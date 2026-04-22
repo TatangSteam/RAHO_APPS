@@ -1,0 +1,422 @@
+/* ============================================================
+   Assign Package Modal - CSS Module
+   ============================================================ */
+
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  z-index: 9999;
+  padding: 20px;
+  overflow-y: auto;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modalContainer {
+  background: #1a1d29;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 700px;
+  margin-top: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+  position: relative;
+  z-index: 10000;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1a1d29;
+  border-radius: 12px 12px 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.modalTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0 8px;
+  transition: color 0.2s ease, transform 0.2s ease;
+  line-height: 1;
+}
+
+.closeButton:hover {
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.closeButton:active {
+  transform: scale(0.95);
+}
+
+.modalBody {
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding: 20px;
+  scroll-behavior: smooth;
+}
+
+.modalBody::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modalBody::-webkit-scrollbar-track {
+  background: #0f1117;
+  border-radius: 4px;
+}
+
+.modalBody::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.modalBody::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.modalFooter {
+  display: flex;
+  gap: 12px;
+  padding: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background: #1a1d29;
+  border-radius: 0 0 12px 12px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+}
+
+/* Section Styles */
+.section {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.sectionBox {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid;
+}
+
+/* Basic Package Section */
+.basicSection {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.basicTitle {
+  color: var(--color-primary-500);
+}
+
+/* Booster Package Section */
+.boosterSection {
+  background: rgba(168, 85, 247, 0.15);
+  border-color: rgba(168, 85, 247, 0.5);
+}
+
+.boosterTitle {
+  color: #a855f7;
+}
+
+/* Add-ons Section */
+.addonsSection {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.addonsTitle {
+  color: #f59e0b;
+}
+
+.addonsDescription {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.addonsSubtitle {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+}
+
+/* Discount Section */
+.discountSection {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.discountTitle {
+  color: #22c55e;
+}
+
+.discountGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+/* Preview Section */
+.previewSection {
+  padding: 16px;
+  background: rgba(148, 163, 184, 0.1);
+  border: 2px solid rgba(148, 163, 184, 0.3);
+  border-radius: var(--radius-lg);
+  margin-bottom: 24px;
+}
+
+.previewTitle {
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+.previewEmpty {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 12px;
+}
+
+.previewItem {
+  margin-bottom: 8px;
+}
+
+.previewItemHeader {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  font-weight: 600;
+}
+
+.previewItemDetails {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding-left: 20px;
+}
+
+.previewDiscount {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  color: #22c55e;
+  font-weight: 600;
+}
+
+.previewTotal {
+  border-top: 2px solid var(--surface-border);
+  margin-top: 8px;
+  padding-top: 8px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-primary-500);
+}
+
+/* Package Item */
+.packageItem {
+  margin-bottom: 12px;
+}
+
+.packageLabel {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.packageLabelBasic {
+  background: transparent;
+}
+
+.packageLabelBasicSelected {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.packageLabelBooster {
+  background: transparent;
+}
+
+.packageLabelBoosterSelected {
+  background: rgba(168, 85, 247, 0.25);
+}
+
+.packageCheckbox {
+  margin-right: 12px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.packageName {
+  flex: 1;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.packagePrice {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.packagePriceBasic {
+  color: var(--color-primary-500);
+}
+
+.packagePriceBooster {
+  color: #a855f7;
+  font-size: 14px;
+}
+
+.packageDetails {
+  margin-top: 8px;
+  padding-left: 42px;
+}
+
+.packageDetailsGrid {
+  display: grid;
+  gap: 12px;
+}
+
+.packageSummary {
+  padding: 12px;
+  background: rgba(168, 85, 247, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.packageSummaryRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.packageSummaryLabel {
+  color: var(--text-muted);
+}
+
+.packageSummaryValue {
+  font-weight: 600;
+}
+
+.packageSummaryTotal {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+  border-top: 1px solid rgba(168, 85, 247, 0.2);
+  font-weight: 700;
+  color: #a855f7;
+}
+
+/* Add-on Item */
+.addonItem {
+  margin-bottom: 8px;
+}
+
+.addonLabel {
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.addonLabelDefault {
+  background: transparent;
+}
+
+.addonLabelSelected {
+  background: rgba(245, 158, 11, 0.2);
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.addonCheckbox {
+  margin-right: 10px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.addonName {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.addonPrice {
+  font-size: 13px;
+  font-weight: 600;
+  color: #f59e0b;
+}
+
+.addonDetails {
+  margin-top: 6px;
+  padding-left: 38px;
+}
+
+.addonQuantityInput {
+  width: 100px;
+  font-size: 13px;
+  padding: 6px 10px;
+}
+
+.addonTotal {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}

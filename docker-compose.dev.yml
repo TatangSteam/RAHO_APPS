@@ -1,0 +1,50 @@
+# ============================================================
+# RAHO — Dev Infrastructure
+# Jalankan: docker compose -f docker-compose.dev.yml up -d
+# ============================================================
+
+services:
+
+  # ── PostgreSQL 15 ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: raho-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: raho_user
+      POSTGRES_PASSWORD: raho_password
+      POSTGRES_DB: raho-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - raho_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raho_user -d raho-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+ # ── MinIO Object Storage ──────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: raho-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: raho_minio_user
+      MINIO_ROOT_PASSWORD: raho_minio_secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - raho_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  raho_pgdata:
+    name: raho_pgdata
+  raho_miniodata:
+    name: raho_miniodata

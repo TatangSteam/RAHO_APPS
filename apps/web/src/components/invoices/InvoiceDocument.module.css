@@ -1,0 +1,614 @@
+/* ============================================================
+   Invoice Document - CSS Module
+   Professional invoice styling for print and screen
+   ============================================================ */
+
+.invoiceDocument {
+  background: white;
+  color: #000;
+  padding: 40px;
+  max-width: 900px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', 'Arial', 'Helvetica', sans-serif;
+  line-height: 1.6;
+  font-size: 13px;
+}
+
+/* ============================================================
+   HEADER SECTION
+   ============================================================ */
+.header {
+  text-align: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #1976d2;
+}
+
+.headerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.companyName {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+  color: #1976d2;
+  letter-spacing: 0.5px;
+}
+
+.companyLegal {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+.companyAddress {
+  margin: 0;
+  font-size: 10px;
+  color: #666;
+}
+
+.companyCity {
+  margin: 0;
+  font-size: 10px;
+  color: #888;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+.divider {
+  height: 1px;
+  background: #ddd;
+  margin: 15px 0;
+}
+
+/* ============================================================
+   TITLE SECTION
+   ============================================================ */
+.titleSection {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.invoiceTitleText {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: #1976d2;
+  letter-spacing: 1px;
+}
+
+.statusBadge {
+  display: inline-block;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.statusDraft {
+  background: #e0e0e0;
+  color: #424242;
+}
+
+.statusPending {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.statusPaid {
+  background: #d4edda;
+  color: #155724;
+}
+
+.statusOverdue {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.statusCancelled {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* ============================================================
+   INVOICE INFO - TWO COLUMNS
+   ============================================================ */
+.invoiceInfo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  margin-bottom: 30px;
+  padding: 15px;
+  background: #f9f9f9;
+  border-radius: 4px;
+}
+
+.infoLeft,
+.infoRight {
+  display: flex;
+  flex-direction: column;
+}
+
+.infoGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.infoGroupTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1976d2;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.infoRow {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 12px;
+}
+
+.infoLabel {
+  font-weight: 600;
+  color: #555;
+  min-width: 100px;
+}
+
+.infoValue {
+  color: #333;
+  font-weight: 500;
+}
+
+.billToName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.billToDetail {
+  font-size: 12px;
+  color: #666;
+  margin: 2px 0 0 0;
+}
+
+/* ============================================================
+   TABLE WRAPPER
+   ============================================================ */
+.tableWrapper {
+  margin-bottom: 25px;
+  overflow-x: auto;
+}
+
+.itemsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.tableHeader {
+  background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%);
+  color: white;
+}
+
+.tableHeader th {
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #1565c0;
+}
+
+.tableBody td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #e0e0e0;
+  color: #000;
+  font-weight: 500;
+}
+
+.tableRow:hover {
+  background: #f9f9f9;
+}
+
+.tableRow:last-child td {
+  border-bottom: 2px solid #1976d2;
+}
+
+/* Column Widths */
+.colNo {
+  width: 5%;
+  text-align: center;
+  color: #000;
+  font-weight: 600;
+}
+
+.colCode {
+  width: 15%;
+  color: #000;
+  font-weight: 500;
+}
+
+.colName {
+  width: 40%;
+}
+
+.colQty {
+  width: 8%;
+  text-align: center;
+  color: #000;
+  font-weight: 600;
+}
+
+.colPrice {
+  width: 16%;
+  text-align: right;
+  color: #000;
+  font-weight: 600;
+}
+
+.colTotal {
+  width: 16%;
+  text-align: right;
+  font-weight: 700;
+  color: #000;
+}
+
+.itemCode {
+  font-family: 'Courier New', monospace;
+  font-weight: 700;
+  color: #000;
+  font-size: 11px;
+}
+
+.itemName {
+  font-weight: 700;
+  color: #000;
+  line-height: 1.4;
+}
+
+.itemSubDescription {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+  margin-top: 2px;
+}
+
+/* ============================================================
+   SUMMARY SECTION
+   ============================================================ */
+.summary {
+  margin-bottom: 25px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.summaryTable {
+  width: 350px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 15px;
+  border-bottom: 1px solid #e0e0e0;
+  font-size: 12px;
+}
+
+.summaryRow:last-child {
+  border-bottom: none;
+}
+
+.summaryLabel {
+  font-weight: 600;
+  color: #555;
+}
+
+.summaryValue {
+  text-align: right;
+  font-weight: 600;
+  color: #000;
+  min-width: 120px;
+}
+
+.summaryDiscount {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.summaryDiscount .summaryLabel,
+.summaryDiscount .summaryValue {
+  color: #856404;
+}
+
+.summaryTotal {
+  background: #1976d2;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 12px 15px;
+}
+
+.summaryTotal .summaryLabel,
+.summaryTotal .summaryValue {
+  color: white;
+}
+
+/* ============================================================
+   PAYMENT SECTION
+   ============================================================ */
+.paymentSection {
+  background: #f0f7ff;
+  padding: 15px;
+  border-left: 4px solid #1976d2;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.sectionTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: #1976d2;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 10px 0;
+}
+
+.paymentDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.paymentDetails p {
+  margin: 0;
+  color: #333;
+}
+
+.paymentDetails strong {
+  color: #555;
+  min-width: 100px;
+  display: inline-block;
+}
+
+/* ============================================================
+   NOTES SECTION
+   ============================================================ */
+.notes {
+  background: #fffbea;
+  padding: 15px;
+  border-left: 4px solid #ffc107;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.notesContent {
+  margin: 0;
+  font-size: 12px;
+  color: #333;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* ============================================================
+   PAYMENT HISTORY
+   ============================================================ */
+.paymentHistory {
+  background: #f0f7ff;
+  padding: 15px;
+  border-left: 4px solid #1976d2;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.paymentHistoryItem {
+  background: white;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+
+.paymentHistoryItem:last-child {
+  margin-bottom: 0;
+}
+
+.paymentHistoryItem p {
+  margin: 4px 0;
+  color: #333;
+}
+
+.paymentHistoryItem strong {
+  color: #555;
+  min-width: 100px;
+  display: inline-block;
+}
+
+/* ============================================================
+   SIGNATURE SECTION
+   ============================================================ */
+.signature {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 30px;
+  margin-top: 40px;
+  padding-top: 30px;
+  border-top: 1px solid #ddd;
+}
+
+.signatureBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.signatureLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 40px;
+}
+
+.signatureLine {
+  width: 100%;
+  height: 1px;
+  background: #333;
+  margin-bottom: 8px;
+}
+
+.signatureName {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.footer {
+  text-align: center;
+  margin-top: 30px;
+  padding-top: 20px;
+  border-top: 1px solid #ddd;
+  font-size: 11px;
+  color: #888;
+}
+
+.footerText {
+  margin: 4px 0;
+}
+
+.footerMeta {
+  margin: 8px 0 0 0;
+  font-size: 10px;
+  color: #aaa;
+}
+
+/* ============================================================
+   PRINT STYLES
+   ============================================================ */
+@media print {
+  .invoiceDocument {
+    padding: 0;
+    max-width: 100%;
+    margin: 0;
+    box-shadow: none;
+  }
+
+  .tableRow:hover {
+    background: white;
+  }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  .invoiceDocument {
+    padding: 20px;
+  }
+
+  .invoiceInfo {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .signature {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  .summaryTable {
+    width: 100%;
+  }
+
+  .tableHeader th {
+    font-size: 10px;
+    padding: 8px 4px;
+  }
+
+  .tableBody td {
+    padding: 8px 4px;
+    font-size: 11px;
+  }
+
+  .colCode {
+    width: 12%;
+  }
+
+  .colName {
+    width: 35%;
+  }
+
+  .colPrice,
+  .colTotal {
+    width: 14%;
+  }
+}
+
+@media (max-width: 480px) {
+  .invoiceDocument {
+    padding: 15px;
+    font-size: 12px;
+  }
+
+  .companyName {
+    font-size: 16px;
+  }
+
+  .invoiceTitleText {
+    font-size: 18px;
+  }
+
+  .tableHeader th {
+    font-size: 9px;
+    padding: 6px 2px;
+  }
+
+  .tableBody td {
+    padding: 6px 2px;
+    font-size: 10px;
+  }
+
+  .colCode {
+    width: 10%;
+  }
+
+  .colName {
+    width: 30%;
+  }
+
+  .colPrice,
+  .colTotal {
+    width: 12%;
+  }
+
+  .signature {
+    gap: 15px;
+  }
+
+  .signatureLabel {
+    margin-bottom: 30px;
+  }
+}

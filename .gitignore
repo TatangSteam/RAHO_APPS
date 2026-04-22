@@ -1,0 +1,246 @@
+# ═══════════════════════════════════════════════════════════════
+# Node.js & Package Managers
+# ═══════════════════════════════════════════════════════════════
+node_modules/
+.npm
+.pnpm-store/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+# ═══════════════════════════════════════════════════════════════
+# Build Output & Distribution
+# ═══════════════════════════════════════════════════════════════
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+.turbo/
+.vercel/
+
+# ═══════════════════════════════════════════════════════════════
+# Environment Variables (NEVER COMMIT!)
+# ═══════════════════════════════════════════════════════════════
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.*.local
+apps/api/.env
+apps/web/.env.local
+
+# Keep example files
+!.env.example
+!.env.local.example
+!apps/api/.env.example
+!apps/web/.env.local.example
+
+# ═══════════════════════════════════════════════════════════════
+# Database & Prisma
+# ═══════════════════════════════════════════════════════════════
+# Migrations are tracked, but you might want to ignore them in some cases
+# apps/api/prisma/migrations/
+
+# SQLite databases (if used for development)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Database dumps
+*.sql.gz
+*.dump
+
+# ═══════════════════════════════════════════════════════════════
+# MinIO / Object Storage
+# ═══════════════════════════════════════════════════════════════
+# Local MinIO data (if running locally)
+.minio/
+minio-data/
+
+# Uploaded files (if stored locally during development)
+uploads/
+temp-uploads/
+
+# ═══════════════════════════════════════════════════════════════
+# Logs
+# ═══════════════════════════════════════════════════════════════
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ═══════════════════════════════════════════════════════════════
+# Operating System Files
+# ═══════════════════════════════════════════════════════════════
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ═══════════════════════════════════════════════════════════════
+# IDE & Editor Files
+# ═══════════════════════════════════════════════════════════════
+# VSCode
+.vscode/settings.json
+.vscode/launch.json
+.vscode/*.code-snippets
+
+# Keep recommended extensions and tasks
+!.vscode/extensions.json
+!.vscode/tasks.json
+
+# JetBrains IDEs (WebStorm, IntelliJ, etc.)
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Vim
+*.swp
+*.swo
+*~
+.*.sw[a-z]
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ═══════════════════════════════════════════════════════════════
+# Testing & Coverage
+# ═══════════════════════════════════════════════════════════════
+coverage/
+.nyc_output/
+*.lcov
+.coverage
+htmlcov/
+.pytest_cache/
+.jest/
+
+# ═══════════════════════════════════════════════════════════════
+# Docker
+# ═══════════════════════════════════════════════════════════════
+# Docker volumes are managed externally
+docker-compose.override.yml
+.dockerignore
+
+# ═══════════════════════════════════════════════════════════════
+# TypeScript
+# ═══════════════════════════════════════════════════════════════
+*.tsbuildinfo
+.tsbuildinfo
+
+# ═══════════════════════════════════════════════════════════════
+# Next.js Specific
+# ═══════════════════════════════════════════════════════════════
+.next/
+out/
+next-env.d.ts
+.vercel
+
+# ═══════════════════════════════════════════════════════════════
+# Temporary Files & Cache
+# ═══════════════════════════════════════════════════════════════
+.cache/
+.temp/
+.tmp/
+tmp/
+temp/
+*.tmp
+*.temp
+
+# ═══════════════════════════════════════════════════════════════
+# Documentation Generated Files
+# ═══════════════════════════════════════════════════════════════
+# Keep markdown files but ignore generated docs
+# docs/generated/
+
+# ═══════════════════════════════════════════════════════════════
+# Backup Files
+# ═══════════════════════════════════════════════════════════════
+*.bak
+*.backup
+*.old
+*.orig
+
+# ═══════════════════════════════════════════════════════════════
+# Security & Sensitive Data
+# ═══════════════════════════════════════════════════════════════
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Secrets
+secrets/
+.secrets/
+*.secret
+
+# ═══════════════════════════════════════════════════════════════
+# Project Specific
+# ═══════════════════════════════════════════════════════════════
+# Kiro AI generated files (keep the important ones)
+API_URL_FIX.md
+API_URL_FIX_COMPLETE.md
+STOCK_REQUEST_UI_COMPLETE.md
+
+# Null files (Windows PowerShell artifacts)
+$null
+*/$null
+**/$null
+
+# Lock files (optional - uncomment if you want to ignore them)
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
+
+# ═══════════════════════════════════════════════════════════════
+# Miscellaneous
+# ═══════════════════════════════════════════════════════════════
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.vite/

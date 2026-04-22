@@ -1,0 +1,342 @@
+'use client';
+
+import { useState, useRef } from 'react';
+import { showToast } from '@/lib/toast';
+import { useAuthStore } from '@/stores/authStore';
+import { photoApi, type SessionPhoto } from '@/lib/photoApi';
+
+interface Step7PhotoProps {
+  sessionId: string;
+  photo: SessionPhoto | null;
+  isLocked: boolean;
+  onComplete: () => void;
+}
+
+export default function Step7Photo({
+  sessionId,
+  photo,
+  isLocked,
+  onComplete,
+}: Step7PhotoProps) {
+  const { user } = useAuthStore();
+  const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<string | null>(photo?.fileUrl || null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      showToast.error('File harus berupa gambar');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      showToast.error('Ukuran file maksimal 5MB');
+      return;
+    }
+
+    // Show preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload file
+    await uploadPhoto(file);
+  };
+
+  const uploadPhoto = async (file: File) => {
+    setUploading(true);
+
+    try {
+      await photoApi.uploadPhoto(sessionId, file, user?.userId || '');
+      showToast.success('Foto berhasil diupload');
+      onComplete();
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      showToast.error(error.message || 'Gagal upload foto');
+      setPreview(photo?.fileUrl || null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeletePhoto = async () => {
+    if (!photo) return;
+
+    if (!confirm('Apakah Anda yakin ingin menghapus foto ini?')) return;
+
+    try {
+      await photoApi.deletePhoto(sessionId);
+      showToast.success('Foto berhasil dihapus');
+      setPreview(null);
+      onComplete();
+    } catch (error: any) {
+      console.error('Error deleting photo:', error);
+      showToast.error(error.message || 'Gagal menghapus foto');
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  if (isLocked) {
+    return (
+      <div style={{
+        padding: '24px',
+        background: 'rgba(148,163,184,0.05)',
+        border: '2px solid rgba(148,163,184,0.2)',
+        borderRadius: 'var(--radius-lg)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: 'rgba(148,163,184,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#64748b',
+            fontWeight: '700',
+            fontSize: '20px'
+          }}>
+            7
+          </div>
+          <div>
+            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#94a3b8', marginBottom: '4px' }}>
+              📸 Upload Foto
+            </h3>
+            <p style={{ fontSize: '14px', color: '#64748b' }}>
+              Step sebelumnya harus diselesaikan terlebih dahulu
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      padding: '24px',
+      background: photo
+        ? 'linear-gradient(135deg, rgba(34,197,94,0.05), rgba(22,163,74,0.05))'
+        : 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(147,51,234,0.05))',
+      border: photo
+        ? '2px solid rgba(34,197,94,0.3)'
+        : '2px solid rgba(59,130,246,0.3)',
+      borderRadius: 'var(--radius-lg)',
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
+        <div style={{
+          width: '48px',
+          height: '48px',
+          borderRadius: '50%',
+          background: photo
+            ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+            : 'linear-gradient(135deg, #3b82f6, #2563eb)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontWeight: '700',
+          fontSize: '20px',
+          boxShadow: photo
+            ? '0 4px 12px rgba(34,197,94,0.3)'
+            : '0 4px 12px rgba(59,130,246,0.3)'
+        }}>
+          {photo ? '✓' : '7'}
+        </div>
+        <div>
+          <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px', color: '#f1f5f9' }}>
+            📸 Upload Foto Sesi
+          </h3>
+          <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+            Upload foto dokumentasi sesi terapi (opsional)
+          </p>
+        </div>
+      </div>
+
+      {/* Photo Preview/Upload Area */}
+      <div style={{
+        padding: '24px',
+        background: 'rgba(15,23,42,0.5)',
+        border: '2px dashed rgba(148,163,184,0.3)',
+        borderRadius: 'var(--radius-md)',
+        textAlign: 'center'
+      }}>
+        {preview ? (
+          <div>
+            <div style={{
+              position: 'relative',
+              maxWidth: '600px',
+              margin: '0 auto',
+              marginBottom: '16px'
+            }}>
+              <img
+                src={preview}
+                alt="Session photo"
+                style={{
+                  width: '100%',
+                  height: 'auto',
+                  maxHeight: '400px',
+                  objectFit: 'contain',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(148,163,184,0.2)'
+                }}
+              />
+            </div>
+
+            {photo && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '16px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                color: '#94a3b8'
+              }}>
+                <span>📄 {photo.fileName}</span>
+                <span>•</span>
+                <span>📦 {formatFileSize(photo.fileSize)}</span>
+                <span>•</span>
+                <span>🕐 {new Date(photo.createdAt).toLocaleString('id-ID')}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                style={{
+                  padding: '10px 20px',
+                  background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: uploading ? 'not-allowed' : 'pointer',
+                  opacity: uploading ? 0.5 : 1
+                }}
+              >
+                🔄 Ganti Foto
+              </button>
+
+              {photo && (
+                <button
+                  onClick={handleDeletePhoto}
+                  disabled={uploading}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: '600',
+                    cursor: uploading ? 'not-allowed' : 'pointer',
+                    opacity: uploading ? 0.5 : 1
+                  }}
+                >
+                  🗑️ Hapus Foto
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div>
+            <div style={{
+              width: '80px',
+              height: '80px',
+              margin: '0 auto 16px',
+              background: 'rgba(59,130,246,0.1)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '40px'
+            }}>
+              📸
+            </div>
+
+            <p style={{ fontSize: '16px', fontWeight: '600', color: '#f1f5f9', marginBottom: '8px' }}>
+              Upload Foto Sesi
+            </p>
+            <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>
+              Format: JPG, PNG, GIF • Maksimal 5MB
+            </p>
+
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              style={{
+                padding: '12px 32px',
+                background: uploading
+                  ? 'rgba(59,130,246,0.3)'
+                  : 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                color: 'white',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: uploading ? 'not-allowed' : 'pointer',
+                boxShadow: uploading ? 'none' : '0 4px 12px rgba(59,130,246,0.3)'
+              }}
+            >
+              {uploading ? '⏳ Mengupload...' : '📤 Pilih Foto'}
+            </button>
+          </div>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          onChange={handleFileSelect}
+          style={{ display: 'none' }}
+          disabled={uploading}
+        />
+      </div>
+
+      {photo && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          background: 'rgba(34,197,94,0.1)',
+          border: '1px solid rgba(34,197,94,0.3)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '13px',
+          color: 'var(--color-success)'
+        }}>
+          ✓ Foto sesi telah diupload
+        </div>
+      )}
+
+      {!photo && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          background: 'rgba(251,191,36,0.1)',
+          border: '1px solid rgba(251,191,36,0.3)',
+          borderRadius: 'var(--radius-md)',
+          fontSize: '13px',
+          color: '#fbbf24',
+          textAlign: 'center'
+        }}>
+          ℹ️ Upload foto bersifat opsional. Anda dapat melewati step ini dan klik save untuk melanjutkan.
+        </div>
+      )}
+    </div>
+  );
+}

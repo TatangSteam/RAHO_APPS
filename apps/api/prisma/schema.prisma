@@ -1,0 +1,1175 @@
+// ============================================================
+// RAHO — Prisma Schema
+// PostgreSQL 15 | CUID primary keys | Soft-delete via isActive
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN_MANAGER
+  ADMIN_CABANG
+  ADMIN_LAYANAN
+  DOCTOR
+  NURSE
+  MEMBER
+}
+
+enum BranchType {
+  KLINIK
+  HOMECARE
+  PREMIERE
+  PARTNERSHIP
+}
+
+enum Gender {
+  L
+  P
+}
+
+enum DocumentType {
+  PERSETUJUAN_SETELAH_PENJELASAN
+  FOTO_PROFIL
+}
+
+enum ReferrerType {
+  DOKTER
+  MEMBER
+  MEDIA
+  LAINNYA
+}
+
+enum PackageType {
+  BASIC
+  BOOSTER
+}
+
+enum PackageStatus {
+  PENDING_PAYMENT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum BoosterType {
+  HHO
+  NO2
+}
+
+enum SessionType {
+  ON_SITE
+  HOME_CARE
+}
+
+enum EncounterStatus {
+  ONGOING
+  CLOSED
+}
+
+enum VitalType {
+  SISTOL
+  DIASTOL
+  HR
+  SATURASI
+  PI
+}
+
+enum VitalTiming {
+  SEBELUM
+  SESUDAH
+}
+
+enum BottleType {
+  IFA
+  EDTA
+}
+
+enum EMRNoteType {
+  CLINICAL_NOTE
+  OPERATIONAL_NOTE
+  ASSESSMENT
+  OUTCOME_MONITORING
+}
+
+enum DiagnosisCategory {
+  HIPERTENSI
+  NEUROLOGI
+  DIABETES
+  KARDIOVASKULAR
+  ORTOPEDI
+  IMUNOLOGI
+  HEMATOLOGI
+  LAINNYA
+}
+
+enum ProductCategory {
+  MEDICINE
+  DEVICE
+  CONSUMABLE
+}
+
+enum StockMutationType {
+  USED
+  RECEIVED
+  ADJUSTMENT
+}
+
+enum StockRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ShipmentStatus {
+  PREPARING
+  SHIPPED
+  RECEIVED
+  APPROVED
+}
+
+enum NotificationType {
+  INVOICE
+  REMINDER
+  INFO
+}
+
+enum NotificationStatus {
+  UNREAD
+  READ
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+  VERIFY
+}
+
+// ============================================================
+// CORE DOMAIN
+// ============================================================
+
+model Branch {
+  id             String     @id @default(cuid())
+  branchCode     String     @unique
+  name           String
+  address        String?
+  city           String?
+  phone          String?
+  type           BranchType @default(KLINIK)
+  operatingHours String?
+  isActive       Boolean    @default(true)
+  createdBy      String?    // User ID who created this branch
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  // Relations
+  users              User[]
+  members            Member[]
+  branchMemberAccess BranchMemberAccess[]
+  memberPackages     MemberPackage[]
+  memberAddOns       MemberAddOn[]
+  nonTherapyPurchases MemberNonTherapyPurchase[]
+  invoices           Invoice[]
+  packagePricings    PackagePricing[]
+  inventoryItems     InventoryItem[]
+  stockRequests      StockRequest[]
+  shipmentsFrom      Shipment[]           @relation("ShipmentFrom")
+  shipmentsTo        Shipment[]           @relation("ShipmentTo")
+  encounters         Encounter[]
+  treatmentSessions  TreatmentSession[]
+  managerBranches    ManagerBranch[]
+
+  @@index([branchCode])
+  @@index([isActive])
+  @@index([createdBy])
+  @@map("branches")
+}
+
+model User {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  password    String
+  role        Role
+  staffCode   String?   @unique
+  branchId    String?
+  isActive    Boolean   @default(true)
+  lastLoginAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  branch          Branch?   @relation(fields: [branchId], references: [id])
+  profile         UserProfile?
+  member          Member?
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  chatMessages    ChatMessage[]
+  chatRooms       ChatRoom[]  @relation("ChatRoomStaff")
+  managedBranches ManagerBranch[]
+
+  sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
+  sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
+  sessionsAsNurse  TreatmentSession[] @relation("SessionNurse")
+  packagesAssigned MemberPackage[]    @relation("PackageAssignedBy")
+  packagesVerified MemberPackage[]    @relation("PackageVerifiedBy")
+  addOnsAssigned   MemberAddOn[]      @relation("AddOnAssignedBy")
+  addOnsVerified   MemberAddOn[]      @relation("AddOnVerifiedBy")
+  nonTherapyAssigned MemberNonTherapyPurchase[] @relation("NonTherapyAssignedBy")
+  nonTherapyVerified MemberNonTherapyPurchase[] @relation("NonTherapyVerifiedBy")
+  invoicesCreated  Invoice[]          @relation("InvoiceCreatedBy")
+  invoicesVerified Invoice[]          @relation("InvoiceVerifiedBy")
+  paymentsReceived InvoicePayment[]   @relation("PaymentReceivedBy")
+
+  @@index([email])
+  @@index([role])
+  @@index([branchId, role, isActive])
+  @@index([staffCode])
+  @@map("users")
+}
+
+model UserProfile {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  fullName  String
+  phone     String?
+  avatarUrl String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([fullName])
+  @@map("user_profiles")
+}
+
+model ManagerBranch {
+  id        String   @id @default(cuid())
+  userId    String
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@index([userId])
+  @@index([branchId])
+  @@map("manager_branches")
+}
+
+// ============================================================
+// MEMBER DOMAIN
+// ============================================================
+
+model Member {
+  id                   String    @id @default(cuid())
+  userId               String    @unique
+  memberNo             String    @unique
+  registrationBranchId String
+  referralCodeId       String?
+  voucherCount         Int       @default(0)
+  isConsentToPhoto     Boolean   @default(true)
+  nik                  String?   @unique
+  tempatLahir          String?
+  dateOfBirth          DateTime?
+  jenisKelamin         Gender?
+  address              String?
+  pekerjaan            String?
+  statusNikah          String?
+  emergencyContact     String?
+  sumberInfoRaho       String?
+  postalCode           String?
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id])
+  registrationBranch Branch             @relation(fields: [registrationBranchId], references: [id])
+  referralCode       ReferralCode?      @relation(fields: [referralCodeId], references: [id])
+  documents          MemberDocument[]
+  branchAccesses     BranchMemberAccess[]
+  memberPackages     MemberPackage[]
+  memberAddOns       MemberAddOn[]
+  nonTherapyPurchases MemberNonTherapyPurchase[]
+  invoices           Invoice[]
+  encounters         Encounter[]
+  diagnoses          Diagnosis[]        // Direct diagnoses without encounter
+  therapyPlans       TherapyPlan[]      // Therapy plans for preparation
+  chatRoom           ChatRoom?
+
+  @@index([memberNo])
+  @@index([registrationBranchId, isActive])
+  @@index([referralCodeId])
+  @@index([nik])
+  @@index([voucherCount])
+  @@map("members")
+}
+
+model MemberDocument {
+  id           String       @id @default(cuid())
+  memberId     String
+  documentType DocumentType
+  fileUrl      String
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  uploadedBy   String
+  createdAt    DateTime     @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, documentType])
+  @@map("member_documents")
+}
+
+model BranchMemberAccess {
+  id        String   @id @default(cuid())
+  memberId  String
+  branchId  String
+  grantedBy String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  member Member @relation(fields: [memberId], references: [id])
+  branch Branch @relation(fields: [branchId], references: [id])
+
+  @@unique([memberId, branchId])
+  @@index([branchId])
+  @@index([memberId])
+  @@map("branch_member_access")
+}
+
+model ReferralCode {
+  id           String        @id @default(cuid())
+  code         String        @unique
+  referrerName String
+  referrerType ReferrerType?
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  members Member[]
+
+  @@index([code])
+  @@index([isActive])
+  @@index([referrerType])
+  @@map("referral_codes")
+}
+
+// ============================================================
+// PACKAGE DOMAIN
+// ============================================================
+
+model PackagePricing {
+  id            String      @id @default(cuid())
+  branchId      String
+  packageType   PackageType
+  productCode   String?     // e.g., TNB-P7-HC, BST-NO-P1-HC
+  name          String
+  totalSessions Int
+  price         Decimal     @db.Decimal(12, 2)
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  branch         Branch          @relation(fields: [branchId], references: [id])
+  memberPackages MemberPackage[]
+
+  @@unique([branchId, packageType, totalSessions])
+  @@index([branchId, isActive])
+  @@index([packageType])
+  @@map("package_pricings")
+}
+
+model MemberPackage {
+  id               String        @id @default(cuid())
+  packageCode      String        @unique
+  memberId         String
+  branchId         String
+  packagePricingId String?
+  packageType      PackageType
+  productCode      String?       // e.g., TNB-P7-HC, BST-NO-P1-HC
+  totalSessions    Int
+  usedSessions     Int           @default(0)
+  finalPrice       Decimal       @db.Decimal(12, 2)
+  discountPercent  Decimal?      @db.Decimal(5, 2)
+  discountAmount   Decimal?      @db.Decimal(12, 2)
+  discountNote     String?
+  notes            String?
+  status           PackageStatus @default(PENDING_PAYMENT)
+  boosterType      BoosterType?
+  serviceType      String?       // HC, PS, PHC, PTY, PDA
+  purchaseGroupId  String?       // Group BASIC + BOOSTER purchased together
+  upgradedFromId   String?       // Track if this is an upgrade from another package
+  
+  // Payment proof (bukti pembayaran)
+  paymentProofUrl     String?
+  paymentProofFileName String?
+  paymentProofFileSize Int?
+  paymentProofMimeType String?
+  
+  assignedBy       String
+  verifiedBy       String?
+  paidAt           DateTime?
+  verifiedAt       DateTime?
+  activatedAt      DateTime?
+  expiredAt        DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  member          Member          @relation(fields: [memberId], references: [id])
+  branch          Branch          @relation(fields: [branchId], references: [id])
+  packagePricing  PackagePricing? @relation(fields: [packagePricingId], references: [id])
+  assignedByUser  User            @relation("PackageAssignedBy", fields: [assignedBy], references: [id])
+  verifiedByUser  User?           @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  upgradedFrom    MemberPackage?  @relation("PackageUpgrade", fields: [upgradedFromId], references: [id], onDelete: SetNull)
+  upgrades        MemberPackage[] @relation("PackageUpgrade")
+  encounters      Encounter[]     @relation("EncounterBasicPackage")
+  boosterSessions TreatmentSession[] @relation("SessionBoosterPackage")
+  addOns          MemberAddOn[]
+
+  @@index([memberId, status])
+  @@index([branchId, status])
+  @@index([packageCode])
+  @@index([memberId, packageType, status])
+  @@index([purchaseGroupId])
+  @@index([paymentProofUrl])
+  @@map("member_packages")
+}
+
+model MemberAddOn {
+  id          String        @id @default(cuid())
+  addOnCode   String        @unique
+  memberId    String
+  branchId    String
+  packageId   String?       // Optional: link to package if purchased together
+  addOnType   AddOnType
+  quantity    Int           @default(1)
+  pricePerUnit Decimal      @db.Decimal(12, 2)
+  totalPrice  Decimal       @db.Decimal(12, 2)
+  status      PackageStatus @default(PENDING_PAYMENT)
+  notes       String?
+  
+  // Payment proof (bukti pembayaran)
+  paymentProofUrl     String?
+  paymentProofFileName String?
+  paymentProofFileSize Int?
+  paymentProofMimeType String?
+  
+  assignedBy  String
+  verifiedBy  String?
+  paidAt      DateTime?
+  verifiedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  member         Member         @relation(fields: [memberId], references: [id])
+  branch         Branch         @relation(fields: [branchId], references: [id])
+  package        MemberPackage? @relation(fields: [packageId], references: [id])
+  assignedByUser User           @relation("AddOnAssignedBy", fields: [assignedBy], references: [id])
+  verifiedByUser User?          @relation("AddOnVerifiedBy", fields: [verifiedBy], references: [id])
+
+  @@index([memberId, status])
+  @@index([branchId, status])
+  @@index([addOnCode])
+  @@index([paymentProofUrl])
+  @@map("member_add_ons")
+}
+
+// ============================================================
+// NON-THERAPY PRODUCTS DOMAIN
+// ============================================================
+
+model NonTherapyProduct {
+  id            String         @id @default(cuid())
+  productCode   String         @unique
+  productType   ProductType
+  name          String
+  description   String?
+  
+  // Air Nano specific fields
+  airNanoColor  AirNanoColor?
+  airNanoVolume AirNanoVolume?
+  airNanoUnit   AirNanoUnit?
+  
+  // Pricing
+  pricePerUnit  Decimal        @db.Decimal(12, 2)
+  
+  // Status
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  purchases     MemberNonTherapyPurchase[]
+
+  @@index([productType, isActive])
+  @@index([productCode])
+  @@map("non_therapy_products")
+}
+
+model MemberNonTherapyPurchase {
+  id           String        @id @default(cuid())
+  purchaseCode String        @unique
+  memberId     String
+  branchId     String
+  productId    String
+  quantity     Int           @default(1)
+  pricePerUnit Decimal       @db.Decimal(12, 2)
+  totalPrice   Decimal       @db.Decimal(12, 2)
+  status       PackageStatus @default(PENDING_PAYMENT)
+  notes        String?
+  
+  // Payment proof (bukti pembayaran)
+  paymentProofUrl     String?
+  paymentProofFileName String?
+  paymentProofFileSize Int?
+  paymentProofMimeType String?
+  
+  assignedBy   String
+  verifiedBy   String?
+  paidAt       DateTime?
+  verifiedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  member         Member            @relation(fields: [memberId], references: [id])
+  branch         Branch            @relation(fields: [branchId], references: [id])
+  product        NonTherapyProduct @relation(fields: [productId], references: [id])
+  assignedByUser User              @relation("NonTherapyAssignedBy", fields: [assignedBy], references: [id])
+  verifiedByUser User?             @relation("NonTherapyVerifiedBy", fields: [verifiedBy], references: [id])
+
+  @@index([memberId, status])
+  @@index([branchId, status])
+  @@index([purchaseCode])
+  @@index([paymentProofUrl])
+  @@map("member_non_therapy_purchases")
+}
+
+// ============================================================
+// INVOICE DOMAIN
+// ============================================================
+
+model Invoice {
+  id              String        @id @default(cuid())
+  invoiceNumber   String        @unique
+  memberId        String
+  branchId        String
+  
+  // Financial details
+  subtotal        Decimal       @db.Decimal(12, 2)
+  discountPercent Decimal?      @db.Decimal(5, 2)
+  discountAmount  Decimal?      @db.Decimal(12, 2)
+  discountNote    String?
+  taxPercent      Decimal?      @db.Decimal(5, 2) @default(0)
+  taxAmount       Decimal?      @db.Decimal(12, 2) @default(0)
+  totalAmount     Decimal       @db.Decimal(12, 2)
+  
+  // Status and dates
+  status          InvoiceStatus @default(DRAFT)
+  dueDate         DateTime?
+  paidAt          DateTime?
+  cancelledAt     DateTime?
+  
+  // Payment details
+  paymentMethod   PaymentMethod?
+  paymentReference String?
+  paymentNotes    String?
+  
+  // Metadata
+  notes           String?
+  createdBy       String
+  verifiedBy      String?
+  verifiedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  member         Member           @relation(fields: [memberId], references: [id])
+  branch         Branch           @relation(fields: [branchId], references: [id])
+  createdByUser  User             @relation("InvoiceCreatedBy", fields: [createdBy], references: [id])
+  verifiedByUser User?            @relation("InvoiceVerifiedBy", fields: [verifiedBy], references: [id])
+  items          InvoiceItem[]
+  payments       InvoicePayment[]
+
+  @@index([memberId, status])
+  @@index([branchId, status])
+  @@index([invoiceNumber])
+  @@index([status, dueDate])
+  @@index([createdAt])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String   @id @default(cuid())
+  invoiceId      String
+  itemType       String   // 'PACKAGE', 'ADDON', 'NON_THERAPY'
+  itemId         String   // Reference to MemberPackage, MemberAddOn, or MemberNonTherapyPurchase
+  code           String?  // Product code (e.g., TNB-P7-HC, BST-NO-P1-HC)
+  description    String
+  quantity       Int      @default(1)
+  pricePerUnit   Decimal  @db.Decimal(12, 2)
+  subtotal       Decimal  @db.Decimal(12, 2)
+  discountAmount Decimal? @db.Decimal(12, 2) @default(0)
+  totalAmount    Decimal  @db.Decimal(12, 2)
+  createdAt      DateTime @default(now())
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([itemType, itemId])
+  @@map("invoice_items")
+}
+
+model InvoicePayment {
+  id               String        @id @default(cuid())
+  invoiceId        String
+  amount           Decimal       @db.Decimal(12, 2)
+  paymentMethod    PaymentMethod
+  paymentReference String?
+  notes            String?
+  
+  // Payment proof (bukti pembayaran)
+  proofFileUrl     String?
+  proofFileName    String?
+  proofFileSize    Int?
+  proofMimeType    String?
+  
+  receivedBy       String
+  receivedAt       DateTime      @default(now())
+  createdAt        DateTime      @default(now())
+
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receivedByUser User    @relation("PaymentReceivedBy", fields: [receivedBy], references: [id])
+
+  @@index([invoiceId])
+  @@index([receivedAt])
+  @@index([proofFileUrl])
+  @@map("invoice_payments")
+}
+
+enum AddOnType {
+  AIR_NANO
+  KONSULTASI_GIZI
+  KONSULTASI_PSIKOLOG
+  LAINNYA
+}
+
+enum ProductType {
+  AIR_NANO
+  ROKOK_KENKOU
+}
+
+enum AirNanoColor {
+  KUNING
+  BIRU
+  HIJAU
+}
+
+enum AirNanoVolume {
+  ML_600
+  ML_1500
+}
+
+enum AirNanoUnit {
+  BOTOL
+  DUS
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  OVERDUE
+}
+
+enum PaymentMethod {
+  CASH
+  TRANSFER
+  DEBIT
+  CREDIT
+  QRIS
+  OTHER
+}
+
+// ============================================================
+// THERAPY DOMAIN
+// ============================================================
+
+model Encounter {
+  id             String          @id @default(cuid())
+  encounterCode  String          @unique
+  memberId       String
+  branchId       String
+  memberPackageId String
+  adminLayananId String
+  doctorId       String
+  nurseId        String
+  status         EncounterStatus @default(ONGOING)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  member        Member          @relation(fields: [memberId], references: [id])
+  branch        Branch          @relation(fields: [branchId], references: [id])
+  memberPackage MemberPackage   @relation("EncounterBasicPackage", fields: [memberPackageId], references: [id])
+  diagnoses     Diagnosis[]
+  sessions      TreatmentSession[]
+
+  @@index([memberId, status])
+  @@index([branchId, status])
+  @@index([memberPackageId])
+  @@index([doctorId])
+  @@map("encounters")
+}
+
+model TreatmentSession {
+  id               String      @id @default(cuid())
+  sessionCode      String      @unique
+  encounterId      String
+  branchId         String
+  infusKe          Int
+  pelaksanaan      SessionType
+  treatmentDate    DateTime
+  isCompleted      Boolean     @default(false)
+  adminLayananId   String
+  doctorId         String
+  nurseId          String
+  boosterPackageId String?
+  boosterType      BoosterType?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  encounter      Encounter        @relation(fields: [encounterId], references: [id])
+  branch         Branch           @relation(fields: [branchId], references: [id])
+  adminLayanan   User             @relation("SessionAdmin",  fields: [adminLayananId], references: [id])
+  doctor         User             @relation("SessionDoctor", fields: [doctorId],       references: [id])
+  nurse          User             @relation("SessionNurse",  fields: [nurseId],         references: [id])
+  boosterPackage MemberPackage?   @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+
+  therapyPlan  TherapyPlan?
+  vitalSigns   VitalSign[]
+  infusion     InfusionExecution?
+  materials    MaterialUsage[]
+  photo        SessionPhoto?
+  emrNotes     EMRNote[]
+  evaluation   DoctorEvaluation?
+
+  @@index([encounterId])
+  @@index([branchId, treatmentDate])
+  @@index([doctorId, treatmentDate])
+  @@index([isCompleted])
+  @@map("treatment_sessions")
+}
+
+model Diagnosis {
+  id                       String              @id @default(cuid())
+  diagnosisCode            String              @unique
+  memberId                 String              // Direct link to member
+  encounterId              String?             @unique // Optional - only if linked to encounter
+  doktorPemeriksa          String
+  diagnosa                 String              @db.Text
+  kategoriDiagnosa         DiagnosisCategory?
+  icdPrimer                String?
+  icdSekunder              String?
+  icdTersier               String?
+  keluhanRiwayatSekarang   String?             @db.Text
+  riwayatPenyakitTerdahulu String?             @db.Text
+  riwayatSosialKebiasaan   String?             @db.Text
+  riwayatPengobatan        String?             @db.Text
+  pemeriksaanFisik         String?             @db.Text
+  pemeriksaanTambahan      Json?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  member    Member     @relation(fields: [memberId], references: [id])
+  encounter Encounter? @relation(fields: [encounterId], references: [id])
+
+  @@index([memberId])
+  @@index([doktorPemeriksa])
+  @@index([kategoriDiagnosa])
+  @@map("diagnoses")
+}
+
+model TherapyPlan {
+  id                 String   @id @default(cuid())
+  planCode           String   @unique
+  memberId           String?  // NEW: For preparation (before session)
+  treatmentSessionId String?  @unique // Make optional
+  keterangan         String?  @db.Text
+  ifa                Decimal? @db.Decimal(10, 2)
+  hho                Decimal? @db.Decimal(10, 2)
+  h2                 Decimal? @db.Decimal(10, 2)
+  no                 Decimal? @db.Decimal(10, 2)
+  gaso               Decimal? @db.Decimal(10, 2)
+  o2                 Decimal? @db.Decimal(10, 2)
+  o3                 Decimal? @db.Decimal(10, 2)
+  edta               Decimal? @db.Decimal(10, 2)
+  mb                 Decimal? @db.Decimal(10, 2)
+  h2s                Decimal? @db.Decimal(10, 2)
+  kcl                Decimal? @db.Decimal(10, 2)
+  jmlNb              Decimal? @db.Decimal(10, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  member  Member?           @relation(fields: [memberId], references: [id])
+  session TreatmentSession? @relation(fields: [treatmentSessionId], references: [id])
+
+  @@index([memberId])
+  @@map("therapy_plans")
+}
+
+model VitalSign {
+  id                 String      @id @default(cuid())
+  treatmentSessionId String
+  pencatatan         VitalType
+  waktuCatat         VitalTiming
+  value              Decimal     @db.Decimal(8, 2)
+  unit               String?
+  recordedBy         String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  @@unique([treatmentSessionId, pencatatan, waktuCatat])
+  @@index([treatmentSessionId])
+  @@map("vital_signs")
+}
+
+model InfusionExecution {
+  id                 String      @id @default(cuid())
+  treatmentSessionId String      @unique
+  ifa                Decimal?    @db.Decimal(10, 2)
+  hho                Decimal?    @db.Decimal(10, 2)
+  h2                 Decimal?    @db.Decimal(10, 2)
+  no                 Decimal?    @db.Decimal(10, 2)
+  gaso               Decimal?    @db.Decimal(10, 2)
+  o2                 Decimal?    @db.Decimal(10, 2)
+  o3                 Decimal?    @db.Decimal(10, 2)
+  edta               Decimal?    @db.Decimal(10, 2)
+  mb                 Decimal?    @db.Decimal(10, 2)
+  h2s                Decimal?    @db.Decimal(10, 2)
+  kcl                Decimal?    @db.Decimal(10, 2)
+  jmlNb              Decimal?    @db.Decimal(10, 2)
+  deviationNotes     String?     @db.Text
+  bottleType         BottleType?
+  jenisCairan        String?
+  volumeCarrier      Decimal?    @db.Decimal(8, 2)
+  jumlahJarum        Int?
+  tanggalProduksi    DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  @@map("infusion_executions")
+}
+
+model MaterialUsage {
+  id                 String   @id @default(cuid())
+  treatmentSessionId String
+  inventoryItemId    String
+  quantity           Decimal  @db.Decimal(10, 2)
+  unit               String
+  recordedBy         String
+  createdAt          DateTime @default(now())
+
+  session       TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+  inventoryItem InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([treatmentSessionId])
+  @@index([inventoryItemId])
+  @@map("material_usages")
+}
+
+model SessionPhoto {
+  id                 String   @id @default(cuid())
+  treatmentSessionId String   @unique
+  fileUrl            String
+  fileName           String
+  fileSize           Int
+  mimeType           String
+  uploadedBy         String
+  createdAt          DateTime @default(now())
+
+  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  @@map("session_photos")
+}
+
+model EMRNote {
+  id                 String      @id @default(cuid())
+  treatmentSessionId String
+  noteType           EMRNoteType
+  content            String      @db.Text
+  writtenBy          String
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+
+  @@index([treatmentSessionId, noteType])
+  @@index([treatmentSessionId])
+  @@map("emr_notes")
+}
+
+model DoctorEvaluation {
+  id                 String   @id @default(cuid())
+  evaluationCode     String   @unique
+  treatmentSessionId String   @unique
+  subjective         String?  @db.Text
+  objective          String?  @db.Text
+  assessment         String?  @db.Text
+  plan               String?  @db.Text
+  generalNotes       String?  @db.Text
+  writtenBy          String
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  session TreatmentSession         @relation(fields: [treatmentSessionId], references: [id])
+  history DoctorEvaluationHistory[]
+
+  @@map("doctor_evaluations")
+}
+
+model DoctorEvaluationHistory {
+  id           String   @id @default(cuid())
+  evaluationId String
+  fieldName    String
+  oldValue     String?  @db.Text
+  newValue     String?  @db.Text
+  changedBy    String
+  createdAt    DateTime @default(now())
+
+  evaluation DoctorEvaluation @relation(fields: [evaluationId], references: [id])
+
+  @@index([evaluationId])
+  @@map("doctor_evaluation_histories")
+}
+
+// ============================================================
+// INVENTORY DOMAIN
+// ============================================================
+
+model MasterProduct {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  category    ProductCategory
+  unit        String
+  description String?
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  inventoryItems InventoryItem[]
+
+  @@index([category, isActive])
+  @@index([isActive])
+  @@map("master_products")
+}
+
+model InventoryItem {
+  id              String   @id @default(cuid())
+  masterProductId String
+  branchId        String
+  stock           Decimal  @db.Decimal(10, 2) @default(0)
+  minThreshold    Decimal  @db.Decimal(10, 2) @default(0)
+  storageLocation String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  masterProduct     MasterProduct      @relation(fields: [masterProductId], references: [id])
+  branch            Branch             @relation(fields: [branchId], references: [id])
+  stockMutations    StockMutation[]
+  materialUsages    MaterialUsage[]
+  stockRequestItems StockRequestItem[]
+
+  @@unique([masterProductId, branchId])
+  @@index([branchId, stock])
+  @@index([branchId])
+  @@map("inventory_items")
+}
+
+model StockMutation {
+  id              String            @id @default(cuid())
+  inventoryItemId String
+  type            StockMutationType
+  quantity        Decimal           @db.Decimal(10, 2)
+  stockBefore     Decimal           @db.Decimal(10, 2)
+  stockAfter      Decimal           @db.Decimal(10, 2)
+  referenceType   String?
+  referenceId     String?
+  notes           String?
+  createdBy       String
+  createdAt       DateTime          @default(now())
+
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([inventoryItemId, createdAt])
+  @@index([referenceType, referenceId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("stock_mutations")
+}
+
+// ============================================================
+// PROCUREMENT DOMAIN
+// ============================================================
+
+model StockRequest {
+  id          String             @id @default(cuid())
+  requestCode String             @unique
+  branchId    String
+  requestedBy String
+  status      StockRequestStatus @default(PENDING)
+  notes       String?
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNotes String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  branch   Branch            @relation(fields: [branchId], references: [id])
+  items    StockRequestItem[]
+  shipment Shipment?
+
+  @@index([branchId, status])
+  @@index([status])
+  @@map("stock_requests")
+}
+
+model StockRequestItem {
+  id              String  @id @default(cuid())
+  stockRequestId  String
+  inventoryItemId String
+  requestedQty    Decimal @db.Decimal(10, 2)
+  notes           String?
+
+  stockRequest  StockRequest  @relation(fields: [stockRequestId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+
+  @@index([stockRequestId])
+  @@map("stock_request_items")
+}
+
+model Shipment {
+  id             String         @id @default(cuid())
+  shipmentCode   String         @unique
+  stockRequestId String         @unique
+  fromBranchId   String
+  toBranchId     String
+  status         ShipmentStatus @default(PREPARING)
+  shippedAt      DateTime?
+  receivedAt     DateTime?
+  approvedAt     DateTime?
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  stockRequest StockRequest   @relation(fields: [stockRequestId], references: [id])
+  fromBranch   Branch         @relation("ShipmentFrom", fields: [fromBranchId], references: [id])
+  toBranch     Branch         @relation("ShipmentTo",   fields: [toBranchId],   references: [id])
+  items        ShipmentItem[]
+
+  @@index([toBranchId, status])
+  @@index([status])
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id              String   @id @default(cuid())
+  shipmentId      String
+  inventoryItemId String
+  sentQty         Decimal  @db.Decimal(10, 2)
+
+  shipment Shipment @relation(fields: [shipmentId], references: [id])
+
+  @@index([shipmentId])
+  @@map("shipment_items")
+}
+
+// ============================================================
+// COMMUNICATION DOMAIN
+// ============================================================
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  body      String             @db.Text
+  deepLink  String?
+  status    NotificationStatus @default(UNREAD)
+  createdAt DateTime           @default(now())
+  readAt    DateTime?
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model ChatRoom {
+  id        String   @id @default(cuid())
+  memberId  String   @unique
+  staffId   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  member   Member        @relation(fields: [memberId], references: [id])
+  staff    User?         @relation("ChatRoomStaff", fields: [staffId], references: [id])
+  messages ChatMessage[]
+
+  @@index([isActive])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  chatRoomId String
+  senderId   String
+  content    String   @db.Text
+  fileUrl    String?
+  fileName   String?
+  createdAt  DateTime @default(now())
+
+  chatRoom ChatRoom @relation(fields: [chatRoomId], references: [id])
+  sender   User     @relation(fields: [senderId],   references: [id])
+
+  @@index([chatRoomId, createdAt])
+  @@map("chat_messages")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String
+  action     AuditAction
+  resource   String
+  resourceId String
+  meta       Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([resource, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

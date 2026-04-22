@@ -1,0 +1,30 @@
+{
+  "name": "raho-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RAHO Klinik — Monorepo (Backend + Frontend)",
+  "scripts": {
+    "dev:api": "npm run dev --prefix apps/api",
+    "dev:web": "npm run dev --prefix apps/web",
+    "dev": "start-servers",
+    "build:api": "npm run build --prefix apps/api",
+    "build:web": "npm run build --prefix apps/web",
+    "db:migrate": "npm run db:migrate --prefix apps/api",
+    "db:seed": "npm run db:seed --prefix apps/api",
+    "db:studio": "npm run db:studio --prefix apps/api",
+    "docker:up": "docker compose -f docker-compose.dev.yml up -d",
+    "docker:down": "docker compose -f docker-compose.dev.yml down",
+    "docker:logs": "docker compose -f docker-compose.dev.yml logs -f",
+    "type-check": "npm run type-check --prefix apps/api"
+  },
+  "workspaces": [
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
+  }
+}

@@ -1,0 +1,201 @@
+'use client';
+
+import { useState } from 'react';
+import { sessionApi } from '@/lib/sessionApi';
+import type { TherapyPlan, CreateTherapyPlanInput } from '@/types/session';
+import styles from './Step2TherapyPlan.module.css';
+
+interface Step2TherapyPlanProps {
+  sessionId: string;
+  therapyPlan: TherapyPlan | null;
+  isLocked: boolean;
+  onComplete: () => void;
+}
+
+const DOSE_FIELDS = [
+  { key: 'ifa', label: 'IFA', unit: 'mg' },
+  { key: 'hho', label: 'HHO', unit: 'ml' },
+  { key: 'h2', label: 'H2', unit: 'ml' },
+  { key: 'no', label: 'NO', unit: 'ml' },
+  { key: 'gaso', label: 'GASO', unit: 'ml' },
+  { key: 'o2', label: 'O2', unit: 'ml' },
+  { key: 'o3', label: 'O3', unit: 'ml' },
+  { key: 'edta', label: 'EDTA', unit: 'ml' },
+  { key: 'mb', label: 'MB', unit: 'ml' },
+  { key: 'h2s', label: 'H2S', unit: 'ml' },
+  { key: 'kcl', label: 'KCL', unit: 'ml' },
+  { key: 'jmlNb', label: 'Jml.NB', unit: 'ml' },
+];
+
+export default function Step2TherapyPlan({
+  sessionId,
+  therapyPlan,
+  isLocked,
+  onComplete,
+}: Step2TherapyPlanProps) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const [formData, setFormData] = useState<CreateTherapyPlanInput>({
+    keterangan: '',
+    ifa: undefined,
+    hho: undefined,
+    h2: undefined,
+    no: undefined,
+    gaso: undefined,
+    o2: undefined,
+    o3: undefined,
+    edta: undefined,
+    mb: undefined,
+    h2s: undefined,
+    kcl: undefined,
+    jmlNb: undefined,
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    // Validate at least one dose field is filled
+    const hasAtLeastOneDose = DOSE_FIELDS.some((field) => {
+      const value = formData[field.key as keyof CreateTherapyPlanInput];
+      return value !== undefined && value !== null && Number(value) > 0;
+    });
+
+    if (!hasAtLeastOneDose) {
+      setError('Minimal satu field dosis harus diisi');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await sessionApi.createTherapyPlan(sessionId, formData);
+      onComplete();
+    } catch (err: any) {
+      console.error('Failed to create therapy plan:', err);
+      setError(err.response?.data?.error?.message || 'Gagal menyimpan terapi plan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateDose = (key: string, value: string) => {
+    const numValue = value === '' ? undefined : Number(value);
+    setFormData({ ...formData, [key]: numValue });
+  };
+
+  if (isLocked) {
+    return (
+      <div className={`${styles.container} ${styles.locked}`}>
+        <div className={styles.header}>
+          <div className={`${styles.stepNumber} ${styles.locked}`}>2</div>
+          <div className={styles.headerContent}>
+            <h3 className={styles.title}>Step 2: Terapi Plan</h3>
+            <p className={styles.subtitle}>Diagnosa harus diisi terlebih dahulu</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (therapyPlan) {
+    return (
+      <div className={`${styles.container} ${styles.completed}`}>
+        <div className={styles.header}>
+          <div className={`${styles.stepNumber} ${styles.completed}`}>✓</div>
+          <div className={styles.headerContent}>
+            <h3 className={styles.title}>Step 2: Terapi Plan</h3>
+            <p className={styles.subtitle}>{therapyPlan.planCode}</p>
+          </div>
+        </div>
+
+        <div className={styles.completedContent}>
+          <div className={styles.doseGrid + ' ' + styles.completed}>
+            {DOSE_FIELDS.map((field) => {
+              const value = therapyPlan[field.key as keyof TherapyPlan];
+              if (!value) return null;
+              return (
+                <div key={field.key} className={styles.doseCard}>
+                  <p className={styles.doseCardLabel}>{field.label}</p>
+                  <p className={styles.doseCardValue}>
+                    {Number(value)}
+                    <span className={styles.doseCardUnit}> {field.unit}</span>
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {therapyPlan.keterangan && (
+            <div className={styles.keteranganSection}>
+              <p className={styles.keteranganLabel}>Keterangan:</p>
+              <p className={styles.keteranganValue}>{therapyPlan.keterangan}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.container}>
+      <div className={styles.header}>
+        <div className={`${styles.stepNumber} ${styles.active}`}>2</div>
+        <div className={styles.headerContent}>
+          <h3 className={styles.title}>Step 2: Terapi Plan</h3>
+          <p className={styles.subtitle}>Isi rencana dosis terapi</p>
+        </div>
+      </div>
+
+      {error && (
+        <div className={styles.errorAlert}>
+          <span className={styles.errorIcon}>⚠️</span>
+          <span>{error}</span>
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className={styles.form}>
+        <div className={styles.doseGrid}>
+          {DOSE_FIELDS.map((field) => (
+            <div key={field.key} className={styles.doseField}>
+              <label className={styles.doseLabel}>
+                {field.label} ({field.unit})
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
+                onChange={(e) => updateDose(field.key, e.target.value)}
+                className={styles.doseInput}
+                placeholder="0"
+                disabled={loading}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className={styles.formGroup}>
+          <label className={styles.formLabel}>Keterangan</label>
+          <textarea
+            value={formData.keterangan}
+            onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+            className={styles.formTextarea}
+            placeholder="Catatan tambahan tentang terapi plan..."
+            disabled={loading}
+          />
+        </div>
+
+        <div className={styles.footer}>
+          <button
+            type="submit"
+            disabled={loading}
+            className={styles.submitBtn}
+          >
+            {loading ? 'Menyimpan...' : 'Simpan Terapi Plan'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
