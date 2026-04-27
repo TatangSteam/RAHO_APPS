@@ -5,7 +5,7 @@
     "main": "dist/server.js",
     "scripts": {
         "dev": "tsx watch src/server.ts",
-        "build": "tsc --project tsconfig.build.json",
+        "build": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
         "build:nocheck": "tsc --build --noCheck",
         "start": "node dist/server.js",
         "db:generate": "prisma generate",
@@ -53,6 +53,7 @@
         "@typescript-eslint/parser": "^7.16.0",
         "eslint": "^8.57.0",
         "prisma": "^5.22.0",
+        "tsc-alias": "^1.8.16",
         "tsx": "^4.16.2",
         "typescript": "^5.5.3"
     },
