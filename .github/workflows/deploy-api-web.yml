@@ -1,0 +1,97 @@
+name: Deploy API and Web
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - apps/api/**
+      - apps/web/**
+      - docker-compose.prod.yml
+      - package.json
+      - package-lock.json
+      - apps/api/package-lock.json
+      - apps/web/package-lock.json
+      - .github/workflows/deploy-api-web.yml
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    env:
+      DEPLOY_DIR: /home/runneradmin/RAHO_APPS
+      COMPOSE_FILE: docker-compose.prod.yml
+      BEFORE_SHA: ${{ github.event.before }}
+      AFTER_SHA: ${{ github.sha }}
+    steps:
+      - name: Validate deploy directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$DEPLOY_DIR"
+          test -f "$DEPLOY_DIR/$COMPOSE_FILE"
+          test -d "$DEPLOY_DIR/secrets"
+
+      - name: Update server repository to latest main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git -C "$DEPLOY_DIR" fetch origin "$AFTER_SHA"
+          git -C "$DEPLOY_DIR" checkout "$AFTER_SHA"
+
+      - name: Detect API and Web changes
+        id: changes
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_changed=false
+          web_changed=false
+
+          if [[ "$BEFORE_SHA" == "0000000000000000000000000000000000000000" ]]; then
+            api_changed=true
+            web_changed=true
+          elif ! git -C "$DEPLOY_DIR" cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null || ! git -C "$DEPLOY_DIR" cat-file -e "$AFTER_SHA^{commit}" 2>/dev/null; then
+            # Fallback for force-push/pruned-history edge cases.
+            api_changed=true
+            web_changed=true
+          else
+            changed_files=$(git -C "$DEPLOY_DIR" diff --name-only "$BEFORE_SHA" "$AFTER_SHA" || true)
+
+            while IFS= read -r file; do
+              [[ -z "$file" ]] && continue
+
+              case "$file" in
+                apps/api/*|apps/api/**)
+                  api_changed=true
+                  ;;
+                apps/web/*|apps/web/**)
+                  web_changed=true
+                  ;;
+                docker-compose.prod.yml|package.json|package-lock.json|apps/api/package-lock.json|apps/web/package-lock.json)
+                  api_changed=true
+                  web_changed=true
+                  ;;
+              esac
+            done <<< "$changed_files"
+          fi
+
+          echo "api_changed=$api_changed" >> "$GITHUB_OUTPUT"
+          echo "web_changed=$web_changed" >> "$GITHUB_OUTPUT"
+
+      - name: Rebuild and restart API
+        if: steps.changes.outputs.api_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f "$DEPLOY_DIR/$COMPOSE_FILE" up --build -d --no-deps api
+
+      - name: Rebuild and restart Web
+        if: steps.changes.outputs.web_changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker compose -f "$DEPLOY_DIR/$COMPOSE_FILE" up --build -d --no-deps web
