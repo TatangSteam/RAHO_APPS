@@ -138,7 +138,7 @@ export async function exportIncentivesToExcel(
     const incentiveRate =
       record.incentiveType === 'PERCENTAGE'
         ? `${record.incentiveValue}%`
-        : `Rp ${record.incentiveValue.toLocaleString('id-ID')}`;
+        : `Rp ${Number(record.incentiveValue).toLocaleString('id-ID')}`;
 
     worksheet.addRow({
       date: new Date(record.createdAt).toLocaleDateString('id-ID'),
@@ -448,8 +448,6 @@ export async function exportReferralSummaryExcel(
     { header: 'Total Referral', key: 'totalReferrals', width: 15 },
     { header: 'Total Transaksi', key: 'totalTransactions', width: 15 },
     { header: 'Total Insentif', key: 'totalIncentive', width: 18 },
-    { header: 'Insentif Pertama', key: 'firstIncentive', width: 18 },
-    { header: 'Insentif Lanjutan', key: 'nextIncentive', width: 18 },
   ];
 
   // Style header
@@ -467,16 +465,6 @@ export async function exportReferralSummaryExcel(
   let grandTotal = 0;
 
   referrals.forEach((referral) => {
-    const firstIncentive =
-      referral.firstIncentiveType === 'PERCENTAGE'
-        ? `${referral.firstIncentiveValue}%`
-        : `Rp ${Number(referral.firstIncentiveValue).toLocaleString('id-ID')}`;
-
-    const nextIncentive =
-      referral.nextIncentiveType === 'PERCENTAGE'
-        ? `${referral.nextIncentiveValue}%`
-        : `Rp ${Number(referral.nextIncentiveValue).toLocaleString('id-ID')}`;
-
     worksheet.addRow({
       code: referral.code,
       name: referral.referrerName,
@@ -487,8 +475,6 @@ export async function exportReferralSummaryExcel(
       totalReferrals: referral.totalReferrals,
       totalTransactions: referral._count.incentiveRecords,
       totalIncentive: Number(referral.totalIncentiveEarned),
-      firstIncentive,
-      nextIncentive,
     });
 
     grandTotal += Number(referral.totalIncentiveEarned);
