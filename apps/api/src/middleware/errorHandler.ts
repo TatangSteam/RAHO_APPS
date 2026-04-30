@@ -61,11 +61,19 @@ export function errorHandler(
   }
 
   // ── Unknown / Unexpected Errors ──────────────────────────
+  // logger.error('[Unhandled Error]', {
+  //   error: err,
+  //   url: req.url,
+  //   method: req.method,
+  //   body: req.body,
+  // });
+
   logger.error('[Unhandled Error]', {
-    error: err,
+    error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
     url: req.url,
     method: req.method,
-    body: req.body,
+    
+    body: typeof req.body === 'object' ? JSON.stringify(req.body).slice(0, 1000) : req.body,
   });
 
   sendError(
