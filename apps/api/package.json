@@ -58,10 +58,10 @@
         "eslint": "^8.57.0",
         "prisma": "^5.22.0",
         "tsc-alias": "^1.8.16",
-        "tsx": "^4.7.0",
+        "tsx": "^4.16.2",
         "typescript": "^5.5.3"
     },
     "prisma": {
-        "seed": "tsx prisma/seed.ts"
+        "seed": "npx tsx prisma/seed.ts"
     }
 }
