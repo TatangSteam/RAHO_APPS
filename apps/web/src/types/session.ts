@@ -29,6 +29,8 @@ export interface CreateSessionInput {
   adminLayananId: string;
   doctorId: string;
   nurseId: string;
+  additionalDoctorIds?: string[];
+  additionalNurseIds?: string[];
   treatmentDate: string;
   pelaksanaan: SessionType;
 }

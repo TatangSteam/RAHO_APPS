@@ -25,6 +25,7 @@ export interface User {
   isActive: boolean;
   lastLoginAt?: string;
   createdAt: string;
+  therapyCount?: number;
   profile: {
     fullName: string;
     phone?: string;

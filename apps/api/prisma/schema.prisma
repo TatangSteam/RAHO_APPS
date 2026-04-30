@@ -27,6 +27,7 @@ enum Role {
 }
 
 enum BranchType {
+  PUSAT
   KLINIK
   HOMECARE
   PREMIERE
@@ -44,10 +45,14 @@ enum DocumentType {
 }
 
 enum ReferrerType {
+  SALES
   DOKTER
   MEMBER
-  MEDIA
-  LAINNYA
+}
+
+enum IncentiveType {
+  PERCENTAGE
+  FIXED_AMOUNT
 }
 
 enum PackageType {
@@ -63,8 +68,15 @@ enum PackageStatus {
 }
 
 enum BoosterType {
-  HHO
-  NO2
+  NO   // Nitric Oxide
+  GT   // Glutathione
+  MB   // Methylene Blue
+  KCL  // Potassium Chloride
+  H2S  // Hydrogen Sulfide
+  HK   // Hypochlorous Acid
+  O3   // Ozone
+  HHO  // Hydrogen (legacy - keep for backward compatibility)
+  NO2  // Nitric Oxide 2 (legacy - keep for backward compatibility)
 }
 
 enum SessionType {
@@ -190,6 +202,8 @@ model Branch {
   encounters         Encounter[]
   treatmentSessions  TreatmentSession[]
   managerBranches    ManagerBranch[]
+  staffBranches      StaffBranch[]        @relation("StaffBranches")
+  referralCodes      ReferralCode[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -218,10 +232,16 @@ model User {
   chatMessages    ChatMessage[]
   chatRooms       ChatRoom[]  @relation("ChatRoomStaff")
   managedBranches ManagerBranch[]
+  staffBranches   StaffBranch[] @relation("StaffBranches")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
   sessionsAsNurse  TreatmentSession[] @relation("SessionNurse")
+  
+  // Multiple doctors/nurses per session
+  sessionDoctorAssignments SessionDoctor[] @relation("SessionDoctorStaff")
+  sessionNurseAssignments  SessionNurse[]  @relation("SessionNurseStaff")
+  
   packagesAssigned MemberPackage[]    @relation("PackageAssignedBy")
   packagesVerified MemberPackage[]    @relation("PackageVerifiedBy")
   addOnsAssigned   MemberAddOn[]      @relation("AddOnAssignedBy")
@@ -270,6 +290,22 @@ model ManagerBranch {
   @@map("manager_branches")
 }
 
+model StaffBranch {
+  id        String   @id @default(cuid())
+  userId    String
+  branchId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation("StaffBranches", fields: [userId], references: [id], onDelete: Cascade)
+  branch Branch @relation("StaffBranches", fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, branchId])
+  @@index([userId])
+  @@index([branchId])
+  @@map("staff_branches")
+}
+
 // ============================================================
 // MEMBER DOMAIN
 // ============================================================
@@ -280,6 +316,13 @@ model Member {
   memberNo             String    @unique
   registrationBranchId String
   referralCodeId       String?
+  
+  // Incentive Settings (per member)
+  firstIncentiveType    IncentiveType? 
+  firstIncentiveValue   Decimal?       @db.Decimal(10, 2)
+  nextIncentiveType     IncentiveType?
+  nextIncentiveValue    Decimal?       @db.Decimal(10, 2)
+  
   voucherCount         Int       @default(0)
   isConsentToPhoto     Boolean   @default(true)
   nik                  String?   @unique
@@ -309,6 +352,7 @@ model Member {
   diagnoses          Diagnosis[]        // Direct diagnoses without encounter
   therapyPlans       TherapyPlan[]      // Therapy plans for preparation
   chatRoom           ChatRoom?
+  incentiveRecords   ReferralIncentiveRecord[]
 
   @@index([memberNo])
   @@index([registrationBranchId, isActive])
@@ -356,39 +400,115 @@ model ReferralCode {
   id           String        @id @default(cuid())
   code         String        @unique
   referrerName String
-  referrerType ReferrerType?
+  referrerType ReferrerType
+  branchId     String
+  phone        String?
+  email        String?
+  
+  // Statistics
+  totalReferrals        Int           @default(0)
+  totalIncentiveEarned  Decimal       @default(0) @db.Decimal(15, 2)
+  
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
 
-  members Member[]
+  branch              Branch                      @relation(fields: [branchId], references: [id])
+  members             Member[]
+  incentiveRecords    ReferralIncentiveRecord[]
 
   @@index([code])
+  @@index([branchId])
   @@index([isActive])
   @@index([referrerType])
   @@map("referral_codes")
+}
+
+model ReferralIncentiveRecord {
+  id                String        @id @default(cuid())
+  referralCodeId    String
+  memberId          String
+  memberPackageId   String
+  
+  // Package Info (snapshot)
+  packageType       String
+  packageName       String
+  packageValue      Decimal       @db.Decimal(15, 2)
+  
+  // Incentive Calculation
+  isFirstPackage    Boolean
+  incentiveType     IncentiveType
+  incentiveValue    Decimal       @db.Decimal(10, 2)
+  incentiveAmount   Decimal       @db.Decimal(15, 2)
+  
+  // Metadata
+  notes             String?
+  createdAt         DateTime      @default(now())
+  
+  referralCode      ReferralCode  @relation(fields: [referralCodeId], references: [id], onDelete: Cascade)
+  member            Member        @relation(fields: [memberId], references: [id])
+  memberPackage     MemberPackage @relation(fields: [memberPackageId], references: [id])
+  
+  @@index([referralCodeId])
+  @@index([memberId])
+  @@index([memberPackageId])
+  @@index([createdAt])
+  @@map("referral_incentive_records")
 }
 
 // ============================================================
 // PACKAGE DOMAIN
 // ============================================================
 
+model MasterBoosterType {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  icon        String?
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("master_booster_types")
+}
+
+model MasterServiceType {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("master_service_types")
+}
+
 model PackagePricing {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   branchId      String
   packageType   PackageType
-  productCode   String?     // e.g., TNB-P7-HC, BST-NO-P1-HC
+  boosterType   BoosterType? // HHO or NO2 for BOOSTER packages
+  serviceType   String?      // HC, PS, PHC, PTY, PDA for service type pricing
+  productCode   String?      // e.g., TNB-P7-HC, BST-NO-P1-HC
   name          String
   totalSessions Int
-  price         Decimal     @db.Decimal(12, 2)
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  price         Decimal      @db.Decimal(12, 2)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   branch         Branch          @relation(fields: [branchId], references: [id])
   memberPackages MemberPackage[]
 
-  @@unique([branchId, packageType, totalSessions])
+  @@unique([branchId, packageType, boosterType, serviceType, totalSessions])
   @@index([branchId, isActive])
   @@index([packageType])
   @@map("package_pricings")
@@ -440,6 +560,7 @@ model MemberPackage {
   encounters      Encounter[]     @relation("EncounterBasicPackage")
   boosterSessions TreatmentSession[] @relation("SessionBoosterPackage")
   addOns          MemberAddOn[]
+  incentiveRecords ReferralIncentiveRecord[]
 
   @@index([memberId, status])
   @@index([branchId, status])
@@ -744,8 +865,8 @@ model TreatmentSession {
   treatmentDate    DateTime
   isCompleted      Boolean     @default(false)
   adminLayananId   String
-  doctorId         String
-  nurseId          String
+  doctorId         String      // Primary doctor (backward compatibility)
+  nurseId          String      // Primary nurse (backward compatibility)
   boosterPackageId String?
   boosterType      BoosterType?
   createdAt        DateTime    @default(now())
@@ -765,12 +886,50 @@ model TreatmentSession {
   photo        SessionPhoto?
   emrNotes     EMRNote[]
   evaluation   DoctorEvaluation?
+  
+  // Multiple doctors and nurses support
+  sessionDoctors SessionDoctor[]
+  sessionNurses  SessionNurse[]
 
   @@index([encounterId])
   @@index([branchId, treatmentDate])
   @@index([doctorId, treatmentDate])
   @@index([isCompleted])
   @@map("treatment_sessions")
+}
+
+// Junction table for multiple doctors per session
+model SessionDoctor {
+  id        String   @id @default(cuid())
+  sessionId String
+  doctorId  String
+  isPrimary Boolean  @default(false) // Mark primary doctor
+  createdAt DateTime @default(now())
+
+  session TreatmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  doctor  User             @relation("SessionDoctorStaff", fields: [doctorId], references: [id])
+
+  @@unique([sessionId, doctorId])
+  @@index([sessionId])
+  @@index([doctorId])
+  @@map("session_doctors")
+}
+
+// Junction table for multiple nurses per session
+model SessionNurse {
+  id        String   @id @default(cuid())
+  sessionId String
+  nurseId   String
+  isPrimary Boolean  @default(false) // Mark primary nurse
+  createdAt DateTime @default(now())
+
+  session TreatmentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  nurse   User             @relation("SessionNurseStaff", fields: [nurseId], references: [id])
+
+  @@unique([sessionId, nurseId])
+  @@index([sessionId])
+  @@index([nurseId])
+  @@map("session_nurses")
 }
 
 model Diagnosis {
@@ -964,19 +1123,23 @@ model DoctorEvaluationHistory {
 // ============================================================
 
 model MasterProduct {
-  id          String          @id @default(cuid())
-  name        String          @unique
-  category    ProductCategory
-  unit        String
-  description String?
-  isActive    Boolean         @default(true)
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  id              String          @id @default(cuid())
+  name            String          @unique
+  category        ProductCategory
+  unit            String          // Legacy field, kept for backward compatibility
+  baseUnit        String          @map("base_unit")        // Storage unit (botol, box, pack)
+  usageUnit       String          @map("usage_unit")       // Usage unit (ml, tablet, gram)
+  conversionFactor Decimal        @map("conversion_factor") @db.Decimal(10, 4) @default(1.0) // How many usage units per base unit
+  description     String?
+  isActive        Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   inventoryItems InventoryItem[]
 
   @@index([category, isActive])
   @@index([isActive])
+  @@index([baseUnit, usageUnit])
   @@map("master_products")
 }
 
@@ -984,8 +1147,8 @@ model InventoryItem {
   id              String   @id @default(cuid())
   masterProductId String
   branchId        String
-  stock           Decimal  @db.Decimal(10, 2) @default(0)
-  minThreshold    Decimal  @db.Decimal(10, 2) @default(0)
+  stock           Decimal  @db.Decimal(10, 4) @default(0)
+  minThreshold    Decimal  @db.Decimal(10, 4) @default(0)
   storageLocation String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -1006,9 +1169,9 @@ model StockMutation {
   id              String            @id @default(cuid())
   inventoryItemId String
   type            StockMutationType
-  quantity        Decimal           @db.Decimal(10, 2)
-  stockBefore     Decimal           @db.Decimal(10, 2)
-  stockAfter      Decimal           @db.Decimal(10, 2)
+  quantity        Decimal           @db.Decimal(10, 4)
+  stockBefore     Decimal           @db.Decimal(10, 4)
+  stockAfter      Decimal           @db.Decimal(10, 4)
   referenceType   String?
   referenceId     String?
   notes           String?

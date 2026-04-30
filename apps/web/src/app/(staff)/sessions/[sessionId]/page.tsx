@@ -23,6 +23,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [completing, setCompleting] = useState(false);
+  const [showStaffInfo, setShowStaffInfo] = useState(false);
 
   useEffect(() => {
     loadSessionDetail();
@@ -189,17 +190,197 @@ export default function SessionDetailPage() {
 
       {/* Progress Steps */}
       <div className="card" style={{ marginBottom: '24px', padding: '24px' }}>
-        <h3 style={{ 
-          fontSize: '18px', 
-          fontWeight: '700', 
-          marginBottom: '20px',
-          color: 'var(--text-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}>
-          <span style={{ fontSize: '20px' }}>📋</span> Progress Sesi Terapi
-        </h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h3 style={{ 
+            fontSize: '18px', 
+            fontWeight: '700',
+            color: 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            margin: 0
+          }}>
+            <span style={{ fontSize: '20px' }}>📋</span> Progress Sesi Terapi
+          </h3>
+          <button
+            onClick={() => setShowStaffInfo(!showStaffInfo)}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <span>👥</span>
+            <span>{showStaffInfo ? 'Sembunyikan' : 'Lihat'} Info Tim</span>
+          </button>
+        </div>
+
+        {/* Staff Info Panel */}
+        {showStaffInfo && (
+          <div style={{
+            marginBottom: '20px',
+            padding: '20px',
+            background: 'var(--surface-input)',
+            border: '1px solid var(--surface-border)',
+            borderRadius: '12px',
+          }}>
+            <h4 style={{
+              fontSize: '16px',
+              fontWeight: '700',
+              color: 'var(--text-primary)',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <span>👥</span> Tim Medis & Admin
+            </h4>
+            
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+              gap: '16px'
+            }}>
+              {/* Admin Layanan */}
+              <div style={{
+                padding: '16px',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--surface-border)',
+                borderRadius: '8px',
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: '8px'
+                }}>
+                  Admin Layanan
+                </div>
+                <div style={{
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '18px' }}>👤</span>
+                  <span>{sessionInfo.adminLayanan.fullName}</span>
+                </div>
+              </div>
+
+              {/* Dokter */}
+              <div style={{
+                padding: '16px',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--surface-border)',
+                borderRadius: '8px',
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: '8px'
+                }}>
+                  Dokter Utama
+                </div>
+                <div style={{
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '18px' }}>👨‍⚕️</span>
+                  <span>{sessionInfo.doctor.fullName}</span>
+                </div>
+                {/* Additional Doctors - will be added when backend returns them */}
+                {(sessionInfo as any).sessionDoctors && (sessionInfo as any).sessionDoctors.length > 1 && (
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px'
+                    }}>
+                      Dokter Tambahan:
+                    </div>
+                    {(sessionInfo as any).sessionDoctors
+                      .filter((sd: any) => !sd.isPrimary)
+                      .map((sd: any) => (
+                        <div key={sd.id} style={{
+                          fontSize: '13px',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '4px',
+                          paddingLeft: '26px'
+                        }}>
+                          • {sd.doctor.profile?.fullName || sd.doctor.fullName}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Nakes */}
+              <div style={{
+                padding: '16px',
+                background: 'var(--surface-card)',
+                border: '1px solid var(--surface-border)',
+                borderRadius: '8px',
+              }}>
+                <div style={{
+                  fontSize: '12px',
+                  fontWeight: '600',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.5px',
+                  marginBottom: '8px'
+                }}>
+                  Nakes Utama
+                </div>
+                <div style={{
+                  fontSize: '15px',
+                  fontWeight: '600',
+                  color: 'var(--text-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }}>
+                  <span style={{ fontSize: '18px' }}>👩‍⚕️</span>
+                  <span>{sessionInfo.nurse.fullName}</span>
+                </div>
+                {/* Additional Nurses - will be added when backend returns them */}
+                {(sessionInfo as any).sessionNurses && (sessionInfo as any).sessionNurses.length > 1 && (
+                  <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: 'var(--text-muted)',
+                      marginBottom: '8px'
+                    }}>
+                      Nakes Tambahan:
+                    </div>
+                    {(sessionInfo as any).sessionNurses
+                      .filter((sn: any) => !sn.isPrimary)
+                      .map((sn: any) => (
+                        <div key={sn.id} style={{
+                          fontSize: '13px',
+                          color: 'var(--text-secondary)',
+                          marginBottom: '4px',
+                          paddingLeft: '26px'
+                        }}>
+                          • {sn.nurse.profile?.fullName || sn.nurse.fullName}
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ 
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 

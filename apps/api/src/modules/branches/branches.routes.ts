@@ -18,6 +18,7 @@ import {
   getAuditLogs,
 } from '../admin/admin.controller';
 import { MembersController } from '../members/members.controller';
+import { listUsers } from '../users/users.controller';
 
 export const branchesRouter = Router();
 
@@ -83,7 +84,7 @@ branchesRouter.get(
 branchesRouter.get(
   '/all',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN]),
   getAllBranchesWithStats,
 );
 
@@ -93,6 +94,14 @@ branchesRouter.get(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   membersController.getMembersByBranch.bind(membersController),
+);
+
+// ── Get Branch Staff ──────────────────────────────────────────
+branchesRouter.get(
+  '/:branchId/staff',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  listUsers,
 );
 
 // ── Get Single Branch ─────────────────────────────────────────

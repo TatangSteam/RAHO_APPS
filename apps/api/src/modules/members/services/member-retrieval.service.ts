@@ -19,8 +19,10 @@ export class MemberRetrievalService {
   async getMembers(branchId: string | null, role: Role, filters: MemberFilters) {
     const { search, status, page = 1, limit = 20 } = filters;
 
-    // Build where clause
-    const where: any = {};
+    // Build where clause - start with isActive filter
+    const where: any = {
+      isActive: true  // Only show active members
+    };
 
     // Branch filtering based on role
     if (role === Role.SUPER_ADMIN) {
@@ -44,13 +46,41 @@ export class MemberRetrievalService {
 
     // Search filter
     if (search) {
-      where.OR = [
-        ...(where.OR || []),
+      const searchConditions = [
         { memberNo: { contains: search, mode: 'insensitive' } },
-        { fullName: { contains: search, mode: 'insensitive' } },
-        { phoneNumber: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
+        { 
+          user: { 
+            profile: { 
+              fullName: { contains: search, mode: 'insensitive' } 
+            } 
+          } 
+        },
+        { 
+          user: { 
+            profile: { 
+              phone: { contains: search, mode: 'insensitive' } 
+            } 
+          } 
+        },
+        { 
+          user: { 
+            email: { contains: search, mode: 'insensitive' } 
+          } 
+        },
       ];
+
+      // Merge with existing OR conditions (branch access)
+      if (where.OR && where.OR.length > 0) {
+        // Combine branch conditions with search conditions using AND
+        const branchConditions = where.OR;
+        where.AND = [
+          { OR: branchConditions },
+          { OR: searchConditions },
+        ];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     // Status filter
@@ -66,9 +96,8 @@ export class MemberRetrievalService {
       where,
       include: {
         user: {
-          select: {
-            id: true,
-            email: true,
+          include: {
+            profile: true,
           },
         },
         registrationBranch: {
@@ -88,6 +117,26 @@ export class MemberRetrievalService {
               },
             },
           },
+        },
+        memberPackages: {
+          where: {
+            packageType: 'BASIC',
+            status: 'ACTIVE',
+          },
+          select: {
+            totalSessions: true,
+            usedSessions: true,
+          },
+        },
+        documents: {
+          where: {
+            documentType: 'FOTO_PROFIL',
+          },
+          select: {
+            fileUrl: true,
+            documentType: true,
+          },
+          take: 1,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -113,27 +162,49 @@ export class MemberRetrievalService {
     const { search, status, page = 1, limit = 20 } = filters;
 
     const where: any = {
-      OR: [
-        { registrationBranchId: targetBranchId },
-        { branchAccesses: { some: { branchId: targetBranchId } } },
-      ],
+      AND: [
+        // Only show active members
+        { isActive: true },
+        // Branch access conditions
+        {
+          OR: [
+            { registrationBranchId: targetBranchId },
+            { branchAccesses: { some: { branchId: targetBranchId } } },
+          ],
+        }
+      ]
     };
 
     if (search) {
-      where.AND = [
-        {
-          OR: [
-            { memberNo: { contains: search, mode: 'insensitive' } },
-            { fullName: { contains: search, mode: 'insensitive' } },
-            { phoneNumber: { contains: search, mode: 'insensitive' } },
-            { email: { contains: search, mode: 'insensitive' } },
-          ],
+      const searchConditions = [
+        { memberNo: { contains: search, mode: 'insensitive' } },
+        { 
+          user: { 
+            profile: { 
+              fullName: { contains: search, mode: 'insensitive' } 
+            } 
+          } 
+        },
+        { 
+          user: { 
+            profile: { 
+              phone: { contains: search, mode: 'insensitive' } 
+            } 
+          } 
+        },
+        { 
+          user: { 
+            email: { contains: search, mode: 'insensitive' } 
+          } 
         },
       ];
+
+      // Add search conditions to existing AND clause
+      where.AND.push({ OR: searchConditions });
     }
 
     if (status) {
-      where.status = status;
+      where.AND.push({ status: status });
     }
 
     const total = await prisma.member.count({ where });
@@ -142,9 +213,8 @@ export class MemberRetrievalService {
       where,
       include: {
         user: {
-          select: {
-            id: true,
-            email: true,
+          include: {
+            profile: true,
           },
         },
         registrationBranch: {
@@ -164,6 +234,26 @@ export class MemberRetrievalService {
               },
             },
           },
+        },
+        memberPackages: {
+          where: {
+            packageType: 'BASIC',
+            status: 'ACTIVE',
+          },
+          select: {
+            totalSessions: true,
+            usedSessions: true,
+          },
+        },
+        documents: {
+          where: {
+            documentType: 'FOTO_PROFIL',
+          },
+          select: {
+            fileUrl: true,
+            documentType: true,
+          },
+          take: 1,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -232,11 +322,27 @@ export class MemberRetrievalService {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
       include: {
-        user: true,
+        user: {
+          include: {
+            profile: true,
+          },
+        },
         registrationBranch: true,
         branchAccesses: {
           include: {
             branch: true,
+          },
+        },
+        referralCode: true,
+        documents: true,
+        memberPackages: {
+          where: {
+            packageType: 'BASIC',
+            status: 'ACTIVE',
+          },
+          select: {
+            totalSessions: true,
+            usedSessions: true,
           },
         },
       },
@@ -246,46 +352,104 @@ export class MemberRetrievalService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    return this.formatMemberData(member);
+    return this.formatMemberDetailData(member);
+  }
+
+  /**
+   * Format member detail data for response
+   */
+  private formatMemberDetailData(member: any) {
+    const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+    
+    return {
+      memberId: member.id,
+      memberNo: member.memberNo,
+      user: {
+        email: member.user.email,
+        isActive: member.isActive,
+      },
+      profile: {
+        fullName: member.user.profile?.fullName || '',
+        phone: member.user.profile?.phone || '',
+        avatarUrl: profilePhoto?.fileUrl,
+      },
+      registrationBranch: {
+        id: member.registrationBranch.id,
+        name: member.registrationBranch.name,
+        branchCode: member.registrationBranch.branchCode,
+      },
+      branchAccess: member.branchAccesses?.map((access: any) => ({
+        branchId: access.branchId,
+        branchName: access.branch.name,
+        grantedAt: access.createdAt.toISOString(),
+      })) || [],
+      documents: member.documents?.map((doc: any) => ({
+        id: doc.id,
+        documentType: doc.documentType,
+        fileUrl: doc.fileUrl,
+        fileName: doc.fileName,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        createdAt: doc.createdAt.toISOString(),
+      })) || [],
+      referralCodeId: member.referralCodeId,
+      referralCode: member.referralCode ? {
+        code: member.referralCode.code,
+        referrerName: member.referralCode.referrerName,
+        referrerType: member.referralCode.referrerType,
+      } : null,
+      // Incentive settings (per member)
+      firstIncentiveType: member.firstIncentiveType,
+      firstIncentiveValue: member.firstIncentiveValue ? Number(member.firstIncentiveValue) : null,
+      nextIncentiveType: member.nextIncentiveType,
+      nextIncentiveValue: member.nextIncentiveValue ? Number(member.nextIncentiveValue) : null,
+      // Member fields
+      nik: member.nik,
+      tempatLahir: member.tempatLahir,
+      dateOfBirth: member.dateOfBirth?.toISOString(),
+      jenisKelamin: member.jenisKelamin,
+      address: member.address,
+      pekerjaan: member.pekerjaan,
+      statusNikah: member.statusNikah,
+      emergencyContact: member.emergencyContact,
+      sumberInfoRaho: member.sumberInfoRaho,
+      postalCode: member.postalCode,
+      voucherCount: member.voucherCount,
+      isConsentToPhoto: member.isConsentToPhoto,
+      isActive: member.isActive,
+      createdAt: member.createdAt.toISOString(),
+    };
   }
 
   /**
    * Format member data for response
    */
   private formatMemberData(member: any) {
+    // Calculate basic voucher count from packages
+    const basicVoucherCount = member.memberPackages?.reduce(
+      (sum: number, pkg: any) => sum + (pkg.totalSessions - pkg.usedSessions),
+      0
+    ) || 0;
+
+    // Get profile photo
+    const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+
+    // Check if member has cross-branch access
+    const isLintas = member.branchAccesses && member.branchAccesses.length > 0;
+
     return {
-      id: member.id,
+      memberId: member.id,
       memberNo: member.memberNo,
-      fullName: member.fullName,
-      dateOfBirth: member.dateOfBirth?.toISOString(),
-      gender: member.gender,
-      phoneNumber: member.phoneNumber,
-      email: member.email,
-      address: member.address,
-      city: member.city,
-      province: member.province,
-      postalCode: member.postalCode,
-      emergencyContactName: member.emergencyContactName,
-      emergencyContactPhone: member.emergencyContactPhone,
-      emergencyContactRelation: member.emergencyContactRelation,
-      photoUrl: member.photoUrl,
-      status: member.status,
-      voucherCount: member.voucherCount,
-      registrationBranch: member.registrationBranch ? {
-        id: member.registrationBranch.id,
-        name: member.registrationBranch.name,
-        branchCode: member.registrationBranch.branchCode,
-      } : null,
-      branchAccesses: member.branchAccesses?.map((access: any) => ({
-        branchId: access.branchId,
-        branchName: access.branch.name,
-        branchCode: access.branch.branchCode,
-        grantedAt: access.grantedAt.toISOString(),
-      })) || [],
-      userId: member.userId,
-      userEmail: member.user?.email,
-      createdAt: member.createdAt.toISOString(),
-      updatedAt: member.updatedAt.toISOString(),
+      fullName: member.user?.profile?.fullName || '',
+      phone: member.user?.profile?.phone || '',
+      email: member.user?.email || '',
+      voucherCount: member.voucherCount || 0,
+      basicPackageCount: basicVoucherCount,
+      isActive: member.isActive,
+      isLintas,
+      registrationBranch: member.registrationBranch?.name || 'N/A',
+      photoUrl: profilePhoto?.fileUrl,
+      createdAt: member.createdAt?.toISOString(),
     };
   }
 }

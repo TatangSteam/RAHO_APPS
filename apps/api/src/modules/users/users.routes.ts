@@ -61,7 +61,7 @@ usersRouter.patch(
 usersRouter.delete(
   '/:userId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   deactivateUser,
 );
 

@@ -11,8 +11,10 @@ export const createSessionSchema = z.object({
   boosterPackageId: z.string().cuid().optional(),
   therapyPlanId: z.string().cuid(), // NEW: Required therapy plan
   adminLayananId: z.string().cuid(),
-  doctorId: z.string().cuid(),
-  nurseId: z.string().cuid(),
+  doctorId: z.string().cuid(), // Primary doctor
+  nurseId: z.string().cuid(), // Primary nurse
+  additionalDoctorIds: z.array(z.string().cuid()).optional().default([]), // Additional doctors
+  additionalNurseIds: z.array(z.string().cuid()).optional().default([]), // Additional nurses
   treatmentDate: z.string().datetime(),
   pelaksanaan: z.nativeEnum(SessionType),
 });

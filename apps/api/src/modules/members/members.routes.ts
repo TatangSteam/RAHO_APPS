@@ -23,6 +23,14 @@ const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, R
 // GET /api/v1/members - List members
 router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(controller));
 
+// POST /api/v1/members/export - Export members data
+router.post(
+  '/export',
+  authenticate,
+  authorize(ADMIN_PLUS),
+  controller.exportMembers.bind(controller)
+);
+
 // GET /api/v1/members/lookup - Lookup member by memberNo
 router.get(
   '/lookup',
@@ -123,7 +131,7 @@ router.get(
 router.patch(
   '/:memberId',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize(ADMIN_PLUS),
   assertBranchAccess,
   controller.updateMember.bind(controller)
 );
@@ -132,7 +140,7 @@ router.patch(
 router.delete(
   '/:memberId',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize(ADMIN_PLUS),
   assertBranchAccess,
   controller.deleteMember.bind(controller)
 );

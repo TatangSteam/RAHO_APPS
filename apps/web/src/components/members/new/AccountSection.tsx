@@ -1,5 +1,7 @@
 'use client';
 
+import { useState, useEffect } from 'react';
+import { getActiveReferrals } from '@/lib/api/referralsApi';
 import type { CreateMemberData } from '@/types/member';
 
 interface AccountSectionProps {
@@ -8,6 +10,127 @@ interface AccountSectionProps {
 }
 
 export default function AccountSection({ formData, onChange }: AccountSectionProps) {
+  const [referralCodes, setReferralCodes] = useState<any[]>([]);
+  const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
+  const [referralSearch, setReferralSearch] = useState('');
+  const [showReferralDropdown, setShowReferralDropdown] = useState(false);
+  const [selectedReferralId, setSelectedReferralId] = useState('');
+
+  // Fetch referral codes on mount
+  useEffect(() => {
+    const fetchReferralCodes = async () => {
+      try {
+        const response = await getActiveReferrals();
+        setReferralCodes(response.data.data);
+        setFilteredReferralCodes(response.data.data);
+      } catch (error) {
+        console.error('Error fetching referral codes:', error);
+      }
+    };
+
+    fetchReferralCodes();
+  }, []);
+
+  // Filter referral codes based on search
+  useEffect(() => {
+    if (referralSearch.trim() === '') {
+      setFilteredReferralCodes(referralCodes);
+    } else {
+      const searchLower = referralSearch.toLowerCase();
+      const filtered = referralCodes.filter((ref) => 
+        ref.code.toLowerCase().includes(searchLower) ||
+        ref.referrerName.toLowerCase().includes(searchLower) ||
+        ref.referrerType.toLowerCase().includes(searchLower)
+      );
+      setFilteredReferralCodes(filtered);
+    }
+  }, [referralSearch, referralCodes]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('#referralSearchInput') && !target.closest('.referral-dropdown-list')) {
+        setShowReferralDropdown(false);
+      }
+    };
+
+    if (showReferralDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showReferralDropdown]);
+
+  const handleReferralSelect = (referralId: string, referralCode: string) => {
+    setSelectedReferralId(referralId);
+    const selected = referralCodes.find(ref => ref.id === referralId);
+    if (selected) {
+      setReferralSearch(`${selected.code} - ${selected.referrerName}`);
+      // Update parent form data with both referral code and ID
+      const referralCodeEvent = {
+        target: {
+          name: 'referralCode',
+          value: referralCode,
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralCodeEvent);
+      
+      // Also send the referralCodeId
+      const referralIdEvent = {
+        target: {
+          name: 'referralCodeId',
+          value: referralId,
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralIdEvent);
+    } else {
+      setReferralSearch('');
+      const referralCodeEvent = {
+        target: {
+          name: 'referralCode',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralCodeEvent);
+      
+      const referralIdEvent = {
+        target: {
+          name: 'referralCodeId',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralIdEvent);
+    }
+    setShowReferralDropdown(false);
+  };
+
+  const handleReferralSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setReferralSearch(e.target.value);
+    setShowReferralDropdown(true);
+    // Clear selection if user is typing
+    if (selectedReferralId) {
+      setSelectedReferralId('');
+      const referralCodeEvent = {
+        target: {
+          name: 'referralCode',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralCodeEvent);
+      
+      const referralIdEvent = {
+        target: {
+          name: 'referralCodeId',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralIdEvent);
+    }
+  };
+
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid var(--surface-border)' }}>
@@ -64,17 +187,94 @@ export default function AccountSection({ formData, onChange }: AccountSectionPro
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Minimal 8 karakter</p>
         </div>
 
-        <div>
+        <div style={{ position: 'relative' }}>
           <label className="form-label">Kode Referral</label>
           <input
             type="text"
-            name="referralCode"
-            value={formData.referralCode || ''}
-            onChange={onChange}
+            id="referralSearchInput"
+            name="referralSearch"
+            value={referralSearch}
+            onChange={handleReferralSearchChange}
+            onFocus={() => setShowReferralDropdown(true)}
             className="form-input"
-            placeholder="Kode referral (opsional)"
-            style={{ fontFamily: 'monospace' }}
+            placeholder="Ketik untuk mencari kode referral atau nama..."
+            autoComplete="off"
           />
+          {showReferralDropdown && (
+            <div className="referral-dropdown-list" style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              marginTop: '4px',
+              maxHeight: '300px',
+              overflowY: 'auto',
+              background: 'var(--surface-card)',
+              border: '2px solid var(--surface-border)',
+              borderRadius: 'var(--radius-lg)',
+              boxShadow: 'var(--shadow-xl)',
+              zIndex: 1000,
+            }}>
+              <div 
+                style={{
+                  padding: '12px 16px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--surface-border)',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                onClick={() => handleReferralSelect('', '')}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>-</span>
+                  <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>Tidak ada referral</span>
+                </div>
+              </div>
+              {filteredReferralCodes.length === 0 ? (
+                <div style={{
+                  padding: '20px 16px',
+                  textAlign: 'center',
+                  color: 'var(--text-secondary)',
+                  fontSize: '14px',
+                  fontStyle: 'italic',
+                }}>
+                  Tidak ada referral ditemukan
+                </div>
+              ) : (
+                filteredReferralCodes.map((ref) => (
+                  <div
+                    key={ref.id}
+                    style={{
+                      padding: '12px 16px',
+                      cursor: 'pointer',
+                      borderBottom: '1px solid var(--surface-border)',
+                      transition: 'all 0.2s',
+                      background: selectedReferralId === ref.id ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                      borderLeft: selectedReferralId === ref.id ? '3px solid var(--color-primary-500)' : 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedReferralId !== ref.id) {
+                        e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedReferralId !== ref.id) {
+                        e.currentTarget.style.background = 'transparent';
+                      }
+                    }}
+                    onClick={() => handleReferralSelect(ref.id, ref.code)}
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>{ref.code}</span>
+                      <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--text-primary)' }}>{ref.referrerName}</span>
+                      <span style={{ fontSize: '12px', fontWeight: '500', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{ref.referrerType}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>

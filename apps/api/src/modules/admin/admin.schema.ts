@@ -120,7 +120,6 @@ export const createStockRequestSchema = z.object({
     .max(500, 'Catatan maksimal 500 karakter')
     .optional(),
   items: z.array(stockRequestItemSchema)
-    .min(1, 'Minimal 1 item harus diminta')
     .max(50, 'Maksimal 50 item per permintaan')
 });
 
@@ -129,13 +128,9 @@ export const createStockRequestSchema = z.object({
 // ============================================================
 
 export const createPackagePricingSchema = z.object({
-  branchId: z.string()
-    .uuid('ID cabang tidak valid'),
   packageType: z.nativeEnum(PackageType),
-  productCode: z.string()
-    .min(2, 'Kode produk minimal 2 karakter')
-    .max(50, 'Kode produk maksimal 50 karakter')
-    .optional(),
+  boosterType: z.enum(['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3', 'HHO', 'NO2']).optional(), // Required for BOOSTER packages
+  serviceType: z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']).optional(), // Required for BOOSTER packages
   name: z.string()
     .min(3, 'Nama paket minimal 3 karakter')
     .max(100, 'Nama paket maksimal 100 karakter'),
@@ -145,7 +140,15 @@ export const createPackagePricingSchema = z.object({
     .max(100, 'Total sesi maksimal 100'),
   price: z.number()
     .min(0, 'Harga tidak boleh negatif')
-    .max(100000000, 'Harga maksimal 100 juta')
+    .max(100000000, 'Harga maksimal 100 juta'),
+  productCode: z.string()
+    .min(2, 'Kode produk minimal 2 karakter')
+    .max(50, 'Kode produk maksimal 50 karakter')
+    .optional(),
+  isActive: z.boolean().optional(),
+  branchId: z.string()
+    .uuid('ID cabang tidak valid')
+    .optional() // Optional in schema, will be set by controller for ADMIN_CABANG
 });
 
 export const updatePackagePricingSchema = z.object({
@@ -158,6 +161,46 @@ export const updatePackagePricingSchema = z.object({
     .max(50, 'Kode produk maksimal 50 karakter')
     .optional(),
   price: z.number()
+    .min(0, 'Harga tidak boleh negatif')
+    .max(100000000, 'Harga maksimal 100 juta')
+    .optional(),
+  isActive: z.boolean().optional()
+});
+
+// ============================================================
+// NON-THERAPY PRODUCT (ADD-ON) SCHEMAS
+// ============================================================
+
+export const createNonTherapyProductSchema = z.object({
+  productCode: z.string()
+    .min(2, 'Kode produk minimal 2 karakter')
+    .max(50, 'Kode produk maksimal 50 karakter'),
+  productType: z.enum(['AIR_NANO', 'ROKOK_KENKOU']),
+  name: z.string()
+    .min(3, 'Nama produk minimal 3 karakter')
+    .max(100, 'Nama produk maksimal 100 karakter'),
+  description: z.string()
+    .max(500, 'Deskripsi maksimal 500 karakter')
+    .optional(),
+  pricePerUnit: z.number()
+    .min(0, 'Harga tidak boleh negatif')
+    .max(100000000, 'Harga maksimal 100 juta'),
+  // Air Nano specific fields
+  airNanoColor: z.enum(['KUNING', 'BIRU', 'HIJAU']).optional(),
+  airNanoVolume: z.enum(['ML_600', 'ML_1500']).optional(),
+  airNanoUnit: z.enum(['BOTOL', 'DUS']).optional(),
+  isActive: z.boolean().optional()
+});
+
+export const updateNonTherapyProductSchema = z.object({
+  name: z.string()
+    .min(3, 'Nama produk minimal 3 karakter')
+    .max(100, 'Nama produk maksimal 100 karakter')
+    .optional(),
+  description: z.string()
+    .max(500, 'Deskripsi maksimal 500 karakter')
+    .optional(),
+  pricePerUnit: z.number()
     .min(0, 'Harga tidak boleh negatif')
     .max(100000000, 'Harga maksimal 100 juta')
     .optional(),
@@ -227,6 +270,8 @@ export type CreateStockRequestInput = z.infer<typeof createStockRequestSchema>;
 export type StockRequestItemInput = z.infer<typeof stockRequestItemSchema>;
 export type CreatePackagePricingInput = z.infer<typeof createPackagePricingSchema>;
 export type UpdatePackagePricingInput = z.infer<typeof updatePackagePricingSchema>;
+export type CreateNonTherapyProductInput = z.infer<typeof createNonTherapyProductSchema>;
+export type UpdateNonTherapyProductInput = z.infer<typeof updateNonTherapyProductSchema>;
 export type PeriodQueryInput = z.infer<typeof periodQuerySchema>;
 export type UserFilterInput = z.infer<typeof userFilterSchema>;
 export type PackagePricingFilterInput = z.infer<typeof packagePricingFilterSchema>;

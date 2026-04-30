@@ -2,12 +2,21 @@ import { Router } from 'express';
 import { PackagesController } from './packages.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
+import { uploadPaymentProof } from '../../middleware/upload';
 
 const router = Router();
 const controller = new PackagesController();
 
 // All routes require authentication
 router.use(authenticate);
+
+// Upload payment proof (ONLY JPEG/JPG)
+router.post(
+  '/packages/payment-proof/upload',
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  uploadPaymentProof.single('file'),
+  controller.uploadPaymentProof.bind(controller)
+);
 
 // Package payment verification
 router.patch(

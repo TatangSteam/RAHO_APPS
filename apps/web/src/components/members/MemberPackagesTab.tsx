@@ -105,7 +105,9 @@ export default function MemberPackagesTab({ packages, loading, onVerifyPayment }
     <div>
       <div className={styles.packagesGrid}>
         {currentPackages.map((pkg) => {
-          const key = 'isGroup' in pkg && pkg.isGroup ? pkg.purchaseGroupId : pkg.packageId;
+          const key = 'isGroup' in pkg && pkg.isGroup 
+            ? pkg.purchaseGroupId 
+            : ('packageId' in pkg ? pkg.packageId : pkg.addOnId);
           return (
             <PackageCard
               key={key}

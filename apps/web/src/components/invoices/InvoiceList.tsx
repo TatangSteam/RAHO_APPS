@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
-import InvoiceView from './InvoiceView';
+import InvoiceModal from './InvoiceModal';
 import styles from './InvoiceList.module.css';
 
 interface InvoiceListProps {
@@ -45,15 +45,6 @@ export default function InvoiceList({ invoices, loading = false, onRefresh }: In
     };
     return labels[status] || status;
   };
-
-  if (selectedInvoice) {
-    return (
-      <InvoiceView
-        invoice={selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-      />
-    );
-  }
 
   return (
     <div className={styles.container}>
@@ -152,6 +143,15 @@ export default function InvoiceList({ invoices, loading = false, onRefresh }: In
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Invoice Modal */}
+      {selectedInvoice && (
+        <InvoiceModal
+          show={!!selectedInvoice}
+          invoice={selectedInvoice}
+          onClose={() => setSelectedInvoice(null)}
+        />
       )}
     </div>
   );

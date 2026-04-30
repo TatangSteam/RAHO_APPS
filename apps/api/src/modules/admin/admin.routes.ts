@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getBranches,
   getSystemStats,
   getSystemHealth,
   getRecentActivities,
@@ -10,6 +11,19 @@ import {
   createPackagePricing,
   updatePackagePricing,
   deletePackagePricing,
+  getAllNonTherapyProducts,
+  getNonTherapyProduct,
+  createNonTherapyProduct,
+  updateNonTherapyProduct,
+  deleteNonTherapyProduct,
+  getAllBoosterTypes,
+  createBoosterType,
+  updateBoosterType,
+  deleteBoosterType,
+  getAllServiceTypes,
+  createServiceType,
+  updateServiceType,
+  deleteServiceType,
   createAdminManager,
   getAllUsers,
 } from './admin.controller';
@@ -19,6 +33,8 @@ import { validate } from '../../middleware/validate';
 import {
   createPackagePricingSchema,
   updatePackagePricingSchema,
+  createNonTherapyProductSchema,
+  updateNonTherapyProductSchema,
   createAdminManagerSchema,
 } from './admin.schema';
 
@@ -26,6 +42,16 @@ const router = Router();
 
 // Apply authentication to all admin routes
 router.use(authenticate);
+
+// ============================================================
+// BRANCH MANAGEMENT
+// ============================================================
+
+// Get branches for admin manager (multi-branch access)
+router.get('/branches',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
+  getBranches
+);
 
 // ============================================================
 // SUPER ADMIN ROUTES
@@ -67,34 +93,68 @@ router.get('/system/audit-logs',
 
 // Get all package pricing (with filters)
 router.get('/package-pricing',
-  authorize(['SUPER_ADMIN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   getAllPackagePricing
 );
 
 // Get single package pricing
 router.get('/package-pricing/:pricingId',
-  authorize(['SUPER_ADMIN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   getPackagePricing
 );
 
 // Create package pricing
 router.post('/package-pricing',
-  authorize(['SUPER_ADMIN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   validate(createPackagePricingSchema),
   createPackagePricing
 );
 
 // Update package pricing
 router.patch('/package-pricing/:pricingId',
-  authorize(['SUPER_ADMIN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   validate(updatePackagePricingSchema),
   updatePackagePricing
 );
 
 // Delete package pricing
 router.delete('/package-pricing/:pricingId',
-  authorize(['SUPER_ADMIN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   deletePackagePricing
+);
+
+// ── Non-Therapy Product (Add-on) Management ────────────────
+
+// Get all non-therapy products
+router.get('/non-therapy-products',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
+  getAllNonTherapyProducts
+);
+
+// Get single non-therapy product
+router.get('/non-therapy-products/:productId',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
+  getNonTherapyProduct
+);
+
+// Create non-therapy product
+router.post('/non-therapy-products',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  validate(createNonTherapyProductSchema),
+  createNonTherapyProduct
+);
+
+// Update non-therapy product
+router.patch('/non-therapy-products/:productId',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  validate(updateNonTherapyProductSchema),
+  updateNonTherapyProduct
+);
+
+// Delete non-therapy product
+router.delete('/non-therapy-products/:productId',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  deleteNonTherapyProduct
 );
 
 // ── User Management ────────────────────────────────────────
@@ -113,3 +173,48 @@ router.get('/users',
 );
 
 export { router as adminRoutes };
+
+
+// ── Master Types Management ────────────────────────────────────
+
+// Booster Types
+router.get('/master/booster-types',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
+  getAllBoosterTypes
+);
+
+router.post('/master/booster-types',
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  createBoosterType
+);
+
+router.patch('/master/booster-types/:typeId',
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  updateBoosterType
+);
+
+router.delete('/master/booster-types/:typeId',
+  authorize(['SUPER_ADMIN']),
+  deleteBoosterType
+);
+
+// Service Types
+router.get('/master/service-types',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
+  getAllServiceTypes
+);
+
+router.post('/master/service-types',
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  createServiceType
+);
+
+router.patch('/master/service-types/:typeId',
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG']),
+  updateServiceType
+);
+
+router.delete('/master/service-types/:typeId',
+  authorize(['SUPER_ADMIN']),
+  deleteServiceType
+);

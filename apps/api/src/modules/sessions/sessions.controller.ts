@@ -10,8 +10,11 @@ import {
   createEvaluationSchema,
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
+import { SessionExportService } from './services/session-export.service';
+import { Role } from '@prisma/client';
 
 const sessionsService = new SessionsService();
+const exportService = new SessionExportService();
 
 export class SessionsController {
   // ============================================================
@@ -64,9 +67,12 @@ export class SessionsController {
   async getAllSessions(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId, page, limit } = req.query;
+      const { userId, branchId, role } = req.user!;
       
       const result = await sessionsService.getAllSessions({
         memberId: memberId as string | undefined,
+        branchId: branchId || undefined,
+        role: role as string,
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
       });
@@ -477,6 +483,58 @@ export class SessionsController {
         return sendError(res, err.status, err.code, err.message);
       }
       next(err);
+    }
+  }
+
+  // ============================================================
+  // EXPORT SESSIONS
+  // ============================================================
+
+  async exportSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { format = 'xlsx', groupBy = 'none' } = req.query;
+      const { userId, branchId, role } = req.user!;
+      
+      const fields = req.body.fields || {
+        basicInfo: true,
+        memberInfo: true,
+        staffInfo: false,
+        vitalSigns: false,
+        therapyPlan: false,
+        infusion: false,
+        materials: false,
+        evaluation: false,
+      };
+
+      const filters = req.body.filters || {};
+
+      const data = await exportService.exportSessions(userId, role as Role, branchId, {
+        fields,
+        format: format as 'csv' | 'json' | 'xlsx',
+        filters,
+        groupBy: groupBy as 'date' | 'member' | 'doctor' | 'none',
+      });
+
+      if (format === 'csv') {
+        const csv = exportService.generateCSV(data);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=sessions-${Date.now()}.csv`);
+        res.send(csv);
+      } else if (format === 'xlsx') {
+        const buffer = await exportService.generateXLSX(data, groupBy as string);
+        res.setHeader(
+          'Content-Type',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader('Content-Disposition', `attachment; filename=sessions-${Date.now()}.xlsx`);
+        res.send(buffer);
+      } else {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=sessions-${Date.now()}.json`);
+        res.json(data);
+      }
+    } catch (error) {
+      next(error);
     }
   }
 }

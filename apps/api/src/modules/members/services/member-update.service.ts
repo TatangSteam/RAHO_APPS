@@ -14,24 +14,25 @@ export class MemberUpdateService {
     memberId: string,
     data: {
       fullName?: string;
-      dateOfBirth?: string;
+      birthDate?: string;
       gender?: string;
-      phoneNumber?: string;
+      phone?: string;
       email?: string;
       address?: string;
-      city?: string;
-      province?: string;
-      postalCode?: string;
       emergencyContactName?: string;
       emergencyContactPhone?: string;
-      emergencyContactRelation?: string;
-      photoUrl?: string;
-      status?: string;
     },
     userId: string
   ) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
+      include: {
+        user: {
+          include: {
+            profile: true
+          }
+        }
+      }
     });
 
     if (!member) {
@@ -39,9 +40,12 @@ export class MemberUpdateService {
     }
 
     // Check if phone number is being changed and already exists
-    if (data.phoneNumber && data.phoneNumber !== member.phoneNumber) {
-      const existingPhone = await prisma.member.findUnique({
-        where: { phoneNumber: data.phoneNumber },
+    if (data.phone && data.phone !== member.user.profile?.phone) {
+      const existingPhone = await prisma.userProfile.findFirst({
+        where: { 
+          phone: data.phone,
+          userId: { not: member.userId }
+        },
       });
 
       if (existingPhone) {
@@ -54,9 +58,12 @@ export class MemberUpdateService {
     }
 
     // Check if email is being changed and already exists
-    if (data.email && data.email !== member.email) {
-      const existingEmail = await prisma.member.findUnique({
-        where: { email: data.email },
+    if (data.email && data.email !== member.user.email) {
+      const existingEmail = await prisma.user.findFirst({
+        where: { 
+          email: data.email,
+          id: { not: member.userId }
+        },
       });
 
       if (existingEmail) {
@@ -68,34 +75,58 @@ export class MemberUpdateService {
       }
     }
 
-    // Update member
-    const updated = await prisma.member.update({
-      where: { id: memberId },
-      data: {
-        fullName: data.fullName,
-        dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-        gender: data.gender,
-        phoneNumber: data.phoneNumber,
-        email: data.email,
-        address: data.address,
-        city: data.city,
-        province: data.province,
-        postalCode: data.postalCode,
-        emergencyContactName: data.emergencyContactName,
-        emergencyContactPhone: data.emergencyContactPhone,
-        emergencyContactRelation: data.emergencyContactRelation,
-        photoUrl: data.photoUrl,
-        status: data.status,
-      },
-      include: {
-        user: true,
-        registrationBranch: true,
-        branchAccesses: {
-          include: {
-            branch: true,
+    // Update in transaction
+    const updated = await prisma.$transaction(async (tx) => {
+      // Update User table (email)
+      if (data.email) {
+        await tx.user.update({
+          where: { id: member.userId },
+          data: { email: data.email }
+        });
+      }
+
+      // Update UserProfile table (fullName, phone)
+      if (data.fullName || data.phone) {
+        await tx.userProfile.update({
+          where: { userId: member.userId },
+          data: {
+            ...(data.fullName && { fullName: data.fullName }),
+            ...(data.phone && { phone: data.phone })
+          }
+        });
+      }
+
+      // Update Member table (member-specific fields)
+      const memberUpdateData: any = {};
+      if (data.birthDate) memberUpdateData.dateOfBirth = new Date(data.birthDate);
+      if (data.gender) memberUpdateData.jenisKelamin = data.gender;
+      if (data.address) memberUpdateData.address = data.address;
+      if (data.emergencyContactName) memberUpdateData.emergencyContact = data.emergencyContactName;
+
+      if (Object.keys(memberUpdateData).length > 0) {
+        await tx.member.update({
+          where: { id: memberId },
+          data: memberUpdateData
+        });
+      }
+
+      // Return updated member
+      return await tx.member.findUnique({
+        where: { id: memberId },
+        include: {
+          user: {
+            include: {
+              profile: true
+            }
+          },
+          registrationBranch: true,
+          branchAccesses: {
+            include: {
+              branch: true,
+            },
           },
         },
-      },
+      });
     });
 
     // Audit log
@@ -111,7 +142,7 @@ export class MemberUpdateService {
   }
 
   /**
-   * Delete member (soft delete by setting status to INACTIVE)
+   * Delete member (soft delete by setting isActive to false)
    */
   async deleteMember(memberId: string, userId: string) {
     const member = await prisma.member.findUnique({
@@ -122,10 +153,10 @@ export class MemberUpdateService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Soft delete by setting status to INACTIVE
+    // Soft delete by setting isActive to false
     await prisma.member.update({
       where: { id: memberId },
-      data: { status: 'INACTIVE' },
+      data: { isActive: false },
     });
 
     // Audit log
@@ -147,21 +178,15 @@ export class MemberUpdateService {
     return {
       id: member.id,
       memberNo: member.memberNo,
-      fullName: member.fullName,
+      fullName: member.user?.profile?.fullName,
       dateOfBirth: member.dateOfBirth?.toISOString(),
-      gender: member.gender,
-      phoneNumber: member.phoneNumber,
-      email: member.email,
+      jenisKelamin: member.jenisKelamin,
+      phone: member.user?.profile?.phone,
+      email: member.user?.email,
       address: member.address,
-      city: member.city,
-      province: member.province,
-      postalCode: member.postalCode,
-      emergencyContactName: member.emergencyContactName,
-      emergencyContactPhone: member.emergencyContactPhone,
-      emergencyContactRelation: member.emergencyContactRelation,
-      photoUrl: member.photoUrl,
-      status: member.status,
+      emergencyContact: member.emergencyContact,
       voucherCount: member.voucherCount,
+      isActive: member.isActive,
       registrationBranch: member.registrationBranch ? {
         id: member.registrationBranch.id,
         name: member.registrationBranch.name,

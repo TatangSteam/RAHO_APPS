@@ -75,7 +75,7 @@ export default function Step4Booster({
     try {
       setSaving(true);
       setShowConfirmDialog(false);
-      await sessionApi.updateBoosterType(sessionId, { boosterType });
+      await sessionApi.updateBoosterType(sessionId, { boosterType: boosterType as any });
       showToast.success('Jenis booster berhasil disimpan dan stok telah dikurangi');
       setIsReadOnly(true);
       onBoosterTypeSelected();
@@ -220,7 +220,7 @@ export default function Step4Booster({
           <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
             <button
               onClick={handleSave}
-              disabled={saving || !boosterType || loadingStock || (stockAvailability && !stockAvailability[boosterType as keyof StockAvailability]?.available)}
+              disabled={saving || !boosterType || loadingStock || (stockAvailability && !stockAvailability[boosterType as keyof StockAvailability]?.available) || false}
               className="btn btn-primary"
               style={{ minWidth: '120px' }}
             >

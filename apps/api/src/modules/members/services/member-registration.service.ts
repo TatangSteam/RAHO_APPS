@@ -30,7 +30,13 @@ export class MemberRegistrationService {
       memberEmail: string;
       memberPassword: string;
       referralCode?: string;
+      referralCodeId?: string;
       isConsentToPhoto?: boolean;
+      // Incentive fields
+      firstIncentiveType?: string;
+      firstIncentiveValue?: number;
+      nextIncentiveType?: string;
+      nextIncentiveValue?: number;
     },
     files: {
       psp?: Express.Multer.File;
@@ -40,11 +46,11 @@ export class MemberRegistrationService {
     userId: string
   ) {
     // Check if phone number already exists
-    const existingMember = await prisma.member.findUnique({
-      where: { phoneNumber: data.phone },
+    const existingPhone = await prisma.userProfile.findFirst({
+      where: { phone: data.phone },
     });
 
-    if (existingMember) {
+    if (existingPhone) {
       throw {
         status: 409,
         code: 'PHONE_EXISTS',
@@ -53,9 +59,9 @@ export class MemberRegistrationService {
     }
 
     // Check if email already exists (if provided)
-    if (data.email) {
-      const existingEmail = await prisma.member.findUnique({
-        where: { email: data.email },
+    if (data.memberEmail) {
+      const existingEmail = await prisma.user.findUnique({
+        where: { email: data.memberEmail },
       });
 
       if (existingEmail) {
@@ -79,6 +85,39 @@ export class MemberRegistrationService {
     // Generate member number
     const memberNo = await this.generateMemberNumber(branch.branchCode);
 
+    // Validate referral code if provided and set incentive values
+    let referralCodeId: string | null = null;
+    let finalFirstIncentiveType = data.firstIncentiveType;
+    let finalFirstIncentiveValue = data.firstIncentiveValue;
+    let finalNextIncentiveType = data.nextIncentiveType;
+    let finalNextIncentiveValue = data.nextIncentiveValue;
+    
+    if (data.referralCodeId) {
+      const referralCode = await prisma.referralCode.findUnique({
+        where: { id: data.referralCodeId, isActive: true },
+      });
+
+      if (!referralCode) {
+        throw {
+          status: 404,
+          code: 'REFERRAL_CODE_NOT_FOUND',
+          message: 'Kode referral tidak ditemukan atau tidak aktif',
+        };
+      }
+
+      referralCodeId = referralCode.id;
+      
+      // Set default incentive values if not provided by user
+      if (!finalFirstIncentiveType) {
+        finalFirstIncentiveType = 'PERCENTAGE';
+        finalFirstIncentiveValue = 10.0; // 10% for first package
+      }
+      if (!finalNextIncentiveType) {
+        finalNextIncentiveType = 'PERCENTAGE';
+        finalNextIncentiveValue = 5.0; // 5% for subsequent packages
+      }
+    }
+
     // Use provided password (already validated by schema)
     const hashedPassword = await bcrypt.hash(data.memberPassword, 10);
 
@@ -93,7 +132,7 @@ export class MemberRegistrationService {
           profile: {
             create: {
               fullName: data.fullName,
-              phoneNumber: data.phone,
+              phone: data.phone,
             },
           },
         },
@@ -105,28 +144,38 @@ export class MemberRegistrationService {
       // Create member
       const member = await tx.member.create({
         data: {
-          memberNo,
           userId: user.id,
-          fullName: data.fullName,
-          dateOfBirth: data.birthDate ? new Date(data.birthDate) : null,
-          gender: data.gender || null,
-          phoneNumber: data.phone,
-          email: data.email || null,
-          address: data.address || null,
-          city: null, // Not in schema
-          province: null, // Not in schema
-          postalCode: data.postalCode || null,
-          emergencyContactName: data.emergencyContact || null,
-          emergencyContactPhone: data.emergencyContactPhone || null,
-          emergencyContactRelation: null, // Not in schema
-          photoUrl: files.photo ? `/uploads/members/${files.photo.filename}` : null,
+          memberNo,
           registrationBranchId: branchId,
-          status: 'ACTIVE',
+          referralCodeId: referralCodeId,
           voucherCount: 0,
+          isConsentToPhoto: data.isConsentToPhoto ?? true,
+          nik: data.nik || null,
+          tempatLahir: data.birthPlace || null,
+          dateOfBirth: data.birthDate ? new Date(data.birthDate) : null,
+          jenisKelamin: data.gender as any || null,
+          address: data.address || null,
+          pekerjaan: data.occupation || null,
+          statusNikah: data.maritalStatus || null,
+          emergencyContact: data.emergencyContact 
+            ? `${data.emergencyContact}${data.emergencyContactPhone ? ' - ' + data.emergencyContactPhone : ''}`
+            : null,
+          sumberInfoRaho: data.infoSource || null,
+          postalCode: data.postalCode || null,
+          // Incentive fields (use user-provided values or defaults if referral code is provided)
+          firstIncentiveType: finalFirstIncentiveType as any || null,
+          firstIncentiveValue: finalFirstIncentiveValue || null,
+          nextIncentiveType: finalNextIncentiveType as any || null,
+          nextIncentiveValue: finalNextIncentiveValue || null,
         },
         include: {
-          user: true,
+          user: {
+            include: {
+              profile: true,
+            },
+          },
           registrationBranch: true,
+          referralCode: true,
         },
       });
 
@@ -154,11 +203,9 @@ export class MemberRegistrationService {
     });
 
     return {
-      member: this.formatMemberData(result.member),
-      credentials: {
-        email: result.user.email,
-        memberNo,
-      },
+      memberId: result.member.id,
+      memberNo: memberNo,
+      message: 'Member berhasil didaftarkan',
     };
   }
 
@@ -196,20 +243,14 @@ export class MemberRegistrationService {
     return {
       id: member.id,
       memberNo: member.memberNo,
-      fullName: member.fullName,
+      fullName: member.user?.profile?.fullName,
       dateOfBirth: member.dateOfBirth?.toISOString(),
-      gender: member.gender,
-      phoneNumber: member.phoneNumber,
-      email: member.email,
+      gender: member.jenisKelamin,
+      phone: member.user?.profile?.phone,
+      email: member.user?.email,
       address: member.address,
-      city: member.city,
-      province: member.province,
       postalCode: member.postalCode,
-      emergencyContactName: member.emergencyContactName,
-      emergencyContactPhone: member.emergencyContactPhone,
-      emergencyContactRelation: member.emergencyContactRelation,
-      photoUrl: member.photoUrl,
-      status: member.status,
+      emergencyContact: member.emergencyContact,
       voucherCount: member.voucherCount,
       registrationBranch: member.registrationBranch ? {
         id: member.registrationBranch.id,

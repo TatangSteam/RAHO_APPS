@@ -45,6 +45,13 @@ export const invoiceService = {
   },
 
   /**
+   * Get payment proof image
+   */
+  async getPaymentProofImage(paymentId: string) {
+    return this.retrievalService.getPaymentProofImage(paymentId);
+  },
+
+  /**
    * Get invoice by package ID
    */
   async getInvoiceByPackageId(packageId: string) {

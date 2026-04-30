@@ -38,6 +38,19 @@ export class SessionRetrievalService {
         },
         photo: true,
         evaluation: true,
+        // Include multiple doctors and nurses
+        sessionDoctors: {
+          include: {
+            doctor: { include: { profile: true } },
+          },
+          orderBy: { isPrimary: 'desc' }, // Primary first
+        },
+        sessionNurses: {
+          include: {
+            nurse: { include: { profile: true } },
+          },
+          orderBy: { isPrimary: 'desc' }, // Primary first
+        },
       },
     });
 
@@ -71,21 +84,44 @@ export class SessionRetrievalService {
       photo: session.photo,
       evaluation: session.evaluation,
       steps,
+      // Include staff info
+      doctors: session.sessionDoctors,
+      nurses: session.sessionNurses,
     };
   }
 
   /**
    * Get all sessions with optional filters
+   * Only shows sessions from BASIC packages (not BOOSTER)
+   * 
+   * Role-based filtering:
+   * - SUPER_ADMIN, ADMIN_MANAGER: See all sessions from all branches
+   * - ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, NURSE: See only sessions from their branch
    */
-  async getAllSessions(params: { memberId?: string; page?: number; limit?: number }) {
-    const { memberId, page = 1, limit = 50 } = params;
+  async getAllSessions(params: { memberId?: string; branchId?: string; role?: string; page?: number; limit?: number }) {
+    const { memberId, branchId, role, page = 1, limit = 50 } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = {};
+    const where: any = {
+      encounter: {
+        memberPackage: {
+          packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
+        },
+      },
+    };
+    
+    // Filter by memberId if provided
     if (memberId) {
-      where.encounter = {
-        memberId,
-      };
+      where.encounter.memberId = memberId;
+    }
+
+    // Role-based branch filtering
+    // SUPER_ADMIN and ADMIN_MANAGER can see all branches
+    // Other roles (ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, NURSE) only see their branch
+    if (role && !['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
+      if (branchId) {
+        where.branchId = branchId;
+      }
     }
 
     const sessions = await prisma.treatmentSession.findMany({
@@ -102,6 +138,7 @@ export class SessionRetrievalService {
               },
             },
             diagnoses: true,
+            memberPackage: true, // Include memberPackage to verify
           },
         },
         adminLayanan: { include: { profile: true } },
@@ -177,6 +214,7 @@ export class SessionRetrievalService {
 
   /**
    * Calculate branch-specific infusKe
+   * Only counts sessions from BASIC packages
    */
   private async calculateBranchInfusKe(
     memberId: string,
@@ -188,6 +226,9 @@ export class SessionRetrievalService {
         encounter: {
           memberId,
           branchId,
+          memberPackage: {
+            packageType: 'BASIC',
+          },
         },
         infusKe: {
           lte: currentInfusKe,
@@ -258,6 +299,25 @@ export class SessionRetrievalService {
             boosterType: session.boosterType,
           }
         : null,
+      // Include multiple doctors and nurses
+      sessionDoctors: session.sessionDoctors?.map((sd: any) => ({
+        id: sd.id,
+        isPrimary: sd.isPrimary,
+        doctor: {
+          userId: sd.doctor.id,
+          fullName: sd.doctor.profile?.fullName || '',
+          staffCode: sd.doctor.staffCode,
+        },
+      })) || [],
+      sessionNurses: session.sessionNurses?.map((sn: any) => ({
+        id: sn.id,
+        isPrimary: sn.isPrimary,
+        nurse: {
+          userId: sn.nurse.id,
+          fullName: sn.nurse.profile?.fullName || '',
+          staffCode: sn.nurse.staffCode,
+        },
+      })) || [],
     };
   }
 }

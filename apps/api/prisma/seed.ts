@@ -16,12 +16,17 @@ import {
   seedBranches,
   assignBranchesToManager,
   seedUsers,
+  assignStaffToBranches,
+  assignManagerToBranches,
   seedProducts,
   seedInventory,
   seedPackagePricing,
   seedReferralCodes,
-  seedInventoryItems,
+  seedMembersMultiBranch,
 } from './seeds';
+
+// Import consolidated inventory seeding
+import { seedConsolidatedInventoryItems } from './seeds/inventory-items-consolidated.seed';
 
 const prisma = new PrismaClient();
 
@@ -173,22 +178,30 @@ async function main(): Promise<void> {
     // 3. Assign branches to Admin Manager (must be after users are created)
     await assignBranchesToManager(prisma);
 
+    // 4. Assign doctors and nurses to multiple branches
+    await assignStaffToBranches(prisma);
+    
+    // 4a. Assign ADMIN_MANAGER to specific branches (NEW MULTI-BRANCH SYSTEM)
+    await assignManagerToBranches(prisma);
+
     // 4. Seed Referral Codes
     await seedReferralCodes(prisma);
 
-    // 5. Seed Master Products
+    // 5. Seed Master Products (OLD - for backward compatibility)
+    // This creates basic master products that may be used by old code
     const products = await seedProducts(prisma);
 
-    // 6. Seed Inventory for All Branches
-    await seedInventory(prisma, products, branchPusat.id);
-    await seedInventory(prisma, products, branchBandung.id);
-    await seedInventory(prisma, products, branchSurabaya.id);
+    // 6. SKIP OLD INVENTORY SEEDING - Use consolidated instead
+    // await seedInventory(prisma, products, branchPusat.id);
+    // await seedInventory(prisma, products, branchBandung.id);
+    // await seedInventory(prisma, products, branchSurabaya.id);
 
     // 7. Seed Package Pricing (with HHO & NO2 booster types)
     await seedPackagePricing(prisma, [branchPusat, branchBandung, branchSurabaya]);
 
-    // 8. Seed Inventory Items (Medical supplies for infusion)
-    await seedInventoryItems(prisma);
+    // 8. Seed CONSOLIDATED Inventory Items (40 products - no duplicates!)
+    // This is the ONLY inventory seeding that should run
+    await seedConsolidatedInventoryItems(prisma);
 
     // 9. Seed Non-Therapy Products (Air Nano & Rokok Kenkou) - SKIPPED (table not migrated yet)
     // await seedNonTherapyProducts(prisma);
@@ -199,15 +212,23 @@ async function main(): Promise<void> {
 
     console.log('\n📊 Seeding complete member data with packages...\n');
 
-    // Import new member seed
-    const { seedMembersMultiBranch } = await import('./seeds/members-multibranch.seed');
-    
     // Get all users for passing to seed function
     const allUsers = await prisma.user.findMany({
       where: { role: { not: 'MEMBER' } }
     });
     
     await seedMembersMultiBranch(prisma, [branchPusat, branchBandung, branchSurabaya], allUsers);
+    
+    // Seed comprehensive dashboard test data - COMMENTED OUT (optional)
+    // Uncomment if you need dashboard test data
+    // const { seedDashboardTestData } = await import('./seeds/dashboard-test.seed');
+    // await seedDashboardTestData(prisma, [branchPusat, branchBandung, branchSurabaya], allUsers);
+
+    // ══════════════════════════════════════════════════════════
+    // THERAPY SESSIONS SEEDING - DISABLED
+    // ══════════════════════════════════════════════════════════
+    // Therapy sessions will be created through the application UI
+    // No need for seeding data
 
     // ══════════════════════════════════════════════════════════
     // GENERATE MISSING INVOICES (for packages without invoices)
@@ -251,9 +272,10 @@ async function main(): Promise<void> {
     console.log(`  • ${3} referral codes`);
     console.log(`  • ${products.length} master products`);
     console.log(`  • Inventory items for 3 branches with different stock levels`);
-    console.log(`  • 40+ medical supplies & infusion materials`);
+    console.log(`  • 40 CONSOLIDATED medical supplies (no duplicates!)`);
     console.log(`  • Package pricings (BASIC + BOOSTER) for all branches`);
-    console.log(`  • 10 complete members with packages`);
+    console.log(`  • 10 complete members with packages (base data)`);
+    console.log(`  • 18 additional members for dashboard testing`);
     console.log(`  • ${invoicesGenerated} invoices auto-generated`);
     console.log(`  • Mix of ACTIVE and PENDING_PAYMENT packages`);
     console.log(`  • Multi-branch inventory isolation for testing`);
@@ -267,6 +289,12 @@ async function main(): Promise<void> {
     console.log('  • Stock levels: Jakarta (100%), Bandung (70%), Surabaya (50%)');
     console.log('  • Test multi-branch by logging in with different branch users');
     console.log('  • Each branch has isolated inventory for stock deduction testing');
+    console.log('\n📊 Dashboard Testing:');
+    console.log('  • Login as: admincabang.pst@raho.id → AdminCabang@123');
+    console.log('  • Dashboard URL: /dashboard');
+    console.log('  • Test filters: Hari Ini (3 txn), 7 Hari (8 txn), Bulan Ini (15 txn)');
+    console.log('  • Revenue growth comparison available');
+    console.log('  • Top packages and recent transactions populated');
   } catch (error) {
     console.error('\n❌ Seeding failed:', error);
     throw error;

@@ -85,93 +85,129 @@ export class InfusionService {
         },
       });
 
-      // Deduct stock for each material used
+      // Deduct stock for each material used AND create material usage records
+      // Map field names to product name patterns for searching
       const materials = [
-        { name: 'IFA', qty: data.ifa },
-        { name: 'HHO', qty: data.hho },
-        { name: 'H2', qty: data.h2 },
-        { name: 'NO', qty: data.no },
-        { name: 'GASO', qty: data.gaso },
-        { name: 'O2', qty: data.o2 },
-        { name: 'O3', qty: data.o3 },
-        { name: 'EDTA', qty: data.edta },
-        { name: 'MB', qty: data.mb },
-        { name: 'H2S', qty: data.h2s },
-        { name: 'KCL', qty: data.kcl },
-        { name: 'JML_NB', qty: data.jmlNb },
+        { field: 'IFA', namePattern: 'IFA', qty: data.ifa },
+        { field: 'HHO', namePattern: 'HHO', qty: data.hho },
+        { field: 'H2', namePattern: 'H2 (Hydrogen)', qty: data.h2 },
+        { field: 'NO', namePattern: 'NO (Nitric Oxide)', qty: data.no },
+        { field: 'GASO', namePattern: 'GASO', qty: data.gaso },
+        { field: 'O2', namePattern: 'O2 (Oxygen)', qty: data.o2 },
+        { field: 'O3', namePattern: 'O3 (Ozone)', qty: data.o3 },
+        { field: 'EDTA', namePattern: 'EDTA', qty: data.edta },
+        { field: 'MB', namePattern: 'MB (Methylene Blue)', qty: data.mb },
+        { field: 'H2S', namePattern: 'H2S', qty: data.h2s },
+        { field: 'KCL', namePattern: 'KCL', qty: data.kcl },
+        { field: 'JML_NB', namePattern: 'JML/NB', qty: data.jmlNb },
       ];
 
       for (const material of materials) {
         if (material.qty && material.qty > 0) {
-          // Find inventory item
-          const masterProduct = await tx.masterProduct.findFirst({
-            where: { name: material.name },
+          console.log(`🔍 Processing material: ${material.field} (${material.namePattern}) - Qty: ${material.qty}`);
+          
+          // Find inventory item directly by name pattern and branch
+          // This ensures we find the product that actually exists in this branch's inventory
+          const inventoryItem = await tx.inventoryItem.findFirst({
+            where: {
+              branchId,
+              masterProduct: {
+                name: { 
+                  contains: material.namePattern,
+                  mode: 'insensitive'
+                },
+                isActive: true,
+              }
+            },
+            include: {
+              masterProduct: true,
+            },
           });
 
-          if (masterProduct) {
-            const inventoryItem = await tx.inventoryItem.findFirst({
+          if (!inventoryItem) {
+            console.warn(`⚠️ Inventory item not found for: ${material.namePattern} at branch ${branchId}`);
+            console.warn(`   Skipping material ${material.field} - ${material.qty} (no inventory item)`);
+            continue; // Skip this material
+          }
+
+          console.log(`✓ Found inventory item: ${inventoryItem.masterProduct.name}`);
+          console.log(`  ID: ${inventoryItem.id} - Stock: ${inventoryItem.stock} ${inventoryItem.masterProduct.baseUnit}`);
+
+          // Get conversion factor for unit conversion
+          const conversionFactor = Number(inventoryItem.masterProduct.conversionFactor);
+          const usageQuantity = material.qty; // Quantity in usage unit (ml)
+          
+          // Convert usage unit to base unit for stock calculation
+          // Example: 450 ml → 0.9 botol (if conversionFactor = 500)
+          const baseQuantityUsed = usageQuantity / conversionFactor;
+          
+          const stockBefore = Number(inventoryItem.stock);
+          const stockAfter = stockBefore - baseQuantityUsed;
+
+          if (stockAfter < 0) {
+            const availableUsageUnit = stockBefore * conversionFactor;
+            throw {
+              status: 409,
+              code: 'STOCK_INSUFFICIENT',
+              message: `Stok ${inventoryItem.masterProduct.name} tidak mencukupi. Tersedia: ${stockBefore.toFixed(2)} ${inventoryItem.masterProduct.baseUnit} (${availableUsageUnit.toFixed(0)} ${inventoryItem.masterProduct.usageUnit})`,
+            };
+          }
+
+          // Update stock (in base unit)
+          await tx.inventoryItem.update({
+            where: { id: inventoryItem.id },
+            data: { stock: stockAfter },
+          });
+
+          // Create stock mutation (in base unit for consistency)
+          await tx.stockMutation.create({
+            data: {
+              inventoryItemId: inventoryItem.id,
+              type: StockMutationType.USED,
+              quantity: baseQuantityUsed,
+              stockBefore,
+              stockAfter,
+              referenceType: 'InfusionExecution',
+              referenceId: infusion.id,
+              notes: `Digunakan untuk sesi ${session.sessionCode}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`,
+              createdBy: userId,
+            },
+          });
+
+          // ✨ AUTO-CREATE MATERIAL USAGE RECORD (stored in usage unit)
+          await tx.materialUsage.create({
+            data: {
+              treatmentSessionId: sessionId,
+              inventoryItemId: inventoryItem.id,
+              quantity: usageQuantity, // Store in usage unit (ml)
+              unit: inventoryItem.masterProduct.usageUnit,
+              recordedBy: userId,
+            },
+          });
+
+          console.log(`✅ Auto-created material usage for ${inventoryItem.masterProduct.name}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`);
+
+          // Check if stock is critical
+          if (stockAfter < Number(inventoryItem.minThreshold)) {
+            // Create notification for ADMIN_CABANG
+            const adminCabang = await tx.user.findMany({
               where: {
-                masterProductId: masterProduct.id,
                 branchId,
+                role: Role.ADMIN_CABANG,
+                isActive: true,
               },
             });
 
-            if (inventoryItem) {
-              const stockBefore = Number(inventoryItem.stock);
-              const stockAfter = stockBefore - material.qty;
-
-              if (stockAfter < 0) {
-                throw {
-                  status: 409,
-                  code: 'STOCK_INSUFFICIENT',
-                  message: `Stok ${material.name} tidak mencukupi`,
-                };
-              }
-
-              // Update stock
-              await tx.inventoryItem.update({
-                where: { id: inventoryItem.id },
-                data: { stock: stockAfter },
-              });
-
-              // Create stock mutation
-              await tx.stockMutation.create({
+            for (const admin of adminCabang) {
+              await tx.notification.create({
                 data: {
-                  inventoryItemId: inventoryItem.id,
-                  type: StockMutationType.USED,
-                  quantity: material.qty,
-                  stockBefore,
-                  stockAfter,
-                  referenceType: 'InfusionExecution',
-                  referenceId: infusion.id,
-                  notes: `Digunakan untuk sesi ${session.sessionCode}`,
-                  createdBy: userId,
+                  userId: admin.id,
+                  type: 'INFO',
+                  title: 'Stok Kritis',
+                  body: `Stok ${inventoryItem.masterProduct.name} hampir habis 🔴`,
+                  status: 'UNREAD',
                 },
               });
-
-              // Check if stock is critical
-              if (stockAfter < Number(inventoryItem.minThreshold)) {
-                // Create notification for ADMIN_CABANG
-                const adminCabang = await tx.user.findMany({
-                  where: {
-                    branchId,
-                    role: Role.ADMIN_CABANG,
-                    isActive: true,
-                  },
-                });
-
-                for (const admin of adminCabang) {
-                  await tx.notification.create({
-                    data: {
-                      userId: admin.id,
-                      type: 'INFO',
-                      title: 'Stok Kritis',
-                      body: `Stok ${material.name} hampir habis 🔴`,
-                      status: 'UNREAD',
-                    },
-                  });
-                }
-              }
             }
           }
         }

@@ -62,16 +62,84 @@ export default function MemberProfileTab({ member }: MemberProfileTabProps) {
         </div>
       </div>
 
-      {member.referralCode && (
-        <div>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>🎁 Referral</h3>
-          <div style={{ padding: '16px', background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)', borderRadius: 'var(--radius-lg)' }}>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Kode: <span style={{ fontFamily: 'monospace', fontWeight: '600', color: '#a855f7' }}>{member.referralCode.code}</span></p>
-            <p style={{ fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>{member.referralCode.referrerName}</p>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{member.referralCode.referrerType}</p>
+      {/* Referral Information - Always show for debugging */}
+      <div>
+        <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>🎁 Informasi Referral</h3>
+        {member.referralCode ? (
+          <div style={{ padding: '20px', background: 'linear-gradient(135deg, rgba(168,85,247,0.1), rgba(139,92,246,0.05))', border: '2px solid rgba(168,85,247,0.3)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>Kode Referral</p>
+              <p style={{ fontFamily: 'monospace', fontWeight: '700', fontSize: '18px', color: '#a855f7', marginBottom: '8px' }}>{member.referralCode.code}</p>
+              <p style={{ fontWeight: '600', fontSize: '16px', marginBottom: '4px', color: 'var(--text-primary)' }}>{member.referralCode.referrerName}</p>
+              <span style={{ 
+                display: 'inline-block',
+                padding: '4px 12px', 
+                background: 'rgba(168,85,247,0.2)', 
+                borderRadius: 'var(--radius-md)', 
+                fontSize: '12px', 
+                fontWeight: '600',
+                color: '#a855f7',
+                textTransform: 'uppercase'
+              }}>
+                {member.referralCode.referrerType}
+              </span>
+            </div>
+            
+            {(member.firstIncentiveType || member.nextIncentiveType) && (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(168,85,247,0.2)' }}>
+                <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '12px' }}>💰 Pengaturan Insentif</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {member.firstIncentiveType && (
+                    <div style={{ padding: '12px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 'var(--radius-md)' }}>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Paket Pertama</p>
+                      <p style={{ fontWeight: '700', fontSize: '16px', color: '#22c55e' }}>
+                        {member.firstIncentiveType === 'PERCENTAGE' 
+                          ? `${member.firstIncentiveValue}%` 
+                          : `Rp ${Number(member.firstIncentiveValue).toLocaleString('id-ID')}`
+                        }
+                      </p>
+                    </div>
+                  )}
+                  {member.nextIncentiveType && (
+                    <div style={{ padding: '12px', background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.3)', borderRadius: 'var(--radius-md)' }}>
+                      <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Paket Lanjutan</p>
+                      <p style={{ fontWeight: '700', fontSize: '16px', color: '#3b82f6' }}>
+                        {member.nextIncentiveType === 'PERCENTAGE' 
+                          ? `${member.nextIncentiveValue}%` 
+                          : `Rp ${Number(member.nextIncentiveValue).toLocaleString('id-ID')}`
+                        }
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', fontStyle: 'italic' }}>
+                  ℹ️ Insentif dihitung per paket yang diassign
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        ) : (
+          <div style={{ padding: '16px', background: 'rgba(148,163,184,0.05)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 'var(--radius-lg)' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+              ❌ Member ini tidak menggunakan kode referral
+            </p>
+            {/* Debug info */}
+            <details style={{ marginTop: '12px' }}>
+              <summary style={{ fontSize: '12px', color: 'var(--text-muted)', cursor: 'pointer' }}>Debug Info</summary>
+              <pre style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px', background: 'rgba(0,0,0,0.1)', padding: '8px', borderRadius: '4px', overflow: 'auto' }}>
+                {JSON.stringify({
+                  referralCodeId: member.referralCodeId,
+                  referralCode: member.referralCode,
+                  firstIncentiveType: member.firstIncentiveType,
+                  firstIncentiveValue: member.firstIncentiveValue,
+                  nextIncentiveType: member.nextIncentiveType,
+                  nextIncentiveValue: member.nextIncentiveValue
+                }, null, 2)}
+              </pre>
+            </details>
+          </div>
+        )}
+      </div>
 
       {member.documents.length > 0 && (
         <div>

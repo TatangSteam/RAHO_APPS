@@ -24,7 +24,7 @@ const branchSelect = {
 } satisfies Prisma.BranchSelect;
 
 // ── List Branches ─────────────────────────────────────────────
-export async function listBranchesService(query: ListBranchesQuery) {
+export async function listBranchesService(query: ListBranchesQuery, userId?: string, userRole?: string) {
   const { page, limit, search, isActive, type } = query;
   const skip = (page - 1) * limit;
 
@@ -42,6 +42,15 @@ export async function listBranchesService(query: ListBranchesQuery) {
       : {}),
   };
 
+  // Filter branches for ADMIN_MANAGER based on ManagerBranch assignments
+  if (userRole === 'ADMIN_MANAGER' && userId) {
+    where.managerBranches = {
+      some: {
+        userId: userId
+      }
+    };
+  }
+
   const [total, branches] = await Promise.all([
     prisma.branch.count({ where }),
     prisma.branch.findMany({
@@ -53,7 +62,27 @@ export async function listBranchesService(query: ListBranchesQuery) {
     }),
   ]);
 
-  return { branches, total, page, limit };
+  // Add member and staff counts to each branch
+  const branchesWithCounts = await Promise.all(
+    branches.map(async (branch) => {
+      const [memberCount, staffCount] = await Promise.all([
+        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
+        prisma.user.count({
+          where: { branchId: branch.id, isActive: true, NOT: { role: 'MEMBER' } },
+        }),
+      ]);
+
+      return {
+        ...branch,
+        _count: {
+          members: memberCount,
+          staff: staffCount,
+        },
+      };
+    })
+  );
+
+  return { branches: branchesWithCounts, total, page, limit };
 }
 
 // ── Get Branch with Stats ─────────────────────────────────────
@@ -70,7 +99,7 @@ export async function getBranchWithStatsService(branchId: string) {
     prisma.user.count({
       where: { branchId, isActive: true, NOT: { role: 'MEMBER' } },
     }),
-    prisma.member.count({ where: { registrationBranchId: branchId } }),
+    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
     prisma.memberPackage.count({
       where: { branchId, status: 'ACTIVE' },
     }),
@@ -88,10 +117,17 @@ export async function getBranchWithStatsService(branchId: string) {
 
 // ── Get All Branches with Stats ───────────────────────────────
 export async function getAllBranchesWithStatsService(userId?: string, userRole?: string) {
-  // Build where clause - ADMIN_MANAGER only sees branches they created
-  const where: Prisma.BranchWhereInput = {};
+  // Build where clause - ADMIN_MANAGER only sees branches they manage via ManagerBranch
+  const where: Prisma.BranchWhereInput = {
+    isActive: true, // Only show active branches
+  };
+  
   if (userRole === 'ADMIN_MANAGER' && userId) {
-    where.createdBy = userId;
+    where.managerBranches = {
+      some: {
+        userId: userId
+      }
+    };
   }
 
   const branches = await prisma.branch.findMany({
@@ -110,7 +146,7 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
         prisma.user.count({
           where: { branchId: branch.id, isActive: true, NOT: { role: 'MEMBER' } },
         }),
-        prisma.member.count({ where: { registrationBranchId: branch.id } }),
+        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
         prisma.memberPackage.count({
           where: { branchId: branch.id, status: 'ACTIVE' },
         }),
@@ -175,21 +211,44 @@ export async function deleteBranchService(branchId: string) {
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
   // Check if branch has active users or members
-  const [activeUsers, totalMembers] = await Promise.all([
+  const [activeUsers, totalMembers, inventoryItems] = await Promise.all([
     prisma.user.count({ where: { branchId, isActive: true } }),
-    prisma.member.count({ where: { registrationBranchId: branchId } }),
+    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
+    prisma.inventoryItem.count({ where: { branchId } }),
   ]);
 
-  if (activeUsers > 0 || totalMembers > 0) {
-    throw errors.badRequest(
-      'BRANCH_HAS_DATA',
-      'Tidak dapat menghapus cabang yang masih memiliki user atau member aktif.'
-    );
-  }
+  // Soft delete branch (set isActive to false)
+  // Also deactivate all related users
+  await prisma.$transaction(async (tx) => {
+    // Deactivate branch
+    await tx.branch.update({
+      where: { id: branchId },
+      data: { isActive: false },
+    });
 
-  // Soft delete
-  await prisma.branch.update({
-    where: { id: branchId },
-    data: { isActive: false },
+    // Deactivate all users in this branch
+    if (activeUsers > 0) {
+      await tx.user.updateMany({
+        where: { branchId, isActive: true },
+        data: { isActive: false },
+      });
+    }
+
+    // Deactivate all members registered in this branch
+    if (totalMembers > 0) {
+      await tx.member.updateMany({
+        where: { registrationBranchId: branchId, isActive: true },
+        data: { isActive: false },
+      });
+    }
   });
+
+  return {
+    message: 'Cabang berhasil dihapus',
+    deactivated: {
+      users: activeUsers,
+      members: totalMembers,
+      inventoryItems,
+    },
+  };
 }

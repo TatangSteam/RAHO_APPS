@@ -18,7 +18,20 @@ export class PackageRetrievalService {
       const [packages, addOns] = await Promise.all([
         prisma.memberPackage.findMany({
           where: { memberId, branchId },
-          include: { branch: true },
+          include: { 
+            branch: true,
+            incentiveRecords: {
+              include: {
+                referralCode: {
+                  select: {
+                    code: true,
+                    referrerName: true,
+                    referrerType: true,
+                  },
+                },
+              },
+            },
+          },
           orderBy: { createdAt: 'desc' },
         }),
         prisma.memberAddOn.findMany({
@@ -110,7 +123,14 @@ export class PackageRetrievalService {
       });
 
       // Combine grouped and standalone packages
-      const result = [...groupedPackages, ...standalone];
+      const combined = [...groupedPackages, ...standalone];
+      
+      // Sort by createdAt descending (newest first)
+      const result = combined.sort((a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateB - dateA; // Descending order (newest first)
+      });
       
       console.log('Returning packages:', result.length);
       return result;
@@ -124,6 +144,11 @@ export class PackageRetrievalService {
    * Format package data for response
    */
   private formatPackageData(pkg: any, userMap: Map<string, any>) {
+    // Get incentive record if exists
+    const incentiveRecord = pkg.incentiveRecords && pkg.incentiveRecords.length > 0 
+      ? pkg.incentiveRecords[0] 
+      : null;
+
     return {
       id: pkg.id,
       packageId: pkg.id,
@@ -149,6 +174,23 @@ export class PackageRetrievalService {
       createdAt: pkg.createdAt.toISOString(),
       purchaseGroupId: pkg.purchaseGroupId,
       upgradedFromId: pkg.upgradedFromId,
+      // Payment proof fields
+      paymentProofUrl: pkg.paymentProofUrl || undefined,
+      paymentProofFileName: pkg.paymentProofFileName || undefined,
+      paymentProofFileSize: pkg.paymentProofFileSize || undefined,
+      paymentProofMimeType: pkg.paymentProofMimeType || undefined,
+      // Incentive information
+      incentive: incentiveRecord ? {
+        incentiveAmount: Number(incentiveRecord.incentiveAmount),
+        incentiveType: incentiveRecord.incentiveType,
+        incentiveValue: Number(incentiveRecord.incentiveValue),
+        referralCode: incentiveRecord.referralCode ? {
+          code: incentiveRecord.referralCode.code,
+          referrerName: incentiveRecord.referralCode.referrerName,
+          referrerType: incentiveRecord.referralCode.referrerType,
+        } : null,
+        createdAt: incentiveRecord.createdAt.toISOString(),
+      } : undefined,
     };
   }
 
@@ -173,6 +215,11 @@ export class PackageRetrievalService {
       verifiedAt: addon.verifiedAt?.toISOString() || undefined,
       createdAt: addon.createdAt.toISOString(),
       isAddOn: true,
+      // Payment proof fields
+      paymentProofUrl: addon.paymentProofUrl || undefined,
+      paymentProofFileName: addon.paymentProofFileName || undefined,
+      paymentProofFileSize: addon.paymentProofFileSize || undefined,
+      paymentProofMimeType: addon.paymentProofMimeType || undefined,
     };
   }
 }

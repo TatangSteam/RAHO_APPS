@@ -4,18 +4,26 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import CreateSessionModal from '@/components/sessions/CreateSessionModal';
+import ExportSessionsModal from '@/components/sessions/ExportSessionsModal';
 import type { SessionDetail } from '@/types/session';
 
 export default function SessionsPage() {
   const router = useRouter();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionDetail[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'completed' | 'incomplete'>('all');
+  const [pelaksanaanFilter, setPelaksanaanFilter] = useState<'all' | 'ON_SITE' | 'HOME_CARE'>('all');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     loadSessions();
@@ -71,10 +79,11 @@ export default function SessionsPage() {
       if (!matchesSearch) return false;
     }
 
-    // Date filter
-    if (dateFilter) {
-      const sessionDate = new Date(sessionDetail.session.treatmentDate).toISOString().split('T')[0];
-      if (sessionDate !== dateFilter) return false;
+    // Date range filter
+    if (dateFrom || dateTo) {
+      const sessionDate = new Date(sessionDetail.session.treatmentDate);
+      if (dateFrom && sessionDate < new Date(dateFrom)) return false;
+      if (dateTo && sessionDate > new Date(dateTo + 'T23:59:59')) return false;
     }
 
     // Status filter
@@ -84,8 +93,24 @@ export default function SessionsPage() {
       if (statusFilter === 'incomplete' && progress === 7) return false;
     }
 
+    // Pelaksanaan filter
+    if (pelaksanaanFilter !== 'all') {
+      if (sessionDetail.session.pelaksanaan !== pelaksanaanFilter) return false;
+    }
+
     return true;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredSessions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedSessions = filteredSessions.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, dateFrom, dateTo, statusFilter, pelaksanaanFilter]);
 
   return (
     <div className="p-8 lg:px-16">
@@ -99,19 +124,27 @@ export default function SessionsPage() {
             Kelola sesi terapi infus member
           </p>
         </div>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="btn btn-primary"
-        >
-          + Buat Sesi Baru
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setIsExportModalOpen(true)}
+            className="btn btn-secondary"
+          >
+            📥 Export Data
+          </button>
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="btn btn-primary"
+          >
+            + Buat Sesi Baru
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="card mb-6 p-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Search */}
-          <div className="form-group">
+          <div className="form-group lg:col-span-2">
             <label className="form-label">Cari</label>
             <input
               type="text"
@@ -122,13 +155,24 @@ export default function SessionsPage() {
             />
           </div>
 
-          {/* Date Filter */}
+          {/* Date From */}
           <div className="form-group">
-            <label className="form-label">Tanggal</label>
+            <label className="form-label">Dari Tanggal</label>
             <input
               type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          {/* Date To */}
+          <div className="form-group">
+            <label className="form-label">Sampai Tanggal</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
               className="form-input"
             />
           </div>
@@ -146,21 +190,61 @@ export default function SessionsPage() {
               <option value="incomplete">Belum Selesai</option>
             </select>
           </div>
+
+          {/* Pelaksanaan Filter */}
+          <div className="form-group">
+            <label className="form-label">Pelaksanaan</label>
+            <select
+              value={pelaksanaanFilter}
+              onChange={(e) => setPelaksanaanFilter(e.target.value as any)}
+              className="form-input"
+            >
+              <option value="all">Semua</option>
+              <option value="ON_SITE">On Site</option>
+              <option value="HOME_CARE">Home Care</option>
+            </select>
+          </div>
         </div>
 
         {/* Clear Filters */}
-        {(searchQuery || dateFilter || statusFilter !== 'all') && (
-          <div className="mt-4 flex justify-end">
+        {(searchQuery || dateFrom || dateTo || statusFilter !== 'all' || pelaksanaanFilter !== 'all') && (
+          <div className="mt-4 flex justify-between items-center">
+            <p className="text-sm text-[var(--text-secondary)]">
+              Menampilkan {filteredSessions.length} dari {sessions.length} sesi
+            </p>
             <button
               onClick={() => {
                 setSearchQuery('');
-                setDateFilter('');
+                setDateFrom('');
+                setDateTo('');
                 setStatusFilter('all');
+                setPelaksanaanFilter('all');
               }}
               className="btn btn-secondary btn-sm"
             >
               Reset Filter
             </button>
+          </div>
+        )}
+
+        {/* Items per page selector */}
+        {filteredSessions.length > 0 && (
+          <div className="mt-4 flex items-center gap-2">
+            <label className="text-sm text-[var(--text-secondary)]">Tampilkan:</label>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="form-input w-20"
+            >
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-sm text-[var(--text-secondary)]">per halaman</span>
           </div>
         )}
       </div>
@@ -210,16 +294,24 @@ export default function SessionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--surface-border)]">
-                {filteredSessions.map((sessionDetail) => {
+                {paginatedSessions.map((sessionDetail) => {
                   const progress = getStepProgress(sessionDetail);
                   const progressPercent = (progress / 7) * 100;
 
                   return (
                     <tr key={sessionDetail.session.sessionId} className="hover:bg-gray-500/5 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-mono text-sm font-semibold">
-                          {sessionDetail.session.sessionCode}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-mono text-sm font-semibold">
+                            {sessionDetail.session.sessionCode}
+                          </span>
+                          {sessionDetail.session.boosterPackage && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-400 border border-amber-500/30 w-fit">
+                              <span>🚀</span>
+                              <span>Booster {sessionDetail.session.boosterPackage.boosterType || ''}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -279,12 +371,80 @@ export default function SessionsPage() {
             </table>
           </div>
         )}
+
+        {/* Pagination */}
+        {filteredSessions.length > 0 && totalPages > 1 && (
+          <div className="px-6 py-4 border-t border-[var(--surface-border)] flex items-center justify-between">
+            <div className="text-sm text-[var(--text-secondary)]">
+              Menampilkan {startIndex + 1} - {Math.min(endIndex, filteredSessions.length)} dari {filteredSessions.length} sesi
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="btn btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ← Sebelumnya
+              </button>
+              
+              <div className="flex items-center gap-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                  // Show first page, last page, current page, and pages around current
+                  if (
+                    page === 1 ||
+                    page === totalPages ||
+                    (page >= currentPage - 1 && page <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                          currentPage === page
+                            ? 'bg-[var(--color-primary-500)] text-white'
+                            : 'bg-[var(--surface-card)] text-[var(--text-secondary)] hover:bg-[var(--surface-card-hover)]'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  } else if (
+                    page === currentPage - 2 ||
+                    page === currentPage + 2
+                  ) {
+                    return <span key={page} className="px-2 text-[var(--text-muted)]">...</span>;
+                  }
+                  return null;
+                })}
+              </div>
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="btn btn-secondary btn-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Selanjutnya →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <CreateSessionModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={handleSessionCreated}
+      />
+
+      <ExportSessionsModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        currentFilters={{
+          dateFrom,
+          dateTo,
+          status: statusFilter === 'all' ? '' : statusFilter,
+          pelaksanaan: pelaksanaanFilter === 'all' ? '' : pelaksanaanFilter,
+        }}
       />
     </div>
   );

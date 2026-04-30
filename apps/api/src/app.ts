@@ -24,6 +24,7 @@ import invoicesRouter from './modules/invoices/invoices.routes';
 import inventoryRouter from './modules/inventory/inventory.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
 import auditRouter from './modules/audit/audit.routes';
+import referralsRouter from './modules/referrals/referrals.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -149,6 +150,9 @@ export function createApp(): Application {
 
   // Inventory module
   app.use(`${prefix}/inventory`, inventoryRouter);
+
+  // Referrals module
+  app.use(`${prefix}/referrals`, referralsRouter);
 
   // Audit logs module
   app.use(`${prefix}/audit-logs`, auditRouter);

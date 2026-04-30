@@ -1,7 +1,8 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction } from '@prisma/client';
+import { generateDiagnosisCode, generateEncounterCode } from '../../../utils/codeGenerator';
+import { AuditAction, Role } from '@prisma/client';
 
 /**
  * Service for managing member medical records (diagnoses, therapy plans, infusions)
@@ -36,49 +37,7 @@ export class MemberMedicalRecordsService {
    * Get member diagnoses
    */
   async getMemberDiagnoses(memberId: string) {
-    const diagnoses = await prisma.encounterDiagnosis.findMany({
-      where: {
-        encounter: {
-          memberId,
-        },
-      },
-      include: {
-        encounter: {
-          include: {
-            member: true,
-            branch: true,
-          },
-        },
-        diagnosedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-      orderBy: { diagnosedAt: 'desc' },
-    });
-
-    return diagnoses.map(d => ({
-      id: d.id,
-      encounterId: d.encounterId,
-      category: d.category,
-      diagnosis: d.diagnosis,
-      notes: d.notes,
-      diagnosedAt: d.diagnosedAt.toISOString(),
-      diagnosedBy: d.diagnosedByUser.profile?.fullName || 'Unknown',
-      encounter: {
-        id: d.encounter.id,
-        encounterDate: d.encounter.encounterDate.toISOString(),
-        branchName: d.encounter.branch.name,
-      },
-    }));
-  }
-
-  /**
-   * Create member diagnosis
-   */
-  async createMemberDiagnosis(memberId: string, data: any, userId: string) {
-    // Check if member exists
+    // Verify member exists
     const member = await prisma.member.findUnique({
       where: { id: memberId },
     });
@@ -87,119 +46,199 @@ export class MemberMedicalRecordsService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Create or get encounter
-    let encounter = await prisma.encounter.findFirst({
+    // Get all diagnoses for this member
+    const diagnoses = await prisma.diagnosis.findMany({
       where: {
         memberId,
-        encounterDate: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lt: new Date(new Date().setHours(23, 59, 59, 999)),
-        },
+      },
+      orderBy: {
+        createdAt: 'desc',
       },
     });
 
-    if (!encounter) {
-      // Create new encounter
-      encounter = await prisma.encounter.create({
-        data: {
-          memberId,
-          branchId: data.branchId,
-          encounterDate: new Date(),
-          status: 'ACTIVE',
-        },
-      });
+    return diagnoses;
+  }
+
+  /**
+   * Create member diagnosis
+   */
+  async createMemberDiagnosis(memberId: string, data: any, userId: string) {
+    // Verify member exists
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        registrationBranch: true,
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Create diagnosis
-    const diagnosis = await prisma.encounterDiagnosis.create({
-      data: {
-        encounterId: encounter.id,
-        category: data.category,
-        diagnosis: data.diagnosis,
-        notes: data.notes,
-        diagnosedBy: userId,
-        diagnosedAt: new Date(),
-      },
+    // Verify doctor exists and is active
+    const doctor = await prisma.user.findUnique({
+      where: { id: data.doktorPemeriksa },
       include: {
-        encounter: {
-          include: {
-            member: true,
-            branch: true,
-          },
-        },
-        diagnosedByUser: {
-          include: {
-            profile: true,
-          },
-        },
+        branch: true,
       },
     });
 
-    // Audit log
+    if (!doctor || doctor.role !== Role.DOCTOR || !doctor.isActive) {
+      throw { status: 403, code: 'INVALID_DOCTOR', message: 'Dokter tidak valid atau tidak aktif' };
+    }
+
+    // Try to find active package and encounter (optional)
+    const activePackage = await prisma.memberPackage.findFirst({
+      where: {
+        memberId,
+        status: 'ACTIVE',
+        packageType: 'BASIC',
+      },
+      include: {
+        branch: true,
+      },
+      orderBy: {
+        activatedAt: 'desc',
+      },
+    });
+
+    let encounterId: string | undefined = undefined;
+
+    // If member has active package, try to link to encounter
+    if (activePackage && doctor.branch) {
+      // Check if encounter already exists for this package
+      let encounter = await prisma.encounter.findFirst({
+        where: {
+          memberPackageId: activePackage.id,
+          status: 'ONGOING',
+        },
+      });
+
+      // If no encounter, create one
+      if (!encounter) {
+        const encounterCode = generateEncounterCode(activePackage.branch.branchCode);
+        encounter = await prisma.encounter.create({
+          data: {
+            encounterCode,
+            memberId,
+            branchId: activePackage.branchId,
+            memberPackageId: activePackage.id,
+            adminLayananId: userId,
+            doctorId: doctor.id,
+            nurseId: doctor.id, // Temporary - should be actual nurse
+            status: 'ONGOING',
+          },
+        });
+      }
+
+      // Check if diagnosis already exists for this encounter
+      const existingDiagnosis = await prisma.diagnosis.findUnique({
+        where: { encounterId: encounter.id },
+      });
+
+      if (existingDiagnosis) {
+        throw { status: 409, code: 'DIAGNOSIS_EXISTS', message: 'Diagnosa sudah ada untuk encounter ini' };
+      }
+
+      encounterId = encounter.id;
+    }
+
+    // Generate diagnosis code
+    const branchCode = member.registrationBranch.branchCode;
+    const prefix = `DX-${branchCode}-`;
+    const lastDiagnosis = await prisma.diagnosis.findFirst({
+      where: { diagnosisCode: { startsWith: prefix } },
+      orderBy: { diagnosisCode: 'desc' },
+    });
+    
+    const sequence = lastDiagnosis 
+      ? parseInt(lastDiagnosis.diagnosisCode.split('-').pop() || '0') + 1 
+      : 1;
+    
+    const diagnosisCode = generateDiagnosisCode(branchCode, sequence);
+
+    // Create diagnosis (with or without encounter)
+    const diagnosis = await prisma.diagnosis.create({
+      data: {
+        diagnosisCode,
+        memberId, // Direct link to member
+        encounterId, // Optional - only if encounter exists
+        doktorPemeriksa: data.doktorPemeriksa,
+        diagnosa: data.diagnosa,
+        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        icdPrimer: data.icdPrimer || null,
+        icdSekunder: data.icdSekunder || null,
+        icdTersier: data.icdTersier || null,
+        keluhanRiwayatSekarang: data.keluhanRiwayatSekarang || null,
+        riwayatPenyakitTerdahulu: data.riwayatPenyakitTerdahulu || null,
+        riwayatSosialKebiasaan: data.riwayatSosialKebiasaan || null,
+        riwayatPengobatan: data.riwayatPengobatan || null,
+        pemeriksaanFisik: data.pemeriksaanFisik || null,
+        pemeriksaanTambahan: data.pemeriksaanTambahan || null,
+      },
+    });
+
+    // Log audit
     await logAudit({
       userId,
       action: AuditAction.CREATE,
-      resource: 'EncounterDiagnosis',
+      resource: 'Diagnosis',
       resourceId: diagnosis.id,
-      meta: { memberId, encounterId: encounter.id, category: data.category },
+      meta: { memberId, encounterId },
     });
 
-    return {
-      id: diagnosis.id,
-      encounterId: diagnosis.encounterId,
-      category: diagnosis.category,
-      diagnosis: diagnosis.diagnosis,
-      notes: diagnosis.notes,
-      diagnosedAt: diagnosis.diagnosedAt.toISOString(),
-      diagnosedBy: diagnosis.diagnosedByUser.profile?.fullName || 'Unknown',
-    };
+    return diagnosis;
   }
 
   /**
    * Get member therapy plans
    */
   async getMemberTherapyPlans(memberId: string) {
-    const plans = await prisma.therapyPlan.findMany({
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    const therapyPlans = await prisma.therapyPlan.findMany({
       where: {
-        session: {
-          encounter: {
-            memberId,
-          },
-        },
+        memberId,
       },
       include: {
         session: {
-          include: {
-            encounter: {
-              include: {
-                member: true,
-                branch: true,
-              },
-            },
-          },
-        },
-        createdByUser: {
-          include: {
-            profile: true,
+          select: {
+            id: true,
+            sessionCode: true,
+            treatmentDate: true,
           },
         },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
-    return plans.map(p => ({
-      id: p.id,
-      sessionId: p.sessionId,
-      planDetails: p.planDetails,
-      goals: p.goals,
-      expectedOutcome: p.expectedOutcome,
-      createdAt: p.createdAt.toISOString(),
-      createdBy: p.createdByUser.profile?.fullName || 'Unknown',
-      session: {
-        id: p.session.id,
-        sessionDate: p.session.sessionDate.toISOString(),
-        branchName: p.session.encounter.branch.name,
-      },
+    return therapyPlans.map((plan) => ({
+      id: plan.id,
+      planCode: plan.planCode,
+      keterangan: plan.keterangan,
+      ifa: plan.ifa ? Number(plan.ifa) : null,
+      hho: plan.hho ? Number(plan.hho) : null,
+      h2: plan.h2 ? Number(plan.h2) : null,
+      no: plan.no ? Number(plan.no) : null,
+      gaso: plan.gaso ? Number(plan.gaso) : null,
+      o2: plan.o2 ? Number(plan.o2) : null,
+      o3: plan.o3 ? Number(plan.o3) : null,
+      edta: plan.edta ? Number(plan.edta) : null,
+      mb: plan.mb ? Number(plan.mb) : null,
+      h2s: plan.h2s ? Number(plan.h2s) : null,
+      kcl: plan.kcl ? Number(plan.kcl) : null,
+      jmlNb: plan.jmlNb ? Number(plan.jmlNb) : null,
+      isUsed: !!plan.treatmentSessionId,
+      usedInSession: plan.session,
+      createdAt: plan.createdAt.toISOString(),
     }));
   }
 
@@ -207,7 +246,70 @@ export class MemberMedicalRecordsService {
    * Create member therapy plan
    */
   async createMemberTherapyPlan(memberId: string, data: any, userId: string) {
-    // Check if member exists
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        registrationBranch: true,
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    // Generate therapy plan code
+    const branchCode = member.registrationBranch.branchCode;
+    const prefix = `TP-${branchCode}-`;
+    const lastPlan = await prisma.therapyPlan.findFirst({
+      where: { planCode: { startsWith: prefix } },
+      orderBy: { planCode: 'desc' },
+    });
+    
+    const sequence = lastPlan 
+      ? parseInt(lastPlan.planCode.split('-').pop() || '0') + 1 
+      : 1;
+    
+    const planCode = `TP-${branchCode}-${String(sequence).padStart(5, '0')}`;
+
+    const therapyPlan = await prisma.therapyPlan.create({
+      data: {
+        planCode,
+        memberId,
+        keterangan: data.keterangan || null,
+        ifa: data.ifa || null,
+        hho: data.hho || null,
+        h2: data.h2 || null,
+        no: data.no || null,
+        gaso: data.gaso || null,
+        o2: data.o2 || null,
+        o3: data.o3 || null,
+        edta: data.edta || null,
+        mb: data.mb || null,
+        h2s: data.h2s || null,
+        kcl: data.kcl || null,
+        jmlNb: data.jmlNb || null,
+      },
+    });
+
+    await logAudit({
+      userId,
+      action: AuditAction.CREATE,
+      resource: 'TherapyPlan',
+      resourceId: therapyPlan.id,
+      meta: { memberId, planCode },
+    });
+
+    return {
+      id: therapyPlan.id,
+      planCode: therapyPlan.planCode,
+      message: 'Therapy plan berhasil dibuat',
+    };
+  }
+
+  /**
+   * Get member infusions
+   */
+  async getMemberInfusions(memberId: string) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
     });
@@ -216,102 +318,7 @@ export class MemberMedicalRecordsService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Get or create encounter
-    let encounter = await prisma.encounter.findFirst({
-      where: {
-        memberId,
-        encounterDate: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lt: new Date(new Date().setHours(23, 59, 59, 999)),
-        },
-      },
-    });
-
-    if (!encounter) {
-      encounter = await prisma.encounter.create({
-        data: {
-          memberId,
-          branchId: data.branchId,
-          encounterDate: new Date(),
-          status: 'ACTIVE',
-        },
-      });
-    }
-
-    // Get or create session
-    let session = await prisma.treatmentSession.findFirst({
-      where: {
-        encounterId: encounter.id,
-        sessionDate: {
-          gte: new Date(new Date().setHours(0, 0, 0, 0)),
-          lt: new Date(new Date().setHours(23, 59, 59, 999)),
-        },
-      },
-    });
-
-    if (!session) {
-      session = await prisma.treatmentSession.create({
-        data: {
-          encounterId: encounter.id,
-          sessionDate: new Date(),
-          status: 'IN_PROGRESS',
-        },
-      });
-    }
-
-    // Create therapy plan
-    const plan = await prisma.therapyPlan.create({
-      data: {
-        sessionId: session.id,
-        planDetails: data.planDetails,
-        goals: data.goals,
-        expectedOutcome: data.expectedOutcome,
-        createdBy: userId,
-      },
-      include: {
-        session: {
-          include: {
-            encounter: {
-              include: {
-                member: true,
-                branch: true,
-              },
-            },
-          },
-        },
-        createdByUser: {
-          include: {
-            profile: true,
-          },
-        },
-      },
-    });
-
-    // Audit log
-    await logAudit({
-      userId,
-      action: AuditAction.CREATE,
-      resource: 'TherapyPlan',
-      resourceId: plan.id,
-      meta: { memberId, sessionId: session.id },
-    });
-
-    return {
-      id: plan.id,
-      sessionId: plan.sessionId,
-      planDetails: plan.planDetails,
-      goals: plan.goals,
-      expectedOutcome: plan.expectedOutcome,
-      createdAt: plan.createdAt.toISOString(),
-      createdBy: plan.createdByUser.profile?.fullName || 'Unknown',
-    };
-  }
-
-  /**
-   * Get member infusions
-   */
-  async getMemberInfusions(memberId: string) {
-    const infusions = await prisma.infusion.findMany({
+    const infusions = await prisma.infusionExecution.findMany({
       where: {
         session: {
           encounter: {
@@ -321,37 +328,61 @@ export class MemberMedicalRecordsService {
       },
       include: {
         session: {
-          include: {
+          select: {
+            id: true,
+            sessionCode: true,
+            treatmentDate: true,
             encounter: {
-              include: {
-                member: true,
-                branch: true,
+              select: {
+                member: {
+                  select: {
+                    user: {
+                      select: {
+                        profile: {
+                          select: {
+                            fullName: true,
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
               },
             },
           },
         },
-        administeredByUser: {
-          include: {
-            profile: true,
-          },
-        },
       },
-      orderBy: { administeredAt: 'desc' },
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
 
-    return infusions.map(i => ({
-      id: i.id,
-      sessionId: i.sessionId,
-      infusionType: i.infusionType,
-      dosage: i.dosage,
-      notes: i.notes,
-      administeredAt: i.administeredAt.toISOString(),
-      administeredBy: i.administeredByUser.profile?.fullName || 'Unknown',
-      session: {
-        id: i.session.id,
-        sessionDate: i.session.sessionDate.toISOString(),
-        branchName: i.session.encounter.branch.name,
-      },
+    return infusions.map((infusion) => ({
+      id: infusion.id,
+      treatmentSessionId: infusion.treatmentSessionId,
+      sessionCode: infusion.session.sessionCode,
+      memberName: infusion.session.encounter.member.user.profile?.fullName || '',
+      treatmentDate: infusion.session.treatmentDate.toISOString(),
+      ifa: infusion.ifa ? Number(infusion.ifa) : null,
+      hho: infusion.hho ? Number(infusion.hho) : null,
+      h2: infusion.h2 ? Number(infusion.h2) : null,
+      no: infusion.no ? Number(infusion.no) : null,
+      gaso: infusion.gaso ? Number(infusion.gaso) : null,
+      o2: infusion.o2 ? Number(infusion.o2) : null,
+      o3: infusion.o3 ? Number(infusion.o3) : null,
+      edta: infusion.edta ? Number(infusion.edta) : null,
+      mb: infusion.mb ? Number(infusion.mb) : null,
+      h2s: infusion.h2s ? Number(infusion.h2s) : null,
+      kcl: infusion.kcl ? Number(infusion.kcl) : null,
+      jmlNb: infusion.jmlNb ? Number(infusion.jmlNb) : null,
+      deviationNotes: infusion.deviationNotes,
+      bottleType: infusion.bottleType,
+      jenisCairan: infusion.jenisCairan,
+      volumeCarrier: infusion.volumeCarrier ? Number(infusion.volumeCarrier) : null,
+      jumlahJarum: infusion.jumlahJarum,
+      tanggalProduksi: infusion.tanggalProduksi?.toISOString() || null,
+      createdAt: infusion.createdAt.toISOString(),
+      updatedAt: infusion.updatedAt.toISOString(),
     }));
   }
 }

@@ -1,0 +1,407 @@
+/* ============================================================
+   Payment Proof Modal - CSS Module
+   Modal untuk menampilkan bukti pembayaran invoice
+   ============================================================ */
+
+.modalBackdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 20px;
+}
+
+.modalContainer {
+  background: var(--surface-card);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  border: 1px solid var(--surface-border);
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-ground);
+}
+
+.modalTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+/* ============================================================
+   PAYMENT TABS
+   ============================================================ */
+.paymentTabs {
+  display: flex;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-ground);
+  overflow-x: auto;
+}
+
+.paymentTab {
+  background: none;
+  border: none;
+  padding: 12px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.paymentTab:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.paymentTabActive {
+  color: var(--primary-color);
+  border-bottom-color: var(--primary-color);
+  background: var(--surface-card);
+}
+
+/* ============================================================
+   PAYMENT DETAILS
+   ============================================================ */
+.paymentDetails {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--surface-border);
+  background: var(--surface-ground);
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.detailItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.detailLabel {
+  font-weight: 600;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.detailValue {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: right;
+}
+
+/* ============================================================
+   PROOF CONTAINER
+   ============================================================ */
+.proofContainer {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.proofTitle {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.proofContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* ============================================================
+   IMAGE DISPLAY
+   ============================================================ */
+.imageContainer {
+  width: 100%;
+  max-width: 600px;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--surface-ground);
+}
+
+.proofImage {
+  width: 100%;
+  height: auto;
+  max-height: 500px;
+  object-fit: contain;
+  display: block;
+}
+
+.errorMessage {
+  padding: 40px;
+  text-align: center;
+  color: #f87171;
+  font-size: 14px;
+  background: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 4px;
+  margin: 20px;
+}
+
+/* ============================================================
+   PDF DISPLAY
+   ============================================================ */
+.pdfContainer {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.pdfPreview {
+  display: flex;
+  align-items: center;
+  padding: 20px;
+  border: 2px dashed var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-ground);
+  margin-bottom: 16px;
+}
+
+.pdfIcon {
+  font-size: 48px;
+  margin-right: 16px;
+}
+
+.pdfInfo {
+  flex: 1;
+  text-align: left;
+}
+
+.pdfName {
+  margin: 0 0 4px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+.pdfSize {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+/* ============================================================
+   UNKNOWN FILE DISPLAY
+   ============================================================ */
+.unknownFileContainer {
+  width: 100%;
+  max-width: 300px;
+  text-align: center;
+  padding: 40px 20px;
+  border: 2px dashed var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-ground);
+}
+
+.unknownFileIcon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.unknownFileName {
+  margin: 0 0 16px 0;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 14px;
+  word-break: break-word;
+}
+
+/* ============================================================
+   ACTIONS
+   ============================================================ */
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--surface-border);
+  background: var(--surface-ground);
+}
+
+.downloadButton {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 20px;
+  background: var(--primary-color);
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+
+.downloadButton:hover {
+  background: var(--primary-color-dark);
+  color: white;
+  text-decoration: none;
+}
+
+.closeActionButton {
+  padding: 10px 20px;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border: 1px solid var(--surface-border);
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.closeActionButton:hover {
+  background: var(--surface-border);
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 768px) {
+  .modalBackdrop {
+    padding: 10px;
+  }
+
+  .modalContainer {
+    max-height: 95vh;
+  }
+
+  .modalHeader {
+    padding: 16px 20px;
+  }
+
+  .modalTitle {
+    font-size: 16px;
+  }
+
+  .paymentDetails {
+    padding: 16px 20px;
+  }
+
+  .detailsGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .detailItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .detailValue {
+    text-align: left;
+  }
+
+  .proofContainer {
+    padding: 20px;
+  }
+
+  .modalActions {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+
+  .paymentTabs {
+    flex-direction: column;
+  }
+
+  .paymentTab {
+    text-align: left;
+    border-bottom: none;
+    border-left: 3px solid transparent;
+  }
+
+  .paymentTabActive {
+    border-left-color: var(--primary-color);
+    border-bottom-color: transparent;
+  }
+}
+
+@media (max-width: 480px) {
+  .modalHeader {
+    padding: 12px 16px;
+  }
+
+  .paymentDetails {
+    padding: 12px 16px;
+  }
+
+  .proofContainer {
+    padding: 16px;
+  }
+
+  .modalActions {
+    padding: 12px 16px;
+  }
+
+  .pdfPreview {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .pdfIcon {
+    margin-right: 0;
+    margin-bottom: 8px;
+  }
+
+  .pdfInfo {
+    text-align: center;
+  }
+}

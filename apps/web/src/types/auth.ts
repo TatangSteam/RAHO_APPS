@@ -61,5 +61,12 @@ export function hasRole(userRole: Role, allowedRoles: Role[]): boolean {
 /** First route to redirect to after login, based on role */
 export function getDefaultRoute(role: Role): string {
   if (role === 'MEMBER') return '/me/dashboard';
+  
+  // All staff roles get main dashboard
+  if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(role)) {
+    return '/dashboard';
+  }
+  
+  // Default fallback
   return '/dashboard';
 }

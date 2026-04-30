@@ -5,8 +5,8 @@ import { AuditAction, Role } from '@prisma/client';
 
 export interface CreateStockRequestInput {
   items: Array<{
-    masterProductId: string;
-    requestedQuantity: number;
+    inventoryItemId: string;
+    requestedQty: number;
     notes?: string;
   }>;
   notes?: string;
@@ -47,17 +47,20 @@ export class StockRequestCreationService {
       };
     }
 
-    // Validate products
-    const productIds = data.items.map(item => item.masterProductId);
-    const products = await prisma.masterProduct.findMany({
-      where: { id: { in: productIds } },
+    // Validate inventory items
+    const inventoryItemIds = data.items.map(item => item.inventoryItemId);
+    const inventoryItems = await prisma.inventoryItem.findMany({
+      where: { id: { in: inventoryItemIds } },
+      include: {
+        masterProduct: true,
+      },
     });
 
-    if (products.length !== productIds.length) {
+    if (inventoryItems.length !== inventoryItemIds.length) {
       throw {
         status: 404,
-        code: 'PRODUCT_NOT_FOUND',
-        message: 'Beberapa produk tidak ditemukan',
+        code: 'INVENTORY_ITEM_NOT_FOUND',
+        message: 'Beberapa item inventori tidak ditemukan',
       };
     }
 
@@ -68,14 +71,14 @@ export class StockRequestCreationService {
     const request = await prisma.stockRequest.create({
       data: {
         requestCode,
-        requestingBranchId: branchId,
+        branchId: branchId,
         requestedBy: userId,
         status: 'PENDING',
         notes: data.notes,
         items: {
           create: data.items.map(item => ({
-            masterProductId: item.masterProductId,
-            requestedQuantity: item.requestedQuantity,
+            inventoryItemId: item.inventoryItemId,
+            requestedQty: item.requestedQty,
             notes: item.notes,
           })),
         },
@@ -83,15 +86,14 @@ export class StockRequestCreationService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
-        requestedByUser: {
-          include: {
-            profile: true,
-          },
-        },
+        branch: true,
       },
     });
 
@@ -149,21 +151,17 @@ export class StockRequestCreationService {
     return {
       id: request.id,
       requestCode: request.requestCode,
-      requestingBranchId: request.requestingBranchId,
-      requestingBranchName: request.requestingBranch.name,
+      branchId: request.branchId,
+      branchName: request.branch.name,
       status: request.status,
       notes: request.notes,
-      requestedBy: request.requestedByUser.profile?.fullName || request.requestedByUser.email,
-      reviewedBy: request.reviewedByUser?.profile?.fullName || request.reviewedByUser?.email,
-      reviewNotes: request.reviewNotes,
+      itemCount: request.items.length,
       items: request.items.map((item: any) => ({
         id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        requestedQuantity: Number(item.requestedQuantity),
-        approvedQuantity: item.approvedQuantity ? Number(item.approvedQuantity) : null,
+        inventoryItemId: item.inventoryItemId,
+        productName: item.inventoryItem.masterProduct.name,
+        requestedQty: Number(item.requestedQty),
+        unit: item.inventoryItem.masterProduct.unit,
         notes: item.notes,
       })),
       createdAt: request.createdAt.toISOString(),

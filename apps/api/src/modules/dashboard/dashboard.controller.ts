@@ -1,72 +1,56 @@
 import { Request, Response, NextFunction } from 'express';
-import {
-  getStaffDashboardService,
-  getAdminCabangDashboardService,
-  getAdminManagerDashboardService,
-  getSuperAdminDashboardService,
-} from './dashboard.service';
-import { sendSuccess } from '@utils/response';
+import { DashboardService } from './dashboard.service';
+import { sendSuccess } from '../../utils/response';
+import { prisma } from '../../lib/prisma';
 
-// ── Staff Dashboard (ADMIN_LAYANAN, DOCTOR, NURSE) ───────────────────────
+const dashboardService = new DashboardService();
 
-export async function getStaffDashboard(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const branchId = req.user.branchId!;
+export class DashboardController {
+  /**
+   * GET /api/v1/dashboard/branch
+   * Get branch dashboard statistics
+   */
+  async getBranchDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userRole = req.user?.role;
+      let branchId = req.user?.branchId;
+      
+      // For ADMIN_MANAGER, allow branchId from query parameter or use first available branch
+      if (userRole === 'ADMIN_MANAGER' && !branchId) {
+        branchId = req.query.branchId as string;
+        
+        // If still no branchId, get first available branch for ADMIN_MANAGER
+        if (!branchId) {
+          const firstBranch = await prisma.branch.findFirst({
+            select: { id: true },
+            orderBy: { createdAt: 'asc' }
+          });
+          
+          if (firstBranch) {
+            branchId = firstBranch.id;
+          }
+        }
+      }
+      
+      if (!branchId) {
+        throw { 
+          status: 401, 
+          code: 'UNAUTHORIZED', 
+          message: userRole === 'ADMIN_MANAGER' 
+            ? 'No branches available for ADMIN_MANAGER' 
+            : 'Branch information missing' 
+        };
+      }
 
-    const data = await getStaffDashboardService(branchId);
-    sendSuccess(res, data);
-  } catch (err) {
-    next(err);
-  }
-}
+      // Parse date range from query params
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
 
-// ── Admin Cabang Dashboard ──────────────────────────────────────────────
-
-export async function getAdminCabangDashboard(
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const branchId = req.user.branchId!;
-
-    const data = await getAdminCabangDashboardService(branchId);
-    sendSuccess(res, data);
-  } catch (err) {
-    next(err);
-  }
-}
-
-// ── Admin Manager Dashboard ─────────────────────────────────────────────
-
-export async function getAdminManagerDashboard(
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const data = await getAdminManagerDashboardService();
-    sendSuccess(res, data);
-  } catch (err) {
-    next(err);
-  }
-}
-
-// ── Super Admin Dashboard ───────────────────────────────────────────────
-
-export async function getSuperAdminDashboard(
-  _req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> {
-  try {
-    const data = await getSuperAdminDashboardService();
-    sendSuccess(res, data);
-  } catch (err) {
-    next(err);
+      const stats = await dashboardService.getBranchDashboard(branchId, startDate, endDate);
+      
+      return sendSuccess(res, stats);
+    } catch (error) {
+      next(error);
+    }
   }
 }

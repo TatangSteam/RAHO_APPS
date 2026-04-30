@@ -8,8 +8,10 @@ import {
 } from './members.schema';
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
+import { MemberExportService } from './services/member-export.service';
 
 const membersService = new MembersService();
+const exportService = new MemberExportService();
 
 export class MembersController {
   async getMembers(req: Request, res: Response, next: NextFunction) {
@@ -70,12 +72,7 @@ export class MembersController {
 
   async createMember(req: Request, res: Response, next: NextFunction) {
     try {
-      console.log('📥 Received request body:', req.body);
-      console.log('📁 Received files:', req.files);
-      
       const validated = createMemberSchema.parse(req.body);
-      console.log('✅ Validation passed:', validated);
-      
       const { branchId, userId } = req.user!;
 
       if (!branchId) {
@@ -248,6 +245,46 @@ export class MembersController {
       sendSuccess(res, result);
     } catch (error) {
       console.error('❌ Error in getMembersByBranch:', error);
+      next(error);
+    }
+  }
+
+  async exportMembers(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { search, status, format = 'xlsx' } = req.query;
+      const { userId, branchId, role } = req.user!;
+      const fields = req.body.fields || {
+        basicInfo: true,
+        contactInfo: true,
+        medicalInfo: false,
+        packages: false,
+        sessions: false,
+        diagnosis: false,
+      };
+
+      const data = await exportService.exportMembers(userId, role as Role, branchId, {
+        fields,
+        format: format as 'csv' | 'json' | 'xlsx',
+        search: search as string,
+        status: status as string,
+      });
+
+      if (format === 'csv') {
+        const csv = exportService.generateCSV(data);
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.csv`);
+        res.send(csv);
+      } else if (format === 'xlsx') {
+        const buffer = await exportService.generateXLSX(data);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.xlsx`);
+        res.send(buffer);
+      } else {
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.json`);
+        res.json(data);
+      }
+    } catch (error) {
       next(error);
     }
   }

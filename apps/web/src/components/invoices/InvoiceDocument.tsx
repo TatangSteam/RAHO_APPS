@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
 import styles from './InvoiceDocument.module.css';
@@ -9,6 +10,18 @@ interface Props {
 }
 
 export default function InvoiceDocument({ invoice }: Props) {
+  // Debug log untuk melihat data invoice
+  React.useEffect(() => {
+    console.log('🔍 Invoice data received:', {
+      subtotal: invoice.subtotal,
+      discountAmount: invoice.discountAmount,
+      discountPercent: invoice.discountPercent,
+      taxAmount: invoice.taxAmount,
+      taxPercent: invoice.taxPercent,
+      totalAmount: invoice.totalAmount,
+    });
+  }, [invoice]);
+
   const getStatusClass = (status: string) => {
     const statusMap: Record<string, string> = {
       DRAFT: styles.statusDraft,
@@ -42,6 +55,33 @@ export default function InvoiceDocument({ invoice }: Props) {
       year: 'numeric'
     });
   };
+
+  // Group invoice items by code + description + pricePerUnit
+  const groupedItems = React.useMemo(() => {
+    if (!invoice.items || invoice.items.length === 0) return [];
+
+    const itemsMap = new Map<string, any>();
+
+    invoice.items.forEach((item) => {
+      const productCode = (item as any).code || `ITEM-${item.id}`;
+      const key = `${productCode}|${item.description}|${item.pricePerUnit}`;
+
+      if (itemsMap.has(key)) {
+        const existing = itemsMap.get(key);
+        existing.quantity += item.quantity;
+        existing.totalAmount += item.totalAmount;
+      } else {
+        itemsMap.set(key, {
+          ...item,
+          code: productCode,
+          quantity: item.quantity,
+          totalAmount: item.totalAmount,
+        });
+      }
+    });
+
+    return Array.from(itemsMap.values());
+  }, [invoice.items]);
 
   return (
     <div id="invoice-document" className={styles.invoiceDocument}>
@@ -113,13 +153,12 @@ export default function InvoiceDocument({ invoice }: Props) {
             </tr>
           </thead>
           <tbody className={styles.tableBody}>
-            {invoice.items?.map((item, index) => {
-              const productCode = (item as any).code || `ITEM-${index + 1}`;
+            {groupedItems.map((item, index) => {
               return (
-                <tr key={item.id} className={styles.tableRow}>
+                <tr key={`${item.id}-${index}`} className={styles.tableRow}>
                   <td className={styles.colNo}>{index + 1}</td>
                   <td className={styles.colCode}>
-                    <div className={styles.itemCode}>{productCode}</div>
+                    <div className={styles.itemCode}>{item.code}</div>
                   </td>
                   <td className={styles.colName}>
                     <div className={styles.itemName}>{item.description}</div>
@@ -169,6 +208,28 @@ export default function InvoiceDocument({ invoice }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Incentive Information */}
+      {invoice.incentive && (
+        <div className={styles.incentiveInfo}>
+          <h3 className={styles.sectionTitle}>🎁 Informasi Insentif Referral</h3>
+          <div className={styles.incentiveContent}>
+            <p className={styles.incentiveRow}>
+              <span className={styles.incentiveLabel}>Jumlah Insentif:</span>
+              <span className={styles.incentiveValue}>{formatCurrency(invoice.incentive.totalAmount)}</span>
+            </p>
+            <p className={styles.incentiveRow}>
+              <span className={styles.incentiveLabel}>Untuk:</span>
+              <span className={styles.incentiveValue}>
+                {invoice.incentive.referrerName} ({invoice.incentive.referralCode})
+              </span>
+            </p>
+            <p className={styles.incentiveNote}>
+              * Insentif referral akan diberikan kepada {invoice.incentive.referrerName}
+            </p>
+          </div>
+        </div>
+      )}
 
 
       {/* Notes */}

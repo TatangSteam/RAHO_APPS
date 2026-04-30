@@ -59,10 +59,15 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
     throw new Error('Member not found');
   }
 
-  // Get last session
+  // Get last session (BASIC packages only)
   const lastSession = await prisma.treatmentSession.findFirst({
     where: {
-      encounter: { memberId },
+      encounter: { 
+        memberId,
+        memberPackage: {
+          packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
+        },
+      },
     },
     orderBy: { treatmentDate: 'desc' },
     select: {
@@ -99,7 +104,12 @@ export async function getMemberSessionsService(
   const [sessions, total] = await Promise.all([
     prisma.treatmentSession.findMany({
       where: {
-        encounter: { memberId },
+        encounter: { 
+          memberId,
+          memberPackage: {
+            packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
+          },
+        },
       },
       orderBy: { treatmentDate: 'desc' },
       skip,
@@ -115,7 +125,12 @@ export async function getMemberSessionsService(
     }),
     prisma.treatmentSession.count({
       where: {
-        encounter: { memberId },
+        encounter: { 
+          memberId,
+          memberPackage: {
+            packageType: 'BASIC', // Only count BASIC packages
+          },
+        },
       },
     }),
   ]);

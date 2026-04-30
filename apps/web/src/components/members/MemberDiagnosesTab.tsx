@@ -287,7 +287,7 @@ export default function MemberDiagnosesTab({ memberId }: MemberDiagnosesTabProps
                       {Object.entries(diagnosis.pemeriksaanTambahan).map(([key, value]) => (
                         <div key={key} style={{ display: 'flex', gap: '8px', fontSize: '14px' }}>
                           <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>{key}:</span>
-                          <span>{value}</span>
+                          <span>{typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}</span>
                         </div>
                       ))}
                     </div>

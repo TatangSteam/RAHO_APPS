@@ -29,6 +29,14 @@ router.get(
   controller.getAllSessions.bind(controller)
 );
 
+// Export sessions
+router.post(
+  '/export',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.exportSessions.bind(controller)
+);
+
 // Create session
 router.post(
   '/',

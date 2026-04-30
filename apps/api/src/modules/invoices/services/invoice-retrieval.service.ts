@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { getPresignedUrl, extractKeyFromUrl } from '../../../config/minio';
 
 /**
  * Service for invoice retrieval
@@ -12,7 +13,11 @@ export class InvoiceRetrievalService {
     const invoice = await (prisma as any).invoice.findUnique({
       where: { id: invoiceId },
       include: {
-        member: true,
+        member: {
+          include: {
+            referralCode: true,
+          },
+        },
         branch: true,
         createdByUser: true,
         verifiedByUser: true,
@@ -46,7 +51,11 @@ export class InvoiceRetrievalService {
         },
       },
       include: {
-        member: true,
+        member: {
+          include: {
+            referralCode: true,
+          },
+        },
         branch: true,
         createdByUser: true,
         verifiedByUser: true,
@@ -73,7 +82,11 @@ export class InvoiceRetrievalService {
     const invoices = await (prisma as any).invoice.findMany({
       where: { memberId },
       include: {
-        member: true,
+        member: {
+          include: {
+            referralCode: true,
+          },
+        },
         branch: true,
         createdByUser: true,
         verifiedByUser: true,
@@ -87,13 +100,90 @@ export class InvoiceRetrievalService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return invoices.map((inv: any) => this.formatInvoice(inv));
+    return Promise.all(invoices.map((inv: any) => this.formatInvoice(inv)));
+  }
+
+  /**
+   * Get payment proof image (returns presigned URL)
+   */
+  async getPaymentProofImage(paymentId: string) {
+    const payment = await (prisma as any).invoicePayment.findUnique({
+      where: { id: paymentId },
+      select: {
+        proofFileUrl: true,
+        proofFileName: true,
+        proofMimeType: true,
+      },
+    });
+
+    if (!payment || !payment.proofFileUrl) {
+      throw new Error('Payment proof not found');
+    }
+
+    // Extract the MinIO key from the URL
+    const key = extractKeyFromUrl(payment.proofFileUrl);
+
+    // Generate presigned URL (valid for 1 hour)
+    const presignedUrl = await getPresignedUrl(key, 3600);
+
+    return {
+      presignedUrl,
+      fileName: payment.proofFileName,
+      mimeType: payment.proofMimeType,
+    };
   }
 
   /**
    * Format invoice for API response
    */
-  formatInvoice(invoice: any) {
+  async formatInvoice(invoice: any) {
+    // Get incentive information for packages in this invoice
+    let incentiveInfo = null;
+    
+    // Get package IDs from invoice items
+    const packageIds = invoice.items
+      .filter((item: any) => item.itemType === 'PACKAGE')
+      .map((item: any) => item.itemId);
+    
+    if (packageIds.length > 0 && invoice.member.referralCode) {
+      // Get incentive records for these packages
+      const incentiveRecords = await prisma.referralIncentiveRecord.findMany({
+        where: {
+          memberPackageId: {
+            in: packageIds,
+          },
+        },
+        include: {
+          referralCode: {
+            select: {
+              code: true,
+              referrerName: true,
+              referrerType: true,
+            },
+          },
+        },
+      });
+      
+      // If there are incentive records, sum them up
+      if (incentiveRecords.length > 0) {
+        const totalIncentive = incentiveRecords.reduce(
+          (sum, record) => sum + Number(record.incentiveAmount),
+          0
+        );
+        
+        // Use the first record for referral info (they should all be the same referral code)
+        const firstRecord = incentiveRecords[0];
+        
+        incentiveInfo = {
+          totalAmount: totalIncentive,
+          referralCode: firstRecord.referralCode.code,
+          referrerName: firstRecord.referralCode.referrerName,
+          referrerType: firstRecord.referralCode.referrerType,
+          recordCount: incentiveRecords.length,
+        };
+      }
+    }
+    
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
@@ -106,11 +196,14 @@ export class InvoiceRetrievalService {
       // Financial
       subtotal: Number(invoice.subtotal),
       discountPercent: invoice.discountPercent ? Number(invoice.discountPercent) : undefined,
-      discountAmount: Number(invoice.discountAmount),
+      discountAmount: invoice.discountAmount && Number(invoice.discountAmount) > 0 ? Number(invoice.discountAmount) : undefined,
       discountNote: invoice.discountNote || undefined,
-      taxPercent: Number(invoice.taxPercent),
-      taxAmount: Number(invoice.taxAmount),
+      taxPercent: invoice.taxPercent && Number(invoice.taxPercent) > 0 ? Number(invoice.taxPercent) : undefined,
+      taxAmount: invoice.taxAmount && Number(invoice.taxAmount) > 0 ? Number(invoice.taxAmount) : undefined,
       totalAmount: Number(invoice.totalAmount),
+      
+      // Incentive information
+      incentive: incentiveInfo,
       
       // Status
       status: invoice.status,
@@ -147,6 +240,10 @@ export class InvoiceRetrievalService {
         paymentMethod: payment.paymentMethod,
         paymentReference: payment.paymentReference || undefined,
         notes: payment.notes || undefined,
+        proofFileUrl: payment.proofFileUrl ? `/invoices/payment-proof/${payment.id}` : undefined,
+        proofFileName: payment.proofFileName || undefined,
+        proofFileSize: payment.proofFileSize || undefined,
+        proofMimeType: payment.proofMimeType || undefined,
         receivedBy: payment.receivedBy,
         receivedByName: payment.receivedByUser.fullName,
         receivedAt: payment.receivedAt.toISOString(),

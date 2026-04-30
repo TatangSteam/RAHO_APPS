@@ -1167,3 +1167,84 @@
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
 }
+/* Unit Conversion Styles */
+.conversionInfo {
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  border-left: 3px solid var(--color-primary);
+}
+
+.conversionLabel {
+  font-size: 12px;
+  color: var(--color-primary);
+  font-weight: 500;
+}
+
+.stockDisplay {
+  font-weight: 600;
+}
+
+.usageQuantityInput {
+  margin-top: 8px;
+}
+
+.usageQuantityInput label {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.usageQuantityInput input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.unitToggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.unitToggleBtn {
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  background: white;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.unitToggleBtn.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.unitToggleBtn:hover:not(.active) {
+  background: var(--color-light);
+}
+
+.conversionHelper {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-success);
+}
+
+.conversionWarning {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-warning);
+}

@@ -37,13 +37,7 @@ export class StockRequestService {
     }
 
     // 3. Validate items exist and belong to branch
-    if (!data.items || data.items.length === 0) {
-      throw {
-        status: 400,
-        code: 'EMPTY_ITEMS',
-        message: 'Minimal harus ada 1 item dalam request',
-      };
-    }
+    // Allow empty requests - no minimum item validation
 
     const inventoryItems = await prisma.inventoryItem.findMany({
       where: {

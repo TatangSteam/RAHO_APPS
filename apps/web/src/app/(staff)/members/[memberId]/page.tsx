@@ -198,24 +198,16 @@ export default function MemberDetailPage() {
     try {
       setSubmitting(true);
       
-      // Upload file to get URL (assuming you have upload function)
-      // For now, we'll create a mock URL - replace with actual upload logic
-      const formData = new FormData();
-      formData.append('file', paymentProof.file);
+      // Upload file to MinIO first
+      const uploadResult = await packagesApi.uploadPaymentProof(paymentProof.file);
       
-      // TODO: Replace with actual upload endpoint
-      // const uploadResponse = await packagesApi.uploadPaymentProof(formData);
-      // const proofFileUrl = uploadResponse.url;
-      
-      // Mock URL for now - replace with actual upload
-      const proofFileUrl = URL.createObjectURL(paymentProof.file);
-      
+      // Then verify payment with the uploaded file URL
       await packagesApi.verifyPayment(selectedPackageId, {
         notes: verifyNotes || undefined,
-        proofFileUrl,
-        proofFileName: paymentProof.file.name,
-        proofFileSize: paymentProof.file.size,
-        proofMimeType: paymentProof.file.type,
+        proofFileUrl: uploadResult.url,
+        proofFileName: uploadResult.fileName,
+        proofFileSize: uploadResult.fileSize,
+        proofMimeType: uploadResult.mimeType,
       });
       
       showToast.success('Pembayaran berhasil diverifikasi');
@@ -225,6 +217,7 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       loadPackages();
     } catch (error: any) {
+      console.error('Verify payment error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal verifikasi pembayaran');
     } finally {
       setSubmitting(false);

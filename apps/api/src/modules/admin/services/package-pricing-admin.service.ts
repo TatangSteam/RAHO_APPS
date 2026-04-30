@@ -66,6 +66,10 @@ export class PackagePricingAdminService {
       pricings: pricings.map(p => ({
         id: p.id,
         packageType: p.packageType,
+        boosterType: p.boosterType,
+        serviceType: p.serviceType,
+        name: p.name,
+        productCode: p.productCode,
         totalSessions: p.totalSessions,
         price: Number(p.price),
         isActive: p.isActive,
@@ -115,6 +119,10 @@ export class PackagePricingAdminService {
     return {
       id: pricing.id,
       packageType: pricing.packageType,
+      boosterType: pricing.boosterType,
+      serviceType: pricing.serviceType,
+      name: pricing.name,
+      productCode: pricing.productCode,
       totalSessions: pricing.totalSessions,
       price: Number(pricing.price),
       isActive: pricing.isActive,
@@ -134,17 +142,50 @@ export class PackagePricingAdminService {
    */
   async createPackagePricing(data: {
     packageType: PackageType;
+    boosterType?: 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
+    serviceType?: string;
+    name: string;
     totalSessions: number;
     price: number;
+    productCode?: string;
     isActive?: boolean;
     branchId?: string;
   }) {
+    // Validate that branchId is provided (required by database)
+    if (!data.branchId) {
+      throw {
+        status: 400,
+        code: 'BRANCH_ID_REQUIRED',
+        message: 'Branch ID is required',
+      };
+    }
+
+    // Validate boosterType for BOOSTER packages
+    if (data.packageType === 'BOOSTER' && !data.boosterType) {
+      throw {
+        status: 400,
+        code: 'BOOSTER_TYPE_REQUIRED',
+        message: 'Tipe booster wajib diisi untuk paket BOOSTER',
+      };
+    }
+
+    // Validate serviceType for BOOSTER packages
+    if (data.packageType === 'BOOSTER' && !data.serviceType) {
+      throw {
+        status: 400,
+        code: 'SERVICE_TYPE_REQUIRED',
+        message: 'Tipe layanan wajib diisi untuk paket BOOSTER',
+      };
+    }
+
     // Check if pricing already exists
     const existing = await prisma.packagePricing.findFirst({
       where: {
         packageType: data.packageType,
+        boosterType: data.boosterType || null,
+        serviceType: data.serviceType || null,
         totalSessions: data.totalSessions,
-        branchId: data.branchId || null,
+        branchId: data.branchId,
       },
     });
 
@@ -152,32 +193,34 @@ export class PackagePricingAdminService {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: 'Harga paket dengan tipe dan jumlah sesi ini sudah ada',
+        message: 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini',
       };
     }
 
-    // Validate branch if provided
-    if (data.branchId) {
-      const branch = await prisma.branch.findUnique({
-        where: { id: data.branchId },
-      });
+    // Validate branch
+    const branch = await prisma.branch.findUnique({
+      where: { id: data.branchId },
+    });
 
-      if (!branch) {
-        throw {
-          status: 404,
-          code: 'BRANCH_NOT_FOUND',
-          message: 'Cabang tidak ditemukan',
-        };
-      }
+    if (!branch) {
+      throw {
+        status: 404,
+        code: 'BRANCH_NOT_FOUND',
+        message: 'Cabang tidak ditemukan',
+      };
     }
 
     const pricing = await prisma.packagePricing.create({
       data: {
         packageType: data.packageType,
+        boosterType: data.boosterType || null,
+        serviceType: data.serviceType || null,
+        name: data.name,
         totalSessions: data.totalSessions,
         price: data.price,
+        productCode: data.productCode,
         isActive: data.isActive ?? true,
-        branchId: data.branchId || null,
+        branchId: data.branchId,
       },
       include: {
         branch: {
@@ -193,6 +236,10 @@ export class PackagePricingAdminService {
     return {
       id: pricing.id,
       packageType: pricing.packageType,
+      boosterType: pricing.boosterType,
+      serviceType: pricing.serviceType,
+      name: pricing.name,
+      productCode: pricing.productCode,
       totalSessions: pricing.totalSessions,
       price: Number(pricing.price),
       isActive: pricing.isActive,
@@ -249,6 +296,10 @@ export class PackagePricingAdminService {
     return {
       id: updated.id,
       packageType: updated.packageType,
+      boosterType: updated.boosterType,
+      serviceType: updated.serviceType,
+      name: updated.name,
+      productCode: updated.productCode,
       totalSessions: updated.totalSessions,
       price: Number(updated.price),
       isActive: updated.isActive,

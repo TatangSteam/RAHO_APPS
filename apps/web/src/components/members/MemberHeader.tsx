@@ -39,7 +39,7 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
               {profilePhoto ? (
                 <img
                   src={profilePhoto.fileUrl}
-                  alt={member.profile.fullName}
+                  alt={member.profile?.fullName || 'Member'}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -48,9 +48,9 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
                   }}
                 />
               ) : (
-                member.profile.fullName.charAt(0).toUpperCase()
+                (member.profile?.fullName || 'M').charAt(0).toUpperCase()
               )}
-              {member.isActive && (
+              {member.user?.isActive && (
                 <span style={{
                   position: 'absolute',
                   bottom: '2px',
@@ -65,9 +65,9 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
               )}
             </div>
             <div>
-              <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>{member.profile.fullName}</h1>
+              <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>{member.profile?.fullName || 'Nama tidak tersedia'}</h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span> • 🏢 {member.registrationBranch.name}
+                <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span> • 🏢 {member.registrationBranch?.name || 'N/A'}
               </p>
             </div>
           </div>

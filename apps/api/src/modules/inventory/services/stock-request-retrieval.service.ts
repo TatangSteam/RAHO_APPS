@@ -13,7 +13,7 @@ export class StockRequestRetrievalService {
     const where: any = {};
 
     if (branchId) {
-      where.requestingBranchId = branchId;
+      where.branchId = branchId;
     }
 
     if (status) {
@@ -25,20 +25,14 @@ export class StockRequestRetrievalService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
-        requestedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-        reviewedByUser: {
-          include: {
-            profile: true,
-          },
-        },
+        branch: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -55,20 +49,14 @@ export class StockRequestRetrievalService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
-        requestedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-        reviewedByUser: {
-          include: {
-            profile: true,
-          },
-        },
+        branch: true,
         shipment: {
           include: {
             fromBranch: true,
@@ -105,21 +93,17 @@ export class StockRequestRetrievalService {
     return {
       id: request.id,
       requestCode: request.requestCode,
-      requestingBranchId: request.requestingBranchId,
-      requestingBranchName: request.requestingBranch.name,
+      branchId: request.branchId,
+      branchName: request.branch.name,
       status: request.status,
       notes: request.notes,
-      requestedBy: request.requestedByUser.profile?.fullName || request.requestedByUser.email,
-      reviewedBy: request.reviewedByUser?.profile?.fullName || request.reviewedByUser?.email,
-      reviewNotes: request.reviewNotes,
+      itemCount: request.items.length,
       items: request.items.map((item: any) => ({
         id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        requestedQuantity: Number(item.requestedQuantity),
-        approvedQuantity: item.approvedQuantity ? Number(item.approvedQuantity) : null,
+        inventoryItemId: item.inventoryItemId,
+        productName: item.inventoryItem.masterProduct.name,
+        requestedQty: Number(item.requestedQty),
+        unit: item.inventoryItem.masterProduct.unit,
         notes: item.notes,
       })),
       createdAt: request.createdAt.toISOString(),

@@ -28,15 +28,13 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
     {
       branch: branchPusat,
       branchName: 'Pusat',
-      adminEmail: 'admincabang.pst@raho.id',
+      adminEmail: 'adminlayanan.pst@raho.id',
       members: [
         { fullName: 'Budi Santoso', email: 'budi.pst@example.com', phone: '081234567801', nik: '3201011503850001', city: 'Jakarta Pusat' },
         { fullName: 'Siti Nurhaliza', email: 'siti.pst@example.com', phone: '081234567803', nik: '3201012207900002', city: 'Jakarta Selatan' },
         { fullName: 'Agus Wijaya', email: 'agus.pst@example.com', phone: '081234567805', nik: '3201013011780003', city: 'Jakarta Barat' },
-        { fullName: 'Dewi Lestari', email: 'dewi.pst@example.com', phone: '081234567807', nik: '3201011805950004', city: 'Jakarta Pusat' },
         { fullName: 'Rudi Hartono', email: 'rudi.pst@example.com', phone: '081234567809', nik: '3201012509820005', city: 'Jakarta Selatan' },
         { fullName: 'Maya Sari', email: 'maya.pst@example.com', phone: '081234567811', nik: '3201011012880006', city: 'Jakarta Selatan' },
-        { fullName: 'Andi Prasetyo', email: 'andi.pst@example.com', phone: '081234567813', nik: '3201010804920007', city: 'Jakarta Selatan' },
         { fullName: 'Rina Kusuma', email: 'rina.pst@example.com', phone: '081234567815', nik: '3201011408870008', city: 'Jakarta Pusat' },
         { fullName: 'Hendra Gunawan', email: 'hendra.pst@example.com', phone: '081234567817', nik: '3201012006800009', city: 'Jakarta Pusat' },
         { fullName: 'Fitri Handayani', email: 'fitri.pst@example.com', phone: '081234567819', nik: '3201011005930010', city: 'Jakarta Selatan' },
@@ -45,7 +43,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
     {
       branch: branchBandung,
       branchName: 'Bandung',
-      adminEmail: 'admincabang.bdg@raho.id',
+      adminEmail: 'adminlayanan.bdg@raho.id',
       members: [
         { fullName: 'Bambang Sutrisno', email: 'bambang.bdg@example.com', phone: '082234567801', nik: '3204011503850011', city: 'Bandung' },
         { fullName: 'Sinta Wijaya', email: 'sinta.bdg@example.com', phone: '082234567803', nik: '3204012207900012', city: 'Bandung' },
@@ -62,7 +60,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
     {
       branch: branchSurabaya,
       branchName: 'Surabaya',
-      adminEmail: 'admincabang.sby@raho.id',
+      adminEmail: 'adminlayanan.sby@raho.id',
       members: [
         { fullName: 'Bambang Setiawan', email: 'bambang.sby@example.com', phone: '083234567801', nik: '3515011503850021', city: 'Surabaya' },
         { fullName: 'Sinta Rahayu', email: 'sinta.sby@example.com', phone: '083234567803', nik: '3515012207900022', city: 'Surabaya' },
@@ -89,16 +87,24 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
       continue;
     }
 
-    // Get package pricings for this branch
-    const nb7hc = await prisma.packagePricing.findFirst({
-      where: { branchId: branch.id, packageType: 'BASIC', totalSessions: 7 }
+    // Get package pricings for this branch - SESUAI LIST HARGA (PM = Premiere)
+    const nb7pm = await prisma.packagePricing.findFirst({
+      where: { 
+        branchId: branch.id, 
+        packageType: 'BASIC', 
+        productCode: 'TNB-P7-PM' // 7X Premiere
+      }
     });
 
-    const booster1x = await prisma.packagePricing.findFirst({
-      where: { branchId: branch.id, packageType: 'BOOSTER', totalSessions: 1 }
+    const boosterNO = await prisma.packagePricing.findFirst({
+      where: { 
+        branchId: branch.id, 
+        packageType: 'BOOSTER',
+        productCode: 'BST-NO-P1-PM' // Booster NO Premiere
+      }
     });
 
-    if (!nb7hc || !booster1x) {
+    if (!nb7pm || !boosterNO) {
       console.log(`  ⚠️  Package pricings not found for ${branchName}, skipping...`);
       continue;
     }
@@ -106,14 +112,15 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
     console.log(`\n📍 ${branchName} Branch - Creating 10 members...\n`);
 
     // Package configurations for variety
+    // All packages are BASIC or BUNDLE to ensure therapy sessions are created
     const packageConfigs = [
       { type: 'BUNDLE', status: 'ACTIVE', discountPercent: 10, discountNote: 'Diskon bundling' },
       { type: 'BASIC', status: 'ACTIVE', discountPercent: 0, discountNote: '' },
       { type: 'BASIC', status: 'PENDING_PAYMENT', discountPercent: 0, discountNote: '' },
-      { type: 'BOOSTER', boosterType: 'GT', serviceType: 'HC', quantity: 3, status: 'ACTIVE', discountPercent: 0, discountNote: '' },
+      { type: 'BASIC', status: 'ACTIVE', discountPercent: 0, discountNote: '' }, // Changed from BOOSTER
       { type: 'BUNDLE', status: 'ACTIVE', discountPercent: 15, discountNote: 'Diskon loyalitas' },
       { type: 'BASIC', status: 'ACTIVE', discountPercent: 5, discountNote: 'Diskon early bird' },
-      { type: 'BOOSTER', boosterType: 'H2S', serviceType: 'PS', quantity: 5, status: 'PENDING_PAYMENT', discountPercent: 0, discountNote: '' },
+      { type: 'BASIC', status: 'ACTIVE', discountPercent: 0, discountNote: '' }, // Changed from BOOSTER
       { type: 'BUNDLE', status: 'ACTIVE', discountPercent: 0, discountNote: '' },
       { type: 'BASIC', status: 'ACTIVE', discountPercent: 0, discountNote: '' },
       { type: 'BUNDLE', status: 'PENDING_PAYMENT', discountPercent: 10, discountNote: 'Diskon bundling' },
@@ -182,7 +189,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
         : undefined;
 
       if (pkgConfig.type === 'BASIC' || pkgConfig.type === 'BUNDLE') {
-        const basicPrice = Number(nb7hc.price);
+        const basicPrice = Number(nb7pm.price);
         const discountPercent = (pkgConfig as any).discountPercent || 0;
         const basicDiscount = discountPercent 
           ? Math.round(basicPrice * (discountPercent / 100))
@@ -195,10 +202,10 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
             branchId: branch.id,
             packageCode: `PKG-${branch.branchCode}-BSC-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
             packageType: 'BASIC',
-            packagePricingId: nb7hc.id,
-            productCode: 'TNB-P7-HC',
-            serviceType: 'HC',
-            totalSessions: nb7hc.totalSessions,
+            packagePricingId: nb7pm.id,
+            productCode: 'TNB-P7-PM', // PM = Premiere
+            serviceType: 'PM',
+            totalSessions: nb7pm.totalSessions,
             usedSessions: 0,
             finalPrice: basicFinalPrice,
             discountPercent: (pkgConfig as any).discountPercent || 0,
@@ -219,21 +226,22 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
         if (pkgConfig.status === 'ACTIVE') {
           await prisma.member.update({
             where: { id: member.id },
-            data: { voucherCount: { increment: nb7hc.totalSessions } },
+            data: { voucherCount: { increment: nb7pm.totalSessions } },
           });
         }
       }
 
       if (pkgConfig.type === 'BOOSTER' || pkgConfig.type === 'BUNDLE') {
+        // LIST HARGA LAMA - Service Type Pricing (PM = Premiere)
         const SERVICE_TYPE_PRICING: Record<string, number> = {
-          HC: 1_000_000,
-          PS: 650_000,
-          PTY: 650_000,
-          PDA: 65_000,
-          PHC: 750_000,
+          PM: 1_000_000,   // Premiere
+          PS: 650_000,     // Partnership
+          PTY: 600_000,    // Partnership Attiya
+          PDA: 65_000,     // Partnership Dr. Abhi (per ml)
+          PHC: 750_000,    // Partnership Homecare
         };
 
-        const serviceType = (pkgConfig as any).serviceType || 'HC';
+        const serviceType = (pkgConfig as any).serviceType || 'PM';
         const boosterType = (pkgConfig as any).boosterType || 'NO';
         const quantity = (pkgConfig as any).quantity || 1;
         const pricePerSession = SERVICE_TYPE_PRICING[serviceType];
@@ -244,7 +252,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
           : 0;
         const boosterFinalPrice = boosterPrice - boosterDiscount;
 
-        const prismaBoosterType = boosterType === 'NO' ? 'NO2' : 'HHO';
+        const prismaBoosterType = boosterType;
         const productCode = `BST-${boosterType}-P1-${serviceType}`;
 
         await prisma.memberPackage.create({
@@ -253,7 +261,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
             branchId: branch.id,
             packageCode: `PKG-${branch.branchCode}-BST-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
             packageType: 'BOOSTER',
-            packagePricingId: booster1x.id,
+            packagePricingId: boosterNO.id,
             productCode,
             serviceType,
             totalSessions: quantity,

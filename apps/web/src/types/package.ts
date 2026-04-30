@@ -38,6 +38,9 @@ export interface PackagePricing {
   totalSessions: number;
   price: number;
   isActive: boolean;
+  boosterType?: ExtendedBoosterType | null;
+  serviceType?: ServiceType | null;
+  productCode?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -67,6 +70,23 @@ export interface MemberPackage {
   createdAt: string;
   purchaseGroupId?: string;
   upgradedFromId?: string;
+  // Payment proof
+  paymentProofUrl?: string;
+  paymentProofFileName?: string;
+  paymentProofFileSize?: number;
+  paymentProofMimeType?: string;
+  // Incentive information
+  incentive?: {
+    incentiveAmount: number;
+    incentiveType: 'PERCENTAGE' | 'FIXED_AMOUNT';
+    incentiveValue: number;
+    referralCode: {
+      code: string;
+      referrerName: string;
+      referrerType: 'MEMBER' | 'STAFF' | 'EXTERNAL';
+    } | null;
+    createdAt: string;
+  };
 }
 
 export interface GroupedPackage {
@@ -103,6 +123,11 @@ export interface StandaloneAddOn {
   paidAt?: string;
   verifiedAt?: string;
   createdAt: string;
+  // Payment proof
+  paymentProofUrl?: string;
+  paymentProofFileName?: string;
+  paymentProofFileSize?: number;
+  paymentProofMimeType?: string;
 }
 
 export type PackageDisplay = GroupedPackage | StandalonePackage | StandaloneAddOn;

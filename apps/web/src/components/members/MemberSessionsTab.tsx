@@ -157,10 +157,30 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
-                          <p style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>
-                            {sessionDetail.session.sessionCode}
-                          </p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <p style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '14px' }}>
+                              {sessionDetail.session.sessionCode}
+                            </p>
+                            {sessionDetail.session.boosterPackage && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                background: 'linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.2))',
+                                color: '#fbbf24',
+                                border: '1px solid rgba(251,191,36,0.3)',
+                                width: 'fit-content'
+                              }}>
+                                <span>🚀</span>
+                                <span>Booster {sessionDetail.session.boosterPackage.boosterType || ''}</span>
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                             {new Date(sessionDetail.session.treatmentDate).toLocaleDateString('id-ID', {
                               day: '2-digit',
                               month: 'long',
@@ -259,10 +279,30 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
-                          <p style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '14px', marginBottom: '4px' }}>
-                            {sessionDetail.session.sessionCode}
-                          </p>
-                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <p style={{ fontFamily: 'monospace', fontWeight: '600', fontSize: '14px' }}>
+                              {sessionDetail.session.sessionCode}
+                            </p>
+                            {sessionDetail.session.boosterPackage && (
+                              <span style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                fontSize: '11px',
+                                fontWeight: '600',
+                                background: 'linear-gradient(135deg, rgba(251,191,36,0.2), rgba(245,158,11,0.2))',
+                                color: '#fbbf24',
+                                border: '1px solid rgba(251,191,36,0.3)',
+                                width: 'fit-content'
+                              }}>
+                                <span>🚀</span>
+                                <span>Booster {sessionDetail.session.boosterPackage.boosterType || ''}</span>
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginTop: '4px' }}>
                             {new Date(sessionDetail.session.treatmentDate).toLocaleDateString('id-ID', {
                               day: '2-digit',
                               month: 'long',

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,12 +28,29 @@ export default function LoginPage() {
   const { setAuth } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [logoutMessage, setLogoutMessage] = useState<string | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) });
+
+  // Check for logout message from sessionStorage
+  useEffect(() => {
+    const message = sessionStorage.getItem('logoutMessage');
+    if (message) {
+      setLogoutMessage(message);
+      sessionStorage.removeItem('logoutMessage');
+      
+      // Auto-hide after 5 seconds
+      const timer = setTimeout(() => {
+        setLogoutMessage(null);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const onSubmit = async (data: LoginForm) => {
     setServerError(null);
@@ -85,6 +102,14 @@ export default function LoginPage() {
         <p className="login-desc">
           Silakan masukkan email dan password Anda
         </p>
+
+        {/* Logout Message Alert */}
+        {logoutMessage && (
+          <div className="login-info-alert" role="alert">
+            <AlertCircle size={16} />
+            <span>{logoutMessage}</span>
+          </div>
+        )}
 
         {/* Server Error Alert */}
         {serverError && (
@@ -238,6 +263,20 @@ export default function LoginPage() {
           margin-bottom: 24px;
         }
 
+        .login-info-alert {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 16px;
+          background: rgba(59, 130, 246, 0.1);
+          border: 1px solid rgba(59, 130, 246, 0.25);
+          border-radius: var(--radius-md);
+          color: #3b82f6;
+          font-size: 13px;
+          margin-bottom: 20px;
+          animation: slideDown 0.3s ease-out;
+        }
+
         .login-error-alert {
           display: flex;
           align-items: center;
@@ -249,6 +288,17 @@ export default function LoginPage() {
           color: #f87171;
           font-size: 13px;
           margin-bottom: 20px;
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .login-form {

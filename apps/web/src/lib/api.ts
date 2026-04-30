@@ -28,6 +28,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 // ── Response Interceptor ──────────────────────────────────────
 // On 401 AUTH_TOKEN_EXPIRED → auto-refresh → retry original request
+// On other 401 errors → logout immediately
 
 let isRefreshing = false;
 let pendingQueue: Array<{
@@ -43,6 +44,26 @@ function processQueue(token: string | null, error: unknown = null): void {
   pendingQueue = [];
 }
 
+// Track if we've already shown logout notification to avoid duplicates
+let hasShownLogoutNotification = false;
+
+function handleUnauthorizedLogout(message: string = 'Sesi Anda telah berakhir. Silakan login kembali.'): void {
+  const { clearAuth } = useAuthStore.getState();
+  clearAuth();
+  
+  // Show notification only once
+  if (!hasShownLogoutNotification) {
+    hasShownLogoutNotification = true;
+    
+    // Store message in sessionStorage to show after redirect
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('logoutMessage', message);
+    }
+  }
+  
+  window.location.href = '/login';
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
@@ -51,57 +72,63 @@ api.interceptors.response.use(
     };
 
     const errCode = (error.response?.data as { error?: { code?: string } })?.error?.code;
-    const is401Expired =
-      error.response?.status === 401 && errCode === 'AUTH_TOKEN_EXPIRED';
+    const is401 = error.response?.status === 401;
+    const is401Expired = is401 && errCode === 'AUTH_TOKEN_EXPIRED';
 
-    if (!is401Expired || originalRequest._retry) {
-      // Non-401 or already retried → just reject
-      return Promise.reject(error);
+    // If 401 and not a retry attempt
+    if (is401 && !originalRequest._retry) {
+      // If it's AUTH_TOKEN_EXPIRED, try to refresh
+      if (is401Expired) {
+        if (isRefreshing) {
+          // Queue the request while refresh is in progress
+          return new Promise((resolve, reject) => {
+            pendingQueue.push({
+              resolve: (token) => {
+                originalRequest.headers.Authorization = `Bearer ${token}`;
+                resolve(api(originalRequest));
+              },
+              reject,
+            });
+          });
+        }
+
+        originalRequest._retry = true;
+        isRefreshing = true;
+
+        const { refreshToken, setAccessToken, clearAuth } = useAuthStore.getState();
+
+        if (!refreshToken) {
+          handleUnauthorizedLogout('Token tidak valid. Silakan login kembali.');
+          return Promise.reject(error);
+        }
+
+        try {
+          const { data } = await axios.post<{
+            data: { accessToken: string; refreshToken: string };
+          }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
+
+          const { accessToken: newAccess, refreshToken: newRefresh } = data.data;
+          setAccessToken(newAccess, newRefresh);
+          processQueue(newAccess);
+
+          originalRequest.headers.Authorization = `Bearer ${newAccess}`;
+          return api(originalRequest);
+        } catch (refreshError) {
+          processQueue(null, refreshError);
+          handleUnauthorizedLogout('Sesi Anda telah berakhir. Silakan login kembali.');
+          return Promise.reject(refreshError);
+        } finally {
+          isRefreshing = false;
+        }
+      } else {
+        // Any other 401 error (invalid token, unauthorized, etc.) → logout immediately
+        handleUnauthorizedLogout('Akses tidak diizinkan. Silakan login kembali.');
+        return Promise.reject(error);
+      }
     }
 
-    if (isRefreshing) {
-      // Queue the request while refresh is in progress
-      return new Promise((resolve, reject) => {
-        pendingQueue.push({
-          resolve: (token) => {
-            originalRequest.headers.Authorization = `Bearer ${token}`;
-            resolve(api(originalRequest));
-          },
-          reject,
-        });
-      });
-    }
-
-    originalRequest._retry = true;
-    isRefreshing = true;
-
-    const { refreshToken, setAccessToken, clearAuth } = useAuthStore.getState();
-
-    if (!refreshToken) {
-      clearAuth();
-      window.location.href = '/login';
-      return Promise.reject(error);
-    }
-
-    try {
-      const { data } = await axios.post<{
-        data: { accessToken: string; refreshToken: string };
-      }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
-
-      const { accessToken: newAccess, refreshToken: newRefresh } = data.data;
-      setAccessToken(newAccess, newRefresh);
-      processQueue(newAccess);
-
-      originalRequest.headers.Authorization = `Bearer ${newAccess}`;
-      return api(originalRequest);
-    } catch (refreshError) {
-      processQueue(null, refreshError);
-      clearAuth();
-      window.location.href = '/login';
-      return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
-    }
+    // Non-401 or already retried → just reject
+    return Promise.reject(error);
   },
 );
 

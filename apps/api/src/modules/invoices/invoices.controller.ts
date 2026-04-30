@@ -51,6 +51,23 @@ export const invoiceController = {
   },
 
   /**
+   * Get payment proof image
+   * GET /api/v1/invoices/payment-proof/:paymentId
+   */
+  async getPaymentProofImage(req: Request, res: Response) {
+    try {
+      const { paymentId } = req.params;
+      const result = await invoiceService.getPaymentProofImage(paymentId);
+
+      // Redirect to presigned URL
+      return res.redirect(result.presignedUrl);
+    } catch (error: any) {
+      logger.error('Get payment proof image error:', error);
+      return sendError(res, 404, 'PAYMENT_PROOF_NOT_FOUND', error.message);
+    }
+  },
+
+  /**
    * Get invoice by package ID
    * GET /api/v1/invoices/package/:packageId
    */

@@ -26,6 +26,14 @@ const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CA
 // INVENTORY ITEMS
 // ============================================================
 
+// Get available inventory items with stock info (for material usage form)
+router.get(
+  '/available/:branchId',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getAvailableItems.bind(inventoryController)
+);
+
 // Get all inventory items for a branch
 router.get(
   '/items',
@@ -42,8 +50,76 @@ router.get(
   inventoryController.getInventoryItemById.bind(inventoryController)
 );
 
+// Create new inventory item
+router.post(
+  '/items',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryController.createInventoryItem.bind(inventoryController)
+);
+
+// Update inventory item
+router.patch(
+  '/items/:itemId',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryController.updateInventoryItem.bind(inventoryController)
+);
+
+// Delete inventory item
+router.delete(
+  '/items/:itemId',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryController.deleteInventoryItem.bind(inventoryController)
+);
+
+// Get low stock items for a branch
+router.get(
+  '/low-stock/:branchId',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getLowStockItems.bind(inventoryController)
+);
+
+// Adjust stock (ADMIN_CABANG from Pusat branch only)
+router.patch(
+  '/items/:itemId/adjust-stock',
+  authenticate,
+  authorize([Role.ADMIN_CABANG]),
+  inventoryController.adjustStock.bind(inventoryController)
+);
+
+// Update master product conversion factor (ADMIN_CABANG only)
+router.patch(
+  '/master-products/:productId',
+  authenticate,
+  authorize([Role.ADMIN_CABANG]),
+  inventoryController.updateMasterProduct.bind(inventoryController)
+);
+
 // ============================================================
-// STOCK REQUESTS
+// EXPORT INVENTORY
+// ============================================================
+
+// Export inventory to CSV
+router.get(
+  '/export/csv',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.exportToCSV.bind(inventoryController)
+);
+
+// Export inventory to Excel
+router.get(
+  '/export/excel',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.exportToExcel.bind(inventoryController)
+);
+
+// ============================================================
+// STOCK REQUESTS (ADMIN_CABANG and above only)
 // ============================================================
 
 // Create stock request
@@ -87,7 +163,7 @@ router.post(
 );
 
 // ============================================================
-// SHIPMENTS
+// SHIPMENTS (ADMIN_CABANG and above only)
 // ============================================================
 
 // Get shipments

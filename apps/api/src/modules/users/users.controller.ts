@@ -42,7 +42,13 @@ export async function getUser(req: Request, res: Response, next: NextFunction): 
 
 export async function createUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    console.log('🔍 [UsersController] Create user request body:', req.body);
+    console.log('🔍 [UsersController] Caller role:', req.user.role);
+    console.log('🔍 [UsersController] Caller branchId:', req.user.branchId);
+    
     const input = createUserSchema.parse(req.body);
+    console.log('🔍 [UsersController] Parsed input:', input);
+    
     const user = await createUserService(input, req.user.role as Role, req.user.branchId);
 
     await logAudit({
@@ -55,13 +61,22 @@ export async function createUser(req: Request, res: Response, next: NextFunction
       userAgent: req.get('user-agent'),
     });
 
+    console.log('✅ [UsersController] User created successfully:', user.id);
     sendCreated(res, user);
-  } catch (err) { next(err); }
+  } catch (err) { 
+    console.error('❌ [UsersController] Error creating user:', err);
+    next(err); 
+  }
 }
 
 export async function updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    console.log('🔍 [UsersController] Update user request:', req.params.userId);
+    console.log('🔍 [UsersController] Update body:', req.body);
+    
     const input = updateUserSchema.parse(req.body);
+    console.log('🔍 [UsersController] Parsed input:', input);
+    
     const user = await updateUserService(req.params.userId, input);
 
     await logAudit({
@@ -74,13 +89,21 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
       userAgent: req.get('user-agent'),
     });
 
+    console.log('✅ [UsersController] User updated successfully:', user.id);
     sendSuccess(res, user);
-  } catch (err) { next(err); }
+  } catch (err) { 
+    console.error('❌ [UsersController] Error updating user:', err);
+    next(err); 
+  }
 }
 
 export async function deactivateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    console.log('🔍 [UsersController] Deactivate user request:', req.params.userId);
+    console.log('🔍 [UsersController] Caller role:', req.user.role);
+    
     const user = await updateUserService(req.params.userId, { isActive: false });
+    
     await logAudit({
       userId: req.user.userId,
       action: 'DELETE',
@@ -90,8 +113,13 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
+    
+    console.log('✅ [UsersController] User deactivated successfully:', user.id);
     sendNoContent(res);
-  } catch (err) { next(err); }
+  } catch (err) { 
+    console.error('❌ [UsersController] Error deactivating user:', err);
+    next(err); 
+  }
 }
 
 export async function changePassword(req: Request, res: Response, next: NextFunction): Promise<void> {

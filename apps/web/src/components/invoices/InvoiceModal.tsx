@@ -41,14 +41,10 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
       await generateInvoicePDF(invoice);
     } catch (error) {
       console.error('Failed to export PDF:', error);
-      alert('Gagal export PDF');
+      alert('Gagal export PDF. Silakan coba lagi.');
     } finally {
       setExporting(false);
     }
-  };
-
-  const handlePrint = () => {
-    window.print();
   };
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -67,19 +63,20 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
           </h3>
           <div className={styles.modalActions}>
             <button
-              onClick={handlePrint}
-              className="btn btn-secondary"
-              style={{ padding: '8px 16px', fontSize: '14px' }}
-            >
-              🖨️ Print
-            </button>
-            <button
               onClick={handleExportPDF}
               disabled={exporting}
               className="btn btn-primary"
-              style={{ padding: '8px 16px', fontSize: '14px' }}
+              style={{ 
+                padding: '8px 16px', 
+                fontSize: '14px',
+                backgroundColor: exporting ? '#6c757d' : '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                marginRight: '8px'
+              }}
             >
-              {exporting ? '⏳ Exporting...' : '📥 Download PDF'}
+              {exporting ? '⏳ Mengunduh...' : '📥 Download PDF'}
             </button>
             <button
               onClick={onClose}
@@ -97,24 +94,9 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
         </div>
       </div>
 
-      {/* Print Styles */}
+      {/* Print Styles - Removed print functionality */}
       <style jsx global>{`
         @media print {
-          body * {
-            visibility: hidden;
-          }
-          #invoice-document,
-          #invoice-document * {
-            visibility: visible;
-          }
-          #invoice-document {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            background: white;
-            padding: 20mm;
-          }
           .no-print {
             display: none !important;
           }

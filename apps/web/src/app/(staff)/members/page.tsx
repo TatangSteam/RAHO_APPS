@@ -6,6 +6,7 @@ import { getMembersApi } from '@/lib/membersApi';
 import type { Member } from '@/types/member';
 import { useAuthStore } from '@/stores/authStore';
 import { LookupMemberModal } from '@/components/members/LookupMemberModal';
+import ExportMembersModal from '@/components/members/ExportMembersModal';
 
 export default function MembersPage() {
   const router = useRouter();
@@ -13,26 +14,38 @@ export default function MembersPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
 
   const [showLookupModal, setShowLookupModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const canCreateMember = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(
     user?.role || ''
   );
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1); // Reset to first page when search changes
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [search]);
+
   useEffect(() => {
     loadMembers();
-  }, [page, status]);
+  }, [page, status, debouncedSearch]);
 
   const loadMembers = async () => {
     try {
       setLoading(true);
       const result = await getMembersApi({
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         status: status || undefined,
         page,
         limit: 20,
@@ -51,8 +64,8 @@ export default function MembersPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    setDebouncedSearch(search);
     setPage(1);
-    loadMembers();
   };
 
   return (
@@ -67,6 +80,13 @@ export default function MembersPage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Kelola data member dan akses lintas cabang</p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              📥 Export Data
+            </button>
             <button
               onClick={() => setShowLookupModal(true)}
               className="btn btn-secondary"
@@ -195,7 +215,7 @@ export default function MembersPage() {
                 >
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span>
+                      <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo || 'N/A'}</span>
                       {member.isLintas && (
                         <span className="badge badge-cyan">🔗 Lintas</span>
                       )}
@@ -222,7 +242,7 @@ export default function MembersPage() {
                                 {member.photoUrl ? (
                                   <img
                                     src={member.photoUrl}
-                                    alt={member.fullName}
+                                    alt={member.fullName || 'Member'}
                                     style={{
                                       width: '100%',
                                       height: '100%',
@@ -231,7 +251,7 @@ export default function MembersPage() {
                                     }}
                                   />
                                 ) : (
-                                  member.fullName.charAt(0).toUpperCase()
+                                  (member.fullName || 'M').charAt(0).toUpperCase()
                                 )}
                                 {member.isActive && (
                                   <span style={{
@@ -248,15 +268,15 @@ export default function MembersPage() {
                                 )}
                               </div>
                               <div>
-                                <div style={{ fontWeight: '600', marginBottom: '2px' }}>{member.fullName}</div>
+                                <div style={{ fontWeight: '600', marginBottom: '2px' }}>{member.fullName || 'Nama tidak tersedia'}</div>
                                 <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                  🏢 {member.registrationBranch}
+                                  🏢 {member.registrationBranch || 'N/A'}
                                 </div>
                               </div>
                             </div>
                           </td>
                           <td>
-                            <span style={{ fontSize: '14px' }}>📞 {member.phone}</span>
+                            <span style={{ fontSize: '14px' }}>📞 {member.phone || '-'}</span>
                           </td>
                           <td style={{ textAlign: 'center' }}>
                             <div style={{
@@ -336,7 +356,15 @@ export default function MembersPage() {
           isOpen={showLookupModal}
           onClose={() => setShowLookupModal(false)}
           onSuccess={() => loadMembers()}
-          />
+        />
+
+        {/* Modal Export */}
+        <ExportMembersModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          currentSearch={debouncedSearch}
+          currentStatus={status}
+        />
     </>
   );
 }

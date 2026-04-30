@@ -176,7 +176,25 @@ export class PaymentVerificationService {
     }
 
     // Auto-generate invoice for the group
-    await this.invoiceService.generateInvoiceForPackages(groupPackages, pkg.member, userId);
+    const invoice = await this.invoiceService.generateInvoiceForPackages(groupPackages, pkg.member, userId);
+
+    // Create invoice payment record with proof
+    if (invoice && data.proofFileUrl) {
+      await prisma.invoicePayment.create({
+        data: {
+          invoiceId: invoice.id,
+          amount: invoice.totalAmount,
+          paymentMethod: 'TRANSFER', // Default to TRANSFER
+          notes: data.notes,
+          proofFileUrl: data.proofFileUrl,
+          proofFileName: data.proofFileName,
+          proofFileSize: data.proofFileSize,
+          proofMimeType: data.proofMimeType,
+          receivedBy: userId,
+          receivedAt: now,
+        },
+      });
+    }
 
     const totalItems = groupPackages.length + groupAddOns.length;
 
@@ -251,7 +269,25 @@ export class PaymentVerificationService {
     });
 
     // Auto-generate invoice for single package
-    await this.invoiceService.generateInvoiceForPackages([updatedPackage], pkg.member, userId);
+    const invoice = await this.invoiceService.generateInvoiceForPackages([updatedPackage], pkg.member, userId);
+
+    // Create invoice payment record with proof
+    if (invoice && data.proofFileUrl) {
+      await prisma.invoicePayment.create({
+        data: {
+          invoiceId: invoice.id,
+          amount: invoice.totalAmount,
+          paymentMethod: 'TRANSFER', // Default to TRANSFER
+          notes: data.notes,
+          proofFileUrl: data.proofFileUrl,
+          proofFileName: data.proofFileName,
+          proofFileSize: data.proofFileSize,
+          proofMimeType: data.proofMimeType,
+          receivedBy: userId,
+          receivedAt: now,
+        },
+      });
+    }
 
     // Send notification to member
     await prisma.notification.create({

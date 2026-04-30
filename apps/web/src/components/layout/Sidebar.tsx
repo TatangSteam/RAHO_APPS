@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   ShoppingCart, Bell, MessageSquare, ChevronLeft,
-  LogOut, ClipboardList, FileText, Shield,
+  LogOut, ClipboardList, FileText, Shield, Building2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -66,7 +66,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Stok',
         href: '/inventory',
         icon: <Boxes size={18} />,
-        roles: ALL_STAFF,
+        roles: ['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Request Stok',
@@ -100,6 +100,18 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Kelola User',
         href: '/admin/users',
         icon: <Shield size={18} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Pengaturan Cabang',
+        href: '/branches',
+        icon: <Building2 size={18} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+      },
+      {
+        label: 'Kode Referral',
+        href: '/referrals',
+        icon: <FileText size={18} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
@@ -107,12 +119,6 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/admin/package-pricing',
         icon: <Package size={18} />,
         roles: ['SUPER_ADMIN', 'ADMIN_CABANG'],
-      },
-      {
-        label: 'Cabang',
-        href: '/admin/branches',
-        icon: <ClipboardList size={18} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
     ],
   },

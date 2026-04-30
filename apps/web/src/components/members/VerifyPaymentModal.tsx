@@ -58,10 +58,10 @@ export default function VerifyPaymentModal({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+    // Validate file type - ONLY IMAGES
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
     if (!allowedTypes.includes(file.type)) {
-      setError('Format file harus JPG, PNG, atau PDF');
+      setError('Format file harus JPG atau PNG');
       return;
     }
 
@@ -75,21 +75,14 @@ export default function VerifyPaymentModal({
     setError('');
 
     // Create preview for images
-    let preview: string | null = null;
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        preview = reader.result as string;
-        const proof = { file, preview };
-        setPaymentProof(proof);
-        onProofChange(proof);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      const proof = { file, preview: null };
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const preview = reader.result as string;
+      const proof = { file, preview };
       setPaymentProof(proof);
       onProofChange(proof);
-    }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemoveFile = () => {
@@ -140,18 +133,14 @@ export default function VerifyPaymentModal({
               📸 Bukti Pembayaran (Wajib) *
             </label>
             <p className={styles.formHint}>
-              Upload foto struk atau bukti transfer (JPG, PNG, atau PDF, max 5MB)
+              Upload foto struk atau bukti transfer (JPG atau PNG, max 5MB)
             </p>
 
             {paymentProof.file ? (
               <div className={styles.filePreview}>
-                {paymentProof.preview ? (
-                  <div className={styles.imagePreview}>
-                    <img src={paymentProof.preview} alt="Payment proof" />
-                  </div>
-                ) : (
-                  <div className={styles.fileIcon}>📄</div>
-                )}
+                <div className={styles.imagePreview}>
+                  <img src={paymentProof.preview!} alt="Payment proof" />
+                </div>
                 <div className={styles.fileInfo}>
                   <div className={styles.fileName}>{paymentProof.file.name}</div>
                   <div className={styles.fileSize}>
@@ -170,7 +159,7 @@ export default function VerifyPaymentModal({
               <label className={styles.uploadBox}>
                 <input
                   type="file"
-                  accept="image/jpeg,image/png,image/jpg,application/pdf"
+                  accept="image/jpeg,image/png,image/jpg"
                   onChange={handleFileChange}
                   className={styles.fileInput}
                 />

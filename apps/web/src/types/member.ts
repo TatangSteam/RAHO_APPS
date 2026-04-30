@@ -5,11 +5,11 @@ export interface Member {
   phone: string;
   email: string;
   voucherCount: number;
-  basicPackageCount: number; // Total sisa sesi/voucher BASIC ACTIVE
+  basicPackageCount: number;
   isActive: boolean;
   isLintas: boolean;
   registrationBranch: string;
-  photoUrl?: string; // URL foto profil member
+  photoUrl?: string;
   createdAt: string;
 }
 
@@ -50,6 +50,11 @@ export interface MemberDetail {
     referrerName: string;
     referrerType: string;
   };
+  // Incentive settings (per member)
+  firstIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  firstIncentiveValue?: number;
+  nextIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  nextIncentiveValue?: number;
   // Member-specific fields
   nik?: string;
   tempatLahir?: string;
@@ -101,7 +106,14 @@ export interface CreateMemberData {
   memberEmail: string;
   memberPassword: string;
   referralCode?: string;
+  referralCodeId?: string;
   isConsentToPhoto: boolean;
+
+  // Section C - Pengaturan Insentif (Optional)
+  firstIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  firstIncentiveValue?: number;
+  nextIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  nextIncentiveValue?: number;
 
   // Section D - Therapy Plans (Optional)
   therapyPlans?: Array<{

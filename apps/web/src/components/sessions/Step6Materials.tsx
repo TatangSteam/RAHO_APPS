@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
-import { inventoryApi, type InventoryItem } from '@/lib/inventoryApi';
+import { inventoryApi, type InventoryItemWithStock } from '@/lib/inventoryApi';
 import { materialsApi } from '@/lib/materialsApi';
 
 interface MaterialUsage {
@@ -39,7 +39,7 @@ export default function Step6Materials({
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(true);
-  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryItems, setInventoryItems] = useState<InventoryItemWithStock[]>([]);
   const [selectedItemId, setSelectedItemId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,9 +51,15 @@ export default function Step6Materials({
   const loadInventoryItems = async () => {
     try {
       setLoadingInventory(true);
-      const items = await inventoryApi.getInventoryItems();
-      console.log('Loaded inventory items:', items);
-      setInventoryItems(items);
+      // Use getAvailableItems instead to get proper stock info with conversion
+      const branchId = user?.branchId;
+      if (!branchId) {
+        showToast.error('Branch ID tidak ditemukan');
+        return;
+      }
+      const response = await inventoryApi.getAvailableItems(branchId);
+      console.log('Loaded inventory items:', response);
+      setInventoryItems(response.data);
     } catch (error) {
       console.error('Error loading inventory:', error);
       showToast.error('Gagal memuat data inventory');
@@ -77,7 +83,7 @@ export default function Step6Materials({
       await materialsApi.createMaterial(sessionId, {
         inventoryItemId: selectedItemId,
         quantity: Number(quantity),
-        unit: selectedItem.unit,
+        unit: selectedItem.masterProduct.usageUnit,
         recordedBy: user?.userId || '',
       });
 
@@ -96,7 +102,7 @@ export default function Step6Materials({
   };
 
   const filteredItems = inventoryItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+    item.masterProduct.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   if (isLocked) {
@@ -271,7 +277,7 @@ export default function Step6Materials({
               </option>
               {filteredItems.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} - Stok: {item.stock} {item.unit}
+                  {item.masterProduct.name} - {item.stockInfo.displayShort}
                 </option>
               ))}
             </select>

@@ -33,6 +33,19 @@ export interface PackagePricingData {
 }
 
 export const packagesApi = {
+  // Upload payment proof file
+  uploadPaymentProof: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const response = await api.post('/packages/payment-proof/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data.data || response.data;
+  },
+
   // Assign package to member
   assignPackage: async (memberId: string, data: AssignPackageData) => {
     const response = await api.post(`/members/${memberId}/packages`, data);

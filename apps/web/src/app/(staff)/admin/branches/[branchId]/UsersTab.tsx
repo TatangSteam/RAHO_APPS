@@ -1,3 +1,6 @@
+'use client';
+
+import { useState } from 'react';
 import { User } from './types';
 import styles from './page.module.css';
 
@@ -24,27 +27,49 @@ export default function UsersTab({
   onAddUser,
   onToggleUserActive,
 }: UsersTabProps) {
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
+
+  // Filter users by role
+  const filteredUsers = roleFilter === 'ALL' 
+    ? users 
+    : users.filter(u => u.role === roleFilter);
+
   return (
     <div className={styles.usersSection}>
       <div className={styles.usersHeader}>
         <h3>👥 Daftar User di Cabang Ini</h3>
-        <button className={styles.createUserBtn} onClick={onAddUser}>
-          ➕ Tambah User
-        </button>
-      </div>
-
-      {users.length === 0 ? (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>👥</div>
-          <h3>Belum Ada User</h3>
-          <p>Tambahkan user pertama untuk cabang ini</p>
+        <div className={styles.usersHeaderActions}>
+          <select 
+            className={styles.roleFilter}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="ALL">Semua Role</option>
+            <option value="ADMIN_CABANG">Admin Cabang</option>
+            <option value="ADMIN_LAYANAN">Admin Layanan</option>
+            <option value="DOCTOR">Dokter</option>
+            <option value="NURSE">Perawat</option>
+          </select>
           <button className={styles.createUserBtn} onClick={onAddUser}>
             ➕ Tambah User
           </button>
         </div>
+      </div>
+
+      {filteredUsers.length === 0 ? (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>👥</div>
+          <h3>{roleFilter === 'ALL' ? 'Belum Ada User' : 'Tidak Ada User dengan Role Ini'}</h3>
+          <p>{roleFilter === 'ALL' ? 'Tambahkan user pertama untuk cabang ini' : 'Coba filter role lain'}</p>
+          {roleFilter === 'ALL' && (
+            <button className={styles.createUserBtn} onClick={onAddUser}>
+              ➕ Tambah User
+            </button>
+          )}
+        </div>
       ) : (
         <div className={styles.usersGrid}>
-          {users.map((u) => (
+          {filteredUsers.map((u) => (
             <div key={u.id} className={styles.userCard}>
               <div className={styles.userHeader}>
                 <div>
@@ -71,6 +96,14 @@ export default function UsersTab({
                     {u.isActive ? '✓ Aktif' : '✗ Nonaktif'}
                   </span>
                 </div>
+                {(u.role === 'DOCTOR' || u.role === 'NURSE' || u.role === 'ADMIN_LAYANAN') && (
+                  <div className={styles.userInfo}>
+                    <span className={styles.label}>Terapi Ditangani:</span>
+                    <span className={styles.therapyCount}>
+                      {u.therapyCount || 0} sesi
+                    </span>
+                  </div>
+                )}
                 {u.lastLoginAt && (
                   <div className={styles.userInfo}>
                     <span className={styles.label}>Login Terakhir:</span>

@@ -1,12 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Debug log
+  useEffect(() => {
+    console.log('🔍 Staff Layout Debug:', {
+      pathname,
+      willRenderSidebar: true
+    });
+  }, [pathname]);
 
   // Load collapsed state from localStorage on mount
   useEffect(() => {

@@ -202,7 +202,7 @@
 .detailGroupTitle {
   font-size: 12px;
   font-weight: 700;
-  color: #1976d2;
+  color: #acd6ff;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin: 0 0 12px 0;
@@ -220,7 +220,7 @@
 }
 
 .detailLabel {
-  color: #666;
+  color: #000000;
   font-weight: 500;
 }
 
@@ -238,7 +238,7 @@
 .billToName {
   font-size: 14px;
   font-weight: 700;
-  color: #333;
+  color: #000000;
   margin: 0;
 }
 
@@ -389,7 +389,7 @@
 .sectionTitle {
   font-size: 12px;
   font-weight: 700;
-  color: #1976d2;
+  color: #7fbfff;
   text-transform: uppercase;
   letter-spacing: 1px;
   margin: 0 0 12px 0;

@@ -32,7 +32,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status }: Pr
       
       // Check if it's a 404 error (invoice not found)
       if (error?.response?.status === 404 || error?.message?.includes('not found')) {
-        alert('Invoice belum tersedia untuk paket ini.\n\nInvoice hanya dibuat otomatis untuk paket yang di-verify setelah update sistem.\n\nUntuk paket lama, silakan hubungi admin untuk membuat invoice manual.');
+        alert('Invoice belum tersedia untuk paket ini.\n\nInvoice dibuat otomatis saat verifikasi pembayaran.\nJika paket sudah diverifikasi tapi invoice belum ada, silakan hubungi admin untuk generate invoice.');
       } else {
         alert('Gagal memuat invoice. Silakan coba lagi.');
       }

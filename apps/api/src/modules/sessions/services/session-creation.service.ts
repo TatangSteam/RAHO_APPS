@@ -144,6 +144,16 @@ export class SessionCreationService {
       };
     }
 
+    // IMPORTANT: Only BASIC packages can be used as main package for creating sessions
+    // BOOSTER packages should only be used as boosterPackageId (additional to existing session)
+    if (memberPackage.packageType !== 'BASIC') {
+      throw {
+        status: 422,
+        code: 'INVALID_PACKAGE_TYPE',
+        message: 'Paket yang dipilih adalah paket BOOSTER. Untuk membuat sesi terapi baru, pilih paket BASIC (contoh: NB7, NB14, dll). Paket BOOSTER dapat ditambahkan melalui checkbox "Gunakan Paket Booster" setelah memilih paket BASIC.',
+      };
+    }
+
     const remainingSessions = memberPackage.totalSessions - memberPackage.usedSessions;
     if (remainingSessions <= 0) {
       throw {
@@ -291,25 +301,32 @@ export class SessionCreationService {
 
   /**
    * Calculate global and branch-specific infusKe
+   * Only counts sessions from BASIC packages
    */
   private async calculateInfusKe(memberId: string, branchId: string) {
-    // Get all sessions for this member across all branches
+    // Get all sessions for this member across all branches (BASIC only)
     const allMemberSessions = await prisma.treatmentSession.findMany({
       where: {
         encounter: {
           memberId,
+          memberPackage: {
+            packageType: 'BASIC',
+          },
         },
       },
       orderBy: { infusKe: 'desc' },
       take: 1,
     });
 
-    // Get sessions for this member in current branch only
+    // Get sessions for this member in current branch only (BASIC only)
     const branchSessions = await prisma.treatmentSession.findMany({
       where: {
         encounter: {
           memberId,
           branchId,
+          memberPackage: {
+            packageType: 'BASIC',
+          },
         },
       },
       orderBy: { infusKe: 'desc' },
@@ -370,12 +387,52 @@ export class SessionCreationService {
           pelaksanaan: data.pelaksanaan,
           treatmentDate: new Date(data.treatmentDate),
           adminLayananId: data.adminLayananId,
-          doctorId: data.doctorId,
-          nurseId: data.nurseId,
+          doctorId: data.doctorId, // Primary doctor
+          nurseId: data.nurseId,   // Primary nurse
           boosterPackageId: data.boosterPackageId,
           isCompleted: false,
         },
       });
+
+      // Add primary doctor to session_doctors
+      await tx.sessionDoctor.create({
+        data: {
+          sessionId: session.id,
+          doctorId: data.doctorId,
+          isPrimary: true,
+        },
+      });
+
+      // Add additional doctors if provided
+      if (data.additionalDoctorIds && data.additionalDoctorIds.length > 0) {
+        await tx.sessionDoctor.createMany({
+          data: data.additionalDoctorIds.map((doctorId) => ({
+            sessionId: session.id,
+            doctorId,
+            isPrimary: false,
+          })),
+        });
+      }
+
+      // Add primary nurse to session_nurses
+      await tx.sessionNurse.create({
+        data: {
+          sessionId: session.id,
+          nurseId: data.nurseId,
+          isPrimary: true,
+        },
+      });
+
+      // Add additional nurses if provided
+      if (data.additionalNurseIds && data.additionalNurseIds.length > 0) {
+        await tx.sessionNurse.createMany({
+          data: data.additionalNurseIds.map((nurseId) => ({
+            sessionId: session.id,
+            nurseId,
+            isPrimary: false,
+          })),
+        });
+      }
 
       // Link therapy plan to session
       await tx.therapyPlan.update({

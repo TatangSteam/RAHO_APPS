@@ -20,6 +20,12 @@ router.post(
   invoiceController.createInvoice
 );
 
+// Get payment proof image (ADMIN, STAFF, MEMBER) - MUST BE BEFORE /:invoiceId
+router.get(
+  '/payment-proof/:paymentId',
+  invoiceController.getPaymentProofImage
+);
+
 // Get invoice by package ID (ADMIN, STAFF, MEMBER) - MUST BE BEFORE /:invoiceId
 router.get(
   '/package/:packageId',

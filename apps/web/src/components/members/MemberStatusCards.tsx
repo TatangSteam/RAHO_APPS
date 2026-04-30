@@ -19,9 +19,10 @@ export default function MemberStatusCards({ member, packages }: MemberStatusCard
         return sum + (item.basic.status === 'ACTIVE' ? item.basic.remainingSessions : 0);
       }
       return sum;
-    } else {
+    } else if ('packageType' in item) {
       return item.packageType === 'BASIC' && item.status === 'ACTIVE' ? sum + item.remainingSessions : sum;
     }
+    return sum;
   }, 0);
 
   const boosterVouchers = packages.reduce((sum, item) => {
@@ -36,9 +37,10 @@ export default function MemberStatusCards({ member, packages }: MemberStatusCard
         return sum + (item.booster.status === 'ACTIVE' ? item.booster.remainingSessions : 0);
       }
       return sum;
-    } else {
+    } else if ('packageType' in item) {
       return item.packageType === 'BOOSTER' && item.status === 'ACTIVE' ? sum + item.remainingSessions : sum;
     }
+    return sum;
   }, 0);
 
   return (

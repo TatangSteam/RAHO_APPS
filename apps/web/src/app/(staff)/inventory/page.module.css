@@ -202,6 +202,41 @@
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
+/* Export Buttons */
+.exportButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.exportBtn {
+  padding: 0.75rem 1.25rem;
+  border: 2px solid var(--surface-border);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exportBtn:hover {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-color: transparent;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.exportBtn:active {
+  transform: translateY(0);
+}
+
 .loading,
 .empty {
   text-align: center;
@@ -566,6 +601,45 @@
 
 .requestBtn:active {
   transform: translateY(0);
+}
+
+.editBtn {
+  width: 100%;
+  padding: 0.875rem 1.25rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.editBtn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.editBtn:active {
+  transform: translateY(0);
+}
+
+.cardFooter {
+  padding: 1.25rem;
+  border-top: 1px solid var(--surface-border);
+  background: var(--surface-input);
+  display: flex;
+  gap: 0.5rem;
+}
+
+.cardFooter button {
+  flex: 1;
 }
 
 @media (max-width: 768px) {

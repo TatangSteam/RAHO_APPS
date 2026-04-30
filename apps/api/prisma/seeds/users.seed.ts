@@ -35,13 +35,22 @@ export async function seedUsers(
       phone: '0811-0000-0001',
     },
     {
-      email: 'manager@raho.id',
+      email: 'manager1@raho.id',
       password: 'Manager@123',
       role: Role.ADMIN_MANAGER,
       branchId: null,
-      staffCode: 'AM-20260413-RAHO',
-      fullName: 'Admin Manager RAHO',
+      staffCode: 'AM-20260413-REG1',
+      fullName: 'Admin Manager Regional 1',
       phone: '0811-0000-0002',
+    },
+    {
+      email: 'manager2@raho.id',
+      password: 'Manager@123',
+      role: Role.ADMIN_MANAGER,
+      branchId: null,
+      staffCode: 'AM-20260413-REG2',
+      fullName: 'Admin Manager Regional 2',
+      phone: '0811-0000-0003',
     },
 
     // ============================================================
@@ -207,4 +216,160 @@ export async function seedUsers(
   console.log(`✅ Users: ${createdUsers.length} staff users created across all branches`);
 
   return { superAdminUser, adminLayananUser, doctorUser, nurseUser, allUsers: createdUsers };
+}
+
+/**
+ * Assign doctors and nurses to multiple branches
+ * This allows them to work across different locations
+ */
+export async function assignStaffToBranches(prisma: PrismaClient) {
+  console.log('🔗 Assigning doctors and nurses to multiple branches...');
+
+  // Get all branches
+  const branches = await prisma.branch.findMany();
+  
+  // Get all doctors and nurses
+  const doctors = await prisma.user.findMany({
+    where: { role: Role.DOCTOR, isActive: true }
+  });
+  
+  const nurses = await prisma.user.findMany({
+    where: { role: Role.NURSE, isActive: true }
+  });
+
+  let assignmentCount = 0;
+
+  // Assign each doctor to ALL branches
+  for (const doctor of doctors) {
+    for (const branch of branches) {
+      const existing = await prisma.staffBranch.findUnique({
+        where: {
+          userId_branchId: {
+            userId: doctor.id,
+            branchId: branch.id
+          }
+        }
+      });
+
+      if (!existing) {
+        await prisma.staffBranch.create({
+          data: {
+            userId: doctor.id,
+            branchId: branch.id
+          }
+        });
+        assignmentCount++;
+      }
+    }
+  }
+
+  // Assign each nurse to ALL branches
+  for (const nurse of nurses) {
+    for (const branch of branches) {
+      const existing = await prisma.staffBranch.findUnique({
+        where: {
+          userId_branchId: {
+            userId: nurse.id,
+            branchId: branch.id
+          }
+        }
+      });
+
+      if (!existing) {
+        await prisma.staffBranch.create({
+          data: {
+            userId: nurse.id,
+            branchId: branch.id
+          }
+        });
+        assignmentCount++;
+      }
+    }
+  }
+
+  console.log(`✅ Assigned ${doctors.length} doctors and ${nurses.length} nurses to ${branches.length} branches`);
+  console.log(`   Total assignments: ${assignmentCount}`);
+}
+
+/**
+ * Assign ADMIN_MANAGER to specific branches
+ * Manager 1: Jakarta Pusat & Bandung
+ * Manager 2: Surabaya & Jakarta Pusat (overlap for testing)
+ */
+export async function assignManagerToBranches(prisma: PrismaClient) {
+  console.log('🔗 Assigning ADMIN_MANAGER to specific branches...');
+
+  // Get all branches
+  const branchPusat = await prisma.branch.findFirst({ where: { branchCode: 'PST' } });
+  const branchBandung = await prisma.branch.findFirst({ where: { branchCode: 'BDG' } });
+  const branchSurabaya = await prisma.branch.findFirst({ where: { branchCode: 'SBY' } });
+
+  if (!branchPusat || !branchBandung || !branchSurabaya) {
+    console.log('⚠️  Some branches not found, skipping manager assignment');
+    return;
+  }
+
+  // Get managers
+  const manager1 = await prisma.user.findUnique({ where: { email: 'manager1@raho.id' } });
+  const manager2 = await prisma.user.findUnique({ where: { email: 'manager2@raho.id' } });
+
+  if (!manager1 || !manager2) {
+    console.log('⚠️  Managers not found, skipping assignment');
+    return;
+  }
+
+  let assignmentCount = 0;
+
+  // Manager 1: Jakarta Pusat & Bandung
+  const manager1Branches = [branchPusat, branchBandung];
+  for (const branch of manager1Branches) {
+    const existing = await prisma.managerBranch.findUnique({
+      where: {
+        userId_branchId: {
+          userId: manager1.id,
+          branchId: branch.id
+        }
+      }
+    });
+
+    if (!existing) {
+      await prisma.managerBranch.create({
+        data: {
+          userId: manager1.id,
+          branchId: branch.id
+        }
+      });
+      assignmentCount++;
+      console.log(`  ✅ Manager 1 (${manager1.email}) → ${branch.name}`);
+    }
+  }
+
+  // Manager 2: Surabaya & Jakarta Pusat
+  const manager2Branches = [branchSurabaya, branchPusat];
+  for (const branch of manager2Branches) {
+    const existing = await prisma.managerBranch.findUnique({
+      where: {
+        userId_branchId: {
+          userId: manager2.id,
+          branchId: branch.id
+        }
+      }
+    });
+
+    if (!existing) {
+      await prisma.managerBranch.create({
+        data: {
+          userId: manager2.id,
+          branchId: branch.id
+        }
+      });
+      assignmentCount++;
+      console.log(`  ✅ Manager 2 (${manager2.email}) → ${branch.name}`);
+    }
+  }
+
+  console.log(`✅ Branch assignments completed:`);
+  console.log(`   - Manager 1: Jakarta Pusat, Bandung`);
+  console.log(`   - Manager 2: Surabaya, Jakarta Pusat`);
+  console.log(`   Total assignments: ${assignmentCount}`);
 }

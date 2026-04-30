@@ -22,6 +22,10 @@ export interface InvoicePayment {
   paymentMethod: PaymentMethod;
   paymentReference?: string;
   notes?: string;
+  proofFileUrl?: string;
+  proofFileName?: string;
+  proofFileSize?: number;
+  proofMimeType?: string;
   receivedBy: string;
   receivedByName: string;
   receivedAt: string;
@@ -44,6 +48,15 @@ export interface Invoice {
   taxPercent?: number;
   taxAmount?: number;
   totalAmount: number;
+  
+  // Incentive information
+  incentive?: {
+    totalAmount: number;
+    referralCode: string;
+    referrerName: string;
+    referrerType: 'MEMBER' | 'STAFF' | 'EXTERNAL';
+    recordCount: number;
+  };
   
   // Status
   status: InvoiceStatus;

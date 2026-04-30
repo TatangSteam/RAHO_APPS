@@ -7,6 +7,7 @@ import {
   updatePackagePricingSchema,
 } from './packages.schema';
 import { sendSuccess, sendCreated } from '../../utils/response';
+import { uploadFile } from '../../config/minio';
 
 const packagesService = new PackagesService();
 
@@ -148,6 +149,57 @@ export class PackagesController {
 
       const result = await packagesService.deletePackagePricing(pricingId, userId);
       return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Upload payment proof file
+  async uploadPaymentProof(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) {
+        throw { status: 400, code: 'FILE_REQUIRED', message: 'File bukti pembayaran wajib diupload' };
+      }
+
+      // Validate file type - ONLY IMAGES
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+      if (!allowedMimeTypes.includes(req.file.mimetype)) {
+        throw { 
+          status: 400, 
+          code: 'INVALID_FILE_TYPE', 
+          message: 'Format file harus JPG atau PNG' 
+        };
+      }
+
+      // Validate file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024;
+      if (req.file.size > maxSize) {
+        throw { 
+          status: 400, 
+          code: 'FILE_TOO_LARGE', 
+          message: 'Ukuran file maksimal 5MB' 
+        };
+      }
+
+      const userId = req.user?.userId;
+      if (!userId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      // Generate unique key for the file
+      const timestamp = Date.now();
+      const fileExt = req.file.mimetype.split('/')[1];
+      const key = `uploads/payment-proofs/${userId}/${timestamp}.${fileExt}`;
+
+      // Upload to MinIO
+      const uploadResult = await uploadFile(req.file.buffer, key, req.file.mimetype);
+
+      return sendSuccess(res, {
+        url: uploadResult.url,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+      });
     } catch (error) {
       next(error);
     }

@@ -19,7 +19,9 @@ import { logAudit } from '@utils/auditLog';
 export async function listBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const query = listBranchesQuerySchema.parse(req.query);
-    const { branches, total, page, limit } = await listBranchesService(query);
+    const userId = req.user?.userId;
+    const userRole = req.user?.role;
+    const { branches, total, page, limit } = await listBranchesService(query, userId, userRole);
     sendSuccess(res, branches, 200, buildPaginationMeta(total, page, limit));
   } catch (err) {
     next(err);

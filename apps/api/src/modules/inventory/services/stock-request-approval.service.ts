@@ -31,10 +31,14 @@ export class StockRequestApprovalService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
+        branch: true,
       },
     });
 
@@ -73,7 +77,7 @@ export class StockRequestApprovalService {
     }
 
     // Generate shipment code
-    const shipmentCode = await this.generateShipmentCode(hqBranch.id, request.requestingBranchId);
+    const shipmentCode = await this.generateShipmentCode(hqBranch.id, request.branchId);
 
     // Create shipment and update request in transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -89,15 +93,14 @@ export class StockRequestApprovalService {
         include: {
           items: {
             include: {
-              masterProduct: true,
+              inventoryItem: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
-          requestingBranch: true,
-          reviewedByUser: {
-            include: {
-              profile: true,
-            },
-          },
+          branch: true,
         },
       });
 
@@ -106,21 +109,25 @@ export class StockRequestApprovalService {
         data: {
           shipmentCode,
           fromBranchId: hqBranch.id,
-          toBranchId: request.requestingBranchId,
+          toBranchId: request.branchId,
           stockRequestId: requestId,
-          status: 'PENDING',
+          status: 'PREPARING',
           notes: `Pengiriman untuk permintaan ${request.requestCode}`,
           items: {
             create: request.items.map(item => ({
-              masterProductId: item.masterProductId,
-              quantity: item.requestedQuantity,
+              inventoryItemId: item.inventoryItemId,
+              sentQty: item.requestedQty,
             })),
           },
         },
         include: {
           items: {
             include: {
-              masterProduct: true,
+              inventoryItem: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
           fromBranch: true,
@@ -178,10 +185,14 @@ export class StockRequestApprovalService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
+        branch: true,
       },
     });
 
@@ -213,15 +224,14 @@ export class StockRequestApprovalService {
       include: {
         items: {
           include: {
-            masterProduct: true,
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
-        requestingBranch: true,
-        reviewedByUser: {
-          include: {
-            profile: true,
-          },
-        },
+        branch: true,
       },
     });
 
@@ -279,21 +289,17 @@ export class StockRequestApprovalService {
     return {
       id: request.id,
       requestCode: request.requestCode,
-      requestingBranchId: request.requestingBranchId,
-      requestingBranchName: request.requestingBranch.name,
+      branchId: request.branchId,
+      branchName: request.branch.name,
       status: request.status,
       notes: request.notes,
-      requestedBy: request.requestedByUser?.profile?.fullName || request.requestedByUser?.email,
-      reviewedBy: request.reviewedByUser?.profile?.fullName || request.reviewedByUser?.email,
-      reviewNotes: request.reviewNotes,
+      itemCount: request.items.length,
       items: request.items.map((item: any) => ({
         id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        requestedQuantity: Number(item.requestedQuantity),
-        approvedQuantity: item.approvedQuantity ? Number(item.approvedQuantity) : null,
+        inventoryItemId: item.inventoryItemId,
+        productName: item.inventoryItem.masterProduct.name,
+        requestedQty: Number(item.requestedQty),
+        unit: item.inventoryItem.masterProduct.unit,
         notes: item.notes,
       })),
       createdAt: request.createdAt.toISOString(),
@@ -316,11 +322,10 @@ export class StockRequestApprovalService {
       notes: shipment.notes,
       items: shipment.items.map((item: any) => ({
         id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        quantity: Number(item.quantity),
+        inventoryItemId: item.inventoryItemId,
+        productName: item.inventoryItem.masterProduct.name,
+        sentQty: Number(item.sentQty),
+        unit: item.inventoryItem.masterProduct.unit,
       })),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),

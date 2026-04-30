@@ -78,7 +78,7 @@ export class SessionsService {
     return this.retrievalService.getSessionById(sessionId);
   }
 
-  async getAllSessions(params: { memberId?: string; page?: number; limit?: number }) {
+  async getAllSessions(params: { memberId?: string; branchId?: string; role?: string; page?: number; limit?: number }) {
     return this.retrievalService.getAllSessions(params);
   }
 

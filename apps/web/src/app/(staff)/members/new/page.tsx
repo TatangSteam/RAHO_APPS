@@ -9,6 +9,7 @@ import NewMemberHeader from '@/components/members/new/NewMemberHeader';
 import ErrorAlert from '@/components/members/new/ErrorAlert';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
+import IncentiveSection from '@/components/members/new/IncentiveSection';
 import DocumentUploadSection from '@/components/members/new/DocumentUploadSection';
 import TherapyPlanSection, { type TherapyPlanData } from '@/components/members/new/TherapyPlanSection';
 
@@ -41,7 +42,14 @@ export default function NewMemberPage() {
     memberEmail: '',
     memberPassword: '',
     referralCode: '',
+    referralCodeId: '',
     isConsentToPhoto: true,
+    
+    // Section C - Pengaturan Insentif
+    firstIncentiveType: undefined,
+    firstIncentiveValue: undefined,
+    nextIncentiveType: undefined,
+    nextIncentiveValue: undefined,
   });
 
   const [therapyPlan, setTherapyPlan] = useState<TherapyPlanData[]>([]);
@@ -52,6 +60,10 @@ export default function NewMemberPage() {
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData((prev) => ({ ...prev, [name]: checked }));
+    } else if (name === 'firstIncentiveValue' || name === 'nextIncentiveValue') {
+      // Convert to number for incentive values
+      const numValue = value === '' ? undefined : parseFloat(value);
+      setFormData((prev) => ({ ...prev, [name]: numValue }));
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
@@ -145,6 +157,12 @@ export default function NewMemberPage() {
         <PersonalDataSection formData={formData} onChange={handleInputChange} />
         
         <AccountSection formData={formData} onChange={handleInputChange} />
+        
+        <IncentiveSection 
+          formData={formData} 
+          onChange={handleInputChange}
+          showIncentiveSettings={!!formData.referralCodeId}
+        />
         
         <DocumentUploadSection
           pspFile={pspFile}

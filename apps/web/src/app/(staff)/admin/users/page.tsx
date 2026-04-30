@@ -15,6 +15,7 @@ interface Staff {
   isActive: boolean;
   lastLoginAt?: string;
   createdAt: string;
+  therapyCount?: number;
   profile: {
     fullName: string;
     phone?: string;
@@ -49,6 +50,7 @@ export default function StaffManagementPage() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
   useEffect(() => {
     setMounted(true);
@@ -144,6 +146,7 @@ export default function StaffManagementPage() {
 
   const getRoleBadge = (role: string) => {
     const roleMap: Record<string, { label: string; className: string }> = {
+      ADMIN_CABANG: { label: 'Admin Cabang', className: styles.roleAdminCabang },
       DOCTOR: { label: 'Dokter', className: styles.roleDoctor },
       NURSE: { label: 'Perawat', className: styles.roleNurse },
       ADMIN_LAYANAN: { label: 'Admin Layanan', className: styles.roleAdmin },
@@ -152,6 +155,11 @@ export default function StaffManagementPage() {
     const roleInfo = roleMap[role] || { label: role, className: styles.roleDefault };
     return <span className={`${styles.roleBadge} ${roleInfo.className}`}>{roleInfo.label}</span>;
   };
+
+  // Filter staff by role
+  const filteredStaff = roleFilter === 'ALL' 
+    ? staff 
+    : staff.filter(s => s.role === roleFilter);
 
   const getActionBadge = (action: string) => {
     const actionMap: Record<string, { label: string; className: string }> = {
@@ -174,9 +182,22 @@ export default function StaffManagementPage() {
           <h1>👥 Kelola User</h1>
           <p>Kelola user di cabang Anda</p>
         </div>
-        <button className={styles.createBtn} onClick={() => setShowCreateModal(true)}>
-          ➕ Tambah User
-        </button>
+        <div className={styles.headerActions}>
+          <select 
+            className={styles.roleFilter}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="ALL">Semua Role</option>
+            <option value="ADMIN_CABANG">Admin Cabang</option>
+            <option value="ADMIN_LAYANAN">Admin Layanan</option>
+            <option value="DOCTOR">Dokter</option>
+            <option value="NURSE">Perawat</option>
+          </select>
+          <button className={styles.createBtn} onClick={() => setShowCreateModal(true)}>
+            ➕ Tambah User
+          </button>
+        </div>
       </div>
 
       <div className={styles.tabs}>
@@ -201,14 +222,14 @@ export default function StaffManagementPage() {
         </div>
       ) : activeTab === 'staff' ? (
         <div className={styles.staffGrid}>
-          {staff.length === 0 ? (
+          {filteredStaff.length === 0 ? (
             <div className={styles.empty}>
               <div className={styles.emptyIcon}>👥</div>
-              <h3>Belum Ada User</h3>
-              <p>Tambahkan user pertama untuk cabang Anda</p>
+              <h3>{roleFilter === 'ALL' ? 'Belum Ada User' : 'Tidak Ada User dengan Role Ini'}</h3>
+              <p>{roleFilter === 'ALL' ? 'Tambahkan user pertama untuk cabang Anda' : 'Coba filter role lain'}</p>
             </div>
           ) : (
-            staff.map((s) => (
+            filteredStaff.map((s) => (
               <div key={s.id} className={styles.staffCard}>
                 <div className={styles.staffHeader}>
                   <div>
@@ -230,11 +251,23 @@ export default function StaffManagementPage() {
                     </div>
                   )}
                   <div className={styles.staffInfo}>
+                    <span className={styles.label}>Cabang:</span>
+                    <span>{s.branch.name}</span>
+                  </div>
+                  <div className={styles.staffInfo}>
                     <span className={styles.label}>Status:</span>
                     <span className={`${styles.statusBadge} ${s.isActive ? styles.active : styles.inactive}`}>
                       {s.isActive ? '✓ Aktif' : '✗ Nonaktif'}
                     </span>
                   </div>
+                  {(s.role === 'DOCTOR' || s.role === 'NURSE' || s.role === 'ADMIN_LAYANAN') && (
+                    <div className={styles.staffInfo}>
+                      <span className={styles.label}>Terapi Ditangani:</span>
+                      <span className={styles.therapyCount}>
+                        {s.therapyCount || 0} sesi
+                      </span>
+                    </div>
+                  )}
                   {s.lastLoginAt && (
                     <div className={styles.staffInfo}>
                       <span className={styles.label}>Login Terakhir:</span>

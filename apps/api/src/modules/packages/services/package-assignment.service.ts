@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { AssignPackageInput } from '../packages.schema';
 import { PackageType, PackageStatus, AuditAction } from '@prisma/client';
+import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
 
 /**
  * Service for handling package assignment to members
@@ -61,6 +62,21 @@ export class PackageAssignmentService {
     branchId: string,
     userId: string
   ) {
+    console.log('🔍 assignPackage called with:', {
+      memberId,
+      branchId,
+      userId,
+      packagesCount: data.packages.length,
+      packages: data.packages,
+      addOnsCount: data.addOns?.length || 0,
+      addOns: data.addOns,
+      discount: {
+        percent: data.discountPercent,
+        amount: data.discountAmount,
+        note: data.discountNote
+      }
+    });
+
     // Validate member access
     const member = await prisma.member.findUnique({
       where: { id: memberId },
@@ -95,34 +111,49 @@ export class PackageAssignmentService {
 
     // Fetch all pricing data
     const pricingIds = [...new Set(data.packages.map(p => p.pricingId))];
+    console.log('📋 Fetching pricings for IDs:', pricingIds);
+    
     const pricings = pricingIds.length > 0 ? await prisma.packagePricing.findMany({
       where: { id: { in: pricingIds } },
     }) : [];
 
+    console.log('📋 Found pricings:', pricings.length);
+
     if (pricingIds.length > 0 && pricings.length !== pricingIds.length) {
+      console.error('❌ Pricing mismatch:', {
+        requested: pricingIds.length,
+        found: pricings.length,
+        requestedIds: pricingIds,
+        foundIds: pricings.map(p => p.id)
+      });
       throw { status: 404, code: 'PRICING_NOT_FOUND', message: 'Beberapa harga paket tidak ditemukan' };
     }
 
     // Calculate total price
     const { subtotal, packageDetails } = this.calculatePackagePricing(data, pricings);
+    console.log('💰 Calculated pricing:', { subtotal, packageDetailsCount: packageDetails.length });
 
     // Add add-on subtotal
     const addOnSubtotal = (data.addOns || []).reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
     const totalSubtotal = subtotal + addOnSubtotal;
+    console.log('💰 Total subtotal (with addons):', totalSubtotal);
 
     // Calculate discount
     const percentDiscount = Math.round((totalSubtotal * (data.discountPercent || 0)) / 100);
     const amountDiscount = Math.round(data.discountAmount || 0);
     const totalDiscountAmount = percentDiscount + amountDiscount;
     const finalTotal = Math.round(totalSubtotal - totalDiscountAmount);
+    console.log('💰 Final calculation:', { percentDiscount, amountDiscount, totalDiscountAmount, finalTotal });
 
     // Determine purchase group
     const purchaseGroupId = this.determinePurchaseGroup(packageDetails, data.addOns);
 
     // Get sequences for package codes
     const { basicSequence, boosterSequence } = await this.getNextSequences(branch.branchCode, branchId);
+    console.log('🔢 Sequences:', { basicSequence, boosterSequence });
 
     // Create packages in transaction
+    console.log('💾 Creating packages in transaction...');
     const result = await this.createPackagesTransaction(
       {
         memberId,
@@ -141,6 +172,12 @@ export class PackageAssignmentService {
       basicSequence,
       boosterSequence
     );
+
+    console.log('✅ Packages created:', {
+      packagesCount: result.createdPackages.length,
+      addOnsCount: result.createdAddOns.length,
+      purchaseGroupId: result.purchaseGroupId
+    });
 
     // Audit logs
     await this.logPackageAssignment(result, userId);
@@ -209,10 +246,24 @@ export class PackageAssignmentService {
     const totalPackagesToCreate = packageDetails.reduce((sum, detail) => sum + detail.quantity, 0);
     const hasAddOns = addOns.length > 0;
     
+    console.log('🔍 Determine Purchase Group:', {
+      hasBasic,
+      hasBooster,
+      totalPackagesToCreate,
+      hasAddOns,
+      packageDetails: packageDetails.map(p => ({
+        type: p.pricing.packageType,
+        quantity: p.quantity
+      }))
+    });
+    
     if ((hasBasic && hasBooster) || totalPackagesToCreate > 1 || (totalPackagesToCreate > 0 && hasAddOns)) {
-      return `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      const groupId = `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+      console.log('✅ Creating purchase group:', groupId);
+      return groupId;
     }
     
+    console.log('✅ No purchase group needed (single package, no addons)');
     return undefined;
   }
 
@@ -377,6 +428,14 @@ export class PackageAssignmentService {
             extendedBoosterType: detail.boosterType,
             serviceType: detail.serviceType,
           });
+
+          // Calculate and record incentive for this package
+          try {
+            await calculateAndRecordIncentive(memberPackage.id, tx);
+          } catch (error) {
+            console.error('[PackageAssignment] Error calculating incentive:', error);
+            // Don't fail the whole transaction if incentive calculation fails
+          }
 
           if (detail.pricing.packageType === PackageType.BASIC) {
             totalBasicSessions += detail.pricing.totalSessions;

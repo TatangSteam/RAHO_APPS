@@ -3,6 +3,9 @@ import { z } from 'zod';
 // Gender enum sesuai dengan Prisma schema
 const GenderEnum = z.enum(['L', 'P']);
 
+// Incentive type enum
+const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
+
 export const createMemberSchema = z.object({
   // Section A - Data Pribadi
   fullName: z.string().min(3, 'Nama lengkap minimal 3 karakter'),
@@ -24,6 +27,11 @@ export const createMemberSchema = z.object({
   memberEmail: z.string().email('Format email tidak valid'),
   memberPassword: z.string().min(8, 'Password minimal 8 karakter'),
   referralCode: z.string().optional(),
+  referralCodeId: z.string().optional().transform((val) => {
+    // Handle empty string as undefined
+    if (val === '' || val === null) return undefined;
+    return val;
+  }),
   isConsentToPhoto: z
     .union([z.boolean(), z.string()])
     .transform((val) => {
@@ -33,6 +41,26 @@ export const createMemberSchema = z.object({
       return val;
     })
     .default(false),
+  
+  // Section C - Incentive Settings (Optional)
+  firstIncentiveType: z.string().optional().transform((val) => {
+    if (!val || val === '' || val === 'undefined' || val === 'null') return undefined;
+    return val as 'PERCENTAGE' | 'FIXED_AMOUNT';
+  }),
+  firstIncentiveValue: z.union([z.string(), z.number()]).optional().transform((val) => {
+    if (val === undefined || val === null || val === '' || val === 'undefined' || val === 'null') return undefined;
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    return isNaN(num) ? undefined : num;
+  }),
+  nextIncentiveType: z.string().optional().transform((val) => {
+    if (!val || val === '' || val === 'undefined' || val === 'null') return undefined;
+    return val as 'PERCENTAGE' | 'FIXED_AMOUNT';
+  }),
+  nextIncentiveValue: z.union([z.string(), z.number()]).optional().transform((val) => {
+    if (val === undefined || val === null || val === '' || val === 'undefined' || val === 'null') return undefined;
+    const num = typeof val === 'string' ? parseFloat(val) : val;
+    return isNaN(num) ? undefined : num;
+  }),
 });
 
 export const updateMemberSchema = z.object({
@@ -51,6 +79,12 @@ export const updateMemberSchema = z.object({
   infoSource: z.string().optional(),
   postalCode: z.string().optional(),
   isActive: z.boolean().optional(),
+  
+  // Incentive fields
+  firstIncentiveType: IncentiveTypeEnum.optional(),
+  firstIncentiveValue: z.number().min(0).optional(),
+  nextIncentiveType: IncentiveTypeEnum.optional(),
+  nextIncentiveValue: z.number().min(0).optional(),
 });
 
 export const grantAccessSchema = z.object({
@@ -66,3 +100,4 @@ export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 export type GrantAccessInput = z.infer<typeof grantAccessSchema>;
 export type SendNotificationInput = z.infer<typeof sendNotificationSchema>;
+

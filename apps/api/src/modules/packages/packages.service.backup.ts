@@ -783,9 +783,10 @@ export class PackagesService {
           itemName = `Paket Terapi Dasar - ${pkg.totalSessions}x Sesi`;
         }
 
-        // Calculate price per session and quantity
-        const quantity = pkg.totalSessions;
-        const pricePerUnit = Math.round(Number(pkg.finalPrice) / quantity);
+        // Quantity = 1 package (not number of sessions)
+        // Price per unit = finalPrice (price of the whole package)
+        const quantity = 1;
+        const pricePerUnit = Number(pkg.finalPrice);
         const itemSubtotal = pricePerUnit * quantity;
         
         subtotal += itemSubtotal;

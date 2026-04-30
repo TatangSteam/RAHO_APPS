@@ -43,12 +43,15 @@
   --color-success:  #22c55e;
   --color-warning:  #f59e0b;
   --color-danger:   #ef4444;
+  --color-error:    #ef4444;
   --color-info:     #06b6d4;
 
   /* ── Surface ──────────────────────────────────────────── */
   --surface-bg:         #0f172a;
+  --surface-background: #0f172a;
   --surface-card:       #1e293b;
   --surface-card-hover: #263548;
+  --surface-hover:      #263548;
   --surface-border:     rgba(148, 163, 184, 0.12);
   --surface-input:      rgba(30, 41, 59, 0.8);
 
