@@ -245,6 +245,6 @@ $null
 .parcel-cache/
 .vite/
 
-Dockerfile
-entrypoint.sh
-*prod*
+# Dockerfile
+# entrypoint.sh
+# *prod*
