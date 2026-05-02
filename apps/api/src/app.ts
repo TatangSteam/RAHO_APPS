@@ -58,6 +58,9 @@ export function createApp(): Application {
   // ── Compression ───────────────────────────────────────────
   app.use(compression());
 
+  // behind one reverse proxy (Nginx Proxy Manager)
+  app.set('trust proxy', 1);
+
   // ── HTTP Request Logger ───────────────────────────────────
   if (env.NODE_ENV === 'development') {
     app.use(morgan('dev'));

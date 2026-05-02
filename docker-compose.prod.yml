@@ -1,0 +1,236 @@
+# ============================================================
+# RAHO — Production Compose (single-host example)
+# Builds immutable images for API and Web and reads local file-based secrets
+# Usage: docker compose -f docker-compose.prod.yml up --build -d
+# ============================================================
+
+services:
+
+  # ── Nginx Proxy Manager (public ingress) ─────────────────
+  npm:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: raho-npm
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "127.0.0.1:81:81"
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    depends_on:
+      - web
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 300M
+    mem_limit: 300m
+    cpus: "0.2"
+    networks:
+      - raho_network
+
+  # ── PostgreSQL 15 ─────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: raho-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: raho_user
+      POSTGRES_DB: raho-db
+    volumes:
+      - raho_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raho_user -d raho-db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Load POSTGRES_PASSWORD from Docker secret and run postgres explicitly
+    entrypoint: ["sh", "-c", "if [ -f /run/secrets/POSTGRES_PASSWORD ]; then export POSTGRES_PASSWORD=$(cat /run/secrets/POSTGRES_PASSWORD); fi; exec docker-entrypoint.sh postgres"]
+    secrets:
+      - POSTGRES_PASSWORD
+    deploy:
+      resources:
+        limits:
+          cpus: '0.8'
+          memory: 900M
+    mem_limit: 900m
+    cpus: "0.8"
+    networks:
+      - raho_network
+
+  # ── MinIO Object Storage ──────────────────────────────────
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: raho-minio
+    restart: unless-stopped
+    volumes:
+      - raho_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Load MinIO root credentials from secrets and run server explicitly
+    entrypoint: ["sh", "-c", "if [ -f /run/secrets/MINIO_ROOT_USER ]; then export MINIO_ROOT_USER=$(cat /run/secrets/MINIO_ROOT_USER); fi; if [ -f /run/secrets/MINIO_ROOT_PASSWORD ]; then export MINIO_ROOT_PASSWORD=$(cat /run/secrets/MINIO_ROOT_PASSWORD); fi; exec minio server /data --console-address :9001"]
+    secrets:
+      - MINIO_ROOT_USER
+      - MINIO_ROOT_PASSWORD
+    deploy:
+      resources:
+        limits:
+          cpus: '0.4'
+          memory: 400M
+    mem_limit: 400m
+    cpus: "0.4"
+    networks:
+      - raho_network
+
+  # ── API (backend) — build immutable image, use secrets ─────
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: raho-api:latest
+    container_name: raho-api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      API_PREFIX: /api/v1
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_BUCKET: raho-uploads
+      MINIO_BUCKET_DOCUMENTS: raho-documents
+      MINIO_BUCKET_PHOTOS: raho-photos
+      MINIO_BUCKET_INVOICES: raho-invoices
+      MINIO_PUBLIC_URL: http://minio:9000
+      MINIO_USE_SSL: "false"
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://erp.rahopremier.id,http://38.147.122.167}
+      JWT_ACCESS_EXPIRES: 15m
+      JWT_REFRESH_EXPIRES: 7d
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX: 100
+      AUTH_RATE_LIMIT_MAX: 10
+    depends_on:
+      - postgres
+      - minio
+    secrets:
+      - DATABASE_URL
+      - MINIO_ACCESS_KEY
+      - MINIO_SECRET_KEY
+      - JWT_ACCESS_SECRET
+      - JWT_REFRESH_SECRET
+    deploy:
+      resources:
+        limits:
+          cpus: '0.6'
+          memory: 400M
+    mem_limit: 400m
+    cpus: "0.6"
+    networks:
+      - raho_network
+
+  # ── Web (frontend) — build immutable image, use secrets ────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${WEB_NEXT_PUBLIC_API_URL:-/api/v1}
+        NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO Klinik}
+        NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
+    image: raho-web:latest
+    container_name: raho-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXT_PUBLIC_API_URL: ${WEB_NEXT_PUBLIC_API_URL:-/api/v1}
+      NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO Klinik}
+      NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
+    depends_on:
+      - api
+    secrets:
+      - JWT_ACCESS_SECRET
+      - JWT_REFRESH_SECRET
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 300M
+    mem_limit: 300m
+    cpus: "0.2"
+    networks:
+      - raho_network
+
+  # ── One-off migration and seed tasks (run manually) ─────
+  migrate:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    image: raho-api:latest
+    container_name: raho-migrate
+    restart: "no"
+    depends_on:
+      - postgres
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+    command: ["npx", "prisma", "migrate", "deploy"]
+    environment:
+      NODE_ENV: production
+    secrets:
+      - DATABASE_URL
+      - POSTGRES_PASSWORD
+    networks:
+      - raho_network
+
+  seed:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: builder
+    image: raho-seed-builder:latest
+    container_name: raho-seed
+    restart: "no"
+    depends_on:
+      - postgres
+    command: ["sh", "-c", "export DATABASE_URL=$(cat /run/secrets/DATABASE_URL) && npx prisma db seed"]
+    environment:
+      NODE_ENV: production
+    secrets:
+      - DATABASE_URL
+    networks:
+      - raho_network
+
+volumes:
+  raho_pgdata:
+    name: raho_pgdata
+  raho_miniodata:
+    name: raho_miniodata
+  npm_data:
+    name: raho_npm_data
+  npm_letsencrypt:
+    name: raho_npm_letsencrypt
+
+networks:
+  raho_network:
+    name: raho_network
+    driver: bridge
+
+secrets:
+  DATABASE_URL:
+    file: ./secrets/DATABASE_URL
+  JWT_ACCESS_SECRET:
+    file: ./secrets/JWT_ACCESS_SECRET
+  JWT_REFRESH_SECRET:
+    file: ./secrets/JWT_REFRESH_SECRET
+  MINIO_ACCESS_KEY:
+    file: ./secrets/MINIO_ACCESS_KEY
+  MINIO_ROOT_PASSWORD:
+    file: ./secrets/MINIO_ROOT_PASSWORD
+  MINIO_ROOT_USER:
+    file: ./secrets/MINIO_ROOT_USER
+  MINIO_SECRET_KEY:
+    file: ./secrets/MINIO_SECRET_KEY
+  POSTGRES_PASSWORD:
+    file: ./secrets/POSTGRES_PASSWORD

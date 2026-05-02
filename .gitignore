@@ -244,3 +244,7 @@ $null
 .stylelintcache
 .parcel-cache/
 .vite/
+
+# Dockerfile
+# entrypoint.sh
+# *prod*
