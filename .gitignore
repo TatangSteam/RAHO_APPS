@@ -219,6 +219,10 @@ secrets/
 .secrets/
 *.secret
 
+# Credentials (NEVER COMMIT!)
+CREDENTIALS.md
+*CREDENTIALS*.md
+
 # ═══════════════════════════════════════════════════════════════
 # Project Specific
 # ═══════════════════════════════════════════════════════════════

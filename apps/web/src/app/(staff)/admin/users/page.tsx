@@ -252,7 +252,7 @@ export default function StaffManagementPage() {
                   )}
                   <div className={styles.staffInfo}>
                     <span className={styles.label}>Cabang:</span>
-                    <span>{s.branch.name}</span>
+                    <span>{s.branch?.name || 'Semua Cabang'}</span>
                   </div>
                   <div className={styles.staffInfo}>
                     <span className={styles.label}>Status:</span>

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import Link from 'next/link';
 import styles from './page.module.css';
 
 interface SystemStats {
@@ -13,28 +14,30 @@ interface SystemStats {
   activeUsers: number;
   totalMembers: number;
   activeMembers: number;
-  totalPackages: number;
-  activePackages: number;
-  totalSessions: number;
-  completedSessions: number;
+  totalProducts: number;
+  activeProducts: number;
   totalRevenue: number;
   monthlyRevenue: number;
-}
-
-interface RecentActivity {
-  id: string;
-  type: 'USER_CREATED' | 'MEMBER_REGISTERED' | 'PACKAGE_ASSIGNED' | 'SESSION_COMPLETED' | 'BRANCH_CREATED';
-  description: string;
-  timestamp: string;
-  user: string;
-  branch?: string;
+  totalSessions: number;
+  monthlySessions: number;
+  usersByRole: {
+    role: string;
+    count: number;
+  }[];
+  recentActivities: {
+    id: string;
+    action: string;
+    userName: string;
+    userEmail: string;
+    branchName: string | null;
+    createdAt: string;
+  }[];
 }
 
 export default function SuperAdminPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [stats, setStats] = useState<SystemStats | null>(null);
-  const [activities, setActivities] = useState<RecentActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
@@ -57,18 +60,20 @@ export default function SuperAdminPage() {
     }
 
     loadSystemStats();
-    loadRecentActivities();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, user, accessToken]);
 
   const loadSystemStats = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/branches/system/stats`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/system-stats`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
 
       if (!response.ok) throw new Error('Gagal memuat statistik sistem');
 
@@ -82,29 +87,34 @@ export default function SuperAdminPage() {
     }
   };
 
-  const loadRecentActivities = async () => {
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/branches/system/activities?limit=10`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Gagal memuat aktivitas');
-
-      const result = await response.json();
-      setActivities(result.data || []);
-    } catch (error: any) {
-      console.error('Error loading activities:', error);
-    }
-  };
-
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getRoleLabel = (role: string) => {
+    const roleMap: Record<string, string> = {
+      SUPER_ADMIN: 'Super Admin',
+      ADMIN_MANAGER: 'Admin Manager',
+      ADMIN_CABANG: 'Admin Cabang',
+      ADMIN_LAYANAN: 'Admin Layanan',
+      DOCTOR: 'Dokter',
+      NURSE: 'Perawat',
+    };
+    return roleMap[role] || role;
   };
 
   if (!mounted) return null;
@@ -125,234 +135,260 @@ export default function SuperAdminPage() {
       {/* Header */}
       <div className={styles.header}>
         <div>
-          <h1>🔐 Super Admin Dashboard</h1>
-          <p className={styles.subtitle}>Overview sistem RAHO secara keseluruhan</p>
+          <h1>🛡️ Super Admin Panel</h1>
+          <p className={styles.subtitle}>
+            Selamat datang, {user?.fullName} - Kontrol penuh sistem RAHO
+          </p>
+        </div>
+      </div>
+
+      {/* Quick Stats Grid */}
+      <div className={styles.statsGrid}>
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>🏢</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>{stats?.totalBranches || 0}</div>
+            <div className={styles.statLabel}>Total Cabang</div>
+            <div className={styles.statSubtext}>
+              {stats?.activeBranches || 0} aktif
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>👥</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>{stats?.totalUsers || 0}</div>
+            <div className={styles.statLabel}>Total Staff</div>
+            <div className={styles.statSubtext}>
+              {stats?.activeUsers || 0} aktif
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>🧑‍🤝‍🧑</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>{stats?.totalMembers || 0}</div>
+            <div className={styles.statLabel}>Total Member</div>
+            <div className={styles.statSubtext}>
+              {stats?.activeMembers || 0} aktif
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>📦</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>{stats?.totalProducts || 0}</div>
+            <div className={styles.statLabel}>Master Produk</div>
+            <div className={styles.statSubtext}>
+              {stats?.activeProducts || 0} aktif
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>💰</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>
+              {formatCurrency(stats?.totalRevenue || 0)}
+            </div>
+            <div className={styles.statLabel}>Total Pendapatan</div>
+            <div className={styles.statSubtext}>
+              {formatCurrency(stats?.monthlyRevenue || 0)} bulan ini
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.statCard}>
+          <div className={styles.statIcon}>💉</div>
+          <div className={styles.statContent}>
+            <div className={styles.statValue}>{stats?.totalSessions || 0}</div>
+            <div className={styles.statLabel}>Total Sesi Terapi</div>
+            <div className={styles.statSubtext}>
+              {stats?.monthlySessions || 0} bulan ini
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Management Sections */}
+      <div className={styles.sectionsGrid}>
+        {/* Master Data Management */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>📋 Master Data</h2>
+            <p>Kelola data master sistem</p>
+          </div>
+          <div className={styles.sectionContent}>
+            <Link href="/admin/master-products" className={styles.actionCard}>
+              <div className={styles.actionIcon}>📦</div>
+              <div className={styles.actionContent}>
+                <h3>Master Produk</h3>
+                <p>Kelola produk untuk semua cabang</p>
+              </div>
+              <div className={styles.actionArrow}>→</div>
+            </Link>
+
+            <Link href="/branches" className={styles.actionCard}>
+              <div className={styles.actionIcon}>🏢</div>
+              <div className={styles.actionContent}>
+                <h3>Manajemen Cabang</h3>
+                <p>Kelola semua cabang RAHO</p>
+              </div>
+              <div className={styles.actionArrow}>→</div>
+            </Link>
+          </div>
+        </div>
+
+        {/* User Management */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>👥 Manajemen User</h2>
+            <p>Kelola akses dan role user</p>
+          </div>
+          <div className={styles.sectionContent}>
+            <Link href="/admin/users" className={styles.actionCard}>
+              <div className={styles.actionIcon}>👤</div>
+              <div className={styles.actionContent}>
+                <h3>Kelola User</h3>
+                <p>Tambah, edit, hapus user sistem</p>
+              </div>
+              <div className={styles.actionArrow}>→</div>
+            </Link>
+
+            <div className={styles.userRoleStats}>
+              <h4>Distribusi Role</h4>
+              {stats?.usersByRole.map((roleData) => (
+                <div key={roleData.role} className={styles.roleItem}>
+                  <span className={styles.roleName}>
+                    {getRoleLabel(roleData.role)}
+                  </span>
+                  <span className={styles.roleCount}>{roleData.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* System Monitoring */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>📊 Monitoring Sistem</h2>
+            <p>Pantau aktivitas dan performa</p>
+          </div>
+          <div className={styles.sectionContent}>
+            <Link href="/admin/audit-logs" className={styles.actionCard}>
+              <div className={styles.actionIcon}>📜</div>
+              <div className={styles.actionContent}>
+                <h3>Audit Logs</h3>
+                <p>Riwayat aktivitas semua user</p>
+              </div>
+              <div className={styles.actionArrow}>→</div>
+            </Link>
+
+            <Link href="/admin/branch-performance" className={styles.actionCard}>
+              <div className={styles.actionIcon}>📈</div>
+              <div className={styles.actionContent}>
+                <h3>Performa Cabang</h3>
+                <p>Analisis performa setiap cabang</p>
+              </div>
+              <div className={styles.actionArrow}>→</div>
+            </Link>
+          </div>
+        </div>
+
+        {/* Recent Activities */}
+        <div className={styles.section}>
+          <div className={styles.sectionHeader}>
+            <h2>🕐 Aktivitas Terbaru</h2>
+            <p>10 aktivitas terakhir sistem</p>
+          </div>
+          <div className={styles.sectionContent}>
+            <div className={styles.activityList}>
+              {stats?.recentActivities && stats.recentActivities.length > 0 ? (
+                stats.recentActivities.map((activity) => (
+                  <div key={activity.id} className={styles.activityItem}>
+                    <div className={styles.activityIcon}>
+                      {activity.action === 'LOGIN' && '🔓'}
+                      {activity.action === 'LOGOUT' && '🔒'}
+                      {activity.action === 'CREATE' && '➕'}
+                      {activity.action === 'UPDATE' && '✏️'}
+                      {activity.action === 'DELETE' && '🗑️'}
+                      {activity.action === 'VERIFY' && '✅'}
+                    </div>
+                    <div className={styles.activityContent}>
+                      <div className={styles.activityAction}>
+                        {activity.action}
+                      </div>
+                      <div className={styles.activityUser}>
+                        {activity.userName} ({activity.userEmail})
+                      </div>
+                      {activity.branchName && (
+                        <div className={styles.activityBranch}>
+                          📍 {activity.branchName}
+                        </div>
+                      )}
+                    </div>
+                    <div className={styles.activityTime}>
+                      {formatDate(activity.createdAt)}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className={styles.emptyState}>
+                  Belum ada aktivitas terbaru
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Quick Actions */}
       <div className={styles.quickActions}>
-        <button
-          className={styles.actionCard}
-          onClick={() => router.push('/admin/branches')}
-        >
-          <div className={styles.actionIcon}>🏢</div>
-          <div className={styles.actionContent}>
-            <h3>Kelola Cabang</h3>
-            <p>Manajemen semua cabang</p>
-          </div>
-        </button>
-
-        <button
-          className={styles.actionCard}
-          onClick={() => router.push('/admin/users')}
-        >
-          <div className={styles.actionIcon}>👥</div>
-          <div className={styles.actionContent}>
-            <h3>Kelola User</h3>
-            <p>Manajemen staff & admin</p>
-          </div>
-        </button>
-
-        <button
-          className={styles.actionCard}
-          onClick={() => router.push('/members')}
-        >
-          <div className={styles.actionIcon}>🧑‍⚕️</div>
-          <div className={styles.actionContent}>
-            <h3>Kelola Member</h3>
-            <p>Semua member sistem</p>
-          </div>
-        </button>
-
-        <button
-          className={styles.actionCard}
-          onClick={() => router.push('/admin/package-pricing')}
-        >
-          <div className={styles.actionIcon}>💰</div>
-          <div className={styles.actionContent}>
-            <h3>Harga Paket</h3>
-            <p>Konfigurasi pricing</p>
-          </div>
-        </button>
-      </div>
-
-      {/* System Stats */}
-      {stats && (
-        <>
-          <div className={styles.sectionHeader}>
-            <h2>📊 Statistik Sistem</h2>
-          </div>
-
-          <div className={styles.statsGrid}>
-            {/* Branches */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>🏢</span>
-                <span className={styles.statLabel}>Cabang</span>
-              </div>
-              <div className={styles.statValue}>{stats.activeBranches}</div>
-              <div className={styles.statSubtext}>
-                dari {stats.totalBranches} total cabang
-              </div>
-            </div>
-
-            {/* Users */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>👥</span>
-                <span className={styles.statLabel}>Staff Aktif</span>
-              </div>
-              <div className={styles.statValue}>{stats.activeUsers}</div>
-              <div className={styles.statSubtext}>
-                dari {stats.totalUsers} total user
-              </div>
-            </div>
-
-            {/* Members */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>🧑‍⚕️</span>
-                <span className={styles.statLabel}>Member Aktif</span>
-              </div>
-              <div className={styles.statValue}>{stats.activeMembers}</div>
-              <div className={styles.statSubtext}>
-                dari {stats.totalMembers} total member
-              </div>
-            </div>
-
-            {/* Packages */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>📦</span>
-                <span className={styles.statLabel}>Paket Aktif</span>
-              </div>
-              <div className={styles.statValue}>{stats.activePackages}</div>
-              <div className={styles.statSubtext}>
-                dari {stats.totalPackages} total paket
-              </div>
-            </div>
-
-            {/* Sessions */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>💉</span>
-                <span className={styles.statLabel}>Sesi Selesai</span>
-              </div>
-              <div className={styles.statValue}>{stats.completedSessions}</div>
-              <div className={styles.statSubtext}>
-                dari {stats.totalSessions} total sesi
-              </div>
-            </div>
-
-            {/* Monthly Revenue */}
-            <div className={styles.statCard}>
-              <div className={styles.statHeader}>
-                <span className={styles.statIcon}>💰</span>
-                <span className={styles.statLabel}>Revenue Bulan Ini</span>
-              </div>
-              <div className={styles.statValue}>
-                {formatCurrency(stats.monthlyRevenue)}
-              </div>
-              <div className={styles.statSubtext}>
-                Total: {formatCurrency(stats.totalRevenue)}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* System Management */}
-      <div className={styles.sectionHeader}>
-        <h2>⚙️ Manajemen Sistem</h2>
-      </div>
-
-      <div className={styles.managementGrid}>
-        <div className={styles.managementCard}>
-          <div className={styles.managementIcon}>🔐</div>
-          <h3>Audit Log</h3>
-          <p>Lihat semua aktivitas sistem</p>
+        <h2>⚡ Aksi Cepat</h2>
+        <div className={styles.quickActionsGrid}>
           <button
-            className={styles.managementBtn}
-            onClick={() => router.push('/admin/audit')}
+            onClick={() => router.push('/admin/master-products')}
+            className={styles.quickActionBtn}
           >
-            Lihat Log
+            <span className={styles.quickActionIcon}>📦</span>
+            <span>Tambah Produk</span>
           </button>
-        </div>
 
-        <div className={styles.managementCard}>
-          <div className={styles.managementIcon}>📊</div>
-          <h3>Laporan</h3>
-          <p>Generate laporan sistem</p>
           <button
-            className={styles.managementBtn}
-            onClick={() => showToast.success('Fitur dalam pengembangan')}
+            onClick={() => router.push('/branches')}
+            className={styles.quickActionBtn}
           >
-            Generate
+            <span className={styles.quickActionIcon}>🏢</span>
+            <span>Tambah Cabang</span>
           </button>
-        </div>
 
-        <div className={styles.managementCard}>
-          <div className={styles.managementIcon}>⚙️</div>
-          <h3>Konfigurasi</h3>
-          <p>Pengaturan sistem global</p>
           <button
-            className={styles.managementBtn}
-            onClick={() => showToast.success('Fitur dalam pengembangan')}
+            onClick={() => router.push('/admin/users')}
+            className={styles.quickActionBtn}
           >
-            Kelola
+            <span className={styles.quickActionIcon}>👤</span>
+            <span>Tambah User</span>
           </button>
-        </div>
 
-        <div className={styles.managementCard}>
-          <div className={styles.managementIcon}>🔔</div>
-          <h3>Notifikasi</h3>
-          <p>Broadcast ke semua user</p>
           <button
-            className={styles.managementBtn}
-            onClick={() => showToast.success('Fitur dalam pengembangan')}
+            onClick={() => router.push('/admin/audit-logs')}
+            className={styles.quickActionBtn}
           >
-            Kirim
+            <span className={styles.quickActionIcon}>📜</span>
+            <span>Lihat Audit Log</span>
           </button>
-        </div>
-      </div>
 
-      {/* System Health */}
-      <div className={styles.sectionHeader}>
-        <h2>🏥 Status Sistem</h2>
-      </div>
-
-      <div className={styles.healthGrid}>
-        <div className={styles.healthCard}>
-          <div className={styles.healthStatus}>
-            <span className={styles.healthDot} style={{ background: '#4ade80' }}></span>
-            <span className={styles.healthLabel}>Database</span>
-          </div>
-          <div className={styles.healthValue}>Operational</div>
-        </div>
-
-        <div className={styles.healthCard}>
-          <div className={styles.healthStatus}>
-            <span className={styles.healthDot} style={{ background: '#4ade80' }}></span>
-            <span className={styles.healthLabel}>API Server</span>
-          </div>
-          <div className={styles.healthValue}>Operational</div>
-        </div>
-
-        <div className={styles.healthCard}>
-          <div className={styles.healthStatus}>
-            <span className={styles.healthDot} style={{ background: '#4ade80' }}></span>
-            <span className={styles.healthLabel}>Storage</span>
-          </div>
-          <div className={styles.healthValue}>Operational</div>
-        </div>
-
-        <div className={styles.healthCard}>
-          <div className={styles.healthStatus}>
-            <span className={styles.healthDot} style={{ background: '#4ade80' }}></span>
-            <span className={styles.healthLabel}>Authentication</span>
-          </div>
-          <div className={styles.healthValue}>Operational</div>
+          <button
+            onClick={loadSystemStats}
+            className={styles.quickActionBtn}
+          >
+            <span className={styles.quickActionIcon}>🔄</span>
+            <span>Refresh Data</span>
+          </button>
         </div>
       </div>
     </div>

@@ -6,10 +6,25 @@ import { LogOut } from 'lucide-react';
 export default function MemberLayout({ children }: { children: React.ReactNode }) {
   const { user, clearAuth } = useAuthStore();
 
-  const handleLogout = () => {
-    clearAuth();
-    document.cookie = 'raho-auth-token=; path=/; max-age=0';
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      // Get refresh token before clearing auth
+      const { refreshToken } = useAuthStore.getState();
+      
+      // Call logout API to create audit log
+      if (refreshToken) {
+        const { logoutApi } = await import('@/lib/authApi');
+        await logoutApi(refreshToken);
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+      // Continue with logout even if API call fails
+    } finally {
+      // Clear local state and redirect
+      clearAuth();
+      document.cookie = 'raho-auth-token=; path=/; max-age=0';
+      window.location.href = '/login';
+    }
   };
 
   return (

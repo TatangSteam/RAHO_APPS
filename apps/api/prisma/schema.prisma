@@ -167,6 +167,8 @@ enum AuditAction {
   UPDATE
   DELETE
   VERIFY
+  LOGIN
+  LOGOUT
 }
 
 // ============================================================
@@ -205,6 +207,7 @@ model Branch {
   managerBranches    ManagerBranch[]
   staffBranches      StaffBranch[]        @relation("StaffBranches")
   referralCodes      ReferralCode[]
+  auditLogs          AuditLog[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -1321,6 +1324,7 @@ model ChatMessage {
 model AuditLog {
   id         String      @id @default(cuid())
   userId     String
+  branchId   String?     // Branch where action occurred (null for SUPER_ADMIN/ADMIN_MANAGER)
   action     AuditAction
   resource   String
   resourceId String
@@ -1329,9 +1333,11 @@ model AuditLog {
   userAgent  String?
   createdAt  DateTime    @default(now())
 
-  user User @relation(fields: [userId], references: [id])
+  user   User    @relation(fields: [userId], references: [id])
+  branch Branch? @relation(fields: [branchId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([branchId, createdAt])
   @@index([resource, resourceId])
   @@index([action])
   @@index([createdAt])

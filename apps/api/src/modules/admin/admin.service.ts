@@ -1,10 +1,11 @@
 // @ts-nocheck
-import { AuditAction, PackageType, Role } from '@prisma/client';
+import { AuditAction, PackageType, ProductCategory, Role } from '@prisma/client';
 import { SystemStatsService } from './services/system-stats.service';
 import { BranchPerformanceService } from './services/branch-performance.service';
 import { AuditLogsService } from './services/audit-logs.service';
 import { PackagePricingAdminService } from './services/package-pricing-admin.service';
 import { UserManagementService } from './services/user-management.service';
+import { MasterProductAdminService } from './services/master-product-admin.service';
 
 /**
  * Main Admin Service - Orchestrates all admin-related operations
@@ -15,6 +16,7 @@ import { UserManagementService } from './services/user-management.service';
  * - AuditLogsService: Audit log management
  * - PackagePricingAdminService: Package pricing management
  * - UserManagementService: User management operations
+ * - MasterProductAdminService: Master product management
  */
 export class AdminService {
   private systemStatsService: SystemStatsService;
@@ -22,6 +24,7 @@ export class AdminService {
   private auditLogsService: AuditLogsService;
   private packagePricingService: PackagePricingAdminService;
   private userManagementService: UserManagementService;
+  private masterProductService: MasterProductAdminService;
 
   constructor() {
     this.systemStatsService = new SystemStatsService();
@@ -29,6 +32,7 @@ export class AdminService {
     this.auditLogsService = new AuditLogsService();
     this.packagePricingService = new PackagePricingAdminService();
     this.userManagementService = new UserManagementService();
+    this.masterProductService = new MasterProductAdminService();
   }
 
   // ============================================================
@@ -172,5 +176,79 @@ export class AdminService {
     limit?: number;
   }) {
     return await this.userManagementService.getAllUsers(filters);
+  }
+
+  // ============================================================
+  // MASTER PRODUCT MANAGEMENT
+  // ============================================================
+
+  /**
+   * Get all master products with filtering
+   */
+  async getAllMasterProducts(filters: {
+    category?: ProductCategory;
+    isActive?: boolean;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    return await this.masterProductService.getAllMasterProducts(filters);
+  }
+
+  /**
+   * Get master product by ID
+   */
+  async getMasterProduct(productId: string) {
+    return await this.masterProductService.getMasterProduct(productId);
+  }
+
+  /**
+   * Create master product
+   */
+  async createMasterProduct(
+    data: {
+      name: string;
+      category: ProductCategory;
+      baseUnit: string;
+      usageUnit: string;
+      conversionFactor: number;
+      description?: string;
+    },
+    userId: string
+  ) {
+    return await this.masterProductService.createMasterProduct(data, userId);
+  }
+
+  /**
+   * Update master product
+   */
+  async updateMasterProduct(
+    productId: string,
+    data: {
+      name?: string;
+      category?: ProductCategory;
+      baseUnit?: string;
+      usageUnit?: string;
+      conversionFactor?: number;
+      description?: string;
+      isActive?: boolean;
+    },
+    userId: string
+  ) {
+    return await this.masterProductService.updateMasterProduct(productId, data, userId);
+  }
+
+  /**
+   * Delete master product
+   */
+  async deleteMasterProduct(productId: string, userId: string) {
+    return await this.masterProductService.deleteMasterProduct(productId, userId);
+  }
+
+  /**
+   * Get product categories
+   */
+  async getProductCategories() {
+    return await this.masterProductService.getProductCategories();
   }
 }

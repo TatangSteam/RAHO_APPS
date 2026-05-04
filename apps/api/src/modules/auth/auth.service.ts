@@ -16,7 +16,7 @@ export interface AuthUser {
 
 // ── Login ─────────────────────────────────────────────────────
 
-export async function loginService(input: LoginInput) {
+export async function loginService(input: LoginInput, ipAddress?: string, userAgent?: string) {
   const user = await prisma.user.findUnique({
     where: { email: input.email },
     include: {
@@ -38,6 +38,32 @@ export async function loginService(input: LoginInput) {
   prisma.user
     .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     .catch(() => void 0);
+
+  // Create audit log for LOGIN (AWAIT to ensure it's saved)
+  try {
+    // Only include branchId if user is not SUPER_ADMIN or ADMIN_MANAGER
+    const shouldIncludeBranch = user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER';
+    
+    const auditLog = await prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        branchId: shouldIncludeBranch ? user.branchId : null,
+        action: 'LOGIN',
+        resource: 'Auth',
+        resourceId: user.id,
+        meta: {
+          email: user.email,
+          role: user.role,
+          branchId: user.branchId,
+        },
+        ipAddress: ipAddress || 'unknown',
+        userAgent: userAgent || 'unknown',
+      },
+    });
+    console.log('✅ LOGIN audit log created:', auditLog.id);
+  } catch (error) {
+    console.error('❌ Failed to create LOGIN audit log:', error);
+  }
 
   const payload: JwtPayload = {
     userId: user.id,

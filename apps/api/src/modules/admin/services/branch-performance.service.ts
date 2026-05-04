@@ -13,13 +13,13 @@ export class BranchPerformanceService {
       where: { isActive: true },
       include: {
         members: {
-          where: { status: 'ACTIVE' },
+          where: { isActive: true },
         },
         users: {
           where: { isActive: true },
         },
         packages: {
-          where: { status: { in: ['ACTIVE', 'COMPLETED'] } },
+          where: { status: 'ACTIVE' },
         },
       },
     });
@@ -30,7 +30,7 @@ export class BranchPerformanceService {
         const revenue = await prisma.memberPackage.aggregate({
           where: {
             branchId: branch.id,
-            status: { in: ['ACTIVE', 'COMPLETED'] },
+            status: 'ACTIVE',
           },
           _sum: { finalPrice: true },
         });
@@ -39,7 +39,7 @@ export class BranchPerformanceService {
         const monthlyRevenue = await prisma.memberPackage.aggregate({
           where: {
             branchId: branch.id,
-            status: { in: ['ACTIVE', 'COMPLETED'] },
+            status: 'ACTIVE',
             paidAt: {
               gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
             },

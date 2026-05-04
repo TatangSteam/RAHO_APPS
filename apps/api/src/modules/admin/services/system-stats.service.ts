@@ -6,89 +6,150 @@ import { prisma } from '../../../lib/prisma';
  */
 export class SystemStatsService {
   /**
-   * Get system statistics
+   * Get comprehensive system statistics for Super Admin
    */
   async getSystemStats() {
-    const [
-      totalMembers,
-      activeMembers,
-      totalBranches,
-      activeBranches,
-      totalUsers,
-      activeUsers,
-      totalPackages,
-      activePackages,
-      totalRevenue,
-      monthlyRevenue,
-    ] = await Promise.all([
-      // Total members
-      prisma.member.count(),
-      
-      // Active members
-      prisma.member.count({ where: { status: 'ACTIVE' } }),
-      
-      // Total branches
-      prisma.branch.count(),
-      
-      // Active branches
-      prisma.branch.count({ where: { isActive: true } }),
-      
-      // Total users
-      prisma.user.count(),
-      
-      // Active users
-      prisma.user.count({ where: { isActive: true } }),
-      
-      // Total packages
-      prisma.memberPackage.count(),
-      
-      // Active packages
-      prisma.memberPackage.count({ where: { status: 'ACTIVE' } }),
-      
-      // Total revenue (all paid packages)
-      prisma.memberPackage.aggregate({
-        where: { status: { in: ['ACTIVE', 'COMPLETED'] } },
-        _sum: { finalPrice: true },
-      }),
-      
-      // Monthly revenue (current month)
-      prisma.memberPackage.aggregate({
-        where: {
-          status: { in: ['ACTIVE', 'COMPLETED'] },
-          paidAt: {
-            gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
-          },
-        },
-        _sum: { finalPrice: true },
-      }),
-    ]);
+    try {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    return {
-      members: {
-        total: totalMembers,
-        active: activeMembers,
-        inactive: totalMembers - activeMembers,
-      },
-      branches: {
-        total: totalBranches,
-        active: activeBranches,
-        inactive: totalBranches - activeBranches,
-      },
-      users: {
-        total: totalUsers,
-        active: activeUsers,
-        inactive: totalUsers - activeUsers,
-      },
-      packages: {
-        total: totalPackages,
-        active: activePackages,
-        completed: totalPackages - activePackages,
-      },
-      revenue: {
-        total: Number(totalRevenue._sum.finalPrice || 0),
-        monthly: Number(monthlyRevenue._sum.finalPrice || 0),
-      },
-    };
+      const [
+        totalMembers,
+        activeMembers,
+        totalBranches,
+        activeBranches,
+        totalUsers,
+        activeUsers,
+        totalProducts,
+        activeProducts,
+        totalSessions,
+        monthlySessions,
+        totalRevenue,
+        monthlyRevenue,
+        usersByRole,
+        recentActivities,
+      ] = await Promise.all([
+        // Total members
+        prisma.member.count().catch(() => 0),
+        
+        // Active members
+        prisma.member.count({ where: { isActive: true } }).catch(() => 0),
+        
+        // Total branches
+        prisma.branch.count().catch(() => 0),
+        
+        // Active branches
+        prisma.branch.count({ where: { isActive: true } }).catch(() => 0),
+        
+        // Total users
+        prisma.user.count().catch(() => 0),
+        
+        // Active users
+        prisma.user.count({ where: { isActive: true } }).catch(() => 0),
+        
+        // Total master products
+        prisma.masterProduct.count().catch(() => 0),
+        
+        // Active master products
+        prisma.masterProduct.count({ where: { isActive: true } }).catch(() => 0),
+        
+        // Total therapy sessions
+        prisma.therapySession.count().catch(() => 0),
+        
+        // Monthly therapy sessions
+        prisma.therapySession.count({
+          where: {
+            createdAt: { gte: firstDayOfMonth },
+          },
+        }).catch(() => 0),
+        
+        // Total revenue (sum of all paid invoices)
+        prisma.invoice.aggregate({
+          where: { status: 'PAID' },
+          _sum: { totalAmount: true },
+        }).catch(() => ({ _sum: { totalAmount: null } })),
+        
+        // Monthly revenue (current month paid invoices)
+        prisma.invoice.aggregate({
+          where: {
+            status: 'PAID',
+            paidAt: { gte: firstDayOfMonth },
+          },
+          _sum: { totalAmount: true },
+        }).catch(() => ({ _sum: { totalAmount: null } })),
+        
+        // Users by role
+        prisma.user.groupBy({
+          by: ['role'],
+          _count: { role: true },
+          where: { isActive: true },
+        }).catch(() => []),
+        
+        // Recent activities (last 10)
+        prisma.auditLog.findMany({
+          take: 10,
+          orderBy: { createdAt: 'desc' },
+          include: {
+            user: {
+              include: {
+                profile: true,
+              },
+            },
+            branch: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        }).catch(() => []),
+      ]);
+
+      return {
+        totalBranches,
+        activeBranches,
+        totalUsers,
+        activeUsers,
+        totalMembers,
+        activeMembers,
+        totalProducts,
+        activeProducts,
+        totalRevenue: Number(totalRevenue._sum.totalAmount || 0),
+        monthlyRevenue: Number(monthlyRevenue._sum.totalAmount || 0),
+        totalSessions,
+        monthlySessions,
+        usersByRole: usersByRole.map(item => ({
+          role: item.role,
+          count: item._count.role,
+        })),
+        recentActivities: recentActivities.map(activity => ({
+          id: activity.id,
+          action: activity.action,
+          userName: activity.user.profile?.fullName || activity.user.email,
+          userEmail: activity.user.email,
+          branchName: activity.branch?.name || null,
+          createdAt: activity.createdAt.toISOString(),
+        })),
+      };
+    } catch (error) {
+      console.error('Error in getSystemStats:', error);
+      // Return default values if there's an error
+      return {
+        totalBranches: 0,
+        activeBranches: 0,
+        totalUsers: 0,
+        activeUsers: 0,
+        totalMembers: 0,
+        activeMembers: 0,
+        totalProducts: 0,
+        activeProducts: 0,
+        totalRevenue: 0,
+        monthlyRevenue: 0,
+        totalSessions: 0,
+        monthlySessions: 0,
+        usersByRole: [],
+        recentActivities: [],
+      };
+    }
   }
 
   /**
@@ -123,11 +184,16 @@ export class SystemStatsService {
   async getRecentActivities(limit: number = 20) {
     const activities = await prisma.auditLog.findMany({
       take: limit,
-      orderBy: { timestamp: 'desc' },
+      orderBy: { createdAt: 'desc' },
       include: {
         user: {
           include: {
             profile: true,
+          },
+        },
+        branch: {
+          select: {
+            name: true,
           },
         },
       },
@@ -140,8 +206,10 @@ export class SystemStatsService {
       resourceId: activity.resourceId,
       userId: activity.userId,
       userName: activity.user.profile?.fullName || activity.user.email,
+      userEmail: activity.user.email,
+      branchName: activity.branch?.name || null,
       meta: activity.meta,
-      timestamp: activity.timestamp.toISOString(),
+      timestamp: activity.createdAt.toISOString(),
     }));
   }
 }

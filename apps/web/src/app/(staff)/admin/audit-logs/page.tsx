@@ -161,6 +161,7 @@ export default function AuditLogsPage() {
             <option value="CREATE">CREATE</option>
             <option value="UPDATE">UPDATE</option>
             <option value="DELETE">DELETE</option>
+            <option value="VERIFY">VERIFY</option>
             <option value="LOGIN">LOGIN</option>
             <option value="LOGOUT">LOGOUT</option>
           </select>

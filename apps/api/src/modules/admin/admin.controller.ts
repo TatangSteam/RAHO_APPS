@@ -441,3 +441,130 @@ export async function deleteServiceType(req: Request, res: Response, next: NextF
     next(err);
   }
 }
+
+
+// ══════════════════════════════════════════════════════════
+// MASTER PRODUCT MANAGEMENT (SUPER_ADMIN only)
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Get all master products
+ * GET /admin/master-products
+ */
+export async function getAllMasterProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { category, isActive, search, page, limit } = req.query;
+
+    const result = await adminService.getAllMasterProducts({
+      category: category as any,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      search: search as string,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get master product by ID
+ * GET /admin/master-products/:id
+ */
+export async function getMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const result = await adminService.getMasterProduct(id);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Create master product
+ * POST /admin/master-products
+ */
+export async function createMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { name, category, baseUnit, usageUnit, conversionFactor, description } = req.body;
+    const userId = (req as any).user.userId;
+
+    const result = await adminService.createMasterProduct(
+      {
+        name,
+        category,
+        baseUnit,
+        usageUnit,
+        conversionFactor: parseFloat(conversionFactor),
+        description,
+      },
+      userId
+    );
+
+    sendSuccess(res, result, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Update master product
+ * PUT /admin/master-products/:id
+ */
+export async function updateMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const { name, category, baseUnit, usageUnit, conversionFactor, description, isActive } = req.body;
+    const userId = (req as any).user.userId;
+
+    const result = await adminService.updateMasterProduct(
+      id,
+      {
+        name,
+        category,
+        baseUnit,
+        usageUnit,
+        conversionFactor: conversionFactor !== undefined ? parseFloat(conversionFactor) : undefined,
+        description,
+        isActive,
+      },
+      userId
+    );
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Delete master product
+ * DELETE /admin/master-products/:id
+ */
+export async function deleteMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user.userId;
+
+    const result = await adminService.deleteMasterProduct(id, userId);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get product categories
+ * GET /admin/master-products/categories
+ */
+export async function getProductCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await adminService.getProductCategories();
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}

@@ -38,7 +38,13 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Dashboard',
         href: '/dashboard',
         icon: <LayoutDashboard size={18} />,
-        roles: ALL_STAFF,
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+      },
+      {
+        label: 'Dashboard',
+        href: '/admin/super-admin',
+        icon: <Shield size={18} />,
+        roles: ['SUPER_ADMIN'],
       },
     ],
   },
@@ -49,13 +55,13 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Member',
         href: '/members',
         icon: <Users size={18} />,
-        roles: ALL_STAFF,
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Sesi Terapi',
         href: '/sessions',
         icon: <Activity size={18} />,
-        roles: ALL_STAFF,
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
     ],
   },
@@ -66,13 +72,13 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Stok',
         href: '/inventory',
         icon: <Boxes size={18} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Request Stok',
         href: '/inventory/stock-requests',
         icon: <ClipboardList size={18} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
     ],
   },
@@ -112,7 +118,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Kode Referral',
         href: '/referrals',
         icon: <FileText size={18} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
         label: 'Harga Paket',
@@ -126,21 +132,9 @@ const MENU_GROUPS: MenuGroup[] = [
     title: 'Super Admin',
     items: [
       {
-        label: 'Super Admin Panel',
-        href: '/admin/super-admin',
-        icon: <Shield size={18} />,
-        roles: ['SUPER_ADMIN'],
-      },
-      {
         label: 'Master Produk',
         href: '/admin/master-products',
         icon: <Boxes size={18} />,
-        roles: ['SUPER_ADMIN'],
-      },
-      {
-        label: 'Referral Code',
-        href: '/admin/referral-codes',
-        icon: <FileText size={18} />,
         roles: ['SUPER_ADMIN'],
       },
       {
@@ -197,9 +191,24 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   if (role === 'MEMBER') return null;
 
   const handleLogout = async () => {
-    clearAuth();
-    document.cookie = 'raho-auth-token=; path=/; max-age=0';
-    window.location.href = '/login';
+    try {
+      // Get refresh token before clearing auth
+      const { refreshToken } = useAuthStore.getState();
+      
+      // Call logout API to create audit log
+      if (refreshToken) {
+        const { logoutApi } = await import('@/lib/authApi');
+        await logoutApi(refreshToken);
+      }
+    } catch (error) {
+      console.error('Logout API error:', error);
+      // Continue with logout even if API call fails
+    } finally {
+      // Clear local state and redirect
+      clearAuth();
+      document.cookie = 'raho-auth-token=; path=/; max-age=0';
+      window.location.href = '/login';
+    }
   };
 
   const isActive = (href: string) => {

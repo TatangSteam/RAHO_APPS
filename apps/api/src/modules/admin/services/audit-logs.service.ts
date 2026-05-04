@@ -44,12 +44,12 @@ export class AuditLogsService {
     }
 
     if (startDate || endDate) {
-      where.timestamp = {};
+      where.createdAt = {};
       if (startDate) {
-        where.timestamp.gte = new Date(startDate);
+        where.createdAt.gte = new Date(startDate);
       }
       if (endDate) {
-        where.timestamp.lte = new Date(endDate);
+        where.createdAt.lte = new Date(endDate);
       }
     }
 
@@ -65,8 +65,15 @@ export class AuditLogsService {
             profile: true,
           },
         },
+        branch: {
+          select: {
+            id: true,
+            branchCode: true,
+            name: true,
+          },
+        },
       },
-      orderBy: { timestamp: 'desc' },
+      orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
       take: limit,
     });
@@ -77,11 +84,21 @@ export class AuditLogsService {
         action: log.action,
         resource: log.resource,
         resourceId: log.resourceId,
-        userId: log.userId,
-        userName: log.user.profile?.fullName || log.user.email,
-        userEmail: log.user.email,
         meta: log.meta,
-        timestamp: log.timestamp.toISOString(),
+        ipAddress: log.ipAddress,
+        userAgent: log.userAgent,
+        createdAt: log.createdAt.toISOString(),
+        user: {
+          id: log.user.id,
+          email: log.user.email,
+          fullName: log.user.profile?.fullName || log.user.email,
+          role: log.user.role,
+        },
+        branch: log.branch ? {
+          id: log.branch.id,
+          branchCode: log.branch.branchCode,
+          name: log.branch.name,
+        } : null,
       })),
       pagination: {
         page,

@@ -28,8 +28,14 @@ export default function DashboardPage() {
       return;
     }
     
-    // Only ADMIN_CABANG and above can access
-    if (!['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user.role)) {
+    // Redirect SUPER_ADMIN to Super Admin Panel
+    if (user.role === 'SUPER_ADMIN') {
+      router.push('/admin/super-admin');
+      return;
+    }
+    
+    // Only ADMIN_MANAGER, ADMIN_CABANG, and ADMIN_LAYANAN can access this dashboard
+    if (!['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user.role)) {
       showToast.error('Anda tidak memiliki akses ke dashboard ini');
       router.push('/members');
       return;

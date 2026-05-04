@@ -26,6 +26,12 @@ import {
   deleteServiceType,
   createAdminManager,
   getAllUsers,
+  getAllMasterProducts,
+  getMasterProduct,
+  createMasterProduct,
+  updateMasterProduct,
+  deleteMasterProduct,
+  getProductCategories,
 } from './admin.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
@@ -59,7 +65,13 @@ router.get('/branches',
 
 // ── System Management ──────────────────────────────────────
 
-// System Statistics
+// System Statistics (Super Admin Dashboard)
+router.get('/system-stats', 
+  authorize(['SUPER_ADMIN']), 
+  getSystemStats
+);
+
+// System Statistics (alternative route)
 router.get('/system/stats', 
   authorize(['SUPER_ADMIN']), 
   getSystemStats
@@ -172,8 +184,43 @@ router.get('/users',
   getAllUsers
 );
 
-export { router as adminRoutes };
+// ── Master Product Management ──────────────────────────────
 
+// Get product categories
+router.get('/master-products/categories',
+  authorize(['SUPER_ADMIN']),
+  getProductCategories
+);
+
+// Get all master products
+router.get('/master-products',
+  authorize(['SUPER_ADMIN']),
+  getAllMasterProducts
+);
+
+// Get single master product
+router.get('/master-products/:id',
+  authorize(['SUPER_ADMIN']),
+  getMasterProduct
+);
+
+// Create master product
+router.post('/master-products',
+  authorize(['SUPER_ADMIN']),
+  createMasterProduct
+);
+
+// Update master product
+router.put('/master-products/:id',
+  authorize(['SUPER_ADMIN']),
+  updateMasterProduct
+);
+
+// Delete master product
+router.delete('/master-products/:id',
+  authorize(['SUPER_ADMIN']),
+  deleteMasterProduct
+);
 
 // ── Master Types Management ────────────────────────────────────
 
@@ -218,3 +265,6 @@ router.delete('/master/service-types/:typeId',
   authorize(['SUPER_ADMIN']),
   deleteServiceType
 );
+
+
+export { router as adminRoutes };
