@@ -3,8 +3,8 @@ import { z } from 'zod';
 // PackageType enum (mirrors Prisma schema)
 const PackageTypeEnum = z.enum(['BASIC', 'BOOSTER']);
 
-// Extended booster types (NO, GT, MB, KCL, H2S, HK, O3)
-const ExtendedBoosterTypeEnum = z.enum(['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3']);
+// Extended booster types (NO, GT, MB, KCL, H2S, HK, O3, HHO, NO2)
+const ExtendedBoosterTypeEnum = z.enum(['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3', 'HHO', 'NO2']);
 
 // Service types for pricing
 const ServiceTypeEnum = z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']);
@@ -68,7 +68,44 @@ export const updatePackagePricingSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+export const refundPackageSchema = z.object({
+  reason: z.string().min(5, 'Alasan refund minimal 5 karakter'),
+  refundAmount: z.number().min(0).optional(),
+});
+
+export const cancelPackageSchema = z.object({
+  reason: z.string().min(5, 'Alasan pembatalan minimal 5 karakter'),
+});
+
+export const editPackageSchema = z.object({
+  packages: z.array(z.object({
+    pricingId: z.string(),
+    quantity: z.number().int().min(1),
+    boosterType: ExtendedBoosterTypeEnum.optional(),
+    serviceType: ServiceTypeEnum.optional(),
+  })).default([]),
+  
+  addOns: z.array(z.object({
+    type: AddOnTypeEnum,
+    code: z.string(),
+    name: z.string(),
+    price: z.number().min(0),
+    quantity: z.number().int().min(1),
+  })).default([]),
+  
+  discountPercent: z.number().min(0).max(100).optional(),
+  discountAmount: z.number().min(0).optional(),
+  discountNote: z.string().optional(),
+  notes: z.string().optional(),
+}).refine(
+  (data) => data.packages.length > 0 || data.addOns.length > 0,
+  { message: 'Minimal 1 paket atau add-on harus dipilih' }
+);
+
 export type AssignPackageInput = z.infer<typeof assignPackageSchema>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
 export type CreatePackagePricingInput = z.infer<typeof createPackagePricingSchema>;
 export type UpdatePackagePricingInput = z.infer<typeof updatePackagePricingSchema>;
+export type RefundPackageInput = z.infer<typeof refundPackageSchema>;
+export type CancelPackageInput = z.infer<typeof cancelPackageSchema>;
+export type EditPackageInput = z.infer<typeof editPackageSchema>;

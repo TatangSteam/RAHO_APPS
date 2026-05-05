@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "AddOnType" ADD VALUE 'ROKOK_KENKOU';

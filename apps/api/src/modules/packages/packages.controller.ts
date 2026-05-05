@@ -5,6 +5,9 @@ import {
   verifyPaymentSchema,
   createPackagePricingSchema,
   updatePackagePricingSchema,
+  refundPackageSchema,
+  cancelPackageSchema,
+  editPackageSchema,
 } from './packages.schema';
 import { sendSuccess, sendCreated } from '../../utils/response';
 import { uploadFile } from '../../config/minio';
@@ -201,6 +204,83 @@ export class PackagesController {
         mimeType: req.file.mimetype,
       });
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // Refund package
+  async refundPackage(req: Request, res: Response, next: NextFunction) {
+    try {
+      console.log('=== refundPackage controller called ===');
+      console.log('packageId:', req.params.packageId);
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
+      const { packageId } = req.params;
+      const data = refundPackageSchema.parse(req.body);
+      
+      console.log('Parsed data:', JSON.stringify(data, null, 2));
+      
+      const userId = req.user?.userId;
+      const branchId = req.user?.branchId || null;
+
+      if (!userId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      const result = await packagesService.refundPackage(packageId, {
+        reason: data.reason,
+        refundAmount: data.refundAmount
+      }, userId, branchId);
+      return sendSuccess(res, result);
+    } catch (error) {
+      console.log('refundPackage controller error:', error);
+      next(error);
+    }
+  }
+
+  // Cancel package
+  async cancelPackage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { packageId } = req.params;
+      const data = cancelPackageSchema.parse(req.body);
+      const userId = req.user?.userId;
+      const branchId = req.user?.branchId || null;
+
+      if (!userId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      const result = await packagesService.cancelPackage(packageId, {
+        reason: data.reason
+      }, userId, branchId);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Edit package
+  async editPackage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { packageId } = req.params;
+      console.log('\n=== editPackage controller called ===');
+      console.log('packageId:', packageId);
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+      
+      const data = editPackageSchema.parse(req.body);
+      console.log('Parsed data:', JSON.stringify(data, null, 2));
+      
+      const userId = req.user?.userId;
+      const branchId = req.user?.branchId || null;
+
+      if (!userId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      const result = await packagesService.editPackage(packageId, data, userId, branchId);
+      return sendSuccess(res, result);
+    } catch (error) {
+      console.error('editPackage controller error:', error);
       next(error);
     }
   }

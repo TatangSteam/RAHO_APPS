@@ -9,11 +9,14 @@ interface Props {
   packages: PackageDisplay[];
   loading: boolean;
   onVerifyPayment: (packageId: string) => void;
+  onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
+  onCancelPackage?: (packageId: string, packageCode: string) => void;
+  onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
 }
 
 const ITEMS_PER_PAGE = 5;
 
-export default function MemberPackagesTab({ packages, loading, onVerifyPayment }: Props) {
+export default function MemberPackagesTab({ packages, loading, onVerifyPayment, onRefundPackage, onCancelPackage, onEditPackage }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Calculate pagination
@@ -113,6 +116,9 @@ export default function MemberPackagesTab({ packages, loading, onVerifyPayment }
               key={key}
               pkg={pkg}
               onVerifyPayment={onVerifyPayment}
+              onRefundPackage={onRefundPackage}
+              onCancelPackage={onCancelPackage}
+              onEditPackage={onEditPackage}
             />
           );
         })}

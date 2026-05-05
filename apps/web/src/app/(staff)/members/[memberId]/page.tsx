@@ -20,6 +20,9 @@ import MemberTherapyPlansTab from '@/components/members/MemberTherapyPlansTab';
 import SendNotificationModal from '@/components/members/SendNotificationModal';
 import AssignPackageModal from '@/components/members/AssignPackageModal';
 import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
+import PackageRefundModal from '@/components/members/PackageRefundModal';
+import PackageCancelModal from '@/components/members/PackageCancelModal';
+import EditPackageModal from '@/components/members/EditPackageModal';
 
 export default function MemberDetailPage() {
   const router = useRouter();
@@ -66,6 +69,41 @@ export default function MemberDetailPage() {
   const [verifyNotes, setVerifyNotes] = useState('');
   const [paymentProof, setPaymentProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [submitting, setSubmitting] = useState(false);
+
+  // Refund modal state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundAmount, setRefundAmount] = useState(0);
+  const [refundPackageCode, setRefundPackageCode] = useState('');
+  const [refundFinalPrice, setRefundFinalPrice] = useState(0);
+
+  // Cancel modal state
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelPackageCode, setCancelPackageCode] = useState('');
+
+  // Edit modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({
+    selectedPackages: [] as Array<{ 
+      pricingId: string; 
+      quantity: number;
+      boosterType?: ExtendedBoosterType;
+      serviceType?: ServiceType;
+    }>,
+    selectedAddOns: [] as Array<{
+      type: AddOnType;
+      code: string;
+      name: string;
+      price: number;
+      quantity: number;
+    }>,
+    discountPercent: 0,
+    discountAmount: 0,
+    discountNote: '',
+    notes: ''
+  });
+  const [editingPackageId, setEditingPackageId] = useState('');
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -247,6 +285,111 @@ export default function MemberDetailPage() {
     }
   };
 
+  const handleRefundPackage = async () => {
+    if (!refundReason || refundAmount <= 0) {
+      showToast.error('Alasan dan jumlah refund wajib diisi');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await packagesApi.refundPackage(selectedPackageId, {
+        reason: refundReason,
+        refundAmount
+      });
+      showToast.success('Paket berhasil di-refund');
+      setShowRefundModal(false);
+      setRefundReason('');
+      setRefundAmount(0);
+      setSelectedPackageId('');
+      await loadPackages();
+    } catch (error: any) {
+      console.error('Refund package error:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal refund paket');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelPackage = async () => {
+    if (!cancelReason) {
+      showToast.error('Alasan pembatalan wajib diisi');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await packagesApi.cancelPackage(selectedPackageId, {
+        reason: cancelReason
+      });
+      showToast.success('Pembelian berhasil dibatalkan');
+      setShowCancelModal(false);
+      setCancelReason('');
+      setSelectedPackageId('');
+      await loadPackages();
+    } catch (error: any) {
+      console.error('Cancel package error:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal batalkan pembelian');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Handler for EditPackageModal data changes
+  const handleEditDataChange = (data: typeof editData) => {
+    setEditData(data);
+  };
+
+  const handleEditPackage = async () => {
+    if (editData.selectedPackages.length === 0 && editData.selectedAddOns.length === 0) {
+      showToast.error('Pilih minimal 1 paket atau add-on');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      
+      // Prepare payload similar to assign package
+      const payload: any = {
+        packages: editData.selectedPackages,
+        discountPercent: editData.discountPercent || undefined,
+        discountAmount: editData.discountAmount || undefined,
+        discountNote: editData.discountNote || undefined,
+        notes: editData.notes || undefined
+      };
+      
+      // Add addOns if any selected
+      if (editData.selectedAddOns.length > 0) {
+        payload.addOns = editData.selectedAddOns;
+      }
+      
+      console.log('=== EDIT PACKAGE DEBUG ===');
+      console.log('editingPackageId:', editingPackageId);
+      console.log('payload:', JSON.stringify(payload, null, 2));
+      console.log('editData.selectedPackages:', editData.selectedPackages);
+      
+      await packagesApi.editPackage(editingPackageId, payload);
+      showToast.success('Paket berhasil diupdate');
+      setShowEditModal(false);
+      setEditData({
+        selectedPackages: [],
+        selectedAddOns: [],
+        discountPercent: 0,
+        discountAmount: 0,
+        discountNote: '',
+        notes: ''
+      });
+      setEditingPackageId('');
+      await loadPackages();
+    } catch (error: any) {
+      console.error('Edit package error:', error);
+      console.error('Error response:', error.response?.data);
+      showToast.error(error.response?.data?.error?.message || 'Gagal edit paket');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '48px', textAlign: 'center' }}>
@@ -302,7 +445,12 @@ export default function MemberDetailPage() {
         </div>
 
         <div style={{ padding: '24px' }}>
-          {activeTab === 'profil' && <MemberProfileTab member={member} />}
+          {activeTab === 'profil' && (
+            <>
+  
+              <MemberProfileTab member={member} />
+            </>
+          )}
           
           {activeTab === 'paket' && (
             <div>
@@ -318,6 +466,69 @@ export default function MemberDetailPage() {
                 onVerifyPayment={(packageId: string) => {
                   setSelectedPackageId(packageId);
                   setShowVerifyModal(true);
+                }}
+                onRefundPackage={(packageId: string, packageCode: string, finalPrice: number) => {
+                  setSelectedPackageId(packageId);
+                  setRefundPackageCode(packageCode);
+                  setRefundFinalPrice(finalPrice);
+                  setRefundAmount(finalPrice);
+                  setShowRefundModal(true);
+                }}
+                onCancelPackage={(packageId: string, packageCode: string) => {
+                  setSelectedPackageId(packageId);
+                  setCancelPackageCode(packageCode);
+                  setShowCancelModal(true);
+                }}
+                onEditPackage={(purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
+                  // Load existing package data into edit modal
+                  const selectedPackages = packages.map((pkg: any) => ({
+                    pricingId: pkg.packagePricingId || '',
+                    quantity: pkg.purchaseQuantity || 1, // Use calculated quantity
+                    boosterType: pkg.boosterType as ExtendedBoosterType,
+                    serviceType: pkg.serviceType as ServiceType
+                  })).filter((p: any) => p.pricingId); // Only include packages with pricingId
+                  
+                  const selectedAddOns = addOns.map((addon: any) => ({
+                    type: addon.addOnType as AddOnType,
+                    code: addon.addOnCode,
+                    name: addon.notes?.split('(')[0]?.trim() || addon.addOnCode,
+                    price: Number(addon.pricePerUnit),
+                    quantity: addon.quantity
+                  }));
+                  
+                  // Calculate the original price to separate percent discount from amount discount
+                  // discount already contains total (percent + amount), we need to separate them
+                  let discountAmountOnly = discount;
+                  if (discountPercent > 0 && packages.length > 0) {
+                    // Calculate total final price for all packages
+                    const totalPackagesFinalPrice = packages.reduce((sum: number, pkg: any) => sum + Number(pkg.finalPrice || 0), 0);
+                    
+                    // Calculate total add-ons price
+                    const totalAddOnsPrice = addOns.reduce((sum: number, addon: any) => sum + (Number(addon.pricePerUnit || 0) * addon.quantity), 0);
+                    
+                    // Total final price (after discount)
+                    const totalFinalPrice = totalPackagesFinalPrice + totalAddOnsPrice;
+                    
+                    // Original price before discount = final price + total discount
+                    const originalPrice = totalFinalPrice + discount;
+                    
+                    // Calculate what the percent discount was from original price
+                    const percentDiscountValue = (originalPrice * discountPercent) / 100;
+                    
+                    // Subtract percent discount from total to get amount-only discount
+                    discountAmountOnly = discount - percentDiscountValue;
+                  }
+                  
+                  setEditingPackageId(purchaseGroupId);
+                  setEditData({
+                    selectedPackages,
+                    selectedAddOns,
+                    discountPercent: discountPercent,
+                    discountAmount: Math.max(0, discountAmountOnly), // Ensure non-negative
+                    discountNote: discountNote || '',
+                    notes: notes || ''
+                  });
+                  setShowEditModal(true);
                 }}
               />
             </div>
@@ -372,6 +583,59 @@ export default function MemberDetailPage() {
         onNotesChange={setVerifyNotes}
         onProofChange={setPaymentProof}
         onSubmit={handleVerifyPayment}
+      />
+
+      <PackageRefundModal
+        show={showRefundModal}
+        packageCode={refundPackageCode}
+        finalPrice={refundFinalPrice}
+        reason={refundReason}
+        refundAmount={refundAmount}
+        submitting={submitting}
+        onClose={() => {
+          setShowRefundModal(false);
+          setRefundReason('');
+          setRefundAmount(0);
+          setSelectedPackageId('');
+        }}
+        onReasonChange={setRefundReason}
+        onRefundAmountChange={setRefundAmount}
+        onSubmit={handleRefundPackage}
+      />
+
+      <PackageCancelModal
+        show={showCancelModal}
+        packageCode={cancelPackageCode}
+        reason={cancelReason}
+        submitting={submitting}
+        onClose={() => {
+          setShowCancelModal(false);
+          setCancelReason('');
+          setSelectedPackageId('');
+        }}
+        onReasonChange={setCancelReason}
+        onSubmit={handleCancelPackage}
+      />
+
+      <EditPackageModal
+        show={showEditModal}
+        pricings={pricings}
+        editData={editData}
+        submitting={submitting}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditData({
+            selectedPackages: [],
+            selectedAddOns: [],
+            discountPercent: 0,
+            discountAmount: 0,
+            discountNote: '',
+            notes: ''
+          });
+          setEditingPackageId('');
+        }}
+        onEditDataChange={handleEditDataChange}
+        onSubmit={handleEditPackage}
       />
     </>
   );

@@ -4,6 +4,9 @@ import { PackageAssignmentService } from './services/package-assignment.service'
 import { PaymentVerificationService } from './services/payment-verification.service';
 import { PackageRetrievalService } from './services/package-retrieval.service';
 import { PackagePricingService } from './services/package-pricing.service';
+import { PackageRefundService } from './services/package-refund.service';
+import { PackageCancelService } from './services/package-cancel.service';
+import { PackageEditService } from './services/package-edit.service';
 
 /**
  * Main Packages Service - Orchestrates all package-related operations
@@ -13,18 +16,27 @@ import { PackagePricingService } from './services/package-pricing.service';
  * - PaymentVerificationService: Handles payment verification
  * - PackageRetrievalService: Handles fetching package data
  * - PackagePricingService: Handles package pricing management
+ * - PackageRefundService: Handles refunding ACTIVE packages
+ * - PackageCancelService: Handles cancelling PENDING_PAYMENT packages
+ * - PackageEditService: Handles editing PENDING_PAYMENT packages
  */
 export class PackagesService {
   private assignmentService: PackageAssignmentService;
   private verificationService: PaymentVerificationService;
   private retrievalService: PackageRetrievalService;
   private pricingService: PackagePricingService;
+  private refundService: PackageRefundService;
+  private cancelService: PackageCancelService;
+  private editService: PackageEditService;
 
   constructor() {
     this.assignmentService = new PackageAssignmentService();
     this.verificationService = new PaymentVerificationService();
     this.retrievalService = new PackageRetrievalService();
     this.pricingService = new PackagePricingService();
+    this.refundService = new PackageRefundService();
+    this.cancelService = new PackageCancelService();
+    this.editService = new PackageEditService();
   }
 
   // ============================================================
@@ -102,5 +114,53 @@ export class PackagesService {
    */
   async deletePackagePricing(pricingId: string, userId: string) {
     return await this.pricingService.deletePackagePricing(pricingId, userId);
+  }
+
+  // ============================================================
+  // PACKAGE REFUND
+  // ============================================================
+
+  /**
+   * Refund an ACTIVE package
+   */
+  async refundPackage(
+    packageId: string,
+    data: { reason: string; refundAmount?: number },
+    userId: string,
+    branchId: string | null
+  ) {
+    return await this.refundService.refundPackage(packageId, data, userId, branchId);
+  }
+
+  // ============================================================
+  // PACKAGE CANCEL
+  // ============================================================
+
+  /**
+   * Cancel a PENDING_PAYMENT package
+   */
+  async cancelPackage(
+    packageId: string,
+    data: { reason: string },
+    userId: string,
+    branchId: string | null
+  ) {
+    return await this.cancelService.cancelPackage(packageId, data, userId, branchId);
+  }
+
+  // ============================================================
+  // PACKAGE EDIT
+  // ============================================================
+
+  /**
+   * Edit a PENDING_PAYMENT package
+   */
+  async editPackage(
+    packageId: string,
+    data: { quantity?: number; discount?: number; discountNote?: string; notes?: string },
+    userId: string,
+    branchId: string | null
+  ) {
+    return await this.editService.editPackage(packageId, data, userId, branchId);
   }
 }

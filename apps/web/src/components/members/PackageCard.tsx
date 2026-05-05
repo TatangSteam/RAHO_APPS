@@ -10,6 +10,9 @@ import styles from './MemberPackagesTab.module.css';
 interface PackageCardProps {
   pkg: PackageDisplay;
   onVerifyPayment: (packageId: string) => void;
+  onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
+  onCancelPackage?: (packageId: string, packageCode: string) => void;
+  onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
 }
 
 // Helper function to get therapy name from product code
@@ -93,7 +96,7 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
   return packageCode;
 };
 
-export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) {
+export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onCancelPackage, onEditPackage }: PackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getStatusBadge = (status: string) => {
@@ -238,6 +241,7 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
     const totalBasicSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
     const totalBoosterSessions = boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
     const totalRemainingSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.remainingSessions || 0), 0) + boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.remainingSessions || 0), 0);
+    const totalDiscount = [...basics, ...boosters].reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.discountAmount || 0), 0);
 
     return (
       <div className={`${styles.packageCard} ${styles.bundleCard}`}>
@@ -368,10 +372,28 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
             {/* Bundle Notes & Discount */}
             <div className={styles.bundleNotesSection}>
               {(() => {
-                // For bundles, sum discount from all packages
-                const totalDiscount = [...basics, ...boosters].reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.discountAmount || 0), 0);
+                // For bundles, get discount info from first package
                 const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
                 const discountNote = basics[0]?.discountNote || boosters[0]?.discountNote;
+                
+                // totalDiscount contains the combined discount (percent + amount)
+                // We need to separate them for display
+                let displayText = '';
+                if (totalDiscount > 0 && discountPercent > 0) {
+                  // Calculate what the percent discount would be from original price
+                  // Original price = current price + total discount
+                  const totalPrice = totalFinalPrice + totalDiscount;
+                  const percentDiscountValue = (totalPrice * discountPercent) / 100;
+                  const amountDiscountValue = totalDiscount - percentDiscountValue;
+                  
+                  if (amountDiscountValue > 0) {
+                    displayText = `${discountPercent}% + ${formatCurrency(amountDiscountValue)}`;
+                  } else {
+                    displayText = `${discountPercent}%`;
+                  }
+                } else if (totalDiscount > 0) {
+                  displayText = formatCurrency(totalDiscount);
+                }
                 
                 // Check if any package has incentive
                 const packageWithIncentive = [...basics, ...boosters].find(p => p?.incentive);
@@ -380,8 +402,7 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
                   <>
                     {totalDiscount > 0 && (
                       <div className={styles.discountInfo}>
-                        💰 Diskon: {formatCurrency(totalDiscount)}
-                        {discountPercent > 0 && ` (${discountPercent}%)`}
+                        💰 Diskon: {displayText}
                         {discountNote && ` - ${discountNote}`}
                       </div>
                     )}
@@ -435,19 +456,55 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
 
             {/* Actions */}
             {anyPending && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onVerifyPayment(basics[0]?.packageId || boosters[0]?.packageId || '');
-                }}
-                className={styles.verifyButton}
-              >
-                ✅ Verify Payment (Bundle)
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerifyPayment(basics[0]?.packageId || boosters[0]?.packageId || '');
+                  }}
+                  className={styles.verifyButton}
+                >
+                  ✅ Verify Payment (Bundle)
+                </button>
+                {onEditPackage && (basics.length > 0 || boosters.length > 0) && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const allPackages = [...basics, ...boosters];
+                      const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
+                      onEditPackage(
+                        pkg.purchaseGroupId || '',
+                        allPackages,
+                        groupAddOns,
+                        totalDiscount,
+                        discountPercent,
+                        basics[0]?.discountNote || boosters[0]?.discountNote || '',
+                        basics[0]?.notes || boosters[0]?.notes || ''
+                      );
+                    }}
+                    className={styles.editButton}
+                    style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                  >
+                    ✏️ Edit
+                  </button>
+                )}
+                {onCancelPackage && basics[0] && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onCancelPackage(basics[0].packageId, basics[0].packageCode);
+                    }}
+                    className={styles.cancelButton}
+                    style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                  >
+                    ❌ Batalkan
+                  </button>
+                )}
+              </div>
             )}
             
             {anyActive && (
-              <div className={styles.invoiceButtonWrapper}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <ViewInvoiceButton
                   packageId={basics[0]?.packageId || boosters[0]?.packageId || ''}
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
@@ -458,6 +515,18 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'ACTIVE'}
                 />
+                {onRefundPackage && basics[0] && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onRefundPackage(basics[0].packageId, basics[0].packageCode, totalFinalPrice);
+                    }}
+                    className={styles.refundButton}
+                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                  >
+                    💰 Refund (Bundle)
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -518,8 +587,24 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
           <div className={styles.bundleNotesSection}>
             {(memberPkg.discountAmount && memberPkg.discountAmount > 0) ? (
               <div className={styles.discountInfo}>
-                💰 Diskon: {formatCurrency(memberPkg.discountAmount)}
-                {memberPkg.discountPercent && memberPkg.discountPercent > 0 && ` (${memberPkg.discountPercent}%)`}
+                💰 Diskon: {(() => {
+                  const discountAmount = Number(memberPkg.discountAmount);
+                  const discountPercent = Number(memberPkg.discountPercent || 0);
+                  
+                  if (discountPercent > 0) {
+                    // Calculate original price and separate percent from amount
+                    const originalPrice = Number(memberPkg.finalPrice) + discountAmount;
+                    const percentDiscountValue = (originalPrice * discountPercent) / 100;
+                    const amountDiscountValue = discountAmount - percentDiscountValue;
+                    
+                    if (amountDiscountValue > 0) {
+                      return `${discountPercent}% + ${formatCurrency(amountDiscountValue)}`;
+                    } else {
+                      return `${discountPercent}%`;
+                    }
+                  }
+                  return formatCurrency(discountAmount);
+                })()}
                 {memberPkg.discountNote && ` - ${memberPkg.discountNote}`}
               </div>
             ) : null}
@@ -570,18 +655,79 @@ export default function PackageCard({ pkg, onVerifyPayment }: PackageCardProps) 
 
           {/* Actions */}
           {memberPkg.status === 'PENDING_PAYMENT' && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onVerifyPayment(memberPkg.packageId);
-              }}
-              className={styles.verifyButton}
-            >
-              ✅ Verify Payment
-            </button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onVerifyPayment(memberPkg.packageId);
+                }}
+                className={styles.verifyButton}
+              >
+                ✅ Verify Payment
+              </button>
+              {onEditPackage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditPackage(
+                      memberPkg.purchaseGroupId || memberPkg.packageId,
+                      [memberPkg],
+                      [],
+                      Number(memberPkg.discountAmount || 0),
+                      Number(memberPkg.discountPercent || 0),
+                      memberPkg.discountNote || '',
+                      memberPkg.notes || ''
+                    );
+                  }}
+                  className={styles.editButton}
+                  style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white' }}
+                >
+                  ✏️ Edit
+                </button>
+              )}
+              {onCancelPackage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCancelPackage(memberPkg.packageId, memberPkg.packageCode);
+                  }}
+                  className={styles.cancelButton}
+                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white' }}
+                >
+                  ❌ Batalkan
+                </button>
+              )}
+            </div>
           )}
 
-          {(memberPkg.status === 'ACTIVE' || memberPkg.status === 'EXPIRED') && (
+          {memberPkg.status === 'ACTIVE' && (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <ViewInvoiceButton
+                packageId={memberPkg.packageId}
+                packageCode={memberPkg.packageCode}
+                status={memberPkg.status}
+              />
+              <ViewPaymentProofButton
+                packageId={memberPkg.packageId}
+                packageCode={memberPkg.packageCode}
+                status={memberPkg.status}
+              />
+              {onRefundPackage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRefundPackage(memberPkg.packageId, memberPkg.packageCode, standaloneFinalPrice);
+                  }}
+                  className={styles.refundButton}
+                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                >
+                  💰 Refund
+                </button>
+              )}
+            </div>
+          )}
+
+          {memberPkg.status === 'EXPIRED' && (
             <div className={styles.invoiceButtonWrapper}>
               <ViewInvoiceButton
                 packageId={memberPkg.packageId}

@@ -20,6 +20,7 @@ export class PackageRetrievalService {
           where: { memberId, branchId },
           include: { 
             branch: true,
+            packagePricing: true, // Include pricing for edit functionality
             incentiveRecords: {
               include: {
                 referralCode: {
@@ -149,10 +150,17 @@ export class PackageRetrievalService {
       ? pkg.incentiveRecords[0] 
       : null;
 
+    // Calculate quantity from pricing if available
+    const baseSessions = pkg.packagePricing?.totalSessions || pkg.totalSessions;
+    const purchaseQuantity = baseSessions > 0 ? Math.round(pkg.totalSessions / baseSessions) : 1;
+
     return {
       id: pkg.id,
       packageId: pkg.id,
       packageCode: pkg.packageCode,
+      packagePricingId: pkg.packagePricingId || undefined, // Include pricing ID for editing
+      baseSessions: baseSessions, // Base sessions from pricing
+      purchaseQuantity: purchaseQuantity, // Calculated quantity
       productCode: pkg.productCode || undefined,
       serviceType: pkg.serviceType || undefined,
       packageType: pkg.packageType,

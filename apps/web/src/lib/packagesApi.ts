@@ -91,4 +91,27 @@ export const packagesApi = {
     const response = await api.delete(`/package-pricings/${pricingId}`);
     return response.data.data || response.data;
   },
+
+  // Refund package (ACTIVE → CANCELLED)
+  refundPackage: async (packageId: string, data: { reason: string; refundAmount?: number }) => {
+    const response = await api.post(`/packages/${packageId}/refund`, data);
+    return response.data.data || response.data;
+  },
+
+  // Cancel package (PENDING_PAYMENT → CANCELLED)
+  cancelPackage: async (packageId: string, data: { reason: string }) => {
+    const response = await api.post(`/packages/${packageId}/cancel`, data);
+    return response.data.data || response.data;
+  },
+
+  // Edit package (PENDING_PAYMENT only)
+  editPackage: async (packageId: string, data: { 
+    quantity?: number; 
+    discount?: number; 
+    discountNote?: string; 
+    notes?: string;
+  }) => {
+    const response = await api.put(`/packages/${packageId}`, data);
+    return response.data.data || response.data;
+  },
 };

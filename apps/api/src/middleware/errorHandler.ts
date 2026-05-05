@@ -21,10 +21,13 @@ export function errorHandler(
 
   // ── Zod Validation Error ─────────────────────────────────
   if (err instanceof ZodError) {
+    console.error('=== ZOD VALIDATION ERROR ===');
+    console.error('Errors:', JSON.stringify(err.errors, null, 2));
     const details = err.errors.map((e) => ({
       field: e.path.join('.'),
       message: e.message,
     }));
+    console.error('Formatted details:', JSON.stringify(details, null, 2));
     sendError(res, 400, 'VALIDATION_ERROR', 'Data yang dikirimkan tidak valid.', details);
     return;
   }

@@ -3,7 +3,7 @@ export type PackageStatus = 'PENDING_PAYMENT' | 'ACTIVE' | 'EXPIRED' | 'CANCELLE
 export type BoosterType = 'HHO' | 'NO2';
 
 // Extended booster types from official pricing
-export type ExtendedBoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3';
+export type ExtendedBoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
 
 // Service types for pricing
 export type ServiceType = 'PM' | 'PS' | 'PTY' | 'PDA' | 'PHC';
@@ -26,6 +26,8 @@ export const BOOSTER_TYPE_LABELS: Record<ExtendedBoosterType, string> = {
   H2S: 'H2S',
   HK: 'H2S Konsentrat',
   O3: 'O3',
+  HHO: 'HHO (Legacy)',
+  NO2: 'NO2 (Legacy)',
 };
 
 export interface PackagePricing {
@@ -48,6 +50,9 @@ export interface PackagePricing {
 export interface MemberPackage {
   packageId: string;
   packageCode: string;
+  packagePricingId?: string; // For editing packages
+  baseSessions?: number; // Base sessions from pricing
+  purchaseQuantity?: number; // Calculated quantity (totalSessions / baseSessions)
   productCode?: string;
   packageType: PackageType;
   totalSessions: number;

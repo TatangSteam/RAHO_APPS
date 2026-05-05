@@ -18,6 +18,27 @@ router.post(
   controller.uploadPaymentProof.bind(controller)
 );
 
+// Package refund (ACTIVE → CANCELLED)
+router.post(
+  '/packages/:packageId/refund',
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  controller.refundPackage.bind(controller)
+);
+
+// Package cancel (PENDING_PAYMENT → CANCELLED)
+router.post(
+  '/packages/:packageId/cancel',
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  controller.cancelPackage.bind(controller)
+);
+
+// Package edit (PENDING_PAYMENT only)
+router.put(
+  '/packages/:packageId',
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  controller.editPackage.bind(controller)
+);
+
 // Package payment verification
 router.patch(
   '/packages/:packageId/verify',
