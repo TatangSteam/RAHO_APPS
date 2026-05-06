@@ -51,11 +51,17 @@ RAHO Klinik Management System adalah aplikasi full-stack untuk mengelola operasi
 
 ### 📦 Package Management
 - Basic therapy packages
-- Booster packages (5 types: OZON, OXYCAN, CHELATION, GLUTATHIONE, VITAMIN_C)
-- Add-on services
+- Booster packages (7 types: NO, GT, MB, KCL, H2S, HK, O3, plus legacy: HHO, NO2)
+- Add-on services (Air Nano, Konsultasi Gizi, Konsultasi Psikolog, Rokok Kenkou)
 - Non-therapy products
 - Dynamic pricing per branch
-- Discount management (percentage & fixed amount)
+- Discount management (percentage + fixed amount combined)
+- **Package bundling** - Multiple packages in one purchase
+- **Package editing** - Edit PENDING_PAYMENT packages before payment
+- **Package refund** - Refund ACTIVE packages with reason tracking
+- **Package cancellation** - Cancel PENDING_PAYMENT packages
+- **Payment proof upload** - Upload and view payment proof documents
+- **Referral incentive system** - Track and manage referral incentives
 
 ### 🏥 Treatment Session Workflow
 8-step treatment process:
@@ -109,11 +115,12 @@ RAHO Klinik Management System adalah aplikasi full-stack untuk mengelola operasi
 {
   "framework": "Next.js 14",
   "language": "TypeScript",
-  "styling": "Tailwind CSS",
-  "ui-components": "shadcn/ui",
-  "state-management": "React Hooks",
-  "forms": "React Hook Form + Zod",
-  "http-client": "Fetch API"
+  "styling": "CSS Modules (not Tailwind)",
+  "ui-components": "Custom components with RAHO dark theme",
+  "state-management": "Zustand + React Hooks",
+  "forms": "React controlled components",
+  "http-client": "Axios",
+  "file-upload": "MinIO integration"
 }
 ```
 
@@ -386,6 +393,11 @@ Authorization: Bearer <token>
 - `POST /packages/assign` - Assign package to member
 - `POST /packages/verify-payment` - Verify payment
 - `GET /packages/member/:memberId` - Get member packages
+- `PUT /packages/:packageId` - Edit package (PENDING_PAYMENT only)
+- `POST /packages/:packageId/refund` - Refund package (ACTIVE only)
+- `POST /packages/:packageId/cancel` - Cancel package (PENDING_PAYMENT only)
+- `POST /packages/upload-payment-proof` - Upload payment proof
+- `GET /packages/:packageId/payment-proof` - Get payment proof
 
 #### Sessions
 - `POST /sessions` - Create treatment session
@@ -477,12 +489,15 @@ module/
    - MemberBranchAccessService
    - MemberMedicalRecordsService
 
-3. **Packages Module** (5 services)
+4. **Packages Module** (8 services)
    - PackageAssignmentService
    - PaymentVerificationService
    - InvoiceGenerationService
    - PackageRetrievalService
    - PackagePricingService
+   - PackageEditService
+   - PackageRefundService
+   - PackageCancelService
 
 4. **Sessions Module** (12 services)
    - SessionCreationService
@@ -657,15 +672,20 @@ Untuk pertanyaan atau issue, silakan hubungi tim development atau buat issue di 
 
 ## 🎉 Changelog
 
-### v1.0.0 (2026-04-22)
-- ✅ Complete service modularization (21 services)
+### v1.0.0 (2026-05-05)
+- ✅ Complete service modularization (29 services)
 - ✅ Multi-branch support
 - ✅ 8-step treatment workflow
-- ✅ Invoice system with payment proof
-- ✅ Inventory management
-- ✅ Admin dashboard
-- ✅ Audit logging
-- ✅ Role-based access control
+- ✅ Invoice system with payment proof upload
+- ✅ Inventory management with shipment tracking
+- ✅ Admin dashboard with analytics
+- ✅ Audit logging for all operations
+- ✅ Role-based access control (6 roles)
+- ✅ Package bundling and discount system
+- ✅ Package edit, refund, and cancel features
+- ✅ Referral incentive tracking
+- ✅ Payment proof management
+- ✅ Add-on services (Air Nano, Konsultasi, Rokok Kenkou)
 
 ---
 
