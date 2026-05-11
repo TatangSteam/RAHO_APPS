@@ -18,8 +18,7 @@ export default function MemberDashboardPage() {
 
   useEffect(() => {
     if (!user) {
-      router.push('/login');
-      return;
+      return; // Let layout handle redirect
     }
 
     async function fetchDashboard() {
@@ -37,7 +36,7 @@ export default function MemberDashboardPage() {
     }
 
     fetchDashboard();
-  }, [user, router]);
+  }, [user]);
 
   if (!user) return null;
 

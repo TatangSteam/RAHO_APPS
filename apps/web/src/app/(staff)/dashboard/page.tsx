@@ -34,8 +34,8 @@ export default function DashboardPage() {
       return;
     }
     
-    // Only ADMIN_MANAGER, ADMIN_CABANG, and ADMIN_LAYANAN can access this dashboard
-    if (!['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user.role)) {
+    // Allow ADMIN_MANAGER, ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, and NURSE to access dashboard
+    if (!['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(user.role)) {
       showToast.error('Anda tidak memiliki akses ke dashboard ini');
       router.push('/members');
       return;

@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createMemberApi } from '@/lib/membersApi';
 import type { CreateMemberData } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import NewMemberHeader from '@/components/members/new/NewMemberHeader';
-import ErrorAlert from '@/components/members/new/ErrorAlert';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
 import IncentiveSection from '@/components/members/new/IncentiveSection';
@@ -16,7 +15,7 @@ import TherapyPlanSection, { type TherapyPlanData } from '@/components/members/n
 export default function NewMemberPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [referralError, setReferralError] = useState('');
   const [pspFile, setPspFile] = useState<File | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -77,7 +76,7 @@ export default function NewMemberPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setError('Ukuran foto maksimal 5MB');
+        showToast.error('Ukuran foto maksimal 5MB');
         return;
       }
       setPhotoFile(file);
@@ -86,7 +85,6 @@ export default function NewMemberPage() {
         setPhotoPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
-      setError('');
     }
   };
 
@@ -94,33 +92,34 @@ export default function NewMemberPage() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
-        setError('Ukuran file PSP maksimal 5MB');
+        showToast.error('Ukuran file PSP maksimal 5MB');
         return;
       }
       setPspFile(file);
-      setError('');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+
+    // Clear previous errors
+    setReferralError('');
 
     // Validation
     if (!formData.fullName || formData.fullName.length < 3) {
-      setError('Nama lengkap minimal 3 karakter');
+      showToast.error('Nama lengkap minimal 3 karakter');
       return;
     }
     if (!formData.phone || formData.phone.length < 10) {
-      setError('Nomor telepon minimal 10 digit');
+      showToast.error('Nomor telepon minimal 10 digit');
       return;
     }
     if (!formData.memberEmail) {
-      setError('Email member wajib diisi');
+      showToast.error('Email member wajib diisi');
       return;
     }
     if (!formData.memberPassword || formData.memberPassword.length < 8) {
-      setError('Password minimal 8 karakter');
+      showToast.error('Password minimal 8 karakter');
       return;
     }
 
@@ -141,7 +140,16 @@ export default function NewMemberPage() {
       showToast.success(`Member berhasil didaftarkan! No. Member: ${result.memberNo}`);
       router.push(`/members/${result.memberId}`);
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Gagal mendaftarkan member');
+      const errorMessage = err.response?.data?.error?.message || 'Gagal mendaftarkan member';
+      const errorCode = err.response?.data?.error?.code;
+      
+      // Check if it's a referral code error
+      if (errorCode === 'INVALID_REFERRAL_CODE') {
+        setReferralError(errorMessage);
+        showToast.error(errorMessage);
+      } else {
+        showToast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -150,13 +158,16 @@ export default function NewMemberPage() {
   return (
     <>
       <NewMemberHeader onBack={() => router.back()} />
-      
-      <ErrorAlert message={error} />
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <PersonalDataSection formData={formData} onChange={handleInputChange} />
         
-        <AccountSection formData={formData} onChange={handleInputChange} />
+        <AccountSection 
+          formData={formData} 
+          onChange={handleInputChange}
+          referralError={referralError}
+          onReferralErrorChange={setReferralError}
+        />
         
         <IncentiveSection 
           formData={formData} 

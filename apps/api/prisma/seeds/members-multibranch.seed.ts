@@ -126,6 +126,12 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
       { type: 'BUNDLE', status: 'PENDING_PAYMENT', discountPercent: 10, discountNote: 'Diskon bundling' },
     ];
 
+    // Get referral codes for this branch (for testing incentive system)
+    const referralCodes = await prisma.referralCode.findMany({
+      where: { branchId: branch.id, isActive: true },
+      take: 3, // Get first 3 referral codes
+    });
+
     // Create members for this branch
     for (let i = 0; i < members.length; i++) {
       const data = members[i];
@@ -158,12 +164,28 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
         },
       });
 
+      // Assign referral code to some members (first 5 members per branch)
+      // and configure incentive settings for testing
+      const referralCodeId = i < 5 && referralCodes[i % referralCodes.length] 
+        ? referralCodes[i % referralCodes.length].id 
+        : undefined;
+      
+      // Incentive settings (only for members with referral codes)
+      const incentiveSettings = referralCodeId ? {
+        firstIncentiveType: 'PERCENTAGE' as any,
+        firstIncentiveValue: 10, // 10% for first package
+        nextIncentiveType: 'PERCENTAGE' as any,
+        nextIncentiveValue: 5, // 5% for subsequent packages
+      } : {};
+
       // Create member with complete data
       const member = await prisma.member.create({
         data: {
           userId: user.id,
           memberNo: memberCode,
           registrationBranchId: branch.id,
+          referralCodeId,
+          ...incentiveSettings,
           nik: data.nik,
           tempatLahir: data.city,
           dateOfBirth: new Date(1985 + Math.floor(Math.random() * 30), Math.floor(Math.random() * 12), Math.floor(Math.random() * 28) + 1),
@@ -179,7 +201,8 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
         },
       });
 
-      console.log(`  ✅ ${data.fullName} (${memberCode})`);
+      const referralInfo = referralCodeId ? ` (with referral code, 10%/5% incentive)` : '';
+      console.log(`  ✅ ${data.fullName} (${memberCode})${referralInfo}`);
 
       // Assign package
       const pkgConfig = packageConfigs[i];

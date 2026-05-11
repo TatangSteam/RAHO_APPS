@@ -15,12 +15,24 @@ export const showToast = {
 
   error: (message: string) => {
     toast.error(message, {
-      duration: 4000,
+      duration: 5000,
       position: 'top-right',
       style: {
-        background: 'var(--surface-card)',
-        color: 'var(--text-primary)',
-        border: '1px solid rgba(239, 68, 68, 0.3)',
+        background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+        color: '#991b1b',
+        border: '2px solid #ef4444',
+        borderLeft: '6px solid #dc2626',
+        padding: '16px 20px',
+        fontSize: '14px',
+        fontWeight: '600',
+        boxShadow: '0 8px 24px rgba(239, 68, 68, 0.25)',
+        maxWidth: '420px',
+        minWidth: '320px',
+      },
+      icon: '⚠️',
+      iconTheme: {
+        primary: '#ef4444',
+        secondary: '#fff',
       },
     });
   },

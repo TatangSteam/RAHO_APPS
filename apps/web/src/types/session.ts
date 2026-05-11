@@ -27,8 +27,8 @@ export interface CreateSessionInput {
   boosterPackageId?: string;
   therapyPlanId: string; // NEW: Required therapy plan
   adminLayananId: string;
-  doctorId: string;
-  nurseId: string;
+  doctorId?: string; // Optional - auto-filled if user is DOCTOR
+  nurseId?: string; // Optional - auto-filled if user is NURSE
   additionalDoctorIds?: string[];
   additionalNurseIds?: string[];
   treatmentDate: string;

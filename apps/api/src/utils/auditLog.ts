@@ -4,6 +4,7 @@ import { logger } from '@lib/logger';
 
 export interface AuditLogPayload {
   userId: string;
+  branchId?: string | null;
   action: AuditAction;
   resource: string;
   resourceId: string;
@@ -21,6 +22,7 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
     await prisma.auditLog.create({
       data: {
         userId: payload.userId,
+        branchId: payload.branchId || null,
         action: payload.action,
         resource: payload.resource,
         resourceId: payload.resourceId,

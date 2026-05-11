@@ -7,9 +7,11 @@ import type { CreateMemberData } from '@/types/member';
 interface AccountSectionProps {
   formData: CreateMemberData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  referralError?: string;
+  onReferralErrorChange?: (error: string) => void;
 }
 
-export default function AccountSection({ formData, onChange }: AccountSectionProps) {
+export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange }: AccountSectionProps) {
   const [referralCodes, setReferralCodes] = useState<any[]>([]);
   const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
@@ -69,6 +71,10 @@ export default function AccountSection({ formData, onChange }: AccountSectionPro
     const selected = referralCodes.find(ref => ref.id === referralId);
     if (selected) {
       setReferralSearch(`${selected.code} - ${selected.referrerName}`);
+      // Clear error when valid selection is made
+      if (onReferralErrorChange) {
+        onReferralErrorChange('');
+      }
       // Update parent form data with both referral code and ID
       const referralCodeEvent = {
         target: {
@@ -88,6 +94,10 @@ export default function AccountSection({ formData, onChange }: AccountSectionPro
       onChange(referralIdEvent);
     } else {
       setReferralSearch('');
+      // Clear error when cleared
+      if (onReferralErrorChange) {
+        onReferralErrorChange('');
+      }
       const referralCodeEvent = {
         target: {
           name: 'referralCode',
@@ -129,6 +139,50 @@ export default function AccountSection({ formData, onChange }: AccountSectionPro
       } as React.ChangeEvent<HTMLInputElement>;
       onChange(referralIdEvent);
     }
+  };
+
+  const handleReferralBlur = () => {
+    // When user leaves the input without selecting from dropdown
+    // Check if they typed something that doesn't match a selection
+    if (referralSearch.trim() && !selectedReferralId) {
+      // User typed something but didn't select from dropdown
+      // Send the typed value as referralCode so backend can validate it
+      const referralCodeEvent = {
+        target: {
+          name: 'referralCode',
+          value: referralSearch.trim(),
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralCodeEvent);
+      
+      // Clear referralCodeId since this is manual input
+      const referralIdEvent = {
+        target: {
+          name: 'referralCodeId',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralIdEvent);
+    } else if (!referralSearch.trim()) {
+      // User cleared the field - clear both values
+      const referralCodeEvent = {
+        target: {
+          name: 'referralCode',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralCodeEvent);
+      
+      const referralIdEvent = {
+        target: {
+          name: 'referralCodeId',
+          value: '',
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(referralIdEvent);
+    }
+    // Close dropdown after a short delay to allow click events to fire
+    setTimeout(() => setShowReferralDropdown(false), 200);
   };
 
   return (
@@ -196,10 +250,17 @@ export default function AccountSection({ formData, onChange }: AccountSectionPro
             value={referralSearch}
             onChange={handleReferralSearchChange}
             onFocus={() => setShowReferralDropdown(true)}
-            className="form-input"
+            onBlur={handleReferralBlur}
+            className={`form-input ${referralError ? 'error' : ''}`}
             placeholder="Ketik untuk mencari kode referral atau nama..."
             autoComplete="off"
           />
+          {referralError && (
+            <p className="form-error" style={{ marginTop: '6px' }}>
+              <span>⚠️</span>
+              <span>{referralError}</span>
+            </p>
+          )}
           {showReferralDropdown && (
             <div className="referral-dropdown-list" style={{
               position: 'absolute',

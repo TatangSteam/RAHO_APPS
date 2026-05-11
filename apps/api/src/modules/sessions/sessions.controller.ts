@@ -33,7 +33,12 @@ export class SessionsController {
         return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
       }
 
-      const result = await sessionsService.createSession(validation.data, branchId, req.user!.userId);
+      const result = await sessionsService.createSession(
+        validation.data, 
+        branchId, 
+        req.user!.userId,
+        req.user!.role // Pass user role for auto-fill logic
+      );
       return sendSuccess(res, result, 201);
     } catch (err: any) {
       if (err.status) {

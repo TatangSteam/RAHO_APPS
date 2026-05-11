@@ -11,61 +11,70 @@ import { Role, AuditAction, PackageStatus, EncounterStatus } from '@prisma/clien
 export class SessionCreationService {
   /**
    * Create a new treatment session
+   * Supports role-based auto-fill for DOCTOR and NURSE roles
    */
-  async createSession(data: CreateSessionInput, branchId: string, userId: string) {
+  async createSession(data: CreateSessionInput, branchId: string, userId: string, userRole?: string) {
+    // 0. Auto-fill doctorId or nurseId based on user role
+    const sessionData = await this.autoFillStaffIds(data, userId, userRole);
+
     // 1. Validate member access
-    await this.validateMemberAccess(data.memberId, branchId);
+    await this.validateMemberAccess(sessionData.memberId, branchId);
 
     // 2. Validate member package
-    const memberPackage = await this.validateMemberPackage(data.memberPackageId, branchId);
+    const memberPackage = await this.validateMemberPackage(sessionData.memberPackageId, branchId);
 
     // 3. Validate doctor
-    await this.validateDoctor(data.doctorId);
+    await this.validateDoctor(sessionData.doctorId);
 
     // 4. Validate nurse
-    await this.validateNurse(data.nurseId);
+    await this.validateNurse(sessionData.nurseId);
 
-    // 5. Validate diagnosis exists
-    await this.validateDiagnosisExists(data.memberId);
+    // 5. Validate admin layanan
+    await this.validateAdminLayanan(sessionData.adminLayananId);
 
-    // 6. Validate therapy plan
-    await this.validateTherapyPlan(data.therapyPlanId, data.memberId);
+    // 6. Validate diagnosis exists
+    await this.validateDiagnosisExists(sessionData.memberId);
 
-    // 7. Validate booster package if provided
-    if (data.boosterPackageId) {
-      await this.validateBoosterPackage(data.boosterPackageId, branchId);
+    // 7. Validate therapy plan
+    await this.validateTherapyPlan(sessionData.therapyPlanId, sessionData.memberId);
+
+    // 8. Validate booster package if provided
+    if (sessionData.boosterPackageId) {
+      await this.validateBoosterPackage(sessionData.boosterPackageId, branchId);
     }
 
-    // 8. Get branch for code generation
+    // 9. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch) {
       throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
     }
 
-    // 9. Calculate infusKe (global and branch-specific)
-    const { globalInfusKe, branchInfusKe } = await this.calculateInfusKe(data.memberId, branchId);
+    // 10. Calculate infusKe (global and branch-specific)
+    const { globalInfusKe, branchInfusKe } = await this.calculateInfusKe(sessionData.memberId, branchId);
 
-    // 10. Create session in transaction
+    // 11. Create session in transaction
     const result = await this.createSessionTransaction(
-      data,
+      sessionData,
       branchId,
       branch,
       globalInfusKe,
       memberPackage
     );
 
-    // 11. Audit log
+    // 12. Audit log
     await logAudit({
       userId,
       action: AuditAction.CREATE,
       resource: 'TreatmentSession',
       resourceId: result.session.id,
+      branchId,
       meta: {
         sessionCode: result.session.sessionCode,
         infusKe: result.session.infusKe,
         globalInfusKe: globalInfusKe,
         branchInfusKe: branchInfusKe,
         branchName: branch.name,
+        createdByRole: userRole,
       },
     });
 
@@ -83,6 +92,49 @@ export class SessionCreationService {
           : `Infus ke-${globalInfusKe} (Infus ke-${branchInfusKe} di ${branch.name})`,
       message: 'Sesi terapi berhasil dibuat',
     };
+  }
+
+  /**
+   * Auto-fill doctorId or nurseId based on user role
+   * - If user is DOCTOR: auto-fill doctorId with userId
+   * - If user is NURSE: auto-fill nurseId with userId
+   * - If user is ADMIN_LAYANAN: use provided doctorId and nurseId
+   */
+  private async autoFillStaffIds(
+    data: CreateSessionInput,
+    userId: string,
+    userRole?: string
+  ): Promise<CreateSessionInput> {
+    const sessionData = { ...data };
+
+    if (userRole === Role.DOCTOR) {
+      // Doctor creates session: auto-fill doctorId
+      sessionData.doctorId = userId;
+      console.log(`🩺 [AUTO-FILL] Doctor role detected, auto-filled doctorId: ${userId}`);
+    } else if (userRole === Role.NURSE) {
+      // Nurse creates session: auto-fill nurseId
+      sessionData.nurseId = userId;
+      console.log(`💉 [AUTO-FILL] Nurse role detected, auto-filled nurseId: ${userId}`);
+    }
+
+    // Validate that both doctorId and nurseId are present after auto-fill
+    if (!sessionData.doctorId) {
+      throw {
+        status: 400,
+        code: 'DOCTOR_REQUIRED',
+        message: 'Doctor harus dipilih atau diisi',
+      };
+    }
+
+    if (!sessionData.nurseId) {
+      throw {
+        status: 400,
+        code: 'NURSE_REQUIRED',
+        message: 'Nurse harus dipilih atau diisi',
+      };
+    }
+
+    return sessionData;
   }
 
   /**
@@ -202,6 +254,25 @@ export class SessionCreationService {
     }
 
     return nurse;
+  }
+
+  /**
+   * Validate admin layanan
+   */
+  private async validateAdminLayanan(adminLayananId: string) {
+    const admin = await prisma.user.findUnique({
+      where: { id: adminLayananId },
+    });
+
+    if (!admin || admin.role !== Role.ADMIN_LAYANAN || !admin.isActive) {
+      throw {
+        status: 403,
+        code: 'INVALID_ADMIN_LAYANAN',
+        message: 'Admin Layanan tidak valid atau tidak aktif',
+      };
+    }
+
+    return admin;
   }
 
   /**

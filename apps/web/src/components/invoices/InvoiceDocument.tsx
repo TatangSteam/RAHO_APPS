@@ -212,7 +212,7 @@ export default function InvoiceDocument({ invoice }: Props) {
       {/* Incentive Information */}
       {invoice.incentive && (
         <div className={styles.incentiveInfo}>
-          <h3 className={styles.sectionTitle}>🎁 Informasi Insentif Referral</h3>
+          <h3 className={styles.sectionTitle}>Informasi Insentif Referral</h3>
           <div className={styles.incentiveContent}>
             <p className={styles.incentiveRow}>
               <span className={styles.incentiveLabel}>Jumlah Insentif:</span>

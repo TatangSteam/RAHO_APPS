@@ -132,6 +132,7 @@ export class MemberUpdateService {
     // Audit log
     await logAudit({
       userId,
+      branchId: updated.registrationBranchId, // Use member's registration branch
       action: AuditAction.UPDATE,
       resource: 'Member',
       resourceId: memberId,
@@ -162,6 +163,7 @@ export class MemberUpdateService {
     // Audit log
     await logAudit({
       userId,
+      branchId: member.registrationBranchId, // Use member's registration branch
       action: AuditAction.DELETE,
       resource: 'Member',
       resourceId: memberId,

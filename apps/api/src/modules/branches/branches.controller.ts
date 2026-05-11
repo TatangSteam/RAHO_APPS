@@ -33,7 +33,9 @@ export async function getAllBranchesWithStats(req: Request, res: Response, next:
   try {
     const userId = req.user?.userId;
     const userRole = req.user?.role;
+    console.log('🎯 getAllBranchesWithStats controller - userId:', userId, 'role:', userRole);
     const branches = await getAllBranchesWithStatsService(userId, userRole);
+    console.log('✅ Returning', branches.length, 'branches');
     sendSuccess(res, branches);
   } catch (err) {
     next(err);
@@ -59,13 +61,15 @@ export async function createBranch(req: Request, res: Response, next: NextFuncti
     console.log('✅ Validation passed:', JSON.stringify(input, null, 2));
     
     const createdBy = req.user.userId;
-    console.log('👤 Created by:', createdBy);
+    const userRole = req.user.role;
+    console.log('👤 Created by:', createdBy, 'Role:', userRole);
     
-    const branch = await createBranchService(input, createdBy);
+    const branch = await createBranchService(input, createdBy, userRole);
     console.log('✅ Branch created:', branch.id);
 
     await logAudit({
       userId: req.user.userId,
+      branchId: branch.id, // Use the newly created branch ID
       action: 'CREATE',
       resource: 'Branch',
       resourceId: branch.id,
@@ -89,6 +93,7 @@ export async function updateBranch(req: Request, res: Response, next: NextFuncti
 
     await logAudit({
       userId: req.user.userId,
+      branchId: req.params.branchId, // Use the branch being updated
       action: 'UPDATE',
       resource: 'Branch',
       resourceId: branch.id,
@@ -110,6 +115,7 @@ export async function deleteBranch(req: Request, res: Response, next: NextFuncti
 
     await logAudit({
       userId: req.user.userId,
+      branchId: req.params.branchId, // Use the branch being deleted
       action: 'DELETE',
       resource: 'Branch',
       resourceId: req.params.branchId,

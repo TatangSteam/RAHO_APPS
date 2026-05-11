@@ -23,13 +23,13 @@ export async function seedUsers(
 
   const usersToSeed: SeedUser[] = [
     // ============================================================
-    // SUPER ADMIN & MANAGER (No Branch)
+    // SUPER ADMIN & MANAGER
     // ============================================================
     {
       email: 'superadmin@raho.id',
       password: 'SuperAdmin@123',
       role: Role.SUPER_ADMIN,
-      branchId: null,
+      branchId: null, // SUPER_ADMIN tidak perlu branchId
       staffCode: 'SA-20260413-RAHO',
       fullName: 'Super Admin RAHO',
       phone: '0811-0000-0001',
@@ -38,7 +38,7 @@ export async function seedUsers(
       email: 'manager1@raho.id',
       password: 'Manager@123',
       role: Role.ADMIN_MANAGER,
-      branchId: null,
+      branchId: branchPusatId, // Assign ke Pusat Jakarta
       staffCode: 'AM-20260413-REG1',
       fullName: 'Admin Manager Regional 1',
       phone: '0811-0000-0002',
@@ -47,7 +47,7 @@ export async function seedUsers(
       email: 'manager2@raho.id',
       password: 'Manager@123',
       role: Role.ADMIN_MANAGER,
-      branchId: null,
+      branchId: branchSurabayaId, // Assign ke Surabaya (bukan Bandung)
       staffCode: 'AM-20260413-REG2',
       fullName: 'Admin Manager Regional 2',
       phone: '0811-0000-0003',

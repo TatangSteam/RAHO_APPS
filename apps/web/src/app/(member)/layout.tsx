@@ -1,172 +1,212 @@
-'use client';
+'use client'
+import { useRouter, usePathname } from 'next/navigation'
+import { useAuthStore } from '@/stores/authStore'
+import { useEffect } from 'react'
+import {
+  LayoutDashboard, Syringe, Package,
+  FileText, LogOut,
+} from 'lucide-react'
+import { logoutApi } from '@/lib/authApi'
+import { Footer } from '@/components/layout/Footer'
 
-import { useAuthStore } from '@/stores/authStore';
-import { LogOut } from 'lucide-react';
+const NAV_ITEMS = [
+  { href: '/me/dashboard', label: 'Dashboard',     icon: LayoutDashboard },
+  { href: '/me/sessions',  label: 'Sesi Terapi',   icon: Syringe },
+  { href: '/me/vouchers',  label: 'Paket & Voucher', icon: Package },
+  { href: '/me/invoices',  label: 'Invoice',        icon: FileText },
+]
 
 export default function MemberLayout({ children }: { children: React.ReactNode }) {
-  const { user, clearAuth } = useAuthStore();
+  const router   = useRouter()
+  const pathname = usePathname()
+  const { user, refreshToken, clearAuth } = useAuthStore()
+
+  useEffect(() => {
+    if (!user) {
+      router.replace('/login')
+    }
+  }, [user, router])
 
   const handleLogout = async () => {
     try {
-      // Get refresh token before clearing auth
-      const { refreshToken } = useAuthStore.getState();
-      
-      // Call logout API to create audit log
+      // Call backend logout API to create audit log
       if (refreshToken) {
-        const { logoutApi } = await import('@/lib/authApi');
-        await logoutApi(refreshToken);
+        await logoutApi(refreshToken)
       }
     } catch (error) {
-      console.error('Logout API error:', error);
-      // Continue with logout even if API call fails
+      console.error('Logout API error:', error)
+      // Continue with logout even if API fails
     } finally {
-      // Clear local state and redirect
-      clearAuth();
-      document.cookie = 'raho-auth-token=; path=/; max-age=0';
-      window.location.href = '/login';
+      // Clear local auth state
+      clearAuth()
+      
+      // Clear auth cookie
+      document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+      
+      sessionStorage.setItem('logoutMessage', 'Anda telah berhasil logout.')
+      
+      // Force redirect with window.location for immediate effect
+      window.location.href = '/login'
     }
-  };
+  }
+
+  // Don't render layout if user is not authenticated
+  if (!user) {
+    return null
+  }
 
   return (
-    <div style={{
-      minHeight: '100dvh',
-      background: 'var(--surface-bg)',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      {/* Header */}
+    <div style={{ minHeight: '100dvh', display: 'flex', flexDirection: 'column', background: 'var(--surface-bg)' }}>
+      {/* Navbar */}
       <header style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 50,
-        background: 'rgba(15,23,42,0.85)',
-        backdropFilter: 'blur(12px)',
+        position: 'sticky', top: 0, zIndex: 50,
+        background: 'var(--sidebar-bg)',
         borderBottom: '1px solid var(--surface-border)',
-        padding: '0 24px',
-        height: 64,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 16,
+        backdropFilter: 'blur(12px)',
       }}>
-        {/* Logo */}
         <div style={{
-          width: 40, 
-          height: 40,
-          background: 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800))',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          fontWeight: 800, 
-          color: '#fff', 
-          fontSize: 18,
-          boxShadow: '0 2px 8px rgba(37,99,235,0.35)',
+          maxWidth: 1200, margin: '0 auto',
+          padding: '0 24px',
+          height: 60,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          gap: 24,
         }}>
-          R
-        </div>
-
-        {/* Brand */}
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
-            RAHO Klinik
-          </span>
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Portal Member
-          </span>
-        </div>
-
-        {/* Spacer */}
-        <div style={{ flex: 1 }} />
-
-        {/* User Info */}
-        {user && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 12,
-            padding: '8px 16px',
-            background: 'rgba(30,41,59,0.5)',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--surface-border)',
-          }}>
+          {/* Brand */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
             <div style={{
-              width: 32,
-              height: 32,
-              background: 'linear-gradient(135deg, #334155, #1e293b)',
-              border: '2px solid var(--surface-border)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text-primary)',
-            }}>
-              {user.fullName.charAt(0).toUpperCase()}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
-                {user.fullName}
-              </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                Member
-              </span>
+              width: 32, height: 32,
+              background: 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800))',
+              borderRadius: 'var(--radius-md)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, color: '#fff', fontSize: 14,
+            }}>R</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                RAHO Klinik
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1 }}>
+                Portal Member
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Logout Button */}
-        <button
-          onClick={handleLogout}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 16px',
-            background: 'rgba(239,68,68,0.1)',
-            border: '1px solid rgba(239,68,68,0.2)',
-            borderRadius: 'var(--radius-md)',
-            color: '#f87171',
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: 'pointer',
-            transition: 'all var(--transition-fast)',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(239,68,68,0.15)';
-            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(239,68,68,0.1)';
-            e.currentTarget.style.borderColor = 'rgba(239,68,68,0.2)';
-          }}
-        >
-          <LogOut size={16} />
-          Keluar
-        </button>
+          {/* Nav Links */}
+          <nav style={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, justifyContent: 'center' }}>
+            {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href
+              return (
+                <button
+                  key={href}
+                  onClick={() => router.push(href)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 7,
+                    padding: '7px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    background: active ? 'rgba(59,130,246,0.12)' : 'none',
+                    color: active ? 'var(--color-primary-400)' : 'var(--text-secondary)',
+                    fontWeight: active ? 600 : 500,
+                    fontSize: 13,
+                    border: active ? '1px solid rgba(59,130,246,0.2)' : '1px solid transparent',
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    if (!active) {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)'
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!active) {
+                      (e.currentTarget as HTMLButtonElement).style.background = 'none'
+                      ;(e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'
+                    }
+                  }}
+                >
+                  <Icon size={15} />
+                  {label}
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* User + Logout */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            {/* Avatar + Name */}
+              <button
+                onClick={() => router.push('/me/profile')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '4px 8px', borderRadius: 'var(--radius-md)',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-hover)'
+                }}
+                onMouseLeave={e => {
+                  (e.currentTarget as HTMLButtonElement).style.background = 'none'
+                }}
+              >
+                <div style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #334155, #1e293b)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 600, color: '#fff', fontSize: 13, flexShrink: 0,
+                }}>
+                  {user?.fullName?.[0]?.toUpperCase() ?? 'M'}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'left' }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                    {user?.fullName ?? 'Member'}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1 }}>
+                    Member
+                  </span>
+                </div>
+              </button>
+
+            {/* Divider */}
+            <div style={{ width: 1, height: 24, background: 'var(--surface-border)' }} />
+
+            {/* Logout Button */}
+            <button
+              onClick={handleLogout}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '7px 12px',
+                borderRadius: 'var(--radius-md)',
+                background: 'none',
+                border: '1px solid transparent',
+                color: '#f87171',
+                fontSize: 13, fontWeight: 500,
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(248,113,113,0.1)'
+                ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(248,113,113,0.2)'
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLButtonElement).style.background = 'none'
+                ;(e.currentTarget as HTMLButtonElement).style.borderColor = 'transparent'
+              }}
+            >
+              <LogOut size={14} />
+              Keluar
+            </button>
+          </div>
+        </div>
       </header>
 
-      {/* Main Content */}
-      <main style={{ 
-        flex: 1, 
-        padding: '32px 24px',
-        maxWidth: 1400,
-        width: '100%',
-        margin: '0 auto',
-      }}>
+      {/* Page Content */}
+      <main style={{ flex: 1, maxWidth: 1200, width: '100%', margin: '0 auto', padding: '32px 24px' }}>
         {children}
       </main>
 
       {/* Footer */}
-      <footer style={{
-        padding: '20px 24px',
-        borderTop: '1px solid var(--surface-border)',
-        textAlign: 'center',
-        fontSize: 12,
-        color: 'var(--text-muted)',
-      }}>
-        © 2026 RAHO Klinik. All rights reserved.
-      </footer>
+      <Footer />
     </div>
-  );
+  )
 }

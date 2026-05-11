@@ -180,7 +180,7 @@ export class PackageAssignmentService {
     });
 
     // Audit logs
-    await this.logPackageAssignment(result, userId);
+    await this.logPackageAssignment(result, branchId, userId);
 
     const totalItems = result.createdPackages.length + result.createdAddOns.length;
     return {
@@ -512,11 +512,12 @@ export class PackageAssignmentService {
   /**
    * Log audit for package assignment
    */
-  private async logPackageAssignment(result: any, userId: string) {
+  private async logPackageAssignment(result: any, branchId: string, userId: string) {
     // Audit log for packages
     for (const pkg of result.createdPackages) {
       await logAudit({
         userId,
+        branchId,
         action: AuditAction.CREATE,
         resource: 'MemberPackage',
         resourceId: pkg.id,
@@ -535,6 +536,7 @@ export class PackageAssignmentService {
     for (const addon of result.createdAddOns) {
       await logAudit({
         userId,
+        branchId,
         action: AuditAction.CREATE,
         resource: 'MemberAddOn',
         resourceId: addon.id,

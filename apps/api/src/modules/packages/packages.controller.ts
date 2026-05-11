@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PackagesService } from './packages.service';
+import { prisma } from '@lib/prisma';
 import {
   assignPackageSchema,
   verifyPaymentSchema,
@@ -49,12 +50,13 @@ export class PackagesController {
       const { packageId } = req.params;
       const data = verifyPaymentSchema.parse(req.body);
       const userId = req.user?.userId;
+      const branchId = req.user?.branchId;
 
       if (!userId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      const result = await packagesService.verifyPayment(packageId, data, userId);
+      const result = await packagesService.verifyPayment(packageId, data, branchId, userId);
       return sendSuccess(res, result);
     } catch (error) {
       next(error);
@@ -65,16 +67,39 @@ export class PackagesController {
   async getMemberPackages(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId } = req.params;
-      const branchId = req.user?.branchId;
+      const { branchId, role } = req.user!;
 
-      if (!branchId) {
+      console.log('🎯 [Packages Controller] getMemberPackages called');
+      console.log('  - memberId:', memberId);
+      console.log('  - branchId:', branchId);
+      console.log('  - role:', role);
+
+      // ADMIN_MANAGER and SUPER_ADMIN should ALWAYS use member's registration branch
+      // They can view packages across all branches
+      let effectiveBranchId = branchId;
+      
+      if (role === 'ADMIN_MANAGER' || role === 'SUPER_ADMIN') {
+        console.log('  - Global role detected, fetching member registration branch');
+        const member = await prisma.member.findUnique({
+          where: { id: memberId },
+          select: { registrationBranchId: true }
+        });
+        
+        if (!member) {
+          throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+        }
+        
+        effectiveBranchId = member.registrationBranchId;
+        console.log('  - Using member registration branch:', effectiveBranchId);
+      } else if (!branchId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
       }
 
-      const packages = await packagesService.getMemberPackages(memberId, branchId);
+      const packages = await packagesService.getMemberPackages(memberId, effectiveBranchId);
+      console.log('✅ [Packages Controller] Returning', packages.length, 'packages');
       return sendSuccess(res, packages);
     } catch (error) {
-      console.error('getMemberPackages error:', error);
+      console.error('❌ [Packages Controller] getMemberPackages error:', error);
       next(error);
     }
   }

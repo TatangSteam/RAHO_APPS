@@ -68,10 +68,11 @@ export class MemberBranchAccessService {
     // Audit log
     await logAudit({
       userId,
+      branchId, // Use the branch being granted access to
       action: AuditAction.CREATE,
       resource: 'MemberBranchAccess',
       resourceId: member.id,
-      meta: { memberNo, branchId, branchName: branch.name },
+      meta: { memberNo, branchName: branch.name },
     });
 
     return {

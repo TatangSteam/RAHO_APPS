@@ -113,6 +113,8 @@ export default function MemberDetailPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
+    console.log('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
+    console.log('👤 [Member Detail] Current user:', user?.email, 'role:', user?.role);
     loadMemberDetail();
     loadPackages();
   }, [memberId]);
@@ -126,30 +128,47 @@ export default function MemberDetailPage() {
   const loadMemberDetail = async () => {
     try {
       setLoading(true);
+      console.log('📥 [Member Detail] Loading member detail for:', memberId);
+      const startTime = performance.now();
+      
       const data = await getMemberDetailApi(memberId);
+      
+      const endTime = performance.now();
+      console.log(`⏱️ [Member Detail] loadMemberDetail: ${(endTime - startTime).toFixed(2)}ms`);
+      console.log('✅ [Member Detail] Member data loaded:', data.memberNo, data.profile.fullName);
       setMember(data);
-    } catch (error) {
-      console.error('Failed to load member detail:', error);
-      alert('Gagal memuat detail member');
+    } catch (error: any) {
+      console.error('❌ [Member Detail] Failed to load member detail:', error);
+      console.error('❌ [Member Detail] Error response:', error.response?.data);
+      console.error('❌ [Member Detail] Error status:', error.response?.status);
+      alert('Gagal memuat detail member: ' + (error.response?.data?.error?.message || error.message));
       router.back();
     } finally {
       setLoading(false);
+      console.log('🏁 [Member Detail] Loading finished');
     }
   };
 
   const loadPackages = async () => {
     try {
       setLoadingPackages(true);
-      console.log('=== Loading packages for member:', memberId);
+      console.log('📦 [Member Detail] Loading packages for member:', memberId);
+      const startTime = performance.now();
+      
       const data = await packagesApi.getMemberPackages(memberId);
-      console.log('Loaded packages data:', data);
-      console.log('Packages array:', data.packages);
+      
+      const endTime = performance.now();
+      console.log(`⏱️ [Member Detail] loadPackages: ${(endTime - startTime).toFixed(2)}ms`);
+      console.log('📥 [Member Detail] Raw API response:', JSON.stringify(data, null, 2));
+      console.log('✅ [Member Detail] Packages loaded:', data.packages?.length || 0, 'packages');
       setPackages(data.packages || []);
-    } catch (error) {
-      console.error('Failed to load packages:', error);
-      showToast.error('Gagal memuat data paket');
+    } catch (error: any) {
+      console.error('❌ [Member Detail] Failed to load packages:', error);
+      console.error('❌ [Member Detail] Error response:', error.response?.data);
+      showToast.error('Gagal memuat data paket: ' + (error.response?.data?.error?.message || error.message));
     } finally {
       setLoadingPackages(false);
+      console.log('🏁 [Member Detail] Package loading finished');
     }
   };
 

@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
 import { authorize } from '@middleware/authorize';
-import { getMemberDashboard, getMemberSessions, getMemberDiagnoses, getMemberPackages } from './me.controller';
+import { getMemberDashboard, getMemberSessions, getMemberDiagnoses, getMemberPackages,  getMemberProfile,
+  getMemberInvoices, } from './me.controller';
 
 const router = Router();
 
@@ -52,5 +53,14 @@ router.get(
   authorize(['MEMBER']),
   getMemberPackages,
 );
-
+router.get(
+    '/profile',   
+    authenticate, 
+    authorize(['MEMBER']), 
+    getMemberProfile)
+router.get(
+    '/invoices',   
+    authenticate, 
+    authorize(['MEMBER']), 
+    getMemberInvoices)
 export { router as meRouter };

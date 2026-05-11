@@ -26,7 +26,11 @@ export const createMemberSchema = z.object({
   // Section B - Akun Member
   memberEmail: z.string().email('Format email tidak valid'),
   memberPassword: z.string().min(8, 'Password minimal 8 karakter'),
-  referralCode: z.string().optional(),
+  referralCode: z.string().optional().transform((val) => {
+    // Trim whitespace and convert empty string to undefined
+    if (!val || val.trim() === '') return undefined;
+    return val.trim();
+  }),
   referralCodeId: z.string().optional().transform((val) => {
     // Handle empty string as undefined
     if (val === '' || val === null) return undefined;

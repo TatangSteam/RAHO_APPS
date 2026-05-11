@@ -1,0 +1,65 @@
+import rateLimit from 'express-rate-limit';
+import { Request } from 'express';
+
+/**
+ * Rate limiter for login endpoint
+ * Limits: 5 attempts per 15 minutes per IP address
+ * 
+ * This prevents brute force attacks on the login endpoint
+ */
+export const loginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: {
+    success: false,
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.',
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  
+  // Use IP address as the key
+  keyGenerator: (req: Request): string => {
+    // Try to get real IP from proxy headers first
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = (forwarded as string).split(',');
+      return ips[0].trim();
+    }
+    
+    // Fallback to connection remote address
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
+  
+  // Skip successful requests (only count failed login attempts)
+  skip: (req: Request) => {
+    // We'll implement this logic in the controller
+    // For now, count all requests
+    return false;
+  },
+});
+
+/**
+ * General API rate limiter
+ * Limits: 100 requests per 15 minutes per IP
+ */
+export const apiRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: {
+    success: false,
+    code: 'RATE_LIMIT_EXCEEDED',
+    message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  
+  keyGenerator: (req: Request): string => {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      const ips = (forwarded as string).split(',');
+      return ips[0].trim();
+    }
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  },
+});

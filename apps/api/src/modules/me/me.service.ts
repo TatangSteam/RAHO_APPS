@@ -1,5 +1,6 @@
 import { prisma } from '@lib/prisma';
 
+
 interface MemberDashboardData {
   voucherSisa: number;
   paketAktif: number;
@@ -35,15 +36,57 @@ interface MemberPackage {
   packageType: string;
   totalSessions: number;
   usedSessions: number;
+  sisaSessions: number;
   status: string;
   activatedAt: Date | null;
+  expiredAt: Date | null;
+  finalPrice: number;
   branchName: string;
 }
 
+interface MemberProfile {
+  userId: string;
+  email: string;
+  fullName: string | null;
+  phone: string | null;
+  avatarUrl: string | null;
+  memberNo: string;
+  nik: string | null;
+  dateOfBirth: Date | null;
+  jenisKelamin: string | null;
+  address: string | null;
+  voucherCount: number;
+  isActive: boolean;
+  registrationBranch: {
+    name: string;
+    branchCode: string;
+    city: string;
+  } | null;
+  memberSince: Date;
+}
+
+interface MemberInvoice {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  totalAmount: number;
+  paidAt: Date | null;
+  paymentMethod: string | null;
+  createdAt: Date;
+  branchName: string;
+  items: {
+    description: string;
+    quantity: number;
+    pricePerUnit: number;
+    totalAmount: number;
+  }[];
+}
+
+
 // ── Member Dashboard ──────────────────────────────────────────
 
+
 export async function getMemberDashboardService(memberId: string): Promise<MemberDashboardData> {
-  // Get member data
   const member = await prisma.member.findUnique({
     where: { id: memberId },
     select: {
@@ -56,16 +99,15 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
   });
 
   if (!member) {
-    throw new Error('Member not found');
+    throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan.' };
   }
 
-  // Get last session (BASIC packages only)
   const lastSession = await prisma.treatmentSession.findFirst({
     where: {
-      encounter: { 
+      encounter: {
         memberId,
         memberPackage: {
-          packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
+          packageType: 'BASIC',
         },
       },
     },
@@ -92,7 +134,9 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
   };
 }
 
+
 // ── Member Sessions ───────────────────────────────────────────
+
 
 export async function getMemberSessionsService(
   memberId: string,
@@ -104,10 +148,10 @@ export async function getMemberSessionsService(
   const [sessions, total] = await Promise.all([
     prisma.treatmentSession.findMany({
       where: {
-        encounter: { 
+        encounter: {
           memberId,
           memberPackage: {
-            packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
+            packageType: 'BASIC',
           },
         },
       },
@@ -125,10 +169,10 @@ export async function getMemberSessionsService(
     }),
     prisma.treatmentSession.count({
       where: {
-        encounter: { 
+        encounter: {
           memberId,
           memberPackage: {
-            packageType: 'BASIC', // Only count BASIC packages
+            packageType: 'BASIC',
           },
         },
       },
@@ -148,13 +192,13 @@ export async function getMemberSessionsService(
   };
 }
 
+
 // ── Member Diagnoses ──────────────────────────────────────────
+
 
 export async function getMemberDiagnosesService(memberId: string): Promise<MemberDiagnosis[]> {
   const diagnoses = await prisma.diagnosis.findMany({
-    where: {
-      encounter: { memberId },
-    },
+    where: { memberId },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,
@@ -162,13 +206,20 @@ export async function getMemberDiagnosesService(memberId: string): Promise<Membe
       diagnosa: true,
       kategoriDiagnosa: true,
       createdAt: true,
-      encounter: {
-        select: {
-          doctorId: true,
-        },
-      },
+      doktorPemeriksa: true,
     },
   });
+
+  // Batch-fetch doctor names agar tidak N+1 query
+  const doctorIds = [...new Set(diagnoses.map((d) => d.doktorPemeriksa).filter(Boolean))] as string[];
+  const doctors = await prisma.user.findMany({
+    where: { id: { in: doctorIds } },
+    select: {
+      id: true,
+      profile: { select: { fullName: true } },
+    },
+  });
+  const doctorMap = new Map(doctors.map((d) => [d.id, d.profile?.fullName ?? 'Dokter']));
 
   return diagnoses.map((d) => ({
     id: d.id,
@@ -176,11 +227,13 @@ export async function getMemberDiagnosesService(memberId: string): Promise<Membe
     diagnosa: d.diagnosa,
     kategoriDiagnosa: d.kategoriDiagnosa,
     createdAt: d.createdAt,
-    doctorName: d.encounter?.doctorId ? 'Doctor' : 'Unknown',
+    doctorName: d.doktorPemeriksa ? (doctorMap.get(d.doktorPemeriksa) ?? 'Dokter') : 'Tidak diketahui',
   }));
 }
 
+
 // ── Member Packages ───────────────────────────────────────────
+
 
 export async function getMemberPackagesService(memberId: string): Promise<MemberPackage[]> {
   const packages = await prisma.memberPackage.findMany({
@@ -194,6 +247,8 @@ export async function getMemberPackagesService(memberId: string): Promise<Member
       usedSessions: true,
       status: true,
       activatedAt: true,
+      expiredAt: true,
+      finalPrice: true,
       branch: { select: { name: true } },
     },
   });
@@ -204,8 +259,128 @@ export async function getMemberPackagesService(memberId: string): Promise<Member
     packageType: p.packageType,
     totalSessions: p.totalSessions,
     usedSessions: p.usedSessions,
+    sisaSessions: p.totalSessions - p.usedSessions,
     status: p.status,
     activatedAt: p.activatedAt,
+    expiredAt: p.expiredAt,
+    finalPrice: Number(p.finalPrice),
     branchName: p.branch.name,
   }));
+}
+
+
+// ── Member Profile ────────────────────────────────────────────
+
+
+export async function getMemberProfileService(userId: string): Promise<MemberProfile> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      createdAt: true,
+      profile: {
+        select: {
+          fullName: true,
+          phone: true,
+          avatarUrl: true,
+        },
+      },
+      member: {
+        select: {
+          memberNo: true,
+          nik: true,
+          dateOfBirth: true,
+          jenisKelamin: true,
+          address: true,
+          voucherCount: true,
+          isActive: true,
+          registrationBranch: {
+            select: { name: true, branchCode: true, city: true },
+          },
+        },
+      },
+    },
+  });
+
+  if (!user || !user.member) {
+    throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Data member tidak ditemukan.' };
+  }
+
+  return {
+    userId: user.id,
+    email: user.email,
+    fullName: user.profile?.fullName ?? null,
+    phone: user.profile?.phone ?? null,
+    avatarUrl: user.profile?.avatarUrl ?? null,
+    memberNo: user.member.memberNo,
+    nik: user.member.nik,
+    dateOfBirth: user.member.dateOfBirth,
+    jenisKelamin: user.member.jenisKelamin,
+    address: user.member.address,
+    voucherCount: user.member.voucherCount,
+    isActive: user.member.isActive,
+    registrationBranch: user.member.registrationBranch ?? null,
+    memberSince: user.createdAt,
+  };
+}
+
+
+// ── Member Invoices ───────────────────────────────────────────
+
+
+export async function getMemberInvoicesService(
+  memberId: string,
+  page: number,
+  limit: number,
+): Promise<{ data: MemberInvoice[]; total: number }> {
+  const skip = (page - 1) * limit;
+
+  const [invoices, total] = await Promise.all([
+    prisma.invoice.findMany({
+      where: { memberId },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: limit,
+      select: {
+        id: true,
+        invoiceNumber: true,
+        status: true,
+        totalAmount: true,
+        paidAt: true,
+        paymentMethod: true,
+        createdAt: true,
+        branch: { select: { name: true } },
+        items: {
+          select: {
+            description: true,
+            quantity: true,
+            pricePerUnit: true,
+            totalAmount: true,
+          },
+        },
+      },
+    }),
+    prisma.invoice.count({ where: { memberId } }),
+  ]);
+
+  return {
+    data: invoices.map((inv) => ({
+      id: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      status: inv.status,
+      totalAmount: Number(inv.totalAmount),
+      paidAt: inv.paidAt,
+      paymentMethod: inv.paymentMethod,
+      createdAt: inv.createdAt,
+      branchName: inv.branch?.name ?? '—',
+      items: inv.items.map((item) => ({
+        description: item.description,
+        quantity: item.quantity,
+        pricePerUnit: Number(item.pricePerUnit),
+        totalAmount: Number(item.totalAmount),
+      })),
+    })),
+    total,
+  };
 }

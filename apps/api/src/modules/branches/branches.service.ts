@@ -117,17 +117,34 @@ export async function getBranchWithStatsService(branchId: string) {
 
 // ── Get All Branches with Stats ───────────────────────────────
 export async function getAllBranchesWithStatsService(userId?: string, userRole?: string) {
+  console.log('🔍 getAllBranchesWithStatsService called with:', { userId, userRole });
+  
   // Build where clause - ADMIN_MANAGER only sees branches they manage via ManagerBranch
   const where: Prisma.BranchWhereInput = {
     isActive: true, // Only show active branches
   };
   
   if (userRole === 'ADMIN_MANAGER' && userId) {
+    console.log('✅ Applying ADMIN_MANAGER filter for userId:', userId);
     where.managerBranches = {
       some: {
         userId: userId
       }
     };
+  }
+
+  console.log('📋 Where clause:', JSON.stringify(where, null, 2));
+
+  // First, let's verify the ManagerBranch records exist
+  if (userRole === 'ADMIN_MANAGER' && userId) {
+    const managerBranchRecords = await prisma.managerBranch.findMany({
+      where: { userId },
+      include: { branch: { select: { branchCode: true, name: true } } }
+    });
+    console.log(`📌 ManagerBranch records for user ${userId}:`, managerBranchRecords.map(mb => ({
+      branchCode: mb.branch.branchCode,
+      branchName: mb.branch.name
+    })));
   }
 
   const branches = await prisma.branch.findMany({
@@ -138,6 +155,8 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
     },
     orderBy: { createdAt: 'desc' },
   });
+
+  console.log(`📊 Found ${branches.length} branches for role ${userRole}`);
 
   // Get stats for each branch
   const branchesWithStats = await Promise.all(
@@ -167,7 +186,7 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
 }
 
 // ── Create Branch ─────────────────────────────────────────────
-export async function createBranchService(input: CreateBranchInput, createdBy: string) {
+export async function createBranchService(input: CreateBranchInput, createdBy: string, userRole?: string) {
   // Check if branch code already exists
   const existing = await prisma.branch.findUnique({
     where: { branchCode: input.branchCode },
@@ -184,6 +203,17 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
     },
     select: branchSelect,
   });
+
+  // Auto-assign ADMIN_MANAGER to the branch they created
+  if (userRole === 'ADMIN_MANAGER') {
+    await prisma.managerBranch.create({
+      data: {
+        userId: createdBy,
+        branchId: branch.id,
+      },
+    });
+    console.log(`✅ Auto-assigned ADMIN_MANAGER (${createdBy}) to branch ${branch.branchCode}`);
+  }
 
   return branch;
 }

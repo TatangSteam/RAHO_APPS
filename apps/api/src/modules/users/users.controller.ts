@@ -53,6 +53,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
 
     await logAudit({
       userId: req.user.userId,
+      branchId: req.user.branchId,
       action: 'CREATE',
       resource: 'User',
       resourceId: user.id,
@@ -81,6 +82,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
 
     await logAudit({
       userId: req.user.userId,
+      branchId: req.user.branchId,
       action: 'UPDATE',
       resource: 'User',
       resourceId: user.id,
@@ -106,6 +108,7 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
     
     await logAudit({
       userId: req.user.userId,
+      branchId: req.user.branchId,
       action: 'DELETE',
       resource: 'User',
       resourceId: user.id,
@@ -136,6 +139,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     await resetPasswordService(req.params.userId, input);
     await logAudit({
       userId: req.user.userId,
+      branchId: req.user.branchId,
       action: 'UPDATE',
       resource: 'User',
       resourceId: req.params.userId,

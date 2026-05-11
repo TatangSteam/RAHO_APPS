@@ -11,13 +11,19 @@ export const createSessionSchema = z.object({
   boosterPackageId: z.string().cuid().optional(),
   therapyPlanId: z.string().cuid(), // NEW: Required therapy plan
   adminLayananId: z.string().cuid(),
-  doctorId: z.string().cuid(), // Primary doctor
-  nurseId: z.string().cuid(), // Primary nurse
+  doctorId: z.string().cuid().optional(), // Optional - auto-filled if user is DOCTOR
+  nurseId: z.string().cuid().optional(), // Optional - auto-filled if user is NURSE
   additionalDoctorIds: z.array(z.string().cuid()).optional().default([]), // Additional doctors
   additionalNurseIds: z.array(z.string().cuid()).optional().default([]), // Additional nurses
   treatmentDate: z.string().datetime(),
   pelaksanaan: z.nativeEnum(SessionType),
-});
+}).refine(
+  (data) => {
+    // At least doctorId or nurseId must be provided (the other will be auto-filled)
+    return data.doctorId || data.nurseId;
+  },
+  { message: 'Minimal doctorId atau nurseId harus diisi' }
+);
 
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 

@@ -16,12 +16,14 @@ const exportService = new MemberExportService();
 export class MembersController {
   async getMembers(req: Request, res: Response, next: NextFunction) {
     try {
-      const { search, status, page, limit } = req.query;
-      const { branchId, role } = req.user!;
+      const { search, status, branchCode, page, limit } = req.query;
+      const { branchId, role, userId } = req.user!;
 
       const result = await membersService.getMembers(branchId, role as Role, {
         search: search as string,
         status: status as string,
+        branchCode: branchCode as string,
+        userId, // Pass userId for ADMIN_MANAGER
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
       });
@@ -106,11 +108,22 @@ export class MembersController {
   async getMemberById(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId } = req.params;
+      const { userId, role, branchId } = req.user!;
+      
+      console.log('🎯 [Members Controller] getMemberById called');
+      console.log('  - memberId:', memberId);
+      console.log('  - userId:', userId);
+      console.log('  - role:', role);
+      console.log('  - branchId:', branchId);
+      console.time('getMemberById-controller');
 
       const result = await membersService.getMemberById(memberId);
 
+      console.timeEnd('getMemberById-controller');
+      console.log('✅ [Members Controller] Sending response');
       sendSuccess(res, result);
     } catch (error) {
+      console.error('❌ [Members Controller] Error in getMemberById:', error);
       next(error);
     }
   }

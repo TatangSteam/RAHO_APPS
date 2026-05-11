@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { Footer } from '@/components/layout/Footer';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -47,6 +48,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
       <div className={`app-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
         <Header />
         <main className="app-content fade-in">{children}</main>
+        <Footer className="staff-footer" />
       </div>
     </div>
   );

@@ -42,8 +42,10 @@ export default function CreateSessionModal({
   const [selectedTherapyPlanId, setSelectedTherapyPlanId] = useState('');
   const [loadingTherapyPlans, setLoadingTherapyPlans] = useState(false);
   
+  const [adminLayananList, setAdminLayananList] = useState<StaffMember[]>([]);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
   const [nurses, setNurses] = useState<StaffMember[]>([]);
+  const [selectedAdminLayananId, setSelectedAdminLayananId] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedNurseId, setSelectedNurseId] = useState('');
   const [additionalDoctorIds, setAdditionalDoctorIds] = useState<string[]>([]);
@@ -239,23 +241,45 @@ export default function CreateSessionModal({
 
   const loadStaff = async () => {
     try {
-      // Load doctors and nurses from API
-      const [doctorsList, nursesList] = await Promise.all([
-        usersApi.getDoctors(user?.branchId || undefined),
-        usersApi.getNurses(user?.branchId || undefined),
-      ]);
+      // Determine which staff to load based on user role
+      const userRole = user?.role;
       
-      setDoctors(doctorsList);
-      setNurses(nursesList);
+      if (userRole === 'DOCTOR') {
+        // DOCTOR needs: Admin Layanan + Nurses
+        const [adminList, nursesList] = await Promise.all([
+          usersApi.getAdminLayanan(user?.branchId || undefined),
+          usersApi.getNurses(user?.branchId || undefined),
+        ]);
+        setAdminLayananList(adminList);
+        setNurses(nursesList);
+      } else if (userRole === 'NURSE') {
+        // NURSE needs: Admin Layanan + Doctors
+        const [adminList, doctorsList] = await Promise.all([
+          usersApi.getAdminLayanan(user?.branchId || undefined),
+          usersApi.getDoctors(user?.branchId || undefined),
+        ]);
+        setAdminLayananList(adminList);
+        setDoctors(doctorsList);
+      } else {
+        // ADMIN_LAYANAN needs: Doctors + Nurses
+        const [doctorsList, nursesList] = await Promise.all([
+          usersApi.getDoctors(user?.branchId || undefined),
+          usersApi.getNurses(user?.branchId || undefined),
+        ]);
+        setDoctors(doctorsList);
+        setNurses(nursesList);
+      }
     } catch (err) {
       console.error('Failed to load staff:', err);
-      setError('Gagal memuat data dokter dan nakes');
+      setError('Gagal memuat data staff');
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    const userRole = user?.role;
 
     // Validation
     if (!memberId) {
@@ -278,14 +302,37 @@ export default function CreateSessionModal({
       return;
     }
 
-    if (!selectedDoctorId) {
-      setError('Dokter harus dipilih');
-      return;
-    }
-
-    if (!selectedNurseId) {
-      setError('Nakes harus dipilih');
-      return;
+    // Role-based validation
+    if (userRole === 'DOCTOR') {
+      // DOCTOR: needs Admin Layanan + Nurse (Doctor auto-filled)
+      if (!selectedAdminLayananId) {
+        setError('Admin Layanan harus dipilih');
+        return;
+      }
+      if (!selectedNurseId) {
+        setError('Nakes harus dipilih');
+        return;
+      }
+    } else if (userRole === 'NURSE') {
+      // NURSE: needs Admin Layanan + Doctor (Nurse auto-filled)
+      if (!selectedAdminLayananId) {
+        setError('Admin Layanan harus dipilih');
+        return;
+      }
+      if (!selectedDoctorId) {
+        setError('Dokter harus dipilih');
+        return;
+      }
+    } else {
+      // ADMIN_LAYANAN: needs Doctor + Nurse (Admin auto-filled)
+      if (!selectedDoctorId) {
+        setError('Dokter harus dipilih');
+        return;
+      }
+      if (!selectedNurseId) {
+        setError('Nakes harus dipilih');
+        return;
+      }
     }
 
     if (!treatmentDate) {
@@ -312,21 +359,48 @@ export default function CreateSessionModal({
     setLoading(true);
 
     try {
-      const data: CreateSessionInput = {
+      // Build data object based on role
+      const baseData = {
         memberId,
         memberPackageId: selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
         therapyPlanId: selectedTherapyPlanId,
-        adminLayananId: user?.userId || '',
-        doctorId: selectedDoctorId,
-        nurseId: selectedNurseId,
         additionalDoctorIds,
         additionalNurseIds,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
       };
 
+      let data: CreateSessionInput;
+
+      if (userRole === 'DOCTOR') {
+        // DOCTOR: adminLayananId + nurseId required, doctorId auto-filled
+        data = {
+          ...baseData,
+          adminLayananId: selectedAdminLayananId,
+          doctorId: user?.userId || '',
+          nurseId: selectedNurseId,
+        };
+      } else if (userRole === 'NURSE') {
+        // NURSE: adminLayananId + doctorId required, nurseId auto-filled
+        data = {
+          ...baseData,
+          adminLayananId: selectedAdminLayananId,
+          doctorId: selectedDoctorId,
+          nurseId: user?.userId || '',
+        };
+      } else {
+        // ADMIN_LAYANAN: doctorId + nurseId required, adminLayananId auto-filled
+        data = {
+          ...baseData,
+          adminLayananId: user?.userId || '',
+          doctorId: selectedDoctorId,
+          nurseId: selectedNurseId,
+        };
+      }
+
       console.log('Creating session with data:', data);
+      console.log('User role:', userRole);
       const result = await sessionApi.createSession(data);
       showToast.success('Sesi terapi berhasil dibuat');
       onSuccess(result.sessionId);
@@ -667,28 +741,184 @@ export default function CreateSessionModal({
                 )}
               </div>
 
-              {/* Doctor Selection */}
-              <div className="form-group">
-                <label className="form-label">
-                  Dokter Utama <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={selectedDoctorId}
-                  onChange={(e) => setSelectedDoctorId(e.target.value)}
-                  className="form-input"
-                  disabled={loading}
-                >
-                  <option value="">Pilih dokter utama...</option>
-                  {doctors.map((doctor) => (
-                    <option key={doctor.userId} value={doctor.userId}>
-                      {doctor.fullName} ({doctor.staffCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {/* Staff Selection - Role-based */}
+              {user?.role === 'DOCTOR' ? (
+                // DOCTOR: Show Admin Layanan + Nurse (Doctor auto-filled)
+                <>
+                  {/* Admin Layanan Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Admin Layanan <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedAdminLayananId}
+                      onChange={(e) => setSelectedAdminLayananId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih admin layanan...</option>
+                      {adminLayananList.map((admin) => (
+                        <option key={admin.userId} value={admin.userId}>
+                          {admin.fullName} ({admin.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Nurse Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Nakes Utama <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedNurseId}
+                      onChange={(e) => setSelectedNurseId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih nakes utama...</option>
+                      {nurses.map((nurse) => (
+                        <option key={nurse.userId} value={nurse.userId}>
+                          {nurse.fullName} ({nurse.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Doctor Auto-filled */}
+                  <div className="form-group">
+                    <label className="form-label">Dokter</label>
+                    <div className="p-3 rounded-lg" style={{
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                    }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: '20px' }}>👨‍⚕️</span>
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {user?.fullName} (Anda)
+                          </p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            Dokter akan otomatis terisi dengan akun Anda
+                          </p>
+                        </div>
+                        <span className="ml-auto text-green-400">✓</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : user?.role === 'NURSE' ? (
+                // NURSE: Show Admin Layanan + Doctor (Nurse auto-filled)
+                <>
+                  {/* Admin Layanan Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Admin Layanan <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedAdminLayananId}
+                      onChange={(e) => setSelectedAdminLayananId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih admin layanan...</option>
+                      {adminLayananList.map((admin) => (
+                        <option key={admin.userId} value={admin.userId}>
+                          {admin.fullName} ({admin.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Doctor Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Dokter Utama <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedDoctorId}
+                      onChange={(e) => setSelectedDoctorId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih dokter utama...</option>
+                      {doctors.map((doctor) => (
+                        <option key={doctor.userId} value={doctor.userId}>
+                          {doctor.fullName} ({doctor.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Nurse Auto-filled */}
+                  <div className="form-group">
+                    <label className="form-label">Nakes</label>
+                    <div className="p-3 rounded-lg" style={{
+                      background: 'rgba(6, 182, 212, 0.1)',
+                      border: '1px solid rgba(6, 182, 212, 0.3)',
+                    }}>
+                      <div className="flex items-center gap-2">
+                        <span style={{ fontSize: '20px' }}>💉</span>
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                            {user?.fullName} (Anda)
+                          </p>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                            Nakes akan otomatis terisi dengan akun Anda
+                          </p>
+                        </div>
+                        <span className="ml-auto text-green-400">✓</span>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // ADMIN_LAYANAN: Show Doctor + Nurse (Admin auto-filled)
+                <>
+                  {/* Doctor Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Dokter Utama <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedDoctorId}
+                      onChange={(e) => setSelectedDoctorId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih dokter utama...</option>
+                      {doctors.map((doctor) => (
+                        <option key={doctor.userId} value={doctor.userId}>
+                          {doctor.fullName} ({doctor.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Nurse Selection */}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Nakes Utama <span className="text-red-400">*</span>
+                    </label>
+                    <select
+                      value={selectedNurseId}
+                      onChange={(e) => setSelectedNurseId(e.target.value)}
+                      className="form-input"
+                      disabled={loading}
+                    >
+                      <option value="">Pilih nakes utama...</option>
+                      {nurses.map((nurse) => (
+                        <option key={nurse.userId} value={nurse.userId}>
+                          {nurse.fullName} ({nurse.staffCode})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              )}
 
               {/* Additional Doctors */}
-              {selectedDoctorId && (
+              {selectedDoctorId && user?.role !== 'DOCTOR' && (
                 <div className="form-group">
                   <label className="form-label">
                     Dokter Tambahan (Opsional)
@@ -807,28 +1037,8 @@ export default function CreateSessionModal({
                 </div>
               )}
 
-              {/* Nurse Selection */}
-              <div className="form-group">
-                <label className="form-label">
-                  Nakes Utama <span className="text-red-400">*</span>
-                </label>
-                <select
-                  value={selectedNurseId}
-                  onChange={(e) => setSelectedNurseId(e.target.value)}
-                  className="form-input"
-                  disabled={loading}
-                >
-                  <option value="">Pilih nakes utama...</option>
-                  {nurses.map((nurse) => (
-                    <option key={nurse.userId} value={nurse.userId}>
-                      {nurse.fullName} ({nurse.staffCode})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Additional Nurses */}
-              {selectedNurseId && (
+              {selectedNurseId && user?.role !== 'NURSE' && (
                 <div className="form-group">
                   <label className="form-label">
                     Nakes Tambahan (Opsional)
@@ -1122,11 +1332,13 @@ export default function CreateSessionModal({
               !memberId || 
               !selectedPackageId || 
               !selectedTherapyPlanId || 
-              !selectedDoctorId || 
-              !selectedNurseId || 
               !treatmentDate ||
               therapyPlans.length === 0 ||
-              (useBooster && !selectedBoosterPackageId)
+              (useBooster && !selectedBoosterPackageId) ||
+              // Role-based validation
+              (user?.role === 'DOCTOR' && (!selectedAdminLayananId || !selectedNurseId)) ||
+              (user?.role === 'NURSE' && (!selectedAdminLayananId || !selectedDoctorId)) ||
+              (user?.role !== 'DOCTOR' && user?.role !== 'NURSE' && (!selectedDoctorId || !selectedNurseId))
             }
             className="btn btn-primary"
             title={
@@ -1134,8 +1346,12 @@ export default function CreateSessionModal({
               !selectedPackageId ? 'Pilih paket basic terlebih dahulu' :
               therapyPlans.length === 0 ? 'Belum ada therapy plan tersedia' :
               !selectedTherapyPlanId ? 'Pilih therapy plan terlebih dahulu' :
-              !selectedDoctorId ? 'Pilih dokter terlebih dahulu' :
-              !selectedNurseId ? 'Pilih nakes terlebih dahulu' :
+              (user?.role === 'DOCTOR' && !selectedAdminLayananId) ? 'Pilih admin layanan terlebih dahulu' :
+              (user?.role === 'DOCTOR' && !selectedNurseId) ? 'Pilih nakes terlebih dahulu' :
+              (user?.role === 'NURSE' && !selectedAdminLayananId) ? 'Pilih admin layanan terlebih dahulu' :
+              (user?.role === 'NURSE' && !selectedDoctorId) ? 'Pilih dokter terlebih dahulu' :
+              (user?.role !== 'DOCTOR' && user?.role !== 'NURSE' && !selectedDoctorId) ? 'Pilih dokter terlebih dahulu' :
+              (user?.role !== 'DOCTOR' && user?.role !== 'NURSE' && !selectedNurseId) ? 'Pilih nakes terlebih dahulu' :
               !treatmentDate ? 'Isi tanggal & waktu terapi' :
               (useBooster && !selectedBoosterPackageId) ? 'Pilih paket booster' :
               'Buat sesi terapi baru'

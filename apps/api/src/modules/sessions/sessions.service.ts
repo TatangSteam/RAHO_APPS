@@ -70,8 +70,8 @@ export class SessionsService {
   // SESSION CREATION & RETRIEVAL
   // ============================================================
 
-  async createSession(data: CreateSessionInput, branchId: string, userId: string) {
-    return this.creationService.createSession(data, branchId, userId);
+  async createSession(data: CreateSessionInput, branchId: string, userId: string, userRole?: string) {
+    return this.creationService.createSession(data, branchId, userId, userRole);
   }
 
   async getSessionById(sessionId: string) {

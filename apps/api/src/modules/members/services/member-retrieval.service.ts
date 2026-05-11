@@ -5,8 +5,10 @@ import { Role } from '@prisma/client';
 export interface MemberFilters {
   search?: string;
   status?: string;
+  branchCode?: string;
   page?: number;
   limit?: number;
+  userId?: string; // Add userId for ADMIN_MANAGER
 }
 
 /**
@@ -17,7 +19,7 @@ export class MemberRetrievalService {
    * Get members with filtering and pagination
    */
   async getMembers(branchId: string | null, role: Role, filters: MemberFilters) {
-    const { search, status, page = 1, limit = 20 } = filters;
+    const { search, status, branchCode, userId, page = 1, limit = 20 } = filters;
 
     // Build where clause - start with isActive filter
     const where: any = {
@@ -26,17 +28,68 @@ export class MemberRetrievalService {
 
     // Branch filtering based on role
     if (role === Role.SUPER_ADMIN) {
-      // Super admin can see all members
-      if (branchId) {
+      // Super admin can see all members or filter by specific branch
+      if (branchCode) {
+        // Filter by specific branch code
         where.OR = [
-          { registrationBranchId: branchId },
-          { branchAccesses: { some: { branchId } } },
+          { registrationBranch: { branchCode } },
+          { branchAccesses: { some: { branch: { branchCode } } } },
         ];
+      }
+      // If no branchCode, show all members (no additional filter)
+    } else if (role === Role.ADMIN_MANAGER) {
+      // Admin Manager can see members from branches they manage
+      if (!branchId || !userId) {
+        // If ADMIN_MANAGER doesn't have branchId or userId, they can see all members
+        // This happens when the user account is not assigned to a branch yet
+        console.warn('⚠️ ADMIN_MANAGER without branchId/userId - showing all members');
+        // No additional filter - show all members
+      } else {
+        // Get all branches this manager manages (via ManagerBranch table)
+        const managerBranches = await prisma.managerBranch.findMany({
+          where: { userId },
+          select: { branchId: true }
+        });
+
+        const managedBranchIds = managerBranches.map(mb => mb.branchId);
+        
+        // Include primary branch + managed branches (remove duplicates)
+        const allBranchIds = Array.from(new Set([branchId, ...managedBranchIds]));
+
+        console.log(`📊 ADMIN_MANAGER ${userId} manages ${allBranchIds.length} branches:`, allBranchIds);
+
+        if (branchCode) {
+          // If branchCode filter is provided, first get the branch by code
+          const targetBranch = await prisma.branch.findUnique({
+            where: { branchCode },
+            select: { id: true }
+          });
+
+          if (targetBranch && allBranchIds.includes(targetBranch.id)) {
+            // Only show members from this specific branch (if manager has access)
+            console.log(`🔍 Filtering by branchCode: ${branchCode} (id: ${targetBranch.id})`);
+            where.OR = [
+              { registrationBranchId: targetBranch.id },
+              { branchAccesses: { some: { branchId: targetBranch.id } } },
+            ];
+          } else {
+            // Manager doesn't have access to this branch - return empty
+            console.warn(`⚠️ ADMIN_MANAGER doesn't have access to branch ${branchCode}`);
+            where.id = 'no-access'; // Force empty result
+          }
+        } else {
+          // Show all members from all branches they manage
+          console.log(`📋 Showing members from all ${allBranchIds.length} managed branches`);
+          where.OR = [
+            { registrationBranchId: { in: allBranchIds } },
+            { branchAccesses: { some: { branchId: { in: allBranchIds } } } },
+          ];
+        }
       }
     } else if (role === Role.ADMIN_CABANG || role === Role.ADMIN_LAYANAN) {
       // Branch admin can only see members from their branch
       if (!branchId) {
-        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Branch ID diperlukan' };
+        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Akun Anda belum di-assign ke cabang. Hubungi SUPER_ADMIN untuk assign cabang.' };
       }
       where.OR = [
         { registrationBranchId: branchId },
@@ -319,6 +372,9 @@ export class MemberRetrievalService {
    * Get member by ID
    */
   async getMemberById(memberId: string) {
+    console.log('🔍 [Member Retrieval] getMemberById called for:', memberId);
+    console.time('getMemberById');
+    
     const member = await prisma.member.findUnique({
       where: { id: memberId },
       include: {
@@ -348,11 +404,17 @@ export class MemberRetrievalService {
       },
     });
 
+    console.timeEnd('getMemberById');
+
     if (!member) {
+      console.log('❌ [Member Retrieval] Member not found:', memberId);
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    return this.formatMemberDetailData(member);
+    console.log('✅ [Member Retrieval] Member found:', member.memberNo, member.user.profile?.fullName);
+    const result = this.formatMemberDetailData(member);
+    console.log('✅ [Member Retrieval] Formatted data ready');
+    return result;
   }
 
   /**

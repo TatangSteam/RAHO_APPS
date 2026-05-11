@@ -603,13 +603,6 @@ Pastikan semua environment variables sudah di-set untuk production:
 
 ## 📖 Documentation
 
-### Additional Docs
-- [Modularization Summary](./MODULARIZATION-SUMMARY.md) - Service architecture
-- [Sessions Modularization](./SESSIONS-MODULARIZATION-COMPLETE.md) - Session services
-- [Admin Controller Fix](./ADMIN-CONTROLLER-FIX.md) - TypeScript fixes
-- [Invoice Improvements](./INVOICE-IMPROVEMENTS.md) - Invoice features
-- [Migration Guides](./docs/) - Various migration guides
-
 ### Service READMEs
 - [Admin Services](./apps/api/src/modules/admin/services/README.md)
 - [Members Services](./apps/api/src/modules/members/services/README.md)

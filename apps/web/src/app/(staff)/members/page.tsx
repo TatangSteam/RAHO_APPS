@@ -12,10 +12,12 @@ export default function MembersPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [members, setMembers] = useState<Member[]>([]);
+  const [branches, setBranches] = useState<Array<{ branchCode: string; name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [status, setStatus] = useState('');
+  const [branchFilter, setBranchFilter] = useState(''); // Filter cabang
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -23,9 +25,56 @@ export default function MembersPage() {
   const [showLookupModal, setShowLookupModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
+  // Check if user is ADMIN_MANAGER (can see multiple branches they manage)
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+
   const canCreateMember = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(
     user?.role || ''
   );
+
+  // DOCTOR and NURSE can view but cannot create members
+  const canViewMembers = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN', 'DOCTOR', 'NURSE'].includes(
+    user?.role || ''
+  );
+
+  // Load branches list for filter
+  useEffect(() => {
+    if (isSuperAdmin || isAdminManager) {
+      loadBranches();
+    }
+    // Don't auto-set filter for ADMIN_MANAGER anymore - let them choose
+  }, [isSuperAdmin, isAdminManager]);
+
+  const loadBranches = async () => {
+    try {
+      console.log('🔄 Loading branches for role:', user?.role);
+      const { branchesApi } = await import('@/lib/api/branchesApi');
+      const response = await branchesApi.getAllBranches();
+      console.log('📊 Full API response:', response);
+      console.log('📊 Response data:', response.data);
+      
+      // getAllBranches returns array directly in response.data.data
+      const branchesData = Array.isArray(response.data.data) ? response.data.data : [];
+      console.log('📋 Branches data (array):', branchesData);
+      console.log('📋 Branches count:', branchesData.length);
+      
+      if (branchesData.length === 0) {
+        console.warn('⚠️ No branches returned from API');
+      }
+      
+      const mappedBranches = branchesData.map((b: any) => {
+        console.log('  - Branch:', b.branchCode, b.name);
+        return { branchCode: b.branchCode, name: b.name };
+      });
+      
+      setBranches(mappedBranches);
+      console.log('✅ Branches state updated:', mappedBranches.length, 'branches');
+    } catch (error: any) {
+      console.error('❌ Failed to load branches:', error);
+      console.error('❌ Error details:', error.response?.data || error.message);
+    }
+  };
 
   // Debounce search
   useEffect(() => {
@@ -39,7 +88,7 @@ export default function MembersPage() {
 
   useEffect(() => {
     loadMembers();
-  }, [page, status, debouncedSearch]);
+  }, [page, status, debouncedSearch, branchFilter]);
 
   const loadMembers = async () => {
     try {
@@ -47,6 +96,7 @@ export default function MembersPage() {
       const result = await getMembersApi({
         search: debouncedSearch || undefined,
         status: status || undefined,
+        branchCode: branchFilter || undefined,
         page,
         limit: 20,
       });
@@ -148,36 +198,63 @@ export default function MembersPage() {
 
       {/* Search & Filter */}
       <div className="card" style={{ marginBottom: '24px' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ flex: 1, position: 'relative' }}>
+        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
             <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>🔍</span>
             <input
               type="text"
               placeholder="Cari nama, no. member, atau telepon..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: '44px' }}
+            />
+          </div>
+          {(isSuperAdmin || isAdminManager) && (
+            <>
+              {console.log('🎨 Rendering dropdown - branches:', branches.length, 'isSuperAdmin:', isSuperAdmin, 'isAdminManager:', isAdminManager)}
+              <select
+                value={branchFilter}
+                onChange={(e) => {
+                  console.log('🔄 Branch filter changed to:', e.target.value);
+                  setBranchFilter(e.target.value);
+                  setPage(1);
+                }}
+                className="form-input"
+                style={{ width: 'auto', minWidth: '180px' }}
+              >
+                <option value="">Semua Cabang</option>
+                {branches.map((branch) => (
+                  <option key={branch.branchCode} value={branch.branchCode}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+          {!isSuperAdmin && !isAdminManager && user?.branchCode && (
+            <div className="form-input" style={{ width: 'auto', minWidth: '180px', background: 'var(--surface-hover)', cursor: 'not-allowed', display: 'flex', alignItems: 'center' }}>
+              🏢 {user.branchCode}
+            </div>
+          )}
+          <select
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setPage(1);
+            }}
             className="form-input"
-            style={{ paddingLeft: '44px' }}
-          />
-        </div>
-        <select
-          value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
-          className="form-input"
-          style={{ width: 'auto', minWidth: '150px' }}
-        >
-          <option value="">Semua Status</option>
-          <option value="active">Aktif</option>
-          <option value="inactive">Nonaktif</option>
-        </select>
-        <button type="submit" className="btn btn-primary">
-          Cari
-        </button>
-      </form>
-    </div>
+            style={{ width: 'auto', minWidth: '150px' }}
+          >
+            <option value="">Semua Status</option>
+            <option value="active">Aktif</option>
+            <option value="inactive">Nonaktif</option>
+          </select>
+          <button type="submit" className="btn btn-primary">
+            Cari
+          </button>
+        </form>
+      </div>
 
     {/* Table */}
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
@@ -189,11 +266,37 @@ export default function MembersPage() {
     ) : members.length === 0 ? (
       <div style={{ padding: '48px', textAlign: 'center' }}>
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>👥</div>
-        <p style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>Tidak ada member ditemukan</p>
-        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Coba ubah filter pencarian Anda</p>
+        <p style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
+          Tidak ada member ditemukan
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+          Coba ubah filter pencarian Anda
+        </p>
       </div>
     ) : (
       <>
+        {branchFilter && (isSuperAdmin || isAdminManager) && (
+          <div style={{ 
+            padding: '12px 24px', 
+            background: 'rgba(59,130,246,0.1)', 
+            borderBottom: '1px solid rgba(59,130,246,0.2)',
+            fontSize: '14px',
+            color: 'var(--text-secondary)'
+          }}>
+            Menampilkan <strong>{total}</strong> member dari cabang <strong>{branches.find(b => b.branchCode === branchFilter)?.name || branchFilter}</strong>
+          </div>
+        )}
+        {isAdminManager && !branchFilter && branches.length > 0 && (
+          <div style={{ 
+            padding: '12px 24px', 
+            background: 'rgba(168,85,247,0.1)', 
+            borderBottom: '1px solid rgba(168,85,247,0.2)',
+            fontSize: '14px',
+            color: 'var(--text-secondary)'
+          }}>
+            📌 Menampilkan member dari <strong>{branches.length}</strong> cabang yang Anda kelola
+          </div>
+        )}
         <div className="table-wrapper">
           <table>
             <thead>

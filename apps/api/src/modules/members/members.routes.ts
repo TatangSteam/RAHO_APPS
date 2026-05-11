@@ -80,6 +80,12 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   assertBranchAccess,
+  (req, res, next) => {
+    console.log('🚀 [Route] GET /members/:memberId/packages hit!');
+    console.log('  - memberId:', req.params.memberId);
+    console.log('  - user:', req.user?.email, req.user?.role);
+    next();
+  },
   packagesController.getMemberPackages.bind(packagesController)
 );
 

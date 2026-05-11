@@ -11,6 +11,7 @@ import type {
 export async function getMembersApi(params?: {
   search?: string;
   status?: string;
+  branchCode?: string;
   page?: number;
   limit?: number;
 }): Promise<MembersResponse> {

@@ -62,8 +62,8 @@ export class PackagesService {
   /**
    * Verify payment for package or add-on
    */
-  async verifyPayment(packageId: string, data: VerifyPaymentInput, userId: string) {
-    return await this.verificationService.verifyPayment(packageId, data, userId);
+  async verifyPayment(packageId: string, data: VerifyPaymentInput, branchId: string | undefined, userId: string) {
+    return await this.verificationService.verifyPayment(packageId, data, branchId, userId);
   }
 
   // ============================================================

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
+import { loginRateLimiter } from '@middleware/rateLimiter';
 import { login, refresh, logout, getMe } from './auth.controller';
 
 const router = Router();
@@ -8,8 +9,9 @@ const router = Router();
  * @route  POST /auth/login
  * @desc   Login with email + password — returns access + refresh tokens
  * @access Public
+ * @rateLimit 5 requests per 15 minutes per IP
  */
-router.post('/login', login);
+router.post('/login', loginRateLimiter, login);
 
 /**
  * @route  POST /auth/refresh

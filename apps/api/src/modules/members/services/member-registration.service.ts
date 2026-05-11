@@ -92,16 +92,51 @@ export class MemberRegistrationService {
     let finalNextIncentiveType = data.nextIncentiveType;
     let finalNextIncentiveValue = data.nextIncentiveValue;
     
+    // Handle both referralCodeId (UUID) and referralCode (string code like "REF-001")
+    // IMPORTANT: If referralCodeId is provided, it takes precedence
     if (data.referralCodeId) {
-      const referralCode = await prisma.referralCode.findUnique({
-        where: { id: data.referralCodeId, isActive: true },
+      // Validate by ID
+      const referralCode = await prisma.referralCode.findFirst({
+        where: { 
+          id: data.referralCodeId, 
+          isActive: true 
+        },
       });
 
       if (!referralCode) {
         throw {
-          status: 404,
-          code: 'REFERRAL_CODE_NOT_FOUND',
-          message: 'Kode referral tidak ditemukan atau tidak aktif',
+          status: 400,
+          code: 'INVALID_REFERRAL_CODE',
+          message: 'Kode referral tidak valid atau tidak aktif',
+        };
+      }
+
+      referralCodeId = referralCode.id;
+      
+      // Set default incentive values if not provided by user
+      if (!finalFirstIncentiveType) {
+        finalFirstIncentiveType = 'PERCENTAGE';
+        finalFirstIncentiveValue = 10.0; // 10% for first package
+      }
+      if (!finalNextIncentiveType) {
+        finalNextIncentiveType = 'PERCENTAGE';
+        finalNextIncentiveValue = 5.0; // 5% for subsequent packages
+      }
+    } else if (data.referralCode) {
+      // Validate by code string (e.g., "REF-001")
+      // This handles cases where user manually types a referral code
+      const referralCode = await prisma.referralCode.findFirst({
+        where: { 
+          code: data.referralCode, 
+          isActive: true 
+        },
+      });
+
+      if (!referralCode) {
+        throw {
+          status: 400,
+          code: 'INVALID_REFERRAL_CODE',
+          message: `Kode referral "${data.referralCode}" tidak valid atau tidak aktif`,
         };
       }
 
@@ -117,6 +152,7 @@ export class MemberRegistrationService {
         finalNextIncentiveValue = 5.0; // 5% for subsequent packages
       }
     }
+    // If neither referralCodeId nor referralCode is provided, that's OK - member can be created without referral
 
     // Use provided password (already validated by schema)
     const hashedPassword = await bcrypt.hash(data.memberPassword, 10);
@@ -196,10 +232,11 @@ export class MemberRegistrationService {
     // Audit log
     await logAudit({
       userId,
+      branchId,
       action: AuditAction.CREATE,
       resource: 'Member',
       resourceId: result.member.id,
-      meta: { memberNo, branchId },
+      meta: { memberNo },
     });
 
     return {

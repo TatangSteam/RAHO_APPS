@@ -25,7 +25,6 @@ interface BranchStats {
   totalMembers: number;
   activePackages: number;
   totalStaff: number;
-  totalMembers: number;
 }
 
 export default function CabangPage() {
@@ -54,8 +53,7 @@ export default function CabangPage() {
         activeUsers: 4,
         totalMembers: 10,
         activePackages: 11,
-        totalStaff: 4,
-        totalMembers: 10
+        totalStaff: 4
       });
     } catch (error: any) {
       console.error('Failed to load branch data:', error);

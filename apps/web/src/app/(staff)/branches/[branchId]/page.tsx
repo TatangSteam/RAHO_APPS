@@ -104,6 +104,21 @@ export default function BranchDetailPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
+  // Member filter state
+  const [memberBranchFilter, setMemberBranchFilter] = useState<'all' | 'registered' | 'lintas'>('all');
+
+  // Filtered members based on branch filter
+  const filteredMembers = members.filter((member) => {
+    if (memberBranchFilter === 'all') return true;
+    if (memberBranchFilter === 'registered') {
+      return member.registrationBranch === branch?.branchCode;
+    }
+    if (memberBranchFilter === 'lintas') {
+      return member.isLintas || member.registrationBranch !== branch?.branchCode;
+    }
+    return true;
+  });
+
   // CRUD Modal states
   const [crudModal, setCrudModal] = useState<{
     type: CrudModalType;
@@ -465,13 +480,38 @@ export default function BranchDetailPage() {
             <div>
               <div className={styles.tabHeader}>
                 <h2>Members</h2>
-                <button 
-                  className={styles.addButton}
-                  onClick={() => openCrudModal('member', 'create')}
-                >
-                  <Plus size={18} />
-                  <span>Tambah Member</span>
-                </button>
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <select 
+                    className={styles.filterSelect}
+                    value={memberBranchFilter}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === 'all' || value === 'registered' || value === 'lintas') {
+                        setMemberBranchFilter(value);
+                      }
+                    }}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--surface-border)',
+                      background: 'var(--surface-card)',
+                      color: 'var(--text-primary)',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <option value="all">Semua Cabang</option>
+                    <option value="registered">Terdaftar di Cabang Ini</option>
+                    <option value="lintas">Member Lintas Cabang</option>
+                  </select>
+                  <button 
+                    className={styles.addButton}
+                    onClick={() => openCrudModal('member', 'create')}
+                  >
+                    <Plus size={18} />
+                    <span>Tambah Member</span>
+                  </button>
+                </div>
               </div>
 
               {tabLoading ? (
@@ -479,11 +519,17 @@ export default function BranchDetailPage() {
                   <div className={styles.loadingSpinner} />
                   <p>Memuat data members...</p>
                 </div>
-              ) : !Array.isArray(members) || members.length === 0 ? (
+              ) : !Array.isArray(filteredMembers) || filteredMembers.length === 0 ? (
                 <div className={styles.emptyState}>
                   <Users size={48} />
                   <h3>Belum Ada Member</h3>
-                  <p>Cabang ini belum memiliki member terdaftar.</p>
+                  <p>
+                    {memberBranchFilter === 'registered' 
+                      ? 'Belum ada member yang terdaftar di cabang ini.'
+                      : memberBranchFilter === 'lintas'
+                      ? 'Belum ada member lintas cabang.'
+                      : 'Cabang ini belum memiliki member terdaftar.'}
+                  </p>
                   <button 
                     className={styles.emptyStateButton}
                     onClick={() => openCrudModal('member', 'create')}
@@ -493,66 +539,110 @@ export default function BranchDetailPage() {
                   </button>
                 </div>
               ) : (
-                <table className={styles.dataTable}>
-                  <thead>
-                    <tr>
-                      <th>No. Member</th>
-                      <th>Nama Lengkap</th>
-                      <th>Email</th>
-                      <th>Telepon</th>
-                      <th>Tanggal Daftar</th>
-                      <th>Status</th>
-                      <th>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {members.map((member) => (
-                      <tr key={member.memberId}>
-                        <td>
-                          <div className={styles.memberCell}>
-                            <div className={styles.memberAvatar}>
-                              {member.fullName.charAt(0).toUpperCase()}
-                            </div>
-                            <div className={styles.memberInfo}>
-                              <div className={styles.memberCode}>{member.memberNo}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className={styles.memberName}>{member.fullName}</div>
-                        </td>
-                        <td>
-                          <div className={styles.memberEmail}>{member.email}</div>
-                        </td>
-                        <td>{member.phone}</td>
-                        <td>{new Date(member.createdAt).toLocaleDateString('id-ID')}</td>
-                        <td>
-                          <span className={`${styles.statusBadge} ${member.isActive ? styles.active : styles.inactive}`}>
-                            {member.isActive ? 'Aktif' : 'Tidak Aktif'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles.actionButtons}>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.edit}`}
-                              onClick={() => openCrudModal('member', 'edit', member)}
-                              title="Edit Member"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.delete}`}
-                              onClick={() => handleDeleteItem('member', member.memberId, member.fullName)}
-                              title="Hapus Member"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
+                <>
+                  <div style={{ 
+                    marginBottom: '16px', 
+                    padding: '12px 16px', 
+                    background: 'rgba(59,130,246,0.1)', 
+                    border: '1px solid rgba(59,130,246,0.2)',
+                    borderRadius: '8px',
+                    fontSize: '14px',
+                    color: 'var(--text-secondary)'
+                  }}>
+                    Menampilkan <strong>{filteredMembers.length}</strong> dari <strong>{members.length}</strong> member
+                    {memberBranchFilter === 'registered' && ' yang terdaftar di cabang ini'}
+                    {memberBranchFilter === 'lintas' && ' lintas cabang'}
+                  </div>
+                  <table className={styles.dataTable}>
+                    <thead>
+                      <tr>
+                        <th>No. Member</th>
+                        <th>Nama Lengkap</th>
+                        <th>Email</th>
+                        <th>Telepon</th>
+                        <th>Cabang Registrasi</th>
+                        <th>Tanggal Daftar</th>
+                        <th>Status</th>
+                        <th>Aksi</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {filteredMembers.map((member) => (
+                        <tr key={member.memberId}>
+                          <td>
+                            <div className={styles.memberCell}>
+                              <div className={styles.memberAvatar}>
+                                {member.fullName.charAt(0).toUpperCase()}
+                              </div>
+                              <div className={styles.memberInfo}>
+                                <div className={styles.memberCode}>{member.memberNo}</div>
+                                {member.isLintas && (
+                                  <span style={{
+                                    fontSize: '10px',
+                                    padding: '2px 6px',
+                                    background: 'rgba(139,92,246,0.15)',
+                                    color: '#8b5cf6',
+                                    borderRadius: '4px',
+                                    fontWeight: 600,
+                                  }}>
+                                    LINTAS
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className={styles.memberName}>{member.fullName}</div>
+                          </td>
+                          <td>
+                            <div className={styles.memberEmail}>{member.email}</div>
+                          </td>
+                          <td>{member.phone}</td>
+                          <td>
+                            <span style={{
+                              padding: '4px 8px',
+                              background: member.registrationBranch === branch?.branchCode 
+                                ? 'rgba(34,197,94,0.15)' 
+                                : 'rgba(59,130,246,0.15)',
+                              color: member.registrationBranch === branch?.branchCode 
+                                ? '#22c55e' 
+                                : '#3b82f6',
+                              borderRadius: '6px',
+                              fontSize: '12px',
+                              fontWeight: 600,
+                            }}>
+                              {member.registrationBranch}
+                            </span>
+                          </td>
+                          <td>{new Date(member.createdAt).toLocaleDateString('id-ID')}</td>
+                          <td>
+                            <span className={`${styles.statusBadge} ${member.isActive ? styles.active : styles.inactive}`}>
+                              {member.isActive ? 'Aktif' : 'Tidak Aktif'}
+                            </span>
+                          </td>
+                          <td>
+                            <div className={styles.actionButtons}>
+                              <button 
+                                className={`${styles.actionBtn} ${styles.edit}`}
+                                onClick={() => openCrudModal('member', 'edit', member)}
+                                title="Edit Member"
+                              >
+                                <Edit size={14} />
+                              </button>
+                              <button 
+                                className={`${styles.actionBtn} ${styles.delete}`}
+                                onClick={() => handleDeleteItem('member', member.memberId, member.fullName)}
+                                title="Hapus Member"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           )}
