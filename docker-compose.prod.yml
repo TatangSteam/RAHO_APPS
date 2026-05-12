@@ -91,8 +91,8 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-    image: raho-api:latest
-    container_name: raho-api
+    image: raho-erp-api:latest
+    container_name: raho-erp-api
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -140,8 +140,8 @@ services:
         NEXT_PUBLIC_API_URL: ${WEB_NEXT_PUBLIC_API_URL:-/api/v1}
         NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO Klinik}
         NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
-    image: raho-web:latest
-    container_name: raho-web
+    image: raho-erp-web:latest
+    container_name: raho-erp-web
     restart: unless-stopped
     environment:
       NODE_ENV: production
@@ -169,8 +169,8 @@ services:
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-    image: raho-api:latest
-    container_name: raho-migrate
+    image: raho-erp-api:latest
+    container_name: raho-erp-migrate
     restart: "no"
     depends_on:
       - postgres
@@ -189,8 +189,8 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
       target: builder
-    image: raho-seed-builder:latest
-    container_name: raho-seed
+    image: raho-erp-seed-builder:latest
+    container_name: raho-erp-seed
     restart: "no"
     depends_on:
       - postgres
