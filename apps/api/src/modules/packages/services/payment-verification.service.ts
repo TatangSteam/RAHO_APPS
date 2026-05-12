@@ -49,17 +49,17 @@ export class PaymentVerificationService {
 
     // If this package is part of a group, verify all packages AND add-ons in the group
     if (pkg.purchaseGroupId) {
-      return await this.verifyGroupPayment(pkg, data, branchId, userId, now);
+      return await this.verifyGroupPayment(pkg, data, userId, now);
     }
 
     // Single package verification
-    return await this.verifySinglePackagePayment(pkg, data, branchId, userId, now);
+    return await this.verifySinglePackagePayment(pkg, data, userId, now);
   }
 
   /**
    * Verify add-on payment
    */
-  private async verifyAddOnPayment(addOnId: string, data: VerifyPaymentInput, userId: string) {
+  private async verifyAddOnPayment(addOnId: string, data: VerifyPaymentInput, branchId: string | undefined, userId: string) {
     const addon = await prisma.memberAddOn.findUnique({
       where: { id: addOnId },
       include: {

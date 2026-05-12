@@ -277,6 +277,7 @@ export class SessionCreationService {
 
   /**
    * Validate diagnosis exists for member
+   * IMPORTANT: Member must have at least one diagnosis before creating therapy session
    */
   private async validateDiagnosisExists(memberId: string) {
     const existingDiagnoses = await prisma.diagnosis.findMany({
@@ -288,7 +289,7 @@ export class SessionCreationService {
         status: 422,
         code: 'DIAGNOSIS_REQUIRED',
         message:
-          'Member harus memiliki diagnosa sebelum membuat sesi terapi. Silakan buat diagnosa terlebih dahulu.',
+          'Member belum memiliki diagnosa. Diagnosa wajib dibuat terlebih dahulu sebelum membuat sesi terapi. Silakan buat diagnosa di menu Member Detail.',
       };
     }
 
@@ -297,6 +298,8 @@ export class SessionCreationService {
 
   /**
    * Validate therapy plan
+   * IMPORTANT: Therapy plan must be created fresh for each session
+   * Cannot reuse therapy plan from previous sessions
    */
   private async validateTherapyPlan(therapyPlanId: string, memberId: string) {
     const therapyPlan = await prisma.therapyPlan.findUnique({
@@ -307,7 +310,7 @@ export class SessionCreationService {
       throw {
         status: 404,
         code: 'THERAPY_PLAN_NOT_FOUND',
-        message: 'Therapy plan tidak ditemukan',
+        message: 'Therapy plan tidak ditemukan. Silakan buat therapy plan baru untuk sesi ini.',
       };
     }
 
@@ -319,11 +322,13 @@ export class SessionCreationService {
       };
     }
 
+    // CRITICAL: Therapy plan must be fresh (not used in any session)
+    // Each session requires a new therapy plan
     if (therapyPlan.treatmentSessionId) {
       throw {
         status: 422,
         code: 'THERAPY_PLAN_ALREADY_USED',
-        message: 'Therapy plan sudah digunakan di sesi lain',
+        message: 'Therapy plan sudah digunakan di sesi lain. Setiap sesi terapi memerlukan therapy plan baru. Silakan buat therapy plan baru untuk sesi ini.',
       };
     }
 

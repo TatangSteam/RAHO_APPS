@@ -21,6 +21,11 @@ export interface TherapyPlan {
     id: string;
     sessionCode: string;
     treatmentDate: string;
+    infusKe: number;
+    branchName: string;
+    branchCode: string;
+    totalSessionsCount: number; // Terapi ke-X (global)
+    branchSessionsCount: number; // Terapi ke-X di cabang ini
   };
   createdAt: string;
 }

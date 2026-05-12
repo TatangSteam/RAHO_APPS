@@ -192,6 +192,7 @@ export class MemberMedicalRecordsService {
 
   /**
    * Get member therapy plans
+   * Returns therapy plans with usage information and session counts
    */
   async getMemberTherapyPlans(memberId: string) {
     const member = await prisma.member.findUnique({
@@ -212,6 +213,14 @@ export class MemberMedicalRecordsService {
             id: true,
             sessionCode: true,
             treatmentDate: true,
+            infusKe: true,
+            branchId: true,
+            branch: {
+              select: {
+                name: true,
+                branchCode: true,
+              },
+            },
           },
         },
       },
@@ -220,30 +229,91 @@ export class MemberMedicalRecordsService {
       },
     });
 
-    return therapyPlans.map((plan) => ({
-      id: plan.id,
-      planCode: plan.planCode,
-      keterangan: plan.keterangan,
-      ifa: plan.ifa ? Number(plan.ifa) : null,
-      hho: plan.hho ? Number(plan.hho) : null,
-      h2: plan.h2 ? Number(plan.h2) : null,
-      no: plan.no ? Number(plan.no) : null,
-      gaso: plan.gaso ? Number(plan.gaso) : null,
-      o2: plan.o2 ? Number(plan.o2) : null,
-      o3: plan.o3 ? Number(plan.o3) : null,
-      edta: plan.edta ? Number(plan.edta) : null,
-      mb: plan.mb ? Number(plan.mb) : null,
-      h2s: plan.h2s ? Number(plan.h2s) : null,
-      kcl: plan.kcl ? Number(plan.kcl) : null,
-      jmlNb: plan.jmlNb ? Number(plan.jmlNb) : null,
-      isUsed: !!plan.treatmentSessionId,
-      usedInSession: plan.session,
-      createdAt: plan.createdAt.toISOString(),
-    }));
+    // Calculate session counts for each therapy plan
+    const plansWithCounts = await Promise.all(
+      therapyPlans.map(async (plan) => {
+        let sessionInfo = null;
+
+        if (plan.session) {
+          // Get total sessions count (global) up to this session
+          const totalSessionsCount = await prisma.treatmentSession.count({
+            where: {
+              encounter: {
+                memberId,
+                memberPackage: {
+                  packageType: 'BASIC',
+                },
+              },
+              infusKe: {
+                lte: plan.session.infusKe,
+              },
+            },
+          });
+
+          // Get branch-specific sessions count up to this session
+          const branchSessionsCount = await prisma.treatmentSession.count({
+            where: {
+              encounter: {
+                memberId,
+                branchId: plan.session.branchId,
+                memberPackage: {
+                  packageType: 'BASIC',
+                },
+              },
+              infusKe: {
+                lte: plan.session.infusKe,
+              },
+            },
+          });
+
+          sessionInfo = {
+            id: plan.session.id,
+            sessionCode: plan.session.sessionCode,
+            treatmentDate: plan.session.treatmentDate,
+            infusKe: plan.session.infusKe,
+            branchName: plan.session.branch.name,
+            branchCode: plan.session.branch.branchCode,
+            // Session counts
+            totalSessionsCount, // Terapi ke-X (global)
+            branchSessionsCount, // Terapi ke-X di cabang ini
+          };
+        }
+
+        return {
+          id: plan.id,
+          planCode: plan.planCode,
+          keterangan: plan.keterangan,
+          ifa: plan.ifa ? Number(plan.ifa) : null,
+          hho: plan.hho ? Number(plan.hho) : null,
+          h2: plan.h2 ? Number(plan.h2) : null,
+          no: plan.no ? Number(plan.no) : null,
+          gaso: plan.gaso ? Number(plan.gaso) : null,
+          o2: plan.o2 ? Number(plan.o2) : null,
+          o3: plan.o3 ? Number(plan.o3) : null,
+          edta: plan.edta ? Number(plan.edta) : null,
+          mb: plan.mb ? Number(plan.mb) : null,
+          h2s: plan.h2s ? Number(plan.h2s) : null,
+          kcl: plan.kcl ? Number(plan.kcl) : null,
+          jmlNb: plan.jmlNb ? Number(plan.jmlNb) : null,
+          isUsed: !!plan.treatmentSessionId,
+          usedInSession: sessionInfo,
+          createdAt: plan.createdAt.toISOString(),
+        };
+      })
+    );
+
+    return plansWithCounts;
   }
 
   /**
    * Create member therapy plan
+   * Generates unique code with branch and member info: TP-MBR-{BranchCode}-{MemberNo}-{BranchSeq}-{TotalSeq}
+   * Example: TP-MBR-PST-0005-00002-00003
+   * - TP-MBR: Therapy Plan Member
+   * - PST: Branch Code
+   * - 0005: Member Number
+   * - 00002: Therapy #2 at this branch
+   * - 00003: Therapy #3 total (global)
    */
   async createMemberTherapyPlan(memberId: string, data: any, userId: string) {
     const member = await prisma.member.findUnique({
@@ -257,19 +327,47 @@ export class MemberMedicalRecordsService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Generate therapy plan code
-    const branchCode = member.registrationBranch.branchCode;
-    const prefix = `TP-${branchCode}-`;
-    const lastPlan = await prisma.therapyPlan.findFirst({
-      where: { planCode: { startsWith: prefix } },
-      orderBy: { planCode: 'desc' },
+    // Get user's branch (for branch-specific sequence)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { branch: true },
     });
-    
-    const sequence = lastPlan 
-      ? parseInt(lastPlan.planCode.split('-').pop() || '0') + 1 
-      : 1;
-    
-    const planCode = `TP-${branchCode}-${String(sequence).padStart(5, '0')}`;
+
+    if (!user || !user.branch) {
+      throw { status: 400, code: 'BRANCH_REQUIRED', message: 'User harus memiliki branch' };
+    }
+
+    const branchCode = user.branch.branchCode;
+
+    // Calculate total therapy count (global across all branches)
+    const totalTherapyCount = await prisma.therapyPlan.count({
+      where: {
+        memberId,
+        treatmentSessionId: { not: null }, // Only count used therapy plans
+      },
+    });
+    const totalSequence = totalTherapyCount + 1;
+
+    // Calculate branch-specific therapy count
+    const branchTherapyCount = await prisma.therapyPlan.count({
+      where: {
+        memberId,
+        treatmentSessionId: { not: null },
+        session: {
+          is: {
+            branchId: user.branchId,
+          },
+        },
+      },
+    });
+    const branchSequence = branchTherapyCount + 1;
+
+    // Extract member number (remove 'M' prefix if exists)
+    const memberNoStr = member.memberNo.replace(/^M/, '');
+
+    // Generate therapy plan code
+    // Format: TP-MBR-{BranchCode}-{MemberNo}-{BranchSeq}-{TotalSeq}
+    const planCode = `TP-MBR-${branchCode}-${memberNoStr.padStart(4, '0')}-${String(branchSequence).padStart(5, '0')}-${String(totalSequence).padStart(5, '0')}`;
 
     const therapyPlan = await prisma.therapyPlan.create({
       data: {
@@ -296,7 +394,14 @@ export class MemberMedicalRecordsService {
       action: AuditAction.CREATE,
       resource: 'TherapyPlan',
       resourceId: therapyPlan.id,
-      meta: { memberId, planCode },
+      meta: { 
+        memberId, 
+        planCode, 
+        memberNo: member.memberNo,
+        branchCode,
+        branchSequence,
+        totalSequence,
+      },
     });
 
     return {

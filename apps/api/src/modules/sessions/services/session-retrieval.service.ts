@@ -160,54 +160,126 @@ export class SessionRetrievalService {
       },
     });
 
-    // Format sessions
-    const formattedSessions = sessions.map((session) => {
-      const diagnosis = session.encounter.diagnoses[0];
+    // Format sessions with branch info and session counts
+    const formattedSessions = await Promise.all(
+      sessions.map(async (session) => {
+        const diagnosis = session.encounter.diagnoses[0];
 
-      return {
-        session: {
-          sessionId: session.id,
-          sessionCode: session.sessionCode,
-          encounterId: session.encounterId,
-          encounterCode: session.encounter.encounterCode,
-          infusKe: session.infusKe,
-          pelaksanaan: session.pelaksanaan,
-          treatmentDate: session.treatmentDate.toISOString(),
-          isCompleted: session.isCompleted,
-          member: {
-            memberId: session.encounter.member.id,
-            memberNo: session.encounter.member.memberNo,
-            fullName: session.encounter.member.user.profile?.fullName || '',
+        // Calculate branch-specific infusKe
+        const branchInfusKe = await this.calculateBranchInfusKe(
+          session.encounter.memberId,
+          session.branchId,
+          session.infusKe
+        );
+
+        // Get branch info
+        const branch = await prisma.branch.findUnique({
+          where: { id: session.branchId },
+        });
+
+        // Get all branches where member has sessions (for multi-branch display)
+        const memberBranches = await prisma.treatmentSession.findMany({
+          where: {
+            encounter: {
+              memberId: session.encounter.memberId,
+              memberPackage: {
+                packageType: 'BASIC',
+              },
+            },
+            infusKe: {
+              lte: session.infusKe,
+            },
           },
-          adminLayanan: {
-            userId: session.adminLayanan.id,
-            fullName: session.adminLayanan.profile?.fullName || '',
+          select: {
+            branchId: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                branchCode: true,
+              },
+            },
           },
-          doctor: {
-            userId: session.doctor.id,
-            fullName: session.doctor.profile?.fullName || '',
+          distinct: ['branchId'],
+        });
+
+        // Calculate session count per branch
+        const branchSessionCounts = await Promise.all(
+          memberBranches.map(async (mb) => {
+            const count = await prisma.treatmentSession.count({
+              where: {
+                encounter: {
+                  memberId: session.encounter.memberId,
+                  branchId: mb.branchId,
+                  memberPackage: {
+                    packageType: 'BASIC',
+                  },
+                },
+                infusKe: {
+                  lte: session.infusKe,
+                },
+              },
+            });
+
+            return {
+              branchId: mb.branchId,
+              branchName: mb.branch.name,
+              branchCode: mb.branch.branchCode,
+              sessionCount: count,
+            };
+          })
+        );
+
+        return {
+          session: {
+            sessionId: session.id,
+            sessionCode: session.sessionCode,
+            encounterId: session.encounterId,
+            encounterCode: session.encounter.encounterCode,
+            infusKe: session.infusKe, // Total therapy count (global)
+            branchInfusKe: branchInfusKe, // Therapy count at current branch
+            branchId: session.branchId,
+            branchName: branch?.name || 'Unknown',
+            branchCode: branch?.branchCode || 'UNK',
+            branchSessionCounts: branchSessionCounts, // Session counts per branch (for multi-branch display)
+            pelaksanaan: session.pelaksanaan,
+            treatmentDate: session.treatmentDate.toISOString(),
+            isCompleted: session.isCompleted,
+            member: {
+              memberId: session.encounter.member.id,
+              memberNo: session.encounter.member.memberNo,
+              fullName: session.encounter.member.user.profile?.fullName || '',
+            },
+            adminLayanan: {
+              userId: session.adminLayanan.id,
+              fullName: session.adminLayanan.profile?.fullName || '',
+            },
+            doctor: {
+              userId: session.doctor.id,
+              fullName: session.doctor.profile?.fullName || '',
+            },
+            nurse: {
+              userId: session.nurse.id,
+              fullName: session.nurse.profile?.fullName || '',
+            },
+            boosterPackage: session.boosterPackage
+              ? {
+                  packageId: session.boosterPackage.id,
+                  packageCode: session.boosterPackage.packageCode,
+                  boosterType: session.boosterType,
+                }
+              : null,
           },
-          nurse: {
-            userId: session.nurse.id,
-            fullName: session.nurse.profile?.fullName || '',
-          },
-          boosterPackage: session.boosterPackage
-            ? {
-                packageId: session.boosterPackage.id,
-                packageCode: session.boosterPackage.packageCode,
-                boosterType: session.boosterType,
-              }
-            : null,
-        },
-        diagnosis,
-        therapyPlan: session.therapyPlan,
-        vitalSigns: session.vitalSigns,
-        infusion: session.infusion,
-        materials: session.materials,
-        photo: session.photo,
-        evaluation: session.evaluation,
-      };
-    });
+          diagnosis,
+          therapyPlan: session.therapyPlan,
+          vitalSigns: session.vitalSigns,
+          infusion: session.infusion,
+          materials: session.materials,
+          photo: session.photo,
+          evaluation: session.evaluation,
+        };
+      })
+    );
 
     return formattedSessions;
   }

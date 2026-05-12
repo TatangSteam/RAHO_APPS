@@ -732,42 +732,104 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
 
               {plan.isUsed && plan.usedInSession && (
                 <div style={{ 
-                  padding: '12px 16px',
+                  padding: '16px',
                   background: 'rgba(34,197,94,0.2)',
                   borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(34,197,94,0.4)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
+                  border: '1px solid rgba(34,197,94,0.4)'
                 }}>
-                  <div>
+                  <div style={{ 
+                    fontSize: '11px', 
+                    fontWeight: '700', 
+                    color: '#16a34a', 
+                    marginBottom: '12px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    🔗 Digunakan di Sesi Terapi
+                  </div>
+                  
+                  <div style={{ 
+                    display: 'grid', 
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+                    gap: '12px',
+                    marginBottom: '12px'
+                  }}>
                     <div style={{ 
-                      fontSize: '11px', 
-                      fontWeight: '700', 
-                      color: '#16a34a', 
-                      marginBottom: '4px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.5px'
+                      padding: '10px 12px',
+                      background: 'rgba(255,255,255,0.1)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(34,197,94,0.3)'
                     }}>
-                      🔗 Digunakan di Sesi
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                        Kode Sesi
+                      </div>
+                      <div style={{ fontSize: '14px', fontWeight: '700', color: '#f1f5f9', fontFamily: 'monospace' }}>
+                        {plan.usedInSession.sessionCode}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '14px', fontWeight: '600', color: '#f1f5f9' }}>
-                      {plan.usedInSession.sessionCode}
+
+                    <div style={{ 
+                      padding: '10px 12px',
+                      background: 'rgba(255,255,255,0.1)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(34,197,94,0.3)'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                        📅 Tanggal Terapi
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#f1f5f9' }}>
+                        {new Date(plan.usedInSession.treatmentDate).toLocaleDateString('id-ID', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: '#cbd5e1', marginTop: '2px' }}>
-                      📅 {new Date(plan.usedInSession.treatmentDate).toLocaleDateString('id-ID', {
-                        day: '2-digit',
-                        month: 'long',
-                        year: 'numeric'
-                      })}
+
+                    <div style={{ 
+                      padding: '10px 12px',
+                      background: 'rgba(59,130,246,0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(59,130,246,0.4)'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                        🌍 Terapi Ke (Total)
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#60a5fa' }}>
+                        #{plan.usedInSession.totalSessionsCount}
+                      </div>
+                    </div>
+
+                    <div style={{ 
+                      padding: '10px 12px',
+                      background: 'rgba(168,85,247,0.2)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(168,85,247,0.4)'
+                    }}>
+                      <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '4px' }}>
+                        📍 Terapi Ke ({plan.usedInSession.branchName})
+                      </div>
+                      <div style={{ fontSize: '18px', fontWeight: '700', color: '#c084fc' }}>
+                        #{plan.usedInSession.branchSessionsCount}
+                      </div>
                     </div>
                   </div>
+
                   <button 
                     className="btn btn-sm btn-primary"
                     onClick={() => router.push(`/sessions/${plan.usedInSession?.id}`)}
-                    style={{ whiteSpace: 'nowrap' }}
+                    style={{ 
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '8px'
+                    }}
                   >
-                    Lihat Sesi →
+                    👁️ Lihat Detail Sesi →
                   </button>
                 </div>
               )}

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import CreateSessionModal from '@/components/sessions/CreateSessionModal';
+import SessionCountDisplay from '@/components/members/SessionCountDisplay';
 import type { SessionDetail } from '@/types/session';
 
 interface MemberSessionsTabProps {
@@ -189,6 +190,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                               minute: '2-digit',
                             })}
                           </p>
+                          
+                          {/* Session Count Information */}
+                          <SessionCountDisplay session={sessionDetail.session} />
                         </div>
                         <span
                           className={`badge ${
@@ -311,6 +315,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                               minute: '2-digit',
                             })}
                           </p>
+                          
+                          {/* Session Count Information */}
+                          <SessionCountDisplay session={sessionDetail.session} />
                         </div>
                         <span
                           className={`badge ${

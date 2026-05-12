@@ -70,7 +70,17 @@ export interface Session {
   sessionCode: string;
   encounterId: string;
   encounterCode: string;
-  infusKe: number;
+  infusKe: number; // Total therapy count (global across all branches)
+  branchInfusKe?: number; // Therapy count at current branch
+  branchId?: string;
+  branchName?: string;
+  branchCode?: string;
+  branchSessionCounts?: Array<{
+    branchId: string;
+    branchName: string;
+    branchCode: string;
+    sessionCount: number;
+  }>; // Session counts per branch (for multi-branch display)
   pelaksanaan: SessionType;
   treatmentDate: string;
   isCompleted: boolean;

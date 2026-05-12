@@ -35,11 +35,25 @@ export default function AddOnSection({
                   <div className={styles.addonDetails}>
                     <label className="form-label" style={{ fontSize: '12px' }}>Jumlah</label>
                     <input
-                      type="number"
-                      value={getAddOnQuantity(addon.code)}
-                      onChange={(e) => updateAddOnQuantity(addon.code, parseInt(e.target.value) || 1)}
+                      type="text"
+                      inputMode="numeric"
+                      value={getAddOnQuantity(addon.code) || 1}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Allow only numbers and empty string
+                        if (value === '' || /^\d+$/.test(value)) {
+                          const numValue = value === '' ? 1 : parseInt(value);
+                          if (numValue >= 1) {
+                            updateAddOnQuantity(addon.code, numValue);
+                          }
+                        }
+                      }}
+                      onFocus={(e) => {
+                        // Select all on focus for easy replacement
+                        e.target.select();
+                      }}
                       className={`form-input ${styles.addonQuantityInput}`}
-                      min="1"
+                      placeholder="1"
                     />
                     <p className={styles.addonTotal}>Total: {formatCurrency(addon.price * getAddOnQuantity(addon.code))}</p>
                   </div>
@@ -61,11 +75,25 @@ export default function AddOnSection({
               <div className={styles.addonDetails}>
                 <label className="form-label" style={{ fontSize: '12px' }}>Jumlah Bungkus</label>
                 <input
-                  type="number"
-                  value={getAddOnQuantity(ROKOK_KENKOU_PRICING.code)}
-                  onChange={(e) => updateAddOnQuantity(ROKOK_KENKOU_PRICING.code, parseInt(e.target.value) || 1)}
+                  type="text"
+                  inputMode="numeric"
+                  value={getAddOnQuantity(ROKOK_KENKOU_PRICING.code) || 1}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    // Allow only numbers and empty string
+                    if (value === '' || /^\d+$/.test(value)) {
+                      const numValue = value === '' ? 1 : parseInt(value);
+                      if (numValue >= 1) {
+                        updateAddOnQuantity(ROKOK_KENKOU_PRICING.code, numValue);
+                      }
+                    }
+                  }}
+                  onFocus={(e) => {
+                    // Select all on focus for easy replacement
+                    e.target.select();
+                  }}
                   className={`form-input ${styles.addonQuantityInput}`}
-                  min="1"
+                  placeholder="1"
                 />
                 <p className={styles.addonTotal}>Total: {formatCurrency(ROKOK_KENKOU_PRICING.price * getAddOnQuantity(ROKOK_KENKOU_PRICING.code))}</p>
               </div>

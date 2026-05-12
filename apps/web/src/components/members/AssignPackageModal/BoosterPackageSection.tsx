@@ -98,12 +98,26 @@ export default function BoosterPackageSection({
                     <div>
                       <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }}>Jumlah</label>
                       <input
-                        type="number"
+                        type="text"
+                        inputMode="numeric"
                         value={sel?.quantity || 1}
-                        onChange={(e) => updateBoosterQty(pricing.id, boosterType, parseInt(e.target.value) || 1)}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          // Allow only numbers and empty string
+                          if (value === '' || /^\d+$/.test(value)) {
+                            const numValue = value === '' ? 1 : parseInt(value);
+                            if (numValue >= 1) {
+                              updateBoosterQty(pricing.id, boosterType, numValue);
+                            }
+                          }
+                        }}
+                        onFocus={(e) => {
+                          // Select all on focus for easy replacement
+                          e.target.select();
+                        }}
                         className="form-input"
-                        min="1"
                         style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+                        placeholder="1"
                       />
                     </div>
 

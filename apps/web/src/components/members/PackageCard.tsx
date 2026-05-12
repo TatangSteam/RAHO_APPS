@@ -483,7 +483,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                       );
                     }}
                     className={styles.editButton}
-                    style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                   >
                     ✏️ Edit
                   </button>
@@ -495,7 +494,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                       onCancelPackage(basics[0].packageId, basics[0].packageCode);
                     }}
                     className={styles.cancelButton}
-                    style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                   >
                     ❌ Batalkan
                   </button>
@@ -522,7 +520,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                       onRefundPackage(basics[0].packageId, basics[0].packageCode, totalFinalPrice);
                     }}
                     className={styles.refundButton}
-                    style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                   >
                     💰 Refund (Bundle)
                   </button>
@@ -680,7 +677,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                     );
                   }}
                   className={styles.editButton}
-                  style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: 'white' }}
                 >
                   ✏️ Edit
                 </button>
@@ -692,7 +688,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                     onCancelPackage(memberPkg.packageId, memberPkg.packageCode);
                   }}
                   className={styles.cancelButton}
-                  style={{ background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white' }}
                 >
                   ❌ Batalkan
                 </button>
@@ -719,7 +714,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                     onRefundPackage(memberPkg.packageId, memberPkg.packageCode, standaloneFinalPrice);
                   }}
                   className={styles.refundButton}
-                  style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: 'white', padding: '10px 20px', borderRadius: '8px', border: 'none', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
                 >
                   💰 Refund
                 </button>
