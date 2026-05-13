@@ -57,12 +57,19 @@ export const invoiceController = {
   async getPaymentProofImage(req: Request, res: Response) {
     try {
       const { paymentId } = req.params;
-      const result = await invoiceService.getPaymentProofImage(paymentId);
+      const result = await invoiceService.getPaymentProofImage(paymentId, req.user);
 
-      // Redirect to presigned URL
-      return res.redirect(result.presignedUrl);
+      res.setHeader('Content-Type', result.contentType);
+      res.setHeader('Content-Length', result.contentLength);
+      res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+      res.setHeader('ETag', result.etag);
+
+      return result.stream.pipe(res);
     } catch (error: any) {
       logger.error('Get payment proof image error:', error);
+      if (error?.status) {
+        return sendError(res, error.status, error.code, error.message);
+      }
       return sendError(res, 404, 'PAYMENT_PROOF_NOT_FOUND', error.message);
     }
   },

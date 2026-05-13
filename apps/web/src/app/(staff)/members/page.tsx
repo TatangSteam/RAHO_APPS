@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMembersApi } from '@/lib/membersApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import type { Member } from '@/types/member';
 import { useAuthStore } from '@/stores/authStore';
 import { LookupMemberModal } from '@/components/members/LookupMemberModal';
@@ -21,6 +22,7 @@ export default function MembersPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   const [showLookupModal, setShowLookupModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -89,6 +91,54 @@ export default function MembersPage() {
   useEffect(() => {
     loadMembers();
   }, [page, status, debouncedSearch, branchFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPhotoUrls = async () => {
+      const entries = await Promise.all(
+        members
+          .filter((member) => Boolean(member.photoUrl))
+          .map(async (member) => {
+            try {
+              const blobUrl = await createAuthenticatedObjectUrl(member.photoUrl);
+              return [member.memberId, blobUrl] as const;
+            } catch (error) {
+              console.error('Failed to load member photo:', member.memberId, error);
+              return [member.memberId, ''] as const;
+            }
+          }),
+      );
+
+      if (!cancelled) {
+        setPhotoUrls((previous) => {
+          Object.values(previous).forEach((url) => {
+            if (url.startsWith('blob:')) {
+              URL.revokeObjectURL(url);
+            }
+          });
+
+          return Object.fromEntries(entries.filter(([, url]) => Boolean(url)));
+        });
+      }
+    };
+
+    loadPhotoUrls();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [members]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(photoUrls).forEach((url) => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    };
+  }, [photoUrls]);
 
   const loadMembers = async () => {
     try {
@@ -330,7 +380,7 @@ export default function MembersPage() {
                                 width: '40px', 
                                 height: '40px', 
                                 borderRadius: '50%', 
-                                background: member.photoUrl ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #2563eb)', 
+                                background: photoUrls[member.memberId] ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #2563eb)', 
                                 display: 'flex', 
                                 alignItems: 'center', 
                                 justifyContent: 'center', 
@@ -342,9 +392,9 @@ export default function MembersPage() {
                                 overflow: 'visible',
                                 border: '2px solid var(--surface-border)'
                               }}>
-                                {member.photoUrl ? (
+                                {photoUrls[member.memberId] ? (
                                   <img
-                                    src={member.photoUrl}
+                                    src={photoUrls[member.memberId]}
                                     alt={member.fullName || 'Member'}
                                     style={{
                                       width: '100%',

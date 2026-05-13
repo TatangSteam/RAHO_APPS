@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import type {
   Member,
   MemberDetail,
@@ -112,16 +113,10 @@ export async function sendNotificationApi(
   return data.data;
 }
 
-// ── Get Presigned URL ──────────────────────────────────────────
-export async function getPresignedUrl(fileUrl: string): Promise<string> {
-  const { data } = await api.get<{ data: { url: string } }>(
-    `/files/presign/${encodeURIComponent(fileUrl)}`
-  );
-  return data.data.url;
-}
-
 // ── Get Consent Documents ──────────────────────────────────────
 export async function getConsentDocumentsApi(memberId: string) {
   const response = await api.get(`/members/${memberId}/documents/consent`);
   return response.data.data;
 }
+
+export { createAuthenticatedObjectUrl };

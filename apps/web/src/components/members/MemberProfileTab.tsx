@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { MemberDetail } from '@/types/member';
-import { getPresignedUrl } from '@/lib/membersApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { showToast } from '@/lib/toast';
 
 interface MemberProfileTabProps {
@@ -17,8 +17,8 @@ export default function MemberProfileTab({
   const handleViewDocument = async (fileUrl: string, fileName: string) => {
     try {
       setLoadingDocUrl(fileUrl);
-      const presignedUrl = await getPresignedUrl(fileUrl);
-      window.open(presignedUrl, '_blank');
+      const blobUrl = await createAuthenticatedObjectUrl(fileUrl);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;

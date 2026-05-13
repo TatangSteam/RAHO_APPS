@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
-import { api } from '@/lib/api';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import styles from './PaymentProofModal.module.css';
 
 interface Props {
@@ -31,12 +31,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
     setLoadingImages(prev => new Set(prev).add(paymentId));
 
     try {
-      const response = await api.get(proofFileUrl, {
-        responseType: 'blob',
-      });
-
-      const blob = response.data;
-      const blobUrl = URL.createObjectURL(blob);
+      const blobUrl = await createAuthenticatedObjectUrl(proofFileUrl);
       
       setImageUrls(prev => new Map(prev).set(paymentId, blobUrl));
     } catch (error) {

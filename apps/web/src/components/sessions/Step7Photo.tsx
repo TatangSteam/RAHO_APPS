@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { photoApi, type SessionPhoto } from '@/lib/photoApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 
 interface Step7PhotoProps {
   sessionId: string;
@@ -20,8 +21,51 @@ export default function Step7Photo({
 }: Step7PhotoProps) {
   const { user } = useAuthStore();
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string | null>(photo?.fileUrl || null);
+  const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPreview = async () => {
+      if (!photo?.fileUrl) {
+        setPreview(null);
+        return;
+      }
+
+      // Keep local previews (data URLs) as-is when uploading a new file.
+      if (photo.fileUrl.startsWith('data:') || photo.fileUrl.startsWith('blob:')) {
+        setPreview(photo.fileUrl);
+        return;
+      }
+
+      try {
+        const objectUrl = await createAuthenticatedObjectUrl(photo.fileUrl);
+        if (!cancelled) {
+          setPreview(objectUrl);
+        }
+      } catch (error) {
+        console.error('Failed to load session photo URL:', error);
+        if (!cancelled) {
+          setPreview(null);
+        }
+      }
+    };
+
+    loadPreview();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photo?.fileUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (preview?.startsWith('blob:')) {
+        URL.revokeObjectURL(preview);
+      }
+    };
+  }, [preview]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -60,7 +104,7 @@ export default function Step7Photo({
     } catch (error: any) {
       console.error('Error uploading photo:', error);
       showToast.error(error.message || 'Gagal upload foto');
-      setPreview(photo?.fileUrl || null);
+      setPreview(null);
     } finally {
       setUploading(false);
     }

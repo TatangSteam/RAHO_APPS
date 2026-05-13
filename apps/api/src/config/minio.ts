@@ -77,8 +77,50 @@ export async function deleteFile(key: string): Promise<void> {
  * Extract the MinIO key from a full URL
  */
 export function extractKeyFromUrl(url: string): string {
-  const baseUrl = `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`;
-  return url.replace(baseUrl, '');
+  let value = url.trim();
+
+  if (!value) {
+    return value;
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    try {
+      const parsed = new URL(value);
+      value = `${parsed.pathname}${parsed.search}`;
+    } catch {
+      // Fall through to string-based normalization.
+    }
+  }
+
+  value = value.replace(/^\/+/, '/');
+
+  const apiFilesPrefix = '/api/v1/files/';
+  const filesPrefix = '/files/';
+  const minioPrefix = `/${env.MINIO_BUCKET}/`;
+  const publicBasePrefix = `/`;
+
+  if (value.startsWith(apiFilesPrefix)) {
+    return value.slice(apiFilesPrefix.length);
+  }
+
+  if (value.startsWith(filesPrefix)) {
+    return value.slice(filesPrefix.length);
+  }
+
+  if (value.startsWith(minioPrefix)) {
+    return value.slice(minioPrefix.length);
+  }
+
+  const publicBaseUrl = `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`;
+  if (value.startsWith(publicBaseUrl)) {
+    return value.slice(publicBaseUrl.length);
+  }
+
+  if (value.startsWith(publicBasePrefix)) {
+    return value.slice(1);
+  }
+
+  return value;
 }
 
 export { s3Client };

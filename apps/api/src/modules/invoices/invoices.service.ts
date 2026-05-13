@@ -47,8 +47,8 @@ export const invoiceService = {
   /**
    * Get payment proof image
    */
-  async getPaymentProofImage(paymentId: string) {
-    return this.retrievalService.getPaymentProofImage(paymentId);
+  async getPaymentProofImage(paymentId: string, user: { userId: string; role: string; branchId: string | null }) {
+    return this.retrievalService.getPaymentProofImage(paymentId, user);
   },
 
   /**

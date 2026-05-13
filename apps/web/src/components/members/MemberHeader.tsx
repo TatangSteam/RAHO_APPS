@@ -1,4 +1,8 @@
+"use client";
+
+import { useEffect, useState } from 'react';
 import { MemberDetail } from '@/types/member';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 
 interface MemberHeaderProps {
   member: MemberDetail;
@@ -11,6 +15,44 @@ interface MemberHeaderProps {
 export default function MemberHeader({ member, onBack, onSendNotification, onEdit, isSuperAdmin }: MemberHeaderProps) {
   // Get profile photo from documents
   const profilePhoto = member.documents?.find(doc => doc.documentType === 'FOTO_PROFIL');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProfilePhoto = async () => {
+      if (!profilePhoto?.fileUrl) {
+        setProfilePhotoUrl(null);
+        return;
+      }
+
+      try {
+        const url = await createAuthenticatedObjectUrl(profilePhoto.fileUrl);
+        if (!cancelled) {
+          setProfilePhotoUrl(url);
+        }
+      } catch (error) {
+        console.error('Failed to load member profile photo:', error);
+        if (!cancelled) {
+          setProfilePhotoUrl(null);
+        }
+      }
+    };
+
+    loadProfilePhoto();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [profilePhoto?.fileUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (profilePhotoUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(profilePhotoUrl);
+      }
+    };
+  }, [profilePhotoUrl]);
   
   return (
     <div style={{ marginBottom: '24px' }}>
@@ -36,9 +78,9 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
               border: '3px solid var(--surface-border)',
               boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
             }}>
-              {profilePhoto ? (
+              {profilePhoto && profilePhotoUrl ? (
                 <img
-                  src={profilePhoto.fileUrl}
+                  src={profilePhotoUrl}
                   alt={member.profile?.fullName || 'Member'}
                   style={{
                     width: '100%',

@@ -11,6 +11,7 @@ import {
   editPackageSchema,
 } from './packages.schema';
 import { sendSuccess, sendCreated } from '../../utils/response';
+import { env } from '../../config/env';
 import { uploadFile } from '../../config/minio';
 
 const packagesService = new PackagesService();
@@ -221,9 +222,10 @@ export class PackagesController {
 
       // Upload to MinIO
       const uploadResult = await uploadFile(req.file.buffer, key, req.file.mimetype);
+      const apiUrl = `${env.API_PREFIX}/files/${key}`;
 
       return sendSuccess(res, {
-        url: uploadResult.url,
+        url: apiUrl,
         fileName: req.file.originalname,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,

@@ -12,6 +12,25 @@ const ServiceTypeEnum = z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']);
 // Add-on types
 const AddOnTypeEnum = z.enum(['AIR_NANO', 'ROKOK_KENKOU', 'KONSULTASI_GIZI', 'KONSULTASI_PSIKOLOG', 'LAINNYA']);
 
+function isValidProofFileUrl(value: string): boolean {
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return false;
+  }
+
+  if (/^https?:\/\//i.test(trimmed)) {
+    return true;
+  }
+
+  const normalizedPath = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return (
+    normalizedPath.startsWith('/api/v1/files/') ||
+    normalizedPath.startsWith('/files/') ||
+    normalizedPath.startsWith('/invoices/')
+  );
+}
+
 export const assignPackageSchema = z.object({
   // Array of packages to assign (optional if addOns provided)
   packages: z.array(z.object({
@@ -43,7 +62,10 @@ export const assignPackageSchema = z.object({
 export const verifyPaymentSchema = z.object({
   notes: z.string().optional(),
   // Payment proof file (required)
-  proofFileUrl: z.string().url('URL file bukti pembayaran harus valid'),
+  proofFileUrl: z.string().min(1, 'URL file bukti pembayaran harus valid').refine(
+    isValidProofFileUrl,
+    { message: 'URL file bukti pembayaran harus valid' }
+  ),
   proofFileName: z.string().min(1, 'Nama file bukti pembayaran diperlukan'),
   proofFileSize: z.number().int().min(1, 'Ukuran file harus lebih dari 0'),
   proofMimeType: z.string().refine(

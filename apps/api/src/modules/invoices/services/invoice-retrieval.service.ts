@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { getPresignedUrl, extractKeyFromUrl } from '../../../config/minio';
+import { extractKeyFromUrl, s3Client } from '../../../config/minio';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { env } from '../../../config/env';
+import { Readable } from 'stream';
+import { Role } from '@prisma/client';
 
 /**
  * Service for invoice retrieval
@@ -104,15 +108,31 @@ export class InvoiceRetrievalService {
   }
 
   /**
-   * Get payment proof image (returns presigned URL)
+   * Get payment proof image (returns private stream)
    */
-  async getPaymentProofImage(paymentId: string) {
+  async getPaymentProofImage(paymentId: string, user: { userId: string; role: string; branchId: string | null }) {
     const payment = await (prisma as any).invoicePayment.findUnique({
       where: { id: paymentId },
       select: {
         proofFileUrl: true,
         proofFileName: true,
         proofMimeType: true,
+        invoice: {
+          select: {
+            branchId: true,
+            member: {
+              select: {
+                userId: true,
+                registrationBranchId: true,
+                branchAccesses: {
+                  select: {
+                    branchId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -120,14 +140,52 @@ export class InvoiceRetrievalService {
       throw new Error('Payment proof not found');
     }
 
-    // Extract the MinIO key from the URL
+    if (user.role === Role.MEMBER) {
+      if (payment.invoice.member.userId !== user.userId) {
+        throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+      }
+    } else if (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER) {
+      const accessibleBranchIds = new Set<string>();
+      if (user.branchId) accessibleBranchIds.add(user.branchId);
+
+      const staffBranches = await prisma.staffBranch.findMany({
+        where: { userId: user.userId },
+        select: { branchId: true },
+      });
+
+      staffBranches.forEach((row) => accessibleBranchIds.add(row.branchId));
+
+      const invoiceBranchIds = [
+        payment.invoice.branchId,
+        payment.invoice.member.registrationBranchId,
+        ...payment.invoice.member.branchAccesses.map((access) => access.branchId),
+      ];
+
+      const hasAccess = invoiceBranchIds.some((branchId) => accessibleBranchIds.has(branchId));
+      if (!hasAccess) {
+        throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+      }
+    }
+
+    // Extract the MinIO key from the stored URL
     const key = extractKeyFromUrl(payment.proofFileUrl);
 
-    // Generate presigned URL (valid for 1 hour)
-    const presignedUrl = await getPresignedUrl(key, 3600);
+    const command = new GetObjectCommand({
+      Bucket: env.MINIO_BUCKET,
+      Key: key,
+    });
+
+    const response = await s3Client.send(command);
+
+    if (!response.Body) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
 
     return {
-      presignedUrl,
+      stream: response.Body as Readable,
+      contentType: response.ContentType || 'application/octet-stream',
+      contentLength: response.ContentLength || 0,
+      etag: response.ETag || '',
       fileName: payment.proofFileName,
       mimeType: payment.proofMimeType,
     };

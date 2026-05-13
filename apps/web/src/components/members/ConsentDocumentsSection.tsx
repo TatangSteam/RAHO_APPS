@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getConsentDocumentsApi, getPresignedUrl } from '@/lib/membersApi';
+import { getConsentDocumentsApi } from '@/lib/membersApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { showToast } from '@/lib/toast';
 import styles from './ConsentDocumentsSection.module.css';
 
@@ -100,8 +101,8 @@ export default function ConsentDocumentsSection({
 
   const handleView = async (fileUrl: string) => {
     try {
-      const presignedUrl = await getPresignedUrl(fileUrl);
-      window.open(presignedUrl, '_blank');
+      const blobUrl = await createAuthenticatedObjectUrl(fileUrl);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
     } catch (err: any) {
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
@@ -128,9 +129,9 @@ export default function ConsentDocumentsSection({
 
   const handleDownload = async (fileUrl: string, fileName: string) => {
     try {
-      const presignedUrl = await getPresignedUrl(fileUrl);
+      const blobUrl = await createAuthenticatedObjectUrl(fileUrl);
       const link = document.createElement('a');
-      link.href = presignedUrl;
+      link.href = blobUrl;
       link.download = fileName;
       link.click();
     } catch (err: any) {
