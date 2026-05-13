@@ -297,6 +297,49 @@ export class MembersController {
     }
   }
 
+  async getReferralIncentives(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const incentives = await membersService.getReferralIncentives(memberId);
+      
+      // Audit log for successful incentive access
+      await logAudit({
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+        action: 'VERIFY',
+        resource: 'MemberReferralIncentives',
+        resourceId: memberId,
+        meta: {
+          recordCount: incentives.records.length,
+          totalIncentive: incentives.totalIncentive,
+          action: 'view_referral_incentives',
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+      
+      sendSuccess(res, incentives);
+    } catch (error) {
+      // Audit log for failed incentive access attempts
+      await logAudit({
+        userId: req.user?.userId || 'unknown',
+        branchId: req.user?.branchId || null,
+        action: 'VERIFY',
+        resource: 'MemberReferralIncentives',
+        resourceId: req.params.memberId,
+        meta: {
+          action: 'view_referral_incentives',
+          error: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code || 'UNKNOWN_ERROR',
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+      
+      next(error);
+    }
+  }
+
   // Get members by specific branch (for Admin Manager viewing branch details)
   async getMembersByBranch(req: Request, res: Response, next: NextFunction) {
     try {

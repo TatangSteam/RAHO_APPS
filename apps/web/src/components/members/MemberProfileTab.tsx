@@ -1,18 +1,71 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { getReferralIncentivesApi } from '@/lib/membersApi';
 import { showToast } from '@/lib/toast';
 
 interface MemberProfileTabProps {
   member: MemberDetail;
 }
 
+interface IncentiveRecord {
+  id: string;
+  packageCode: string;
+  packageType: string;
+  packageName: string;
+  packageValue: number;
+  isFirstPackage: boolean;
+  incentiveType: string;
+  incentiveValue: number;
+  incentiveAmount: number;
+  notes: string | null;
+  purchaseDate: string;
+  createdAt: string;
+}
+
 export default function MemberProfileTab({ 
   member
 }: MemberProfileTabProps) {
   const [loadingDocUrl, setLoadingDocUrl] = useState<string | null>(null);
+  const [incentiveData, setIncentiveData] = useState<{
+    totalIncentive: number;
+    records: IncentiveRecord[];
+  } | null>(null);
+  const [loadingIncentives, setLoadingIncentives] = useState(false);
+  const [showPurchaseHistory, setShowPurchaseHistory] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
+  useEffect(() => {
+    if (member.referralCodeId) {
+      loadIncentives();
+    }
+  }, [member.referralCodeId]);
+
+  const loadIncentives = async () => {
+    try {
+      setLoadingIncentives(true);
+      const data = await getReferralIncentivesApi(member.memberId);
+      setIncentiveData(data);
+    } catch (error: any) {
+      console.error('Failed to load incentives:', error);
+      showToast.error('Gagal memuat data insentif');
+    } finally {
+      setLoadingIncentives(false);
+    }
+  };
+
+  // Pagination logic
+  const getPaginatedRecords = () => {
+    if (!incentiveData) return [];
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return incentiveData.records.slice(startIndex, endIndex);
+  };
+
+  const totalPages = incentiveData ? Math.ceil(incentiveData.records.length / itemsPerPage) : 0;
 
   const handleViewDocument = async (fileUrl: string, fileName: string) => {
     try {
@@ -152,6 +205,171 @@ export default function MemberProfileTab({
                 </p>
               </div>
             )}
+
+            {/* Incentive Records Section */}
+            {loadingIncentives ? (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(168,85,247,0.2)', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>⏳ Memuat data insentif...</p>
+              </div>
+            ) : incentiveData && incentiveData.records.length > 0 ? (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(168,85,247,0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>💸 Total Insentif yang Didapat</p>
+                  <p style={{ fontSize: '20px', fontWeight: '700', color: '#22c55e' }}>
+                    Rp {incentiveData.totalIncentive.toLocaleString('id-ID')}
+                  </p>
+                </div>
+                
+                {/* Dropdown Toggle Button */}
+                <div style={{ marginTop: '12px' }}>
+                  <button
+                    onClick={() => {
+                      setShowPurchaseHistory(!showPurchaseHistory);
+                      if (!showPurchaseHistory) {
+                        setCurrentPage(1); // Reset to first page when opening
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '12px 16px',
+                      background: 'rgba(168,85,247,0.1)',
+                      border: '1px solid rgba(168,85,247,0.3)',
+                      borderRadius: 'var(--radius-md)',
+                      color: 'var(--text-primary)',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(168,85,247,0.15)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(168,85,247,0.1)';
+                    }}
+                  >
+                    <span>📋 Riwayat Pembelian ({incentiveData.records.length})</span>
+                    <span style={{ fontSize: '16px', transition: 'transform 0.2s', transform: showPurchaseHistory ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+                      ▼
+                    </span>
+                  </button>
+
+                  {/* Dropdown Content */}
+                  {showPurchaseHistory && (
+                    <div style={{ marginTop: '12px', animation: 'slideDown 0.2s ease-out' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {getPaginatedRecords().map((record) => (
+                          <div 
+                            key={record.id} 
+                            style={{ 
+                              padding: '12px', 
+                              background: 'rgba(255,255,255,0.05)', 
+                              border: '1px solid rgba(168,85,247,0.2)', 
+                              borderRadius: 'var(--radius-md)',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
+                              <div>
+                                <p style={{ fontWeight: '600', fontSize: '14px', color: 'var(--text-primary)', marginBottom: '2px' }}>
+                                  {record.packageCode}
+                                </p>
+                                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                                  {record.packageName}
+                                </p>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <p style={{ fontWeight: '700', fontSize: '14px', color: '#22c55e' }}>
+                                  +Rp {record.incentiveAmount.toLocaleString('id-ID')}
+                                </p>
+                                <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                                  {record.incentiveType === 'PERCENTAGE' 
+                                    ? `${record.incentiveValue}%` 
+                                    : `Rp ${record.incentiveValue.toLocaleString('id-ID')}`
+                                  }
+                                </p>
+                              </div>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-muted)' }}>
+                              <span>
+                                {record.isFirstPackage ? '🎉 Paket Pertama' : '🔄 Paket Lanjutan'}
+                              </span>
+                              <span>
+                                📅 {new Date(record.purchaseDate).toLocaleDateString('id-ID', { 
+                                  day: 'numeric', 
+                                  month: 'short', 
+                                  year: 'numeric' 
+                                })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Pagination Controls */}
+                      {totalPages > 1 && (
+                        <div style={{ 
+                          marginTop: '12px', 
+                          display: 'flex', 
+                          justifyContent: 'center', 
+                          alignItems: 'center', 
+                          gap: '8px' 
+                        }}>
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                            disabled={currentPage === 1}
+                            style={{
+                              padding: '6px 12px',
+                              background: currentPage === 1 ? 'rgba(148,163,184,0.1)' : 'rgba(168,85,247,0.2)',
+                              border: '1px solid rgba(168,85,247,0.3)',
+                              borderRadius: 'var(--radius-md)',
+                              color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            ← Prev
+                          </button>
+                          
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>
+                            Halaman {currentPage} dari {totalPages}
+                          </span>
+                          
+                          <button
+                            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                            disabled={currentPage === totalPages}
+                            style={{
+                              padding: '6px 12px',
+                              background: currentPage === totalPages ? 'rgba(148,163,184,0.1)' : 'rgba(168,85,247,0.2)',
+                              border: '1px solid rgba(168,85,247,0.3)',
+                              borderRadius: 'var(--radius-md)',
+                              color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : incentiveData && incentiveData.records.length === 0 ? (
+              <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(168,85,247,0.2)' }}>
+                <p style={{ fontSize: '13px', color: 'var(--text-muted)', textAlign: 'center' }}>
+                  📭 Belum ada pembelian paket dari member ini
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div style={{ padding: '16px', background: 'rgba(148,163,184,0.05)', border: '1px solid rgba(148,163,184,0.2)', borderRadius: 'var(--radius-lg)' }}>

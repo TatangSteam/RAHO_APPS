@@ -112,6 +112,19 @@ router.get(
 );
 
 // ============================================================
+// REFERRAL INCENTIVES ROUTES
+// ============================================================
+
+// GET /api/v1/members/:memberId/referral-incentives - Get member referral incentive records
+router.get(
+  '/:memberId/referral-incentives',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getReferralIncentives.bind(controller)
+);
+
+// ============================================================
 // DIAGNOSIS ROUTES
 // ============================================================
 

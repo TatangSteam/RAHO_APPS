@@ -119,4 +119,26 @@ export async function getConsentDocumentsApi(memberId: string) {
   return response.data.data;
 }
 
+// ── Get Referral Incentives ──────────────────────────────────────
+export async function getReferralIncentivesApi(memberId: string): Promise<{
+  totalIncentive: number;
+  records: Array<{
+    id: string;
+    packageCode: string;
+    packageType: string;
+    packageName: string;
+    packageValue: number;
+    isFirstPackage: boolean;
+    incentiveType: string;
+    incentiveValue: number;
+    incentiveAmount: number;
+    notes: string | null;
+    purchaseDate: string;
+    createdAt: string;
+  }>;
+}> {
+  const response = await api.get(`/members/${memberId}/referral-incentives`);
+  return response.data.data;
+}
+
 export { createAuthenticatedObjectUrl };

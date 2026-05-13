@@ -429,17 +429,24 @@ export class PackageAssignmentService {
             serviceType: detail.serviceType,
           });
 
-          // Calculate and record incentive for this package
-          try {
-            await calculateAndRecordIncentive(memberPackage.id, tx);
-          } catch (error) {
-            console.error('[PackageAssignment] Error calculating incentive:', error);
-            // Don't fail the whole transaction if incentive calculation fails
-          }
+          // Don't calculate incentive here - will be done after all packages are created
 
           if (detail.pricing.packageType === PackageType.BASIC) {
             totalBasicSessions += detail.pricing.totalSessions;
           }
+        }
+      }
+
+      // Calculate and record incentive AFTER all packages are created
+      // This ensures bundle incentive is calculated with complete package data
+      if (createdPackages.length > 0) {
+        try {
+          // Use the first package to trigger incentive calculation
+          // The service will detect if it's a bundle and calculate accordingly
+          await calculateAndRecordIncentive(createdPackages[0].id, tx);
+        } catch (error) {
+          console.error('[PackageAssignment] Error calculating incentive:', error);
+          // Don't fail the whole transaction if incentive calculation fails
         }
       }
 

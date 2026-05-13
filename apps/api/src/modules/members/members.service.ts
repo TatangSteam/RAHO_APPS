@@ -70,6 +70,13 @@ export class MembersService {
     return await this.retrievalService.getConsentDocuments(memberId);
   }
 
+  /**
+   * Get referral incentive records for a member
+   */
+  async getReferralIncentives(memberId: string) {
+    return await this.retrievalService.getReferralIncentives(memberId);
+  }
+
   // ============================================================
   // MEMBER REGISTRATION
   // ============================================================

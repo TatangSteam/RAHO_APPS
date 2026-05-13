@@ -117,6 +117,13 @@ export async function calculateAndRecordIncentive(
         where: {
           purchaseGroupId: memberPackage.purchaseGroupId,
         },
+        select: {
+          id: true,
+          packageType: true,
+          finalPrice: true,
+          discountAmount: true,
+          discountPercent: true,
+        },
       });
 
       // Sum all finalPrice in the bundle
@@ -130,6 +137,20 @@ export async function calculateAndRecordIncentive(
         `[IncentiveCalculation] Calculating incentive for bundle ${memberPackage.purchaseGroupId}: ` +
           `${bundlePackages.length} packages, total value Rp ${packageValue}`
       );
+      
+      // Debug: Log each package's finalPrice
+      bundlePackages.forEach((pkg, idx) => {
+        logger.info(
+          `[IncentiveCalculation] Bundle package ${idx + 1}: ` +
+            `${pkg.packageType} - finalPrice: Rp ${pkg.finalPrice}, ` +
+            `discountAmount: Rp ${pkg.discountAmount || 0}, ` +
+            `discountPercent: ${pkg.discountPercent || 0}%`
+        );
+      });
+      
+      logger.info(
+        `[IncentiveCalculation] Total packageValue for bundle: Rp ${packageValue}`
+      );
     } else {
       // Standalone package
       packageValue = Number(memberPackage.finalPrice);
@@ -140,13 +161,24 @@ export async function calculateAndRecordIncentive(
     let incentiveAmount: number;
     if (incentiveType === IncentiveType.PERCENTAGE) {
       incentiveAmount = (packageValue * Number(incentiveValue)) / 100;
+      logger.info(
+        `[IncentiveCalculation] Percentage calculation: ` +
+          `Rp ${packageValue} × ${incentiveValue}% = Rp ${incentiveAmount}`
+      );
     } else {
       // FIXED_AMOUNT
       incentiveAmount = Number(incentiveValue);
+      logger.info(
+        `[IncentiveCalculation] Fixed amount: Rp ${incentiveAmount}`
+      );
     }
 
     // Round to nearest integer (no decimal)
     incentiveAmount = Math.round(incentiveAmount);
+    
+    logger.info(
+      `[IncentiveCalculation] Final incentive amount (after rounding): Rp ${incentiveAmount}`
+    );
 
     // Create incentive record
     const incentiveRecord = await db.referralIncentiveRecord.create({

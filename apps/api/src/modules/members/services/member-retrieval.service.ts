@@ -476,6 +476,75 @@ export class MemberRetrievalService {
   }
 
   /**
+   * Get referral incentive records for a member
+   */
+  async getReferralIncentives(memberId: string) {
+    console.log('🔍 [Member Retrieval] getReferralIncentives called for:', memberId);
+    
+    // First verify member exists
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { id: true, memberNo: true, referralCodeId: true },
+    });
+
+    if (!member) {
+      console.log('❌ [Member Retrieval] Member not found:', memberId);
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    if (!member.referralCodeId) {
+      console.log('ℹ️ [Member Retrieval] Member has no referral code');
+      return {
+        totalIncentive: 0,
+        records: [],
+      };
+    }
+
+    console.log('✅ [Member Retrieval] Member found:', member.memberNo);
+
+    // Get incentive records
+    const records = await prisma.referralIncentiveRecord.findMany({
+      where: {
+        memberId,
+      },
+      include: {
+        memberPackage: {
+          select: {
+            packageCode: true,
+            createdAt: true,
+          },
+        },
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    console.log(`💰 [Member Retrieval] Found ${records.length} incentive records for member ${member.memberNo}`);
+
+    // Calculate total incentive
+    const totalIncentive = records.reduce((sum, record) => sum + Number(record.incentiveAmount), 0);
+
+    return {
+      totalIncentive,
+      records: records.map(record => ({
+        id: record.id,
+        packageCode: record.memberPackage.packageCode,
+        packageType: record.packageType,
+        packageName: record.packageName,
+        packageValue: Number(record.packageValue),
+        isFirstPackage: record.isFirstPackage,
+        incentiveType: record.incentiveType,
+        incentiveValue: Number(record.incentiveValue),
+        incentiveAmount: Number(record.incentiveAmount),
+        notes: record.notes,
+        purchaseDate: record.memberPackage.createdAt.toISOString(),
+        createdAt: record.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
    * Format member detail data for response
    */
   private formatMemberDetailData(member: any) {
