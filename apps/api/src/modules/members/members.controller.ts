@@ -9,6 +9,7 @@ import {
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
 import { MemberExportService } from './services/member-export.service';
+import { logAudit } from '../../utils/auditLog';
 
 const membersService = new MembersService();
 const exportService = new MemberExportService();
@@ -85,11 +86,22 @@ export class MembersController {
         };
       }
 
+      console.log('🔍 [Controller] Content-Type:', req.headers['content-type']);
+      console.log('🔍 [Controller] req.files:', req.files);
+      console.log('🔍 [Controller] req.body keys:', Object.keys(req.body));
+      console.log('🔍 [Controller] req.body.psp type:', typeof req.body.psp);
+      console.log('🔍 [Controller] req.body.photo type:', typeof req.body.photo);
+
       const filesObj = req.files as { [fieldname: string]: Express.Multer.File[] };
       const files = {
         psp: filesObj?.['psp']?.[0],
         photo: filesObj?.['photo']?.[0],
       };
+
+      console.log('🔍 [Controller] Extracted files:', {
+        psp: files.psp ? `${files.psp.originalname} (${files.psp.size} bytes)` : 'not found',
+        photo: files.photo ? `${files.photo.originalname} (${files.photo.size} bytes)` : 'not found',
+      });
 
       const result = await membersService.createMember(
         validated as any, // Type assertion since schema validation ensures correct types
@@ -234,6 +246,53 @@ export class MembersController {
       const infusions = await membersService.getMemberInfusions(memberId);
       return sendSuccess(res, infusions);
     } catch (error) {
+      next(error);
+    }
+  }
+
+  // ============================================================
+  // CONSENT DOCUMENTS METHODS
+  // ============================================================
+
+  async getConsentDocuments(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const documents = await membersService.getConsentDocuments(memberId);
+      
+      // Audit log for successful document access
+      // Using VERIFY action as closest semantic match for document access verification
+      await logAudit({
+        userId: req.user.userId,
+        branchId: req.user.branchId,
+        action: 'VERIFY',
+        resource: 'MemberConsentDocuments',
+        resourceId: memberId,
+        meta: {
+          documentCount: documents.documents.length,
+          action: 'view_consent_documents_list',
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+      
+      sendSuccess(res, documents);
+    } catch (error) {
+      // Audit log for failed document access attempts
+      await logAudit({
+        userId: req.user?.userId || 'unknown',
+        branchId: req.user?.branchId || null,
+        action: 'VERIFY',
+        resource: 'MemberConsentDocuments',
+        resourceId: req.params.memberId,
+        meta: {
+          action: 'view_consent_documents_list',
+          error: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code || 'UNKNOWN_ERROR',
+        },
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+      
       next(error);
     }
   }

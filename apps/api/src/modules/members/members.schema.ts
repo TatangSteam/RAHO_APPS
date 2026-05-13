@@ -65,7 +65,7 @@ export const createMemberSchema = z.object({
     const num = typeof val === 'string' ? parseFloat(val) : val;
     return isNaN(num) ? undefined : num;
   }),
-});
+}).passthrough(); // Allow additional fields (like psp, photo) to pass through without validation
 
 export const updateMemberSchema = z.object({
   fullName: z.string().min(3).optional(),

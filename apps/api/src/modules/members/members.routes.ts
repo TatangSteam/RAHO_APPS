@@ -3,7 +3,7 @@ import { MembersController } from './members.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
-import { upload } from '../../middleware/upload';
+import { uploadMemberDocuments } from '../../middleware/upload';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -52,7 +52,7 @@ router.post(
   '/',
   authenticate,
   authorize(ADMIN_PLUS),
-  upload.fields([
+  uploadMemberDocuments.fields([
     { name: 'psp', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
   ]),
@@ -96,6 +96,19 @@ router.post(
   authorize(ALLSTAFF),
   assertBranchAccess,
   controller.sendNotification.bind(controller)
+);
+
+// ============================================================
+// CONSENT DOCUMENTS ROUTES
+// ============================================================
+
+// GET /api/v1/members/:memberId/documents/consent - Get member consent documents
+router.get(
+  '/:memberId/documents/consent',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getConsentDocuments.bind(controller)
 );
 
 // ============================================================

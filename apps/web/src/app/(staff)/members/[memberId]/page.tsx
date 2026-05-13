@@ -467,7 +467,9 @@ export default function MemberDetailPage() {
           {activeTab === 'profil' && (
             <>
   
-              <MemberProfileTab member={member} />
+              <MemberProfileTab 
+                member={member}
+              />
             </>
           )}
           

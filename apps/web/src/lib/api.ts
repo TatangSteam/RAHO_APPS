@@ -11,7 +11,6 @@ import { useAuthStore } from '@/stores/authStore';
 
 export const api: AxiosInstance = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL,
-  headers: { 'Content-Type': 'application/json' },
   timeout: 30_000,
 });
 
@@ -156,6 +155,15 @@ export function stopTokenExpiryCheck(): void {
 
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const { accessToken, clearAuth } = useAuthStore.getState();
+  
+  // Set Content-Type based on data type
+  if (config.data instanceof FormData) {
+    // Let browser set Content-Type with boundary for multipart/form-data
+    delete config.headers['Content-Type'];
+  } else if (!config.headers['Content-Type']) {
+    // Default to JSON for non-FormData requests
+    config.headers['Content-Type'] = 'application/json';
+  }
   
   if (accessToken) {
     // Check if token is expired before sending request

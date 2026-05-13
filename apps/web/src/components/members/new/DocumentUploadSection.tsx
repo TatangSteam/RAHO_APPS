@@ -68,7 +68,7 @@ export default function DocumentUploadSection({
           }}>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+              accept="image/jpeg,image/png,image/webp,image/jpg,image/gif,image/bmp"
               onChange={onPspChange}
               style={{ display: 'none' }}
               id="psp-upload"
@@ -84,7 +84,7 @@ export default function DocumentUploadSection({
                 <div>
                   <div style={{ fontSize: '48px', marginBottom: '12px' }}>📄</div>
                   <p style={{ fontWeight: '600', marginBottom: '4px' }}>Upload PSP / Informed Consent</p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Max 5MB • JPG, PNG, WebP, PDF</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Max 5MB • JPG, PNG, WebP (gambar saja)</p>
                 </div>
               )}
             </label>

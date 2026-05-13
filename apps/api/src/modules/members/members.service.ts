@@ -63,6 +63,13 @@ export class MembersService {
     return await this.retrievalService.getMemberById(memberId);
   }
 
+  /**
+   * Get consent documents for a member
+   */
+  async getConsentDocuments(memberId: string) {
+    return await this.retrievalService.getConsentDocuments(memberId);
+  }
+
   // ============================================================
   // MEMBER REGISTRATION
   // ============================================================

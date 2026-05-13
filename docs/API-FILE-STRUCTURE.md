@@ -183,6 +183,7 @@ module/
 - Multi-branch access
 - Medical history tracking
 - Package & session history
+- Consent document viewing and download
 
 ---
 

@@ -418,6 +418,64 @@ export class MemberRetrievalService {
   }
 
   /**
+   * Get consent documents for a member
+   */
+  async getConsentDocuments(memberId: string) {
+    console.log('🔍 [Member Retrieval] getConsentDocuments called for:', memberId);
+    
+    // First verify member exists
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { id: true, memberNo: true },
+    });
+
+    if (!member) {
+      console.log('❌ [Member Retrieval] Member not found:', memberId);
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    console.log('✅ [Member Retrieval] Member found:', member.memberNo);
+
+    // Get consent documents
+    const documents = await prisma.memberDocument.findMany({
+      where: {
+        memberId,
+        documentType: 'PERSETUJUAN_SETELAH_PENJELASAN',
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        fileSize: true,
+        mimeType: true,
+        uploadedBy: true,
+        createdAt: true,
+      },
+    });
+
+    console.log(`📄 [Member Retrieval] Found ${documents.length} consent documents for member ${member.memberNo}`);
+    
+    if (documents.length > 0) {
+      console.log('📋 [Member Retrieval] Documents:', documents.map(d => ({ fileName: d.fileName, fileUrl: d.fileUrl })));
+    }
+
+    return {
+      documents: documents.map(doc => ({
+        id: doc.id,
+        fileName: doc.fileName,
+        fileUrl: doc.fileUrl,
+        fileSize: doc.fileSize,
+        mimeType: doc.mimeType,
+        uploadedBy: doc.uploadedBy,
+        createdAt: doc.createdAt.toISOString(),
+      })),
+    };
+  }
+
+  /**
    * Format member detail data for response
    */
   private formatMemberDetailData(member: any) {

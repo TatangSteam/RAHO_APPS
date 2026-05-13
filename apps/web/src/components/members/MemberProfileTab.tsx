@@ -1,10 +1,45 @@
+'use client';
+
+import { useState } from 'react';
 import { MemberDetail } from '@/types/member';
+import { getPresignedUrl } from '@/lib/membersApi';
+import { showToast } from '@/lib/toast';
 
 interface MemberProfileTabProps {
   member: MemberDetail;
 }
 
-export default function MemberProfileTab({ member }: MemberProfileTabProps) {
+export default function MemberProfileTab({ 
+  member
+}: MemberProfileTabProps) {
+  const [loadingDocUrl, setLoadingDocUrl] = useState<string | null>(null);
+
+  const handleViewDocument = async (fileUrl: string, fileName: string) => {
+    try {
+      setLoadingDocUrl(fileUrl);
+      const presignedUrl = await getPresignedUrl(fileUrl);
+      window.open(presignedUrl, '_blank');
+    } catch (err: any) {
+      const errorCode = err.response?.data?.error?.code;
+      const errorMessage = err.response?.data?.error?.message;
+      
+      switch (errorCode) {
+        case 'DOCUMENT_NOT_FOUND':
+          showToast.error('Dokumen tidak ditemukan');
+          break;
+        case 'FILE_NOT_FOUND':
+          showToast.error('File tidak ditemukan');
+          break;
+        case 'STORAGE_UNAVAILABLE':
+          showToast.error('Layanan penyimpanan tidak tersedia. Silakan coba lagi.');
+          break;
+        default:
+          showToast.error(errorMessage || 'Gagal membuka dokumen');
+      }
+    } finally {
+      setLoadingDocUrl(null);
+    }
+  };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div>
@@ -150,22 +185,19 @@ export default function MemberProfileTab({ member }: MemberProfileTabProps) {
                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px', fontWeight: '600' }}>
                   {doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN' ? '📋 Dokumen PSP' : '📸 Foto Member'}
                 </p>
-                {doc.mimeType.startsWith('image/') && (
-                  <img
-                    src={doc.fileUrl}
-                    alt={doc.fileName}
-                    style={{ width: '100%', height: '200px', objectFit: 'cover', borderRadius: 'var(--radius-md)', marginBottom: '12px' }}
-                  />
-                )}
                 <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', wordBreak: 'break-all' }}>{doc.fileName}</p>
-                <a
-                  href={doc.fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <p style={{ fontSize: '10px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+                  📅 {new Date(doc.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => handleViewDocument(doc.fileUrl, doc.fileName)}
+                  disabled={loadingDocUrl === doc.fileUrl}
                   className="btn btn-sm btn-primary btn-full"
+                  style={{ opacity: loadingDocUrl === doc.fileUrl ? 0.6 : 1 }}
                 >
-                  👁️ Lihat File
-                </a>
+                  {loadingDocUrl === doc.fileUrl ? '⏳ Memuat...' : '👁️ Lihat File'}
+                </button>
               </div>
             ))}
           </div>

@@ -43,27 +43,35 @@ export async function createMemberApi(
   const formData = new FormData();
 
   // Append member data - only non-empty values
+  // IMPORTANT: Exclude 'psp' and 'photo' as they should be File objects, not strings
   Object.entries(memberData).forEach(([key, value]) => {
+    if (key === 'psp' || key === 'photo') {
+      return; // Skip these - they'll be added as files below
+    }
     if (value !== undefined && value !== null && value !== '') {
-      formData.append(key, typeof value === 'boolean' ? String(value) : value);
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        // For nested objects like therapyPlans, stringify them
+        formData.append(key, JSON.stringify(value));
+      } else if (Array.isArray(value)) {
+        // For arrays like therapyPlans, stringify them
+        formData.append(key, JSON.stringify(value));
+      } else {
+        formData.append(key, typeof value === 'boolean' ? String(value) : String(value));
+      }
     }
   });
 
-  // Append files
-  if (files.psp) {
-    formData.append('psp', files.psp);
+  // Append files - IMPORTANT: Only append if they are actual File objects
+  if (files.psp && files.psp instanceof File) {
+    formData.append('psp', files.psp, files.psp.name);
   }
-  if (files.photo) {
-    formData.append('photo', files.photo);
+  if (files.photo && files.photo instanceof File) {
+    formData.append('photo', files.photo, files.photo.name);
   }
 
   const { data } = await api.post<{
     data: { memberId: string; memberNo: string; message: string };
-  }>('/members', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  }>('/members', formData);
 
   return data.data;
 }
@@ -102,4 +110,18 @@ export async function sendNotificationApi(
     notification
   );
   return data.data;
+}
+
+// ── Get Presigned URL ──────────────────────────────────────────
+export async function getPresignedUrl(fileUrl: string): Promise<string> {
+  const { data } = await api.get<{ data: { url: string } }>(
+    `/files/presign/${encodeURIComponent(fileUrl)}`
+  );
+  return data.data.url;
+}
+
+// ── Get Consent Documents ──────────────────────────────────────
+export async function getConsentDocumentsApi(memberId: string) {
+  const response = await api.get(`/members/${memberId}/documents/consent`);
+  return response.data.data;
 }

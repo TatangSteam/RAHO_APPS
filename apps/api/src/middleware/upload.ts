@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { AppError } from './errorHandler';
 
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const;
+const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // For PSP and profile photos - images only
 const PAYMENT_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // Accept all common image formats
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 
@@ -13,6 +14,19 @@ function fileFilter(
 ): void {
   if (!ALLOWED_MIME_TYPES.includes(file.mimetype as (typeof ALLOWED_MIME_TYPES)[number])) {
     cb(new AppError(400, 'FILE_INVALID_TYPE', 'Hanya JPG, PNG, dan WebP yang diizinkan.'));
+    return;
+  }
+  cb(null, true);
+}
+
+function documentFileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  // Allow only images for both PSP documents and profile photos
+  if (!DOCUMENT_MIME_TYPES.includes(file.mimetype as (typeof DOCUMENT_MIME_TYPES)[number])) {
+    cb(new AppError(400, 'FILE_INVALID_TYPE', 'Hanya file gambar (JPG, PNG, WebP, GIF, BMP) yang diizinkan untuk PSP dan foto profil.'));
     return;
   }
   cb(null, true);
@@ -38,6 +52,16 @@ export const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter,
+});
+
+/**
+ * Multer instance for member documents (PSP + profile photo) — stores files in memory (as Buffer).
+ * Enforces: max 5 MB, accepts images only (JPG, PNG, WebP, GIF, BMP) for both PSP and profile photos.
+ */
+export const uploadMemberDocuments = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: documentFileFilter,
 });
 
 /**

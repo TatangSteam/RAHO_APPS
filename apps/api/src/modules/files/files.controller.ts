@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { FilesService } from './files.service';
+import { extractKeyFromUrl } from '../../config/minio';
 
 export class FilesController {
   private filesService: FilesService;
@@ -15,7 +16,7 @@ export class FilesController {
   async serveFile(req: Request, res: Response, next: NextFunction) {
     try {
       // Get the full path after /files/
-      const filePath = req.params[0]; // This captures everything after /files/
+      let filePath = req.params[0]; // This captures everything after /files/
 
       if (!filePath) {
         return res.status(400).json({
@@ -25,6 +26,16 @@ export class FilesController {
             message: 'File path is required',
           },
         });
+      }
+
+      // Decode the file path in case it was URL-encoded
+      filePath = decodeURIComponent(filePath);
+
+      // If the filePath is a full URL (starts with http:// or https://), extract the key
+      if (filePath.startsWith('http://') || filePath.startsWith('https://')) {
+        console.log('🔍 [Files] Extracting key from full URL:', filePath);
+        filePath = extractKeyFromUrl(filePath);
+        console.log('🔍 [Files] Extracted key:', filePath);
       }
 
       const result = await this.filesService.getFile(filePath);
@@ -52,13 +63,23 @@ export class FilesController {
   async presignFile(req: Request, res: Response, next: NextFunction) {
     try {
       // req.params[0] will contain the path after /presign/
-      const key = req.params[0];
+      let key = req.params[0];
 
       if (!key) {
         return res.status(400).json({
           success: false,
           error: { code: 'INVALID_FILE_PATH', message: 'File path is required' },
         });
+      }
+
+      // Decode the key in case it was URL-encoded by the client
+      key = decodeURIComponent(key);
+
+      // If the key is a full URL (starts with http:// or https://), extract the key
+      if (key.startsWith('http://') || key.startsWith('https://')) {
+        console.log('🔍 [Files] Extracting key from full URL:', key);
+        key = extractKeyFromUrl(key);
+        console.log('🔍 [Files] Extracted key:', key);
       }
 
       // Optional: allow client to request a custom expiry via query, capped

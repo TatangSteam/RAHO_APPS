@@ -474,39 +474,73 @@ export class MembersService {
     });
 
     // Upload files to MinIO if provided
-    if (files.psp) {
-      const pspKey = `uploads/members/${result.member.id}/documents/psp-${Date.now()}.${files.psp.mimetype.split('/')[1]}`;
-      const pspResult = await uploadFile(files.psp.buffer, pspKey, files.psp.mimetype);
+    console.log('📤 [Create Member] Starting file uploads...');
+    console.log('  - PSP file:', files.psp ? `${files.psp.originalname} (${files.psp.size} bytes)` : 'not provided');
+    console.log('  - Photo file:', files.photo ? `${files.photo.originalname} (${files.photo.size} bytes)` : 'not provided');
 
-      await prisma.memberDocument.create({
-        data: {
-          memberId: result.member.id,
-          documentType: DocumentType.PERSETUJUAN_SETELAH_PENJELASAN,
-          fileUrl: pspResult.url, // Use permanent URL instead of presignedUrl
-          fileName: files.psp.originalname,
-          fileSize: files.psp.size,
-          mimeType: files.psp.mimetype,
-          uploadedBy: userId,
-        },
-      });
+    if (files.psp) {
+      try {
+        console.log('📄 [Create Member] Uploading PSP document...');
+        const pspKey = `uploads/members/${result.member.id}/documents/psp-${Date.now()}.${files.psp.mimetype.split('/')[1]}`;
+        console.log('  - Key:', pspKey);
+        console.log('  - MIME type:', files.psp.mimetype);
+        
+        const pspResult = await uploadFile(files.psp.buffer, pspKey, files.psp.mimetype);
+        console.log('  ✅ PSP uploaded to MinIO');
+        console.log('  - URL:', pspResult.url);
+
+        const pspDoc = await prisma.memberDocument.create({
+          data: {
+            memberId: result.member.id,
+            documentType: DocumentType.PERSETUJUAN_SETELAH_PENJELASAN,
+            fileUrl: pspResult.url, // Use permanent URL instead of presignedUrl
+            fileName: files.psp.originalname,
+            fileSize: files.psp.size,
+            mimeType: files.psp.mimetype,
+            uploadedBy: userId,
+          },
+        });
+        console.log('  ✅ PSP document saved to database');
+        console.log('  - Document ID:', pspDoc.id);
+      } catch (error) {
+        console.error('❌ [Create Member] Failed to upload PSP document:', error);
+        // Don't throw - allow member creation to succeed even if file upload fails
+        // TODO: Consider implementing retry mechanism or notification to admin
+      }
     }
 
     if (files.photo) {
-      const photoKey = `uploads/members/${result.member.id}/documents/profile-${Date.now()}.${files.photo.mimetype.split('/')[1]}`;
-      const photoResult = await uploadFile(files.photo.buffer, photoKey, files.photo.mimetype);
+      try {
+        console.log('📸 [Create Member] Uploading profile photo...');
+        const photoKey = `uploads/members/${result.member.id}/documents/profile-${Date.now()}.${files.photo.mimetype.split('/')[1]}`;
+        console.log('  - Key:', photoKey);
+        console.log('  - MIME type:', files.photo.mimetype);
+        
+        const photoResult = await uploadFile(files.photo.buffer, photoKey, files.photo.mimetype);
+        console.log('  ✅ Photo uploaded to MinIO');
+        console.log('  - URL:', photoResult.url);
 
-      await prisma.memberDocument.create({
-        data: {
-          memberId: result.member.id,
-          documentType: DocumentType.FOTO_PROFIL,
-          fileUrl: photoResult.url, // Use permanent URL instead of presignedUrl
-          fileName: files.photo.originalname,
-          fileSize: files.photo.size,
-          mimeType: files.photo.mimetype,
-          uploadedBy: userId,
-        },
-      });
+        const photoDoc = await prisma.memberDocument.create({
+          data: {
+            memberId: result.member.id,
+            documentType: DocumentType.FOTO_PROFIL,
+            fileUrl: photoResult.url, // Use permanent URL instead of presignedUrl
+            fileName: files.photo.originalname,
+            fileSize: files.photo.size,
+            mimeType: files.photo.mimetype,
+            uploadedBy: userId,
+          },
+        });
+        console.log('  ✅ Photo document saved to database');
+        console.log('  - Document ID:', photoDoc.id);
+      } catch (error) {
+        console.error('❌ [Create Member] Failed to upload profile photo:', error);
+        // Don't throw - allow member creation to succeed even if file upload fails
+        // TODO: Consider implementing retry mechanism or notification to admin
+      }
     }
+
+    console.log('✅ [Create Member] File uploads completed');
 
     await logAudit({
       userId,

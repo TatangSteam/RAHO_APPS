@@ -1,0 +1,365 @@
+/* ============================================================
+   CONSENT DOCUMENTS SECTION STYLES - RAHO Dark Theme
+   ============================================================ */
+
+.container {
+  margin-top: 32px;
+}
+
+/* ── Section Header ─────────────────────────────────────── */
+.sectionHeader {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Documents Grid ─────────────────────────────────────── */
+.documentsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+/* ── Document Card ──────────────────────────────────────── */
+.documentCard {
+  padding: 20px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.documentCard:hover {
+  border-color: var(--color-primary-400);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── Document Info ──────────────────────────────────────── */
+.documentInfo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  word-break: break-word;
+  line-height: 1.4;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.metadataList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metadataItem {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Action Buttons ─────────────────────────────────────── */
+.actionButtons {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.actionButton {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  min-height: 44px;
+  border: 2px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.actionButton:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+.actionButton.view:hover {
+  border-color: var(--color-primary-500);
+  color: var(--color-primary-400);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.actionButton.download:hover {
+  border-color: var(--color-success);
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.actionButton:active {
+  transform: translateY(0);
+}
+
+/* ── Loading State ──────────────────────────────────────── */
+.loadingState {
+  padding: 24px;
+  text-align: center;
+  background: rgba(148, 163, 184, 0.05);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--surface-border);
+}
+
+.loadingText {
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ── Error State ────────────────────────────────────────── */
+.errorState {
+  padding: 24px;
+  text-align: center;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.errorText {
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  min-height: 44px;
+  border: 2px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.retryButton:hover {
+  border-color: var(--color-primary-500);
+  color: var(--color-primary-400);
+  background: rgba(59, 130, 246, 0.1);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Empty State ────────────────────────────────────────── */
+.emptyState {
+  padding: 24px;
+  text-align: center;
+  background: rgba(148, 163, 184, 0.05);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: var(--radius-lg);
+}
+
+.emptyText {
+  color: var(--text-secondary);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* ── Responsive Design ──────────────────────────────────── */
+
+/* Tablet (768px - 1024px) */
+@media (max-width: 1024px) {
+  .documentsGrid {
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 14px;
+  }
+
+  .documentCard {
+    padding: 18px;
+  }
+}
+
+/* Mobile (< 768px) - Stack cards vertically */
+@media (max-width: 768px) {
+  .container {
+    margin-top: 24px;
+  }
+
+  .sectionHeader {
+    font-size: 15px;
+    margin-bottom: 14px;
+  }
+
+  .documentsGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .documentCard {
+    padding: 16px;
+  }
+
+  .fileName {
+    font-size: 13px;
+  }
+
+  .metadataItem {
+    font-size: 11px;
+  }
+
+  .actionButtons {
+    gap: 8px;
+  }
+
+  .actionButton {
+    padding: 12px 16px;
+    min-height: 44px;
+    font-size: 13px;
+  }
+
+  .loadingState,
+  .errorState,
+  .emptyState {
+    padding: 20px;
+  }
+
+  .retryButton {
+    padding: 12px 20px;
+    min-height: 44px;
+  }
+}
+
+/* Small Mobile (< 480px) */
+@media (max-width: 480px) {
+  .container {
+    margin-top: 20px;
+  }
+
+  .sectionHeader {
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+
+  .documentCard {
+    padding: 14px;
+  }
+
+  .fileName {
+    font-size: 13px;
+  }
+
+  .metadataItem {
+    font-size: 10px;
+  }
+
+  .actionButtons {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .actionButton {
+    width: 100%;
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+}
+
+/* ── Accessibility ──────────────────────────────────────── */
+
+/* Focus states for keyboard navigation */
+.actionButton:focus,
+.retryButton:focus {
+  outline: 3px solid var(--color-primary-500);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.actionButton:focus-visible,
+.retryButton:focus-visible {
+  outline: 3px solid var(--color-primary-500);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+/* Remove focus outline when clicking with mouse */
+.actionButton:focus:not(:focus-visible),
+.retryButton:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Enhanced focus for better visibility */
+.actionButton.view:focus-visible {
+  outline-color: var(--color-primary-500);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.actionButton.download:focus-visible {
+  outline-color: var(--color-success);
+  background: rgba(34, 197, 94, 0.15);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.2);
+}
+
+/* Reduced motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .documentCard,
+  .actionButton,
+  .retryButton {
+    transition: none;
+  }
+
+  .documentCard:hover,
+  .actionButton:hover,
+  .retryButton:hover {
+    transform: none;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .documentCard {
+    border-width: 2px;
+  }
+
+  .actionButton,
+  .retryButton {
+    border-width: 2px;
+  }
+}
