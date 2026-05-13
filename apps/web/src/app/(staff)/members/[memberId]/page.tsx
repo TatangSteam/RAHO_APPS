@@ -23,6 +23,7 @@ import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
+import RefundDetailModal from '@/components/members/RefundDetailModal';
 
 export default function MemberDetailPage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function MemberDetailPage() {
   const [refundAmount, setRefundAmount] = useState(0);
   const [refundPackageCode, setRefundPackageCode] = useState('');
   const [refundFinalPrice, setRefundFinalPrice] = useState(0);
+  const [refundProof, setRefundProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
 
   // Cancel modal state
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -104,6 +106,18 @@ export default function MemberDetailPage() {
     notes: ''
   });
   const [editingPackageId, setEditingPackageId] = useState('');
+
+  // Refund detail modal state
+  const [showRefundDetailModal, setShowRefundDetailModal] = useState(false);
+  const [refundDetailData, setRefundDetailData] = useState<{
+    packageCode: string;
+    refundAmount: number;
+    refundReason: string;
+    refundedBy?: string;
+    refundedAt?: string;
+    refundProofUrl?: string;
+    refundProofFileName?: string;
+  } | null>(null);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -314,12 +328,14 @@ export default function MemberDetailPage() {
       setSubmitting(true);
       await packagesApi.refundPackage(selectedPackageId, {
         reason: refundReason,
-        refundAmount
+        refundAmount,
+        refundProof: refundProof.file || undefined
       });
       showToast.success('Paket berhasil di-refund');
       setShowRefundModal(false);
       setRefundReason('');
       setRefundAmount(0);
+      setRefundProof({ file: null, preview: null });
       setSelectedPackageId('');
       await loadPackages();
     } catch (error: any) {
@@ -500,6 +516,10 @@ export default function MemberDetailPage() {
                   setCancelPackageCode(packageCode);
                   setShowCancelModal(true);
                 }}
+                onViewRefundDetail={(refundData) => {
+                  setRefundDetailData(refundData);
+                  setShowRefundDetailModal(true);
+                }}
                 onEditPackage={(purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
                   // Load existing package data into edit modal
                   const selectedPackages = packages.map((pkg: any) => ({
@@ -612,15 +632,18 @@ export default function MemberDetailPage() {
         finalPrice={refundFinalPrice}
         reason={refundReason}
         refundAmount={refundAmount}
+        refundProof={refundProof}
         submitting={submitting}
         onClose={() => {
           setShowRefundModal(false);
           setRefundReason('');
           setRefundAmount(0);
+          setRefundProof({ file: null, preview: null });
           setSelectedPackageId('');
         }}
         onReasonChange={setRefundReason}
         onRefundAmountChange={setRefundAmount}
+        onProofChange={setRefundProof}
         onSubmit={handleRefundPackage}
       />
 
@@ -658,6 +681,17 @@ export default function MemberDetailPage() {
         onEditDataChange={handleEditDataChange}
         onSubmit={handleEditPackage}
       />
+
+      {refundDetailData && (
+        <RefundDetailModal
+          isOpen={showRefundDetailModal}
+          onClose={() => {
+            setShowRefundDetailModal(false);
+            setRefundDetailData(null);
+          }}
+          refundData={refundDetailData}
+        />
+      )}
     </>
   );
 }

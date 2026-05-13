@@ -241,6 +241,7 @@ export class PackagesController {
       console.log('=== refundPackage controller called ===');
       console.log('packageId:', req.params.packageId);
       console.log('Request body:', JSON.stringify(req.body, null, 2));
+      console.log('File:', req.file);
       
       const { packageId } = req.params;
       const data = refundPackageSchema.parse(req.body);
@@ -254,10 +255,27 @@ export class PackagesController {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      const result = await packagesService.refundPackage(packageId, {
-        reason: data.reason,
-        refundAmount: data.refundAmount
-      }, userId, branchId);
+      if (!branchId) {
+        throw {
+          status: 403,
+          code: 'BRANCH_REQUIRED',
+          message: 'Hanya staff cabang yang bisa melakukan refund',
+        };
+      }
+
+      // Get file from multer
+      const refundProofFile = req.file;
+
+      const result = await packagesService.refundPackage(
+        packageId,
+        {
+          reason: data.reason,
+          refundAmount: data.refundAmount
+        },
+        userId,
+        branchId,
+        refundProofFile
+      );
       return sendSuccess(res, result);
     } catch (error) {
       console.log('refundPackage controller error:', error);

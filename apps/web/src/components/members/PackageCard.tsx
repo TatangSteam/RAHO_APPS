@@ -13,6 +13,15 @@ interface PackageCardProps {
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
+  onViewRefundDetail?: (refundData: {
+    packageCode: string;
+    refundAmount: number;
+    refundReason: string;
+    refundedBy?: string;
+    refundedAt?: string;
+    refundProofUrl?: string;
+    refundProofFileName?: string;
+  }) => void;
 }
 
 // Helper function to get therapy name from product code
@@ -96,7 +105,7 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
   return packageCode;
 };
 
-export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onCancelPackage, onEditPackage }: PackageCardProps) {
+export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onCancelPackage, onEditPackage, onViewRefundDetail }: PackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getStatusBadge = (status: string) => {
@@ -121,6 +130,35 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
         {statusText[status] || status}
       </span>
     );
+  };
+
+  const getRefundBadge = (pkg: MemberPackage) => {
+    if (pkg.status === 'CANCELLED' && pkg.refundReason) {
+      return (
+        <span 
+          className={`${styles.badge} ${styles.refund}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onViewRefundDetail) {
+              onViewRefundDetail({
+                packageCode: pkg.packageCode,
+                refundAmount: pkg.refundAmount || 0,
+                refundReason: pkg.refundReason,
+                refundedBy: pkg.refundedBy,
+                refundedAt: pkg.refundedAt,
+                refundProofUrl: pkg.refundProofUrl,
+                refundProofFileName: pkg.refundProofFileName,
+              });
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Klik untuk melihat detail refund"
+        >
+          📝 [REFUND] {pkg.refundReason}
+        </span>
+      );
+    }
+    return null;
   };
 
   const isGroup = 'isGroup' in pkg && pkg.isGroup;
@@ -268,6 +306,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
           <div className={styles.compactRight}>
             <div className={styles.compactPrice}>{formatCurrency(totalFinalPrice)}</div>
             {getStatusBadge(groupStatus || 'ACTIVE')}
+            {(basics[0] && getRefundBadge(basics[0])) || (boosters[0] && getRefundBadge(boosters[0]))}
             <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
           </div>
         </div>
@@ -565,6 +604,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
         <div className={styles.compactRight}>
           <div className={styles.compactPrice}>{formatCurrency(standaloneFinalPrice)}</div>
           {getStatusBadge(memberPkg.status)}
+          {getRefundBadge(memberPkg)}
           <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         </div>
       </div>

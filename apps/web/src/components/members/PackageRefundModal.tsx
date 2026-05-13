@@ -11,9 +11,11 @@ interface PackageRefundModalProps {
   reason: string;
   refundAmount: number;
   submitting: boolean;
+  refundProof?: { file: File | null; preview: string | null };
   onClose: () => void;
   onReasonChange: (value: string) => void;
   onRefundAmountChange: (value: number) => void;
+  onProofChange?: (value: { file: File | null; preview: string | null }) => void;
   onSubmit: () => void;
 }
 
@@ -24,9 +26,11 @@ export default function PackageRefundModal({
   reason,
   refundAmount,
   submitting,
+  refundProof,
   onClose,
   onReasonChange,
   onRefundAmountChange,
+  onProofChange,
   onSubmit,
 }: PackageRefundModalProps) {
   useEffect(() => {
@@ -82,6 +86,35 @@ export default function PackageRefundModal({
             />
             <small className={styles.hint}>Maksimal: Rp {finalPrice.toLocaleString('id-ID')}</small>
           </div>
+
+          {onProofChange && (
+            <div className={styles.formGroup}>
+              <label>Bukti Refund (Opsional)</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      onProofChange({ file, preview: reader.result as string });
+                    };
+                    reader.readAsDataURL(file);
+                  } else {
+                    onProofChange({ file: null, preview: null });
+                  }
+                }}
+                className={styles.input}
+                disabled={submitting}
+              />
+              {refundProof?.preview && (
+                <div className={styles.imagePreview}>
+                  <img src={refundProof.preview} alt="Preview" style={{ maxWidth: '200px', marginTop: '8px', borderRadius: '4px' }} />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className={styles.warningBox}>
             <p>⚠️ <strong>Perhatian:</strong></p>

@@ -127,9 +127,10 @@ export class PackagesService {
     packageId: string,
     data: { reason: string; refundAmount?: number },
     userId: string,
-    branchId: string | null
+    branchId: string | null,
+    refundProofFile?: Express.Multer.File
   ) {
-    return await this.refundService.refundPackage(packageId, data, userId, branchId);
+    return await this.refundService.refundPackage(packageId, data, userId, branchId, refundProofFile);
   }
 
   // ============================================================

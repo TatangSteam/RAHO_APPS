@@ -22,6 +22,7 @@ router.post(
 router.post(
   '/packages/:packageId/refund',
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  uploadPaymentProof.single('refundProof'),
   controller.refundPackage.bind(controller)
 );
 

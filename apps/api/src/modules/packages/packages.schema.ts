@@ -92,7 +92,10 @@ export const updatePackagePricingSchema = z.object({
 
 export const refundPackageSchema = z.object({
   reason: z.string().min(5, 'Alasan refund minimal 5 karakter'),
-  refundAmount: z.number().min(0).optional(),
+  refundAmount: z.preprocess(
+    (val) => val === undefined || val === '' ? undefined : Number(val),
+    z.number().min(0).optional()
+  ),
 });
 
 export const cancelPackageSchema = z.object({

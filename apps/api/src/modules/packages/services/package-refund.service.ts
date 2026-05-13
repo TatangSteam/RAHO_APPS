@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
+import { uploadFile } from '../../../config/minio';
 
 interface RefundPackageInput {
   reason: string;
@@ -18,12 +19,14 @@ export class PackageRefundService {
    * - Invoice status → CANCELLED
    * - If package is part of a bundle (has purchaseGroupId), refund ALL packages in the bundle
    * - Audit log created
+   * - Refund proof image uploaded to MinIO if provided
    */
   async refundPackage(
     packageId: string,
     data: RefundPackageInput,
     userId: string,
-    branchId: string | null
+    branchId: string | null,
+    refundProofFile?: Express.Multer.File
   ) {
     console.log('=== PackageRefundService.refundPackage called ===');
     console.log('packageId:', packageId);
@@ -184,12 +187,43 @@ export class PackageRefundService {
     });
 
     // 6. Update ALL packages in the bundle to CANCELLED
+    // Upload refund proof to MinIO if provided
+    let refundProofUrl: string | undefined;
+    let refundProofFileName: string | undefined;
+    let refundProofFileSize: number | undefined;
+    let refundProofMimeType: string | undefined;
+
+    if (refundProofFile) {
+      console.log('Uploading refund proof to MinIO...');
+      
+      // Generate unique key for the file
+      const timestamp = Date.now();
+      const fileExt = refundProofFile.mimetype.split('/')[1];
+      const key = `refund-proofs/${packageId}/${timestamp}.${fileExt}`;
+      
+      // Upload to MinIO with buffer, key, and mimeType
+      const uploadResult = await uploadFile(refundProofFile.buffer, key, refundProofFile.mimetype);
+      refundProofUrl = uploadResult.url;
+      refundProofFileName = refundProofFile.originalname;
+      refundProofFileSize = refundProofFile.size;
+      refundProofMimeType = refundProofFile.mimetype;
+      console.log('Refund proof uploaded:', refundProofUrl);
+    }
+
     await prisma.memberPackage.updateMany({
       where: {
         id: { in: packagesToRefund }
       },
       data: {
         status: 'CANCELLED',
+        refundAmount: totalRefundAmount,
+        refundReason: data.reason,
+        refundProofUrl,
+        refundProofFileName,
+        refundProofFileSize,
+        refundProofMimeType,
+        refundedBy: userId,
+        refundedAt: new Date(),
         updatedAt: new Date()
       }
     });

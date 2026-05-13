@@ -187,6 +187,15 @@ export class PackageRetrievalService {
       paymentProofFileName: pkg.paymentProofFileName || undefined,
       paymentProofFileSize: pkg.paymentProofFileSize || undefined,
       paymentProofMimeType: pkg.paymentProofMimeType || undefined,
+      // Refund fields
+      refundAmount: pkg.refundAmount ? Number(pkg.refundAmount) : undefined,
+      refundReason: pkg.refundReason || undefined,
+      refundProofUrl: pkg.refundProofUrl || undefined,
+      refundProofFileName: pkg.refundProofFileName || undefined,
+      refundProofFileSize: pkg.refundProofFileSize || undefined,
+      refundProofMimeType: pkg.refundProofMimeType || undefined,
+      refundedBy: pkg.refundedBy ? userMap.get(pkg.refundedBy)?.profile?.fullName : undefined,
+      refundedAt: pkg.refundedAt?.toISOString() || undefined,
       // Incentive information
       incentive: incentiveRecord ? {
         incentiveAmount: Number(incentiveRecord.incentiveAmount),

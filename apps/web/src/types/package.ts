@@ -80,6 +80,15 @@ export interface MemberPackage {
   paymentProofFileName?: string;
   paymentProofFileSize?: number;
   paymentProofMimeType?: string;
+  // Refund fields
+  refundAmount?: number;
+  refundReason?: string;
+  refundProofUrl?: string;
+  refundProofFileName?: string;
+  refundProofFileSize?: number;
+  refundProofMimeType?: string;
+  refundedBy?: string;
+  refundedAt?: string;
   // Incentive information
   incentive?: {
     incentiveAmount: number;

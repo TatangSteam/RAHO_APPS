@@ -248,6 +248,7 @@ model User {
   
   packagesAssigned MemberPackage[]    @relation("PackageAssignedBy")
   packagesVerified MemberPackage[]    @relation("PackageVerifiedBy")
+  packagesRefunded MemberPackage[]    @relation("PackageRefundedBy")
   addOnsAssigned   MemberAddOn[]      @relation("AddOnAssignedBy")
   addOnsVerified   MemberAddOn[]      @relation("AddOnVerifiedBy")
   nonTherapyAssigned MemberNonTherapyPurchase[] @relation("NonTherapyAssignedBy")
@@ -545,6 +546,16 @@ model MemberPackage {
   paymentProofFileSize Int?
   paymentProofMimeType String?
   
+  // Refund information (informasi pengembalian dana)
+  refundAmount         Decimal?  @db.Decimal(12, 2)
+  refundReason         String?
+  refundProofUrl       String?
+  refundProofFileName  String?
+  refundProofFileSize  Int?
+  refundProofMimeType  String?
+  refundedBy           String?
+  refundedAt           DateTime?
+  
   assignedBy       String
   verifiedBy       String?
   paidAt           DateTime?
@@ -559,6 +570,7 @@ model MemberPackage {
   packagePricing  PackagePricing? @relation(fields: [packagePricingId], references: [id])
   assignedByUser  User            @relation("PackageAssignedBy", fields: [assignedBy], references: [id])
   verifiedByUser  User?           @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  refundedByUser  User?           @relation("PackageRefundedBy", fields: [refundedBy], references: [id])
   upgradedFrom    MemberPackage?  @relation("PackageUpgrade", fields: [upgradedFromId], references: [id], onDelete: SetNull)
   upgrades        MemberPackage[] @relation("PackageUpgrade")
   encounters      Encounter[]     @relation("EncounterBasicPackage")
@@ -572,6 +584,8 @@ model MemberPackage {
   @@index([memberId, packageType, status])
   @@index([purchaseGroupId])
   @@index([paymentProofUrl])
+  @@index([refundedAt])
+  @@index([refundProofUrl])
   @@map("member_packages")
 }
 
