@@ -41,4 +41,34 @@ export class FilesController {
       next(err);
     }
   }
+
+  /**
+   * GET /files/presign/*
+   * Return a short-lived presigned URL for an object in MinIO.
+   * This endpoint requires authentication — the client must call it
+   * using their Bearer token and then set the returned URL on the
+   * <img> element or use it directly.
+   */
+  async presignFile(req: Request, res: Response, next: NextFunction) {
+    try {
+      // req.params[0] will contain the path after /presign/
+      const key = req.params[0];
+
+      if (!key) {
+        return res.status(400).json({
+          success: false,
+          error: { code: 'INVALID_FILE_PATH', message: 'File path is required' },
+        });
+      }
+
+      // Optional: allow client to request a custom expiry via query, capped
+      const expires = Math.min(3600, Math.max(10, Number(req.query.expires) || 60));
+
+      const url = await this.filesService.getPresignedUrl(key, expires);
+
+      return res.json({ success: true, data: { url } });
+    } catch (err: any) {
+      next(err);
+    }
+  }
 }

@@ -1,19 +1,20 @@
 import { Router } from 'express';
 import { FilesController } from './files.controller';
+import { authenticate } from '../../middleware/authenticate';
 
 const router = Router();
 const controller = new FilesController();
 
 /**
- * GET /files/*
- * Serve any file from MinIO
- * Public endpoint - no authentication required for file serving
- * 
- * Examples:
- * - GET /files/session-photos/abc123.jpg
- * - GET /files/payment-proofs/xyz789.pdf
- * - GET /files/member-photos/def456.png
+ * Files routes
+ * - GET /files/presign/* (authenticated) -> returns presigned URL
+ * - GET /files/* (authenticated) -> proxy/stream file from MinIO
  */
-router.get('/*', controller.serveFile.bind(controller));
+
+// Presign endpoint — authenticated users only. Example: GET /files/presign/session-photos/abc.jpg
+router.get('/presign/*', authenticate, controller.presignFile.bind(controller));
+
+// Serve file via API (require authentication). Keep this after the presign route.
+router.get('/*', authenticate, controller.serveFile.bind(controller));
 
 export default router;

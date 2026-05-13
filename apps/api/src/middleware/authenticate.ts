@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { verifyAccessToken } from '@lib/jwt';
 import { sendError } from '@utils/response';
+import { env } from '@config/env';
 
 // Extend Express Request with authenticated user
 declare global {
