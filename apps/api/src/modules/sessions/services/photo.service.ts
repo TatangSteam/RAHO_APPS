@@ -26,7 +26,19 @@ export class PhotoService {
     // If exists, delete old file from MinIO
     if (existingPhoto) {
       try {
-        const oldKey = existingPhoto.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+        // Extract key from URL
+        // Old format: http://minio:9000/raho-uploads/session-photos/abc.jpg
+        // New format: http://localhost:4000/api/v1/files/session-photos/abc.jpg
+        let oldKey: string;
+        
+        if (existingPhoto.fileUrl.includes('/api/v1/files/')) {
+          // New format - extract everything after /files/
+          oldKey = existingPhoto.fileUrl.split('/api/v1/files/')[1];
+        } else {
+          // Old format - extract from MinIO URL
+          oldKey = existingPhoto.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+        }
+        
         await deleteFile(oldKey);
       } catch (error) {
         console.error('Error deleting old photo from MinIO:', error);
@@ -41,9 +53,12 @@ export class PhotoService {
     // Upload to MinIO using the minio config helper
     const uploadResult = await uploadFile(file.buffer, key, file.mimetype);
 
+    // Use API endpoint URL instead of direct MinIO URL
+    const apiUrl = `${env.API_URL}/api/v1/files/${key}`;
+
     // Save or update in database
     const photoData = {
-      fileUrl: uploadResult.url,
+      fileUrl: apiUrl, // Use API URL instead of MinIO URL
       fileName: file.originalname,
       fileSize: file.size,
       mimeType: file.mimetype,
@@ -76,7 +91,17 @@ export class PhotoService {
 
     // Delete from MinIO
     try {
-      const key = photo.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+      // Extract key from URL
+      let key: string;
+      
+      if (photo.fileUrl.includes('/api/v1/files/')) {
+        // New format - extract everything after /files/
+        key = photo.fileUrl.split('/api/v1/files/')[1];
+      } else {
+        // Old format - extract from MinIO URL
+        key = photo.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+      }
+      
       await deleteFile(key);
     } catch (error) {
       console.error('Error deleting photo from MinIO:', error);

@@ -25,6 +25,7 @@ import inventoryRouter from './modules/inventory/inventory.routes';
 import { adminRoutes } from './modules/admin/admin.routes';
 import auditRouter from './modules/audit/audit.routes';
 import referralsRouter from './modules/referrals/referrals.routes';
+import filesRouter from './modules/files/files.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -162,6 +163,9 @@ export function createApp(): Application {
 
   // Admin module
   app.use(`${prefix}/admin`, adminRoutes);
+
+  // Files module (serve files from MinIO through API)
+  app.use(`${prefix}/files`, filesRouter);
 
   // Future module routes registered here:
   // app.use(`${prefix}/treatment-sessions`, sessionsRouter);

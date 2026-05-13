@@ -8,6 +8,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   API_PREFIX: z.string().default('/api/v1'),
+  API_URL: z.string().url().optional().default('http://localhost:4000'),
 
   DATABASE_URL: z.string().url(),
 

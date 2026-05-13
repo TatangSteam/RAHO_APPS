@@ -4,6 +4,18 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { AuthUser, TokenPair } from '@/types/auth';
 
+// Import token expiry checker
+let startTokenExpiryCheck: (() => void) | null = null;
+let stopTokenExpiryCheck: (() => void) | null = null;
+
+// Dynamically import to avoid circular dependency
+if (typeof window !== 'undefined') {
+  import('@/lib/api').then((module) => {
+    startTokenExpiryCheck = module.startTokenExpiryCheck;
+    stopTokenExpiryCheck = module.stopTokenExpiryCheck;
+  });
+}
+
 // ── State Shape ───────────────────────────────────────────────
 
 interface AuthState {
@@ -37,21 +49,34 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       ...initialState,
 
-      setAuth: (user, tokens) =>
+      setAuth: (user, tokens) => {
         set({
           user,
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           isAuthenticated: true,
-        }),
+        });
+        
+        // Start token expiry check when user logs in
+        if (startTokenExpiryCheck) {
+          startTokenExpiryCheck();
+        }
+      },
 
       setAccessToken: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
 
-      clearAuth: () => set(initialState),
+      clearAuth: () => {
+        set(initialState);
+        
+        // Stop token expiry check when user logs out
+        if (stopTokenExpiryCheck) {
+          stopTokenExpiryCheck();
+        }
+      },
     }),
     {
-      name: 'raho-auth',
+      name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
       // Only persist tokens; user can be re-fetched on restore
       partialize: (state) => ({
@@ -60,6 +85,12 @@ export const useAuthStore = create<AuthStore>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
+      // Start token check when store is rehydrated (page refresh)
+      onRehydrateStorage: () => (state) => {
+        if (state?.isAuthenticated && startTokenExpiryCheck) {
+          startTokenExpiryCheck();
+        }
+      },
     },
   ),
 );
