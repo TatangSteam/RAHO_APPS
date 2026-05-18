@@ -283,6 +283,9 @@ const nonTherapyProductService = new NonTherapyProductAdminService();
 import { MasterTypesAdminService } from './services/master-types-admin.service';
 const masterTypesService = new MasterTypesAdminService();
 
+import { ImpersonationService } from './services/impersonation.service';
+const impersonationService = new ImpersonationService();
+
 // ── Get All Non-Therapy Products ──────────────────────────────
 export async function getAllNonTherapyProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -563,6 +566,256 @@ export async function deleteMasterProduct(req: Request, res: Response, next: Nex
 export async function getProductCategories(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const result = await adminService.getProductCategories();
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// IMPERSONATION SYSTEM
+// ══════════════════════════════════════════════════════════
+
+/**
+ * Get Admin Managers (for Super Admin)
+ * GET /admin/managers
+ */
+export async function getAdminManagers(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { search, isActive, page, limit } = req.query;
+
+    const result = await impersonationService.getAdminManagers({
+      search: search as string,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get Admin Manager Detail (for Super Admin)
+ * GET /admin/managers/:managerId
+ */
+export async function getAdminManagerDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+
+    // Get manager with branches
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      include: {
+        profile: true,
+        managedBranches: {
+          include: {
+            branch: {
+              select: {
+                id: true,
+                branchCode: true,
+                name: true,
+                city: true,
+                type: true,
+                isActive: true,
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!manager || manager.role !== 'ADMIN_MANAGER') {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan'
+      };
+    }
+
+    const result = {
+      id: manager.id,
+      email: manager.email,
+      fullName: manager.profile?.fullName || manager.email,
+      phoneNumber: manager.profile?.phone || '',
+      isActive: manager.isActive,
+      createdAt: manager.createdAt,
+      lastLoginAt: manager.lastLoginAt,
+      branches: manager.managedBranches.map(mb => mb.branch)
+    };
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get Branch Admins (for Admin Manager)
+ * GET /admin/branch-admins
+ */
+export async function getBranchAdmins(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const { branchId, search, isActive, page, limit } = req.query;
+
+    // Get manager's branch IDs
+    let managerBranchIds: string[];
+    
+    if (user.branches) {
+      // Already impersonating Admin Manager or is Admin Manager
+      managerBranchIds = user.branches;
+    } else if (user.role === 'ADMIN_MANAGER') {
+      // Get branches from database
+      const managerBranches = await prisma.managerBranch.findMany({
+        where: { userId: user.id },
+        select: { branchId: true }
+      });
+      managerBranchIds = managerBranches.map(mb => mb.branchId);
+    } else {
+      throw {
+        status: 403,
+        code: 'FORBIDDEN',
+        message: 'Hanya Admin Manager yang dapat mengakses endpoint ini'
+      };
+    }
+
+    const result = await impersonationService.getBranchAdmins(managerBranchIds, {
+      branchId: branchId as string,
+      search: search as string,
+      isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Start Impersonation
+ * POST /admin/impersonate/:userId
+ */
+export async function startImpersonation(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const user = (req as any).user;
+    const { userId } = req.params;
+
+    console.log('🎭 [startImpersonation] Request received:', {
+      currentUserId: user.id,
+      currentUserEmail: user.email,
+      currentUserRole: user.role,
+      targetUserId: userId,
+      hasBranchId: !!user.branchId,
+      branchId: user.branchId
+    });
+
+    // Get current token payload (may include existing impersonation)
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.slice(7);
+    
+    let currentToken;
+    if (token) {
+      const { verifyAccessToken } = await import('@lib/jwt');
+      currentToken = verifyAccessToken(token);
+      console.log('🎭 [startImpersonation] Current token decoded:', {
+        userId: currentToken.userId,
+        role: currentToken.role,
+        isImpersonating: !!currentToken.impersonating
+      });
+    }
+
+    console.log('🎭 [startImpersonation] Calling impersonationService.createImpersonationToken...');
+    const result = await impersonationService.createImpersonationToken(
+      user.id,
+      userId,
+      currentToken
+    );
+
+    console.log('🎭 [startImpersonation] Impersonation successful:', {
+      targetUserId: result.targetUser.id,
+      targetUserEmail: result.targetUser.email,
+      targetUserRole: result.targetUser.role,
+      tokenGenerated: !!result.token
+    });
+
+    // Log impersonation start
+    const { logAudit } = await import('@utils/auditLog');
+    await logAudit({
+      userId: user.id,
+      branchId: user.branchId,
+      action: AuditAction.LOGIN, // Using LOGIN as proxy for IMPERSONATE_START
+      resource: 'Impersonation',
+      resourceId: userId,
+      meta: {
+        type: 'IMPERSONATE_START',
+        targetUser: result.targetUser.email,
+        targetRole: result.targetUser.role,
+        isNested: !!currentToken?.impersonating
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    console.log('🎭 [startImpersonation] Audit log created, sending response');
+    sendSuccess(res, result);
+  } catch (err: any) {
+    console.error('❌ [startImpersonation] Error occurred:', {
+      message: err.message,
+      code: err.code,
+      status: err.status,
+      stack: err.stack
+    });
+    next(err);
+  }
+}
+
+/**
+ * Stop Impersonation
+ * POST /admin/stop-impersonation
+ */
+export async function stopImpersonation(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const user = (req as any).user;
+
+    // Get current token payload
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.slice(7);
+    
+    if (!token) {
+      throw {
+        status: 401,
+        code: 'AUTH_TOKEN_MISSING',
+        message: 'Token autentikasi diperlukan'
+      };
+    }
+
+    const { verifyAccessToken } = await import('@lib/jwt');
+    const currentToken = verifyAccessToken(token) as any; // Cast to any to avoid type issues
+
+    const result = await impersonationService.stopImpersonation(currentToken);
+
+    // Log impersonation stop
+    const { logAudit } = await import('@utils/auditLog');
+    await logAudit({
+      userId: currentToken.userId, // Original user
+      branchId: currentToken.branchId,
+      action: AuditAction.LOGOUT, // Using LOGOUT as proxy for IMPERSONATE_STOP
+      resource: 'Impersonation',
+      resourceId: user.id,
+      meta: {
+        type: 'IMPERSONATE_STOP',
+        impersonatedUser: currentToken.impersonating?.email,
+        impersonatedRole: currentToken.impersonating?.role
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
     sendSuccess(res, result);
   } catch (err) {
     next(err);

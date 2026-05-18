@@ -257,18 +257,22 @@ export class SessionCreationService {
   }
 
   /**
-   * Validate admin layanan
+   * Validate admin layanan or admin cabang
+   * Both ADMIN_LAYANAN and ADMIN_CABANG can create sessions
    */
   private async validateAdminLayanan(adminLayananId: string) {
     const admin = await prisma.user.findUnique({
       where: { id: adminLayananId },
     });
 
-    if (!admin || admin.role !== Role.ADMIN_LAYANAN || !admin.isActive) {
+    // Allow both ADMIN_LAYANAN and ADMIN_CABANG to create sessions
+    const allowedRoles = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG];
+    
+    if (!admin || !allowedRoles.includes(admin.role as Role) || !admin.isActive) {
       throw {
         status: 403,
-        code: 'INVALID_ADMIN_LAYANAN',
-        message: 'Admin Layanan tidak valid atau tidak aktif',
+        code: 'INVALID_ADMIN',
+        message: 'Admin tidak valid atau tidak aktif. Hanya ADMIN_LAYANAN atau ADMIN_CABANG yang dapat membuat sesi.',
       };
     }
 

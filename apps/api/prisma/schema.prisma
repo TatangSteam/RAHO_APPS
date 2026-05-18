@@ -486,6 +486,7 @@ model MasterServiceType {
   code        String   @unique
   name        String
   description String?
+  price       Decimal? @db.Decimal(12, 2)
   isActive    Boolean  @default(true)
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
@@ -498,9 +499,9 @@ model MasterServiceType {
 
 model PackagePricing {
   id            String       @id @default(cuid())
-  branchId      String
+  branchId      String?      // NULL = global pricing, specific ID = branch-specific pricing
   packageType   PackageType
-  boosterType   BoosterType? // HHO or NO2 for BOOSTER packages
+  boosterType   String?      // Custom booster type code (NO, GT, MB, KCL, H2S, HK, O3, or custom from MasterBoosterType)
   serviceType   String?      // HC, PS, PHC, PTY, PDA for service type pricing
   productCode   String?      // e.g., TNB-P7-HC, BST-NO-P1-HC
   name          String
@@ -510,7 +511,7 @@ model PackagePricing {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  branch         Branch          @relation(fields: [branchId], references: [id])
+  branch         Branch?         @relation(fields: [branchId], references: [id])
   memberPackages MemberPackage[]
 
   @@unique([branchId, packageType, boosterType, serviceType, totalSessions])
@@ -535,7 +536,7 @@ model MemberPackage {
   discountNote     String?
   notes            String?
   status           PackageStatus @default(PENDING_PAYMENT)
-  boosterType      BoosterType?
+  boosterType      String?
   serviceType      String?       // HC, PS, PHC, PTY, PDA
   purchaseGroupId  String?       // Group BASIC + BOOSTER purchased together
   upgradedFromId   String?       // Track if this is an upgrade from another package
@@ -887,7 +888,7 @@ model TreatmentSession {
   doctorId         String      // Primary doctor (backward compatibility)
   nurseId          String      // Primary nurse (backward compatibility)
   boosterPackageId String?
-  boosterType      BoosterType?
+  boosterType      String?
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
 

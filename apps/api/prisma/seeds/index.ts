@@ -15,3 +15,5 @@ export { seedInventoryItems } from './inventory-items.seed';
 export { seedOfficialInventoryItems } from './inventory-items-official.seed';
 export { seedConsolidatedInventoryItems } from './inventory-items-consolidated.seed';
 export { seedInfusionMaterialUsage } from './infusion-material-usage.seed';
+export { seedMaterials } from './materials.seed';
+export { cleanupOrphanProducts } from './cleanup-orphan-products.seed';

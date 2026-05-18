@@ -11,6 +11,11 @@ export interface AuditLogPayload {
   meta?: Record<string, unknown>;
   ipAddress?: string;
   userAgent?: string;
+  impersonating?: {
+    email: string;
+    role: string;
+    note?: string;
+  };
 }
 
 /**
@@ -19,6 +24,15 @@ export interface AuditLogPayload {
  */
 export async function logAudit(payload: AuditLogPayload): Promise<void> {
   try {
+    const metaData: Record<string, unknown> = { ...(payload.meta ?? {}) };
+    
+    // Add impersonation info to meta if present
+    if (payload.impersonating) {
+      metaData.impersonating = payload.impersonating.email;
+      metaData.impersonatedRole = payload.impersonating.role;
+      metaData.note = payload.impersonating.note || `Action performed as ${payload.impersonating.email}`;
+    }
+    
     await prisma.auditLog.create({
       data: {
         userId: payload.userId,
@@ -26,7 +40,7 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
         action: payload.action,
         resource: payload.resource,
         resourceId: payload.resourceId,
-        meta: (payload.meta ?? {}) as object,
+        meta: metaData as object,
         ipAddress: payload.ipAddress,
         userAgent: payload.userAgent,
       },
@@ -37,4 +51,37 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
       payload,
     });
   }
+}
+
+/**
+ * Helper to create audit log from Express request
+ * Automatically handles impersonation tracking
+ */
+export async function logAuditFromRequest(
+  req: any,
+  action: AuditAction,
+  resource: string,
+  resourceId: string,
+  meta?: Record<string, unknown>
+): Promise<void> {
+  const userId = req.originalUser?.userId || req.user.userId;
+  const branchId = req.user.branchId;
+  
+  const impersonating = req.isImpersonating ? {
+    email: req.user.email,
+    role: req.user.role,
+    note: `Action performed as ${req.user.email}`
+  } : undefined;
+  
+  await logAudit({
+    userId,
+    branchId,
+    action,
+    resource,
+    resourceId,
+    meta,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    impersonating
+  });
 }

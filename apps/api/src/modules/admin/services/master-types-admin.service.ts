@@ -53,13 +53,27 @@ export class MasterTypesAdminService {
       };
     }
 
+    // Check if sortOrder already exists
+    const sortOrder = data.sortOrder ?? 999;
+    const existingSortOrder = await prisma.masterBoosterType.findFirst({
+      where: { sortOrder },
+    });
+
+    if (existingSortOrder) {
+      throw {
+        status: 409,
+        code: 'SORT_ORDER_EXISTS',
+        message: `Urutan ${sortOrder} sudah digunakan oleh tipe booster lain`,
+      };
+    }
+
     const type = await prisma.masterBoosterType.create({
       data: {
         code: data.code.toUpperCase(),
         name: data.name,
         icon: data.icon,
         description: data.description,
-        sortOrder: data.sortOrder ?? 999,
+        sortOrder,
       },
     });
 
@@ -96,6 +110,24 @@ export class MasterTypesAdminService {
         code: 'NOT_FOUND',
         message: 'Tipe booster tidak ditemukan',
       };
+    }
+
+    // Check if sortOrder is being changed and if it already exists
+    if (data.sortOrder !== undefined && data.sortOrder !== type.sortOrder) {
+      const existingSortOrder = await prisma.masterBoosterType.findFirst({
+        where: { 
+          sortOrder: data.sortOrder,
+          id: { not: id },
+        },
+      });
+
+      if (existingSortOrder) {
+        throw {
+          status: 409,
+          code: 'SORT_ORDER_EXISTS',
+          message: `Urutan ${data.sortOrder} sudah digunakan oleh tipe booster lain`,
+        };
+      }
     }
 
     const updated = await prisma.masterBoosterType.update({
@@ -169,6 +201,7 @@ export class MasterTypesAdminService {
       code: t.code,
       name: t.name,
       description: t.description,
+      price: t.price ? Number(t.price) : null,
       isActive: t.isActive,
       sortOrder: t.sortOrder,
       createdAt: t.createdAt.toISOString(),
@@ -180,6 +213,7 @@ export class MasterTypesAdminService {
     code: string;
     name: string;
     description?: string;
+    price?: number;
     sortOrder?: number;
   }) {
     // Check if code already exists
@@ -195,12 +229,27 @@ export class MasterTypesAdminService {
       };
     }
 
+    // Check if sortOrder already exists
+    const sortOrder = data.sortOrder ?? 999;
+    const existingSortOrder = await prisma.masterServiceType.findFirst({
+      where: { sortOrder },
+    });
+
+    if (existingSortOrder) {
+      throw {
+        status: 409,
+        code: 'SORT_ORDER_EXISTS',
+        message: `Urutan ${sortOrder} sudah digunakan oleh tipe layanan lain`,
+      };
+    }
+
     const type = await prisma.masterServiceType.create({
       data: {
         code: data.code.toUpperCase(),
         name: data.name,
         description: data.description,
-        sortOrder: data.sortOrder ?? 999,
+        price: data.price,
+        sortOrder,
       },
     });
 
@@ -209,6 +258,7 @@ export class MasterTypesAdminService {
       code: type.code,
       name: type.name,
       description: type.description,
+      price: type.price ? Number(type.price) : null,
       isActive: type.isActive,
       sortOrder: type.sortOrder,
       createdAt: type.createdAt.toISOString(),
@@ -221,6 +271,7 @@ export class MasterTypesAdminService {
     data: {
       name?: string;
       description?: string;
+      price?: number;
       isActive?: boolean;
       sortOrder?: number;
     }
@@ -237,6 +288,24 @@ export class MasterTypesAdminService {
       };
     }
 
+    // Check if sortOrder is being changed and if it already exists
+    if (data.sortOrder !== undefined && data.sortOrder !== type.sortOrder) {
+      const existingSortOrder = await prisma.masterServiceType.findFirst({
+        where: { 
+          sortOrder: data.sortOrder,
+          id: { not: id },
+        },
+      });
+
+      if (existingSortOrder) {
+        throw {
+          status: 409,
+          code: 'SORT_ORDER_EXISTS',
+          message: `Urutan ${data.sortOrder} sudah digunakan oleh tipe layanan lain`,
+        };
+      }
+    }
+
     const updated = await prisma.masterServiceType.update({
       where: { id },
       data,
@@ -247,6 +316,7 @@ export class MasterTypesAdminService {
       code: updated.code,
       name: updated.name,
       description: updated.description,
+      price: updated.price ? Number(updated.price) : null,
       isActive: updated.isActive,
       sortOrder: updated.sortOrder,
       createdAt: updated.createdAt.toISOString(),

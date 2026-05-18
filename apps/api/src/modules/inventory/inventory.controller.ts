@@ -116,7 +116,9 @@ export class InventoryController {
   }
 
   /**
-   * Adjust stock (ADMIN_CABANG only - can edit their own branch stock)
+   * Adjust stock
+   * - SUPER_ADMIN, ADMIN_MANAGER: can adjust any branch's stock
+   * - ADMIN_CABANG: can only adjust their own branch's stock
    * PATCH /api/v1/inventory/items/:itemId/adjust-stock
    */
   async adjustStock(req: Request, res: Response, next: NextFunction) {
@@ -124,6 +126,7 @@ export class InventoryController {
       const { itemId } = req.params;
       const { adjustment, notes } = req.body;
       const userId = req.user!.userId;
+      const userRole = req.user!.role;
       const userBranchId = req.user!.branchId;
 
       // Validate input
@@ -131,7 +134,7 @@ export class InventoryController {
         return sendError(res, 400, 'INVALID_ADJUSTMENT', 'Adjustment must be a non-zero number');
       }
 
-      // Verify the inventory item belongs to user's branch
+      // Verify the inventory item exists
       const inventoryItem = await prisma.inventoryItem.findUnique({
         where: { id: itemId },
         select: { branchId: true },
@@ -141,7 +144,8 @@ export class InventoryController {
         return sendError(res, 404, 'ITEM_NOT_FOUND', 'Item inventori tidak ditemukan');
       }
 
-      if (inventoryItem.branchId !== userBranchId) {
+      // Branch restriction only for ADMIN_CABANG
+      if (userRole === 'ADMIN_CABANG' && inventoryItem.branchId !== userBranchId) {
         return sendError(
           res,
           403,

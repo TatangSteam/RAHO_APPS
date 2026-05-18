@@ -82,11 +82,11 @@ router.get(
   inventoryController.getLowStockItems.bind(inventoryController)
 );
 
-// Adjust stock (ADMIN_CABANG from Pusat branch only)
+// Adjust stock (SUPER_ADMIN, ADMIN_MANAGER, or ADMIN_CABANG)
 router.patch(
   '/items/:itemId/adjust-stock',
   authenticate,
-  authorize([Role.ADMIN_CABANG]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   inventoryController.adjustStock.bind(inventoryController)
 );
 

@@ -7,12 +7,13 @@ import { uploadPaymentProof } from '../../middleware/upload';
 const router = Router();
 const controller = new PackagesController();
 
-// All routes require authentication
-router.use(authenticate);
+// NOTE: Authentication is applied per-route below, not globally
+// This prevents double authentication when mounted at root path
 
 // Upload payment proof (ONLY JPEG/JPG)
 router.post(
   '/packages/payment-proof/upload',
+  authenticate,
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
   uploadPaymentProof.single('file'),
   controller.uploadPaymentProof.bind(controller)
@@ -21,6 +22,7 @@ router.post(
 // Package refund (ACTIVE → CANCELLED)
 router.post(
   '/packages/:packageId/refund',
+  authenticate,
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
   uploadPaymentProof.single('refundProof'),
   controller.refundPackage.bind(controller)
@@ -29,6 +31,7 @@ router.post(
 // Package cancel (PENDING_PAYMENT → CANCELLED)
 router.post(
   '/packages/:packageId/cancel',
+  authenticate,
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.cancelPackage.bind(controller)
 );
@@ -36,6 +39,7 @@ router.post(
 // Package edit (PENDING_PAYMENT only)
 router.put(
   '/packages/:packageId',
+  authenticate,
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.editPackage.bind(controller)
 );
@@ -43,6 +47,7 @@ router.put(
 // Package payment verification
 router.patch(
   '/packages/:packageId/verify',
+  authenticate,
   authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.verifyPayment.bind(controller)
 );
@@ -50,24 +55,28 @@ router.patch(
 // Package pricing management (ADMIN_MANAGER+)
 router.get(
   '/package-pricings',
+  authenticate,
   authorize(['ADMIN_MANAGER', 'SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN']),
   controller.getPackagePricings.bind(controller)
 );
 
 router.post(
   '/package-pricings',
+  authenticate,
   authorize(['ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.createPackagePricing.bind(controller)
 );
 
 router.patch(
   '/package-pricings/:pricingId',
+  authenticate,
   authorize(['ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.updatePackagePricing.bind(controller)
 );
 
 router.delete(
   '/package-pricings/:pricingId',
+  authenticate,
   authorize(['ADMIN_MANAGER', 'SUPER_ADMIN']),
   controller.deletePackagePricing.bind(controller)
 );

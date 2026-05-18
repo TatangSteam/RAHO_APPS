@@ -1,5 +1,15 @@
 import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
+import { Role } from '@prisma/client';
+
+interface ImpersonationData {
+  userId: string;
+  email: string;
+  role: Role;
+  branchId?: string | null;
+  branches?: string[];
+  impersonating?: ImpersonationData;
+}
 
 export interface JwtPayload {
   userId: string;
@@ -9,6 +19,7 @@ export interface JwtPayload {
   branchCode: string | null;
   fullName: string;
   staffCode: string | null;
+  impersonating?: ImpersonationData;
 }
 
 export interface TokenPair {
@@ -16,9 +27,9 @@ export interface TokenPair {
   refreshToken: string;
 }
 
-export function signAccessToken(payload: JwtPayload): string {
+export function signAccessToken(payload: JwtPayload, expiresIn?: string): string {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
-    expiresIn: env.JWT_ACCESS_EXPIRES,
+    expiresIn: expiresIn || env.JWT_ACCESS_EXPIRES,
     issuer: 'raho-api',
     audience: 'raho-client',
   } as jwt.SignOptions);

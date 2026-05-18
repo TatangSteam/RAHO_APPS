@@ -142,24 +142,15 @@ export class PackagePricingAdminService {
    */
   async createPackagePricing(data: {
     packageType: PackageType;
-    boosterType?: 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
+    boosterType?: string;
     serviceType?: string;
     name: string;
     totalSessions: number;
     price: number;
     productCode?: string;
     isActive?: boolean;
-    branchId?: string;
+    branchId?: string; // Optional: null/undefined = global pricing
   }) {
-    // Validate that branchId is provided (required by database)
-    if (!data.branchId) {
-      throw {
-        status: 400,
-        code: 'BRANCH_ID_REQUIRED',
-        message: 'Branch ID is required',
-      };
-    }
-
     // Validate boosterType for BOOSTER packages
     if (data.packageType === 'BOOSTER' && !data.boosterType) {
       throw {
@@ -185,7 +176,7 @@ export class PackagePricingAdminService {
         boosterType: data.boosterType || null,
         serviceType: data.serviceType || null,
         totalSessions: data.totalSessions,
-        branchId: data.branchId,
+        branchId: data.branchId || null,
       },
     });
 
@@ -193,21 +184,25 @@ export class PackagePricingAdminService {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini',
+        message: data.branchId 
+          ? 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini'
+          : 'Harga paket global dengan tipe dan jumlah sesi ini sudah ada',
       };
     }
 
-    // Validate branch
-    const branch = await prisma.branch.findUnique({
-      where: { id: data.branchId },
-    });
+    // Validate branch if branchId is provided
+    if (data.branchId) {
+      const branch = await prisma.branch.findUnique({
+        where: { id: data.branchId },
+      });
 
-    if (!branch) {
-      throw {
-        status: 404,
-        code: 'BRANCH_NOT_FOUND',
-        message: 'Cabang tidak ditemukan',
-      };
+      if (!branch) {
+        throw {
+          status: 404,
+          code: 'BRANCH_NOT_FOUND',
+          message: 'Cabang tidak ditemukan',
+        };
+      }
     }
 
     const pricing = await prisma.packagePricing.create({
@@ -220,7 +215,7 @@ export class PackagePricingAdminService {
         price: data.price,
         productCode: data.productCode,
         isActive: data.isActive ?? true,
-        branchId: data.branchId,
+        branchId: data.branchId || null,
       },
       include: {
         branch: {
@@ -256,10 +251,18 @@ export class PackagePricingAdminService {
 
   /**
    * Update package pricing
+   * Note: Changes to PackagePricing will NOT affect existing MemberPackages
+   * because MemberPackage stores a snapshot of the data at assignment time.
    */
   async updatePackagePricing(
     pricingId: string,
     data: {
+      packageType?: PackageType;
+      boosterType?: string;
+      serviceType?: string;
+      name?: string;
+      totalSessions?: number;
+      productCode?: string;
       price?: number;
       isActive?: boolean;
     }
@@ -276,12 +279,42 @@ export class PackagePricingAdminService {
       };
     }
 
+    // Validate boosterType for BOOSTER packages
+    const newPackageType = data.packageType ?? pricing.packageType;
+    if (newPackageType === 'BOOSTER') {
+      const newBoosterType = data.boosterType ?? pricing.boosterType;
+      if (!newBoosterType) {
+        throw {
+          status: 400,
+          code: 'BOOSTER_TYPE_REQUIRED',
+          message: 'Tipe booster wajib diisi untuk paket BOOSTER',
+        };
+      }
+
+      const newServiceType = data.serviceType ?? pricing.serviceType;
+      if (!newServiceType) {
+        throw {
+          status: 400,
+          code: 'SERVICE_TYPE_REQUIRED',
+          message: 'Tipe layanan wajib diisi untuk paket BOOSTER',
+        };
+      }
+    }
+
+    // Build update data object (only include fields that are provided)
+    const updateData: any = {};
+    if (data.packageType !== undefined) updateData.packageType = data.packageType;
+    if (data.boosterType !== undefined) updateData.boosterType = data.boosterType;
+    if (data.serviceType !== undefined) updateData.serviceType = data.serviceType;
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.totalSessions !== undefined) updateData.totalSessions = data.totalSessions;
+    if (data.productCode !== undefined) updateData.productCode = data.productCode;
+    if (data.price !== undefined) updateData.price = data.price;
+    if (data.isActive !== undefined) updateData.isActive = data.isActive;
+
     const updated = await prisma.packagePricing.update({
       where: { id: pricingId },
-      data: {
-        price: data.price,
-        isActive: data.isActive,
-      },
+      data: updateData,
       include: {
         branch: {
           select: {

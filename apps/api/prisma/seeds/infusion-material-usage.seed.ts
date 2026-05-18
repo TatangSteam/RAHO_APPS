@@ -51,6 +51,7 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
     console.log(`\n📍 Processing ${sessionCode} (${session.branch.name})`);
 
     // Map infusion fields to product name patterns
+    // These patterns match the product names in materials.seed.ts
     const materials = [
       { field: 'ifa', namePattern: 'IFA', qty: infusion.ifa },
       { field: 'hho', namePattern: 'HHO', qty: infusion.hho },
@@ -63,7 +64,7 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
       { field: 'mb', namePattern: 'MB (Methylene Blue)', qty: infusion.mb },
       { field: 'h2s', namePattern: 'H2S', qty: infusion.h2s },
       { field: 'kcl', namePattern: 'KCL', qty: infusion.kcl },
-      { field: 'jmlNb', namePattern: 'JML/NB', qty: infusion.jmlNb },
+      { field: 'jmlNb', namePattern: 'NB Koktail', qty: infusion.jmlNb },
     ];
 
     let sessionCreated = 0;

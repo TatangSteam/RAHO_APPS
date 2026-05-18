@@ -46,10 +46,29 @@ export class MasterProductAdminService {
     // Get total count
     const total = await prisma.masterProduct.count({ where });
 
-    // Get products with pagination
+    // Get products with pagination + per-branch stock info
     const products = await prisma.masterProduct.findMany({
       where,
       include: {
+        inventoryItems: {
+          select: {
+            id: true,
+            stock: true,
+            minThreshold: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                branchCode: true,
+              },
+            },
+            _count: {
+              select: {
+                materialUsages: true,
+              },
+            },
+          },
+        },
         _count: {
           select: {
             inventoryItems: true,
@@ -65,19 +84,45 @@ export class MasterProductAdminService {
     });
 
     return {
-      products: products.map(product => ({
-        id: product.id,
-        name: product.name,
-        category: product.category,
-        baseUnit: product.baseUnit,
-        usageUnit: product.usageUnit,
-        conversionFactor: Number(product.conversionFactor),
-        description: product.description,
-        isActive: product.isActive,
-        usageCount: product._count.inventoryItems,
-        createdAt: product.createdAt.toISOString(),
-        updatedAt: product.updatedAt.toISOString(),
-      })),
+      products: products.map(product => {
+        const branches = product.inventoryItems.map(item => ({
+          inventoryItemId: item.id,
+          branchId: item.branch.id,
+          branchCode: item.branch.branchCode,
+          branchName: item.branch.name,
+          stock: Number(item.stock),
+          minThreshold: Number(item.minThreshold),
+          isLowStock: Number(item.stock) <= Number(item.minThreshold),
+          isOutOfStock: Number(item.stock) <= 0,
+          sessionUsageCount: item._count.materialUsages,
+        }));
+
+        const totalStock = branches.reduce((sum, b) => sum + b.stock, 0);
+        const totalSessionUsage = branches.reduce((sum, b) => sum + b.sessionUsageCount, 0);
+        const lowStockBranches = branches.filter(b => b.isLowStock).length;
+        const outOfStockBranches = branches.filter(b => b.isOutOfStock).length;
+
+        return {
+          id: product.id,
+          name: product.name,
+          category: product.category,
+          baseUnit: product.baseUnit,
+          usageUnit: product.usageUnit,
+          conversionFactor: Number(product.conversionFactor),
+          description: product.description,
+          isActive: product.isActive,
+          usageCount: product._count.inventoryItems,
+          // Stock & usage breakdown
+          totalStock,
+          totalSessionUsage,
+          isUsedInSessions: totalSessionUsage > 0,
+          lowStockBranches,
+          outOfStockBranches,
+          branches, // Per-branch detail
+          createdAt: product.createdAt.toISOString(),
+          updatedAt: product.updatedAt.toISOString(),
+        };
+      }),
       pagination: {
         page,
         limit,

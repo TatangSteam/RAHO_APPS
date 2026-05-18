@@ -129,8 +129,14 @@ export const createStockRequestSchema = z.object({
 
 export const createPackagePricingSchema = z.object({
   packageType: z.nativeEnum(PackageType),
-  boosterType: z.enum(['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3', 'HHO', 'NO2']).optional(), // Required for BOOSTER packages
-  serviceType: z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']).optional(), // Required for BOOSTER packages
+  boosterType: z.string()
+    .min(1, 'Tipe booster minimal 1 karakter')
+    .max(50, 'Tipe booster maksimal 50 karakter')
+    .optional(), // Required for BOOSTER packages
+  serviceType: z.string()
+    .min(2, 'Tipe layanan minimal 2 karakter')
+    .max(50, 'Tipe layanan maksimal 50 karakter')
+    .optional(), // Required for BOOSTER packages
   name: z.string()
     .min(3, 'Nama paket minimal 3 karakter')
     .max(100, 'Nama paket maksimal 100 karakter'),
@@ -147,14 +153,28 @@ export const createPackagePricingSchema = z.object({
     .optional(),
   isActive: z.boolean().optional(),
   branchId: z.string()
-    .uuid('ID cabang tidak valid')
-    .optional() // Optional in schema, will be set by controller for ADMIN_CABANG
+    .min(1, 'ID cabang tidak valid')
+    .optional() // Optional: null/undefined = global pricing
 });
 
 export const updatePackagePricingSchema = z.object({
+  packageType: z.enum(['BASIC', 'BOOSTER']).optional(),
+  boosterType: z.string()
+    .min(1, 'Tipe booster minimal 1 karakter')
+    .max(50, 'Tipe booster maksimal 50 karakter')
+    .optional(),
+  serviceType: z.string()
+    .min(2, 'Tipe layanan minimal 2 karakter')
+    .max(50, 'Tipe layanan maksimal 50 karakter')
+    .optional(),
   name: z.string()
     .min(3, 'Nama paket minimal 3 karakter')
     .max(100, 'Nama paket maksimal 100 karakter')
+    .optional(),
+  totalSessions: z.number()
+    .int('Jumlah sesi harus bilangan bulat')
+    .min(1, 'Jumlah sesi minimal 1')
+    .max(100, 'Jumlah sesi maksimal 100')
     .optional(),
   productCode: z.string()
     .min(2, 'Kode produk minimal 2 karakter')
@@ -240,7 +260,7 @@ export const userFilterSchema = z.object({
 });
 
 export const packagePricingFilterSchema = z.object({
-  branchId: z.string().uuid('ID cabang tidak valid').optional(),
+  branchId: z.string().min(1, 'ID cabang tidak valid').optional(),
   packageType: z.nativeEnum(PackageType).optional(),
   isActive: z.string()
     .transform(val => val === 'true')
@@ -256,6 +276,49 @@ export const packagePricingFilterSchema = z.object({
     .transform(val => parseInt(val))
     .optional()
     .default('20')
+});
+
+// ============================================================
+// IMPERSONATION SCHEMAS
+// ============================================================
+
+export const getAdminManagersQuerySchema = z.object({
+  search: z.string().optional(),
+  isActive: z.string()
+    .transform(val => val === 'true' ? true : val === 'false' ? false : undefined)
+    .optional(),
+  page: z.string()
+    .regex(/^\d+$/, 'Page harus berupa angka')
+    .transform(val => parseInt(val))
+    .optional()
+    .default('1'),
+  limit: z.string()
+    .regex(/^\d+$/, 'Limit harus berupa angka')
+    .transform(val => parseInt(val))
+    .optional()
+    .default('10')
+});
+
+export const getBranchAdminsQuerySchema = z.object({
+  branchId: z.string().uuid('ID cabang tidak valid').optional(),
+  search: z.string().optional(),
+  isActive: z.string()
+    .transform(val => val === 'true' ? true : val === 'false' ? false : undefined)
+    .optional(),
+  page: z.string()
+    .regex(/^\d+$/, 'Page harus berupa angka')
+    .transform(val => parseInt(val))
+    .optional()
+    .default('1'),
+  limit: z.string()
+    .regex(/^\d+$/, 'Limit harus berupa angka')
+    .transform(val => parseInt(val))
+    .optional()
+    .default('10')
+});
+
+export const impersonateUserParamsSchema = z.object({
+  userId: z.string().min(1, 'ID user tidak boleh kosong')
 });
 
 // ============================================================
@@ -275,3 +338,6 @@ export type UpdateNonTherapyProductInput = z.infer<typeof updateNonTherapyProduc
 export type PeriodQueryInput = z.infer<typeof periodQuerySchema>;
 export type UserFilterInput = z.infer<typeof userFilterSchema>;
 export type PackagePricingFilterInput = z.infer<typeof packagePricingFilterSchema>;
+export type GetAdminManagersQueryInput = z.infer<typeof getAdminManagersQuerySchema>;
+export type GetBranchAdminsQueryInput = z.infer<typeof getBranchAdminsQuerySchema>;
+export type ImpersonateUserParamsInput = z.infer<typeof impersonateUserParamsSchema>;

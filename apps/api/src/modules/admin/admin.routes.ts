@@ -32,16 +32,24 @@ import {
   updateMasterProduct,
   deleteMasterProduct,
   getProductCategories,
+  getAdminManagers,
+  getAdminManagerDetail,
+  getBranchAdmins,
+  startImpersonation,
+  stopImpersonation,
 } from './admin.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
-import { validate } from '../../middleware/validate';
+import { validate, validateQuery, validateParams } from '../../middleware/validate';
 import {
   createPackagePricingSchema,
   updatePackagePricingSchema,
   createNonTherapyProductSchema,
   updateNonTherapyProductSchema,
   createAdminManagerSchema,
+  getAdminManagersQuerySchema,
+  getBranchAdminsQuerySchema,
+  impersonateUserParamsSchema,
 } from './admin.schema';
 
 const router = Router();
@@ -264,6 +272,43 @@ router.patch('/master/service-types/:typeId',
 router.delete('/master/service-types/:typeId',
   authorize(['SUPER_ADMIN']),
   deleteServiceType
+);
+
+// ============================================================
+// IMPERSONATION SYSTEM
+// ============================================================
+
+// Get Admin Managers (Super Admin only)
+router.get('/managers',
+  authorize(['SUPER_ADMIN']),
+  validateQuery(getAdminManagersQuerySchema),
+  getAdminManagers
+);
+
+// Get Admin Manager Detail (Super Admin only) - MUST be after /managers
+router.get('/managers/:managerId',
+  authorize(['SUPER_ADMIN']),
+  getAdminManagerDetail
+);
+
+// Get Branch Admins (Admin Manager only)
+router.get('/branch-admins',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  validateQuery(getBranchAdminsQuerySchema),
+  getBranchAdmins
+);
+
+// Start Impersonation (Super Admin or Admin Manager)
+router.post('/impersonate/:userId',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  validateParams(impersonateUserParamsSchema),
+  startImpersonation
+);
+
+// Stop Impersonation
+router.post('/stop-impersonation',
+  authenticate, // Only authenticate, no specific role check
+  stopImpersonation
 );
 
 
