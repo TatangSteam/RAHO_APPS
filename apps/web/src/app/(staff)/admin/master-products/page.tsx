@@ -155,6 +155,11 @@ export default function MasterProductsPage() {
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockEditProduct, setStockEditProduct] = useState<MasterProduct | null>(null);
 
+  // Assign to branch modal state
+  const [assignModalOpen, setAssignModalOpen] = useState(false);
+  const [assignProduct, setAssignProduct] = useState<MasterProduct | null>(null);
+  const [allBranches, setAllBranches] = useState<Array<{ id: string; branchCode: string; name: string }>>([]);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -344,6 +349,73 @@ export default function MasterProductsPage() {
   const closeStockModal = () => {
     setStockModalOpen(false);
     setStockEditProduct(null);
+  };
+
+  // ── Assign to branch handlers ─────────────────────────────
+  const loadAllBranches = async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/branches`,
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      );
+      if (!response.ok) throw new Error('Gagal memuat cabang');
+      const result = await response.json();
+      setAllBranches(result.data || []);
+    } catch (error: any) {
+      console.error('Error loading branches:', error);
+    }
+  };
+
+  const openAssignModal = (product: MasterProduct) => {
+    setAssignProduct(product);
+    setAssignModalOpen(true);
+    if (allBranches.length === 0) {
+      loadAllBranches();
+    }
+  };
+
+  const closeAssignModal = () => {
+    setAssignModalOpen(false);
+    setAssignProduct(null);
+  };
+
+  /**
+   * Assign product to a branch by creating inventory item
+   */
+  const handleAssignToBranch = async (
+    branchId: string,
+    stock: number,
+    minThreshold: number
+  ): Promise<boolean> => {
+    if (!assignProduct) return false;
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/inventory/items`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            masterProductId: assignProduct.id,
+            branchId,
+            stock,
+            minThreshold,
+          }),
+        }
+      );
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error?.message || err.message || 'Gagal menambahkan ke cabang');
+      }
+      showToast.success(`Produk berhasil ditambahkan ke cabang`);
+      await loadProducts();
+      return true;
+    } catch (e: any) {
+      showToast.error(e.message || 'Gagal menambahkan ke cabang');
+      return false;
+    }
   };
 
   /**
@@ -868,6 +940,13 @@ export default function MasterProductsPage() {
                           📦
                         </button>
                         <button
+                          className={styles.stockBtn}
+                          onClick={() => openAssignModal(product)}
+                          title="Tambahkan ke cabang baru"
+                        >
+                          ➕
+                        </button>
+                        <button
                           className={styles.toggleBtn}
                           onClick={() => handleToggleStatus(product)}
                           title={product.isActive ? 'Nonaktifkan' : 'Aktifkan'}
@@ -936,6 +1015,13 @@ export default function MasterProductsPage() {
                     📦 Stok
                   </button>
                   <button
+                    className={styles.stockBtn}
+                    onClick={() => openAssignModal(product)}
+                    title="Tambahkan ke cabang baru"
+                  >
+                    ➕ Cabang
+                  </button>
+                  <button
                     className={styles.toggleBtn}
                     onClick={() => handleToggleStatus(product)}
                     title={product.isActive ? 'Nonaktifkan' : 'Aktifkan'}
@@ -965,6 +1051,17 @@ export default function MasterProductsPage() {
           product={stockEditProduct}
           onClose={closeStockModal}
           onAdjust={handleAdjustStock}
+        />,
+        document.body
+      )}
+
+      {/* Assign to Branch Modal */}
+      {assignModalOpen && assignProduct && mounted && createPortal(
+        <AssignToBranchModal
+          product={assignProduct}
+          allBranches={allBranches}
+          onClose={closeAssignModal}
+          onAssign={handleAssignToBranch}
         />,
         document.body
       )}
@@ -1135,7 +1232,10 @@ function StockEditModal({
     notes: string
   ) => Promise<boolean>;
 }) {
-  // Local state: per-branch new value being typed
+  // Unit mode: 'base' (e.g., kotak) or 'usage' (e.g., ml)
+  const [unitMode, setUnitMode] = useState<'base' | 'usage'>('base');
+  
+  // Local state: per-branch new value being typed (always stored in base unit)
   const [drafts, setDrafts] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     product.branches.forEach(b => { initial[b.inventoryItemId] = String(b.stock); });
@@ -1143,6 +1243,9 @@ function StockEditModal({
   });
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState<string | null>(null);
+  
+  // Get current unit label
+  const currentUnit = unitMode === 'base' ? product.baseUnit : product.usageUnit;
 
   useEffect(() => {
     document.body.style.overflow = 'hidden';
@@ -1209,7 +1312,54 @@ function StockEditModal({
           </div>
 
           {/* Per-branch table */}
-          <div className={styles.sectionTitle} style={{ marginTop: '8px' }}>🏢 Stok per Cabang</div>
+          <div className={styles.sectionTitle} style={{ marginTop: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>🏢 Stok per Cabang</span>
+            {/* Unit Toggle */}
+            {product.conversionFactor !== 1 && (
+              <div style={{
+                display: 'flex',
+                background: 'var(--surface-secondary, #1e293b)',
+                borderRadius: '6px',
+                padding: '2px',
+                gap: '2px'
+              }}>
+                <button
+                  type="button"
+                  onClick={() => setUnitMode('base')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    background: unitMode === 'base' ? 'var(--primary, #3b82f6)' : 'transparent',
+                    color: unitMode === 'base' ? 'white' : 'var(--text-muted, #94a3b8)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  dalam {product.baseUnit}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUnitMode('usage')}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    background: unitMode === 'usage' ? 'var(--primary, #3b82f6)' : 'transparent',
+                    color: unitMode === 'usage' ? 'white' : 'var(--text-muted, #94a3b8)',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  dalam {product.usageUnit}
+                </button>
+              </div>
+            )}
+          </div>
           <div className={styles.stockEditTable}>
             <div className={styles.stockEditHeader}>
               <span>Cabang</span>
@@ -1222,8 +1372,21 @@ function StockEditModal({
               const draft = drafts[b.inventoryItemId];
               const draftNum = Number(draft);
               const isDirty = !Number.isNaN(draftNum) && draftNum !== b.stock;
-              const adjustment = isDirty ? draftNum - b.stock : 0;
+              // Calculate adjustment in base unit for display
+              const adjustmentBase = isDirty ? draftNum - b.stock : 0;
+              // Convert adjustment to display unit
+              const adjustmentDisplay = unitMode === 'usage' 
+                ? Math.round(adjustmentBase * product.conversionFactor) 
+                : adjustmentBase;
               const isLoadingThis = submitting === b.inventoryItemId;
+              
+              // Display values based on unit mode
+              const currentStockDisplay = unitMode === 'usage' 
+                ? Math.round(b.stock * product.conversionFactor) 
+                : b.stock;
+              const inputValue = unitMode === 'usage'
+                ? (draft === '' ? '' : String(Math.round(Number(draft) * product.conversionFactor)))
+                : draft;
 
               return (
                 <div key={b.inventoryItemId} className={styles.stockEditRow}>
@@ -1239,20 +1402,33 @@ function StockEditModal({
                     title={`Threshold minimum: ${b.minThreshold} ${product.baseUnit}`}
                   >
                     {b.isOutOfStock ? '🔴' : b.isLowStock ? '🟡' : '🟢'}{' '}
-                    {b.stock} {product.baseUnit}
+                    {currentStockDisplay} {currentUnit}
                   </span>
                   <span className={styles.stockEditInput}>
                     <input
                       type="number"
                       min="0"
-                      step="1"
-                      value={draft}
-                      onChange={(e) => setDrafts(prev => ({ ...prev, [b.inventoryItemId]: e.target.value }))}
+                      step={unitMode === 'usage' ? '1' : '0.01'}
+                      value={inputValue}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '') {
+                          setDrafts(prev => ({ ...prev, [b.inventoryItemId]: '' }));
+                          return;
+                        }
+                        const numVal = Number(val);
+                        if (Number.isNaN(numVal)) return;
+                        // Convert to base unit for storage
+                        const baseVal = unitMode === 'usage' 
+                          ? numVal / product.conversionFactor 
+                          : numVal;
+                        setDrafts(prev => ({ ...prev, [b.inventoryItemId]: String(baseVal) }));
+                      }}
                       disabled={isLoadingThis}
                     />
                     {isDirty && (
-                      <span className={`${styles.adjustmentHint} ${adjustment > 0 ? styles.adjustPositive : styles.adjustNegative}`}>
-                        {adjustment > 0 ? '+' : ''}{adjustment}
+                      <span className={`${styles.adjustmentHint} ${adjustmentDisplay > 0 ? styles.adjustPositive : styles.adjustNegative}`}>
+                        {adjustmentDisplay > 0 ? '+' : ''}{adjustmentDisplay}
                       </span>
                     )}
                   </span>
@@ -1279,6 +1455,242 @@ function StockEditModal({
           <div className={styles.formActions}>
             <button type="button" onClick={onClose} className={styles.cancelBtn}>Tutup</button>
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ───────────────────────────────────────────────────────────
+// ASSIGN TO BRANCH MODAL — add product to new branches
+// ───────────────────────────────────────────────────────────
+
+function AssignToBranchModal({
+  product,
+  allBranches,
+  onClose,
+  onAssign,
+}: {
+  product: MasterProduct;
+  allBranches: Array<{ id: string; branchCode: string; name: string }>;
+  onClose: () => void;
+  onAssign: (branchId: string, stock: number, minThreshold: number) => Promise<boolean>;
+}) {
+  // Get branches that don't have this product yet
+  const existingBranchIds = new Set(product.branches.map(b => b.branchId));
+  const availableBranches = allBranches.filter(b => !existingBranchIds.has(b.id));
+  
+  const [selectedBranches, setSelectedBranches] = useState<Set<string>>(new Set());
+  const [stock, setStock] = useState(0);
+  const [minThreshold, setMinThreshold] = useState(10);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  useEffect(() => {
+    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [onClose]);
+
+  const toggleBranch = (branchId: string) => {
+    setSelectedBranches(prev => {
+      const next = new Set(prev);
+      if (next.has(branchId)) {
+        next.delete(branchId);
+      } else {
+        next.add(branchId);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    setSelectedBranches(new Set(availableBranches.map(b => b.id)));
+  };
+
+  const deselectAll = () => {
+    setSelectedBranches(new Set());
+  };
+
+  const handleSubmit = async () => {
+    if (selectedBranches.size === 0) return;
+    setSubmitting(true);
+    
+    let successCount = 0;
+    for (const branchId of selectedBranches) {
+      const ok = await onAssign(branchId, stock, minThreshold);
+      if (ok) successCount++;
+    }
+    
+    setSubmitting(false);
+    if (successCount > 0) {
+      onClose();
+    }
+  };
+
+  return (
+    <div className={styles.modalOverlay} onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className={styles.modal} style={{ maxWidth: '600px' }}>
+        <div className={styles.modalHeader}>
+          <div>
+            <h2>➕ Tambahkan ke Cabang — {product.name}</h2>
+            <p className={styles.modalSubtitle}>
+              Pilih cabang yang ingin ditambahkan produk ini
+            </p>
+          </div>
+          <button className={styles.closeBtn} onClick={onClose} aria-label="Tutup">×</button>
+        </div>
+
+        <div className={styles.form}>
+          {availableBranches.length === 0 ? (
+            <div style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: 'var(--text-muted, #94a3b8)'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>✅</div>
+              <div style={{ fontSize: '16px', fontWeight: 500 }}>
+                Produk ini sudah ada di semua cabang
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* Stock settings */}
+              <div className={styles.section}>
+                <div className={styles.sectionTitle}>📦 Pengaturan Stok Awal</div>
+                <div style={{ display: 'flex', gap: '16px' }}>
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
+                    <label>Stok Awal ({product.baseUnit})</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={stock}
+                      onChange={(e) => setStock(Number(e.target.value) || 0)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
+                    <label>Min. Threshold ({product.baseUnit})</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={minThreshold}
+                      onChange={(e) => setMinThreshold(Number(e.target.value) || 0)}
+                      placeholder="10"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Branch selection */}
+              <div className={styles.section}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div className={styles.sectionTitle} style={{ margin: 0 }}>🏢 Pilih Cabang</div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      type="button"
+                      onClick={selectAll}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        color: '#3b82f6',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Pilih Semua
+                    </button>
+                    <button
+                      type="button"
+                      onClick={deselectAll}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        background: 'rgba(148, 163, 184, 0.15)',
+                        color: '#94a3b8',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Hapus Semua
+                    </button>
+                  </div>
+                </div>
+                
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+                  gap: '8px',
+                  maxHeight: '250px',
+                  overflowY: 'auto',
+                  padding: '4px'
+                }}>
+                  {availableBranches.map(branch => (
+                    <label
+                      key={branch.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '10px',
+                        padding: '12px',
+                        background: selectedBranches.has(branch.id) 
+                          ? 'rgba(34, 197, 94, 0.15)' 
+                          : 'var(--surface-secondary, #1e293b)',
+                        border: `2px solid ${selectedBranches.has(branch.id) ? '#22c55e' : 'transparent'}`,
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBranches.has(branch.id)}
+                        onChange={() => toggleBranch(branch.id)}
+                        style={{ width: '18px', height: '18px', accentColor: '#22c55e' }}
+                      />
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary, #f1f5f9)' }}>
+                          {branch.branchCode}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted, #94a3b8)' }}>
+                          {branch.name}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+                
+                <div style={{ 
+                  marginTop: '12px', 
+                  fontSize: '13px', 
+                  color: 'var(--text-muted, #94a3b8)' 
+                }}>
+                  {selectedBranches.size} dari {availableBranches.length} cabang dipilih
+                </div>
+              </div>
+
+              <div className={styles.formActions}>
+                <button type="button" onClick={onClose} className={styles.cancelBtn} disabled={submitting}>
+                  Batal
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className={styles.submitBtn}
+                  disabled={submitting || selectedBranches.size === 0}
+                >
+                  {submitting ? '⏳ Menambahkan...' : `➕ Tambahkan ke ${selectedBranches.size} Cabang`}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

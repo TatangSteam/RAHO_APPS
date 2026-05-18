@@ -89,6 +89,10 @@ export default function InventoryCrudModal({
   const [selectedProduct, setSelectedProduct] = useState<MasterProduct | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   
+  // Unit mode for edit: 'base' (e.g., botol) or 'usage' (e.g., ml)
+  const [stockUnitMode, setStockUnitMode] = useState<'base' | 'usage'>('base');
+  const [thresholdUnitMode, setThresholdUnitMode] = useState<'base' | 'usage'>('base');
+  
   const [formData, setFormData] = useState<InventoryFormData>({
     masterProductId: '',
     stock: 0,
@@ -215,6 +219,50 @@ export default function InventoryCrudModal({
       setEditFormData(prev => ({
         ...prev,
         [name]: type === 'number' ? parseFloat(value) || 0 : value
+      }));
+    }
+  };
+
+  // Handle stock change with unit conversion
+  const handleStockChange = (value: number, mode: 'base' | 'usage') => {
+    const conversionFactor = editFormData.conversionFactor;
+    
+    if (mode === 'base') {
+      // Input is in base unit (e.g., botol), calculate usage stock
+      setEditFormData(prev => ({
+        ...prev,
+        stock: value,
+        usageStock: value * conversionFactor
+      }));
+    } else {
+      // Input is in usage unit (e.g., ml), calculate base stock
+      const baseStock = value / conversionFactor;
+      setEditFormData(prev => ({
+        ...prev,
+        stock: baseStock,
+        usageStock: value
+      }));
+    }
+  };
+
+  // Handle threshold change with unit conversion
+  const handleThresholdChange = (value: number, mode: 'base' | 'usage') => {
+    const conversionFactor = editFormData.conversionFactor;
+    
+    if (mode === 'base') {
+      // Input is in base unit (e.g., botol), calculate usage threshold
+      setEditFormData(prev => ({
+        ...prev,
+        minThreshold: value,
+        minThresholdUsage: value * conversionFactor
+      }));
+    } else {
+      // Input is in usage unit (e.g., ml), calculate base threshold
+      const baseThreshold = value / conversionFactor;
+      setEditFormData(prev => ({
+        ...prev,
+        minThreshold: baseThreshold,
+        minThresholdUsage: value
       }));
     }
   };
@@ -678,35 +726,186 @@ export default function InventoryCrudModal({
                 </small>
               </div>
 
-              <div className={styles.formGroup}>
-                <label htmlFor="stock">
-                  Stok ({editFormData.baseUnit})
+              {/* Stock Input with Unit Toggle */}
+              <div className={styles.formGroupFull}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Package size={16} />
+                    Stok Saat Ini
+                  </span>
+                  {/* Unit Toggle */}
+                  <div style={{
+                    display: 'flex',
+                    background: 'var(--surface-secondary)',
+                    borderRadius: '6px',
+                    padding: '2px',
+                    gap: '2px'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setStockUnitMode('base')}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: stockUnitMode === 'base' ? 'var(--primary)' : 'transparent',
+                        color: stockUnitMode === 'base' ? 'white' : 'var(--text-muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      dalam {editFormData.baseUnit}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStockUnitMode('usage')}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: stockUnitMode === 'usage' ? 'var(--primary)' : 'transparent',
+                        color: stockUnitMode === 'usage' ? 'white' : 'var(--text-muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      dalam {editFormData.usageUnit}
+                    </button>
+                  </div>
                 </label>
-                <input
-                  type="number"
-                  id="stock"
-                  name="stock"
-                  value={editFormData.stock}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="0"
-                />
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    value={stockUnitMode === 'base' 
+                      ? editFormData.stock 
+                      : editFormData.usageStock}
+                    onChange={(e) => handleStockChange(parseFloat(e.target.value) || 0, stockUnitMode)}
+                    min="0"
+                    step={stockUnitMode === 'base' ? '0.01' : '1'}
+                    placeholder="0"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                <small style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  {stockUnitMode === 'base' 
+                    ? `= ${editFormData.usageStock.toFixed(0)} ${editFormData.usageUnit}`
+                    : `= ${editFormData.stock.toFixed(2)} ${editFormData.baseUnit}`
+                  }
+                </small>
               </div>
 
-              <div className={styles.formGroup}>
-                <label htmlFor="minThreshold">
-                  <AlertTriangle size={16} />
-                  Min. Stok ({editFormData.baseUnit})
+              {/* Min Threshold Input with Unit Toggle */}
+              <div className={styles.formGroupFull}>
+                <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <AlertTriangle size={16} />
+                    Minimum Stok (Peringatan)
+                  </span>
+                  {/* Unit Toggle */}
+                  <div style={{
+                    display: 'flex',
+                    background: 'var(--surface-secondary)',
+                    borderRadius: '6px',
+                    padding: '2px',
+                    gap: '2px'
+                  }}>
+                    <button
+                      type="button"
+                      onClick={() => setThresholdUnitMode('base')}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: thresholdUnitMode === 'base' ? 'var(--primary)' : 'transparent',
+                        color: thresholdUnitMode === 'base' ? 'white' : 'var(--text-muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      dalam {editFormData.baseUnit}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setThresholdUnitMode('usage')}
+                      style={{
+                        padding: '4px 10px',
+                        fontSize: '12px',
+                        fontWeight: 500,
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        background: thresholdUnitMode === 'usage' ? 'var(--primary)' : 'transparent',
+                        color: thresholdUnitMode === 'usage' ? 'white' : 'var(--text-muted)',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      dalam {editFormData.usageUnit}
+                    </button>
+                  </div>
                 </label>
-                <input
-                  type="number"
-                  id="minThreshold"
-                  name="minThreshold"
-                  value={editFormData.minThreshold}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="10"
-                />
+                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                  <input
+                    type="number"
+                    value={thresholdUnitMode === 'base' 
+                      ? editFormData.minThreshold 
+                      : editFormData.minThresholdUsage}
+                    onChange={(e) => handleThresholdChange(parseFloat(e.target.value) || 0, thresholdUnitMode)}
+                    min="0"
+                    step={thresholdUnitMode === 'base' ? '0.01' : '1'}
+                    placeholder="10"
+                    style={{ flex: 1 }}
+                  />
+                </div>
+                <small style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  {thresholdUnitMode === 'base' 
+                    ? `= ${editFormData.minThresholdUsage.toFixed(0)} ${editFormData.usageUnit}`
+                    : `= ${editFormData.minThreshold.toFixed(2)} ${editFormData.baseUnit}`
+                  }
+                </small>
+              </div>
+
+              {/* Current Stock Summary */}
+              <div className={styles.formGroupFull}>
+                <div style={{
+                  padding: '12px 16px',
+                  background: editFormData.stock <= editFormData.minThreshold 
+                    ? 'rgba(239, 68, 68, 0.1)' 
+                    : 'rgba(34, 197, 94, 0.1)',
+                  border: `1px solid ${editFormData.stock <= editFormData.minThreshold 
+                    ? 'rgba(239, 68, 68, 0.3)' 
+                    : 'rgba(34, 197, 94, 0.3)'}`,
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>
+                      Ringkasan Stok
+                    </div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {editFormData.stock.toFixed(2)} {editFormData.baseUnit} ({editFormData.usageStock.toFixed(0)} {editFormData.usageUnit})
+                    </div>
+                  </div>
+                  {editFormData.stock <= editFormData.minThreshold && (
+                    <span style={{
+                      padding: '4px 10px',
+                      background: 'rgba(239, 68, 68, 0.2)',
+                      color: '#ef4444',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: 600
+                    }}>
+                      Stok Rendah
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}

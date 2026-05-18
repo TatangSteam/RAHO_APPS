@@ -246,7 +246,7 @@ export default function InventoryBatchAddModal({
       showToast.success(`Berhasil menambahkan ${result.created} item inventori`);
       
       if (result.skipped > 0) {
-        showToast.info(`${result.skipped} item dilewati (sudah ada)`);
+        showToast.success(`${result.skipped} item dilewati (sudah ada)`);
       }
       
       onSuccess();

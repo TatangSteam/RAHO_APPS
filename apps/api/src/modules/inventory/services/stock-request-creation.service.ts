@@ -161,7 +161,7 @@ export class StockRequestCreationService {
         inventoryItemId: item.inventoryItemId,
         productName: item.inventoryItem.masterProduct.name,
         requestedQty: Number(item.requestedQty),
-        unit: item.inventoryItem.masterProduct.unit,
+        unit: item.inventoryItem.masterProduct.baseUnit || item.inventoryItem.masterProduct.unit,
         notes: item.notes,
       })),
       createdAt: request.createdAt.toISOString(),
