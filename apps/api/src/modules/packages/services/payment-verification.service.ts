@@ -175,26 +175,16 @@ export class PaymentVerificationService {
       });
     }
 
-    // Auto-generate invoice for the group
-    const invoice = await this.invoiceService.generateInvoiceForPackages(groupPackages, pkg.member, userId);
+    // Refetch packages with updated payment proof data for invoice generation
+    const updatedPackages = await prisma.memberPackage.findMany({
+      where: { purchaseGroupId: pkg.purchaseGroupId },
+    });
 
-    // Create invoice payment record with proof
-    if (invoice && data.proofFileUrl) {
-      await prisma.invoicePayment.create({
-        data: {
-          invoiceId: invoice.id,
-          amount: invoice.totalAmount,
-          paymentMethod: 'TRANSFER', // Default to TRANSFER
-          notes: data.notes,
-          proofFileUrl: data.proofFileUrl,
-          proofFileName: data.proofFileName,
-          proofFileSize: data.proofFileSize,
-          proofMimeType: data.proofMimeType,
-          receivedBy: userId,
-          receivedAt: now,
-        },
-      });
-    }
+    // Auto-generate invoice for the group (this also creates payment record with proof)
+    await this.invoiceService.generateInvoiceForPackages(updatedPackages, pkg.member, userId);
+
+    // NOTE: Payment record is already created inside generateInvoiceForPackages
+    // No need to create another one here
 
     const totalItems = groupPackages.length + groupAddOns.length;
 
@@ -268,26 +258,11 @@ export class PaymentVerificationService {
       },
     });
 
-    // Auto-generate invoice for single package
-    const invoice = await this.invoiceService.generateInvoiceForPackages([updatedPackage], pkg.member, userId);
+    // Auto-generate invoice for single package (this also creates payment record with proof)
+    await this.invoiceService.generateInvoiceForPackages([updatedPackage], pkg.member, userId);
 
-    // Create invoice payment record with proof
-    if (invoice && data.proofFileUrl) {
-      await prisma.invoicePayment.create({
-        data: {
-          invoiceId: invoice.id,
-          amount: invoice.totalAmount,
-          paymentMethod: 'TRANSFER', // Default to TRANSFER
-          notes: data.notes,
-          proofFileUrl: data.proofFileUrl,
-          proofFileName: data.proofFileName,
-          proofFileSize: data.proofFileSize,
-          proofMimeType: data.proofMimeType,
-          receivedBy: userId,
-          receivedAt: now,
-        },
-      });
-    }
+    // NOTE: Payment record is already created inside generateInvoiceForPackages
+    // No need to create another one here
 
     // Send notification to member
     await prisma.notification.create({

@@ -65,11 +65,17 @@ export default function PackageRefundModal({
             <textarea
               value={reason}
               onChange={(e) => onReasonChange(e.target.value)}
-              placeholder="Masukkan alasan refund..."
+              placeholder="Masukkan alasan refund (minimal 8 karakter)..."
               rows={4}
               className={styles.textarea}
               disabled={submitting}
+              minLength={8}
             />
+            {reason.length > 0 && reason.length < 8 && (
+              <small className={styles.error} style={{ color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                Alasan refund minimal 8 karakter ({reason.length}/8)
+              </small>
+            )}
           </div>
 
           <div className={styles.formGroup}>
@@ -134,7 +140,7 @@ export default function PackageRefundModal({
           <button 
             onClick={onSubmit} 
             className={styles.btnDanger} 
-            disabled={submitting || !reason || refundAmount <= 0}
+            disabled={submitting || !reason || reason.length < 8 || refundAmount <= 0}
           >
             {submitting ? 'Memproses...' : 'Refund Paket'}
           </button>

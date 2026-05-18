@@ -319,8 +319,12 @@ export default function MemberDetailPage() {
   };
 
   const handleRefundPackage = async () => {
-    if (!refundReason || refundAmount <= 0) {
-      showToast.error('Alasan dan jumlah refund wajib diisi');
+    if (!refundReason || refundReason.length < 8) {
+      showToast.error('Alasan refund minimal 8 karakter');
+      return;
+    }
+    if (refundAmount <= 0) {
+      showToast.error('Jumlah refund wajib diisi');
       return;
     }
 
