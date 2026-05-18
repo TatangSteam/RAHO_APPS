@@ -325,20 +325,26 @@ export default function StaffManagementPage() {
                   </td>
                   <td>
                     <div className={styles.actions}>
-                      <button
-                        className={`${styles.actionBtn} ${styles.editBtn}`}
-                        onClick={() => handleOpenEditModal(staffMember)}
-                        title="Edit Staff"
-                      >
-                        <Edit size={14} />
-                      </button>
-                      <button
-                        className={`${styles.actionBtn} ${styles.deleteBtn}`}
-                        onClick={() => handleDeleteStaff(staffMember)}
-                        title="Nonaktifkan Staff"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {/* ADMIN_CABANG tidak boleh mengedit ADMIN_CABANG lain */}
+                      {staffMember.role !== 'ADMIN_CABANG' && (
+                        <button
+                          className={`${styles.actionBtn} ${styles.editBtn}`}
+                          onClick={() => handleOpenEditModal(staffMember)}
+                          title="Edit Staff"
+                        >
+                          <Edit size={14} />
+                        </button>
+                      )}
+                      {/* ADMIN_CABANG tidak boleh menghapus ADMIN_CABANG lain */}
+                      {staffMember.role !== 'ADMIN_CABANG' && (
+                        <button
+                          className={`${styles.actionBtn} ${styles.deleteBtn}`}
+                          onClick={() => handleDeleteStaff(staffMember)}
+                          title="Nonaktifkan Staff"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

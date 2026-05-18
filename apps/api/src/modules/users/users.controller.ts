@@ -104,6 +104,21 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
     console.log('🔍 [UsersController] Deactivate user request:', req.params.userId);
     console.log('🔍 [UsersController] Caller role:', req.user.role);
     
+    // Get target user to check their role
+    const targetUser = await getUserService(req.params.userId);
+    
+    // ADMIN_CABANG cannot deactivate other ADMIN_CABANG
+    if (req.user.role === Role.ADMIN_CABANG && targetUser.role === Role.ADMIN_CABANG) {
+      res.status(403).json({
+        success: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: 'Admin Cabang tidak dapat menonaktifkan Admin Cabang lain.'
+        }
+      });
+      return;
+    }
+    
     const user = await updateUserService(req.params.userId, { isActive: false });
     
     await logAudit({
