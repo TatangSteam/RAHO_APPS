@@ -8,6 +8,9 @@ import { errors } from './errorHandler';
 export function validate(schema: ZodSchema) {
   return async (req: Request, _res: Response, next: NextFunction) => {
     try {
+      // Log incoming body for debugging
+      console.log('📝 [VALIDATE] Request body:', JSON.stringify(req.body, null, 2));
+      
       // Validate and parse the request body
       req.body = await schema.parseAsync(req.body);
       next();
@@ -18,6 +21,8 @@ export function validate(schema: ZodSchema) {
           field: err.path.join('.'),
           message: err.message,
         }));
+
+        console.log('❌ [VALIDATE] Validation errors:', JSON.stringify(formattedErrors, null, 2));
 
         return next(
           errors.badRequest('VALIDATION_ERROR', JSON.stringify(formattedErrors))

@@ -57,7 +57,7 @@ export class UserManagementService {
         profile: {
           create: {
             fullName: data.fullName,
-            phoneNumber: data.phoneNumber,
+            phone: data.phoneNumber, // Map phoneNumber to phone field in DB
           },
         },
         managedBranches: {
@@ -83,7 +83,7 @@ export class UserManagementService {
       isActive: user.isActive,
       profile: {
         fullName: user.profile?.fullName,
-        phoneNumber: user.profile?.phoneNumber,
+        phoneNumber: user.profile?.phone, // Map phone field to phoneNumber in response
       },
       managedBranches: user.managedBranches.map(mb => ({
         branchId: mb.branchId,
@@ -137,7 +137,7 @@ export class UserManagementService {
         ...(where.OR || []),
         { email: { contains: search, mode: 'insensitive' } },
         { profile: { fullName: { contains: search, mode: 'insensitive' } } },
-        { profile: { phoneNumber: { contains: search, mode: 'insensitive' } } },
+        { profile: { phone: { contains: search, mode: 'insensitive' } } },
       ];
     }
 
@@ -181,7 +181,7 @@ export class UserManagementService {
         isActive: user.isActive,
         profile: {
           fullName: user.profile?.fullName,
-          phoneNumber: user.profile?.phoneNumber,
+          phoneNumber: user.profile?.phone, // Map phone to phoneNumber in response
         },
         branch: user.branch ? {
           id: user.branch.id,

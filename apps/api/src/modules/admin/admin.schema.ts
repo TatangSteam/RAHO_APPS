@@ -86,16 +86,15 @@ export const createAdminManagerSchema = z.object({
     .max(100, 'Email maksimal 100 karakter'),
   password: z.string()
     .min(8, 'Password minimal 8 karakter')
-    .max(50, 'Password maksimal 50 karakter')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/, 'Password harus mengandung huruf kecil, huruf besar, dan angka'),
+    .max(50, 'Password maksimal 50 karakter'),
   fullName: z.string()
     .min(2, 'Nama lengkap minimal 2 karakter')
     .max(100, 'Nama lengkap maksimal 100 karakter'),
-  phone: z.string()
+  phoneNumber: z.string()
     .min(10, 'Nomor telepon minimal 10 digit')
-    .max(15, 'Nomor telepon maksimal 15 digit')
+    .max(20, 'Nomor telepon maksimal 20 digit')
     .regex(/^[0-9+\-\s()]+$/, 'Format nomor telepon tidak valid'),
-  branchIds: z.array(z.string().uuid('ID cabang tidak valid'))
+  branchIds: z.array(z.string().min(1, 'ID cabang tidak valid'))
     .min(1, 'Minimal 1 cabang harus dipilih')
 });
 

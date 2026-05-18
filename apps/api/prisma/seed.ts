@@ -31,12 +31,20 @@ async function main(): Promise<void> {
     const { seedProducts } = await import('./seeds');
     const { seedConsolidatedInventoryItems } = await import('./seeds/inventory-items-consolidated.seed');
     const { cleanupOrphanProducts } = await import('./seeds/cleanup-orphan-products.seed');
+    const { seedMasterTypes } = await import('./seeds/master-types.seed');
+    const { seedNonTherapyProducts } = await import('./seeds/non-therapy-products.seed');
 
     console.log('📦 Seeding master products...');
     const products = await seedProducts(prisma);
 
     console.log('📦 Seeding consolidated inventory items...');
     await seedConsolidatedInventoryItems(prisma);
+
+    console.log('⚙️  Seeding master types (booster & service types)...');
+    await seedMasterTypes();
+
+    console.log('🛍️  Seeding non-therapy products (add-ons)...');
+    await seedNonTherapyProducts(prisma);
 
     console.log('\n✅ Essential seed completed!\n');
 
