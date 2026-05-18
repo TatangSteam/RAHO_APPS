@@ -1010,6 +1010,7 @@ export default function BranchDetailPage() {
           action={crudModal.action}
           branchId={branchId}
           staffData={crudModal.data}
+          callerRole={user?.role}
         />
       )}
 

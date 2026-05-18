@@ -357,6 +357,7 @@ export default function StaffManagementPage() {
           action={modalAction}
           branchId={user.branchId}
           staffData={selectedStaff}
+          callerRole={user.role}
         />
       )}
     </div>

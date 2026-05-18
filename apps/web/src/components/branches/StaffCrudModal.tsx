@@ -13,20 +13,28 @@ interface StaffCrudModalProps {
   action: 'create' | 'edit' | 'delete';
   branchId: string;
   staffData?: any;
+  callerRole?: string; // Role of the user opening the modal
 }
 
 interface StaffFormData {
   email: string;
   password?: string;
-  role: 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE';
+  role: 'ADMIN_CABANG' | 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE';
   fullName: string;
   phone: string;
   isActive: boolean;
 }
 
-// Role options - ADMIN_CABANG can only create ADMIN_LAYANAN, DOCTOR, NURSE
-// ADMIN_CABANG option is only for SUPER_ADMIN/ADMIN_MANAGER
-const ROLE_OPTIONS = [
+// Role options for ADMIN_CABANG - can only create ADMIN_LAYANAN, DOCTOR, NURSE
+const ROLE_OPTIONS_ADMIN_CABANG = [
+  { value: 'ADMIN_LAYANAN', label: 'Admin Layanan' },
+  { value: 'DOCTOR', label: 'Dokter' },
+  { value: 'NURSE', label: 'Perawat' }
+];
+
+// Role options for SUPER_ADMIN/ADMIN_MANAGER - can also create ADMIN_CABANG
+const ROLE_OPTIONS_MANAGER = [
+  { value: 'ADMIN_CABANG', label: 'Admin Cabang' },
   { value: 'ADMIN_LAYANAN', label: 'Admin Layanan' },
   { value: 'DOCTOR', label: 'Dokter' },
   { value: 'NURSE', label: 'Perawat' }
@@ -38,8 +46,13 @@ export default function StaffCrudModal({
   onSuccess,
   action,
   branchId,
-  staffData
+  staffData,
+  callerRole
 }: StaffCrudModalProps) {
+  // Determine which role options to show based on caller's role
+  const roleOptions = (callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN_MANAGER') 
+    ? ROLE_OPTIONS_MANAGER 
+    : ROLE_OPTIONS_ADMIN_CABANG;
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<StaffFormData>({
     email: '',
@@ -217,7 +230,7 @@ export default function StaffCrudModal({
                 onChange={handleInputChange}
                 required
               >
-                {ROLE_OPTIONS.map(option => (
+                {roleOptions.map(option => (
                   <option key={option.value} value={option.value}>
                     {option.label}
                   </option>
