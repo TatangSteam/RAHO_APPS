@@ -9,13 +9,13 @@ export class ShipmentRetrievalService {
   /**
    * Get shipments with filtering
    */
-  async getShipments(branchId?: string, status?: ShipmentStatus) {
+  async getShipments(branchIds?: string[], status?: ShipmentStatus) {
     const where: any = {};
 
-    if (branchId) {
+    if (branchIds && branchIds.length > 0) {
       where.OR = [
-        { fromBranchId: branchId },
-        { toBranchId: branchId },
+        { fromBranchId: { in: branchIds } },
+        { toBranchId: { in: branchIds } },
       ];
     }
 
@@ -26,26 +26,20 @@ export class ShipmentRetrievalService {
     const shipments = await prisma.shipment.findMany({
       where,
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
-        shippedByUser: {
+        stockRequest: {
           include: {
-            profile: true,
-          },
-        },
-        receivedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-        approvedByUser: {
-          include: {
-            profile: true,
+            items: {
+              include: {
+                inventoryItem: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -62,31 +56,21 @@ export class ShipmentRetrievalService {
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
-        shippedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-        receivedByUser: {
-          include: {
-            profile: true,
-          },
-        },
-        approvedByUser: {
-          include: {
-            profile: true,
-          },
-        },
         stockRequest: {
           include: {
-            requestingBranch: true,
+            branch: true,
+            items: {
+              include: {
+                inventoryItem: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -105,7 +89,7 @@ export class ShipmentRetrievalService {
       stockRequest: shipment.stockRequest ? {
         id: shipment.stockRequest.id,
         requestCode: shipment.stockRequest.requestCode,
-        requestingBranchName: shipment.stockRequest.requestingBranch.name,
+        requestingBranchName: shipment.stockRequest.branch.name,
       } : null,
     };
   }
@@ -114,6 +98,18 @@ export class ShipmentRetrievalService {
    * Format shipment for response
    */
   private formatShipment(shipment: any) {
+    // Build item info map from stock request items
+    const itemInfoMap = new Map<string, { productName: string; unit: string; category: string }>();
+    if (shipment.stockRequest?.items) {
+      shipment.stockRequest.items.forEach((item: any) => {
+        itemInfoMap.set(item.inventoryItemId, {
+          productName: item.inventoryItem.masterProduct.name,
+          unit: item.inventoryItem.masterProduct.baseUnit || item.inventoryItem.masterProduct.unit,
+          category: item.inventoryItem.masterProduct.category,
+        });
+      });
+    }
+
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -123,20 +119,20 @@ export class ShipmentRetrievalService {
       toBranchName: shipment.toBranch.name,
       status: shipment.status,
       notes: shipment.notes,
-      shippedBy: shipment.shippedByUser?.profile?.fullName || shipment.shippedByUser?.email,
       shippedAt: shipment.shippedAt?.toISOString(),
-      receivedBy: shipment.receivedByUser?.profile?.fullName || shipment.receivedByUser?.email,
       receivedAt: shipment.receivedAt?.toISOString(),
-      approvedBy: shipment.approvedByUser?.profile?.fullName || shipment.approvedByUser?.email,
       approvedAt: shipment.approvedAt?.toISOString(),
-      items: shipment.items.map((item: any) => ({
-        id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        quantity: Number(item.quantity),
-      })),
+      itemCount: shipment.items.length,
+      items: shipment.items.map((item: any) => {
+        const itemInfo = itemInfoMap.get(item.inventoryItemId);
+        return {
+          id: item.id,
+          inventoryItemId: item.inventoryItemId,
+          productName: itemInfo?.productName || 'Unknown Product',
+          unit: itemInfo?.unit || 'unit',
+          sentQty: Number(item.sentQty),
+        };
+      }),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),
     };

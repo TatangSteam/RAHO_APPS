@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StockRequest } from '../types';
+import { showToast } from '@/lib/toast';
 import styles from '../page.module.css';
 
 interface ReviewModalProps {
@@ -12,18 +13,25 @@ interface ReviewModalProps {
 
 export default function ReviewModal({ request, onClose, onApprove, onReject, loading }: ReviewModalProps) {
   const [reviewNotes, setReviewNotes] = useState('');
+  const [notesError, setNotesError] = useState(false);
 
   const handleApprove = async () => {
     if (!reviewNotes.trim()) {
-      return; // Parent should handle validation
+      setNotesError(true);
+      showToast.error('Catatan review harus diisi sebelum approve');
+      return;
     }
+    setNotesError(false);
     await onApprove(request.id, reviewNotes);
   };
 
   const handleReject = async () => {
     if (!reviewNotes.trim()) {
-      return; // Parent should handle validation
+      setNotesError(true);
+      showToast.error('Catatan penolakan harus diisi sebelum reject');
+      return;
     }
+    setNotesError(false);
     await onReject(request.id, reviewNotes);
   };
 
@@ -66,14 +74,23 @@ export default function ReviewModal({ request, onClose, onApprove, onReject, loa
           </div>
 
           <div className={styles.formGroup}>
-            <label>Catatan Review</label>
+            <label>Catatan Review <span style={{ color: '#ef4444' }}>*</span></label>
             <textarea
               value={reviewNotes}
-              onChange={(e) => setReviewNotes(e.target.value)}
-              placeholder="Masukkan catatan review..."
+              onChange={(e) => {
+                setReviewNotes(e.target.value);
+                if (e.target.value.trim()) setNotesError(false);
+              }}
+              placeholder="Masukkan catatan review (wajib diisi)..."
               rows={4}
               className={styles.textarea}
+              style={notesError ? { borderColor: '#ef4444', boxShadow: '0 0 0 2px rgba(239, 68, 68, 0.2)' } : {}}
             />
+            {notesError && (
+              <p style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                Catatan review wajib diisi
+              </p>
+            )}
           </div>
         </div>
 

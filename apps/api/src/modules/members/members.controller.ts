@@ -10,6 +10,7 @@ import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
 import { MemberExportService } from './services/member-export.service';
 import { logAudit } from '../../utils/auditLog';
+import { prisma } from '../../lib/prisma';
 
 const membersService = new MembersService();
 const exportService = new MemberExportService();
@@ -76,9 +77,44 @@ export class MembersController {
   async createMember(req: Request, res: Response, next: NextFunction) {
     try {
       const validated = createMemberSchema.parse(req.body);
-      const { branchId, userId } = req.user!;
+      const { branchId: userBranchId, userId, role } = req.user!;
 
-      if (!branchId) {
+      // Determine which branchId to use
+      let targetBranchId: string | null = null;
+      
+      // For ADMIN_MANAGER, must select a branch from their managed branches
+      if (role === Role.ADMIN_MANAGER) {
+        if (!validated.branchId) {
+          throw {
+            status: 400,
+            code: 'BRANCH_SELECTION_REQUIRED',
+            message: 'Pilih cabang terlebih dahulu',
+          };
+        }
+        
+        // Verify the manager has access to this branch
+        const managerBranch = await prisma.managerBranch.findFirst({
+          where: {
+            userId,
+            branchId: validated.branchId,
+          },
+        });
+        
+        if (!managerBranch) {
+          throw {
+            status: 403,
+            code: 'BRANCH_ACCESS_DENIED',
+            message: 'Anda tidak memiliki akses ke cabang ini',
+          };
+        }
+        
+        targetBranchId = validated.branchId;
+      } else {
+        // For other roles (ADMIN_CABANG, ADMIN_LAYANAN, etc.), use their assigned branch
+        targetBranchId = userBranchId;
+      }
+
+      if (!targetBranchId) {
         throw {
           status: 403,
           code: 'BRANCH_REQUIRED',
@@ -91,6 +127,8 @@ export class MembersController {
       console.log('🔍 [Controller] req.body keys:', Object.keys(req.body));
       console.log('🔍 [Controller] req.body.psp type:', typeof req.body.psp);
       console.log('🔍 [Controller] req.body.photo type:', typeof req.body.photo);
+      console.log('🔍 [Controller] Target branchId:', targetBranchId);
+      console.log('🔍 [Controller] User role:', role);
 
       const filesObj = req.files as { [fieldname: string]: Express.Multer.File[] };
       const files = {
@@ -106,7 +144,7 @@ export class MembersController {
       const result = await membersService.createMember(
         validated as any, // Type assertion since schema validation ensures correct types
         files, 
-        branchId, 
+        targetBranchId, 
         userId
       );
 

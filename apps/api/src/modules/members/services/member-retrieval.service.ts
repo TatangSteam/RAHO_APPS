@@ -39,52 +39,57 @@ export class MemberRetrievalService {
       // If no branchCode, show all members (no additional filter)
     } else if (role === Role.ADMIN_MANAGER) {
       // Admin Manager can see members from branches they manage
-      if (!branchId || !userId) {
-        // If ADMIN_MANAGER doesn't have branchId or userId, they can see all members
-        // This happens when the user account is not assigned to a branch yet
-        console.warn('⚠️ ADMIN_MANAGER without branchId/userId - showing all members');
-        // No additional filter - show all members
-      } else {
-        // Get all branches this manager manages (via ManagerBranch table)
-        const managerBranches = await prisma.managerBranch.findMany({
-          where: { userId },
-          select: { branchId: true }
+      if (!userId) {
+        // If ADMIN_MANAGER doesn't have userId, something is wrong - deny access
+        console.error('❌ ADMIN_MANAGER without userId - denying access');
+        throw { status: 403, code: 'USER_ID_REQUIRED', message: 'User ID diperlukan untuk ADMIN_MANAGER' };
+      }
+      
+      // Get all branches this manager manages (via ManagerBranch table)
+      const managerBranches = await prisma.managerBranch.findMany({
+        where: { userId },
+        select: { branchId: true }
+      });
+
+      const managedBranchIds = managerBranches.map(mb => mb.branchId);
+      
+      // Include primary branch (if exists) + managed branches (remove duplicates)
+      const allBranchIds = branchId 
+        ? Array.from(new Set([branchId, ...managedBranchIds]))
+        : managedBranchIds;
+
+      console.log(`📊 ADMIN_MANAGER ${userId} manages ${allBranchIds.length} branches:`, allBranchIds);
+
+      // If manager has no branches assigned, return empty result
+      if (allBranchIds.length === 0) {
+        console.warn('⚠️ ADMIN_MANAGER has no branches assigned - returning empty result');
+        where.id = 'no-branches-assigned'; // Force empty result
+      } else if (branchCode) {
+        // If branchCode filter is provided, first get the branch by code
+        const targetBranch = await prisma.branch.findUnique({
+          where: { branchCode },
+          select: { id: true }
         });
 
-        const managedBranchIds = managerBranches.map(mb => mb.branchId);
-        
-        // Include primary branch + managed branches (remove duplicates)
-        const allBranchIds = Array.from(new Set([branchId, ...managedBranchIds]));
-
-        console.log(`📊 ADMIN_MANAGER ${userId} manages ${allBranchIds.length} branches:`, allBranchIds);
-
-        if (branchCode) {
-          // If branchCode filter is provided, first get the branch by code
-          const targetBranch = await prisma.branch.findUnique({
-            where: { branchCode },
-            select: { id: true }
-          });
-
-          if (targetBranch && allBranchIds.includes(targetBranch.id)) {
-            // Only show members from this specific branch (if manager has access)
-            console.log(`🔍 Filtering by branchCode: ${branchCode} (id: ${targetBranch.id})`);
-            where.OR = [
-              { registrationBranchId: targetBranch.id },
-              { branchAccesses: { some: { branchId: targetBranch.id } } },
-            ];
-          } else {
-            // Manager doesn't have access to this branch - return empty
-            console.warn(`⚠️ ADMIN_MANAGER doesn't have access to branch ${branchCode}`);
-            where.id = 'no-access'; // Force empty result
-          }
-        } else {
-          // Show all members from all branches they manage
-          console.log(`📋 Showing members from all ${allBranchIds.length} managed branches`);
+        if (targetBranch && allBranchIds.includes(targetBranch.id)) {
+          // Only show members from this specific branch (if manager has access)
+          console.log(`🔍 Filtering by branchCode: ${branchCode} (id: ${targetBranch.id})`);
           where.OR = [
-            { registrationBranchId: { in: allBranchIds } },
-            { branchAccesses: { some: { branchId: { in: allBranchIds } } } },
+            { registrationBranchId: targetBranch.id },
+            { branchAccesses: { some: { branchId: targetBranch.id } } },
           ];
+        } else {
+          // Manager doesn't have access to this branch - return empty
+          console.warn(`⚠️ ADMIN_MANAGER doesn't have access to branch ${branchCode}`);
+          where.id = 'no-access'; // Force empty result
         }
+      } else {
+        // Show all members from all branches they manage
+        console.log(`📋 Showing members from all ${allBranchIds.length} managed branches`);
+        where.OR = [
+          { registrationBranchId: { in: allBranchIds } },
+          { branchAccesses: { some: { branchId: { in: allBranchIds } } } },
+        ];
       }
     } else if (role === Role.ADMIN_CABANG || role === Role.ADMIN_LAYANAN) {
       // Branch admin can only see members from their branch

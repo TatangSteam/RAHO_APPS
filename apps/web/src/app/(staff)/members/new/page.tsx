@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { createMemberApi } from '@/lib/membersApi';
 import type { CreateMemberData } from '@/types/member';
 import { showToast } from '@/lib/toast';
+import { useAuthStore } from '@/stores/authStore';
+import { branchesApi } from '@/lib/api/branchesApi';
 import NewMemberHeader from '@/components/members/new/NewMemberHeader';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
@@ -12,15 +14,30 @@ import IncentiveSection from '@/components/members/new/IncentiveSection';
 import DocumentUploadSection from '@/components/members/new/DocumentUploadSection';
 import TherapyPlanSection, { type TherapyPlanData } from '@/components/members/new/TherapyPlanSection';
 
+interface Branch {
+  id: string;
+  name: string;
+  branchCode: string;
+}
+
 export default function NewMemberPage() {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [referralError, setReferralError] = useState('');
   const [pspFile, setPspFile] = useState<File | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  
+  // Branch selection for ADMIN_MANAGER
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
 
   const [formData, setFormData] = useState<CreateMemberData>({
+    // Branch selection (for ADMIN_MANAGER)
+    branchId: '',
+    
     // Section A - Data Pribadi
     fullName: '',
     nik: '',
@@ -52,6 +69,29 @@ export default function NewMemberPage() {
   });
 
   const [therapyPlan, setTherapyPlan] = useState<TherapyPlanData[]>([]);
+
+  // Fetch branches for ADMIN_MANAGER
+  useEffect(() => {
+    if (isAdminManager) {
+      setLoadingBranches(true);
+      branchesApi.getAllBranches()
+        .then((response) => {
+          const branchList = response.data?.data || [];
+          setBranches(branchList);
+          // Auto-select first branch if only one
+          if (branchList.length === 1) {
+            setFormData(prev => ({ ...prev, branchId: branchList[0].id }));
+          }
+        })
+        .catch((err) => {
+          console.error('Failed to fetch branches:', err);
+          showToast.error('Gagal memuat daftar cabang');
+        })
+        .finally(() => {
+          setLoadingBranches(false);
+        });
+    }
+  }, [isAdminManager]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -105,6 +145,12 @@ export default function NewMemberPage() {
     // Clear previous errors
     setReferralError('');
 
+    // Validation for ADMIN_MANAGER - must select branch
+    if (isAdminManager && !formData.branchId) {
+      showToast.error('Pilih cabang terlebih dahulu');
+      return;
+    }
+
     // Validation
     if (!formData.fullName || formData.fullName.length < 3) {
       showToast.error('Nama lengkap minimal 3 karakter');
@@ -129,6 +175,8 @@ export default function NewMemberPage() {
       // Prepare data with therapy plans if any exist
       const dataToSubmit = {
         ...formData,
+        // Only include branchId for ADMIN_MANAGER
+        branchId: isAdminManager ? formData.branchId : undefined,
         therapyPlans: therapyPlan.length > 0 ? therapyPlan : undefined,
       };
 
@@ -160,6 +208,58 @@ export default function NewMemberPage() {
       <NewMemberHeader onBack={() => router.back()} />
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* Branch Selection for ADMIN_MANAGER */}
+        {isAdminManager && (
+          <div className="card" style={{ padding: '20px' }}>
+            <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>
+              🏢 Pilih Cabang
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label htmlFor="branchId" style={{ fontSize: '14px', fontWeight: '500' }}>
+                Cabang Pendaftaran <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                id="branchId"
+                name="branchId"
+                value={formData.branchId || ''}
+                onChange={handleInputChange}
+                disabled={loadingBranches}
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '8px',
+                  border: '1px solid #334155',
+                  fontSize: '14px',
+                  backgroundColor: '#1e293b',
+                  color: '#f1f5f9',
+                  cursor: loadingBranches ? 'not-allowed' : 'pointer',
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  paddingRight: '36px',
+                }}
+                required
+              >
+                <option value="" style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}>
+                  {loadingBranches ? 'Memuat cabang...' : '-- Pilih Cabang --'}
+                </option>
+                {branches.map((branch) => (
+                  <option 
+                    key={branch.id} 
+                    value={branch.id}
+                    style={{ backgroundColor: '#1e293b', color: '#f1f5f9' }}
+                  >
+                    {branch.name} ({branch.branchCode})
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+                Member akan didaftarkan di cabang yang dipilih
+              </p>
+            </div>
+          </div>
+        )}
+
         <PersonalDataSection formData={formData} onChange={handleInputChange} />
         
         <AccountSection 

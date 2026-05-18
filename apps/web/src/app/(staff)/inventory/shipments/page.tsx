@@ -143,7 +143,9 @@ export default function ShipmentsPage() {
     }
   };
 
-  const canShip = (shipment: Shipment) => user?.role === 'SUPER_ADMIN' && shipment.status === 'PREPARING';
+  const canShip = (shipment: Shipment) => 
+    ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && 
+    shipment.status === 'PREPARING';
   const canReceive = (shipment: Shipment) =>
     ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '') &&
     shipment.status === 'SHIPPED';
@@ -212,6 +214,64 @@ export default function ShipmentsPage() {
               </div>
 
               <div className={styles.cardBody}>
+                {/* Timeline / Dates */}
+                <div className={styles.timeline}>
+                  <div className={styles.timelineItem}>
+                    <span className={styles.timelineLabel}>📅 Dibuat:</span>
+                    <span className={styles.timelineDate}>
+                      {new Date(shipment.createdAt).toLocaleDateString('id-ID', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                  {shipment.shippedAt && (
+                    <div className={styles.timelineItem}>
+                      <span className={styles.timelineLabel}>🚚 Dikirim:</span>
+                      <span className={styles.timelineDate}>
+                        {new Date(shipment.shippedAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {shipment.receivedAt && (
+                    <div className={styles.timelineItem}>
+                      <span className={styles.timelineLabel}>📥 Diterima:</span>
+                      <span className={styles.timelineDate}>
+                        {new Date(shipment.receivedAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                  {shipment.approvedAt && (
+                    <div className={styles.timelineItem}>
+                      <span className={styles.timelineLabel}>✅ Selesai:</span>
+                      <span className={styles.timelineDate}>
+                        {new Date(shipment.approvedAt).toLocaleDateString('id-ID', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
                 <div className={styles.itemsCount}>
                   <span className={styles.label}>Items:</span>
                   <span className={styles.value}>{shipment.itemCount}</span>
@@ -231,32 +291,12 @@ export default function ShipmentsPage() {
                   )}
                 </div>
 
-                <div className={styles.timeline}>
-                  {shipment.shippedAt && (
-                    <div className={styles.timelineItem}>
-                      <span className={styles.timelineLabel}>Dikirim:</span>
-                      <span className={styles.timelineDate}>
-                        {new Date(shipment.shippedAt).toLocaleDateString('id-ID')}
-                      </span>
-                    </div>
-                  )}
-                  {shipment.receivedAt && (
-                    <div className={styles.timelineItem}>
-                      <span className={styles.timelineLabel}>Diterima:</span>
-                      <span className={styles.timelineDate}>
-                        {new Date(shipment.receivedAt).toLocaleDateString('id-ID')}
-                      </span>
-                    </div>
-                  )}
-                  {shipment.approvedAt && (
-                    <div className={styles.timelineItem}>
-                      <span className={styles.timelineLabel}>Di-approve:</span>
-                      <span className={styles.timelineDate}>
-                        {new Date(shipment.approvedAt).toLocaleDateString('id-ID')}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                {shipment.notes && (
+                  <div className={styles.notesSection}>
+                    <span className={styles.label}>📝 Catatan:</span>
+                    <p className={styles.notesText}>{shipment.notes}</p>
+                  </div>
+                )}
               </div>
 
               {(canShip(shipment) || canReceive(shipment) || canApprove(shipment)) && (

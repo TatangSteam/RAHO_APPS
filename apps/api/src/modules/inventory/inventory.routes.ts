@@ -170,7 +170,7 @@ router.get(
 router.post(
   '/stock-requests/:requestId/approve',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   stockRequestController.approveRequest.bind(stockRequestController)
 );
 
@@ -178,7 +178,7 @@ router.post(
 router.post(
   '/stock-requests/:requestId/reject',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   stockRequestController.rejectRequest.bind(stockRequestController)
 );
 
@@ -202,11 +202,11 @@ router.get(
   shipmentController.getShipmentById.bind(shipmentController)
 );
 
-// Ship shipment (SUPER_ADMIN only)
+// Ship shipment (SUPER_ADMIN and ADMIN_MANAGER)
 router.post(
   '/shipments/:shipmentId/ship',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   shipmentController.shipShipment.bind(shipmentController)
 );
 

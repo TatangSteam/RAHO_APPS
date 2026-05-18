@@ -3,13 +3,13 @@ import { Request } from 'express';
 
 /**
  * Rate limiter for login endpoint
- * Limits: 5 attempts per 15 minutes per IP address
+ * Limits: 10000 attempts per 15 minutes per IP address
  * 
  * This prevents brute force attacks on the login endpoint
  */
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: 10000, // Limit each IP to 10000 requests per windowMs
   message: {
     success: false,
     code: 'RATE_LIMIT_EXCEEDED',
@@ -41,11 +41,11 @@ export const loginRateLimiter = rateLimit({
 
 /**
  * General API rate limiter
- * Limits: 100 requests per 15 minutes per IP
+ * Limits: 10000 requests per 15 minutes per IP
  */
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 10000, // Limit each IP to 10000 requests per windowMs
   message: {
     success: false,
     code: 'RATE_LIMIT_EXCEEDED',

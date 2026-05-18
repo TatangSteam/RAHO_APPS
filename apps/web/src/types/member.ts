@@ -86,6 +86,9 @@ export interface MemberLookup {
 }
 
 export interface CreateMemberData {
+  // Branch selection (for ADMIN_MANAGER)
+  branchId?: string;
+  
   // Section A - Data Pribadi
   fullName: string;
   nik?: string;

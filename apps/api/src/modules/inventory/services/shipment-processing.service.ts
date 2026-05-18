@@ -11,31 +11,40 @@ export class ShipmentProcessingService {
    * Ship shipment (mark as shipped)
    */
   async shipShipment(shipmentId: string, userId: string, notes?: string) {
-    // Validate user is SUPER_ADMIN
+    // Validate user is SUPER_ADMIN or ADMIN_MANAGER
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
 
-    if (!user || user.role !== Role.SUPER_ADMIN) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya super admin yang dapat mengirim barang',
+        message: 'Hanya super admin atau admin manager yang dapat mengirim barang',
       };
     }
 
-    // Get shipment
+    // Get shipment with stock request items for product info
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
+        stockRequest: {
+          include: {
+            items: {
+              include: {
+                inventoryItem: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -47,12 +56,41 @@ export class ShipmentProcessingService {
       };
     }
 
-    if (shipment.status !== 'PENDING') {
+    if (shipment.status !== 'PREPARING') {
       throw {
         status: 422,
         code: 'INVALID_STATUS',
-        message: 'Pengiriman sudah diproses',
+        message: 'Pengiriman sudah diproses atau belum siap',
       };
+    }
+
+    // For ADMIN_MANAGER, validate they manage the from branch
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: shipment.fromBranchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk mengirim dari cabang ini',
+        };
+      }
+    }
+
+    // Build inventory item map from stock request
+    const inventoryItemMap = new Map<string, { masterProductId: string; productName: string }>();
+    if (shipment.stockRequest?.items) {
+      shipment.stockRequest.items.forEach((item: any) => {
+        inventoryItemMap.set(item.inventoryItemId, {
+          masterProductId: item.inventoryItem.masterProductId,
+          productName: item.inventoryItem.masterProduct.name,
+        });
+      });
     }
 
     // Update shipment status and deduct stock from source branch
@@ -62,48 +100,39 @@ export class ShipmentProcessingService {
         where: { id: shipmentId },
         data: {
           status: 'SHIPPED',
-          shippedBy: userId,
           shippedAt: new Date(),
           notes: notes || shipment.notes,
         },
         include: {
-          items: {
-            include: {
-              masterProduct: true,
-            },
-          },
+          items: true,
           fromBranch: true,
           toBranch: true,
-          shippedByUser: {
-            include: {
-              profile: true,
-            },
-          },
         },
       });
 
       // Deduct stock from source branch
       for (const item of shipment.items) {
-        const inventoryItem = await tx.inventoryItem.findFirst({
-          where: {
-            branchId: shipment.fromBranchId,
-            masterProductId: item.masterProductId,
-          },
+        const itemInfo = inventoryItemMap.get(item.inventoryItemId);
+        
+        // Find inventory item at source branch
+        const inventoryItem = await tx.inventoryItem.findUnique({
+          where: { id: item.inventoryItemId },
+          include: { masterProduct: true },
         });
 
         if (!inventoryItem) {
           throw {
             status: 404,
             code: 'INVENTORY_NOT_FOUND',
-            message: `Item ${item.masterProduct.name} tidak ditemukan di cabang pengirim`,
+            message: `Item tidak ditemukan di cabang pengirim`,
           };
         }
 
-        if (Number(inventoryItem.stock) < Number(item.quantity)) {
+        if (Number(inventoryItem.stock) < Number(item.sentQty)) {
           throw {
             status: 422,
             code: 'INSUFFICIENT_STOCK',
-            message: `Stok ${item.masterProduct.name} tidak mencukupi`,
+            message: `Stok ${inventoryItem.masterProduct.name} tidak mencukupi`,
           };
         }
 
@@ -112,7 +141,7 @@ export class ShipmentProcessingService {
           where: { id: inventoryItem.id },
           data: {
             stock: {
-              decrement: item.quantity,
+              decrement: item.sentQty,
             },
           },
         });
@@ -122,7 +151,7 @@ export class ShipmentProcessingService {
           data: {
             inventoryItemId: inventoryItem.id,
             type: StockMutationType.OUT,
-            quantity: item.quantity,
+            quantity: item.sentQty,
             notes: `Pengiriman ${shipment.shipmentCode} ke ${shipment.toBranch.name}`,
             performedBy: userId,
           },
@@ -141,7 +170,7 @@ export class ShipmentProcessingService {
       meta: { action: 'SHIP', shipmentCode: shipment.shipmentCode },
     });
 
-    return this.formatShipment(result);
+    return this.formatShipmentBasic(result);
   }
 
   /**
@@ -154,11 +183,11 @@ export class ShipmentProcessingService {
       select: { role: true, branchId: true },
     });
 
-    if (!user || ![Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.SUPER_ADMIN].includes(user.role)) {
+    if (!user || ![Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.ADMIN_MANAGER, Role.SUPER_ADMIN].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya admin cabang atau super admin yang dapat menerima barang',
+        message: 'Hanya admin cabang, admin manager, atau super admin yang dapat menerima barang',
       };
     }
 
@@ -166,11 +195,7 @@ export class ShipmentProcessingService {
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
       },
@@ -192,8 +217,23 @@ export class ShipmentProcessingService {
       };
     }
 
-    // Validate receiving branch
-    if (shipment.toBranchId !== branchId && user.role !== Role.SUPER_ADMIN) {
+    // Validate receiving branch access
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: shipment.toBranchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk menerima barang di cabang ini',
+        };
+      }
+    } else if (user.role !== Role.SUPER_ADMIN && shipment.toBranchId !== user.branchId) {
       throw {
         status: 403,
         code: 'INVALID_BRANCH',
@@ -206,23 +246,13 @@ export class ShipmentProcessingService {
       where: { id: shipmentId },
       data: {
         status: 'RECEIVED',
-        receivedBy: userId,
         receivedAt: new Date(),
         notes: notes || shipment.notes,
       },
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
-        receivedByUser: {
-          include: {
-            profile: true,
-          },
-        },
       },
     });
 
@@ -235,7 +265,7 @@ export class ShipmentProcessingService {
       meta: { action: 'RECEIVE', shipmentCode: shipment.shipmentCode },
     });
 
-    return this.formatShipment(updatedShipment);
+    return this.formatShipmentBasic(updatedShipment);
   }
 
   /**
@@ -248,25 +278,34 @@ export class ShipmentProcessingService {
       select: { role: true, branchId: true },
     });
 
-    if (!user || ![Role.ADMIN_CABANG, Role.SUPER_ADMIN].includes(user.role)) {
+    if (!user || ![Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya admin cabang atau super admin yang dapat menyetujui penerimaan barang',
+        message: 'Hanya admin cabang, admin manager, atau super admin yang dapat menyetujui penerimaan barang',
       };
     }
 
-    // Get shipment
+    // Get shipment with stock request for product info
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
-        },
+        items: true,
         fromBranch: true,
         toBranch: true,
+        stockRequest: {
+          include: {
+            items: {
+              include: {
+                inventoryItem: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
 
@@ -286,13 +325,39 @@ export class ShipmentProcessingService {
       };
     }
 
-    // Validate approving branch
-    if (shipment.toBranchId !== branchId && user.role !== Role.SUPER_ADMIN) {
+    // Validate approving branch access
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: shipment.toBranchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk menyetujui barang di cabang ini',
+        };
+      }
+    } else if (user.role !== Role.SUPER_ADMIN && shipment.toBranchId !== user.branchId) {
       throw {
         status: 403,
         code: 'INVALID_BRANCH',
         message: 'Anda hanya dapat menyetujui barang untuk cabang Anda',
       };
+    }
+
+    // Build inventory item map from stock request
+    const inventoryItemMap = new Map<string, { masterProductId: string; productName: string }>();
+    if (shipment.stockRequest?.items) {
+      shipment.stockRequest.items.forEach((item: any) => {
+        inventoryItemMap.set(item.inventoryItemId, {
+          masterProductId: item.inventoryItem.masterProductId,
+          productName: item.inventoryItem.masterProduct.name,
+        });
+      });
     }
 
     // Update shipment and add stock to destination branch
@@ -302,67 +367,62 @@ export class ShipmentProcessingService {
         where: { id: shipmentId },
         data: {
           status: 'APPROVED',
-          approvedBy: userId,
           approvedAt: new Date(),
           notes: notes || shipment.notes,
         },
         include: {
-          items: {
-            include: {
-              masterProduct: true,
-            },
-          },
+          items: true,
           fromBranch: true,
           toBranch: true,
-          approvedByUser: {
-            include: {
-              profile: true,
-            },
-          },
         },
       });
 
       // Add stock to destination branch
       for (const item of shipment.items) {
-        let inventoryItem = await tx.inventoryItem.findFirst({
+        const itemInfo = inventoryItemMap.get(item.inventoryItemId);
+        
+        // Find or create inventory item at destination branch
+        let destInventoryItem = await tx.inventoryItem.findFirst({
           where: {
             branchId: shipment.toBranchId,
-            masterProductId: item.masterProductId,
+            masterProductId: itemInfo?.masterProductId,
           },
         });
 
-        if (!inventoryItem) {
+        if (!destInventoryItem && itemInfo) {
           // Create inventory item if doesn't exist
-          inventoryItem = await tx.inventoryItem.create({
+          destInventoryItem = await tx.inventoryItem.create({
             data: {
               branchId: shipment.toBranchId,
-              masterProductId: item.masterProductId,
+              masterProductId: itemInfo.masterProductId,
               stock: 0,
               minThreshold: 10,
             },
           });
         }
 
-        // Update stock
-        await tx.inventoryItem.update({
-          where: { id: inventoryItem.id },
-          data: {
-            stock: {
-              increment: item.quantity,
+        if (destInventoryItem) {
+          // Update stock
+          await tx.inventoryItem.update({
+            where: { id: destInventoryItem.id },
+            data: {
+              stock: {
+                increment: item.sentQty,
+              },
             },
-          },
-        });
+          });
 
-        // Create stock mutation record
-        await tx.stockMutation.create({
-          data: {
-            inventoryItemId: inventoryItem.id,
-            type: StockMutationType.IN,
-            quantity: item.quantity,
-            notes: `Penerimaan ${shipment.shipmentCode} dari ${shipment.fromBranch.name}`,
-            performedBy: userId,
-          },
-        });
+          // Create stock mutation record
+          await tx.stockMutation.create({
+            data: {
+              inventoryItemId: destInventoryItem.id,
+              type: StockMutationType.IN,
+              quantity: item.sentQty,
+              notes: `Penerimaan ${shipment.shipmentCode} dari ${shipment.fromBranch.name}`,
+              performedBy: userId,
+            },
+          });
+        }
       }
 
       return updatedShipment;
@@ -377,11 +437,38 @@ export class ShipmentProcessingService {
       meta: { action: 'APPROVE', shipmentCode: shipment.shipmentCode },
     });
 
-    return this.formatShipment(result);
+    return this.formatShipmentBasic(result);
   }
 
   /**
-   * Format shipment for response
+   * Format shipment for response (basic - without user relations)
+   */
+  private formatShipmentBasic(shipment: any) {
+    return {
+      id: shipment.id,
+      shipmentCode: shipment.shipmentCode,
+      fromBranchId: shipment.fromBranchId,
+      fromBranchName: shipment.fromBranch.name,
+      toBranchId: shipment.toBranchId,
+      toBranchName: shipment.toBranch.name,
+      status: shipment.status,
+      notes: shipment.notes,
+      shippedAt: shipment.shippedAt?.toISOString(),
+      receivedAt: shipment.receivedAt?.toISOString(),
+      approvedAt: shipment.approvedAt?.toISOString(),
+      itemCount: shipment.items.length,
+      items: shipment.items.map((item: any) => ({
+        id: item.id,
+        inventoryItemId: item.inventoryItemId,
+        sentQty: Number(item.sentQty),
+      })),
+      createdAt: shipment.createdAt.toISOString(),
+      updatedAt: shipment.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Format shipment for response (with user relations - legacy)
    */
   private formatShipment(shipment: any) {
     return {
@@ -402,10 +489,10 @@ export class ShipmentProcessingService {
       items: shipment.items.map((item: any) => ({
         id: item.id,
         masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        productUnit: item.masterProduct.unit,
-        quantity: Number(item.quantity),
+        productName: item.masterProduct?.name || 'Unknown',
+        productCategory: item.masterProduct?.category,
+        productUnit: item.masterProduct?.unit,
+        quantity: Number(item.quantity || item.sentQty),
       })),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),

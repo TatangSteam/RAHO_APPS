@@ -1521,7 +1521,7 @@ function AssignToBranchModal({
     setSubmitting(true);
     
     let successCount = 0;
-    for (const branchId of selectedBranches) {
+    for (const branchId of Array.from(selectedBranches)) {
       const ok = await onAssign(branchId, stock, minThreshold);
       if (ok) successCount++;
     }

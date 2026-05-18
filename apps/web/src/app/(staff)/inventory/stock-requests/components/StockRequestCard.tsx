@@ -77,7 +77,7 @@ export default function StockRequestCard({ request, userRole, onReview }: StockR
         </div>
       </div>
 
-      {request.status === 'PENDING' && userRole === 'SUPER_ADMIN' && (
+      {request.status === 'PENDING' && (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER') && (
         <div className={styles.cardActions}>
           <button
             className={`${styles.actionBtn} ${styles.approve}`}

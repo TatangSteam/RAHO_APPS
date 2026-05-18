@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   ShoppingCart, Bell, MessageSquare, ChevronLeft,
   LogOut, ClipboardList, FileText, Shield, Building2,
-  UserCog,
+  UserCog, Truck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -80,6 +80,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/inventory/stock-requests',
         icon: <ClipboardList size={18} />,
         roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Pengiriman',
+        href: '/inventory/shipments',
+        icon: <Truck size={18} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
     ],
   },

@@ -11,17 +11,17 @@ export class StockRequestApprovalService {
    * Approve stock request and create shipment
    */
   async approveRequest(requestId: string, userId: string, reviewNotes?: string) {
-    // Validate user is SUPER_ADMIN
+    // Validate user role
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, branchId: true },
     });
 
-    if (!user || user.role !== Role.SUPER_ADMIN) {
+    if (!user || (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya super admin yang dapat menyetujui permintaan stok',
+        message: 'Hanya Super Admin atau Admin Manager yang dapat menyetujui permintaan stok',
       };
     }
 
@@ -48,6 +48,24 @@ export class StockRequestApprovalService {
         code: 'REQUEST_NOT_FOUND',
         message: 'Permintaan stok tidak ditemukan',
       };
+    }
+
+    // For ADMIN_MANAGER, verify they manage the requesting branch
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: request.branchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk menyetujui permintaan dari cabang ini',
+        };
+      }
     }
 
     if (request.status !== 'PENDING') {
@@ -121,15 +139,7 @@ export class StockRequestApprovalService {
           },
         },
         include: {
-          items: {
-            include: {
-              inventoryItem: {
-                include: {
-                  masterProduct: true,
-                },
-              },
-            },
-          },
+          items: true,
           fromBranch: true,
           toBranch: true,
         },
@@ -157,7 +167,7 @@ export class StockRequestApprovalService {
 
     return {
       request: this.formatStockRequest(result.updatedRequest),
-      shipment: this.formatShipment(result.shipment),
+      shipment: this.formatShipment(result.shipment, result.updatedRequest.items),
     };
   }
 
@@ -165,17 +175,17 @@ export class StockRequestApprovalService {
    * Reject stock request
    */
   async rejectRequest(requestId: string, userId: string, reviewNotes: string) {
-    // Validate user is SUPER_ADMIN
+    // Validate user role
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
 
-    if (!user || user.role !== Role.SUPER_ADMIN) {
+    if (!user || (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya super admin yang dapat menolak permintaan stok',
+        message: 'Hanya Super Admin atau Admin Manager yang dapat menolak permintaan stok',
       };
     }
 
@@ -202,6 +212,24 @@ export class StockRequestApprovalService {
         code: 'REQUEST_NOT_FOUND',
         message: 'Permintaan stok tidak ditemukan',
       };
+    }
+
+    // For ADMIN_MANAGER, verify they manage the requesting branch
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: request.branchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk menolak permintaan dari cabang ini',
+        };
+      }
     }
 
     if (request.status !== 'PENDING') {
@@ -310,7 +338,18 @@ export class StockRequestApprovalService {
   /**
    * Format shipment
    */
-  private formatShipment(shipment: any) {
+  private formatShipment(shipment: any, requestItems?: any[]) {
+    // Create a map of inventoryItemId to product info from request items
+    const itemInfoMap = new Map<string, { productName: string; unit: string }>();
+    if (requestItems) {
+      requestItems.forEach((item: any) => {
+        itemInfoMap.set(item.inventoryItemId, {
+          productName: item.inventoryItem.masterProduct.name,
+          unit: item.inventoryItem.masterProduct.baseUnit || item.inventoryItem.masterProduct.unit,
+        });
+      });
+    }
+
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -320,13 +359,16 @@ export class StockRequestApprovalService {
       toBranchName: shipment.toBranch.name,
       status: shipment.status,
       notes: shipment.notes,
-      items: shipment.items.map((item: any) => ({
-        id: item.id,
-        inventoryItemId: item.inventoryItemId,
-        productName: item.inventoryItem.masterProduct.name,
-        sentQty: Number(item.sentQty),
-        unit: item.inventoryItem.masterProduct.baseUnit || item.inventoryItem.masterProduct.unit,
-      })),
+      items: shipment.items.map((item: any) => {
+        const itemInfo = itemInfoMap.get(item.inventoryItemId);
+        return {
+          id: item.id,
+          inventoryItemId: item.inventoryItemId,
+          productName: itemInfo?.productName || 'Unknown Product',
+          sentQty: Number(item.sentQty),
+          unit: itemInfo?.unit || 'unit',
+        };
+      }),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),
     };

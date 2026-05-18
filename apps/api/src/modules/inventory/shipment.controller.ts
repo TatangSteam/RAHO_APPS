@@ -29,12 +29,18 @@ export class ShipmentController {
       const { notes } = req.body;
       const userId = req.user?.id;
       const branchId = req.user?.branchId;
+      const userRole = req.user?.role;
 
-      if (!userId || !branchId) {
+      if (!userId) {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
       }
 
-      const result = await shipmentService.receiveShipment(shipmentId, userId, branchId, notes);
+      // ADMIN_MANAGER and SUPER_ADMIN can have null branchId
+      if (!branchId && !['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(userRole || '')) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak memiliki cabang');
+      }
+
+      const result = await shipmentService.receiveShipment(shipmentId, userId, branchId || '', notes);
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);
@@ -47,12 +53,18 @@ export class ShipmentController {
       const { notes } = req.body;
       const userId = req.user?.id;
       const branchId = req.user?.branchId;
+      const userRole = req.user?.role;
 
-      if (!userId || !branchId) {
+      if (!userId) {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
       }
 
-      const result = await shipmentService.approveShipment(shipmentId, userId, branchId, notes);
+      // ADMIN_MANAGER and SUPER_ADMIN can have null branchId
+      if (!branchId && !['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(userRole || '')) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak memiliki cabang');
+      }
+
+      const result = await shipmentService.approveShipment(shipmentId, userId, branchId || '', notes);
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);
@@ -62,13 +74,34 @@ export class ShipmentController {
   async getShipments(req: Request, res: Response, next: NextFunction) {
     try {
       const { branchId, status } = req.query;
+      const userId = req.user?.id;
       const userBranchId = req.user?.branchId;
+      const userRole = req.user?.role;
 
-      // Use query branchId if provided, otherwise use user's branchId
-      const targetBranchId = (branchId as string) || userBranchId;
+      // For ADMIN_MANAGER with null branchId, get their managed branches
+      let targetBranchIds: string[] | undefined;
+      
+      if (branchId) {
+        // If specific branchId is provided in query, use it
+        targetBranchIds = [branchId as string];
+      } else if (userRole === 'ADMIN_MANAGER' && !userBranchId) {
+        // ADMIN_MANAGER with null branchId - get all managed branches
+        const { prisma } = await import('../../lib/prisma');
+        const managedBranches = await prisma.managerBranch.findMany({
+          where: { userId },
+          select: { branchId: true },
+        });
+        targetBranchIds = managedBranches.map(mb => mb.branchId);
+      } else if (userRole === 'SUPER_ADMIN') {
+        // SUPER_ADMIN can see all shipments
+        targetBranchIds = undefined;
+      } else if (userBranchId) {
+        // Regular staff with assigned branch
+        targetBranchIds = [userBranchId];
+      }
 
       const result = await shipmentService.getShipments(
-        targetBranchId,
+        targetBranchIds,
         status as ShipmentStatus
       );
 

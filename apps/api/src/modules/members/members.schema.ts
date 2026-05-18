@@ -7,6 +7,9 @@ const GenderEnum = z.enum(['L', 'P']);
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
 
 export const createMemberSchema = z.object({
+  // Branch selection (for ADMIN_MANAGER)
+  branchId: z.string().optional(),
+  
   // Section A - Data Pribadi
   fullName: z.string().min(3, 'Nama lengkap minimal 3 karakter'),
   nik: z.string().optional(),

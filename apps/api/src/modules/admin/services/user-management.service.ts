@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { generateStaffCode } from '../../../utils/codeGenerator';
 
 /**
  * Service for user management (admin operations)
@@ -47,6 +48,9 @@ export class UserManagementService {
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
+    // Generate staff code
+    const staffCode = generateStaffCode(Role.ADMIN_MANAGER);
+
     // Create user and assign branches
     // IMPORTANT: UserProfile model uses 'phone' field, not 'phoneNumber'
     const user = await prisma.user.create({
@@ -54,6 +58,7 @@ export class UserManagementService {
         email: data.email,
         password: hashedPassword,
         role: Role.ADMIN_MANAGER,
+        staffCode,
         isActive: true,
         profile: {
           create: {
