@@ -1,0 +1,209 @@
+.demo {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.demo h2 {
+  font-size: 28px;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.description {
+  color: #6b7280;
+  margin-bottom: 32px;
+}
+
+.statePanel {
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  border: 2px solid #d1d5db;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 32px;
+}
+
+.statePanel h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #374151;
+}
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.stateItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stateLabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stateValue {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.chainDisplay {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 2px solid #d1d5db;
+}
+
+.chainDisplay h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #374151;
+}
+
+.chain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.chainItem {
+  background: white;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  padding: 12px 16px;
+  min-width: 150px;
+}
+
+.chainRole {
+  font-size: 12px;
+  font-weight: 600;
+  color: #667eea;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.chainName {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1f2937;
+}
+
+.arrow {
+  font-size: 24px;
+  color: #667eea;
+  font-weight: bold;
+}
+
+.section {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.section h3 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  color: #1f2937;
+}
+
+.sectionDesc {
+  color: #6b7280;
+  margin-bottom: 16px;
+  font-size: 14px;
+}
+
+.userList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.userCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.userCard:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.userInfo {
+  flex: 1;
+}
+
+.userName {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.userEmail {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.controlBtn,
+.errorBtn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.controlBtn {
+  background: #3b82f6;
+  color: white;
+}
+
+.controlBtn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.controlBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.errorBtn {
+  background: #ef4444;
+  color: white;
+}
+
+.errorBtn:hover:not(:disabled) {
+  background: #dc2626;
+  transform: translateY(-1px);
+}
+
+.errorBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

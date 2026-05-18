@@ -5,6 +5,8 @@ import { usePathname } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
+import { ImpersonationProvider } from '@/contexts/ImpersonationContext';
+import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -43,13 +45,16 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div className="app-layout">
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} />
-      <div className={`app-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-        <Header />
-        <main className="app-content fade-in">{children}</main>
-        <Footer className="staff-footer" />
+    <ImpersonationProvider>
+      <div className="app-layout">
+        <ImpersonationBanner />
+        <Sidebar collapsed={collapsed} onToggle={handleToggle} />
+        <div className={`app-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
+          <Header />
+          <main className="app-content fade-in">{children}</main>
+          <Footer className="staff-footer" />
+        </div>
       </div>
-    </div>
+    </ImpersonationProvider>
   );
 }

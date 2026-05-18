@@ -1,0 +1,114 @@
+import { api } from '../api';
+
+export interface Branch {
+  id: string;
+  branchCode: string;
+  name: string;
+  type: string;
+  isActive: boolean;
+}
+
+export interface AdminManager {
+  id: string;
+  email: string;
+  fullName: string;
+  phoneNumber: string;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+  branches: Branch[];
+}
+
+export interface CreateAdminManagerData {
+  email: string;
+  password: string;
+  fullName: string;
+  phoneNumber: string;
+  branchIds: string[];
+}
+
+export interface AdminManagersResponse {
+  data: AdminManager[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export interface ImpersonateResponse {
+  token: string;  // Backend returns 'token', not 'accessToken'
+  targetUser: {
+    id: string;
+    email: string;
+    role: string;
+    fullName: string;
+    branchId?: string | null;
+  };
+  originalUser?: {
+    id: string;
+    email: string;
+    role: string;
+  };
+}
+
+export const adminManagersApi = {
+  /**
+   * Get all admin managers
+   */
+  getAdminManagers: async (params?: {
+    search?: string;
+    isActive?: boolean;
+    page?: number;
+    limit?: number;
+  }): Promise<AdminManagersResponse> => {
+    const response = await api.get('/admin/managers', { params });
+    
+    // Backend returns { managers, pagination }, transform to { data, meta }
+    const backendData = response.data.data || response.data;
+    
+    return {
+      data: backendData.managers || [],
+      meta: {
+        total: backendData.pagination?.total || 0,
+        page: backendData.pagination?.page || 1,
+        limit: backendData.pagination?.limit || 10,
+        totalPages: backendData.pagination?.totalPages || 0,
+      }
+    };
+  },
+
+  /**
+   * Create new admin manager
+   */
+  createAdminManager: async (data: CreateAdminManagerData): Promise<{ data: AdminManager }> => {
+    const response = await api.post('/admin/users/admin-manager', data);
+    return response.data;
+  },
+
+  /**
+   * Start impersonation
+   */
+  startImpersonation: async (userId: string): Promise<ImpersonateResponse> => {
+    const response = await api.post(`/admin/impersonate/${userId}`);
+    // Backend returns { success: true, data: { token, targetUser, originalUser } }
+    return response.data.data;
+  },
+
+  /**
+   * Stop impersonation
+   */
+  stopImpersonation: async (): Promise<{ accessToken: string }> => {
+    const response = await api.post('/admin/stop-impersonation');
+    return response.data.data;
+  },
+
+  /**
+   * Get all branches (for assignment)
+   */
+  getBranches: async (): Promise<{ data: Branch[] }> => {
+    const response = await api.get('/admin/branches');
+    return response.data;
+  },
+};

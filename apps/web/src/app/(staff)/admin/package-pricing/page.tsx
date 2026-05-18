@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
@@ -59,6 +59,7 @@ interface MasterServiceType {
   code: string;
   name: string;
   description?: string;
+  price?: number;
   isActive: boolean;
   sortOrder: number;
   createdAt: string;
@@ -75,8 +76,10 @@ export default function PackagePricingPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'packages' | 'addons' | 'master'>('packages');
+  const [activeTab, setActiveTab] = useState<'packages' | 'booster-matrix' | 'addons' | 'master'>('packages');
   const [masterTab, setMasterTab] = useState<'booster' | 'service'>('booster');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+  const [branches, setBranches] = useState<Array<{ id: string; name: string; branchCode: string }>>([]);
   const [formData, setFormData] = useState({
     packageType: 'BASIC' as 'BASIC' | 'BOOSTER',
     boosterType: '' as '' | 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2',
@@ -85,6 +88,7 @@ export default function PackagePricingPage() {
     totalSessions: 7,
     price: 0,
     productCode: '',
+    branchId: '' as string,
     isActive: true
   });
   const [addonFormData, setAddonFormData] = useState({
@@ -103,6 +107,7 @@ export default function PackagePricingPage() {
     name: '',
     icon: '',
     description: '',
+    price: 0,
     sortOrder: 0,
     isActive: true
   });
@@ -130,7 +135,7 @@ export default function PackagePricingPage() {
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && showModal) {
         setShowModal(false);
-        if (activeTab === 'packages') {
+        if (activeTab === 'packages' || activeTab === 'booster-matrix') {
           resetForm();
         } else {
           resetAddonForm();
@@ -145,6 +150,9 @@ export default function PackagePricingPage() {
     if (user && accessToken) {
       if (activeTab === 'packages') {
         loadPricings();
+      } else if (activeTab === 'booster-matrix') {
+        loadPricings(); // Load all pricings for matrix view
+        loadMasterData(); // Load booster and service types
       } else if (activeTab === 'addons') {
         loadProducts();
       } else if (activeTab === 'master') {
@@ -153,10 +161,50 @@ export default function PackagePricingPage() {
     }
   }, [user, accessToken, activeTab]);
 
+  // Load branches for Super Admin and Admin Manager
+  useEffect(() => {
+    if ((isSuperAdmin || isAdminManager) && accessToken) {
+      loadBranches();
+    }
+  }, [isSuperAdmin, isAdminManager, accessToken]);
+
+  // Load master data on initial load for dropdown options
+  useEffect(() => {
+    if (user && accessToken) {
+      loadMasterData();
+    }
+  }, [user, accessToken]);
+
+  const loadBranches = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/branches`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('📦 Branches API Response:', result);
+        
+        // Response structure: { success: true, data: [...branches] }
+        const branchesData = result.data || [];
+        console.log('📋 Branches Data:', branchesData);
+        
+        setBranches(branchesData);
+      } else {
+        console.error('Failed to load branches, status:', response.status);
+      }
+    } catch (error) {
+      console.error('Failed to load branches:', error);
+    }
+  };
+
   const loadPricings = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/package-pricing`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/package-pricing?limit=1000`, {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
           'Content-Type': 'application/json',
@@ -169,6 +217,8 @@ export default function PackagePricingPage() {
 
       const data = await response.json();
       console.log('📦 Package Pricing Data:', data.data?.pricings);
+      console.log('📊 Total pricings loaded:', data.data?.pricings?.length || 0);
+      console.log('🚀 BOOSTER pricings:', data.data?.pricings?.filter((p: any) => p.packageType === 'BOOSTER').length || 0);
       setPricings(data.data?.pricings || []);
     } catch (error: any) {
       console.error('Failed to load pricings:', error);
@@ -217,6 +267,7 @@ export default function PackagePricingPage() {
 
       if (boosterResponse.ok) {
         const boosterData = await boosterResponse.json();
+        console.log('🎯 Booster Types:', boosterData.data?.types);
         setBoosterTypes(boosterData.data?.types || []);
       }
 
@@ -230,6 +281,7 @@ export default function PackagePricingPage() {
 
       if (serviceResponse.ok) {
         const serviceData = await serviceResponse.json();
+        console.log('🎯 Service Types:', serviceData.data?.types);
         setServiceTypes(serviceData.data?.types || []);
       }
     } catch (error: any) {
@@ -262,17 +314,29 @@ export default function PackagePricingPage() {
       setSubmitting(true);
       
       if (editingId) {
-        // Update - only send price and isActive
+        // Update - send all fields that can be changed
+        const payload: any = {
+          packageType: formData.packageType,
+          name: formData.name,
+          totalSessions: formData.totalSessions,
+          price: formData.price,
+          productCode: formData.productCode || undefined,
+          isActive: formData.isActive,
+        };
+
+        // Add boosterType and serviceType for BOOSTER packages
+        if (formData.packageType === 'BOOSTER') {
+          if (formData.boosterType) payload.boosterType = formData.boosterType;
+          if (formData.serviceType) payload.serviceType = formData.serviceType;
+        }
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/package-pricing/${editingId}`, {
           method: 'PATCH',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            price: formData.price,
-            isActive: formData.isActive,
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (!response.ok) {
@@ -298,10 +362,15 @@ export default function PackagePricingPage() {
           if (formData.serviceType) payload.serviceType = formData.serviceType;
         }
 
-        // Add branchId for ADMIN_CABANG
-        if (isAdminCabang && user?.branchId) {
+        // Add branchId - priority: form selection > user's branch (for ADMIN_CABANG)
+        if (formData.branchId) {
+          payload.branchId = formData.branchId;
+        } else if (isAdminCabang && user?.branchId) {
           payload.branchId = user.branchId;
         }
+        // If no branchId, it will be a global pricing (null branchId)
+
+        console.log('📤 Sending create pricing payload:', payload);
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/package-pricing`, {
           method: 'POST',
@@ -314,7 +383,8 @@ export default function PackagePricingPage() {
 
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.error?.message || 'Gagal menambahkan harga paket');
+          console.error('❌ Create pricing error:', error);
+          throw new Error(error.error?.message || error.message || 'Gagal menambahkan harga paket');
         }
 
         showToast.success('Harga paket berhasil ditambahkan');
@@ -340,6 +410,7 @@ export default function PackagePricingPage() {
       totalSessions: pricing.totalSessions,
       price: pricing.price,
       productCode: pricing.productCode || '',
+      branchId: pricing.branchId || '',
       isActive: pricing.isActive
     });
     setShowModal(true);
@@ -390,6 +461,86 @@ export default function PackagePricingPage() {
       loadPricings();
     } catch (error: any) {
       showToast.error(error.message);
+    }
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  // BULK CREATE BOOSTER (for all service types)
+  // ══════════════════════════════════════════════════════════════
+  const handleBulkCreateBooster = async (boosterCode: string, boosterName: string) => {
+    const currentBranchId = selectedBranchFilter === 'global' ? null : selectedBranchFilter;
+    const branchInfo = currentBranchId
+      ? branches.find(b => b.id === currentBranchId)
+      : null;
+    const branchLabel = branchInfo ? ` di cabang ${branchInfo.branchCode}` : ' (Global)';
+
+    // Find which service types don't have pricing yet for this booster
+    const activeServiceTypes = serviceTypes.filter(st => st.isActive);
+    const missingServiceTypes = activeServiceTypes.filter(st => {
+      return !pricings.find(p =>
+        p.packageType === 'BOOSTER' &&
+        p.boosterType === boosterCode &&
+        p.serviceType === st.code &&
+        p.branchId === currentBranchId
+      );
+    });
+
+    if (missingServiceTypes.length === 0) {
+      showToast.success(`Booster ${boosterCode} sudah punya semua tipe layanan${branchLabel}`);
+      return;
+    }
+
+    const confirmMsg = `Buat ${missingServiceTypes.length} harga booster ${boosterCode}${branchLabel}?\n\nTipe layanan: ${missingServiceTypes.map(st => st.code).join(', ')}\n\nHarga akan diambil dari Master Tipe Layanan (atau 0 jika belum diatur).`;
+    if (!confirm(confirmMsg)) return;
+
+    try {
+      setSubmitting(true);
+      let successCount = 0;
+      const errors: string[] = [];
+
+      for (const st of missingServiceTypes) {
+        const payload: any = {
+          packageType: 'BOOSTER',
+          boosterType: boosterCode,
+          serviceType: st.code,
+          name: `Booster ${boosterCode} 1X - ${st.code}${branchInfo ? ` (${branchInfo.branchCode})` : ''}`,
+          totalSessions: 1,
+          price: st.price || 0,
+          productCode: `BST-${boosterCode}-1X-${st.code}${branchInfo ? `-${branchInfo.branchCode}` : ''}`,
+          isActive: true,
+        };
+        if (currentBranchId) payload.branchId = currentBranchId;
+
+        try {
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/package-pricing`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload),
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            const err = await response.json();
+            errors.push(`${st.code}: ${err.error?.message || 'gagal'}`);
+          }
+        } catch (e: any) {
+          errors.push(`${st.code}: ${e.message}`);
+        }
+      }
+
+      if (successCount > 0) {
+        showToast.success(`Berhasil membuat ${successCount} harga booster`);
+      }
+      if (errors.length > 0) {
+        showToast.error(`Gagal membuat ${errors.length}: ${errors.slice(0, 2).join('; ')}`);
+      }
+      loadPricings();
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -573,6 +724,7 @@ export default function PackagePricingPage() {
             name: masterFormData.name,
             icon: isBooster ? masterFormData.icon : undefined,
             description: masterFormData.description || undefined,
+            price: !isBooster ? masterFormData.price : undefined,
             isActive: masterFormData.isActive,
             sortOrder: masterFormData.sortOrder,
           }),
@@ -595,6 +747,8 @@ export default function PackagePricingPage() {
 
         if (isBooster) {
           payload.icon = masterFormData.icon;
+        } else {
+          payload.price = masterFormData.price;
         }
 
         const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/admin/master/${endpoint}`, {
@@ -631,6 +785,7 @@ export default function PackagePricingPage() {
       name: item.name,
       icon: 'icon' in item ? item.icon || '' : '',
       description: item.description || '',
+      price: 'price' in item ? item.price || 0 : 0,
       sortOrder: item.sortOrder,
       isActive: item.isActive
     });
@@ -701,6 +856,7 @@ export default function PackagePricingPage() {
       totalSessions: 7,
       price: 0,
       productCode: '',
+      branchId: '',
       isActive: true
     });
   };
@@ -727,13 +883,24 @@ export default function PackagePricingPage() {
       name: '',
       icon: '',
       description: '',
+      price: 0,
       sortOrder: 0,
       isActive: true
     });
   };
 
+  // Filter pricings by selected branch
+  const filteredPricings = selectedBranchFilter === 'all' 
+    ? pricings 
+    : pricings.filter(p => {
+        if (selectedBranchFilter === 'global') {
+          return !p.branchId;
+        }
+        return p.branchId === selectedBranchFilter;
+      });
+
   // Group pricings by branch for display
-  const groupedByBranch = pricings.reduce((acc, pricing) => {
+  const groupedByBranch = filteredPricings.reduce((acc, pricing) => {
     const branchKey = pricing.branchId || 'global';
     if (!acc[branchKey]) {
       acc[branchKey] = {
@@ -745,6 +912,16 @@ export default function PackagePricingPage() {
     acc[branchKey].pricings.push(pricing);
     return acc;
   }, {} as Record<string, { branchCode: string; branchName: string; pricings: PackagePricing[] }>);
+
+  // Get unique branches for filter dropdown
+  const uniqueBranches = Array.from(
+    new Map(
+      pricings
+        .filter(p => p.branch)
+        .map(p => [p.branchId, { id: p.branchId!, name: p.branch!.name, code: p.branch!.branchCode }])
+    ).values()
+  );
+  const hasGlobalPricings = pricings.some(p => !p.branchId);
 
   const getPackageName = (pricing: PackagePricing) => {
     const type = pricing.packageType === 'BASIC' ? 'Basic' : 'Booster';
@@ -770,31 +947,49 @@ export default function PackagePricingPage() {
             {isAdminCabang ? 'Atur harga paket terapi dan add-on untuk cabang Anda' : 'Kelola harga paket terapi dan add-on untuk semua cabang'}
           </p>
         </div>
-        {canManage && (
-          <button
-            onClick={() => {
-              if (activeTab === 'packages') {
-                resetForm();
-              } else if (activeTab === 'addons') {
-                if (!canManageAddons) {
-                  showToast.error('Hanya SUPER_ADMIN dan ADMIN_MANAGER yang dapat mengelola add-on');
-                  return;
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          {/* Branch Filter - Only show for SUPER_ADMIN and ADMIN_MANAGER on packages tab */}
+          {(isSuperAdmin || isAdminManager) && activeTab === 'packages' && (
+            <select
+              value={selectedBranchFilter}
+              onChange={(e) => setSelectedBranchFilter(e.target.value)}
+              className={styles.branchFilter}
+            >
+              <option value="all">🏢 Semua Cabang</option>
+              {hasGlobalPricings && <option value="global">🌐 Global</option>}
+              {uniqueBranches.map((branch) => (
+                <option key={branch.id} value={branch.id}>
+                  {branch.code} - {branch.name}
+                </option>
+              ))}
+            </select>
+          )}
+          {canManage && (
+            <button
+              onClick={() => {
+                if (activeTab === 'packages') {
+                  resetForm();
+                } else if (activeTab === 'addons') {
+                  if (!canManageAddons) {
+                    showToast.error('Hanya SUPER_ADMIN dan ADMIN_MANAGER yang dapat mengelola add-on');
+                    return;
+                  }
+                  resetAddonForm();
+                } else if (activeTab === 'master') {
+                  if (!isSuperAdmin && !isAdminCabang) {
+                    showToast.error('Hanya SUPER_ADMIN dan ADMIN_CABANG yang dapat mengelola master data');
+                    return;
+                  }
+                  resetMasterForm();
                 }
-                resetAddonForm();
-              } else if (activeTab === 'master') {
-                if (!isSuperAdmin && !isAdminCabang) {
-                  showToast.error('Hanya SUPER_ADMIN dan ADMIN_CABANG yang dapat mengelola master data');
-                  return;
-                }
-                resetMasterForm();
-              }
-              setShowModal(true);
-            }}
-            className={styles.addBtn}
-          >
-            ➕ Tambah {activeTab === 'packages' ? 'Harga Paket' : activeTab === 'addons' ? 'Add-on' : masterTab === 'booster' ? 'Tipe Booster' : 'Tipe Layanan'}
-          </button>
-        )}
+                setShowModal(true);
+              }}
+              className={styles.addBtn}
+            >
+              ➕ Tambah {activeTab === 'packages' ? 'Harga Paket' : activeTab === 'addons' ? 'Add-on' : masterTab === 'booster' ? 'Tipe Booster' : 'Tipe Layanan'}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -814,6 +1009,22 @@ export default function PackagePricingPage() {
           }}
         >
           📦 Paket Terapi
+        </button>
+        <button
+          onClick={() => setActiveTab('booster-matrix')}
+          style={{
+            padding: '12px 24px',
+            background: activeTab === 'booster-matrix' ? 'var(--color-primary)' : 'transparent',
+            color: activeTab === 'booster-matrix' ? 'white' : 'var(--text-secondary)',
+            border: 'none',
+            borderBottom: activeTab === 'booster-matrix' ? '3px solid var(--color-primary)' : '3px solid transparent',
+            cursor: 'pointer',
+            fontWeight: '600',
+            fontSize: '14px',
+            transition: 'all 0.2s',
+          }}
+        >
+          🚀 Booster Matrix
         </button>
         <button
           onClick={() => setActiveTab('addons')}
@@ -856,16 +1067,321 @@ export default function PackagePricingPage() {
           <div className={styles.loadingSpinner}>⏳</div>
           <p>Memuat data...</p>
         </div>
+      ) : activeTab === 'booster-matrix' ? (
+        // ══════════════════════════════════════════════════════════════
+        // BOOSTER MATRIX TAB
+        // ══════════════════════════════════════════════════════════════
+        <div>
+          {/* Header & Branch Filter */}
+          <div style={{ marginBottom: '24px', padding: '20px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: '#f1f5f9' }}>
+                  🚀 Harga Booster Per Cabang
+                </h3>
+                <p style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '0' }}>
+                  Kelola harga booster untuk setiap kombinasi Tipe Booster × Tipe Layanan. Pilih cabang untuk melihat harga spesifik.
+                </p>
+              </div>
+
+              {/* Branch Selector */}
+              <div style={{ minWidth: '250px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', color: '#94a3b8', marginBottom: '8px' }}>
+                  Pilih Cabang:
+                </label>
+                <select
+                  value={selectedBranchFilter}
+                  onChange={(e) => setSelectedBranchFilter(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    borderRadius: '6px',
+                    color: '#f1f5f9',
+                    fontSize: '14px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="global">🌐 Global (Semua Cabang)</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.branchCode} - {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Booster Matrix Table */}
+          {boosterTypes.filter(bt => bt.isActive).length === 0 || serviceTypes.filter(st => st.isActive).length === 0 ? (
+            <div className={styles.empty}>
+              <div className={styles.emptyIcon}>🚀</div>
+              <h3>Belum ada data master</h3>
+              <p>Silakan tambahkan Tipe Booster dan Tipe Layanan di tab Master Data terlebih dahulu</p>
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto', marginBottom: '24px' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  background: '#1e293b',
+                  borderRadius: '8px',
+                  overflow: 'hidden'
+                }}>
+                  <thead>
+                    <tr style={{ background: '#0f172a' }}>
+                      <th style={{
+                        padding: '16px',
+                        textAlign: 'left',
+                        borderBottom: '2px solid #334155',
+                        color: '#f1f5f9',
+                        fontWeight: '600',
+                        minWidth: '200px'
+                      }}>
+                        Tipe Booster
+                      </th>
+                      {serviceTypes.filter(st => st.isActive).map((st) => (
+                        <th key={st.id} style={{
+                          padding: '16px',
+                          textAlign: 'center',
+                          borderBottom: '2px solid #334155',
+                          borderLeft: '1px solid #334155',
+                          color: '#f1f5f9',
+                          fontWeight: '600',
+                          minWidth: '150px'
+                        }}>
+                          <div>{st.code}</div>
+                          <div style={{ fontSize: '12px', fontWeight: '400', color: '#94a3b8', marginTop: '4px' }}>
+                            {st.name}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boosterTypes.filter(bt => bt.isActive).map((bt, btIndex) => (
+                      <tr key={bt.id} style={{
+                        background: btIndex % 2 === 0 ? '#1e293b' : '#0f172a'
+                      }}>
+                        <td style={{
+                          padding: '16px',
+                          borderBottom: '1px solid #334155',
+                          color: '#f1f5f9',
+                          fontWeight: '600'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '20px' }}>{bt.icon || '🚀'}</span>
+                              <div>
+                                <div>{bt.code}</div>
+                                <div style={{ fontSize: '12px', fontWeight: '400', color: '#94a3b8' }}>
+                                  {bt.name}
+                                </div>
+                              </div>
+                            </div>
+                            {canManage && (() => {
+                              const currentBranchId = selectedBranchFilter === 'global' ? null : selectedBranchFilter;
+                              const activeSvc = serviceTypes.filter(s => s.isActive);
+                              const missingCount = activeSvc.filter(st =>
+                                !pricings.find(p =>
+                                  p.packageType === 'BOOSTER' &&
+                                  p.boosterType === bt.code &&
+                                  p.serviceType === st.code &&
+                                  p.branchId === currentBranchId
+                                )
+                              ).length;
+                              if (missingCount === 0) return null;
+                              return (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleBulkCreateBooster(bt.code, bt.name);
+                                  }}
+                                  disabled={submitting}
+                                  title={`Buat ${missingCount} harga sekaligus untuk semua tipe layanan`}
+                                  style={{
+                                    padding: '4px 10px',
+                                    background: '#10b981',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    cursor: submitting ? 'not-allowed' : 'pointer',
+                                    opacity: submitting ? 0.6 : 1,
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  ⚡ +{missingCount} Semua
+                                </button>
+                              );
+                            })()}
+                          </div>
+                        </td>
+                        {serviceTypes.filter(st => st.isActive).map((st) => {
+                          const currentBranchId = selectedBranchFilter === 'global' ? null : selectedBranchFilter;
+                          const pricing = pricings.find(p =>
+                            p.packageType === 'BOOSTER' &&
+                            p.boosterType === bt.code &&
+                            p.serviceType === st.code &&
+                            p.branchId === currentBranchId
+                          );
+
+                          const globalPricing = selectedBranchFilter !== 'global' ? pricings.find(p =>
+                            p.packageType === 'BOOSTER' &&
+                            p.boosterType === bt.code &&
+                            p.serviceType === st.code &&
+                            p.branchId === null
+                          ) : null;
+
+                          return (
+                            <td
+                              key={`${bt.id}-${st.id}`}
+                              onClick={() => {
+                                if (pricing) {
+                                  handleEdit(pricing);
+                                } else {
+                                  const branchInfo = selectedBranchFilter === 'global'
+                                    ? { id: '', code: '', branchCode: '' }
+                                    : branches.find(b => b.id === selectedBranchFilter) || { id: '', code: '', branchCode: '' };
+
+                                  setFormData({
+                                    packageType: 'BOOSTER',
+                                    boosterType: bt.code as any,
+                                    serviceType: st.code as any,
+                                    name: `Booster ${bt.code} 1X - ${st.code}${branchInfo.branchCode ? ` (${branchInfo.branchCode})` : ''}`,
+                                    totalSessions: 1,
+                                    price: globalPricing?.price || 0,
+                                    productCode: `BST-${bt.code}-1X-${st.code}${branchInfo.branchCode ? `-${branchInfo.branchCode}` : ''}`,
+                                    branchId: selectedBranchFilter === 'global' ? '' : selectedBranchFilter,
+                                    isActive: true
+                                  });
+                                  setEditingId(null);
+                                  setShowModal(true);
+                                }
+                              }}
+                              style={{
+                                padding: '16px',
+                                textAlign: 'center',
+                                borderBottom: '1px solid #334155',
+                                borderLeft: '1px solid #334155',
+                                cursor: 'pointer',
+                                transition: 'all 0.2s',
+                                position: 'relative'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = '#334155';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent';
+                              }}
+                            >
+                              {pricing ? (
+                                <div>
+                                  <div style={{
+                                    fontSize: '16px',
+                                    fontWeight: '600',
+                                    color: selectedBranchFilter === 'global' ? '#10b981' : '#3b82f6',
+                                    marginBottom: '4px'
+                                  }}>
+                                    {formatCurrency(pricing.price)}
+                                  </div>
+                                  {pricing.isActive ? (
+                                    <div style={{ fontSize: '11px', color: '#10b981' }}>✓ Aktif</div>
+                                  ) : (
+                                    <div style={{ fontSize: '11px', color: '#ef4444' }}>✗ Nonaktif</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  <div style={{ fontSize: '24px', color: '#64748b', marginBottom: '4px' }}>➕</div>
+                                  {globalPricing && selectedBranchFilter !== 'global' && (
+                                    <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                      Global: {formatCurrency(globalPricing.price)}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Info & Legend */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+                <div style={{ padding: '16px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#f1f5f9' }}>
+                    📖 Keterangan:
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#10b981', fontSize: '14px', fontWeight: '600' }}>Hijau</span>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>= Harga Global</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#3b82f6', fontSize: '14px', fontWeight: '600' }}>Biru</span>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>= Harga Spesifik Cabang</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ color: '#64748b', fontSize: '14px', fontWeight: '600' }}>➕</span>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>= Klik untuk tambah harga</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: '16px', background: '#1e293b', borderRadius: '8px', border: '1px solid #334155' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: '#f1f5f9' }}>
+                    📊 Statistik:
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Total Kombinasi:</span>
+                      <span style={{ color: '#f1f5f9', fontSize: '13px', fontWeight: '600' }}>
+                        {boosterTypes.filter(bt => bt.isActive).length} × {serviceTypes.filter(st => st.isActive).length} = {boosterTypes.filter(bt => bt.isActive).length * serviceTypes.filter(st => st.isActive).length}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Harga Tersedia:</span>
+                      <span style={{ color: '#f1f5f9', fontSize: '13px', fontWeight: '600' }}>
+                        {pricings.filter(p =>
+                          p.packageType === 'BOOSTER' &&
+                          p.branchId === (selectedBranchFilter === 'global' ? null : selectedBranchFilter)
+                        ).length}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#94a3b8', fontSize: '13px' }}>Belum Ada Harga:</span>
+                      <span style={{ color: '#f59e0b', fontSize: '13px', fontWeight: '600' }}>
+                        {(boosterTypes.filter(bt => bt.isActive).length * serviceTypes.filter(st => st.isActive).length) -
+                         pricings.filter(p =>
+                           p.packageType === 'BOOSTER' &&
+                           p.branchId === (selectedBranchFilter === 'global' ? null : selectedBranchFilter)
+                         ).length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       ) : activeTab === 'packages' ? (
-        pricings.length === 0 ? (
+        filteredPricings.length === 0 ? (
           <div className={styles.empty}>
             <div className={styles.emptyIcon}>📦</div>
             <h3>Belum ada harga paket</h3>
             <p>Klik tombol "Tambah Harga Paket" untuk menambahkan harga paket baru</p>
           </div>
         ) : (
-        <div className={styles.content}>
-          {Object.entries(groupedByBranch).map(([branchId, branchData]) => {
+          <div className={styles.content}>
+            {Object.entries(groupedByBranch).map(([branchId, branchData]) => {
             const basicPricings = branchData.pricings.filter(p => p.packageType === 'BASIC');
             const boosterPricings = branchData.pricings.filter(p => p.packageType === 'BOOSTER');
 
@@ -947,122 +1463,12 @@ export default function PackagePricingPage() {
                   </div>
                 )}
 
-                {/* BOOSTER PACKAGES */}
-                {boosterPricings.length > 0 && (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                      <h4 style={{ fontSize: '16px', fontWeight: '600', color: 'var(--text-primary)' }}>
-                        🚀 Paket Booster
-                      </h4>
-                      <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                        {boosterPricings.length} paket (7 tipe × 5 layanan)
-                      </span>
-                    </div>
-
-                    {/* Group by booster type */}
-                    {['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3'].map((boosterType) => {
-                      const boosterGroup = boosterPricings.filter(p => p.boosterType === boosterType);
-                      if (boosterGroup.length === 0) return null;
-
-                      const boosterIcon = 
-                        boosterType === 'NO' ? '🔵' :
-                        boosterType === 'GT' ? '💚' :
-                        boosterType === 'MB' ? '🔷' :
-                        boosterType === 'KCL' ? '⚪' :
-                        boosterType === 'H2S' ? '🟡' :
-                        boosterType === 'HK' ? '🔴' :
-                        boosterType === 'O3' ? '🌀' : '🚀';
-
-                      const boosterName = boosterGroup[0]?.name.split(' - ')[0] || boosterType;
-
-                      return (
-                        <div key={boosterType} style={{ marginBottom: '24px', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px', background: 'var(--bg-secondary)' }}>
-                          <h5 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
-                            {boosterIcon} {boosterName}
-                          </h5>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
-                            {boosterGroup.map((pricing) => {
-                              const serviceTypeLabel = 
-                                pricing.serviceType === 'PM' ? 'Premiere' :
-                                pricing.serviceType === 'PS' ? 'Partnership' :
-                                pricing.serviceType === 'PTY' ? 'Partnership Attiya' :
-                                pricing.serviceType === 'PDA' ? 'Partnership Dr. Abhi' :
-                                pricing.serviceType === 'PHC' ? 'Partnership Homecare' :
-                                pricing.serviceType || 'Unknown';
-
-                              return (
-                                <div key={pricing.id} className={styles.pricingCard} style={{ marginBottom: '0' }}>
-                                  <div className={styles.pricingHeader}>
-                                    <div>
-                                      <span className={`${styles.typeBadge} ${styles.typeBooster}`} style={{ fontSize: '11px', padding: '2px 6px' }}>
-                                        {pricing.serviceType || 'N/A'}
-                                      </span>
-                                      <h6 style={{ fontSize: '13px', fontWeight: '600', marginTop: '6px', marginBottom: '4px', color: 'var(--text-primary)' }}>
-                                        {serviceTypeLabel}
-                                      </h6>
-                                      {pricing.productCode && (
-                                        <p className={styles.productCode} style={{ fontSize: '10px' }}>
-                                          {pricing.productCode}
-                                        </p>
-                                      )}
-                                    </div>
-                                    <span className={`${styles.statusBadge} ${pricing.isActive ? styles.statusActive : styles.statusInactive}`} style={{ fontSize: '10px', padding: '2px 6px' }}>
-                                      {pricing.isActive ? '✅' : '❌'}
-                                    </span>
-                                  </div>
-
-                                  <div className={styles.pricingBody}>
-                                    <div className={styles.priceDisplay}>
-                                      <span className={styles.priceLabel} style={{ fontSize: '11px' }}>Harga</span>
-                                      <span className={styles.priceValue} style={{ fontSize: '14px' }}>
-                                        {formatCurrency(pricing.price)}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  {canManage && (
-                                    <div className={styles.pricingActions} style={{ gap: '6px' }}>
-                                      <button
-                                        onClick={() => handleEdit(pricing)}
-                                        className={`${styles.actionBtn} ${styles.editBtn}`}
-                                        style={{ fontSize: '11px', padding: '4px 8px' }}
-                                        title="Edit"
-                                      >
-                                        ✏️
-                                      </button>
-                                      <button
-                                        onClick={() => handleToggleActive(pricing)}
-                                        className={`${styles.actionBtn} ${pricing.isActive ? styles.deactivateBtn : styles.activateBtn}`}
-                                        style={{ fontSize: '11px', padding: '4px 8px' }}
-                                        title={pricing.isActive ? 'Nonaktifkan' : 'Aktifkan'}
-                                      >
-                                        {pricing.isActive ? '🔒' : '🔓'}
-                                      </button>
-                                      <button
-                                        onClick={() => handleDelete(pricing.id)}
-                                        className={`${styles.actionBtn} ${styles.deleteBtn}`}
-                                        style={{ fontSize: '11px', padding: '4px 8px' }}
-                                        title="Hapus"
-                                      >
-                                        🗑️
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
             );
           })}
         </div>
-      )
-      ) : (
+        )
+      ) : activeTab === 'addons' ? (
         /* ADD-ON TAB */
         products.length === 0 ? (
           <div className={styles.empty}>
@@ -1179,7 +1585,7 @@ export default function PackagePricingPage() {
             })}
           </div>
         )
-      )}
+      ) : null}
 
       {/* MASTER DATA TAB */}
       {activeTab === 'master' && (
@@ -1317,12 +1723,20 @@ export default function PackagePricingPage() {
                     </div>
 
                     <div className={styles.pricingBody}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px', marginBottom: '8px' }}>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Urutan:</span>
                         <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-primary)' }}>
                           #{type.sortOrder}
                         </span>
                       </div>
+                      {type.price && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px', background: 'rgba(34, 197, 94, 0.1)', borderRadius: '6px' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Harga Default:</span>
+                          <span style={{ fontSize: '14px', fontWeight: '700', color: '#22c55e' }}>
+                            {formatCurrency(type.price)}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {isSuperAdmin && (
@@ -1365,7 +1779,7 @@ export default function PackagePricingPage() {
           onClick={(e) => { 
             if (e.target === e.currentTarget) {
               setShowModal(false); 
-              if (activeTab === 'packages') {
+              if (activeTab === 'packages' || activeTab === 'booster-matrix') {
                 resetForm();
               } else if (activeTab === 'addons') {
                 resetAddonForm();
@@ -1381,7 +1795,7 @@ export default function PackagePricingPage() {
           >
             <div className={styles.modalHeader}>
               <h3>
-                {activeTab === 'packages' 
+                {activeTab === 'packages' || activeTab === 'booster-matrix'
                   ? (editingId ? '✏️ Edit Harga Paket' : '➕ Tambah Harga Paket')
                   : activeTab === 'addons'
                   ? (editingId ? '✏️ Edit Add-on' : '➕ Tambah Add-on')
@@ -1393,7 +1807,7 @@ export default function PackagePricingPage() {
                 className={styles.closeBtn}
                 onClick={() => { 
                   setShowModal(false); 
-                  if (activeTab === 'packages') {
+                  if (activeTab === 'packages' || activeTab === 'booster-matrix') {
                     resetForm();
                   } else if (activeTab === 'addons') {
                     resetAddonForm();
@@ -1405,7 +1819,7 @@ export default function PackagePricingPage() {
             </div>
 
             <div className={styles.modalBody}>
-              {activeTab === 'packages' ? (
+              {activeTab === 'packages' || activeTab === 'booster-matrix' ? (
                 /* PACKAGE FORM */
                 <>
                   <div className={styles.formGroup}>
@@ -1423,19 +1837,20 @@ export default function PackagePricingPage() {
                         });
                       }}
                       className={styles.formInput}
-                      disabled={!!editingId}
                     >
                       <option value="BASIC">📦 BASIC (Terapi Nano Bubble)</option>
                       <option value="BOOSTER">🚀 BOOSTER (Tambahan Terapi)</option>
                     </select>
-                    {!editingId && (
-                      <p className={styles.formHint}>
-                        {formData.packageType === 'BASIC' 
-                          ? 'Paket terapi utama dengan berbagai jumlah sesi (1X, 7X, 15X, dll)'
-                          : 'Paket booster dengan 7 tipe (NO, GT, MB, KCL, H2S, HK, O3) dan 5 tipe layanan (PM, PS, PTY, PDA, PHC)'}
+                    <p className={styles.formHint}>
+                      {formData.packageType === 'BASIC' 
+                        ? 'Paket terapi utama dengan berbagai jumlah sesi (1X, 7X, 15X, dll)'
+                        : 'Paket booster dengan 7 tipe (NO, GT, MB, KCL, H2S, HK, O3) dan 5 tipe layanan (PM, PS, PTY, PDA, PHC)'}
+                    </p>
+                    {editingId && (
+                      <p className={styles.formHint} style={{ color: '#f59e0b', fontWeight: '600' }}>
+                        ⚠️ Perubahan tidak akan mempengaruhi paket yang sudah dimiliki member
                       </p>
                     )}
-                    {editingId && <p className={styles.formHint}>Tipe paket tidak dapat diubah</p>}
                   </div>
 
                   {formData.packageType === 'BOOSTER' && (
@@ -1444,38 +1859,90 @@ export default function PackagePricingPage() {
                         <label className={styles.formLabel}>Tipe Booster *</label>
                         <select
                           value={formData.boosterType}
-                          onChange={(e) => setFormData({ ...formData, boosterType: e.target.value as any })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '__ADD_NEW__') {
+                              // Redirect to Master Data tab to add new booster type
+                              setActiveTab('master');
+                              setMasterTab('booster');
+                              setShowModal(false);
+                            } else {
+                              setFormData({ ...formData, boosterType: value as any });
+                            }
+                          }}
                           className={styles.formInput}
-                          disabled={!!editingId}
                         >
                           <option value="">-- Pilih Tipe Booster --</option>
-                          <option value="NO">🔵 NO (Nitric Oxide)</option>
-                          <option value="GT">💚 GT (Glutathione)</option>
-                          <option value="MB">🔷 MB (Methylene Blue)</option>
-                          <option value="KCL">⚪ KCL (Potassium Chloride)</option>
-                          <option value="H2S">🟡 H2S (Hydrogen Sulfide)</option>
-                          <option value="HK">🔴 HK (Hypochlorous Acid)</option>
-                          <option value="O3">🌀 O3 (Ozone)</option>
+                          
+                          {/* Hardcoded default options */}
+                          <option value="NO">🔵 NO - Nitric Oxide</option>
+                          <option value="GT">💚 GT - Glutathione</option>
+                          <option value="MB">🔷 MB - Methylene Blue</option>
+                          <option value="KCL">⚪ KCL - Potassium Chloride</option>
+                          <option value="H2S">🟡 H2S - Hydrogen Sulfide</option>
+                          <option value="HK">🔴 HK - Hypochlorous Acid</option>
+                          <option value="O3">🌀 O3 - Ozone</option>
+                          
+                          {/* Additional options from master data (if any) */}
+                          {boosterTypes.filter(bt => 
+                            bt.isActive && 
+                            !['NO', 'GT', 'MB', 'KCL', 'H2S', 'HK', 'O3'].includes(bt.code)
+                          ).map((bt) => (
+                            <option key={bt.id} value={bt.code}>
+                              {bt.icon || '🚀'} {bt.code} - {bt.name}
+                            </option>
+                          ))}
+                          
+                          {!editingId && (
+                            <option value="__ADD_NEW__" style={{ borderTop: '2px solid #3b82f6', marginTop: '4px', fontWeight: '700', color: '#60a5fa' }}>
+                              ➕ Tambah Tipe Booster Baru
+                            </option>
+                          )}
                         </select>
-                        {editingId && <p className={styles.formHint}>Tipe booster tidak dapat diubah</p>}
                       </div>
 
                       <div className={styles.formGroup}>
                         <label className={styles.formLabel}>Tipe Layanan *</label>
                         <select
                           value={formData.serviceType}
-                          onChange={(e) => setFormData({ ...formData, serviceType: e.target.value as any })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '__ADD_NEW__') {
+                              // Redirect to Master Data tab to add new service type
+                              setActiveTab('master');
+                              setMasterTab('service');
+                              setShowModal(false);
+                            } else {
+                              setFormData({ ...formData, serviceType: value as any });
+                            }
+                          }}
                           className={styles.formInput}
-                          disabled={!!editingId}
                         >
                           <option value="">-- Pilih Tipe Layanan --</option>
+                          
+                          {/* Hardcoded default options */}
                           <option value="PM">PM - Premiere (Rp 1.000.000)</option>
                           <option value="PS">PS - Partnership (Rp 650.000)</option>
                           <option value="PTY">PTY - Partnership Attiya (Rp 600.000)</option>
                           <option value="PDA">PDA - Partnership Dr. Abhi (Rp 65.000/ml)</option>
                           <option value="PHC">PHC - Partnership Homecare (Rp 750.000)</option>
+                          
+                          {/* Additional options from master data (if any) */}
+                          {serviceTypes.filter(st => 
+                            st.isActive && 
+                            !['PM', 'PS', 'PTY', 'PDA', 'PHC'].includes(st.code)
+                          ).map((st) => (
+                            <option key={st.id} value={st.code}>
+                              {st.code} - {st.name}
+                            </option>
+                          ))}
+                          
+                          {!editingId && (
+                            <option value="__ADD_NEW__" style={{ borderTop: '2px solid #3b82f6', marginTop: '4px', fontWeight: '700', color: '#60a5fa' }}>
+                              ➕ Tambah Tipe Layanan Baru
+                            </option>
+                          )}
                         </select>
-                        {editingId && <p className={styles.formHint}>Tipe layanan tidak dapat diubah</p>}
                       </div>
                     </>
                   )}
@@ -1488,10 +1955,30 @@ export default function PackagePricingPage() {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       className={styles.formInput}
                       placeholder="Contoh: Terapi Nano Bubble 7X"
-                      disabled={!!editingId}
                     />
-                    {editingId && <p className={styles.formHint}>Nama paket tidak dapat diubah</p>}
                   </div>
+
+                  {/* Branch Selection - Only for SUPER_ADMIN and ADMIN_MANAGER when creating */}
+                  {!editingId && (isSuperAdmin || isAdminManager) && (
+                    <div className={styles.formGroup}>
+                      <label className={styles.formLabel}>Cabang (Opsional)</label>
+                      <select
+                        value={formData.branchId}
+                        onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                        className={styles.formInput}
+                      >
+                        <option value="">🌐 Global (Semua Cabang)</option>
+                        {branches.map((branch) => (
+                          <option key={branch.id} value={branch.id}>
+                            {branch.branchCode} - {branch.name}
+                          </option>
+                        ))}
+                      </select>
+                      <p className={styles.formHint}>
+                        Pilih cabang spesifik atau biarkan kosong untuk harga global yang berlaku di semua cabang
+                      </p>
+                    </div>
+                  )}
 
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Kode Produk (Opsional)</label>
@@ -1501,9 +1988,7 @@ export default function PackagePricingPage() {
                       onChange={(e) => setFormData({ ...formData, productCode: e.target.value })}
                       className={styles.formInput}
                       placeholder="Contoh: TNB-P7-PM"
-                      disabled={!!editingId}
                     />
-                    {editingId && <p className={styles.formHint}>Kode produk tidak dapat diubah</p>}
                   </div>
 
                   <div className={styles.formGroup}>
@@ -1514,9 +1999,7 @@ export default function PackagePricingPage() {
                       onChange={(e) => setFormData({ ...formData, totalSessions: parseInt(e.target.value) || 0 })}
                       className={styles.formInput}
                       min="1"
-                      disabled={!!editingId}
                     />
-                    {editingId && <p className={styles.formHint}>Jumlah sesi tidak dapat diubah</p>}
                   </div>
 
                   <div className={styles.formGroup}>
@@ -1736,6 +2219,22 @@ export default function PackagePricingPage() {
                     />
                   </div>
 
+                  {masterTab === 'service' && (
+                    <div className={styles.formGroup}>
+                      <label className={styles.formLabel}>Harga (Opsional)</label>
+                      <input
+                        type="number"
+                        value={masterFormData.price}
+                        onChange={(e) => setMasterFormData({ ...masterFormData, price: parseFloat(e.target.value) || 0 })}
+                        className={styles.formInput}
+                        placeholder="Contoh: 1000000"
+                        min="0"
+                        step="10000"
+                      />
+                      <p className={styles.formHint}>Harga default untuk tipe layanan ini (dalam Rupiah). Preview: {formatCurrency(masterFormData.price)}</p>
+                    </div>
+                  )}
+
                   <div className={styles.formGroup}>
                     <label className={styles.formLabel}>Urutan Tampilan</label>
                     <input
@@ -1768,7 +2267,7 @@ export default function PackagePricingPage() {
               <button
                 onClick={() => { 
                   setShowModal(false); 
-                  if (activeTab === 'packages') {
+                  if (activeTab === 'packages' || activeTab === 'booster-matrix') {
                     resetForm();
                   } else if (activeTab === 'addons') {
                     resetAddonForm();
@@ -1781,7 +2280,7 @@ export default function PackagePricingPage() {
                 Batal
               </button>
               <button
-                onClick={activeTab === 'packages' ? handleSubmit : activeTab === 'addons' ? handleAddonSubmit : handleMasterSubmit}
+                onClick={(activeTab === 'packages' || activeTab === 'booster-matrix') ? handleSubmit : activeTab === 'addons' ? handleAddonSubmit : handleMasterSubmit}
                 disabled={submitting}
                 className={`${styles.modalBtn} ${styles.submitBtn}`}
               >

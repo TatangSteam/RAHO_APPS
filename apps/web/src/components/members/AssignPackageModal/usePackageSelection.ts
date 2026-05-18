@@ -1,4 +1,13 @@
-import { PackagePricing, ExtendedBoosterType, ServiceType, SERVICE_TYPE_PRICING, BOOSTER_TYPE_LABELS, AddOnPricing, AddOnType } from '@/types/package';
+import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnPricing, AddOnType } from '@/types/package';
+
+// Built-in service type label mapping (fallback labels)
+const SERVICE_TYPE_NAMES: Record<string, string> = {
+  PM: 'Premiere',
+  PS: 'Partnership',
+  PTY: 'Partnership Attiya',
+  PDA: 'Partnership Dr. Abhi',
+  PHC: 'Partnership Homecare',
+};
 
 interface PackageSelection {
   pricingId: string;
@@ -83,11 +92,14 @@ export function usePackageSelection(
         ),
       });
     } else {
+      // Default service type: use the anchor pricing's serviceType (first record for this booster type)
+      const anchor = pricingsList.find(p => p.id === pricingId);
+      const defaultServiceType = (anchor?.serviceType || 'PM') as ServiceType;
       onAssignDataChange({
         ...assignData,
         selectedPackages: [
           ...assignData.selectedPackages,
-          { pricingId, quantity: 1, boosterType, serviceType: 'PM' },
+          { pricingId, quantity: 1, boosterType, serviceType: defaultServiceType },
         ],
       });
     }
@@ -164,14 +176,20 @@ export function usePackageSelection(
       if (pricing.packageType === 'BASIC') {
         totalPrice = pricePerSession * selection.quantity;
       } else {
-        const serviceType = selection.serviceType || 'PM';
-        const serviceConfig = SERVICE_TYPE_PRICING[serviceType];
-        pricePerSession = serviceConfig.pricePerSession;
-        const BOOSTER_TYPE_LABELS_MAP = BOOSTER_TYPE_LABELS as Record<string, string>;
-        const boosterLabel = selection.boosterType ? BOOSTER_TYPE_LABELS_MAP[selection.boosterType] : 'NO';
-        itemName = `Booster ${boosterLabel} ${pricing.totalSessions}X`;
-        details = `${serviceConfig.name}${serviceConfig.unit ? ` (${serviceConfig.unit})` : ''}`;
-        totalPrice = pricePerSession * pricing.totalSessions * selection.quantity;
+        // BOOSTER: find pricing record for the selected service type
+        const serviceType = selection.serviceType || pricing.serviceType || 'PM';
+        // Look up the actual booster pricing record matching boosterType + serviceType
+        const matched = pricingsList.find(p =>
+          p.packageType === 'BOOSTER' &&
+          p.boosterType === selection.boosterType &&
+          p.serviceType === serviceType
+        ) || pricing;
+        pricePerSession = matched.price;
+        const serviceName = SERVICE_TYPE_NAMES[serviceType] || serviceType;
+        const boosterLabel = selection.boosterType || 'BOOSTER';
+        itemName = `Booster ${boosterLabel} ${matched.totalSessions}X`;
+        details = serviceName;
+        totalPrice = pricePerSession * matched.totalSessions * selection.quantity;
       }
 
       subtotal += totalPrice;

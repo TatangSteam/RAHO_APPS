@@ -1,0 +1,82 @@
+.errorContainer {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  z-index: 9999;
+  max-width: 420px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.errorContent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  border: 2px solid #ef4444;
+  border-left: 6px solid #dc2626;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(239, 68, 68, 0.25);
+  color: #991b1b;
+}
+
+.errorIcon {
+  font-size: 24px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.errorMessage {
+  flex: 1;
+  font-size: 14px;
+}
+
+.errorMessage strong {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.errorMessage p {
+  margin: 0;
+  line-height: 1.5;
+  color: #7f1d1d;
+}
+
+.closeButton {
+  background: none;
+  border: none;
+  color: #991b1b;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+  flex-shrink: 0;
+}
+
+.closeButton:hover {
+  background-color: rgba(127, 29, 29, 0.1);
+}
+
+.closeButton:active {
+  background-color: rgba(127, 29, 29, 0.2);
+}

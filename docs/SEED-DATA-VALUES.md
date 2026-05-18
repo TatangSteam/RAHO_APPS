@@ -60,9 +60,13 @@
 ### Super Admin & Manager (Cross-Branch)
 | No | Email | Role | Nama Lengkap | Password | Cabang Primary |
 |----|-------|------|--------------|----------|----------------|
-| 1 | superadmin@raho.id | SUPER_ADMIN | Super Admin RAHO | SuperAdmin@123 | - (Semua) |
+| 1 | superadmin@raho.id | SUPER_ADMIN | Super Administrator | Sup3r4dM1n@123 | - (Semua) |
 | 2 | manager1@raho.id | ADMIN_MANAGER | Admin Manager Regional 1 | Manager@123 | PST (Jakarta) |
 | 3 | manager2@raho.id | ADMIN_MANAGER | Admin Manager Regional 2 | Manager@123 | SBY (Surabaya) |
+
+**Catatan:**
+- Super Admin dibuat melalui **essential seed** (production-safe)
+- Admin Manager dibuat melalui **testing seed** (development only)
 
 ### Cabang Pusat Jakarta (PST) - 5 Staff
 | No | Email | Role | Nama Lengkap | Password | Staff Code |
@@ -93,7 +97,9 @@
 
 **Catatan:**
 - SUPER_ADMIN tidak memiliki cabang (akses ke semua cabang)
+- SUPER_ADMIN dapat melakukan impersonation ke Admin Manager dan Admin Cabang
 - ADMIN_MANAGER memiliki cabang primary tapi bisa manage multiple branches via ManagerBranch table
+- ADMIN_MANAGER dapat melakukan impersonation ke Admin Cabang di branches yang dikelola
 - DOCTOR dan NURSE memiliki cabang primary tapi bisa bekerja di cabang lain via StaffBranch table
 - Manager 1 mengelola: Jakarta Pusat & Bandung
 - Manager 2 mengelola: Surabaya & Jakarta Pusat
@@ -330,7 +336,10 @@ npx tsx prisma/seed.ts
 
 ## Catatan Penting
 
-1. **Password Default**: Semua staff menggunakan password default sesuai role (admin123, manager123, dll.)
+1. **Password Default**: 
+   - Super Admin: `Sup3r4dM1n@123` (production credential)
+   - Admin Manager: `Manager@123` (testing credential)
+   - Other staff: password sesuai role (AdminCabang@123, Dokter@123, dll.)
 2. **Kode Unik**: Setiap cabang memiliki kode unik (PST, BDG, SBY) yang digunakan dalam kode member dan paket
 3. **Harga Konsisten**: Harga paket sama di semua cabang, hanya kode yang berbeda
 4. **Data Realistis**: Semua data menggunakan nama, alamat, dan informasi yang realistis

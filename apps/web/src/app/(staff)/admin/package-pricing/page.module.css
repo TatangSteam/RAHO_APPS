@@ -483,6 +483,13 @@
   transition: all 0.3s ease;
 }
 
+.formInput option {
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 0.75rem;
+  font-weight: 600;
+}
+
 .formInput:hover {
   border-color: rgba(59, 130, 246, 0.7);
 }
@@ -600,4 +607,35 @@
   font-weight: 500;
   margin: 0;
   font-family: 'Courier New', monospace;
+}
+
+.branchFilter {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(145deg, 
+    rgba(30, 41, 59, 0.95) 0%, 
+    rgba(15, 23, 42, 0.98) 100%);
+  color: #f1f5f9;
+  border: 2px solid rgba(59, 130, 246, 0.4);
+  border-radius: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 200px;
+  transition: all 0.3s ease;
+}
+
+.branchFilter:hover {
+  border-color: rgba(59, 130, 246, 0.7);
+}
+
+.branchFilter:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.9);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.branchFilter option {
+  background: #1e293b;
+  color: #f1f5f9;
+  padding: 0.5rem;
 }

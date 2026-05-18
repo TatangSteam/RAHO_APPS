@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import Link from 'next/link';
+import { Activity, Users, Package, FileText } from 'lucide-react';
+import { AdminManagersTab } from '@/components/admin/AdminManagersTab';
 import styles from './page.module.css';
+
+type TabType = 'overview' | 'admin-managers' | 'master-products' | 'audit-logs';
 
 interface SystemStats {
   totalBranches: number;
@@ -40,6 +44,7 @@ export default function SuperAdminPage() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   useEffect(() => {
     setMounted(true);
@@ -213,182 +218,253 @@ export default function SuperAdminPage() {
         </div>
       </div>
 
-      {/* Management Sections */}
-      <div className={styles.sectionsGrid}>
-        {/* Master Data Management */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>📋 Master Data</h2>
-            <p>Kelola data master sistem</p>
-          </div>
-          <div className={styles.sectionContent}>
-            <Link href="/admin/master-products" className={styles.actionCard}>
-              <div className={styles.actionIcon}>📦</div>
-              <div className={styles.actionContent}>
-                <h3>Master Produk</h3>
-                <p>Kelola produk untuk semua cabang</p>
-              </div>
-              <div className={styles.actionArrow}>→</div>
-            </Link>
-
-            <Link href="/branches" className={styles.actionCard}>
-              <div className={styles.actionIcon}>🏢</div>
-              <div className={styles.actionContent}>
-                <h3>Manajemen Cabang</h3>
-                <p>Kelola semua cabang RAHO</p>
-              </div>
-              <div className={styles.actionArrow}>→</div>
-            </Link>
-          </div>
+      {/* Tabs */}
+      <div className={styles.tabsContainer}>
+        <div className={styles.tabsNav}>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'overview' ? styles.active : ''}`}
+            onClick={() => setActiveTab('overview')}
+          >
+            <Activity size={18} />
+            <span>Overview</span>
+          </button>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'admin-managers' ? styles.active : ''}`}
+            onClick={() => setActiveTab('admin-managers')}
+          >
+            <Users size={18} />
+            <span>Admin Managers</span>
+          </button>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'master-products' ? styles.active : ''}`}
+            onClick={() => setActiveTab('master-products')}
+          >
+            <Package size={18} />
+            <span>Master Products</span>
+          </button>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'audit-logs' ? styles.active : ''}`}
+            onClick={() => setActiveTab('audit-logs')}
+          >
+            <FileText size={18} />
+            <span>Audit Logs</span>
+          </button>
         </div>
 
-        {/* User Management */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>👥 Manajemen User</h2>
-            <p>Kelola akses dan role user</p>
-          </div>
-          <div className={styles.sectionContent}>
-            <Link href="/admin/users" className={styles.actionCard}>
-              <div className={styles.actionIcon}>👤</div>
-              <div className={styles.actionContent}>
-                <h3>Kelola User</h3>
-                <p>Tambah, edit, hapus user sistem</p>
-              </div>
-              <div className={styles.actionArrow}>→</div>
-            </Link>
+        {/* Tab Content */}
+        <div className={styles.tabContent}>
+          {activeTab === 'overview' && (
+            <div className={styles.overviewContent}>
+              {/* Management Sections */}
+              <div className={styles.sectionsGrid}>
+                {/* Master Data Management */}
+                <div className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <h2>📋 Master Data</h2>
+                    <p>Kelola data master sistem</p>
+                  </div>
+                  <div className={styles.sectionContent}>
+                    <Link href="/admin/master-products" className={styles.actionCard}>
+                      <div className={styles.actionIcon}>📦</div>
+                      <div className={styles.actionContent}>
+                        <h3>Master Produk</h3>
+                        <p>Kelola produk untuk semua cabang</p>
+                      </div>
+                      <div className={styles.actionArrow}>→</div>
+                    </Link>
 
-            <div className={styles.userRoleStats}>
-              <h4>Distribusi Role</h4>
-              {stats?.usersByRole.map((roleData) => (
-                <div key={roleData.role} className={styles.roleItem}>
-                  <span className={styles.roleName}>
-                    {getRoleLabel(roleData.role)}
-                  </span>
-                  <span className={styles.roleCount}>{roleData.count}</span>
+                    <Link href="/branches" className={styles.actionCard}>
+                      <div className={styles.actionIcon}>🏢</div>
+                      <div className={styles.actionContent}>
+                        <h3>Manajemen Cabang</h3>
+                        <p>Kelola semua cabang RAHO</p>
+                      </div>
+                      <div className={styles.actionArrow}>→</div>
+                    </Link>
+                  </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
 
-        {/* System Monitoring */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>📊 Monitoring Sistem</h2>
-            <p>Pantau aktivitas dan performa</p>
-          </div>
-          <div className={styles.sectionContent}>
-            <Link href="/admin/audit-logs" className={styles.actionCard}>
-              <div className={styles.actionIcon}>📜</div>
-              <div className={styles.actionContent}>
-                <h3>Audit Logs</h3>
-                <p>Riwayat aktivitas semua user</p>
-              </div>
-              <div className={styles.actionArrow}>→</div>
-            </Link>
+                {/* User Management */}
+                <div className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <h2>👥 Manajemen User</h2>
+                    <p>Kelola akses dan role user</p>
+                  </div>
+                  <div className={styles.sectionContent}>
+                    <Link href="/admin/users" className={styles.actionCard}>
+                      <div className={styles.actionIcon}>👤</div>
+                      <div className={styles.actionContent}>
+                        <h3>Kelola User</h3>
+                        <p>Tambah, edit, hapus user sistem</p>
+                      </div>
+                      <div className={styles.actionArrow}>→</div>
+                    </Link>
 
-            <Link href="/admin/branch-performance" className={styles.actionCard}>
-              <div className={styles.actionIcon}>📈</div>
-              <div className={styles.actionContent}>
-                <h3>Performa Cabang</h3>
-                <p>Analisis performa setiap cabang</p>
-              </div>
-              <div className={styles.actionArrow}>→</div>
-            </Link>
-          </div>
-        </div>
-
-        {/* Recent Activities */}
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>🕐 Aktivitas Terbaru</h2>
-            <p>10 aktivitas terakhir sistem</p>
-          </div>
-          <div className={styles.sectionContent}>
-            <div className={styles.activityList}>
-              {stats?.recentActivities && stats.recentActivities.length > 0 ? (
-                stats.recentActivities.map((activity) => (
-                  <div key={activity.id} className={styles.activityItem}>
-                    <div className={styles.activityIcon}>
-                      {activity.action === 'LOGIN' && '🔓'}
-                      {activity.action === 'LOGOUT' && '🔒'}
-                      {activity.action === 'CREATE' && '➕'}
-                      {activity.action === 'UPDATE' && '✏️'}
-                      {activity.action === 'DELETE' && '🗑️'}
-                      {activity.action === 'VERIFY' && '✅'}
+                    <div className={styles.userRoleStats}>
+                      <h4>Distribusi Role</h4>
+                      {stats?.usersByRole.map((roleData) => (
+                        <div key={roleData.role} className={styles.roleItem}>
+                          <span className={styles.roleName}>
+                            {getRoleLabel(roleData.role)}
+                          </span>
+                          <span className={styles.roleCount}>{roleData.count}</span>
+                        </div>
+                      ))}
                     </div>
-                    <div className={styles.activityContent}>
-                      <div className={styles.activityAction}>
-                        {activity.action}
+                  </div>
+                </div>
+
+                {/* System Monitoring */}
+                <div className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <h2>📊 Monitoring Sistem</h2>
+                    <p>Pantau aktivitas dan performa</p>
+                  </div>
+                  <div className={styles.sectionContent}>
+                    <Link href="/admin/audit-logs" className={styles.actionCard}>
+                      <div className={styles.actionIcon}>📜</div>
+                      <div className={styles.actionContent}>
+                        <h3>Audit Logs</h3>
+                        <p>Riwayat aktivitas semua user</p>
                       </div>
-                      <div className={styles.activityUser}>
-                        {activity.userName} ({activity.userEmail})
+                      <div className={styles.actionArrow}>→</div>
+                    </Link>
+
+                    <Link href="/admin/branch-performance" className={styles.actionCard}>
+                      <div className={styles.actionIcon}>📈</div>
+                      <div className={styles.actionContent}>
+                        <h3>Performa Cabang</h3>
+                        <p>Analisis performa setiap cabang</p>
                       </div>
-                      {activity.branchName && (
-                        <div className={styles.activityBranch}>
-                          📍 {activity.branchName}
+                      <div className={styles.actionArrow}>→</div>
+                    </Link>
+                  </div>
+                </div>
+
+                {/* Recent Activities */}
+                <div className={styles.section}>
+                  <div className={styles.sectionHeader}>
+                    <h2>🕐 Aktivitas Terbaru</h2>
+                    <p>10 aktivitas terakhir sistem</p>
+                  </div>
+                  <div className={styles.sectionContent}>
+                    <div className={styles.activityList}>
+                      {stats?.recentActivities && stats.recentActivities.length > 0 ? (
+                        stats.recentActivities.map((activity) => (
+                          <div key={activity.id} className={styles.activityItem}>
+                            <div className={styles.activityIcon}>
+                              {activity.action === 'LOGIN' && '🔓'}
+                              {activity.action === 'LOGOUT' && '🔒'}
+                              {activity.action === 'CREATE' && '➕'}
+                              {activity.action === 'UPDATE' && '✏️'}
+                              {activity.action === 'DELETE' && '🗑️'}
+                              {activity.action === 'VERIFY' && '✅'}
+                            </div>
+                            <div className={styles.activityContent}>
+                              <div className={styles.activityAction}>
+                                {activity.action}
+                              </div>
+                              <div className={styles.activityUser}>
+                                {activity.userName} ({activity.userEmail})
+                              </div>
+                              {activity.branchName && (
+                                <div className={styles.activityBranch}>
+                                  📍 {activity.branchName}
+                                </div>
+                              )}
+                            </div>
+                            <div className={styles.activityTime}>
+                              {formatDate(activity.createdAt)}
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className={styles.emptyState}>
+                          Belum ada aktivitas terbaru
                         </div>
                       )}
                     </div>
-                    <div className={styles.activityTime}>
-                      {formatDate(activity.createdAt)}
-                    </div>
                   </div>
-                ))
-              ) : (
-                <div className={styles.emptyState}>
-                  Belum ada aktivitas terbaru
                 </div>
-              )}
+              </div>
+
+              {/* Quick Actions */}
+              <div className={styles.quickActions}>
+                <h2>⚡ Aksi Cepat</h2>
+                <div className={styles.quickActionsGrid}>
+                  <button
+                    onClick={() => router.push('/admin/master-products')}
+                    className={styles.quickActionBtn}
+                  >
+                    <span className={styles.quickActionIcon}>📦</span>
+                    <span>Tambah Produk</span>
+                  </button>
+
+                  <button
+                    onClick={() => router.push('/branches')}
+                    className={styles.quickActionBtn}
+                  >
+                    <span className={styles.quickActionIcon}>🏢</span>
+                    <span>Tambah Cabang</span>
+                  </button>
+
+                  <button
+                    onClick={() => router.push('/admin/users')}
+                    className={styles.quickActionBtn}
+                  >
+                    <span className={styles.quickActionIcon}>👤</span>
+                    <span>Tambah User</span>
+                  </button>
+
+                  <button
+                    onClick={() => router.push('/admin/audit-logs')}
+                    className={styles.quickActionBtn}
+                  >
+                    <span className={styles.quickActionIcon}>📜</span>
+                    <span>Lihat Audit Log</span>
+                  </button>
+
+                  <button
+                    onClick={loadSystemStats}
+                    className={styles.quickActionBtn}
+                  >
+                    <span className={styles.quickActionIcon}>🔄</span>
+                    <span>Refresh Data</span>
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
+          )}
 
-      {/* Quick Actions */}
-      <div className={styles.quickActions}>
-        <h2>⚡ Aksi Cepat</h2>
-        <div className={styles.quickActionsGrid}>
-          <button
-            onClick={() => router.push('/admin/master-products')}
-            className={styles.quickActionBtn}
-          >
-            <span className={styles.quickActionIcon}>📦</span>
-            <span>Tambah Produk</span>
-          </button>
+          {activeTab === 'admin-managers' && (
+            <AdminManagersTab />
+          )}
 
-          <button
-            onClick={() => router.push('/branches')}
-            className={styles.quickActionBtn}
-          >
-            <span className={styles.quickActionIcon}>🏢</span>
-            <span>Tambah Cabang</span>
-          </button>
+          {activeTab === 'master-products' && (
+            <div className={styles.tabPlaceholder}>
+              <h2>Master Products</h2>
+              <p>Redirecting to Master Products page...</p>
+              <button
+                onClick={() => router.push('/admin/master-products')}
+                className={styles.redirectBtn}
+              >
+                Go to Master Products
+              </button>
+            </div>
+          )}
 
-          <button
-            onClick={() => router.push('/admin/users')}
-            className={styles.quickActionBtn}
-          >
-            <span className={styles.quickActionIcon}>👤</span>
-            <span>Tambah User</span>
-          </button>
-
-          <button
-            onClick={() => router.push('/admin/audit-logs')}
-            className={styles.quickActionBtn}
-          >
-            <span className={styles.quickActionIcon}>📜</span>
-            <span>Lihat Audit Log</span>
-          </button>
-
-          <button
-            onClick={loadSystemStats}
-            className={styles.quickActionBtn}
-          >
-            <span className={styles.quickActionIcon}>🔄</span>
-            <span>Refresh Data</span>
-          </button>
+          {activeTab === 'audit-logs' && (
+            <div className={styles.tabPlaceholder}>
+              <h2>Audit Logs</h2>
+              <p>Redirecting to Audit Logs page...</p>
+              <button
+                onClick={() => router.push('/admin/audit-logs')}
+                className={styles.redirectBtn}
+              >
+                Go to Audit Logs
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

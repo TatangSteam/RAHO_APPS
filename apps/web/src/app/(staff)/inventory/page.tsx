@@ -268,7 +268,6 @@ export default function InventoryPage() {
   const totalItems = items.length;
   const lowStockItems = items.filter((i) => i.stockInfo.isLowStock).length;
   const normalStockItems = totalItems - lowStockItems;
-  const totalStockValue = items.reduce((sum, item) => sum + item.stockInfo.baseStock, 0);
 
   // Modal component
   const EditStockModalContent = () => {
@@ -680,15 +679,6 @@ export default function InventoryPage() {
           <div className={styles.statContent}>
             <p className={styles.statLabel}>Stok Normal</p>
             <h3 className={styles.statValue}>{normalStockItems}</h3>
-          </div>
-        </div>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)' }}>
-            📊
-          </div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Total Unit</p>
-            <h3 className={styles.statValue}>{totalStockValue}</h3>
           </div>
         </div>
       </div>

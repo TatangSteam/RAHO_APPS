@@ -1,4 +1,4 @@
-import { PackagePricing, ExtendedBoosterType, ServiceType, SERVICE_TYPE_PRICING, BOOSTER_TYPE_LABELS } from '@/types/package';
+import { PackagePricing, ExtendedBoosterType, ServiceType } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
 import styles from '../AssignPackageModal.module.css';
 
@@ -11,6 +11,15 @@ interface BoosterPackageSectionProps {
   updateBoosterServiceType: (pricingId: string, boosterType: ExtendedBoosterType, serviceType: ServiceType) => void;
 }
 
+// Built-in service type labels (fallback names if pricing.name doesn't include it)
+const SERVICE_TYPE_NAMES: Record<string, string> = {
+  PM: 'Premiere',
+  PS: 'Partnership',
+  PTY: 'Partnership Attiya',
+  PDA: 'Partnership Dr. Abhi',
+  PHC: 'Partnership Homecare',
+};
+
 export default function BoosterPackageSection({
   pricingsList,
   isBoosterSelected,
@@ -19,18 +28,25 @@ export default function BoosterPackageSection({
   updateBoosterQty,
   updateBoosterServiceType,
 }: BoosterPackageSectionProps) {
-  // Group booster pricings by boosterType to avoid duplicates
-  const boosterPricings = pricingsList.filter(p => p.packageType === 'BOOSTER');
-  
-  // Create a map of unique booster types (only keep first occurrence of each type)
-  const uniqueBoosterMap = new Map<string, PackagePricing>();
+  // All booster pricings from database
+  const boosterPricings = pricingsList.filter(p => p.packageType === 'BOOSTER' && p.isActive);
+
+  // Group pricings by booster type → list of available service types
+  const boosterMap = new Map<string, PackagePricing[]>();
   boosterPricings.forEach(pricing => {
-    if (pricing.boosterType && !uniqueBoosterMap.has(pricing.boosterType)) {
-      uniqueBoosterMap.set(pricing.boosterType, pricing);
-    }
+    if (!pricing.boosterType) return;
+    const list = boosterMap.get(pricing.boosterType) || [];
+    list.push(pricing);
+    boosterMap.set(pricing.boosterType, list);
   });
-  
-  const uniqueBoosters = Array.from(uniqueBoosterMap.values());
+
+  // Convert to array of { boosterType, name, pricings (one per service type) }
+  const uniqueBoosters = Array.from(boosterMap.entries()).map(([boosterType, pricings]) => ({
+    boosterType,
+    // Use the first pricing's name (without the "- service" suffix) as label
+    label: boosterType,
+    pricings, // All pricings for this booster type (one per service type)
+  }));
 
   return (
     <div className={styles.section}>
@@ -39,24 +55,31 @@ export default function BoosterPackageSection({
         {uniqueBoosters.length === 0 && (
           <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada paket booster tersedia.</p>
         )}
-        
+
         <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
           Pilih tipe booster yang diinginkan. Harga akan disesuaikan dengan tipe layanan yang dipilih.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
-          {uniqueBoosters.map((pricing) => {
-            const boosterType = pricing.boosterType as ExtendedBoosterType;
-            if (!boosterType) return null;
+          {uniqueBoosters.map(({ boosterType, label, pricings: typePricings }) => {
+            // Use the first pricing as "anchor" for the booster checkbox
+            const anchor = typePricings[0];
+            if (!anchor) return null;
 
-            const selected = isBoosterSelected(pricing.id, boosterType);
-            const sel = getBoosterSelection(pricing.id, boosterType);
-            const serviceType = (sel?.serviceType || 'PM') as ServiceType;
-            const serviceConfig = SERVICE_TYPE_PRICING[serviceType];
+            const selected = isBoosterSelected(anchor.id, boosterType as ExtendedBoosterType);
+            const sel = getBoosterSelection(anchor.id, boosterType as ExtendedBoosterType);
+
+            // Get current selected service type, default to first available
+            const selectedServiceType = (sel?.serviceType || typePricings[0].serviceType || 'PM') as string;
+
+            // Find the pricing for the selected service type
+            const selectedPricing = typePricings.find(p => p.serviceType === selectedServiceType) || typePricings[0];
+            const pricePerSession = selectedPricing.price;
+            const serviceTypeName = SERVICE_TYPE_NAMES[selectedServiceType] || selectedServiceType;
 
             return (
               <div
-                key={pricing.id}
+                key={boosterType}
                 style={{
                   border: selected ? '2px solid var(--color-booster, #a855f7)' : '1px solid var(--border-color)',
                   borderRadius: '8px',
@@ -69,11 +92,14 @@ export default function BoosterPackageSection({
                   <input
                     type="checkbox"
                     checked={selected}
-                    onChange={() => toggleBooster(pricing.id, boosterType)}
+                    onChange={() => toggleBooster(anchor.id, boosterType as ExtendedBoosterType)}
                     className={styles.packageCheckbox}
                   />
                   <span style={{ fontWeight: '600', fontSize: '14px' }}>
-                    {BOOSTER_TYPE_LABELS[boosterType] || boosterType}
+                    {label}
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    ({typePricings.length} layanan)
                   </span>
                 </label>
 
@@ -82,16 +108,20 @@ export default function BoosterPackageSection({
                     <div>
                       <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }}>Tipe Layanan</label>
                       <select
-                        value={serviceType}
-                        onChange={(e) => updateBoosterServiceType(pricing.id, boosterType, e.target.value as ServiceType)}
+                        value={selectedServiceType}
+                        onChange={(e) => updateBoosterServiceType(anchor.id, boosterType as ExtendedBoosterType, e.target.value as ServiceType)}
                         className="form-input"
                         style={{ fontSize: '12px', padding: '6px 8px', width: '100%' }}
                       >
-                        {Object.entries(SERVICE_TYPE_PRICING).map(([key, config]) => (
-                          <option key={key} value={key}>
-                            {config.name} — {formatCurrency((config as any).pricePerSession)}
-                          </option>
-                        ))}
+                        {typePricings.map(p => {
+                          const stCode = p.serviceType || '';
+                          const stName = SERVICE_TYPE_NAMES[stCode] || stCode;
+                          return (
+                            <option key={p.id} value={stCode}>
+                              {stName} — {formatCurrency(p.price)}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
 
@@ -103,18 +133,14 @@ export default function BoosterPackageSection({
                         value={sel?.quantity || 1}
                         onChange={(e) => {
                           const value = e.target.value;
-                          // Allow only numbers and empty string
                           if (value === '' || /^\d+$/.test(value)) {
                             const numValue = value === '' ? 1 : parseInt(value);
                             if (numValue >= 1) {
-                              updateBoosterQty(pricing.id, boosterType, numValue);
+                              updateBoosterQty(anchor.id, boosterType as ExtendedBoosterType, numValue);
                             }
                           }
                         }}
-                        onFocus={(e) => {
-                          // Select all on focus for easy replacement
-                          e.target.select();
-                        }}
+                        onFocus={(e) => e.target.select()}
                         className="form-input"
                         style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
                         placeholder="1"
@@ -124,15 +150,15 @@ export default function BoosterPackageSection({
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                         <span>Harga per sesi:</span>
-                        <span>{formatCurrency(serviceConfig.pricePerSession)}</span>
+                        <span>{formatCurrency(pricePerSession)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                         <span>Total sesi:</span>
-                        <span>{pricing.totalSessions * (sel?.quantity || 1)}</span>
+                        <span>{selectedPricing.totalSessions * (sel?.quantity || 1)}</span>
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', color: 'var(--color-booster, #a855f7)', marginTop: '6px', fontSize: '12px' }}>
                         <span>Total Harga:</span>
-                        <span>{formatCurrency(serviceConfig.pricePerSession * pricing.totalSessions * (sel?.quantity || 1))}</span>
+                        <span>{formatCurrency(pricePerSession * selectedPricing.totalSessions * (sel?.quantity || 1))}</span>
                       </div>
                     </div>
                   </div>
