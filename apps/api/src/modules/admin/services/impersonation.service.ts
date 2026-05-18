@@ -447,7 +447,7 @@ export class ImpersonationService {
         id: manager.id,
         email: manager.email,
         fullName: manager.profile?.fullName || manager.email,
-        phoneNumber: manager.profile?.phoneNumber || '',
+        phoneNumber: manager.profile?.phone || '',
         isActive: manager.isActive,
         branches: manager.managedBranches.map(mb => mb.branch),
         createdAt: manager.createdAt,

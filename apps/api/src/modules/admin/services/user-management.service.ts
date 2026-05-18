@@ -48,6 +48,7 @@ export class UserManagementService {
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     // Create user and assign branches
+    // IMPORTANT: UserProfile model uses 'phone' field, not 'phoneNumber'
     const user = await prisma.user.create({
       data: {
         email: data.email,
@@ -57,7 +58,7 @@ export class UserManagementService {
         profile: {
           create: {
             fullName: data.fullName,
-            phone: data.phoneNumber, // Map phoneNumber to phone field in DB
+            phone: data.phoneNumber, // Frontend sends phoneNumber, DB field is phone
           },
         },
         managedBranches: {

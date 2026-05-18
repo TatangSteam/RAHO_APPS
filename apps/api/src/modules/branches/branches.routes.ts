@@ -9,6 +9,10 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
+  getBranchManagers,
+  assignManagerToBranch,
+  unassignManagerFromBranch,
+  getAvailableManagersForBranch,
 } from './branches.controller';
 import {
   getSystemStats,
@@ -102,6 +106,39 @@ branchesRouter.get(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   listUsers,
+);
+
+// ── Get Available Managers for Branch (not yet assigned) ──────
+// NOTE: This route MUST be before /:branchId/managers to avoid route conflict
+branchesRouter.get(
+  '/:branchId/managers/available',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  getAvailableManagersForBranch,
+);
+
+// ── Get Branch Managers (Admin Managers assigned to this branch) ──
+branchesRouter.get(
+  '/:branchId/managers',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  getBranchManagers,
+);
+
+// ── Assign Manager to Branch ──────────────────────────────────
+branchesRouter.post(
+  '/:branchId/managers',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  assignManagerToBranch,
+);
+
+// ── Unassign Manager from Branch ──────────────────────────────
+branchesRouter.delete(
+  '/:branchId/managers/:managerId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  unassignManagerFromBranch,
 );
 
 // ── Get Single Branch ─────────────────────────────────────────

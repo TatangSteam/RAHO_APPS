@@ -1,5 +1,19 @@
 import { z } from 'zod';
-import { SessionType, BoosterType, VitalType, VitalTiming, BottleType, EMRNoteType, DiagnosisCategory } from '@prisma/client';
+import { SessionType, VitalType, VitalTiming, BottleType, EMRNoteType, DiagnosisCategory } from '@prisma/client';
+
+// BoosterType enum values (not exported from Prisma because not used as field type in any model)
+// These values match the BoosterType enum in schema.prisma
+const BoosterType = {
+  NO: 'NO',
+  GT: 'GT',
+  MB: 'MB',
+  KCL: 'KCL',
+  H2S: 'H2S',
+  HK: 'HK',
+  O3: 'O3',
+  HHO: 'HHO',
+  NO2: 'NO2',
+} as const;
 
 // ============================================================
 // CREATE SESSION

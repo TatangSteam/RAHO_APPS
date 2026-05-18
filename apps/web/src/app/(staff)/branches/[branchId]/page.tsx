@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield
 } from 'lucide-react';
 import styles from '@/styles/branch-detail.module.css';
 
@@ -18,6 +18,7 @@ import styles from '@/styles/branch-detail.module.css';
 import MemberCrudModal from '@/components/branches/MemberCrudModal';
 import StaffCrudModal from '@/components/branches/StaffCrudModal';
 import InventoryCrudModal from '@/components/branches/InventoryCrudModal';
+import AssignManagerModal from '@/components/branches/AssignManagerModal';
 
 interface Branch {
   id: string;
@@ -83,7 +84,19 @@ interface Staff {
   };
 }
 
-type TabType = 'overview' | 'members' | 'inventory' | 'staff';
+interface Manager {
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  fullName: string;
+  phone: string;
+  avatarUrl: string | null;
+  lastLoginAt: string | null;
+  assignedAt: string;
+}
+
+type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers';
 
 type CrudModalType = 'member' | 'staff' | 'inventory' | null;
 type CrudAction = 'create' | 'edit' | 'delete';
@@ -102,6 +115,7 @@ export default function BranchDetailPage() {
   const [members, setMembers] = useState<Member[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [managers, setManagers] = useState<Manager[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
   // Member filter state
@@ -125,6 +139,9 @@ export default function BranchDetailPage() {
     action: CrudAction;
     data?: any;
   }>({ type: null, action: 'create' });
+
+  // Assign Manager Modal state
+  const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
 
   // Check authorization
   useEffect(() => {
@@ -200,6 +217,12 @@ export default function BranchDetailPage() {
         const staffData = staffResult?.users || staffResult || [];
         console.log('🔍 [BranchDetail] Staff data:', staffData, 'isArray:', Array.isArray(staffData));
         setStaff(Array.isArray(staffData) ? staffData : []);
+      } else if (activeTab === 'managers') {
+        const response = await branchesApi.getBranchManagers(branchId);
+        console.log('🔍 [BranchDetail] Managers response:', response.data);
+        const managersData = response.data.data?.managers || [];
+        console.log('🔍 [BranchDetail] Managers data:', managersData, 'isArray:', Array.isArray(managersData));
+        setManagers(Array.isArray(managersData) ? managersData : []);
       }
     } catch (error: any) {
       console.error(`❌ [BranchDetail] Error loading ${activeTab} data:`, error);
@@ -213,6 +236,7 @@ export default function BranchDetailPage() {
       if (activeTab === 'members') setMembers([]);
       else if (activeTab === 'inventory') setInventory([]);
       else if (activeTab === 'staff') setStaff([]);
+      else if (activeTab === 'managers') setManagers([]);
     } finally {
       setTabLoading(false);
     }
@@ -435,6 +459,13 @@ export default function BranchDetailPage() {
             {branch.stats && (
               <span className="tab-badge">{branch.stats.activeUsers}</span>
             )}
+          </button>
+          <button
+            className={`${styles.tabButton} ${activeTab === 'managers' ? styles.active : ''}`}
+            onClick={() => setActiveTab('managers')}
+          >
+            <Shield size={18} />
+            <span>Managers</span>
           </button>
         </div>
 
@@ -835,6 +866,127 @@ export default function BranchDetailPage() {
               )}
             </div>
           )}
+
+          {activeTab === 'managers' && (
+            <div>
+              <div className={styles.tabHeader}>
+                <div>
+                  <h2>Admin Managers</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                    Daftar Admin Manager yang di-assign ke cabang ini
+                  </p>
+                </div>
+                {user?.role === 'SUPER_ADMIN' && (
+                  <button 
+                    className={styles.addButton}
+                    onClick={() => setShowAssignManagerModal(true)}
+                    style={{ background: '#8b5cf6' }}
+                  >
+                    <Plus size={18} />
+                    <span>Tambah Manager</span>
+                  </button>
+                )}
+              </div>
+
+              {tabLoading ? (
+                <div className={styles.loadingState}>
+                  <div className={styles.loadingSpinner} />
+                  <p>Memuat data managers...</p>
+                </div>
+              ) : !Array.isArray(managers) || managers.length === 0 ? (
+                <div className={styles.emptyState}>
+                  <Shield size={48} />
+                  <h3>Belum Ada Admin Manager</h3>
+                  <p>Cabang ini belum memiliki Admin Manager yang di-assign.</p>
+                  {user?.role === 'SUPER_ADMIN' && (
+                    <button 
+                      className={styles.emptyStateButton}
+                      onClick={() => setShowAssignManagerModal(true)}
+                      style={{ background: '#8b5cf6' }}
+                    >
+                      <Plus size={18} />
+                      <span>Assign Manager Pertama</span>
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <table className={styles.dataTable}>
+                  <thead>
+                    <tr>
+                      <th>Nama</th>
+                      <th>Email</th>
+                      <th>Telepon</th>
+                      <th>Tanggal Assign</th>
+                      <th>Login Terakhir</th>
+                      <th>Status</th>
+                      {user?.role === 'SUPER_ADMIN' && <th>Aksi</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {managers.map((manager) => (
+                      <tr key={manager.id}>
+                        <td>
+                          <div className={styles.staffCell}>
+                            <div className={styles.staffAvatar} style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>
+                              {manager.fullName?.charAt(0).toUpperCase() || 'M'}
+                            </div>
+                            <div className={styles.staffInfo}>
+                              <div className={styles.staffName}>{manager.fullName || '-'}</div>
+                              <div style={{ fontSize: '11px', color: '#8b5cf6', fontWeight: 600 }}>ADMIN_MANAGER</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td>{manager.email}</td>
+                        <td>{manager.phone || '-'}</td>
+                        <td>{new Date(manager.assignedAt).toLocaleDateString('id-ID')}</td>
+                        <td>
+                          {manager.lastLoginAt 
+                            ? new Date(manager.lastLoginAt).toLocaleDateString('id-ID', {
+                                day: '2-digit',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })
+                            : '-'
+                          }
+                        </td>
+                        <td>
+                          <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
+                            {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
+                          </span>
+                        </td>
+                        {user?.role === 'SUPER_ADMIN' && (
+                          <td>
+                            <div className={styles.actionButtons}>
+                              <button 
+                                className={`${styles.actionBtn} ${styles.delete}`}
+                                onClick={async () => {
+                                  if (!confirm(`Apakah Anda yakin ingin menghapus ${manager.fullName} dari cabang ini?`)) {
+                                    return;
+                                  }
+                                  try {
+                                    await branchesApi.unassignManager(branchId, manager.id);
+                                    showToast.success('Admin Manager berhasil di-unassign');
+                                    loadTabData();
+                                  } catch (error: any) {
+                                    showToast.error(error.response?.data?.message || 'Gagal unassign Admin Manager');
+                                  }
+                                }}
+                                title="Hapus dari Cabang"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -869,6 +1021,20 @@ export default function BranchDetailPage() {
           action={crudModal.action}
           branchId={branchId}
           inventoryData={crudModal.data}
+        />
+      )}
+
+      {/* Assign Manager Modal */}
+      {showAssignManagerModal && branch && (
+        <AssignManagerModal
+          isOpen={showAssignManagerModal}
+          onClose={() => setShowAssignManagerModal(false)}
+          onSuccess={() => {
+            setShowAssignManagerModal(false);
+            loadTabData();
+          }}
+          branchId={branchId}
+          branchName={branch.name}
         />
       )}
 

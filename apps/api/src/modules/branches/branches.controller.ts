@@ -11,6 +11,10 @@ import {
   createBranchService,
   updateBranchService,
   deleteBranchService,
+  getBranchManagersService,
+  assignManagerToBranchService,
+  unassignManagerFromBranchService,
+  getAvailableManagersForBranchService,
 } from './branches.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
@@ -125,6 +129,80 @@ export async function deleteBranch(req: Request, res: Response, next: NextFuncti
     });
 
     sendNoContent(res);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Get Branch Managers ───────────────────────────────────────
+export async function getBranchManagers(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await getBranchManagersService(req.params.branchId);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Assign Manager to Branch ──────────────────────────────────
+export async function assignManagerToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId } = req.params;
+    const { managerId } = req.body;
+
+    if (!managerId) {
+      res.status(400).json({ success: false, message: 'managerId is required' });
+      return;
+    }
+
+    const result = await assignManagerToBranchService(branchId, managerId);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: branchId,
+      action: 'CREATE',
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: { action: 'assign_manager', managerId, branchId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendCreated(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Unassign Manager from Branch ──────────────────────────────
+export async function unassignManagerFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, managerId } = req.params;
+
+    const result = await unassignManagerFromBranchService(branchId, managerId);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: branchId,
+      action: 'DELETE',
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: { action: 'unassign_manager', managerId, branchId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Get Available Managers for Branch ─────────────────────────
+export async function getAvailableManagersForBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const managers = await getAvailableManagersForBranchService(req.params.branchId);
+    sendSuccess(res, managers);
   } catch (err) {
     next(err);
   }

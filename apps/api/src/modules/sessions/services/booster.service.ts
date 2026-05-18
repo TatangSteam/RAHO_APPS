@@ -1,6 +1,9 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, BoosterType, Role, StockMutationType } from '@prisma/client';
+import { AuditAction, Role, StockMutationType } from '@prisma/client';
+
+// BoosterType enum values (not exported from Prisma because not used as field type in any model)
+type BoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
 
 export class BoosterService {
   /**

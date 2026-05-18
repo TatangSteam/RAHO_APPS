@@ -68,7 +68,11 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
       const [memberCount, staffCount] = await Promise.all([
         prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
         prisma.user.count({
-          where: { branchId: branch.id, isActive: true, NOT: { role: 'MEMBER' } },
+          where: { 
+            branchId: branch.id, 
+            isActive: true, 
+            NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+          },
         }),
       ]);
 
@@ -95,9 +99,14 @@ export async function getBranchWithStatsService(branchId: string) {
   if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
 
   // Get stats
+  // Note: activeUsers excludes MEMBER and ADMIN_MANAGER (Admin Managers are shown in separate tab)
   const [activeUsers, totalMembers, activePackages] = await Promise.all([
     prisma.user.count({
-      where: { branchId, isActive: true, NOT: { role: 'MEMBER' } },
+      where: { 
+        branchId, 
+        isActive: true, 
+        NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+      },
     }),
     prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
     prisma.memberPackage.count({
@@ -163,7 +172,11 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
     branches.map(async (branch) => {
       const [activeUsers, totalMembers, activePackages] = await Promise.all([
         prisma.user.count({
-          where: { branchId: branch.id, isActive: true, NOT: { role: 'MEMBER' } },
+          where: { 
+            branchId: branch.id, 
+            isActive: true, 
+            NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+          },
         }),
         prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
         prisma.memberPackage.count({
@@ -233,6 +246,197 @@ export async function updateBranchService(
   });
 
   return branch;
+}
+
+// ── Get Branch Managers ────────────────────────────────────────
+export async function getBranchManagersService(branchId: string) {
+  // Verify branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, branchCode: true, name: true },
+  });
+
+  if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
+
+  // Get all Admin Managers assigned to this branch
+  const managerBranches = await prisma.managerBranch.findMany({
+    where: { branchId },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          lastLoginAt: true,
+          createdAt: true,
+          profile: {
+            select: {
+              fullName: true,
+              phone: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const managers = managerBranches.map((mb) => ({
+    id: mb.user.id,
+    email: mb.user.email,
+    role: mb.user.role,
+    isActive: mb.user.isActive,
+    fullName: mb.user.profile?.fullName || '',
+    phone: mb.user.profile?.phone || '',
+    avatarUrl: mb.user.profile?.avatarUrl || null,
+    lastLoginAt: mb.user.lastLoginAt,
+    assignedAt: mb.createdAt,
+  }));
+
+  return {
+    branch: {
+      id: branch.id,
+      branchCode: branch.branchCode,
+      name: branch.name,
+    },
+    managers,
+    total: managers.length,
+  };
+}
+
+// ── Assign Manager to Branch ──────────────────────────────────
+export async function assignManagerToBranchService(branchId: string, managerId: string) {
+  // Verify branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, branchCode: true, name: true },
+  });
+
+  if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
+
+  // Verify user exists and is ADMIN_MANAGER
+  const manager = await prisma.user.findUnique({
+    where: { id: managerId },
+    select: { id: true, email: true, role: true, profile: { select: { fullName: true } } },
+  });
+
+  if (!manager) throw errors.notFound('User tidak ditemukan.');
+  if (manager.role !== 'ADMIN_MANAGER') {
+    throw errors.badRequest('INVALID_ROLE', 'User harus memiliki role ADMIN_MANAGER.');
+  }
+
+  // Check if already assigned
+  const existing = await prisma.managerBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId: managerId,
+        branchId: branchId,
+      },
+    },
+  });
+
+  if (existing) {
+    throw errors.conflict('ALREADY_ASSIGNED', 'Admin Manager sudah di-assign ke cabang ini.');
+  }
+
+  // Create assignment
+  await prisma.managerBranch.create({
+    data: {
+      userId: managerId,
+      branchId: branchId,
+    },
+  });
+
+  return {
+    message: 'Admin Manager berhasil di-assign ke cabang',
+    manager: {
+      id: manager.id,
+      email: manager.email,
+      fullName: manager.profile?.fullName || manager.email,
+    },
+    branch: {
+      id: branch.id,
+      branchCode: branch.branchCode,
+      name: branch.name,
+    },
+  };
+}
+
+// ── Unassign Manager from Branch ──────────────────────────────
+export async function unassignManagerFromBranchService(branchId: string, managerId: string) {
+  // Verify branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, branchCode: true, name: true },
+  });
+
+  if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
+
+  // Check if assignment exists
+  const existing = await prisma.managerBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId: managerId,
+        branchId: branchId,
+      },
+    },
+  });
+
+  if (!existing) {
+    throw errors.notFound('Admin Manager tidak di-assign ke cabang ini.');
+  }
+
+  // Delete assignment
+  await prisma.managerBranch.delete({
+    where: {
+      userId_branchId: {
+        userId: managerId,
+        branchId: branchId,
+      },
+    },
+  });
+
+  return {
+    message: 'Admin Manager berhasil di-unassign dari cabang',
+  };
+}
+
+// ── Get Available Managers for Branch ─────────────────────────
+export async function getAvailableManagersForBranchService(branchId: string) {
+  // Get all ADMIN_MANAGER users who are NOT assigned to this branch
+  const assignedManagerIds = await prisma.managerBranch.findMany({
+    where: { branchId },
+    select: { userId: true },
+  });
+
+  const assignedIds = assignedManagerIds.map((m) => m.userId);
+
+  const availableManagers = await prisma.user.findMany({
+    where: {
+      role: 'ADMIN_MANAGER',
+      isActive: true,
+      id: { notIn: assignedIds },
+    },
+    select: {
+      id: true,
+      email: true,
+      profile: {
+        select: {
+          fullName: true,
+          phone: true,
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return availableManagers.map((m) => ({
+    id: m.id,
+    email: m.email,
+    fullName: m.profile?.fullName || m.email,
+    phone: m.profile?.phone || '',
+  }));
 }
 
 // ── Delete Branch (Soft Delete) ───────────────────────────────

@@ -70,6 +70,34 @@ export const branchesApi = {
   },
 
   /**
+   * Get branch managers (Admin Managers assigned to this branch)
+   */
+  getBranchManagers: (branchId: string) => {
+    return api.get(`/branches/${branchId}/managers`);
+  },
+
+  /**
+   * Get available managers for branch (not yet assigned)
+   */
+  getAvailableManagers: (branchId: string) => {
+    return api.get(`/branches/${branchId}/managers/available`);
+  },
+
+  /**
+   * Assign manager to branch
+   */
+  assignManager: (branchId: string, managerId: string) => {
+    return api.post(`/branches/${branchId}/managers`, { managerId });
+  },
+
+  /**
+   * Unassign manager from branch
+   */
+  unassignManager: (branchId: string, managerId: string) => {
+    return api.delete(`/branches/${branchId}/managers/${managerId}`);
+  },
+
+  /**
    * Create new branch
    */
   createBranch: (data: CreateBranchData) => {

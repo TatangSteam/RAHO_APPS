@@ -58,8 +58,9 @@ export async function listUsersService(
           ],
         }
       : {}),
-    // Exclude members from staff user list
-    NOT: { role: Role.MEMBER },
+    // Exclude members and admin managers from staff user list
+    // Admin managers are shown in the separate "Managers" tab
+    NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER] } },
   };
 
   const [total, users] = await Promise.all([
