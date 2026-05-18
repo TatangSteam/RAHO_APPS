@@ -11,9 +11,10 @@ import ICDSearchInput from '@/components/ui/ICDSearchInput';
 
 interface MemberDiagnosesTabProps {
   memberId: string;
+  memberBranchId?: string;
 }
 
-export default function MemberDiagnosesTab({ memberId }: MemberDiagnosesTabProps) {
+export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberDiagnosesTabProps) {
   const { user } = useAuthStore();
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +81,9 @@ export default function MemberDiagnosesTab({ memberId }: MemberDiagnosesTabProps
 
   const loadDoctors = async () => {
     try {
-      const data = await usersApi.getDoctors(user?.branchId || undefined);
+      // Use member's branch ID first, fallback to user's branch ID
+      const branchIdToUse = memberBranchId || user?.branchId || undefined;
+      const data = await usersApi.getDoctors(branchIdToUse);
       setDoctors(data);
     } catch (error) {
       console.error('Failed to load doctors:', error);

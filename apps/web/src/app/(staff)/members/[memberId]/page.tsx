@@ -583,7 +583,7 @@ export default function MemberDetailPage() {
             />
           )}
 
-          {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} />}
+          {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} />}
           
           {activeTab === 'therapy-plan' && <MemberTherapyPlansTab memberId={memberId} />}
         </div>

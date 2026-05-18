@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { formatCurrency } from '@/lib/formatNumber';
@@ -68,6 +69,9 @@ interface MasterServiceType {
 
 export default function PackagePricingPage() {
   const { user, accessToken } = useAuthStore();
+  const searchParams = useSearchParams();
+  const initialBranchId = searchParams.get('branchId');
+  
   const [pricings, setPricings] = useState<PackagePricing[]>([]);
   const [products, setProducts] = useState<NonTherapyProduct[]>([]);
   const [boosterTypes, setBoosterTypes] = useState<MasterBoosterType[]>([]);
@@ -78,7 +82,7 @@ export default function PackagePricingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<'packages' | 'booster-matrix' | 'addons' | 'master'>('packages');
   const [masterTab, setMasterTab] = useState<'booster' | 'service'>('booster');
-  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>('all');
+  const [selectedBranchFilter, setSelectedBranchFilter] = useState<string>(initialBranchId || 'all');
   const [branches, setBranches] = useState<Array<{ id: string; name: string; branchCode: string }>>([]);
   const [formData, setFormData] = useState({
     packageType: 'BASIC' as 'BASIC' | 'BOOSTER',

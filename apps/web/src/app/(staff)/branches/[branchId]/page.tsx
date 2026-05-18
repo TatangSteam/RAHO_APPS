@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign
 } from 'lucide-react';
 import styles from '@/styles/branch-detail.module.css';
 
@@ -98,7 +98,7 @@ interface Manager {
   assignedAt: string;
 }
 
-type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers';
+type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing';
 
 type CrudModalType = 'member' | 'staff' | 'inventory' | null;
 type CrudAction = 'create' | 'edit' | 'delete';
@@ -472,6 +472,15 @@ export default function BranchDetailPage() {
             <Shield size={18} />
             <span>Managers</span>
           </button>
+          {user?.role === 'SUPER_ADMIN' && (
+            <button
+              className={`${styles.tabButton} ${activeTab === 'pricing' ? styles.active : ''}`}
+              onClick={() => setActiveTab('pricing')}
+            >
+              <DollarSign size={18} />
+              <span>Harga Paket</span>
+            </button>
+          )}
         </div>
 
         {/* Tab Content */}
@@ -1018,6 +1027,50 @@ export default function BranchDetailPage() {
                   </tbody>
                 </table>
               )}
+            </div>
+          )}
+
+          {activeTab === 'pricing' && user?.role === 'SUPER_ADMIN' && (
+            <div>
+              <div className={styles.tabHeader}>
+                <div>
+                  <h2>Harga Paket Cabang</h2>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                    Kelola harga paket khusus untuk cabang {branch.name}
+                  </p>
+                </div>
+                <button 
+                  className={styles.addButton}
+                  onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
+                  style={{ background: '#f59e0b' }}
+                >
+                  <DollarSign size={18} />
+                  <span>Kelola Harga Paket</span>
+                </button>
+              </div>
+
+              <div style={{ 
+                padding: '40px', 
+                textAlign: 'center',
+                background: 'var(--surface-card)',
+                borderRadius: '12px',
+                border: '1px solid var(--surface-border)'
+              }}>
+                <DollarSign size={48} style={{ color: '#f59e0b', marginBottom: '16px' }} />
+                <h3 style={{ marginBottom: '8px', color: 'var(--text-primary)' }}>Pengaturan Harga Paket</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', maxWidth: '400px', margin: '0 auto 24px' }}>
+                  Klik tombol di atas untuk mengelola harga paket khusus cabang ini. 
+                  Anda dapat mengatur harga paket BASIC dan BOOSTER yang berbeda dari harga global.
+                </p>
+                <button 
+                  className={styles.emptyStateButton}
+                  onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
+                  style={{ background: '#f59e0b' }}
+                >
+                  <DollarSign size={18} />
+                  <span>Buka Halaman Harga Paket</span>
+                </button>
+              </div>
             </div>
           )}
         </div>

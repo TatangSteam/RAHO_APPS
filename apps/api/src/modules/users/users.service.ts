@@ -197,6 +197,14 @@ export async function createUserService(
           phone: input.phone,
         },
       },
+      // Auto-create StaffBranch for DOCTOR and NURSE
+      ...(branchId && (input.role === Role.DOCTOR || input.role === Role.NURSE) ? {
+        staffBranches: {
+          create: {
+            branchId,
+          },
+        },
+      } : {}),
     },
     select: userSelect,
   });
@@ -298,6 +306,33 @@ export async function getStaffByRoleService(
       userId: s.id,
       staffCode: s.staffCode || '',
       fullName: s.fullName || '',
+    }));
+  }
+
+  // For DOCTOR and NURSE without branchId, return all active staff
+  // This is useful for ADMIN_MANAGER who can see all doctors/nurses
+  if ((role === Role.DOCTOR || role === Role.NURSE) && !branchId) {
+    const staff = await prisma.user.findMany({
+      where: {
+        role,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        staffCode: true,
+        profile: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
+      orderBy: { profile: { fullName: 'asc' } },
+    });
+
+    return staff.map((s) => ({
+      userId: s.id,
+      staffCode: s.staffCode,
+      fullName: s.profile?.fullName || '',
     }));
   }
 

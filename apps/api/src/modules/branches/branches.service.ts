@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Prisma } from '@prisma/client';
+import { Prisma, PackageType } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import {
@@ -7,6 +7,97 @@ import {
   UpdateBranchInput,
   ListBranchesQuery,
 } from './branches.schema';
+
+// ── Default Package Pricing Data ──────────────────────────────
+const DEFAULT_THERAPY_PACKAGES = [
+  // Premiere (PM) - Main packages
+  { name: 'Terapi Nano Bubble 1X Premiere', totalSessions: 1, price: 2_000_000, productCode: 'TNB-P1-PM' },
+  { name: 'Terapi Nano Bubble 7X Premiere', totalSessions: 7, price: 12_500_000, productCode: 'TNB-P7-PM' },
+  { name: 'Terapi Nano Bubble 15X Premiere', totalSessions: 15, price: 22_500_000, productCode: 'TNB-P15-PM' },
+  
+  // Partnership (PS)
+  { name: 'Terapi Nano Bubble 1X Partnership', totalSessions: 1, price: 850_000, productCode: 'TNB-P1-PS' },
+  
+  // Partnership Homecare (PHC)
+  { name: 'Terapi Nano Bubble 1X Partnership Homecare', totalSessions: 1, price: 1_000_000, productCode: 'TNB-P1-PHC' },
+  
+  // Free Packages (Bonus) - Premiere
+  { name: 'FREE Terapi Nano Bubble dan Booster 2X Premiere', totalSessions: 2, price: 0, productCode: 'FRE-TRP-F2-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 3X Premiere', totalSessions: 3, price: 0, productCode: 'FRE-TRP-F3-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 4X Premiere', totalSessions: 4, price: 0, productCode: 'FRE-TRP-F4-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 5X Premiere', totalSessions: 5, price: 0, productCode: 'FRE-TRP-F5-PM' },
+];
+
+const DEFAULT_BOOSTER_TYPES = [
+  { code: 'NO', name: 'NO' },
+  { code: 'GT', name: 'GT' },
+  { code: 'MB', name: 'MB' },
+  { code: 'KCL', name: 'KCL' },
+  { code: 'H2S', name: 'H2S' },
+  { code: 'HK', name: 'H2S Konsentrat' },
+  { code: 'O3', name: 'O3' },
+];
+
+const DEFAULT_SERVICE_TYPES = [
+  { code: 'PM', name: 'Premiere', price: 1_000_000 },
+  { code: 'PS', name: 'Partnership', price: 650_000 },
+  { code: 'PTY', name: 'Partnership Attiya', price: 600_000 },
+  { code: 'PDA', name: 'Partnership Dr. Abhi', price: 65_000 },
+  { code: 'PHC', name: 'Partnership Homecare', price: 750_000 },
+];
+
+// ── Helper: Create Default Package Pricing for Branch ─────────
+async function createDefaultPackagePricingForBranch(branchId: string) {
+  console.log(`📦 Creating default package pricings for branch: ${branchId}`);
+  
+  // Create therapy packages (BASIC)
+  for (const pkg of DEFAULT_THERAPY_PACKAGES) {
+    await prisma.packagePricing.create({
+      data: {
+        branchId,
+        packageType: PackageType.BASIC,
+        boosterType: null,
+        name: pkg.name,
+        totalSessions: pkg.totalSessions,
+        price: pkg.price,
+        productCode: pkg.productCode,
+        isActive: true,
+      },
+    });
+  }
+  console.log(`  ✅ Created ${DEFAULT_THERAPY_PACKAGES.length} therapy packages`);
+
+  // Create booster packages (7 types × 5 service types = 35 packages)
+  let boosterCount = 0;
+  for (const boosterType of DEFAULT_BOOSTER_TYPES) {
+    for (const serviceType of DEFAULT_SERVICE_TYPES) {
+      const name = `Booster ${boosterType.code} (${boosterType.name}) 1X - ${serviceType.name}`;
+      const productCode = `BST-${boosterType.code}-P1-${serviceType.code}`;
+
+      await prisma.packagePricing.create({
+        data: {
+          branchId,
+          packageType: PackageType.BOOSTER,
+          boosterType: boosterType.code as any,
+          serviceType: serviceType.code,
+          name,
+          totalSessions: 1,
+          price: serviceType.price,
+          productCode,
+          isActive: true,
+        },
+      });
+      boosterCount++;
+    }
+  }
+  console.log(`  ✅ Created ${boosterCount} booster packages`);
+  
+  return {
+    therapyPackages: DEFAULT_THERAPY_PACKAGES.length,
+    boosterPackages: boosterCount,
+    total: DEFAULT_THERAPY_PACKAGES.length + boosterCount,
+  };
+}
 
 // ── Shared Branch Select ──────────────────────────────────────
 const branchSelect = {
@@ -226,6 +317,15 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
       },
     });
     console.log(`✅ Auto-assigned ADMIN_MANAGER (${createdBy}) to branch ${branch.branchCode}`);
+  }
+
+  // Auto-create default package pricing for the new branch
+  try {
+    const pricingResult = await createDefaultPackagePricingForBranch(branch.id);
+    console.log(`✅ Created ${pricingResult.total} default package pricings for branch ${branch.branchCode}`);
+  } catch (error) {
+    console.error(`⚠️ Failed to create default package pricings for branch ${branch.branchCode}:`, error);
+    // Don't throw - branch creation should still succeed even if pricing creation fails
   }
 
   return branch;
