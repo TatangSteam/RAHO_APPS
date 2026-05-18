@@ -78,6 +78,7 @@ export class SessionsController {
         memberId: memberId as string | undefined,
         branchId: branchId || undefined,
         role: role as string,
+        userId, // Pass userId for DOCTOR/NURSE multi-branch support
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
       });

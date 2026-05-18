@@ -91,15 +91,55 @@ export class MemberRetrievalService {
           { branchAccesses: { some: { branchId: { in: allBranchIds } } } },
         ];
       }
+    } else if (role === Role.DOCTOR || role === Role.NURSE) {
+      // DOCTOR and NURSE use StaffBranch table for multi-branch support
+      if (!userId) {
+        console.error(`❌ ${role} without userId - denying access`);
+        throw { status: 403, code: 'USER_ID_REQUIRED', message: 'User ID diperlukan' };
+      }
+
+      // Get all branches this staff has access to (via StaffBranch table)
+      const staffBranches = await prisma.staffBranch.findMany({
+        where: { userId },
+        select: { branchId: true }
+      });
+
+      const staffBranchIds = staffBranches.map(sb => sb.branchId);
+      
+      // Include primary branch (if exists) + staff branches (remove duplicates)
+      const allBranchIds = branchId 
+        ? Array.from(new Set([branchId, ...staffBranchIds]))
+        : staffBranchIds;
+
+      console.log(`🔒 ${role} ${userId} has access to ${allBranchIds.length} branches:`, allBranchIds);
+
+      // If staff has no branches assigned, deny access
+      if (allBranchIds.length === 0) {
+        console.warn(`⚠️ ${role} has no branches assigned - denying access`);
+        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Akun Anda belum di-assign ke cabang. Hubungi SUPER_ADMIN untuk assign cabang.' };
+      }
+
+      // Filter members by accessible branches
+      where.OR = [
+        { registrationBranchId: { in: allBranchIds } },
+        { branchAccesses: { some: { branchId: { in: allBranchIds } } } },
+      ];
     } else if (role === Role.ADMIN_CABANG || role === Role.ADMIN_LAYANAN) {
-      // Branch admin can only see members from their branch
+      // Admin Cabang and Admin Layanan can only see members from their primary branch
       if (!branchId) {
         throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Akun Anda belum di-assign ke cabang. Hubungi SUPER_ADMIN untuk assign cabang.' };
       }
+      
+      console.log(`🔒 ${role} filtering members by branchId: ${branchId}`);
+      
       where.OR = [
         { registrationBranchId: branchId },
         { branchAccesses: { some: { branchId } } },
       ];
+    } else {
+      // Unknown role - deny access
+      console.error(`❌ Unknown role ${role} - denying access`);
+      throw { status: 403, code: 'ACCESS_DENIED', message: 'Anda tidak memiliki akses ke data member' };
     }
 
     // Search filter

@@ -10,6 +10,7 @@ import { sendError } from '@utils/response';
  *   1. The member's registrationBranchId === staff's branchId
  *   2. A BranchMemberAccess record exists for (memberId, staff's branchId)
  *   3. Staff role is SUPER_ADMIN or ADMIN_MANAGER (global bypass)
+ *   4. For DOCTOR/NURSE: member's branch is in their StaffBranch records
  *
  * Expects `req.params.memberId` to be set by the parent route.
  * Must be used AFTER `authenticate`.
@@ -40,22 +41,50 @@ export async function assertBranchAccess(
     return;
   }
 
-  if (!user.branchId) {
-    console.log('❌ [assertBranchAccess] No branchId for user');
-    sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda tidak memiliki akses ke member ini.');
-    return;
-  }
-
   try {
     console.time('assertBranchAccess-query');
+    
+    // For DOCTOR and NURSE, get all accessible branches from StaffBranch table
+    let accessibleBranchIds: string[] = [];
+    
+    if (user.role === Role.DOCTOR || user.role === Role.NURSE) {
+      // Get branches from StaffBranch table
+      const staffBranches = await prisma.staffBranch.findMany({
+        where: { userId: user.userId },
+        select: { branchId: true },
+      });
+      
+      accessibleBranchIds = staffBranches.map(sb => sb.branchId);
+      
+      // Also include primary branchId if exists
+      if (user.branchId && !accessibleBranchIds.includes(user.branchId)) {
+        accessibleBranchIds.push(user.branchId);
+      }
+      
+      console.log(`  - ${user.role} accessible branches:`, accessibleBranchIds);
+      
+      if (accessibleBranchIds.length === 0) {
+        console.log('❌ [assertBranchAccess] No branches assigned to staff');
+        sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda belum di-assign ke cabang manapun.');
+        return;
+      }
+    } else {
+      // For other roles (ADMIN_CABANG, ADMIN_LAYANAN), use primary branchId
+      if (!user.branchId) {
+        console.log('❌ [assertBranchAccess] No branchId for user');
+        sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda tidak memiliki akses ke member ini.');
+        return;
+      }
+      accessibleBranchIds = [user.branchId];
+    }
+
     const member = await prisma.member.findUnique({
       where: { id: memberId },
       select: {
         id: true,
         registrationBranchId: true,
         branchAccesses: {
-          where: { branchId: user.branchId },
-          select: { id: true },
+          select: { branchId: true },
         },
       },
     });
@@ -67,13 +96,18 @@ export async function assertBranchAccess(
       return;
     }
 
-    const isRegistrationBranch = member.registrationBranchId === user.branchId;
-    const hasGrantedAccess = member.branchAccesses.length > 0;
+    // Check if member's registration branch is in accessible branches
+    const isRegistrationBranchAccessible = accessibleBranchIds.includes(member.registrationBranchId);
+    
+    // Check if member has granted access to any of the accessible branches
+    const hasGrantedAccess = member.branchAccesses.some(
+      access => accessibleBranchIds.includes(access.branchId)
+    );
 
-    console.log('  - isRegistrationBranch:', isRegistrationBranch);
+    console.log('  - isRegistrationBranchAccessible:', isRegistrationBranchAccessible);
     console.log('  - hasGrantedAccess:', hasGrantedAccess);
 
-    if (!isRegistrationBranch && !hasGrantedAccess) {
+    if (!isRegistrationBranchAccessible && !hasGrantedAccess) {
       console.log('❌ [assertBranchAccess] Access denied');
       sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda tidak memiliki akses ke member ini.');
       return;

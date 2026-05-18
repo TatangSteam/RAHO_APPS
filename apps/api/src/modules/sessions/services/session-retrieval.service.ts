@@ -97,10 +97,11 @@ export class SessionRetrievalService {
    * 
    * Role-based filtering:
    * - SUPER_ADMIN, ADMIN_MANAGER: See all sessions from all branches
-   * - ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, NURSE: See only sessions from their branch
+   * - ADMIN_CABANG, ADMIN_LAYANAN: See only sessions from their primary branch
+   * - DOCTOR, NURSE: See sessions from all branches they have access to (via StaffBranch)
    */
-  async getAllSessions(params: { memberId?: string; branchId?: string; role?: string; page?: number; limit?: number }) {
-    const { memberId, branchId, role, page = 1, limit = 50 } = params;
+  async getAllSessions(params: { memberId?: string; branchId?: string; role?: string; userId?: string; page?: number; limit?: number }) {
+    const { memberId, branchId, role, userId, page = 1, limit = 50 } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -118,9 +119,31 @@ export class SessionRetrievalService {
 
     // Role-based branch filtering
     // SUPER_ADMIN and ADMIN_MANAGER can see all branches
-    // Other roles (ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, NURSE) only see their branch
     if (role && !['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
-      if (branchId) {
+      // For DOCTOR and NURSE, get all accessible branches from StaffBranch table
+      if ((role === 'DOCTOR' || role === 'NURSE') && userId) {
+        const staffBranches = await prisma.staffBranch.findMany({
+          where: { userId },
+          select: { branchId: true },
+        });
+        
+        const accessibleBranchIds = staffBranches.map(sb => sb.branchId);
+        
+        // Also include primary branchId if exists
+        if (branchId && !accessibleBranchIds.includes(branchId)) {
+          accessibleBranchIds.push(branchId);
+        }
+        
+        console.log(`🔒 ${role} ${userId} filtering sessions by branches:`, accessibleBranchIds);
+        
+        if (accessibleBranchIds.length > 0) {
+          where.branchId = { in: accessibleBranchIds };
+        } else {
+          // No branches assigned - return empty result
+          where.branchId = 'no-branches-assigned';
+        }
+      } else if (branchId) {
+        // For ADMIN_CABANG and ADMIN_LAYANAN, use primary branchId
         where.branchId = branchId;
       }
     }
