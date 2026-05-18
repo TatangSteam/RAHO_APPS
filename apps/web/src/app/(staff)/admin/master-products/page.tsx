@@ -456,7 +456,29 @@ export default function MasterProductsPage() {
       showToast.success(
         `Stok ${branchInfo.branchCode} berhasil diubah: ${branchInfo.stock} → ${newStock} ${stockEditProduct?.baseUnit ?? ''}`
       );
-      await loadProducts();
+      
+      // Reload products and update stockEditProduct with fresh data
+      const params = new URLSearchParams();
+      if (categoryFilter) params.append('category', categoryFilter);
+      if (statusFilter) params.append('isActive', statusFilter);
+      const refreshResponse = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/master-products?${params.toString()}`,
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      );
+      if (refreshResponse.ok) {
+        const result = await refreshResponse.json();
+        const updatedProducts = result.data.products || [];
+        setProducts(updatedProducts);
+        
+        // Update stockEditProduct with fresh data
+        if (stockEditProduct) {
+          const updatedProduct = updatedProducts.find((p: MasterProduct) => p.id === stockEditProduct.id);
+          if (updatedProduct) {
+            setStockEditProduct(updatedProduct);
+          }
+        }
+      }
+      
       return true;
     } catch (e: any) {
       showToast.error(e.message || 'Gagal mengubah stok');
