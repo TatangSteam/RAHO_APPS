@@ -18,14 +18,15 @@ interface StaffCrudModalProps {
 interface StaffFormData {
   email: string;
   password?: string;
-  role: 'ADMIN_CABANG' | 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE';
+  role: 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE';
   fullName: string;
   phone: string;
   isActive: boolean;
 }
 
+// Role options - ADMIN_CABANG can only create ADMIN_LAYANAN, DOCTOR, NURSE
+// ADMIN_CABANG option is only for SUPER_ADMIN/ADMIN_MANAGER
 const ROLE_OPTIONS = [
-  { value: 'ADMIN_CABANG', label: 'Admin Cabang' },
   { value: 'ADMIN_LAYANAN', label: 'Admin Layanan' },
   { value: 'DOCTOR', label: 'Dokter' },
   { value: 'NURSE', label: 'Perawat' }

@@ -110,6 +110,12 @@ const MENU_GROUPS: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
       {
+        label: 'Kelola Staff',
+        href: '/staff',
+        icon: <UserCog size={18} />,
+        roles: ['ADMIN_CABANG'],
+      },
+      {
         label: 'Kode Referral',
         href: '/referrals',
         icon: <FileText size={18} />,
