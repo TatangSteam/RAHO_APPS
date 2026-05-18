@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
-import { memberApi } from '@/lib/memberApi';
+import { diagnosisApi } from '@/lib/diagnosisApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import ICDSearchInput from '@/components/ui/ICDSearchInput';
@@ -58,16 +58,28 @@ export default function Step1Diagnosis({
   // Load member's previous diagnoses
   useEffect(() => {
     const loadDiagnoses = async () => {
+      console.log('🔍 Step1Diagnosis - memberId received:', memberId);
+      
+      if (!memberId) {
+        console.error('❌ Step1Diagnosis - memberId is undefined or empty!');
+        setMemberDiagnoses([]);
+        return;
+      }
+      
       try {
-        const response = await memberApi.getMemberDiagnoses(memberId);
-        setMemberDiagnoses(response.data || []);
+        const data = await diagnosisApi.getMemberDiagnoses(memberId);
+        console.log('📋 Loaded diagnoses for member:', memberId, 'count:', data?.length, data);
+        setMemberDiagnoses(data || []);
       } catch (err) {
         console.error('Failed to load member diagnoses:', err);
+        setMemberDiagnoses([]);
       }
     };
 
     if (memberId) {
       loadDiagnoses();
+    } else {
+      console.warn('⚠️ Step1Diagnosis - memberId is falsy, skipping diagnosis load');
     }
   }, [memberId]);
 
@@ -88,6 +100,9 @@ export default function Step1Diagnosis({
         pemeriksaanTambahan: undefined, // Not needed when using existing diagnosis
       };
 
+      console.log('📤 Submitting diagnosis with data:', data);
+      console.log('📤 doktorPemeriksa being sent:', data.doktorPemeriksa);
+
       await sessionApi.createDiagnosis(encounterId, data);
       setIsEditing(false);
       onComplete();
@@ -100,8 +115,11 @@ export default function Step1Diagnosis({
   };
 
   const handleSelectExistingDiagnosis = (selectedDiagnosis: any) => {
+    console.log('📋 Selected diagnosis:', selectedDiagnosis);
+    console.log('📋 doktorPemeriksa from diagnosis:', selectedDiagnosis.doktorPemeriksa);
+    
     setFormData({
-      doktorPemeriksa: user?.userId || '',
+      doktorPemeriksa: selectedDiagnosis.doktorPemeriksa || user?.userId || '', // Use original doctor from diagnosis
       diagnosa: selectedDiagnosis.diagnosa,
       kategoriDiagnosa: selectedDiagnosis.kategoriDiagnosa,
       icdPrimer: selectedDiagnosis.icdPrimer || '',

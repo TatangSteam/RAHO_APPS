@@ -76,6 +76,7 @@ export class SessionRetrievalService {
 
     return {
       session: this.formatSessionData(session, branchInfusKe, branch),
+      memberId: session.encounter.memberId, // Add memberId at top level for frontend
       diagnosis,
       therapyPlan: session.therapyPlan,
       vitalSigns: session.vitalSigns,

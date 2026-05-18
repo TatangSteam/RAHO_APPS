@@ -3,10 +3,11 @@
 import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { memberApi } from '@/lib/memberApi';
+import { diagnosisApi } from '@/lib/diagnosisApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { useAuthStore } from '@/stores/authStore';
-import type { CreateSessionInput, SessionType } from '@/types/session';
+import type { CreateSessionInput, SessionType, Diagnosis } from '@/types/session';
 import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
 
@@ -42,6 +43,11 @@ export default function CreateSessionModal({
   const [selectedTherapyPlanId, setSelectedTherapyPlanId] = useState('');
   const [loadingTherapyPlans, setLoadingTherapyPlans] = useState(false);
   
+  // Diagnosis state
+  const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+  const [loadingDiagnoses, setLoadingDiagnoses] = useState(false);
+  const [hasDiagnosis, setHasDiagnosis] = useState(false);
+  
   const [adminLayananList, setAdminLayananList] = useState<StaffMember[]>([]);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
   const [nurses, setNurses] = useState<StaffMember[]>([]);
@@ -66,6 +72,7 @@ export default function CreateSessionModal({
     if (memberId) {
       loadMemberData(memberId);
       loadTherapyPlans(memberId);
+      loadDiagnoses(memberId);
     }
   }, [memberId]);
 
@@ -239,6 +246,25 @@ export default function CreateSessionModal({
     }
   };
 
+  const loadDiagnoses = async (id: string) => {
+    try {
+      setLoadingDiagnoses(true);
+      const memberDiagnoses = await diagnosisApi.getMemberDiagnoses(id);
+      setDiagnoses(memberDiagnoses);
+      setHasDiagnosis(memberDiagnoses.length > 0);
+      
+      if (memberDiagnoses.length === 0) {
+        console.log('⚠️ Member has no diagnosis - session creation will be blocked');
+      }
+    } catch (err: any) {
+      console.error('Failed to load diagnoses:', err);
+      setDiagnoses([]);
+      setHasDiagnosis(false);
+    } finally {
+      setLoadingDiagnoses(false);
+    }
+  };
+
   const loadStaff = async () => {
     try {
       // Determine which staff to load based on user role
@@ -284,6 +310,12 @@ export default function CreateSessionModal({
     // Validation
     if (!memberId) {
       setError('Member harus dipilih');
+      return;
+    }
+
+    // Check if member has diagnosis
+    if (!hasDiagnosis) {
+      setError('Member belum memiliki diagnosa. Silakan buat diagnosa terlebih dahulu di tab Diagnosa pada halaman detail member.');
       return;
     }
 
@@ -418,11 +450,20 @@ export default function CreateSessionModal({
     if (!loading) {
       setError(null);
       setMemberId('');
+      setMemberNo('');
+      setMemberName('');
+      setVoucherCount(0);
+      setPackages([]);
       setSelectedPackageId('');
       setUseBooster(false);
       setSelectedBoosterPackageId('');
+      setTherapyPlans([]);
+      setSelectedTherapyPlanId('');
+      setDiagnoses([]);
+      setHasDiagnosis(false);
       setSelectedDoctorId('');
       setSelectedNurseId('');
+      setSelectedAdminLayananId('');
       setAdditionalDoctorIds([]);
       setAdditionalNurseIds([]);
       setShowAddDoctor(false);
@@ -582,6 +623,34 @@ export default function CreateSessionModal({
                   </div>
                 )}
               </div>
+
+              {/* Diagnosis Check Warning */}
+              {memberId && !loadingDiagnoses && !hasDiagnosis && (
+                <div className="p-4 bg-red-500/15 border border-red-500/30 rounded-lg">
+                  <p className="text-sm text-red-400 mb-2">
+                    ⚠️ Member belum memiliki diagnosa
+                  </p>
+                  <p className="text-xs text-red-400/80">
+                    Diagnosa wajib dibuat terlebih dahulu sebelum membuat sesi terapi. Silakan buat diagnosa di tab <strong>Diagnosa</strong> pada halaman detail member.
+                  </p>
+                </div>
+              )}
+
+              {/* Loading Diagnoses */}
+              {memberId && loadingDiagnoses && (
+                <div className="p-3 bg-gray-500/10 rounded-lg text-sm text-[var(--text-secondary)]">
+                  Memeriksa diagnosa member...
+                </div>
+              )}
+
+              {/* Diagnosis OK */}
+              {memberId && !loadingDiagnoses && hasDiagnosis && (
+                <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <p className="text-sm text-green-400">
+                    ✓ Member memiliki {diagnoses.length} diagnosa
+                  </p>
+                </div>
+              )}
 
               {/* Package Selection */}
               {packages.length === 0 && memberId ? (
