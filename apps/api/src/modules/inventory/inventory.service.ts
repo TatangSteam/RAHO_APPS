@@ -43,14 +43,17 @@ export class InventoryService {
    * Create new inventory item
    */
   async createInventoryItem(data: {
-    name: string;
-    category: string;
-    baseUnit: string;
-    usageUnit: string;
-    conversionFactor: number;
-    stock: number;
-    minThreshold: number;
+    name?: string;
+    category?: string;
+    baseUnit?: string;
+    usageUnit?: string;
+    conversionFactor?: number;
+    stock?: number;
+    minThreshold?: number;
     storageLocation?: string;
+    masterProductId?: string;
+    usageStock?: number;
+    minThresholdUsage?: number;
   }, branchId: string, userId: string) {
     return await this.itemsService.createInventoryItem(data, branchId, userId);
   }
@@ -76,5 +79,17 @@ export class InventoryService {
    */
   async deleteInventoryItem(itemId: string, userId: string) {
     return await this.itemsService.deleteInventoryItem(itemId, userId);
+  }
+
+  /**
+   * Batch create inventory items
+   */
+  async batchCreateInventoryItems(items: Array<{
+    masterProductId: string;
+    stock?: number;
+    minThreshold?: number;
+    storageLocation?: string;
+  }>, branchId: string, userId: string) {
+    return await this.itemsService.batchCreateInventoryItems(items, branchId, userId);
   }
 }

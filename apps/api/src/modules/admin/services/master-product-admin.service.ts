@@ -22,7 +22,7 @@ export class MasterProductAdminService {
       isActive,
       search,
       page = 1,
-      limit = 50,
+      limit = 1000, // Increased default limit for inventory modal
     } = filters;
 
     // Build where clause

@@ -14,6 +14,66 @@ const materialUsageService = new MaterialUsageService();
 
 export class InventoryController {
   /**
+   * Get master products for inventory modal (accessible by ADMIN_ROLES)
+   * GET /api/v1/inventory/master-products
+   */
+  async getMasterProducts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { category, isActive, search, limit } = req.query;
+
+      // Build where clause
+      const where: any = {};
+
+      if (category) {
+        where.category = category;
+      }
+
+      if (isActive === 'true') {
+        where.isActive = true;
+      } else if (isActive === 'false') {
+        where.isActive = false;
+      }
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search as string, mode: 'insensitive' } },
+          { description: { contains: search as string, mode: 'insensitive' } },
+        ];
+      }
+
+      // Get products with high limit for inventory modal
+      const products = await prisma.masterProduct.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          baseUnit: true,
+          usageUnit: true,
+          conversionFactor: true,
+          description: true,
+          isActive: true,
+        },
+        orderBy: [
+          { category: 'asc' },
+          { name: 'asc' },
+        ],
+        take: limit ? parseInt(limit as string) : 1000,
+      });
+
+      return sendSuccess(res, {
+        products: products.map(p => ({
+          ...p,
+          conversionFactor: Number(p.conversionFactor),
+        })),
+        total: products.length,
+      });
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
    * Get available inventory items with stock info in both units
    * GET /api/v1/inventory/available/:branchId
    */
@@ -356,6 +416,41 @@ export class InventoryController {
 
       const result = await inventoryService.deleteInventoryItem(itemId, userId);
       return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Batch create inventory items
+   * POST /api/v1/inventory/items/batch
+   */
+  async batchCreateInventoryItems(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { branchId, items } = req.body;
+      const userId = req.user!.userId;
+      const userBranchId = req.user!.branchId;
+
+      // Use provided branchId or user's branchId
+      const targetBranchId = branchId || userBranchId;
+
+      if (!targetBranchId) {
+        return sendError(res, 400, 'BRANCH_ID_REQUIRED', 'Branch ID is required');
+      }
+
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return sendError(res, 400, 'ITEMS_REQUIRED', 'Items array is required');
+      }
+
+      // Validate items
+      for (const item of items) {
+        if (!item.masterProductId) {
+          return sendError(res, 400, 'MASTER_PRODUCT_ID_REQUIRED', 'Master product ID is required for each item');
+        }
+      }
+
+      const result = await inventoryService.batchCreateInventoryItems(items, targetBranchId, userId);
+      return sendSuccess(res, result, 201);
     } catch (err: any) {
       next(err);
     }

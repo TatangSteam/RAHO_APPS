@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers
 } from 'lucide-react';
 import styles from '@/styles/branch-detail.module.css';
 
@@ -18,6 +18,7 @@ import styles from '@/styles/branch-detail.module.css';
 import MemberCrudModal from '@/components/branches/MemberCrudModal';
 import StaffCrudModal from '@/components/branches/StaffCrudModal';
 import InventoryCrudModal from '@/components/branches/InventoryCrudModal';
+import InventoryBatchAddModal from '@/components/branches/InventoryBatchAddModal';
 import AssignManagerModal from '@/components/branches/AssignManagerModal';
 
 interface Branch {
@@ -66,6 +67,7 @@ interface InventoryItem {
   thresholdDisplay: string;
   isLowStock: boolean;
   storageLocation?: string;
+  masterProductId?: string;
 }
 
 interface Staff {
@@ -142,6 +144,9 @@ export default function BranchDetailPage() {
 
   // Assign Manager Modal state
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
+
+  // Batch Add Inventory Modal state
+  const [showBatchAddModal, setShowBatchAddModal] = useState(false);
 
   // Check authorization
   useEffect(() => {
@@ -682,13 +687,27 @@ export default function BranchDetailPage() {
             <div>
               <div className={styles.tabHeader}>
                 <h2>Inventori</h2>
-                <button 
-                  className={styles.addButton}
-                  onClick={() => openCrudModal('inventory', 'create')}
-                >
-                  <Plus size={18} />
-                  <span>Tambah Item</span>
-                </button>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    className={styles.addButton}
+                    onClick={() => setShowBatchAddModal(true)}
+                    style={{ 
+                      background: 'var(--surface-secondary)', 
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--surface-border)'
+                    }}
+                  >
+                    <Layers size={18} />
+                    <span>Tambah Batch</span>
+                  </button>
+                  <button 
+                    className={styles.addButton}
+                    onClick={() => openCrudModal('inventory', 'create')}
+                  >
+                    <Plus size={18} />
+                    <span>Tambah Item</span>
+                  </button>
+                </div>
               </div>
 
               {tabLoading ? (
@@ -701,13 +720,27 @@ export default function BranchDetailPage() {
                   <Package size={48} />
                   <h3>Belum Ada Stok</h3>
                   <p>Cabang ini belum memiliki data inventori.</p>
-                  <button 
-                    className={styles.emptyStateButton}
-                    onClick={() => openCrudModal('inventory', 'create')}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Item Pertama</span>
-                  </button>
+                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
+                    <button 
+                      className={styles.emptyStateButton}
+                      onClick={() => setShowBatchAddModal(true)}
+                      style={{ 
+                        background: 'var(--surface-secondary)', 
+                        color: 'var(--text-primary)',
+                        border: '1px solid var(--surface-border)'
+                      }}
+                    >
+                      <Layers size={18} />
+                      <span>Tambah Batch</span>
+                    </button>
+                    <button 
+                      className={styles.emptyStateButton}
+                      onClick={() => openCrudModal('inventory', 'create')}
+                    >
+                      <Plus size={18} />
+                      <span>Tambah Item</span>
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <table className={styles.dataTable}>
@@ -1036,6 +1069,20 @@ export default function BranchDetailPage() {
           }}
           branchId={branchId}
           branchName={branch.name}
+        />
+      )}
+
+      {/* Batch Add Inventory Modal */}
+      {showBatchAddModal && (
+        <InventoryBatchAddModal
+          isOpen={showBatchAddModal}
+          onClose={() => setShowBatchAddModal(false)}
+          onSuccess={() => {
+            setShowBatchAddModal(false);
+            loadTabData();
+          }}
+          branchId={branchId}
+          existingProductIds={inventory.map(item => item.masterProductId || '')}
         />
       )}
 

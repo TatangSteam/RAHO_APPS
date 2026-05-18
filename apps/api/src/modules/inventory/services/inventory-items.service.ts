@@ -281,26 +281,35 @@ export class InventoryItemsService {
    * Create new inventory item with master product
    */
   async createInventoryItem(data: {
-    name: string;
-    category: string;
-    baseUnit: string;
-    usageUnit: string;
-    conversionFactor: number;
-    stock: number;
-    minThreshold: number;
+    name?: string;
+    category?: string;
+    baseUnit?: string;
+    usageUnit?: string;
+    conversionFactor?: number;
+    stock?: number;
+    minThreshold?: number;
     storageLocation?: string;
+    masterProductId?: string; // NEW: Use existing master product
+    usageStock?: number;
+    minThresholdUsage?: number;
   }, branchId: string, userId: string) {
+    // If masterProductId is provided, use existing master product
+    if (data.masterProductId) {
+      return await this.createInventoryItemFromMasterProduct(data, branchId, userId);
+    }
+
+    // Otherwise, create new master product (legacy behavior)
     // Create master product and inventory item in transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create master product
       const masterProduct = await tx.masterProduct.create({
         data: {
-          name: data.name,
-          category: data.category,
-          baseUnit: data.baseUnit,
-          usageUnit: data.usageUnit,
-          conversionFactor: data.conversionFactor,
-          unit: data.baseUnit, // Legacy field
+          name: data.name!,
+          category: data.category!,
+          baseUnit: data.baseUnit!,
+          usageUnit: data.usageUnit!,
+          conversionFactor: data.conversionFactor!,
+          unit: data.baseUnit!, // Legacy field
         },
       });
 
@@ -309,8 +318,8 @@ export class InventoryItemsService {
         data: {
           masterProductId: masterProduct.id,
           branchId: branchId,
-          stock: data.stock,
-          minThreshold: data.minThreshold,
+          stock: data.stock || 0,
+          minThreshold: data.minThreshold || 10,
           storageLocation: data.storageLocation,
         },
         include: {
@@ -320,7 +329,7 @@ export class InventoryItemsService {
       });
 
       // Create initial stock mutation if stock > 0
-      if (data.stock > 0) {
+      if (data.stock && data.stock > 0) {
         await tx.stockMutation.create({
           data: {
             inventoryItemId: inventoryItem.id,
@@ -331,6 +340,95 @@ export class InventoryItemsService {
             referenceType: 'InitialStock',
             referenceId: userId,
             notes: `Initial stock for new item: ${data.name}`,
+            createdBy: userId,
+          },
+        });
+      }
+
+      return inventoryItem;
+    });
+
+    return {
+      success: true,
+      message: 'Item inventori berhasil ditambahkan',
+      item: this.formatInventoryItemWithConversion(result),
+    };
+  }
+
+  /**
+   * Create inventory item from existing master product
+   */
+  async createInventoryItemFromMasterProduct(data: {
+    masterProductId: string;
+    stock?: number;
+    minThreshold?: number;
+    storageLocation?: string;
+    usageStock?: number;
+    minThresholdUsage?: number;
+  }, branchId: string, userId: string) {
+    // Verify master product exists
+    const masterProduct = await prisma.masterProduct.findUnique({
+      where: { id: data.masterProductId },
+    });
+
+    if (!masterProduct) {
+      throw {
+        status: 404,
+        code: 'MASTER_PRODUCT_NOT_FOUND',
+        message: 'Master produk tidak ditemukan',
+      };
+    }
+
+    // Check if inventory item already exists for this branch and master product
+    const existingItem = await prisma.inventoryItem.findUnique({
+      where: {
+        masterProductId_branchId: {
+          masterProductId: data.masterProductId,
+          branchId: branchId,
+        },
+      },
+    });
+
+    if (existingItem) {
+      throw {
+        status: 409,
+        code: 'ITEM_ALREADY_EXISTS',
+        message: `Item "${masterProduct.name}" sudah ada di cabang ini`,
+      };
+    }
+
+    const stock = data.stock || 0;
+    const minThreshold = data.minThreshold || 10;
+
+    // Create inventory item in transaction
+    const result = await prisma.$transaction(async (tx) => {
+      // Create inventory item
+      const inventoryItem = await tx.inventoryItem.create({
+        data: {
+          masterProductId: data.masterProductId,
+          branchId: branchId,
+          stock: stock,
+          minThreshold: minThreshold,
+          storageLocation: data.storageLocation || null,
+        },
+        include: {
+          masterProduct: true,
+          branch: true,
+        },
+      });
+
+      // Create initial stock mutation if stock > 0
+      if (stock > 0) {
+        await tx.stockMutation.create({
+          data: {
+            inventoryItemId: inventoryItem.id,
+            type: 'INITIAL_STOCK',
+            quantity: stock,
+            stockBefore: 0,
+            stockAfter: stock,
+            referenceType: 'InitialStock',
+            referenceId: userId,
+            notes: `Initial stock for item: ${masterProduct.name}`,
             createdBy: userId,
           },
         });
@@ -509,6 +607,111 @@ export class InventoryItemsService {
         id: result.id,
         name: result.masterProduct.name,
       },
+    };
+  }
+
+  /**
+   * Batch create inventory items from master products
+   */
+  async batchCreateInventoryItems(items: Array<{
+    masterProductId: string;
+    stock?: number;
+    minThreshold?: number;
+    storageLocation?: string;
+  }>, branchId: string, userId: string) {
+    let created = 0;
+    let skipped = 0;
+    const createdItems: any[] = [];
+    const errors: string[] = [];
+
+    // Process each item in a transaction
+    const result = await prisma.$transaction(async (tx) => {
+      for (const item of items) {
+        try {
+          // Verify master product exists
+          const masterProduct = await tx.masterProduct.findUnique({
+            where: { id: item.masterProductId },
+          });
+
+          if (!masterProduct) {
+            errors.push(`Produk dengan ID ${item.masterProductId} tidak ditemukan`);
+            skipped++;
+            continue;
+          }
+
+          // Check if inventory item already exists for this branch and master product
+          const existingItem = await tx.inventoryItem.findUnique({
+            where: {
+              masterProductId_branchId: {
+                masterProductId: item.masterProductId,
+                branchId: branchId,
+              },
+            },
+          });
+
+          if (existingItem) {
+            skipped++;
+            continue;
+          }
+
+          const stock = item.stock || 0;
+          const minThreshold = item.minThreshold || 10;
+
+          // Create inventory item
+          const inventoryItem = await tx.inventoryItem.create({
+            data: {
+              masterProductId: item.masterProductId,
+              branchId: branchId,
+              stock: stock,
+              minThreshold: minThreshold,
+              storageLocation: item.storageLocation || null,
+            },
+            include: {
+              masterProduct: true,
+            },
+          });
+
+          // Create initial stock mutation if stock > 0
+          if (stock > 0) {
+            await tx.stockMutation.create({
+              data: {
+                inventoryItemId: inventoryItem.id,
+                type: 'INITIAL_STOCK',
+                quantity: stock,
+                stockBefore: 0,
+                stockAfter: stock,
+                referenceType: 'BatchCreate',
+                referenceId: userId,
+                notes: `Batch create initial stock for: ${masterProduct.name}`,
+                createdBy: userId,
+              },
+            });
+          }
+
+          createdItems.push({
+            id: inventoryItem.id,
+            name: masterProduct.name,
+            category: masterProduct.category,
+            stock: stock,
+            minThreshold: minThreshold,
+          });
+          created++;
+        } catch (err: any) {
+          errors.push(`Error creating item: ${err.message}`);
+          skipped++;
+        }
+      }
+
+      return { created, skipped, createdItems, errors };
+    });
+
+    return {
+      success: true,
+      message: `Berhasil menambahkan ${result.created} item inventori`,
+      created: result.created,
+      skipped: result.skipped,
+      items: result.createdItems,
+      errors: result.errors.length > 0 ? result.errors : undefined,
     };
   }
 }

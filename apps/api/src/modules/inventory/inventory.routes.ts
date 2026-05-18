@@ -23,6 +23,18 @@ const ALLSTAFF: Role[] = [
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
 
 // ============================================================
+// MASTER PRODUCTS (for inventory modal)
+// ============================================================
+
+// Get master products for inventory modal (accessible by ADMIN_ROLES)
+router.get(
+  '/master-products',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryController.getMasterProducts.bind(inventoryController)
+);
+
+// ============================================================
 // INVENTORY ITEMS
 // ============================================================
 
@@ -56,6 +68,14 @@ router.post(
   authenticate,
   authorize(ADMIN_ROLES),
   inventoryController.createInventoryItem.bind(inventoryController)
+);
+
+// Batch create inventory items
+router.post(
+  '/items/batch',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryController.batchCreateInventoryItems.bind(inventoryController)
 );
 
 // Update inventory item

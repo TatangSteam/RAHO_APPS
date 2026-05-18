@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Hash, Tag, MapPin, AlertTriangle, Save, Loader2 } from 'lucide-react';
+import { X, Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import styles from '@/styles/crud-modal.module.css';
@@ -16,7 +16,26 @@ interface InventoryCrudModalProps {
   inventoryData?: any;
 }
 
+interface MasterProduct {
+  id: string;
+  name: string;
+  category: string;
+  baseUnit: string;
+  usageUnit: string;
+  conversionFactor: number;
+  description?: string;
+}
+
 interface InventoryFormData {
+  masterProductId: string;
+  stock: number;
+  usageStock: number;
+  minThreshold: number;
+  minThresholdUsage: number;
+  storageLocation: string;
+}
+
+interface EditFormData {
   name: string;
   category: string;
   baseUnit: string;
@@ -29,28 +48,29 @@ interface InventoryFormData {
   conversionFactor: number;
 }
 
-const CATEGORY_OPTIONS = [
-  'INFUSION_MATERIAL',
-  'MEDICAL_EQUIPMENT',
-  'CONSUMABLES',
-  'MEDICATION',
-  'SUPPLEMENTS',
-  'OTHER'
-];
+const CATEGORY_LABELS: Record<string, string> = {
+  'INFUSION_MATERIAL': 'Bahan Infus',
+  'MEDICAL_EQUIPMENT': 'Alat Medis',
+  'CONSUMABLES': 'Bahan Habis Pakai',
+  'MEDICATION': 'Obat-obatan',
+  'SUPPLEMENTS': 'Suplemen',
+  'MEDICINE': 'Obat & Cairan',
+  'DEVICE': 'Alat Medis',
+  'CONSUMABLE': 'Bahan Habis Pakai',
+  'OTHER': 'Lainnya'
+};
 
-const UNIT_OPTIONS = [
-  'PCS',
-  'BOX',
-  'BOTTLE',
-  'VIAL',
-  'AMPUL',
-  'TABLET',
-  'CAPSULE',
-  'ML',
-  'LITER',
-  'GRAM',
-  'KG'
-];
+const CATEGORY_COLORS: Record<string, string> = {
+  'INFUSION_MATERIAL': '#3b82f6',
+  'MEDICAL_EQUIPMENT': '#8b5cf6',
+  'CONSUMABLES': '#f59e0b',
+  'MEDICATION': '#ef4444',
+  'SUPPLEMENTS': '#22c55e',
+  'MEDICINE': '#3b82f6',
+  'DEVICE': '#8b5cf6',
+  'CONSUMABLE': '#f59e0b',
+  'OTHER': '#6b7280'
+};
 
 export default function InventoryCrudModal({
   isOpen,
@@ -62,7 +82,23 @@ export default function InventoryCrudModal({
 }: InventoryCrudModalProps) {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [masterProducts, setMasterProducts] = useState<MasterProduct[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [selectedProduct, setSelectedProduct] = useState<MasterProduct | null>(null);
+  const [showDropdown, setShowDropdown] = useState(false);
+  
   const [formData, setFormData] = useState<InventoryFormData>({
+    masterProductId: '',
+    stock: 0,
+    usageStock: 0,
+    minThreshold: 10,
+    minThresholdUsage: 10,
+    storageLocation: ''
+  });
+
+  const [editFormData, setEditFormData] = useState<EditFormData>({
     name: '',
     category: 'INFUSION_MATERIAL',
     baseUnit: 'PCS',
@@ -80,8 +116,14 @@ export default function InventoryCrudModal({
   }, []);
 
   useEffect(() => {
+    if (isOpen && action === 'create') {
+      loadMasterProducts();
+    }
+  }, [isOpen, action]);
+
+  useEffect(() => {
     if (action === 'edit' && inventoryData) {
-      setFormData({
+      setEditFormData({
         name: inventoryData.name || '',
         category: inventoryData.category || 'INFUSION_MATERIAL',
         baseUnit: inventoryData.baseUnit || 'PCS',
@@ -96,12 +138,85 @@ export default function InventoryCrudModal({
     }
   }, [action, inventoryData]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
+  const loadMasterProducts = async () => {
+    try {
+      setLoadingProducts(true);
+      // Load all active products from inventory endpoint (accessible by ADMIN_ROLES)
+      const response = await api.get('/inventory/master-products', {
+        params: { limit: 1000, isActive: 'true' }
+      });
+      
+      console.log('🔍 [InventoryModal] Master products response:', response.data);
+      
+      const data = response.data.data;
+      const products = data?.products || data || [];
+      
+      console.log('🔍 [InventoryModal] Products loaded:', products.length);
+      
+      setMasterProducts(Array.isArray(products) ? products : []);
+    } catch (error: any) {
+      console.error('Error loading master products:', error);
+      showToast.error('Gagal memuat daftar produk');
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
+  // Get unique categories from products
+  const categories = useMemo(() => {
+    const cats = new Set(masterProducts.map(p => p.category));
+    return Array.from(cats).sort();
+  }, [masterProducts]);
+
+  // Filter products based on search and category
+  const filteredProducts = useMemo(() => {
+    return masterProducts.filter(product => {
+      const matchesSearch = !searchQuery || 
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchQuery.toLowerCase());
+      
+      const matchesCategory = !selectedCategory || product.category === selectedCategory;
+      
+      return matchesSearch && matchesCategory;
+    });
+  }, [masterProducts, searchQuery, selectedCategory]);
+
+  // Group products by category for display
+  const groupedProducts = useMemo(() => {
+    const groups: Record<string, MasterProduct[]> = {};
+    filteredProducts.forEach(product => {
+      if (!groups[product.category]) {
+        groups[product.category] = [];
+      }
+      groups[product.category].push(product);
+    });
+    return groups;
+  }, [filteredProducts]);
+
+  const handleProductSelect = (product: MasterProduct) => {
+    setSelectedProduct(product);
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value
+      masterProductId: product.id
     }));
+    setShowDropdown(false);
+    setSearchQuery('');
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    
+    if (action === 'create') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) || 0 : value
+      }));
+    } else {
+      setEditFormData(prev => ({
+        ...prev,
+        [name]: type === 'number' ? parseFloat(value) || 0 : value
+      }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -110,24 +225,42 @@ export default function InventoryCrudModal({
 
     try {
       if (action === 'create') {
-        // Create inventory item
+        if (!formData.masterProductId) {
+          showToast.error('Pilih produk terlebih dahulu');
+          setLoading(false);
+          return;
+        }
+
         const createData = {
-          ...formData,
-          branchId: branchId
+          masterProductId: formData.masterProductId,
+          branchId: branchId,
+          stock: formData.stock,
+          usageStock: formData.usageStock,
+          minThreshold: formData.minThreshold,
+          minThresholdUsage: formData.minThresholdUsage,
+          storageLocation: formData.storageLocation || null
         };
         
         await api.post('/inventory/items', createData);
         showToast.success('Item inventori berhasil ditambahkan');
       } else if (action === 'edit') {
-        // Update inventory item
-        await api.patch(`/inventory/items/${inventoryData.id}`, formData);
+        const updateData = {
+          stock: editFormData.stock,
+          usageStock: editFormData.usageStock,
+          minThreshold: editFormData.minThreshold,
+          minThresholdUsage: editFormData.minThresholdUsage,
+          storageLocation: editFormData.storageLocation || null
+        };
+        
+        await api.patch(`/inventory/items/${inventoryData.id}`, updateData);
         showToast.success('Item inventori berhasil diperbarui');
       }
       
       onSuccess();
     } catch (error: any) {
       console.error('Error saving inventory item:', error);
-      showToast.error(error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} item inventori`);
+      const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} item inventori`;
+      showToast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -158,8 +291,10 @@ export default function InventoryCrudModal({
         style={{
           position: 'relative',
           zIndex: 10000,
-          maxWidth: '600px',
-          width: '100%'
+          maxWidth: action === 'create' ? '750px' : '600px',
+          width: '100%',
+          maxHeight: '90vh',
+          overflow: 'auto'
         }}
       >
         <div className={styles.modalHeader}>
@@ -173,177 +308,408 @@ export default function InventoryCrudModal({
         </div>
 
         <form onSubmit={handleSubmit} className={styles.modalForm}>
-          <div className={styles.formGrid}>
-            <div className={styles.formGroupFull}>
-              <label htmlFor="name">
-                <Package size={16} />
-                Nama Item *
-              </label>
-              <input
-                type="text"
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                required
-                placeholder="Masukkan nama item"
-              />
-            </div>
+          {action === 'create' ? (
+            <>
+              {/* Product Selection - Improved UI */}
+              <div style={{ marginBottom: '24px' }}>
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px', 
+                  marginBottom: '12px', 
+                  fontWeight: 600,
+                  fontSize: '14px'
+                }}>
+                  <Package size={16} />
+                  Pilih Produk dari Master *
+                </label>
+                
+                {/* Selected Product Display or Dropdown Trigger */}
+                <div 
+                  onClick={() => setShowDropdown(!showDropdown)}
+                  style={{
+                    padding: '12px 16px',
+                    background: selectedProduct ? 'rgba(34, 197, 94, 0.1)' : 'var(--surface-card)',
+                    border: `2px solid ${selectedProduct ? 'rgba(34, 197, 94, 0.5)' : 'var(--surface-border)'}`,
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {selectedProduct ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '8px',
+                        background: `${CATEGORY_COLORS[selectedProduct.category] || '#6b7280'}20`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Check size={18} style={{ color: '#22c55e' }} />
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {selectedProduct.name}
+                        </div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          {CATEGORY_LABELS[selectedProduct.category] || selectedProduct.category} • 
+                          {selectedProduct.baseUnit} → {selectedProduct.usageUnit} • 
+                          Konversi: {selectedProduct.conversionFactor}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      Klik untuk memilih produk...
+                    </span>
+                  )}
+                  <ChevronDown 
+                    size={20} 
+                    style={{ 
+                      color: 'var(--text-muted)',
+                      transform: showDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                      transition: 'transform 0.2s'
+                    }} 
+                  />
+                </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="category">
-                <Tag size={16} />
-                Kategori *
-              </label>
-              <select
-                id="category"
-                name="category"
-                value={formData.category}
-                onChange={handleInputChange}
-                required
-              >
-                {CATEGORY_OPTIONS.map(category => (
-                  <option key={category} value={category}>
-                    {category.replace(/_/g, ' ')}
-                  </option>
-                ))}
-              </select>
-            </div>
+                {/* Dropdown Panel */}
+                {showDropdown && (
+                  <div style={{
+                    marginTop: '8px',
+                    background: 'var(--surface-card)',
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 10px 40px rgba(0,0,0,0.3)'
+                  }}>
+                    {/* Search and Filter */}
+                    <div style={{ 
+                      padding: '12px', 
+                      borderBottom: '1px solid var(--surface-border)',
+                      display: 'flex',
+                      gap: '10px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ 
+                        flex: 1,
+                        minWidth: '200px',
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px',
+                        padding: '8px 12px',
+                        background: 'var(--surface-secondary)',
+                        borderRadius: '8px'
+                      }}>
+                        <Search size={16} style={{ color: 'var(--text-muted)' }} />
+                        <input
+                          type="text"
+                          placeholder="Cari produk..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            flex: 1,
+                            border: 'none',
+                            background: 'transparent',
+                            outline: 'none',
+                            fontSize: '14px',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                      </div>
+                      <select
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          padding: '8px 12px',
+                          background: 'var(--surface-secondary)',
+                          border: 'none',
+                          borderRadius: '8px',
+                          fontSize: '14px',
+                          color: 'var(--text-primary)',
+                          cursor: 'pointer',
+                          minWidth: '150px'
+                        }}
+                      >
+                        <option value="">Semua Kategori</option>
+                        {categories.map(cat => (
+                          <option key={cat} value={cat}>
+                            {CATEGORY_LABELS[cat] || cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="storageLocation">
-                <MapPin size={16} />
-                Lokasi Penyimpanan
-              </label>
-              <input
-                type="text"
-                id="storageLocation"
-                name="storageLocation"
-                value={formData.storageLocation}
-                onChange={handleInputChange}
-                placeholder="Rak A1, Lemari B2, dll"
-              />
-            </div>
+                    {/* Product Count */}
+                    <div style={{
+                      padding: '8px 16px',
+                      background: 'var(--surface-secondary)',
+                      fontSize: '12px',
+                      color: 'var(--text-muted)'
+                    }}>
+                      Menampilkan {filteredProducts.length} dari {masterProducts.length} produk
+                    </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="baseUnit">
-                Satuan Dasar *
-              </label>
-              <select
-                id="baseUnit"
-                name="baseUnit"
-                value={formData.baseUnit}
-                onChange={handleInputChange}
-                required
-              >
-                {UNIT_OPTIONS.map(unit => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
-            </div>
+                    {/* Product List */}
+                    <div style={{
+                      maxHeight: '300px',
+                      overflowY: 'auto'
+                    }}>
+                      {loadingProducts ? (
+                        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <Loader2 size={24} className="animate-spin" style={{ margin: '0 auto 12px' }} />
+                          <div>Memuat produk...</div>
+                        </div>
+                      ) : filteredProducts.length === 0 ? (
+                        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                          <Package size={32} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
+                          <div>{searchQuery || selectedCategory ? 'Tidak ada produk yang cocok' : 'Tidak ada produk tersedia'}</div>
+                        </div>
+                      ) : (
+                        Object.entries(groupedProducts).map(([category, products]) => (
+                          <div key={category}>
+                            {/* Category Header */}
+                            <div style={{
+                              padding: '8px 16px',
+                              background: 'var(--surface-secondary)',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              color: CATEGORY_COLORS[category] || 'var(--text-muted)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              position: 'sticky',
+                              top: 0,
+                              zIndex: 1
+                            }}>
+                              {CATEGORY_LABELS[category] || category} ({products.length})
+                            </div>
+                            
+                            {/* Products in Category */}
+                            {products.map(product => (
+                              <div
+                                key={product.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleProductSelect(product);
+                                }}
+                                style={{
+                                  padding: '12px 16px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid var(--surface-border)',
+                                  background: selectedProduct?.id === product.id ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '12px',
+                                  transition: 'background 0.15s'
+                                }}
+                                onMouseEnter={(e) => {
+                                  if (selectedProduct?.id !== product.id) {
+                                    e.currentTarget.style.background = 'var(--surface-hover)';
+                                  }
+                                }}
+                                onMouseLeave={(e) => {
+                                  if (selectedProduct?.id !== product.id) {
+                                    e.currentTarget.style.background = 'transparent';
+                                  }
+                                }}
+                              >
+                                <div style={{
+                                  width: '32px',
+                                  height: '32px',
+                                  borderRadius: '6px',
+                                  background: `${CATEGORY_COLORS[product.category] || '#6b7280'}15`,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0
+                                }}>
+                                  <Package size={16} style={{ color: CATEGORY_COLORS[product.category] || '#6b7280' }} />
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ 
+                                    fontWeight: 500, 
+                                    color: 'var(--text-primary)',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}>
+                                    {product.name}
+                                  </div>
+                                  <div style={{ 
+                                    fontSize: '12px', 
+                                    color: 'var(--text-muted)',
+                                    marginTop: '2px'
+                                  }}>
+                                    {product.baseUnit} → {product.usageUnit} • Konversi: {product.conversionFactor}
+                                  </div>
+                                </div>
+                                {selectedProduct?.id === product.id && (
+                                  <Check size={18} style={{ color: '#3b82f6', flexShrink: 0 }} />
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="usageUnit">
-                Satuan Pakai *
-              </label>
-              <select
-                id="usageUnit"
-                name="usageUnit"
-                value={formData.usageUnit}
-                onChange={handleInputChange}
-                required
-              >
-                {UNIT_OPTIONS.map(unit => (
-                  <option key={unit} value={unit}>
-                    {unit}
-                  </option>
-                ))}
-              </select>
-            </div>
+              {/* Stock Settings - Only show when product is selected */}
+              {selectedProduct && (
+                <div style={{
+                  padding: '16px',
+                  background: 'var(--surface-secondary)',
+                  borderRadius: '10px',
+                  marginBottom: '16px'
+                }}>
+                  <h4 style={{ 
+                    margin: '0 0 16px 0', 
+                    fontSize: '14px', 
+                    fontWeight: 600,
+                    color: 'var(--text-primary)'
+                  }}>
+                    Pengaturan Stok untuk {selectedProduct.name}
+                  </h4>
+                  
+                  <div className={styles.formGrid}>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="storageLocation">
+                        <MapPin size={16} />
+                        Lokasi Penyimpanan
+                      </label>
+                      <input
+                        type="text"
+                        id="storageLocation"
+                        name="storageLocation"
+                        value={formData.storageLocation}
+                        onChange={handleInputChange}
+                        placeholder="Rak A1, Lemari B2, dll"
+                      />
+                    </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="conversionFactor">
-                <Hash size={16} />
-                Faktor Konversi *
-              </label>
-              <input
-                type="number"
-                id="conversionFactor"
-                name="conversionFactor"
-                value={formData.conversionFactor}
-                onChange={handleInputChange}
-                required
-                min="0.01"
-                step="0.01"
-                placeholder="1"
-              />
-              <small>1 {formData.baseUnit} = {formData.conversionFactor} {formData.usageUnit}</small>
-            </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="stock">
+                        Stok Awal ({selectedProduct.baseUnit})
+                      </label>
+                      <input
+                        type="number"
+                        id="stock"
+                        name="stock"
+                        value={formData.stock}
+                        onChange={handleInputChange}
+                        min="0"
+                        placeholder="0"
+                      />
+                    </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="stock">
-                Stok Dasar
-              </label>
-              <input
-                type="number"
-                id="stock"
-                name="stock"
-                value={formData.stock}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="0"
-              />
-            </div>
+                    <div className={styles.formGroup}>
+                      <label htmlFor="minThreshold">
+                        <AlertTriangle size={16} />
+                        Min. Stok ({selectedProduct.baseUnit})
+                      </label>
+                      <input
+                        type="number"
+                        id="minThreshold"
+                        name="minThreshold"
+                        value={formData.minThreshold}
+                        onChange={handleInputChange}
+                        min="0"
+                        placeholder="10"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            // EDIT MODE
+            <div className={styles.formGrid}>
+              <div className={styles.formGroupFull}>
+                <label>
+                  <Package size={16} />
+                  Nama Item
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name}
+                  disabled
+                  style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                />
+                <small style={{ color: 'var(--text-muted)' }}>Nama item tidak dapat diubah</small>
+              </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="usageStock">
-                Stok Pakai
-              </label>
-              <input
-                type="number"
-                id="usageStock"
-                name="usageStock"
-                value={formData.usageStock}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="0"
-              />
-            </div>
+              <div className={styles.formGroup}>
+                <label htmlFor="storageLocation">
+                  <MapPin size={16} />
+                  Lokasi Penyimpanan
+                </label>
+                <input
+                  type="text"
+                  id="storageLocation"
+                  name="storageLocation"
+                  value={editFormData.storageLocation}
+                  onChange={handleInputChange}
+                  placeholder="Rak A1, Lemari B2, dll"
+                />
+              </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="minThreshold">
-                <AlertTriangle size={16} />
-                Min. Stok Dasar
-              </label>
-              <input
-                type="number"
-                id="minThreshold"
-                name="minThreshold"
-                value={formData.minThreshold}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="10"
-              />
-            </div>
+              <div className={styles.formGroup}>
+                <label>
+                  <Hash size={16} />
+                  Faktor Konversi
+                </label>
+                <input
+                  type="number"
+                  value={editFormData.conversionFactor}
+                  disabled
+                  style={{ opacity: 0.7, cursor: 'not-allowed' }}
+                />
+                <small style={{ color: 'var(--text-muted)' }}>
+                  1 {editFormData.baseUnit} = {editFormData.conversionFactor} {editFormData.usageUnit}
+                </small>
+              </div>
 
-            <div className={styles.formGroup}>
-              <label htmlFor="minThresholdUsage">
-                <AlertTriangle size={16} />
-                Min. Stok Pakai
-              </label>
-              <input
-                type="number"
-                id="minThresholdUsage"
-                name="minThresholdUsage"
-                value={formData.minThresholdUsage}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="10"
-              />
+              <div className={styles.formGroup}>
+                <label htmlFor="stock">
+                  Stok ({editFormData.baseUnit})
+                </label>
+                <input
+                  type="number"
+                  id="stock"
+                  name="stock"
+                  value={editFormData.stock}
+                  onChange={handleInputChange}
+                  min="0"
+                  placeholder="0"
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label htmlFor="minThreshold">
+                  <AlertTriangle size={16} />
+                  Min. Stok ({editFormData.baseUnit})
+                </label>
+                <input
+                  type="number"
+                  id="minThreshold"
+                  name="minThreshold"
+                  value={editFormData.minThreshold}
+                  onChange={handleInputChange}
+                  min="0"
+                  placeholder="10"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className={styles.modalActions}>
             <button
@@ -357,7 +723,7 @@ export default function InventoryCrudModal({
             <button
               type="submit"
               className={styles.saveButton}
-              disabled={loading}
+              disabled={loading || (action === 'create' && !selectedProduct)}
             >
               {loading ? (
                 <>
