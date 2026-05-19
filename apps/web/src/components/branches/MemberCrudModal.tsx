@@ -184,21 +184,43 @@ export default function MemberCrudModal({
     e.preventDefault();
     setLoading(true);
 
-    console.log('🔍 [MemberCrudModal] Submit attempt:', { action, formData });
+    console.log('🔍 [MemberCrudModal] Submit attempt:', { action, formData, branchId });
 
     try {
       if (action === 'create') {
         console.log('🔍 [MemberCrudModal] Creating member with data:', formData);
         
-        // Prepare data with incentive fields
-        const createData = {
-          ...formData,
-          // Only include incentive fields if they are set
-          firstIncentiveType: formData.firstIncentiveType || undefined,
-          firstIncentiveValue: formData.firstIncentiveType ? formData.firstIncentiveValue : undefined,
-          nextIncentiveType: formData.nextIncentiveType || undefined,
-          nextIncentiveValue: formData.nextIncentiveType ? formData.nextIncentiveValue : undefined,
+        // Prepare data - explicitly build the object to avoid spreading unwanted fields
+        const createData: any = {
+          fullName: formData.fullName,
+          memberEmail: formData.memberEmail,
+          memberPassword: formData.memberPassword,
+          phone: formData.phone,
+          isConsentToPhoto: formData.isConsentToPhoto,
+          branchId: branchId, // Include branchId for ADMIN_MANAGER
         };
+        
+        // Add optional fields only if they have values
+        if (formData.email) createData.email = formData.email;
+        if (formData.address) createData.address = formData.address;
+        if (formData.birthPlace) createData.birthPlace = formData.birthPlace;
+        if (formData.birthDate) createData.birthDate = formData.birthDate;
+        if (formData.gender) createData.gender = formData.gender;
+        if (formData.emergencyContact) createData.emergencyContact = formData.emergencyContact;
+        if (formData.emergencyContactPhone) createData.emergencyContactPhone = formData.emergencyContactPhone;
+        if (formData.referralCodeId) createData.referralCodeId = formData.referralCodeId;
+        
+        // Only include incentive fields if type is set (not empty string)
+        if (formData.firstIncentiveType) {
+          createData.firstIncentiveType = formData.firstIncentiveType;
+          createData.firstIncentiveValue = formData.firstIncentiveValue || 0;
+        }
+        if (formData.nextIncentiveType) {
+          createData.nextIncentiveType = formData.nextIncentiveType;
+          createData.nextIncentiveValue = formData.nextIncentiveValue || 0;
+        }
+        
+        console.log('🔍 [MemberCrudModal] Final createData:', createData);
         
         await createMemberApi(createData, {});
         showToast.success('Member berhasil ditambahkan');

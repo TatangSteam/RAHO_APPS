@@ -220,15 +220,21 @@ export async function listBranchStaff(req: Request, res: Response, next: NextFun
       null, // Pass null for callerBranchId since we're explicitly filtering by branchId param
     );
     
-    // Transform to match expected frontend format
+    // Return full user data including staffCode and profile for frontend
     const transformedUsers = users.map(user => ({
       id: user.id,
       email: user.email,
-      fullName: user.profile?.fullName || '',
+      staffCode: user.staffCode || '-',
       role: user.role,
       isActive: user.isActive,
+      profile: {
+        fullName: user.profile?.fullName || '-',
+        phone: user.profile?.phone || '-',
+        avatarUrl: user.profile?.avatarUrl || null,
+      },
+      branch: user.branch,
     }));
     
-    sendSuccess(res, transformedUsers, 200, buildPaginationMeta(total, page, limit));
+    sendSuccess(res, { users: transformedUsers, total, page, limit });
   } catch (err) { next(err); }
 }

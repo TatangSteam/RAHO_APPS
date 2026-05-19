@@ -267,6 +267,7 @@ export default function NewMemberPage() {
           onChange={handleInputChange}
           referralError={referralError}
           onReferralErrorChange={setReferralError}
+          branchId={isAdminManager ? formData.branchId : undefined}
         />
         
         <IncentiveSection 

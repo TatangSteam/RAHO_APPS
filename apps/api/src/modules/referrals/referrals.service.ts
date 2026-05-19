@@ -282,11 +282,39 @@ export async function deleteReferralService(referralId: string) {
 }
 
 // ── Get All Active Referrals (for dropdown) ──────────────────
-export async function getActiveReferralsService(branchId?: string) {
+export async function getActiveReferralsService(
+  branchId?: string,
+  userId?: string,
+  userRole?: string,
+  userBranchId?: string
+) {
   const where: Prisma.ReferralCodeWhereInput = {
     isActive: true,
-    ...(branchId ? { branchId } : {}),
   };
+
+  // Filter by branchId - use explicit branchId param first, then fallback to user's branch
+  if (branchId) {
+    // Explicit branchId provided (e.g., from MemberCrudModal in branch detail page)
+    where.branchId = branchId;
+  } else if (userRole === 'ADMIN_CABANG' || userRole === 'ADMIN_LAYANAN') {
+    // For branch-level staff, filter by their branch
+    if (userBranchId) {
+      where.branchId = userBranchId;
+    }
+  } else if (userRole === 'ADMIN_MANAGER' && userId) {
+    // For ADMIN_MANAGER, show referrals from branches they manage
+    const managerBranches = await prisma.managerBranch.findMany({
+      where: { userId: userId },
+      select: { branchId: true },
+    });
+    
+    if (managerBranches.length > 0) {
+      where.branchId = {
+        in: managerBranches.map((mb) => mb.branchId),
+      };
+    }
+  }
+  // SUPER_ADMIN without explicit branchId can see all referrals
 
   const referrals = await prisma.referralCode.findMany({
     where,
@@ -295,6 +323,13 @@ export async function getActiveReferralsService(branchId?: string) {
       code: true,
       referrerName: true,
       referrerType: true,
+      branchId: true,
+      branch: {
+        select: {
+          branchCode: true,
+          name: true,
+        },
+      },
     },
     orderBy: { code: 'asc' },
   });

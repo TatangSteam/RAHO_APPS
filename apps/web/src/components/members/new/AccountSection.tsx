@@ -9,20 +9,22 @@ interface AccountSectionProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   referralError?: string;
   onReferralErrorChange?: (error: string) => void;
+  branchId?: string; // Optional branchId to filter referrals
 }
 
-export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange }: AccountSectionProps) {
+export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange, branchId }: AccountSectionProps) {
   const [referralCodes, setReferralCodes] = useState<any[]>([]);
   const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState('');
 
-  // Fetch referral codes on mount
+  // Fetch referral codes on mount or when branchId changes
   useEffect(() => {
     const fetchReferralCodes = async () => {
       try {
-        const response = await getActiveReferrals();
+        // Pass branchId to filter referrals by branch
+        const response = await getActiveReferrals(branchId);
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
@@ -31,7 +33,7 @@ export default function AccountSection({ formData, onChange, referralError, onRe
     };
 
     fetchReferralCodes();
-  }, []);
+  }, [branchId]);
 
   // Filter referral codes based on search
   useEffect(() => {

@@ -9,7 +9,134 @@ interface IncentiveSectionProps {
   showIncentiveSettings: boolean;
 }
 
+// Helper function to format currency input
+const formatCurrency = (value: number | undefined): string => {
+  if (value === undefined || value === null || isNaN(value)) return '';
+  return value.toLocaleString('id-ID');
+};
+
+// Helper function to parse currency input (remove dots)
+const parseCurrency = (value: string): number => {
+  const cleaned = value.replace(/\./g, '').replace(/,/g, '');
+  const parsed = parseInt(cleaned, 10);
+  return isNaN(parsed) ? 0 : parsed;
+};
+
 export default function IncentiveSection({ formData, onChange, showIncentiveSettings }: IncentiveSectionProps) {
+  // Local state for formatted display values
+  const [firstValueDisplay, setFirstValueDisplay] = useState('');
+  const [nextValueDisplay, setNextValueDisplay] = useState('');
+
+  // Sync display values with form data
+  useEffect(() => {
+    if (formData.firstIncentiveType === 'FIXED_AMOUNT' && formData.firstIncentiveValue !== undefined) {
+      setFirstValueDisplay(formatCurrency(formData.firstIncentiveValue));
+    } else if (formData.firstIncentiveType === 'PERCENTAGE' && formData.firstIncentiveValue !== undefined) {
+      setFirstValueDisplay(String(formData.firstIncentiveValue));
+    } else {
+      setFirstValueDisplay('');
+    }
+  }, [formData.firstIncentiveValue, formData.firstIncentiveType]);
+
+  useEffect(() => {
+    if (formData.nextIncentiveType === 'FIXED_AMOUNT' && formData.nextIncentiveValue !== undefined) {
+      setNextValueDisplay(formatCurrency(formData.nextIncentiveValue));
+    } else if (formData.nextIncentiveType === 'PERCENTAGE' && formData.nextIncentiveValue !== undefined) {
+      setNextValueDisplay(String(formData.nextIncentiveValue));
+    } else {
+      setNextValueDisplay('');
+    }
+  }, [formData.nextIncentiveValue, formData.nextIncentiveType]);
+
+  // Handle first incentive value change
+  const handleFirstValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    
+    if (formData.firstIncentiveType === 'FIXED_AMOUNT') {
+      // For currency, parse and format
+      const numValue = parseCurrency(rawValue);
+      setFirstValueDisplay(rawValue === '' ? '' : formatCurrency(numValue));
+      
+      // Send numeric value to parent
+      const syntheticEvent = {
+        target: {
+          name: 'firstIncentiveValue',
+          value: rawValue === '' ? '' : String(numValue),
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(syntheticEvent);
+    } else {
+      // For percentage, just use the raw value (allow decimals)
+      setFirstValueDisplay(rawValue);
+      
+      const syntheticEvent = {
+        target: {
+          name: 'firstIncentiveValue',
+          value: rawValue,
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(syntheticEvent);
+    }
+  };
+
+  // Handle next incentive value change
+  const handleNextValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    
+    if (formData.nextIncentiveType === 'FIXED_AMOUNT') {
+      // For currency, parse and format
+      const numValue = parseCurrency(rawValue);
+      setNextValueDisplay(rawValue === '' ? '' : formatCurrency(numValue));
+      
+      // Send numeric value to parent
+      const syntheticEvent = {
+        target: {
+          name: 'nextIncentiveValue',
+          value: rawValue === '' ? '' : String(numValue),
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(syntheticEvent);
+    } else {
+      // For percentage, just use the raw value (allow decimals)
+      setNextValueDisplay(rawValue);
+      
+      const syntheticEvent = {
+        target: {
+          name: 'nextIncentiveValue',
+          value: rawValue,
+        }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onChange(syntheticEvent);
+    }
+  };
+
+  // Reset display value when type changes
+  const handleFirstTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFirstValueDisplay('');
+    // Clear the value when type changes
+    const clearEvent = {
+      target: {
+        name: 'firstIncentiveValue',
+        value: '',
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    onChange(clearEvent);
+    onChange(e);
+  };
+
+  const handleNextTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setNextValueDisplay('');
+    // Clear the value when type changes
+    const clearEvent = {
+      target: {
+        name: 'nextIncentiveValue',
+        value: '',
+      }
+    } as React.ChangeEvent<HTMLInputElement>;
+    onChange(clearEvent);
+    onChange(e);
+  };
+
   if (!showIncentiveSettings) {
     return null;
   }
@@ -31,175 +158,124 @@ export default function IncentiveSection({ formData, onChange, showIncentiveSett
         }}>
           💰
         </div>
-        <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Pengaturan Insentif</h2>
+        <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Pengaturan Insentif Referral (Opsional)</h2>
       </div>
 
       <div style={{ 
         padding: '16px', 
-        background: 'rgba(245, 158, 11, 0.1)', 
-        border: '1px solid rgba(245, 158, 11, 0.3)', 
+        background: 'rgba(59, 130, 246, 0.1)', 
+        border: '1px solid rgba(59, 130, 246, 0.3)', 
         borderRadius: 'var(--radius-lg)', 
         marginBottom: '24px' 
       }}>
         <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
-          ℹ️ <strong>Pengaturan Insentif Khusus:</strong> Jika tidak diisi, sistem akan menggunakan nilai default (10% untuk paket pertama, 5% untuk paket selanjutnya).
+          ℹ️ <strong>Catatan:</strong> Insentif ditentukan per member. Setiap member dapat memiliki rate insentif yang berbeda meskipun menggunakan kode referral yang sama.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
         {/* First Package Incentive */}
-        <div style={{ 
-          padding: '20px', 
-          background: 'rgba(34, 197, 94, 0.05)', 
-          border: '2px solid rgba(34, 197, 94, 0.2)', 
-          borderRadius: 'var(--radius-lg)' 
-        }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            🎯 Insentif Paket Pertama
-          </h3>
-          
-          <div style={{ display: 'grid', gap: '16px' }}>
-            <div>
-              <label className="form-label">Tipe Insentif</label>
-              <select
-                name="firstIncentiveType"
-                value={formData.firstIncentiveType || ''}
-                onChange={onChange}
-                className="form-input"
-              >
-                <option value="">Pilih tipe insentif...</option>
-                <option value="PERCENTAGE">Persentase (%)</option>
-                <option value="FIXED_AMOUNT">Nominal Tetap (Rp)</option>
-              </select>
-            </div>
+        <div>
+          <label className="form-label">Insentif Paket Pertama - Tipe</label>
+          <select
+            name="firstIncentiveType"
+            value={formData.firstIncentiveType || ''}
+            onChange={handleFirstTypeChange}
+            className="form-input"
+          >
+            <option value="">Pilih tipe...</option>
+            <option value="PERCENTAGE">Persentase (%)</option>
+            <option value="FIXED_AMOUNT">Nominal (Rp)</option>
+          </select>
+        </div>
 
-            <div>
-              <label className="form-label">
-                Nilai Insentif {formData.firstIncentiveType === 'PERCENTAGE' ? '(%)' : formData.firstIncentiveType === 'FIXED_AMOUNT' ? '(Rp)' : ''}
-              </label>
-              <input
-                type="number"
-                name="firstIncentiveValue"
-                value={formData.firstIncentiveValue || ''}
-                onChange={onChange}
-                className="form-input"
-                placeholder={formData.firstIncentiveType === 'PERCENTAGE' ? 'Contoh: 10' : formData.firstIncentiveType === 'FIXED_AMOUNT' ? 'Contoh: 50000' : 'Pilih tipe terlebih dahulu'}
-                min="0"
-                step={formData.firstIncentiveType === 'PERCENTAGE' ? '0.1' : '1000'}
-                disabled={!formData.firstIncentiveType}
-              />
-              {formData.firstIncentiveType === 'PERCENTAGE' && (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Persentase dari harga paket (contoh: 10 = 10%)
-                </p>
-              )}
-              {formData.firstIncentiveType === 'FIXED_AMOUNT' && (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Nominal tetap dalam Rupiah
-                </p>
-              )}
-            </div>
+        <div>
+          <label className="form-label">Nilai Insentif Pertama</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              value={firstValueDisplay}
+              onChange={handleFirstValueChange}
+              className="form-input"
+              placeholder={
+                formData.firstIncentiveType === 'PERCENTAGE' 
+                  ? 'Contoh: 10' 
+                  : formData.firstIncentiveType === 'FIXED_AMOUNT' 
+                    ? 'Contoh: 50.000' 
+                    : 'Pilih tipe dulu'
+              }
+              disabled={!formData.firstIncentiveType}
+              style={{ 
+                paddingRight: formData.firstIncentiveType ? '50px' : undefined 
+              }}
+            />
+            {formData.firstIncentiveType && (
+              <span style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)',
+                fontSize: '14px',
+                fontWeight: '500',
+              }}>
+                {formData.firstIncentiveType === 'PERCENTAGE' ? '%' : 'Rp'}
+              </span>
+            )}
           </div>
         </div>
 
         {/* Next Package Incentive */}
-        <div style={{ 
-          padding: '20px', 
-          background: 'rgba(59, 130, 246, 0.05)', 
-          border: '2px solid rgba(59, 130, 246, 0.2)', 
-          borderRadius: 'var(--radius-lg)' 
-        }}>
-          <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            🔄 Insentif Paket Selanjutnya
-          </h3>
-          
-          <div style={{ display: 'grid', gap: '16px' }}>
-            <div>
-              <label className="form-label">Tipe Insentif</label>
-              <select
-                name="nextIncentiveType"
-                value={formData.nextIncentiveType || ''}
-                onChange={onChange}
-                className="form-input"
-              >
-                <option value="">Pilih tipe insentif...</option>
-                <option value="PERCENTAGE">Persentase (%)</option>
-                <option value="FIXED_AMOUNT">Nominal Tetap (Rp)</option>
-              </select>
-            </div>
+        <div>
+          <label className="form-label">Insentif Paket Lanjutan - Tipe</label>
+          <select
+            name="nextIncentiveType"
+            value={formData.nextIncentiveType || ''}
+            onChange={handleNextTypeChange}
+            className="form-input"
+          >
+            <option value="">Pilih tipe...</option>
+            <option value="PERCENTAGE">Persentase (%)</option>
+            <option value="FIXED_AMOUNT">Nominal (Rp)</option>
+          </select>
+        </div>
 
-            <div>
-              <label className="form-label">
-                Nilai Insentif {formData.nextIncentiveType === 'PERCENTAGE' ? '(%)' : formData.nextIncentiveType === 'FIXED_AMOUNT' ? '(Rp)' : ''}
-              </label>
-              <input
-                type="number"
-                name="nextIncentiveValue"
-                value={formData.nextIncentiveValue || ''}
-                onChange={onChange}
-                className="form-input"
-                placeholder={formData.nextIncentiveType === 'PERCENTAGE' ? 'Contoh: 5' : formData.nextIncentiveType === 'FIXED_AMOUNT' ? 'Contoh: 25000' : 'Pilih tipe terlebih dahulu'}
-                min="0"
-                step={formData.nextIncentiveType === 'PERCENTAGE' ? '0.1' : '1000'}
-                disabled={!formData.nextIncentiveType}
-              />
-              {formData.nextIncentiveType === 'PERCENTAGE' && (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Persentase dari harga paket (contoh: 5 = 5%)
-                </p>
-              )}
-              {formData.nextIncentiveType === 'FIXED_AMOUNT' && (
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>
-                  Nominal tetap dalam Rupiah
-                </p>
-              )}
-            </div>
+        <div>
+          <label className="form-label">Nilai Insentif Lanjutan</label>
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              value={nextValueDisplay}
+              onChange={handleNextValueChange}
+              className="form-input"
+              placeholder={
+                formData.nextIncentiveType === 'PERCENTAGE' 
+                  ? 'Contoh: 5' 
+                  : formData.nextIncentiveType === 'FIXED_AMOUNT' 
+                    ? 'Contoh: 25.000' 
+                    : 'Pilih tipe dulu'
+              }
+              disabled={!formData.nextIncentiveType}
+              style={{ 
+                paddingRight: formData.nextIncentiveType ? '50px' : undefined 
+              }}
+            />
+            {formData.nextIncentiveType && (
+              <span style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-muted)',
+                fontSize: '14px',
+                fontWeight: '500',
+              }}>
+                {formData.nextIncentiveType === 'PERCENTAGE' ? '%' : 'Rp'}
+              </span>
+            )}
           </div>
         </div>
       </div>
-
-      {/* Preview Section */}
-      {(formData.firstIncentiveType || formData.nextIncentiveType) && (
-        <div style={{ 
-          marginTop: '24px', 
-          padding: '16px', 
-          background: 'rgba(168, 85, 247, 0.05)', 
-          border: '1px solid rgba(168, 85, 247, 0.2)', 
-          borderRadius: 'var(--radius-lg)' 
-        }}>
-          <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px', color: 'var(--text-primary)' }}>
-            📋 Preview Pengaturan Insentif
-          </h4>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
-            <div>
-              <strong>Paket Pertama:</strong>{' '}
-              {formData.firstIncentiveType && formData.firstIncentiveValue ? (
-                <span style={{ color: '#22c55e' }}>
-                  {formData.firstIncentiveType === 'PERCENTAGE' 
-                    ? `${formData.firstIncentiveValue}%` 
-                    : `Rp ${Number(formData.firstIncentiveValue).toLocaleString('id-ID')}`
-                  }
-                </span>
-              ) : (
-                <span style={{ color: 'var(--text-muted)' }}>Default (10%)</span>
-              )}
-            </div>
-            <div>
-              <strong>Paket Selanjutnya:</strong>{' '}
-              {formData.nextIncentiveType && formData.nextIncentiveValue ? (
-                <span style={{ color: '#3b82f6' }}>
-                  {formData.nextIncentiveType === 'PERCENTAGE' 
-                    ? `${formData.nextIncentiveValue}%` 
-                    : `Rp ${Number(formData.nextIncentiveValue).toLocaleString('id-ID')}`
-                  }
-                </span>
-              ) : (
-                <span style={{ color: 'var(--text-muted)' }}>Default (5%)</span>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

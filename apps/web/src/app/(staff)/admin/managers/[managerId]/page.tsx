@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
 import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
 import styles from './page.module.css';
 
@@ -71,6 +71,9 @@ export default function AdminManagerDetailPage() {
 
   // Delete State
   const [deleting, setDeleting] = useState(false);
+
+  // Activate State
+  const [activating, setActivating] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'SUPER_ADMIN') {
@@ -281,6 +284,26 @@ export default function AdminManagerDetailPage() {
     }
   };
 
+  const handleActivate = async () => {
+    if (!manager) return;
+
+    if (!confirm(`Apakah Anda yakin ingin mengaktifkan kembali Admin Manager "${manager.fullName}"?`)) {
+      return;
+    }
+
+    try {
+      setActivating(true);
+      await adminManagersApi.updateAdminManager(managerId, { isActive: true });
+      showToast.success('Admin Manager berhasil diaktifkan');
+      await loadManagerDetail();
+    } catch (error: any) {
+      console.error('Error activating manager:', error);
+      showToast.error(error.response?.data?.message || 'Gagal mengaktifkan Admin Manager');
+    } finally {
+      setActivating(false);
+    }
+  };
+
   const toggleBranch = (branchId: string) => {
     setExpandedBranches(prev => {
       const newSet = new Set(prev);
@@ -349,6 +372,16 @@ export default function AdminManagerDetailPage() {
           </div>
           
           <div className={styles.headerActions}>
+            {!manager.isActive && (
+              <button 
+                className={styles.activateBtn}
+                onClick={handleActivate}
+                disabled={activating}
+              >
+                {activating ? '⏳' : <Power size={18} />}
+                <span>{activating ? 'Mengaktifkan...' : 'Aktifkan'}</span>
+              </button>
+            )}
             <button 
               className={styles.editBtn}
               onClick={handleOpenEditModal}

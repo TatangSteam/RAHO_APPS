@@ -43,7 +43,16 @@ export class ReferralsController {
   async getActiveReferrals(req: Request, res: Response, next: NextFunction) {
     try {
       const branchId = req.query.branchId as string | undefined;
-      const referrals = await referralService.getActiveReferralsService(branchId);
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+      const userBranchId = req.user?.branchId;
+
+      const referrals = await referralService.getActiveReferralsService(
+        branchId,
+        userId,
+        userRole,
+        userBranchId
+      );
 
       return sendSuccess(res, referrals);
     } catch (error) {

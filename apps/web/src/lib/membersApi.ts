@@ -43,22 +43,31 @@ export async function createMemberApi(
 ): Promise<{ memberId: string; memberNo: string; message: string }> {
   const formData = new FormData();
 
+  console.log('🔍 [membersApi] createMemberApi called with:', memberData);
+
   // Append member data - only non-empty values
   // IMPORTANT: Exclude 'psp' and 'photo' as they should be File objects, not strings
   Object.entries(memberData).forEach(([key, value]) => {
     if (key === 'psp' || key === 'photo') {
       return; // Skip these - they'll be added as files below
     }
-    if (value !== undefined && value !== null && value !== '') {
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        // For nested objects like therapyPlans, stringify them
-        formData.append(key, JSON.stringify(value));
-      } else if (Array.isArray(value)) {
-        // For arrays like therapyPlans, stringify them
-        formData.append(key, JSON.stringify(value));
-      } else {
-        formData.append(key, typeof value === 'boolean' ? String(value) : String(value));
-      }
+    // Skip undefined, null, and empty string values
+    if (value === undefined || value === null || value === '') {
+      console.log(`🔍 [membersApi] Skipping ${key}: ${value}`);
+      return;
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      // For nested objects like therapyPlans, stringify them
+      formData.append(key, JSON.stringify(value));
+      console.log(`🔍 [membersApi] Appending ${key} (object):`, JSON.stringify(value));
+    } else if (Array.isArray(value)) {
+      // For arrays like therapyPlans, stringify them
+      formData.append(key, JSON.stringify(value));
+      console.log(`🔍 [membersApi] Appending ${key} (array):`, JSON.stringify(value));
+    } else {
+      const stringValue = typeof value === 'boolean' ? String(value) : String(value);
+      formData.append(key, stringValue);
+      console.log(`🔍 [membersApi] Appending ${key}:`, stringValue);
     }
   });
 
