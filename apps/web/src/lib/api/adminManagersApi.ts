@@ -4,6 +4,7 @@ export interface Branch {
   id: string;
   branchCode: string;
   name: string;
+  city?: string;
   type: string;
   isActive: boolean;
 }
@@ -25,6 +26,14 @@ export interface CreateAdminManagerData {
   fullName: string;
   phoneNumber: string;
   branchIds: string[];
+}
+
+export interface UpdateAdminManagerData {
+  email?: string;
+  password?: string;
+  fullName?: string;
+  phoneNumber?: string;
+  isActive?: boolean;
 }
 
 export interface AdminManagersResponse {
@@ -84,6 +93,46 @@ export const adminManagersApi = {
    */
   createAdminManager: async (data: CreateAdminManagerData): Promise<{ data: AdminManager }> => {
     const response = await api.post('/admin/users/admin-manager', data);
+    return response.data;
+  },
+
+  /**
+   * Update admin manager
+   */
+  updateAdminManager: async (managerId: string, data: UpdateAdminManagerData): Promise<{ data: AdminManager }> => {
+    const response = await api.put(`/admin/managers/${managerId}`, data);
+    return response.data;
+  },
+
+  /**
+   * Delete admin manager
+   */
+  deleteAdminManager: async (managerId: string): Promise<{ data: { message: string } }> => {
+    const response = await api.delete(`/admin/managers/${managerId}`);
+    return response.data;
+  },
+
+  /**
+   * Get available branches for a manager (not yet assigned)
+   */
+  getAvailableBranchesForManager: async (managerId: string): Promise<{ data: Branch[] }> => {
+    const response = await api.get(`/admin/managers/${managerId}/available-branches`);
+    return response.data;
+  },
+
+  /**
+   * Assign branch to manager
+   */
+  assignBranchToManager: async (managerId: string, branchId: string): Promise<{ data: { message: string; branch: Branch } }> => {
+    const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId });
+    return response.data;
+  },
+
+  /**
+   * Unassign branch from manager
+   */
+  unassignBranchFromManager: async (managerId: string, branchId: string): Promise<{ data: { message: string } }> => {
+    const response = await api.delete(`/admin/managers/${managerId}/branches/${branchId}`);
     return response.data;
   },
 

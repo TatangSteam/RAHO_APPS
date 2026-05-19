@@ -22,7 +22,7 @@ import {
   getAuditLogs,
 } from '../admin/admin.controller';
 import { MembersController } from '../members/members.controller';
-import { listUsers } from '../users/users.controller';
+import { listBranchStaff } from '../users/users.controller';
 
 export const branchesRouter = Router();
 
@@ -105,7 +105,7 @@ branchesRouter.get(
   '/:branchId/staff',
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
-  listUsers,
+  listBranchStaff,
 );
 
 // ── Get Available Managers for Branch (not yet assigned) ──────

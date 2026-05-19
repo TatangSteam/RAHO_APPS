@@ -653,6 +653,301 @@ export async function getAdminManagerDetail(req: Request, res: Response, next: N
 }
 
 /**
+ * Update Admin Manager (for Super Admin)
+ * PUT /admin/managers/:managerId
+ */
+export async function updateAdminManager(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+    const { email, password, fullName, phoneNumber, isActive } = req.body;
+    const currentUserId = (req as any).user.userId;
+
+    const result = await adminService.updateAdminManager(managerId, {
+      email,
+      password,
+      fullName,
+      phoneNumber,
+      isActive,
+    }, currentUserId);
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Delete Admin Manager (for Super Admin)
+ * DELETE /admin/managers/:managerId
+ */
+export async function deleteAdminManager(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+    const currentUserId = (req as any).user.userId;
+
+    const result = await adminService.deleteAdminManager(managerId, currentUserId);
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get available branches for a manager (branches not yet assigned)
+ * GET /admin/managers/:managerId/available-branches
+ */
+export async function getAvailableBranchesForManager(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+
+    // Verify manager exists
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: { id: true, role: true }
+    });
+
+    if (!manager || manager.role !== 'ADMIN_MANAGER') {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan'
+      };
+    }
+
+    // Get branches already assigned to this manager
+    const assignedBranches = await prisma.managerBranch.findMany({
+      where: { userId: managerId },
+      select: { branchId: true }
+    });
+    const assignedBranchIds = assignedBranches.map(mb => mb.branchId);
+
+    // Get all active branches not assigned to this manager
+    // Exclude External/System branch (EXT)
+    const availableBranches = await prisma.branch.findMany({
+      where: {
+        isActive: true,
+        branchCode: { not: 'EXT' }, // Exclude External/System branch
+        id: { notIn: assignedBranchIds }
+      },
+      select: {
+        id: true,
+        branchCode: true,
+        name: true,
+        city: true,
+        type: true,
+        isActive: true,
+      },
+      orderBy: [
+        { type: 'desc' }, // PUSAT first
+        { name: 'asc' }
+      ]
+    });
+
+    sendSuccess(res, availableBranches);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Assign branch to manager
+ * POST /admin/managers/:managerId/branches
+ */
+export async function assignBranchToManager(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+    const { branchId } = req.body;
+    const currentUserId = (req as any).user.userId;
+
+    if (!branchId) {
+      throw {
+        status: 400,
+        code: 'BRANCH_ID_REQUIRED',
+        message: 'branchId harus diisi'
+      };
+    }
+
+    // Verify manager exists
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: { id: true, role: true, email: true }
+    });
+
+    if (!manager || manager.role !== 'ADMIN_MANAGER') {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan'
+      };
+    }
+
+    // Verify branch exists
+    const branch = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { id: true, name: true, branchCode: true, isActive: true }
+    });
+
+    if (!branch) {
+      throw {
+        status: 404,
+        code: 'BRANCH_NOT_FOUND',
+        message: 'Cabang tidak ditemukan'
+      };
+    }
+
+    if (!branch.isActive) {
+      throw {
+        status: 422,
+        code: 'BRANCH_INACTIVE',
+        message: 'Cabang tidak aktif'
+      };
+    }
+
+    // Check if already assigned
+    const existingAssignment = await prisma.managerBranch.findFirst({
+      where: { userId: managerId, branchId }
+    });
+
+    if (existingAssignment) {
+      throw {
+        status: 422,
+        code: 'ALREADY_ASSIGNED',
+        message: 'Cabang sudah di-assign ke manager ini'
+      };
+    }
+
+    // Create assignment
+    const assignment = await prisma.managerBranch.create({
+      data: {
+        userId: managerId,
+        branchId
+      },
+      include: {
+        branch: {
+          select: {
+            id: true,
+            branchCode: true,
+            name: true,
+            city: true,
+            type: true,
+            isActive: true,
+          }
+        }
+      }
+    });
+
+    // Audit log
+    const { logAudit } = await import('@utils/auditLog');
+    await logAudit({
+      userId: currentUserId,
+      branchId: branchId,
+      action: AuditAction.CREATE,
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: { 
+        action: 'assign_branch_to_manager', 
+        managerId, 
+        managerEmail: manager.email,
+        branchId, 
+        branchName: branch.name 
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    sendSuccess(res, {
+      message: `Cabang ${branch.name} berhasil di-assign ke manager`,
+      branch: assignment.branch
+    }, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Unassign branch from manager
+ * DELETE /admin/managers/:managerId/branches/:branchId
+ */
+export async function unassignBranchFromManager(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId, branchId } = req.params;
+    const currentUserId = (req as any).user.userId;
+
+    // Verify manager exists
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: { id: true, role: true, email: true }
+    });
+
+    if (!manager || manager.role !== 'ADMIN_MANAGER') {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan'
+      };
+    }
+
+    // Verify branch exists
+    const branch = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { id: true, name: true }
+    });
+
+    if (!branch) {
+      throw {
+        status: 404,
+        code: 'BRANCH_NOT_FOUND',
+        message: 'Cabang tidak ditemukan'
+      };
+    }
+
+    // Check if assignment exists
+    const existingAssignment = await prisma.managerBranch.findFirst({
+      where: { userId: managerId, branchId }
+    });
+
+    if (!existingAssignment) {
+      throw {
+        status: 404,
+        code: 'ASSIGNMENT_NOT_FOUND',
+        message: 'Cabang tidak di-assign ke manager ini'
+      };
+    }
+
+    // Delete assignment
+    await prisma.managerBranch.delete({
+      where: { id: existingAssignment.id }
+    });
+
+    // Audit log
+    const { logAudit } = await import('@utils/auditLog');
+    await logAudit({
+      userId: currentUserId,
+      branchId: branchId,
+      action: AuditAction.DELETE,
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: { 
+        action: 'unassign_branch_from_manager', 
+        managerId, 
+        managerEmail: manager.email,
+        branchId, 
+        branchName: branch.name 
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent']
+    });
+
+    sendSuccess(res, {
+      message: `Cabang ${branch.name} berhasil di-unassign dari manager`
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * Get Branch Admins (for Admin Manager)
  * GET /admin/branch-admins
  */

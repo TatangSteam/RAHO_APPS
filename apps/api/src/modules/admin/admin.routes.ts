@@ -25,6 +25,8 @@ import {
   updateServiceType,
   deleteServiceType,
   createAdminManager,
+  updateAdminManager,
+  deleteAdminManager,
   getAllUsers,
   getAllMasterProducts,
   getMasterProduct,
@@ -34,6 +36,9 @@ import {
   getProductCategories,
   getAdminManagers,
   getAdminManagerDetail,
+  getAvailableBranchesForManager,
+  assignBranchToManager,
+  unassignBranchFromManager,
   getBranchAdmins,
   startImpersonation,
   stopImpersonation,
@@ -285,10 +290,40 @@ router.get('/managers',
   getAdminManagers
 );
 
+// Get available branches for a manager (Super Admin only)
+router.get('/managers/:managerId/available-branches',
+  authorize(['SUPER_ADMIN']),
+  getAvailableBranchesForManager
+);
+
+// Assign branch to manager (Super Admin only)
+router.post('/managers/:managerId/branches',
+  authorize(['SUPER_ADMIN']),
+  assignBranchToManager
+);
+
+// Unassign branch from manager (Super Admin only)
+router.delete('/managers/:managerId/branches/:branchId',
+  authorize(['SUPER_ADMIN']),
+  unassignBranchFromManager
+);
+
 // Get Admin Manager Detail (Super Admin only) - MUST be after /managers
 router.get('/managers/:managerId',
   authorize(['SUPER_ADMIN']),
   getAdminManagerDetail
+);
+
+// Update Admin Manager (Super Admin only)
+router.put('/managers/:managerId',
+  authorize(['SUPER_ADMIN']),
+  updateAdminManager
+);
+
+// Delete Admin Manager (Super Admin only)
+router.delete('/managers/:managerId',
+  authorize(['SUPER_ADMIN']),
+  deleteAdminManager
 );
 
 // Get Branch Admins (Admin Manager only)

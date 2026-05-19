@@ -203,3 +203,32 @@ export async function getStaffByRole(req: Request, res: Response, next: NextFunc
     sendSuccess(res, staff);
   } catch (err) { next(err); }
 }
+
+/**
+ * List staff for a specific branch (used by /branches/:branchId/staff endpoint)
+ * This properly uses req.params.branchId instead of req.user.branchId
+ */
+export async function listBranchStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId } = req.params;
+    const query = listUsersQuerySchema.parse(req.query);
+    
+    // Override branchId from URL params
+    const { users, total, page, limit } = await listUsersService(
+      { ...query, branchId },
+      req.user.role as Role,
+      null, // Pass null for callerBranchId since we're explicitly filtering by branchId param
+    );
+    
+    // Transform to match expected frontend format
+    const transformedUsers = users.map(user => ({
+      id: user.id,
+      email: user.email,
+      fullName: user.profile?.fullName || '',
+      role: user.role,
+      isActive: user.isActive,
+    }));
+    
+    sendSuccess(res, transformedUsers, 200, buildPaginationMeta(total, page, limit));
+  } catch (err) { next(err); }
+}

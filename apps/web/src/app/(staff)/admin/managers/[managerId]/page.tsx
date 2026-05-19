@@ -4,17 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff } from 'lucide-react';
+import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
 import styles from './page.module.css';
-
-interface Branch {
-  id: string;
-  branchCode: string;
-  name: string;
-  city: string;
-  type: string;
-  isActive: boolean;
-}
 
 interface Staff {
   id: string;
@@ -25,8 +17,8 @@ interface Staff {
 }
 
 interface Member {
-  id: string;
-  memberCode: string;
+  memberId: string;
+  memberNo: string;
   fullName: string;
   email: string;
   phone: string;
@@ -56,6 +48,29 @@ export default function AdminManagerDetailPage() {
   const [expandedBranches, setExpandedBranches] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<Record<string, 'staff' | 'members'>>({});
   const [loading, setLoading] = useState(true);
+  
+  // Add Branch Modal State
+  const [showAddBranchModal, setShowAddBranchModal] = useState(false);
+  const [availableBranches, setAvailableBranches] = useState<Branch[]>([]);
+  const [loadingAvailableBranches, setLoadingAvailableBranches] = useState(false);
+  const [assigningBranch, setAssigningBranch] = useState<string | null>(null);
+  const [removingBranch, setRemovingBranch] = useState<string | null>(null);
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    email: '',
+    fullName: '',
+    phoneNumber: '',
+    password: '',
+    confirmPassword: '',
+    isActive: true,
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete State
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!user || user.role !== 'SUPER_ADMIN') {
@@ -118,7 +133,7 @@ export default function AdminManagerDetailPage() {
   const loadBranchMembers = async (branchId: string) => {
     try {
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/members?branchId=${branchId}&limit=100`,
+        `${process.env.NEXT_PUBLIC_API_URL}/branches/${branchId}/members?limit=100`,
         {
           headers: { 'Authorization': `Bearer ${accessToken}` },
         }
@@ -130,6 +145,139 @@ export default function AdminManagerDetailPage() {
       }
     } catch (error) {
       console.error(`Error loading members for branch ${branchId}:`, error);
+    }
+  };
+
+  const loadAvailableBranches = async () => {
+    try {
+      setLoadingAvailableBranches(true);
+      const response = await adminManagersApi.getAvailableBranchesForManager(managerId);
+      setAvailableBranches(response.data || []);
+    } catch (error: any) {
+      console.error('Error loading available branches:', error);
+      showToast.error('Gagal memuat daftar cabang');
+    } finally {
+      setLoadingAvailableBranches(false);
+    }
+  };
+
+  const handleOpenAddBranchModal = () => {
+    setShowAddBranchModal(true);
+    loadAvailableBranches();
+  };
+
+  const handleAssignBranch = async (branchId: string) => {
+    try {
+      setAssigningBranch(branchId);
+      await adminManagersApi.assignBranchToManager(managerId, branchId);
+      showToast.success('Cabang berhasil ditambahkan');
+      setShowAddBranchModal(false);
+      await loadManagerDetail();
+    } catch (error: any) {
+      console.error('Error assigning branch:', error);
+      showToast.error(error.response?.data?.message || 'Gagal menambahkan cabang');
+    } finally {
+      setAssigningBranch(null);
+    }
+  };
+
+  const handleRemoveBranch = async (branchId: string, branchName: string) => {
+    if (!confirm(`Apakah Anda yakin ingin menghapus cabang "${branchName}" dari manager ini?`)) {
+      return;
+    }
+
+    try {
+      setRemovingBranch(branchId);
+      await adminManagersApi.unassignBranchFromManager(managerId, branchId);
+      showToast.success('Cabang berhasil dihapus');
+      await loadManagerDetail();
+    } catch (error: any) {
+      console.error('Error removing branch:', error);
+      showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
+    } finally {
+      setRemovingBranch(null);
+    }
+  };
+
+  const handleOpenEditModal = () => {
+    if (manager) {
+      setEditForm({
+        email: manager.email,
+        fullName: manager.fullName,
+        phoneNumber: manager.phoneNumber || '',
+        password: '',
+        confirmPassword: '',
+        isActive: manager.isActive,
+      });
+      setShowEditModal(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    // Validation
+    if (!editForm.email.trim()) {
+      showToast.error('Email harus diisi');
+      return;
+    }
+    if (!editForm.fullName.trim()) {
+      showToast.error('Nama lengkap harus diisi');
+      return;
+    }
+    if (editForm.password && editForm.password.length < 6) {
+      showToast.error('Password minimal 6 karakter');
+      return;
+    }
+    if (editForm.password && editForm.password !== editForm.confirmPassword) {
+      showToast.error('Password dan konfirmasi password tidak sama');
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      
+      const updateData: UpdateAdminManagerData = {
+        email: editForm.email,
+        fullName: editForm.fullName,
+        phoneNumber: editForm.phoneNumber,
+        isActive: editForm.isActive,
+      };
+
+      // Only include password if it's being changed
+      if (editForm.password) {
+        updateData.password = editForm.password;
+      }
+
+      await adminManagersApi.updateAdminManager(managerId, updateData);
+      showToast.success('Admin Manager berhasil diperbarui');
+      setShowEditModal(false);
+      await loadManagerDetail();
+    } catch (error: any) {
+      console.error('Error updating manager:', error);
+      showToast.error(error.response?.data?.message || 'Gagal memperbarui Admin Manager');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!manager) return;
+
+    const confirmText = `Apakah Anda yakin ingin menghapus Admin Manager "${manager.fullName}"?\n\nTindakan ini akan:\n- Menghapus semua assignment cabang\n- Menghapus akun Admin Manager secara permanen\n\nTindakan ini tidak dapat dibatalkan.`;
+    
+    if (!confirm(confirmText)) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      await adminManagersApi.deleteAdminManager(managerId);
+      showToast.success('Admin Manager berhasil dihapus');
+      router.push('/admin/managers');
+    } catch (error: any) {
+      console.error('Error deleting manager:', error);
+      showToast.error(error.response?.data?.message || 'Gagal menghapus Admin Manager');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -186,16 +334,36 @@ export default function AdminManagerDetailPage() {
           <span>Kembali</span>
         </button>
         
-        <div className={styles.headerInfo}>
-          <div className={styles.avatar}>
-            {manager.fullName.charAt(0).toUpperCase()}
+        <div className={styles.headerRow}>
+          <div className={styles.headerInfo}>
+            <div className={styles.avatar}>
+              {manager.fullName.charAt(0).toUpperCase()}
+            </div>
+            <div className={styles.headerText}>
+              <h1>{manager.fullName}</h1>
+              <p className={styles.email}>{manager.email}</p>
+              <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
+                {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
+              </span>
+            </div>
           </div>
-          <div className={styles.headerText}>
-            <h1>{manager.fullName}</h1>
-            <p className={styles.email}>{manager.email}</p>
-            <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
-              {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
-            </span>
+          
+          <div className={styles.headerActions}>
+            <button 
+              className={styles.editBtn}
+              onClick={handleOpenEditModal}
+            >
+              <Edit size={18} />
+              <span>Edit</span>
+            </button>
+            <button 
+              className={styles.deleteBtn}
+              onClick={handleDelete}
+              disabled={deleting}
+            >
+              {deleting ? '⏳' : <Trash2 size={18} />}
+              <span>{deleting ? 'Menghapus...' : 'Hapus'}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -239,12 +407,28 @@ export default function AdminManagerDetailPage() {
 
       {/* Branches List */}
       <div className={styles.branchesSection}>
-        <h2>Branches yang Dikelola</h2>
+        <div className={styles.branchesSectionHeader}>
+          <h2>Branches yang Dikelola</h2>
+          <button 
+            className={styles.addBranchBtn}
+            onClick={handleOpenAddBranchModal}
+          >
+            <Plus size={18} />
+            <span>Tambah Cabang</span>
+          </button>
+        </div>
         
         {manager.branches.length === 0 ? (
           <div className={styles.emptyState}>
             <Building2 size={48} />
             <p>Belum ada branch yang di-assign</p>
+            <button 
+              className={styles.addBranchBtnEmpty}
+              onClick={handleOpenAddBranchModal}
+            >
+              <Plus size={18} />
+              <span>Tambah Cabang Pertama</span>
+            </button>
           </div>
         ) : (
           <div className={styles.branchesList}>
@@ -257,11 +441,11 @@ export default function AdminManagerDetailPage() {
               return (
                 <div key={branch.id} className={styles.branchCard}>
                   {/* Branch Header */}
-                  <div 
-                    className={styles.branchHeader}
-                    onClick={() => toggleBranch(branch.id)}
-                  >
-                    <div className={styles.branchInfo}>
+                  <div className={styles.branchHeader}>
+                    <div 
+                      className={styles.branchInfo}
+                      onClick={() => toggleBranch(branch.id)}
+                    >
                       <div className={styles.branchIcon}>
                         <Building2 size={20} />
                       </div>
@@ -270,7 +454,7 @@ export default function AdminManagerDetailPage() {
                         <p className={styles.branchMeta}>
                           <span className={styles.branchCode}>{branch.branchCode}</span>
                           <span className={styles.separator}>•</span>
-                          <span>{branch.city}</span>
+                          <span>{branch.city || '-'}</span>
                           <span className={styles.separator}>•</span>
                           <span>{branch.type}</span>
                         </p>
@@ -286,7 +470,23 @@ export default function AdminManagerDetailPage() {
                         <Users size={14} />
                         {members.length} Members
                       </span>
-                      {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      <button
+                        className={styles.removeBranchBtn}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveBranch(branch.id, branch.name);
+                        }}
+                        disabled={removingBranch === branch.id}
+                        title="Hapus cabang dari manager"
+                      >
+                        {removingBranch === branch.id ? '⏳' : <Trash2 size={16} />}
+                      </button>
+                      <div 
+                        className={styles.expandIcon}
+                        onClick={() => toggleBranch(branch.id)}
+                      >
+                        {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      </div>
                     </div>
                   </div>
 
@@ -376,9 +576,9 @@ export default function AdminManagerDetailPage() {
                                 </thead>
                                 <tbody>
                                   {members.map((m) => (
-                                    <tr key={m.id}>
+                                    <tr key={m.memberId}>
                                       <td>
-                                        <span className={styles.memberCode}>{m.memberCode}</span>
+                                        <span className={styles.memberCode}>{m.memberNo}</span>
                                       </td>
                                       <td>{m.fullName}</td>
                                       <td>{m.email}</td>
@@ -391,7 +591,7 @@ export default function AdminManagerDetailPage() {
                                       <td>
                                         <button
                                           className={styles.actionBtn}
-                                          onClick={() => router.push(`/members/${m.id}`)}
+                                          onClick={() => router.push(`/members/${m.memberId}`)}
                                           title="Lihat Detail"
                                         >
                                           👁️
@@ -413,6 +613,193 @@ export default function AdminManagerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Add Branch Modal */}
+      {showAddBranchModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowAddBranchModal(false)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Tambah Cabang</h3>
+              <button 
+                className={styles.modalCloseBtn}
+                onClick={() => setShowAddBranchModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className={styles.modalContent}>
+              {loadingAvailableBranches ? (
+                <div className={styles.modalLoading}>
+                  <div className={styles.loadingSpinner}>⏳</div>
+                  <p>Memuat daftar cabang...</p>
+                </div>
+              ) : availableBranches.length === 0 ? (
+                <div className={styles.modalEmpty}>
+                  <Building2 size={48} />
+                  <p>Semua cabang sudah di-assign ke manager ini</p>
+                </div>
+              ) : (
+                <div className={styles.branchSelectList}>
+                  {availableBranches.map((branch) => (
+                    <div key={branch.id} className={styles.branchSelectItem}>
+                      <div className={styles.branchSelectInfo}>
+                        <div className={styles.branchSelectIcon}>
+                          <Building2 size={18} />
+                        </div>
+                        <div>
+                          <div className={styles.branchSelectName}>{branch.name}</div>
+                          <div className={styles.branchSelectMeta}>
+                            <span className={styles.branchCode}>{branch.branchCode}</span>
+                            <span className={styles.separator}>•</span>
+                            <span>{branch.city || '-'}</span>
+                            <span className={styles.separator}>•</span>
+                            <span>{branch.type}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        className={styles.assignBtn}
+                        onClick={() => handleAssignBranch(branch.id)}
+                        disabled={assigningBranch === branch.id}
+                      >
+                        {assigningBranch === branch.id ? '⏳' : (
+                          <>
+                            <Plus size={16} />
+                            <span>Tambah</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className={styles.modalOverlay} onClick={() => setShowEditModal(false)}>
+          <div className={styles.editModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h3>Edit Admin Manager</h3>
+              <button 
+                className={styles.modalCloseBtn}
+                onClick={() => setShowEditModal(false)}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className={styles.modalContent}>
+              <div className={styles.formGroup}>
+                <label>Email <span className={styles.required}>*</span></label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="email@example.com"
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Nama Lengkap <span className={styles.required}>*</span></label>
+                <input
+                  type="text"
+                  value={editForm.fullName}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, fullName: e.target.value }))}
+                  placeholder="Nama lengkap"
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Nomor Telepon</label>
+                <input
+                  type="tel"
+                  value={editForm.phoneNumber}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, phoneNumber: e.target.value }))}
+                  placeholder="08xxxxxxxxxx"
+                  className={styles.input}
+                />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Password Baru <span className={styles.hint}>(kosongkan jika tidak ingin mengubah)</span></label>
+                <div className={styles.passwordInput}>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={editForm.password}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, password: e.target.value }))}
+                    placeholder="Minimal 6 karakter"
+                    className={styles.input}
+                  />
+                  <button
+                    type="button"
+                    className={styles.passwordToggle}
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {editForm.password && (
+                <div className={styles.formGroup}>
+                  <label>Konfirmasi Password Baru <span className={styles.required}>*</span></label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={editForm.confirmPassword}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                    placeholder="Ulangi password baru"
+                    className={styles.input}
+                  />
+                </div>
+              )}
+
+              <div className={styles.formGroup}>
+                <label>Status</label>
+                <div className={styles.toggleContainer}>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${editForm.isActive ? styles.active : ''}`}
+                    onClick={() => setEditForm(prev => ({ ...prev, isActive: true }))}
+                  >
+                    Aktif
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${!editForm.isActive ? styles.active : ''}`}
+                    onClick={() => setEditForm(prev => ({ ...prev, isActive: false }))}
+                  >
+                    Tidak Aktif
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button 
+                className={styles.cancelBtn}
+                onClick={() => setShowEditModal(false)}
+                disabled={savingEdit}
+              >
+                Batal
+              </button>
+              <button 
+                className={styles.saveBtn}
+                onClick={handleSaveEdit}
+                disabled={savingEdit}
+              >
+                {savingEdit ? '⏳ Menyimpan...' : 'Simpan Perubahan'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

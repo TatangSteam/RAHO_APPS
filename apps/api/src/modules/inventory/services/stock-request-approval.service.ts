@@ -5,10 +5,43 @@ import { AuditAction, Role } from '@prisma/client';
 
 /**
  * Service for approving/rejecting stock requests
+ * 
+ * Approval Rules:
+ * - SUPER_ADMIN: Can approve any request, shipment comes from "External/System" (not tied to any branch)
+ * - ADMIN_MANAGER: Can only approve requests from branches they manage, shipment comes from their managed branch
  */
 export class StockRequestApprovalService {
+  // Branch code for external/system shipments (Super Admin)
+  private readonly EXTERNAL_BRANCH_CODE = 'EXT';
+
+  /**
+   * Get or create the external/system branch for Super Admin shipments
+   */
+  private async getOrCreateExternalBranch() {
+    let externalBranch = await prisma.branch.findFirst({
+      where: { branchCode: this.EXTERNAL_BRANCH_CODE },
+    });
+
+    if (!externalBranch) {
+      externalBranch = await prisma.branch.create({
+        data: {
+          branchCode: this.EXTERNAL_BRANCH_CODE,
+          name: 'External / Sistem',
+          address: 'Pengiriman dari sistem eksternal',
+          phone: '-',
+          isActive: true,
+        },
+      });
+    }
+
+    return externalBranch;
+  }
+
   /**
    * Approve stock request and create shipment
+   * 
+   * - Super Admin: Can approve any request, shipment from External/System
+   * - Admin Manager: Can only approve requests from branches they manage, shipment from External/System
    */
   async approveRequest(requestId: string, userId: string, reviewNotes?: string) {
     // Validate user role
@@ -50,7 +83,15 @@ export class StockRequestApprovalService {
       };
     }
 
-    // For ADMIN_MANAGER, verify they manage the requesting branch
+    if (request.status !== 'PENDING') {
+      throw {
+        status: 422,
+        code: 'INVALID_STATUS',
+        message: 'Permintaan stok sudah diproses',
+      };
+    }
+
+    // For Admin Manager: verify they manage the requesting branch
     if (user.role === Role.ADMIN_MANAGER) {
       const managerBranch = await prisma.managerBranch.findFirst({
         where: {
@@ -63,39 +104,17 @@ export class StockRequestApprovalService {
         throw {
           status: 403,
           code: 'BRANCH_ACCESS_DENIED',
-          message: 'Anda tidak memiliki akses untuk menyetujui permintaan dari cabang ini',
+          message: 'Anda hanya dapat menyetujui permintaan dari cabang yang Anda kelola',
         };
       }
     }
 
-    if (request.status !== 'PENDING') {
-      throw {
-        status: 422,
-        code: 'INVALID_STATUS',
-        message: 'Permintaan stok sudah diproses',
-      };
-    }
-
-    // Get HQ branch (assuming branchCode 'HQ' or first branch)
-    const hqBranch = await prisma.branch.findFirst({
-      where: {
-        OR: [
-          { branchCode: 'HQ' },
-          { branchCode: 'PST' },
-        ],
-      },
-    });
-
-    if (!hqBranch) {
-      throw {
-        status: 404,
-        code: 'HQ_NOT_FOUND',
-        message: 'Cabang pusat tidak ditemukan',
-      };
-    }
+    // Both Super Admin and Admin Manager: Shipment from External/System
+    const senderBranch = await this.getOrCreateExternalBranch();
+    const shipmentNotes = `Pengiriman untuk permintaan ${request.requestCode} dari Sistem/External`;
 
     // Generate shipment code
-    const shipmentCode = await this.generateShipmentCode(hqBranch.id, request.branchId);
+    const shipmentCode = await this.generateShipmentCode(senderBranch.id, request.branchId);
 
     // Create shipment and update request in transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -126,11 +145,11 @@ export class StockRequestApprovalService {
       const shipment = await tx.shipment.create({
         data: {
           shipmentCode,
-          fromBranchId: hqBranch.id,
+          fromBranchId: senderBranch.id,
           toBranchId: request.branchId,
           stockRequestId: requestId,
           status: 'PREPARING',
-          notes: `Pengiriman untuk permintaan ${request.requestCode}`,
+          notes: shipmentNotes,
           items: {
             create: request.items.map(item => ({
               inventoryItemId: item.inventoryItemId,
@@ -154,7 +173,12 @@ export class StockRequestApprovalService {
       action: AuditAction.UPDATE,
       resource: 'StockRequest',
       resourceId: requestId,
-      meta: { action: 'APPROVE', shipmentId: result.shipment.id },
+      meta: { 
+        action: 'APPROVE', 
+        shipmentId: result.shipment.id,
+        approverRole: user.role,
+        senderBranchId: senderBranch.id,
+      },
     });
 
     await logAudit({
@@ -173,12 +197,15 @@ export class StockRequestApprovalService {
 
   /**
    * Reject stock request
+   * 
+   * - Super Admin: Can reject any request
+   * - Admin Manager: Can only reject requests from branches they manage
    */
   async rejectRequest(requestId: string, userId: string, reviewNotes: string) {
     // Validate user role
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { role: true, branchId: true },
     });
 
     if (!user || (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER)) {
@@ -219,7 +246,7 @@ export class StockRequestApprovalService {
       const managerBranch = await prisma.managerBranch.findFirst({
         where: {
           userId,
-          branchId: request.branchId,
+          branchId: request.branchId, // Must manage the requesting branch
         },
       });
 
@@ -227,7 +254,7 @@ export class StockRequestApprovalService {
         throw {
           status: 403,
           code: 'BRANCH_ACCESS_DENIED',
-          message: 'Anda tidak memiliki akses untuk menolak permintaan dari cabang ini',
+          message: 'Anda hanya dapat menolak permintaan dari cabang yang Anda kelola',
         };
       }
     }
@@ -269,7 +296,7 @@ export class StockRequestApprovalService {
       action: AuditAction.UPDATE,
       resource: 'StockRequest',
       resourceId: requestId,
-      meta: { action: 'REJECT', reason: reviewNotes },
+      meta: { action: 'REJECT', reason: reviewNotes, approverRole: user.role },
     });
 
     return this.formatStockRequest(updatedRequest);
@@ -288,7 +315,7 @@ export class StockRequestApprovalService {
     const year = date.getFullYear().toString().slice(-2);
     const month = (date.getMonth() + 1).toString().padStart(2, '0');
     
-    const prefix = `SHP-${fromBranch?.branchCode}-${toBranch?.branchCode}-${year}${month}`;
+    const prefix = `SHP-${fromBranch?.branchCode || 'EXT'}-${toBranch?.branchCode}-${year}${month}`;
     
     const lastShipment = await prisma.shipment.findFirst({
       where: {

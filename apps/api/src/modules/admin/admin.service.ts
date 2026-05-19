@@ -165,6 +165,30 @@ export class AdminService {
   }
 
   /**
+   * Update admin manager
+   */
+  async updateAdminManager(
+    managerId: string,
+    data: {
+      email?: string;
+      password?: string;
+      fullName?: string;
+      phoneNumber?: string;
+      isActive?: boolean;
+    },
+    currentUserId: string
+  ) {
+    return await this.userManagementService.updateAdminManager(managerId, data, currentUserId);
+  }
+
+  /**
+   * Delete admin manager
+   */
+  async deleteAdminManager(managerId: string, currentUserId: string) {
+    return await this.userManagementService.deleteAdminManager(managerId, currentUserId);
+  }
+
+  /**
    * Get all users with filtering
    */
   async getAllUsers(filters: {
