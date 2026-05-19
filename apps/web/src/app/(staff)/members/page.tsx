@@ -187,13 +187,16 @@ export default function MembersPage() {
             >
               📥 Export Data
             </button>
-            <button
-              onClick={() => setShowLookupModal(true)}
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              🔍 Cari Lintas Cabang
-            </button>
+            {/* Hide "Cari Lintas Cabang" for DOCTOR and NURSE - they can only see members in their branch */}
+            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
+              <button
+                onClick={() => setShowLookupModal(true)}
+                className="btn btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                🔍 Cari Lintas Cabang
+              </button>
+            )}
             {canCreateMember && (
               <button
                 onClick={() => router.push('/members/new')}

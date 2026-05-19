@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { generateDiagnosisCode, generateEncounterCode } from '../../../utils/codeGenerator';
+import { generateDiagnosisCode } from '../../../utils/codeGenerator';
 import { AuditAction, Role } from '@prisma/client';
 
 /**
@@ -61,6 +61,10 @@ export class MemberMedicalRecordsService {
 
   /**
    * Create member diagnosis
+   * 
+   * IMPORTANT: Diagnoses are created directly linked to member (not encounter).
+   * A member can have multiple diagnoses. Diagnoses are NOT tied to encounters
+   * to allow flexibility - member can have diagnoses before having any active package.
    */
   async createMemberDiagnosis(memberId: string, data: any, userId: string) {
     // Verify member exists
@@ -87,62 +91,6 @@ export class MemberMedicalRecordsService {
       throw { status: 403, code: 'INVALID_DOCTOR', message: 'Dokter tidak valid atau tidak aktif' };
     }
 
-    // Try to find active package and encounter (optional)
-    const activePackage = await prisma.memberPackage.findFirst({
-      where: {
-        memberId,
-        status: 'ACTIVE',
-        packageType: 'BASIC',
-      },
-      include: {
-        branch: true,
-      },
-      orderBy: {
-        activatedAt: 'desc',
-      },
-    });
-
-    let encounterId: string | undefined = undefined;
-
-    // If member has active package, try to link to encounter
-    if (activePackage && doctor.branch) {
-      // Check if encounter already exists for this package
-      let encounter = await prisma.encounter.findFirst({
-        where: {
-          memberPackageId: activePackage.id,
-          status: 'ONGOING',
-        },
-      });
-
-      // If no encounter, create one
-      if (!encounter) {
-        const encounterCode = generateEncounterCode(activePackage.branch.branchCode);
-        encounter = await prisma.encounter.create({
-          data: {
-            encounterCode,
-            memberId,
-            branchId: activePackage.branchId,
-            memberPackageId: activePackage.id,
-            adminLayananId: userId,
-            doctorId: doctor.id,
-            nurseId: doctor.id, // Temporary - should be actual nurse
-            status: 'ONGOING',
-          },
-        });
-      }
-
-      // Check if diagnosis already exists for this encounter
-      const existingDiagnosis = await prisma.diagnosis.findUnique({
-        where: { encounterId: encounter.id },
-      });
-
-      if (existingDiagnosis) {
-        throw { status: 409, code: 'DIAGNOSIS_EXISTS', message: 'Diagnosa sudah ada untuk encounter ini' };
-      }
-
-      encounterId = encounter.id;
-    }
-
     // Generate diagnosis code
     const branchCode = member.registrationBranch.branchCode;
     const prefix = `DX-${branchCode}-`;
@@ -157,12 +105,13 @@ export class MemberMedicalRecordsService {
     
     const diagnosisCode = generateDiagnosisCode(branchCode, sequence);
 
-    // Create diagnosis (with or without encounter)
+    // Create diagnosis linked directly to member (NOT to encounter)
+    // This allows member to have multiple diagnoses
     const diagnosis = await prisma.diagnosis.create({
       data: {
         diagnosisCode,
         memberId, // Direct link to member
-        encounterId, // Optional - only if encounter exists
+        encounterId: null, // NOT linked to encounter - diagnoses are standalone
         doktorPemeriksa: data.doktorPemeriksa,
         diagnosa: data.diagnosa,
         kategoriDiagnosa: data.kategoriDiagnosa || null,
@@ -184,7 +133,7 @@ export class MemberMedicalRecordsService {
       action: AuditAction.CREATE,
       resource: 'Diagnosis',
       resourceId: diagnosis.id,
-      meta: { memberId, encounterId },
+      meta: { memberId, diagnosisCode },
     });
 
     return diagnosis;

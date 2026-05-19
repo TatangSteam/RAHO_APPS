@@ -125,6 +125,7 @@ export default function MemberDetailPage() {
   };
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
 
   useEffect(() => {
     console.log('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
@@ -497,9 +498,11 @@ export default function MemberDetailPage() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <h3 style={{ fontSize: '18px', fontWeight: '600' }}>📦 Paket Member</h3>
-                <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
-                  ➕ Assign Paket
-                </button>
+                {canAssignPackage && (
+                  <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
+                    ➕ Assign Paket
+                  </button>
+                )}
               </div>
               <MemberPackagesTab
                 packages={packages}
