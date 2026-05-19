@@ -81,14 +81,26 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600' }}>🩺 Sesi Terapi</h3>
-        <button
-          onClick={() => setIsCreateModalOpen(true)}
-          className="btn btn-primary"
-          disabled={hasIncompleteSession}
-          title={hasIncompleteSession ? 'Selesaikan sesi yang sedang berjalan terlebih dahulu' : ''}
-        >
-          ➕ Buat Sesi Baru
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {hasIncompleteSession && incompleteSessions.length > 0 && (
+            <button
+              onClick={() => router.push(`/sessions/${incompleteSessions[0].session.sessionId}`)}
+              className="btn btn-warning"
+              style={{
+                background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                border: 'none',
+              }}
+            >
+              ⏳ Lanjutkan Sesi Pending ({incompleteSessions.length})
+            </button>
+          )}
+          <button
+            onClick={() => setIsCreateModalOpen(true)}
+            className="btn btn-primary"
+          >
+            ➕ Buat Sesi Baru
+          </button>
+        </div>
       </div>
 
       {validSessions.length === 0 ? (
@@ -115,10 +127,10 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                 <span style={{ fontSize: '20px' }}>⚠️</span>
                 <div>
                   <p style={{ fontSize: '14px', fontWeight: '700', color: '#fbbf24', marginBottom: '4px' }}>
-                    Ada Sesi yang Belum Lengkap
+                    Ada {incompleteSessions.length} Sesi yang Belum Lengkap
                   </p>
                   <p style={{ fontSize: '13px', color: '#fcd34d' }}>
-                    Selesaikan sesi yang sedang berjalan terlebih dahulu sebelum membuat sesi baru.
+                    Anda dapat melanjutkan sesi yang pending atau membuat sesi baru. Klik tombol "Lanjutkan Sesi Pending" untuk melanjutkan sesi yang belum selesai.
                   </p>
                 </div>
               </div>

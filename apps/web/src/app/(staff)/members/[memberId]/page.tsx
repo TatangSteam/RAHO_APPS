@@ -135,10 +135,11 @@ export default function MemberDetailPage() {
   }, [memberId]);
 
   useEffect(() => {
-    if (activeTab === 'paket') {
+    // Only load pricings for roles that can assign packages
+    if (activeTab === 'paket' && canAssignPackage) {
       loadPricings();
     }
-  }, [activeTab]);
+  }, [activeTab, canAssignPackage]);
 
   const loadMemberDetail = async () => {
     try {
