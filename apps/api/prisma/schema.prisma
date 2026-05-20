@@ -1144,6 +1144,7 @@ model DoctorEvaluationHistory {
 
 model MasterProduct {
   id              String          @id @default(cuid())
+  sku             String?         @unique // SKU code like PRD-INF-IFA-001
   name            String          @unique
   category        ProductCategory
   unit            String          // Legacy field, kept for backward compatibility
@@ -1160,6 +1161,7 @@ model MasterProduct {
   @@index([category, isActive])
   @@index([isActive])
   @@index([baseUnit, usageUnit])
+  @@index([sku])
   @@map("master_products")
 }
 

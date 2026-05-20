@@ -100,8 +100,35 @@ export class SessionRetrievalService {
    * - ADMIN_CABANG, ADMIN_LAYANAN: See only sessions from their primary branch
    * - DOCTOR, NURSE: See sessions from all branches they have access to (via StaffBranch)
    */
-  async getAllSessions(params: { memberId?: string; branchId?: string; role?: string; userId?: string; page?: number; limit?: number }) {
-    const { memberId, branchId, role, userId, page = 1, limit = 50 } = params;
+  async getAllSessions(params: { 
+    memberId?: string; 
+    branchId?: string; 
+    role?: string; 
+    userId?: string; 
+    page?: number; 
+    limit?: number;
+    // Additional filters
+    doctorId?: string;
+    nurseId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: string;
+    pelaksanaan?: string;
+  }) {
+    const { 
+      memberId, 
+      branchId, 
+      role, 
+      userId, 
+      page = 1, 
+      limit = 50,
+      doctorId,
+      nurseId,
+      dateFrom,
+      dateTo,
+      status,
+      pelaksanaan,
+    } = params;
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -117,9 +144,49 @@ export class SessionRetrievalService {
       where.encounter.memberId = memberId;
     }
 
+    // Filter by doctorId if provided
+    if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    // Filter by nurseId if provided
+    if (nurseId) {
+      where.nurseId = nurseId;
+    }
+
+    // Filter by date range
+    if (dateFrom || dateTo) {
+      where.treatmentDate = {};
+      if (dateFrom) {
+        where.treatmentDate.gte = new Date(dateFrom);
+      }
+      if (dateTo) {
+        // Add 1 day to include the end date
+        const endDate = new Date(dateTo);
+        endDate.setDate(endDate.getDate() + 1);
+        where.treatmentDate.lt = endDate;
+      }
+    }
+
+    // Filter by status
+    if (status && status !== 'all') {
+      where.isCompleted = status === 'completed';
+    }
+
+    // Filter by pelaksanaan
+    if (pelaksanaan && pelaksanaan !== 'all') {
+      where.pelaksanaan = pelaksanaan;
+    }
+
     // Role-based branch filtering
-    // SUPER_ADMIN and ADMIN_MANAGER can see all branches
-    if (role && !['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
+    // SUPER_ADMIN and ADMIN_MANAGER can see all branches (or filter by specific branch)
+    if (role && ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
+      // If branchId filter is provided, use it
+      if (branchId) {
+        where.branchId = branchId;
+      }
+      // Otherwise, no branch filter - see all
+    } else if (role && !['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
       // For DOCTOR and NURSE, get all accessible branches from StaffBranch table
       if ((role === 'DOCTOR' || role === 'NURSE') && userId) {
         const staffBranches = await prisma.staffBranch.findMany({

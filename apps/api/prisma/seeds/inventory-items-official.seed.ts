@@ -2,18 +2,16 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
 
 /**
  * Official Inventory Items Seeder
- * Based on "List Stok.md" - Official RAHO Product List
+ * Based on "List Barang RAHO.md" - Official RAHO Product List
  * 
  * This seed creates master products with proper unit conversion:
- * - baseUnit: Storage unit (botol, kotak, pack, rim, etc.)
- * - usageUnit: Usage unit (ml, piece, lembar, etc.)
+ * - baseUnit: Storage unit (Botol, Kotak, Pack, Rim, etc.)
+ * - usageUnit: Usage unit (Botol, Piece, Lembar, etc.)
  * - conversionFactor: How many usage units per base unit
  * 
- * Example: IFA 500ml
- * - baseUnit: "botol"
- * - usageUnit: "ml"
- * - conversionFactor: 500 (1 botol = 500 ml)
- * - Stock stored in botol, usage recorded in ml
+ * IFA Products:
+ * - IFA + NO 2,5ml (250ml): 1 Botol per terapi (WAJIB)
+ * - IFA A + MG 500ml: 1 Botol (special case/alternatif)
  */
 
 export async function seedOfficialInventoryItems(prisma: PrismaClient) {
@@ -30,29 +28,31 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
     // ============================================================
     // CAIRAN INFUS (INF) - Category: MEDICINE
     // ============================================================
+    // IFA + NO 2,5ml - WAJIB 1 botol per terapi (250ml)
     {
-      sku: 'INF-IFM-V500-BT',
-      name: 'IFA A+MG 500ml',
+      sku: 'PRD-INF-IFA-001',
+      name: 'IFA + NO 2,5ml (250ml)',
       category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 500,
+      baseUnit: 'Botol',
+      usageUnit: 'Botol',
+      conversionFactor: 1,
+      pricePerUnit: 12500000,
+      description: 'IFA + NO 2,5ml dalam botol 250ml - Wajib 1 botol per terapi',
+      stock: 100,
+      minStock: 20,
+    },
+    // IFA Biasa 500ml - Special case / alternatif
+    {
+      sku: 'PRD-INF-IFA-002',
+      name: 'IFA A + MG 500ml',
+      category: ProductCategory.MEDICINE,
+      baseUnit: 'Botol',
+      usageUnit: 'Botol',
+      conversionFactor: 1,
       pricePerUnit: 2000000,
-      description: 'Cairan infus IFA dengan Magnesium 500ml per botol',
+      description: 'IFA A + MG 500ml - Alternatif/special case',
       stock: 50,
       minStock: 10,
-    },
-    {
-      sku: 'INF-IFM-V250-BT',
-      name: 'IFA A+MG 250ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 250,
-      pricePerUnit: 12500000,
-      description: 'Cairan infus IFA dengan Magnesium 250ml per botol',
-      stock: 30,
-      minStock: 5,
     },
     {
       sku: 'INF-HHO-V100-BT',
@@ -256,14 +256,14 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
     // ALAT MEDIS HABIS PAKAI (MED) - Category: DEVICE
     // ============================================================
     {
-      sku: 'MED-IFS-PC',
+      sku: 'PRD-INF-SET-001',
       name: 'Infus Set',
       category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
+      baseUnit: 'Piece',
+      usageUnit: 'Piece',
       conversionFactor: 1,
       pricePerUnit: 22500000,
-      description: 'Infus Set 1 piece',
+      description: 'Set infus lengkap',
       stock: 500,
       minStock: 100,
     },
@@ -698,7 +698,8 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
   });
   
   console.log('\n💡 Unit Conversion Examples:');
-  console.log('   • IFA A+MG 500ml: 1 botol = 500 ml');
+  console.log('   • IFA + NO 2,5ml (250ml): 1 Botol = 1 Botol (wajib per terapi)');
+  console.log('   • IFA A + MG 500ml: 1 Botol = 1 Botol (special case)');
   console.log('   • Handscoon: 1 kotak = 100 piece');
   console.log('   • Kertas HVS: 1 rim = 500 lembar');
   console.log('   • Baterai AA: 1 pack = 4 piece');

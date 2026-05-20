@@ -87,16 +87,18 @@ export class InfusionService {
 
       // Deduct stock for each material used AND create material usage records
       // Map field names to product name patterns for searching
+      // IFA: Default to "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi
+      // For special case IFA A + MG 500ml, use separate field or manual selection
       const materials = [
-        { field: 'IFA', namePattern: 'IFA', qty: data.ifa },
+        { field: 'IFA', namePattern: 'IFA + NO', qty: data.ifa }, // Default: IFA + NO 2,5ml (250ml)
         { field: 'HHO', namePattern: 'HHO', qty: data.hho },
-        { field: 'H2', namePattern: 'H2 (Hydrogen)', qty: data.h2 },
-        { field: 'NO', namePattern: 'NO (Nitric Oxide)', qty: data.no },
-        { field: 'GASO', namePattern: 'GASO', qty: data.gaso },
-        { field: 'O2', namePattern: 'O2 (Oxygen)', qty: data.o2 },
-        { field: 'O3', namePattern: 'O3 (Ozone)', qty: data.o3 },
+        { field: 'H2', namePattern: 'H2', qty: data.h2 },
+        { field: 'NO', namePattern: 'NB-NO', qty: data.no },
+        { field: 'GASO', namePattern: 'Gasotransmitter', qty: data.gaso },
+        { field: 'O2', namePattern: 'O2', qty: data.o2 },
+        { field: 'O3', namePattern: 'Ozone', qty: data.o3 },
         { field: 'EDTA', namePattern: 'EDTA', qty: data.edta },
-        { field: 'MB', namePattern: 'MB (Methylene Blue)', qty: data.mb },
+        { field: 'MB', namePattern: 'Methyln Blue', qty: data.mb },
         { field: 'H2S', namePattern: 'H2S', qty: data.h2s },
         { field: 'KCL', namePattern: 'KCL', qty: data.kcl },
         { field: 'JML_NB', namePattern: 'JML/NB', qty: data.jmlNb },

@@ -1,6 +1,6 @@
 'use client';
 
-import { Bell, Menu, Search } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
 
@@ -36,15 +36,6 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
         >
           <Menu size={20} />
         </button>
-        <div className="header-search">
-          <Search size={15} className="header-search-icon" />
-          <input
-            type="search"
-            placeholder="Cari member, sesi..."
-            className="header-search-input"
-            aria-label="Global search"
-          />
-        </div>
       </div>
 
       {/* Right */}
@@ -97,37 +88,6 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
         }
 
         .mobile-menu-btn { display: none; }
-
-        .header-search {
-          position: relative;
-          max-width: 340px;
-          width: 100%;
-        }
-        .header-search-icon {
-          position: absolute;
-          left: 12px; top: 50%;
-          transform: translateY(-50%);
-          color: var(--text-muted);
-          pointer-events: none;
-        }
-        .header-search-input {
-          width: 100%;
-          padding: 8px 12px 8px 36px;
-          background: rgba(30, 41, 59, 0.6);
-          border: 1px solid var(--surface-border);
-          border-radius: var(--radius-lg);
-          color: var(--text-primary);
-          font-size: 13px;
-          font-family: inherit;
-          outline: none;
-          transition: all var(--transition-fast);
-        }
-        .header-search-input::placeholder { color: var(--text-muted); }
-        .header-search-input:focus {
-          background: rgba(30,41,59,0.9);
-          border-color: var(--color-primary-500);
-          box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
-        }
 
         .header-right {
           display: flex;
@@ -184,12 +144,10 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
 
         @media (max-width: 1024px) {
           .mobile-menu-btn { display: flex; }
-          .header-search { max-width: 200px; }
           .header-user-info { display: none; }
         }
 
         @media (max-width: 640px) {
-          .header-search { display: none; }
           .app-header { padding: 0 16px; }
         }
       `}</style>

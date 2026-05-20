@@ -134,9 +134,51 @@ export const sessionApi = {
     return response.data.data || [];
   },
 
-  getAllSessions: async (params?: { page?: number; limit?: number }): Promise<SessionDetail[]> => {
+  getAllSessions: async (params?: { 
+    page?: number; 
+    limit?: number;
+    branchId?: string;
+    memberId?: string;
+    doctorId?: string;
+    nurseId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    status?: 'all' | 'completed' | 'incomplete';
+    pelaksanaan?: 'all' | 'ON_SITE' | 'HOME_CARE';
+  }): Promise<SessionDetail[]> => {
     const response = await api.get('/treatment-sessions', { params });
     return response.data.data || [];
+  },
+
+  // ============================================================
+  // EXPORT SESSIONS
+  // ============================================================
+
+  exportSessions: async (params: {
+    format: 'xlsx' | 'csv' | 'json';
+    groupBy?: 'date' | 'member' | 'doctor' | 'none';
+    fields: Record<string, boolean>;
+    filters?: {
+      branchId?: string;
+      memberId?: string;
+      doctorId?: string;
+      nurseId?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      status?: string;
+      pelaksanaan?: string;
+    };
+  }): Promise<Blob> => {
+    const response = await api.post('/treatment-sessions/export', {
+      format: params.format,
+      groupBy: params.groupBy || 'none',
+      fields: params.fields,
+      filters: params.filters,
+    }, {
+      params: { format: params.format, groupBy: params.groupBy || 'none' },
+      responseType: 'blob',
+    });
+    return response.data;
   },
 
   // ============================================================

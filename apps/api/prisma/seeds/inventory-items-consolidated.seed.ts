@@ -34,28 +34,30 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
     // CAIRAN INFUS UNTUK TERAPI - SKU: PRD-INF-xxx / PRD-NBT-xxx
     // Sesuai dokumen LOGISTIK
     // ============================================================
+    // IFA + NO 2,5ml - WAJIB 1 botol per terapi (250ml)
     {
       sku: 'PRD-INF-IFA-001',
+      name: 'IFA + NO 2,5ml (250ml)',
+      category: ProductCategory.MEDICINE,
+      baseUnit: 'Botol',
+      usageUnit: 'Botol',
+      conversionFactor: 1,
+      pricePerUnit: 12500000,
+      description: 'IFA + NO 2,5ml dalam botol 250ml - Wajib 1 botol per terapi',
+      stock: 100,
+      minStock: 20,
+    },
+    // IFA Biasa 500ml - Special case / alternatif
+    {
+      sku: 'PRD-INF-IFA-002',
       name: 'IFA A + MG 500ml',
       category: ProductCategory.MEDICINE,
       baseUnit: 'Botol',
-      usageUnit: 'ml',
-      conversionFactor: 500,
+      usageUnit: 'Botol',
+      conversionFactor: 1,
       pricePerUnit: 2000000,
-      description: 'IFA A + MG 500ml per botol',
+      description: 'IFA A + MG 500ml - Alternatif/special case',
       stock: 50,
-      minStock: 10,
-    },
-    {
-      sku: 'PRD-INF-IFA-002',
-      name: 'IFA A + MG 250ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'Botol',
-      usageUnit: 'ml',
-      conversionFactor: 250,
-      pricePerUnit: 1200000,
-      description: 'IFA A + MG 250ml per botol',
-      stock: 40,
       minStock: 10,
     },
     {

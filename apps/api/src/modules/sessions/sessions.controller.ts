@@ -71,16 +71,34 @@ export class SessionsController {
 
   async getAllSessions(req: Request, res: Response, next: NextFunction) {
     try {
-      const { memberId, page, limit } = req.query;
+      const { 
+        memberId, 
+        page, 
+        limit,
+        branchId: filterBranchId,
+        doctorId,
+        nurseId,
+        dateFrom,
+        dateTo,
+        status,
+        pelaksanaan,
+      } = req.query;
       const { userId, branchId, role } = req.user!;
       
       const result = await sessionsService.getAllSessions({
         memberId: memberId as string | undefined,
-        branchId: branchId || undefined,
+        branchId: filterBranchId as string || branchId || undefined,
         role: role as string,
         userId, // Pass userId for DOCTOR/NURSE multi-branch support
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
+        // Additional filters
+        doctorId: doctorId as string | undefined,
+        nurseId: nurseId as string | undefined,
+        dateFrom: dateFrom as string | undefined,
+        dateTo: dateTo as string | undefined,
+        status: status as string | undefined,
+        pelaksanaan: pelaksanaan as string | undefined,
       });
       
       return sendSuccess(res, result);

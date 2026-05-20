@@ -52,19 +52,20 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
 
     // Map infusion fields to product name patterns
     // These patterns match the product names in materials.seed.ts
+    // IFA: Default to "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi
     const materials = [
-      { field: 'ifa', namePattern: 'IFA', qty: infusion.ifa },
+      { field: 'ifa', namePattern: 'IFA + NO', qty: infusion.ifa },
       { field: 'hho', namePattern: 'HHO', qty: infusion.hho },
-      { field: 'h2', namePattern: 'H2 (Hydrogen)', qty: infusion.h2 },
-      { field: 'no', namePattern: 'NO (Nitric Oxide)', qty: infusion.no },
-      { field: 'gaso', namePattern: 'GASO', qty: infusion.gaso },
-      { field: 'o2', namePattern: 'O2 (Oxygen)', qty: infusion.o2 },
-      { field: 'o3', namePattern: 'O3 (Ozone)', qty: infusion.o3 },
+      { field: 'h2', namePattern: 'H2', qty: infusion.h2 },
+      { field: 'no', namePattern: 'NB-NO', qty: infusion.no },
+      { field: 'gaso', namePattern: 'Gasotransmitter', qty: infusion.gaso },
+      { field: 'o2', namePattern: 'O2', qty: infusion.o2 },
+      { field: 'o3', namePattern: 'Ozone', qty: infusion.o3 },
       { field: 'edta', namePattern: 'EDTA', qty: infusion.edta },
-      { field: 'mb', namePattern: 'MB (Methylene Blue)', qty: infusion.mb },
+      { field: 'mb', namePattern: 'Methyln Blue', qty: infusion.mb },
       { field: 'h2s', namePattern: 'H2S', qty: infusion.h2s },
       { field: 'kcl', namePattern: 'KCL', qty: infusion.kcl },
-      { field: 'jmlNb', namePattern: 'NB Koktail', qty: infusion.jmlNb },
+      { field: 'jmlNb', namePattern: 'JML/NB', qty: infusion.jmlNb },
     ];
 
     let sessionCreated = 0;
