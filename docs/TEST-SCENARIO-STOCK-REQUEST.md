@@ -16,15 +16,65 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 | Role | Email | Password | Branch |
 |------|-------|----------|--------|
-| Super Admin | superadmin@raho.id | password123 | - |
-| Admin Manager | manager@raho.id | password123 | Manages multiple branches |
-| Admin Cabang (Premiere) | admin.premiere@raho.id | password123 | Cabang Premiere |
-| Admin Cabang (Partnership) | admin.partnership@raho.id | password123 | Cabang Partnership |
+| Super Admin | superadmin@raho.id | SuperAdmin@123 | - |
+| Admin Manager | manager1@raho.id | Manager@123 | Manages multiple branches |
+| Admin Cabang (Premiere) | admincabang.pst@raho.id | AdminCabang@123 | RAHO Premiere Jakarta |
+| Admin Cabang (Partnership) | admincabang.bdg@raho.id | AdminCabang@123 | | RAHO Partnership Bandung |
 
 ### Test Data Requirements
 - Master Products sudah tersedia di database
 - Cabang PREMIERE dan PARTNERSHIP sudah terdaftar
 - Admin Manager sudah di-assign ke cabang yang akan ditest
+
+---
+
+## Flow Diagram
+
+### PREMIERE Branch Flow
+```
+Admin Cabang                    Admin Manager                    Admin Cabang
+     │                               │                               │
+     │ 1. Create Request             │                               │
+     │ ─────────────────────────────>│                               │
+     │                               │                               │
+     │                               │ 2. Review & Approve           │
+     │                               │ (Shipment auto-created)       │
+     │                               │                               │
+     │                               │ 3. Ship Shipment              │
+     │                               │ ─────────────────────────────>│
+     │                               │                               │
+     │                               │                               │ 4. Receive Shipment
+     │                               │                               │ (Stock added)
+     │                               │                               │
+```
+
+### PARTNERSHIP Branch Flow
+```
+Admin Cabang                    Admin Manager                    Admin Cabang
+     │                               │                               │
+     │ 1. Create Request             │                               │
+     │ ─────────────────────────────>│                               │
+     │                               │                               │
+     │                               │ 2. Review & Create Invoice    │
+     │                               │                               │
+     │ 3. Pay externally             │                               │
+     │ (Transfer bank, send proof    │                               │
+     │  via WhatsApp/Email)          │                               │
+     │ ─────────────────────────────>│                               │
+     │                               │                               │
+     │                               │ 4. Upload Payment Proof       │
+     │                               │ (received from Admin Cabang)  │
+     │                               │                               │
+     │                               │ 5. Confirm Payment            │
+     │                               │ (Shipment auto-created)       │
+     │                               │                               │
+     │                               │ 6. Ship Shipment              │
+     │                               │ ─────────────────────────────>│
+     │                               │                               │
+     │                               │                               │ 7. Receive Shipment
+     │                               │                               │ (Stock added)
+     │                               │                               │
+```
 
 ---
 
@@ -71,7 +121,7 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
    - Verifikasi informasi request (items, jumlah)
    - Perhatikan badge **"PREMIERE"** pada nama cabang
    - Isi catatan review (wajib)
-6. Klik **"✓ Approve"**
+6. Klik **"✓ Approve Request"**
 
 **Expected Results:**
 - ✅ Modal menampilkan detail request dengan benar
@@ -80,6 +130,7 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
   - Status request berubah menjadi **APPROVED**
   - Shipment otomatis dibuat dengan status **PREPARING**
 - ✅ Toast notification sukses muncul
+- ✅ Shipment muncul di halaman Pengiriman
 
 ---
 
@@ -112,27 +163,51 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 ---
 
-### Scenario 4: Upload Payment Proof (Admin Cabang Partnership)
+### Scenario 4: Download Invoice PDF (Admin Manager/Admin Cabang)
 
-**Objective:** Memastikan Admin Cabang Partnership dapat upload bukti pembayaran
+**Objective:** Memastikan invoice dapat didownload sebagai PDF
 
-**Precondition:** Request dalam status WAITING_PAYMENT
+**Precondition:** Request dalam status WAITING_PAYMENT atau setelahnya
 
 **Steps:**
-1. Login sebagai Admin Cabang Partnership
+1. Login sebagai Admin Manager atau Admin Cabang
+2. Navigasi ke menu **Inventory > Request Stok**
+3. Klik **"📋 Review"** pada request yang sudah ada invoice
+4. Klik tab **"📄 Invoice"**
+5. Klik **"📥 Download Invoice PDF"**
+
+**Expected Results:**
+- ✅ PDF invoice terdownload dengan format yang benar
+- ✅ PDF berisi: nomor invoice, tanggal, items, harga, total
+- ✅ Nama file: `Invoice_{INVOICE_NUMBER}.pdf`
+
+---
+
+### Scenario 5: Upload Payment Proof (Admin Manager)
+
+**Objective:** Memastikan Admin Manager dapat upload bukti pembayaran yang diterima dari Admin Cabang
+
+**Precondition:** 
+- Request dalam status WAITING_PAYMENT
+- Admin Cabang sudah mengirim bukti pembayaran via WhatsApp/Email ke Admin Manager
+
+**Steps:**
+1. Login sebagai Admin Manager
 2. Navigasi ke menu **Inventory > Request Stok**
 3. Filter status **"Menunggu Bayar"**
-4. Klik **"📤 Upload Bukti Bayar"** pada request
-5. Di modal upload:
-   - Verifikasi informasi invoice (nomor, total)
-   - Klik input file dan pilih gambar bukti pembayaran
+4. Klik **"📤 Upload Bukti"** pada request
+5. Di modal upload (dark theme):
+   - Verifikasi informasi request dan invoice
+   - Drag & drop file gambar atau klik untuk memilih
    - Preview gambar akan muncul
-6. Klik **"📤 Upload"**
+   - Bisa hapus dan pilih ulang jika salah
+6. Klik **"📤 Upload & Simpan"**
 
 **Expected Results:**
 - ✅ Modal menampilkan informasi invoice dengan benar
+- ✅ Drag & drop berfungsi
 - ✅ Preview gambar muncul setelah memilih file
-- ✅ Hanya file gambar yang diterima (JPG, PNG, WebP, GIF, BMP)
+- ✅ Validasi: hanya file gambar (JPG, PNG, JPEG), max 5MB
 - ✅ Setelah upload:
   - Status request berubah menjadi **PAYMENT_UPLOADED**
   - File tersimpan di MinIO
@@ -140,7 +215,27 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 ---
 
-### Scenario 5: Confirm Payment (Admin Manager)
+### Scenario 6: View Payment Proof (Admin Manager)
+
+**Objective:** Memastikan Admin Manager dapat melihat bukti pembayaran yang sudah diupload
+
+**Precondition:** Request dalam status PAYMENT_UPLOADED
+
+**Steps:**
+1. Login sebagai Admin Manager
+2. Navigasi ke menu **Inventory > Request Stok**
+3. Filter status **"Bukti Diupload"**
+4. Klik **"📋 Review"** pada request
+5. Klik tab **"💳 Bukti Bayar"**
+
+**Expected Results:**
+- ✅ Gambar bukti pembayaran ditampilkan dengan jelas
+- ✅ Informasi file (nama, tanggal upload) ditampilkan
+- ✅ Gambar dapat di-zoom atau dibuka di tab baru
+
+---
+
+### Scenario 7: Confirm Payment (Admin Manager)
 
 **Objective:** Memastikan Admin Manager dapat konfirmasi pembayaran setelah melihat bukti
 
@@ -150,9 +245,9 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 1. Login sebagai Admin Manager
 2. Navigasi ke menu **Inventory > Request Stok**
 3. Filter status **"Bukti Diupload"**
-4. Klik **"✓ Konfirmasi"** pada request
+4. Klik **"📋 Review"** pada request
 5. Di modal review:
-   - Klik tab **"💳 Bukti Pembayaran"** untuk melihat foto bukti
+   - Klik tab **"💳 Bukti Bayar"** untuk melihat foto bukti
    - Verifikasi bukti pembayaran valid
    - Isi catatan verifikasi (opsional)
 6. Klik **"✓ Konfirmasi Pembayaran"**
@@ -160,13 +255,14 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 **Expected Results:**
 - ✅ Foto bukti pembayaran dapat dilihat dengan jelas
 - ✅ Setelah konfirmasi:
-  - Status request berubah menjadi **PAYMENT_CONFIRMED**
+  - Status request berubah menjadi **APPROVED**
   - Shipment otomatis dibuat dengan status **PREPARING**
 - ✅ Toast notification sukses muncul
+- ✅ Shipment muncul di halaman Pengiriman
 
 ---
 
-### Scenario 6: Reject Payment (Admin Manager)
+### Scenario 8: Reject Payment (Admin Manager)
 
 **Objective:** Memastikan Admin Manager dapat menolak pembayaran yang tidak valid
 
@@ -176,23 +272,23 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 1. Login sebagai Admin Manager
 2. Navigasi ke menu **Inventory > Request Stok**
 3. Filter status **"Bukti Diupload"**
-4. Klik **"✓ Konfirmasi"** pada request
+4. Klik **"📋 Review"** pada request
 5. Di modal review:
    - Lihat bukti pembayaran
    - Isi alasan penolakan (wajib)
-6. Klik **"↩ Tolak Pembayaran"**
+6. Klik **"↩ Tolak"**
 
 **Expected Results:**
 - ✅ Alasan penolakan wajib diisi
 - ✅ Setelah tolak:
   - Status request kembali ke **WAITING_PAYMENT**
   - Bukti pembayaran dihapus
-  - Admin Cabang dapat upload ulang
+  - Admin Manager dapat upload ulang setelah menerima bukti baru
 - ✅ Toast notification muncul
 
 ---
 
-### Scenario 7: Ship Shipment (Admin Manager)
+### Scenario 9: Ship Shipment (Admin Manager)
 
 **Objective:** Memastikan Admin Manager dapat mengirim barang
 
@@ -203,22 +299,22 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 2. Navigasi ke menu **Inventory > Pengiriman**
 3. Filter status **"Disiapkan"**
 4. Klik **"🚚 Kirim"** pada shipment
-5. Di modal:
+5. Di modal (dark theme):
+   - Verifikasi informasi shipment (kode, rute)
    - Verifikasi items yang akan dikirim
    - Isi catatan pengiriman (opsional)
-6. Klik **"🚚 Kirim"**
+6. Klik **"🚚 Kirim Pengiriman"**
 
 **Expected Results:**
 - ✅ Modal menampilkan detail items dengan benar
 - ✅ Setelah kirim:
   - Status shipment berubah menjadi **SHIPPED**
-  - Status request berubah menjadi **SHIPPED**
   - Tanggal pengiriman tercatat
 - ✅ Toast notification sukses muncul
 
 ---
 
-### Scenario 8: Receive Shipment - Normal (Admin Cabang)
+### Scenario 10: Receive Shipment - Normal (Admin Cabang)
 
 **Objective:** Memastikan Admin Cabang dapat menerima barang dengan jumlah sesuai
 
@@ -229,23 +325,22 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 2. Navigasi ke menu **Inventory > Pengiriman**
 3. Filter status **"Dikirim"**
 4. Klik **"📥 Terima"** pada shipment
-5. Di modal:
+5. Di modal (dark theme):
    - Verifikasi jumlah yang diterima sama dengan yang dikirim
    - Isi catatan penerimaan (opsional)
-6. Klik **"✅ Terima"**
+6. Klik **"✅ Terima Pengiriman"**
 
 **Expected Results:**
 - ✅ Jumlah default sama dengan jumlah yang dikirim
 - ✅ Setelah terima:
   - Status shipment berubah menjadi **RECEIVED**
-  - Status request berubah menjadi **COMPLETED**
-  - Stok di inventory cabang bertambah
+  - **Stok di inventory cabang bertambah**
   - Stock mutation tercatat
 - ✅ Toast notification sukses muncul
 
 ---
 
-### Scenario 9: Receive Shipment - With Discrepancy (Admin Cabang)
+### Scenario 11: Receive Shipment - With Discrepancy (Admin Cabang)
 
 **Objective:** Memastikan Admin Cabang dapat melaporkan ketidaksesuaian saat terima barang
 
@@ -256,29 +351,50 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 2. Navigasi ke menu **Inventory > Pengiriman**
 3. Filter status **"Dikirim"**
 4. Klik **"📥 Terima"** pada shipment
-5. Di modal:
+5. Di modal (dark theme):
    - Ubah jumlah yang diterima (lebih kecil dari yang dikirim)
-   - Form ketidaksesuaian akan muncul otomatis
+   - Form ketidaksesuaian akan muncul otomatis (highlight merah)
    - Pilih tipe ketidaksesuaian:
-     - **SHORTAGE** - Kurang
-     - **DAMAGE** - Rusak
-     - **WRONG_ITEM** - Salah Item
-     - **OTHER** - Lainnya
+     - **Kurang** - Jumlah kurang dari yang dikirim
+     - **Rusak** - Barang rusak
+     - **Salah Item** - Item tidak sesuai
+     - **Lainnya** - Alasan lain
    - Isi catatan ketidaksesuaian
 6. Klik **"⚠️ Terima dengan Catatan"**
 
 **Expected Results:**
 - ✅ Form ketidaksesuaian muncul saat jumlah berbeda
+- ✅ Item dengan ketidaksesuaian di-highlight merah
 - ✅ Setelah terima:
   - Status shipment berubah menjadi **RECEIVED_WITH_ISSUE**
-  - Status request berubah menjadi **COMPLETED_WITH_ISSUE**
   - Discrepancy tercatat di database
-  - Stok bertambah sesuai jumlah yang diterima (bukan yang dikirim)
+  - **Stok bertambah sesuai jumlah yang diterima** (bukan yang dikirim)
 - ✅ Toast notification muncul dengan pesan yang sesuai
 
 ---
 
-### Scenario 10: Reject Stock Request (Admin Manager)
+### Scenario 12: View Shipment Detail
+
+**Objective:** Memastikan detail shipment dapat dilihat
+
+**Steps:**
+1. Login sebagai Admin Manager atau Admin Cabang
+2. Navigasi ke menu **Inventory > Pengiriman**
+3. Klik pada card shipment (bukan tombol aksi)
+
+**Expected Results:**
+- ✅ Modal detail muncul dengan informasi lengkap:
+  - Kode shipment dan status
+  - Rute (dari → ke)
+  - Timeline (dibuat, dikirim, diterima)
+  - Daftar items
+  - Ketidaksesuaian (jika ada)
+  - Catatan
+- ✅ Tombol aksi sesuai status dan role
+
+---
+
+### Scenario 13: Reject Stock Request (Admin Manager)
 
 **Objective:** Memastikan Admin Manager dapat menolak request stok
 
@@ -314,19 +430,31 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 ### EC-3: Upload Non-Image File
 **Steps:** Coba upload file PDF atau dokumen lain sebagai bukti pembayaran
-**Expected:** Error message "Bukti pembayaran hanya menerima format gambar"
+**Expected:** Error message atau file tidak diterima
 
-### EC-4: Access Request from Other Branch
+### EC-4: Upload File > 5MB
+**Steps:** Coba upload gambar dengan ukuran > 5MB
+**Expected:** Error message "Ukuran file maksimal 5MB"
+
+### EC-5: Access Request from Other Branch
 **Steps:** Admin Cabang A mencoba akses request dari Cabang B
-**Expected:** Error 403 "Anda tidak memiliki akses ke request ini"
+**Expected:** Request tidak muncul di list atau error 403
 
-### EC-5: Approve Already Approved Request
+### EC-6: Approve Already Approved Request
 **Steps:** Coba approve request yang sudah di-approve
-**Expected:** Error "Permintaan stok tidak dapat diproses. Status saat ini: APPROVED"
+**Expected:** Error "Permintaan stok tidak dapat diproses"
 
-### EC-6: Receive Already Received Shipment
+### EC-7: Receive Already Received Shipment
 **Steps:** Coba terima shipment yang sudah diterima
-**Expected:** Error "Pengiriman belum dikirim atau sudah diproses"
+**Expected:** Tombol "Terima" tidak muncul atau error
+
+### EC-8: Ship Shipment as Admin Cabang
+**Steps:** Admin Cabang mencoba ship shipment
+**Expected:** Tombol "Kirim" tidak muncul (hanya Admin Manager yang bisa)
+
+### EC-9: Receive Shipment as Admin Manager
+**Steps:** Admin Manager mencoba receive shipment
+**Expected:** Tombol "Terima" tidak muncul (hanya Admin Cabang tujuan yang bisa)
 
 ---
 
@@ -334,17 +462,26 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 ### PREMIERE Branch Flow
 ```
-PENDING → APPROVED → SHIPPED → COMPLETED
-                            ↘ COMPLETED_WITH_ISSUE
-       ↘ REJECTED
+PENDING ──────────────────────────────────────> APPROVED ──> (Shipment: PREPARING → SHIPPED → RECEIVED)
+    │                                                                                            │
+    │                                                                                            v
+    └──> REJECTED                                                                    Stock Added to Branch
 ```
 
 ### PARTNERSHIP Branch Flow
 ```
-PENDING → WAITING_PAYMENT → PAYMENT_UPLOADED → PAYMENT_CONFIRMED → SHIPPED → COMPLETED
-                         ↙ (reject payment)                                ↘ COMPLETED_WITH_ISSUE
-       ↘ REJECTED
+PENDING ──> WAITING_PAYMENT ──> PAYMENT_UPLOADED ──> APPROVED ──> (Shipment: PREPARING → SHIPPED → RECEIVED)
+    │              │                    │                                                        │
+    │              │                    │                                                        v
+    │              │                    └──> (reject) ──> WAITING_PAYMENT              Stock Added to Branch
+    │              │
+    └──> REJECTED  └──> (Admin Cabang pays externally, sends proof to Admin Manager)
 ```
+
+### Key Points:
+1. **Stock hanya ditambahkan saat Admin Cabang menerima shipment** (bukan saat approve)
+2. **Admin Manager yang upload bukti pembayaran** (bukan Admin Cabang)
+3. **Shipment otomatis dibuat** saat request di-approve (PREMIERE) atau payment dikonfirmasi (PARTNERSHIP)
 
 ---
 
@@ -362,6 +499,7 @@ PENDING → WAITING_PAYMENT → PAYMENT_UPLOADED → PAYMENT_CONFIRMED → SHIPP
 | POST | `/inventory/stock-requests/:id/reject-payment` | Reject payment |
 | POST | `/inventory/stock-requests/:id/reject` | Reject request |
 | GET | `/inventory/shipments` | Get shipments |
+| GET | `/inventory/shipments/:id` | Get shipment detail |
 | POST | `/inventory/shipments/:id/ship` | Ship shipment |
 | POST | `/inventory/shipments/:id/receive` | Receive shipment |
 
@@ -372,21 +510,34 @@ PENDING → WAITING_PAYMENT → PAYMENT_UPLOADED → PAYMENT_CONFIRMED → SHIPP
 ### Admin Cabang
 - [ ] Dapat membuat request stok baru
 - [ ] Dapat melihat request dari cabang sendiri
-- [ ] Dapat upload bukti pembayaran (Partnership)
+- [ ] Dapat download invoice PDF (Partnership)
+- [ ] Dapat melihat shipment untuk cabang sendiri
 - [ ] Dapat menerima shipment
-- [ ] Dapat melaporkan ketidaksesuaian
+- [ ] Dapat melaporkan ketidaksesuaian saat terima
 
 ### Admin Manager
 - [ ] Dapat melihat request dari cabang yang dikelola
-- [ ] Dapat approve request PREMIERE
+- [ ] Dapat approve request PREMIERE (shipment auto-created)
 - [ ] Dapat membuat invoice untuk PARTNERSHIP
-- [ ] Dapat konfirmasi/tolak pembayaran
+- [ ] Dapat upload bukti pembayaran (dari Admin Cabang)
+- [ ] Dapat konfirmasi pembayaran (shipment auto-created)
+- [ ] Dapat tolak pembayaran
 - [ ] Dapat mengirim shipment
 - [ ] Dapat reject request
 
 ### Super Admin
 - [ ] Dapat melihat semua request
 - [ ] Dapat melakukan semua aksi Admin Manager
+
+---
+
+## UI Components Updated
+
+### Dark Theme Modals (AssignPackageModal style)
+- ✅ Upload Payment Modal - drag & drop, preview, file info
+- ✅ Ship Modal - shipment info, items list, notes
+- ✅ Receive Modal - quantity inputs, discrepancy form
+- ✅ Detail Modal - full shipment info, timeline, actions
 
 ---
 
@@ -397,3 +548,14 @@ PENDING → WAITING_PAYMENT → PAYMENT_UPLOADED → PAYMENT_CONFIRMED → SHIPP
 3. **File Storage:** Bukti pembayaran disimpan di MinIO dengan path `uploads/stock-requests/{requestId}/`
 4. **Invoice Number Format:** `INV-STK-{BRANCH_CODE}-{YYMMDD}-{SEQUENCE}`
 5. **Shipment Code Format:** `SHP-{FROM_BRANCH}-{TO_BRANCH}-{YYMMDD}-{SEQUENCE}`
+6. **Request Code Format:** `REQ-{BRANCH_CODE}-{YYMMDD}-{SEQUENCE}`
+
+---
+
+## Last Updated
+- Date: 20 Mei 2026
+- Changes: 
+  - Updated flow: Admin Manager uploads payment proof (not Admin Cabang)
+  - Stock only added when Admin Cabang receives shipment
+  - Added dark theme modal descriptions
+  - Added flow diagrams
