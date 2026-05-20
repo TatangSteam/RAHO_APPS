@@ -68,8 +68,8 @@ export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;
 
 export const createTherapyPlanSchema = z.object({
   keterangan: z.string().optional(),
-  ifa250: z.number().optional(), // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
-  ifa500: z.number().optional(), // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
+  ifa250: z.number().optional(), // IFA + NO 2,5ml (satuan: Botol)
+  ifa500: z.number().optional(), // IFA 500ml (satuan: Botol)
   hho: z.number().optional(),
   h2: z.number().optional(),
   no: z.number().optional(),
@@ -133,8 +133,8 @@ export type UpdateBoosterTypeInput = z.infer<typeof updateBoosterTypeSchema>;
 // ============================================================
 
 export const createInfusionSchema = z.object({
-  ifa250: z.number().optional(), // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
-  ifa500: z.number().optional(), // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
+  ifa250: z.number().optional(), // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: z.number().optional(), // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho: z.number().optional(),
   h2: z.number().optional(),
   no: z.number().optional(),

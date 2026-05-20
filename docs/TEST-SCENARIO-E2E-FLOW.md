@@ -1,6 +1,6 @@
 # 🧪 Test Scenario End-to-End Flow
 
-> **Dokumen ini berisi skenario test lengkap dari awal sampai akhir alur sistem RAHO Klinik.**
+> **Dokumen ini berisi skenario test lengkap dari awal sampai akhir alur sistem Raho ERP.**
 > Mulai dari Super Admin membuat Admin Manager, sampai Admin Layanan membuat sesi terapi.
 
 ---
@@ -105,7 +105,7 @@ SELECT email, role, "isActive" FROM users WHERE email = 'manager.budi@raho.id';
 |------|------|-----------------|
 | 1 | Klik menu **Pengaturan Cabang** atau **Cabang** | Halaman list cabang |
 | 2 | Klik **+ Tambah Cabang** | Modal form cabang muncul |
-| 3 | Isi form: <br> - Kode Cabang: `JKT` <br> - Nama: `RAHO Klinik Jakarta` <br> - Tipe: `KLINIK` <br> - Alamat: `Jl. Sudirman No. 100` <br> - Kota: `Jakarta` <br> - Telepon: `021-12345678` <br> - Jam Operasi: `08:00 - 20:00` | Form valid |
+| 3 | Isi form: <br> - Kode Cabang: `JKT` <br> - Nama: `Raho ERP Jakarta` <br> - Tipe: `KLINIK` <br> - Alamat: `Jl. Sudirman No. 100` <br> - Kota: `Jakarta` <br> - Telepon: `021-12345678` <br> - Jam Operasi: `08:00 - 20:00` | Form valid |
 | 4 | Klik **Simpan** | Toast sukses, cabang baru muncul di list |
 
 ✅ **Pass Criteria:**
@@ -216,7 +216,7 @@ npx tsx prisma/seeds/materials.seed.ts
 
 | Step | Aksi | Expected Result |
 |------|------|-----------------|
-| 1 | Klik tombol **Edit Stok** pada produk `IFA A+MG 500ml` | Modal edit stok muncul |
+| 1 | Klik tombol **Edit Stok** pada produk `IFA 500ml` | Modal edit stok muncul |
 | 2 | Update stok: `100 botol` | - |
 | 3 | Klik **Simpan** | Toast sukses, `StockMutation` tercatat dengan type `ADJUSTMENT` |
 

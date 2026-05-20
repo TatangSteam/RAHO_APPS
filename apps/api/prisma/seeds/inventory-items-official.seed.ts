@@ -4,18 +4,20 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * Official Inventory Items Seeder
  * Based on "List Barang RAHO.md" - Official RAHO Product List
  * 
- * This seed creates master products with proper unit conversion:
- * - baseUnit: Storage unit (Botol, Kotak, Pack, Rim, etc.)
- * - usageUnit: Usage unit (Botol, Piece, Lembar, etc.)
- * - conversionFactor: How many usage units per base unit
- * 
- * IFA Products:
- * - IFA + NO 2,5ml (250ml): 1 Botol per terapi (WAJIB)
- * - IFA A + MG 500ml: 1 Botol (special case/alternatif)
+ * SATUAN SESUAI LIST:
+ * - IFA: Botol
+ * - Cairan Terapi (NB-HHO, NB-NO, dll): ml
+ * - Handscoon: Kotak
+ * - Oneswab: Kotak
+ * - IV Cath, Ultrafik, Plesterin: Kotak
+ * - Kantong Sampah: Pack
+ * - Kertas HVS: Rim
+ * - Inform Consent: Rangkap
+ * - Lainnya: Piece/Unit/Botol sesuai list
  */
 
 export async function seedOfficialInventoryItems(prisma: PrismaClient) {
-  console.log('\n📦 Seeding OFFICIAL inventory items from List Stok...\n');
+  console.log('\n📦 Seeding OFFICIAL inventory items from List Barang RAHO...\n');
 
   // Get all branches
   const branches = await prisma.branch.findMany();
@@ -25,577 +27,87 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
   }
 
   const masterProducts = [
-    // ============================================================
-    // CAIRAN INFUS (INF) - Category: MEDICINE
-    // ============================================================
-    // IFA + NO 2,5ml - WAJIB 1 botol per terapi (250ml)
-    {
-      sku: 'PRD-INF-IFA-001',
-      name: 'IFA + NO 2,5ml (250ml)',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'Botol',
-      usageUnit: 'Botol',
-      conversionFactor: 1,
-      pricePerUnit: 12500000,
-      description: 'IFA + NO 2,5ml dalam botol 250ml - Wajib 1 botol per terapi',
-      stock: 100,
-      minStock: 20,
-    },
-    // IFA Biasa 500ml - Special case / alternatif
-    {
-      sku: 'PRD-INF-IFA-002',
-      name: 'IFA A + MG 500ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'Botol',
-      usageUnit: 'Botol',
-      conversionFactor: 1,
-      pricePerUnit: 2000000,
-      description: 'IFA A + MG 500ml - Alternatif/special case',
-      stock: 50,
-      minStock: 10,
-    },
-    {
-      sku: 'INF-HHO-V100-BT',
-      name: 'HHO 100ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 100,
-      pricePerUnit: 1000000,
-      description: 'Hydrogen-Hydrogen-Oxygen 100ml per botol',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'INF-NNB-HHO-V100-BT',
-      name: 'Nano Bubble HHO 100ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 100,
-      pricePerUnit: 1000000,
-      description: 'Nano Bubble HHO 100ml per botol',
-      stock: 80,
-      minStock: 15,
-    },
-    {
-      sku: 'INF-NNB-HHO-V250-BT',
-      name: 'NB HHO 250ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 250,
-      pricePerUnit: 1000000,
-      description: 'Nano Bubble HHO 250ml per botol',
-      stock: 60,
-      minStock: 10,
-    },
-    {
-      sku: 'INF-NNB-HHO-V25-BT',
-      name: 'NB HHO 25ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 25,
-      pricePerUnit: 1000000,
-      description: 'Nano Bubble HHO 25ml per botol',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'INF-NO-V25-BT',
-      name: 'NO 25ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 25,
-      pricePerUnit: 1000000,
-      description: 'Nitric Oxide 25ml per botol',
-      stock: 120,
-      minStock: 25,
-    },
-    {
-      sku: 'INF-KCL-V25-BT',
-      name: 'KCL 25ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 25,
-      pricePerUnit: 600000,
-      description: 'Potassium Chloride 25ml per botol',
-      stock: 150,
-      minStock: 30,
-    },
-    {
-      sku: 'INF-NNB-KTL-V250-BT',
-      name: 'NB Koktail 250ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 250,
-      pricePerUnit: 650000,
-      description: 'Nano Bubble Koktail 250ml per botol',
-      stock: 40,
-      minStock: 10,
-    },
-    {
-      sku: 'INF-NNB-MB-V50-BT',
-      name: 'NB Methyln 50ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 50,
-      pricePerUnit: 600000,
-      description: 'Nano Bubble Methylene Blue 50ml per botol',
-      stock: 60,
-      minStock: 15,
-    },
-    {
-      sku: 'INF-NNB-MB-V100-BT',
-      name: 'NB Methyln 100ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 100,
-      pricePerUnit: 600000,
-      description: 'Nano Bubble Methylene Blue 100ml per botol',
-      stock: 50,
-      minStock: 10,
-    },
-    {
-      sku: 'INF-H2S-V1-VL',
-      name: 'NB H2S Konsentrat 1ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'vial',
-      usageUnit: 'ml',
-      conversionFactor: 1,
-      pricePerUnit: 600000,
-      description: 'Nano Bubble H2S Konsentrat 1ml per vial',
-      stock: 200,
-      minStock: 50,
-    },
-    // ❌ REMOVED DUPLICATE: Cairan H2S 1ml (identical to NB H2S Konsentrat 1ml)
+    // ==================== INFUS (INF) ====================
+    { sku: 'PRD-INF-IFA-001', name: 'IFA 500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA 500ml', stock: 50, minStock: 10 },
+    { sku: 'PRD-INF-IFA-002', name: 'IFA + NO 2,5ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA + NO 2,5ml (default per terapi)', stock: 100, minStock: 20 },
+    { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus lengkap - WAJIB per sesi terapi', stock: 500, minStock: 100 },
 
-    // ============================================================
-    // AIR NANO (ARN) - Category: MEDICINE
-    // ============================================================
-    {
-      sku: 'INF-ARN-V600-CB-BT',
-      name: 'Air Nano Biru 600ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 600,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Biru 600ml per botol',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'INF-ARN-V600-CK-BT',
-      name: 'Air Nano Kuning 600ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 600,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Kuning 600ml per botol',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'INF-ARN-V600-CH-BT',
-      name: 'Air Nano Hijau H2S 600ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 600,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Hijau H2S 600ml per botol',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'INF-ARN-V1500-CB-BT',
-      name: 'Air Nano Biru 1500ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 1500,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Biru 1500ml per botol',
-      stock: 60,
-      minStock: 15,
-    },
-    {
-      sku: 'INF-ARN-V1500-CK-BT',
-      name: 'Air Nano Kuning 1500ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 1500,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Kuning 1500ml per botol',
-      stock: 60,
-      minStock: 15,
-    },
-    {
-      sku: 'INF-ARN-V1500-CH-BT',
-      name: 'Air Nano Hijau H2S 1500ml',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 1500,
-      pricePerUnit: 650000,
-      description: 'Air Nano warna Hijau H2S 1500ml per botol',
-      stock: 60,
-      minStock: 15,
-    },
+    // ==================== NANOBUBBLE THERAPY (NBT) ====================
+    { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble HHO - untuk field: hho', stock: 33000, minStock: 5000 },
+    { sku: 'PRD-NBT-HHO-002', name: 'HHO Konsentrat', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'HHO Konsentrat', stock: 5000, minStock: 1000 },
+    { sku: 'PRD-NBT-CNO-001', name: 'NB-NO (25ml)', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Nitric Oxide - untuk field: no', stock: 3000, minStock: 500 },
+    { sku: 'PRD-NBT-CGT-001', name: 'NB Gasotransmitter (GT)', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Gasotransmitter - untuk field: gaso', stock: 17000, minStock: 3000 },
+    { sku: 'PRD-NBT-CMB-001', name: 'NB Methyln Blue (MB)', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Methylene Blue - untuk field: mb', stock: 5000, minStock: 1000 },
+    { sku: 'PRD-NBT-H2S-001', name: 'Cairan H2S', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Cairan Hydrogen Sulfide - untuk field: h2s', stock: 650, minStock: 100 },
+    { sku: 'PRD-NBT-H2S-002', name: 'NB H2S Konsentrat', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble H2S Konsentrat', stock: 1000, minStock: 200 },
+    { sku: 'PRD-NBT-CO3-001', name: 'Ozone (O3)', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Ozone - untuk field: o3', stock: 10000, minStock: 2000 },
+    { sku: 'PRD-NBT-KCL-001', name: 'KCL', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Kalium Klorida - untuk field: kcl', stock: 3750, minStock: 750 },
+    { sku: 'PRD-NBT-CH2-001', name: 'H2', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Hydrogen - untuk field: h2', stock: 22000, minStock: 4000 },
+    { sku: 'PRD-NBT-PRP-001', name: 'Cairan PRP', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Platelet Rich Plasma', stock: 1500, minStock: 300 },
 
-    // ============================================================
-    // ALAT MEDIS HABIS PAKAI (MED) - Category: DEVICE
-    // ============================================================
-    {
-      sku: 'PRD-INF-SET-001',
-      name: 'Infus Set',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'Piece',
-      usageUnit: 'Piece',
-      conversionFactor: 1,
-      pricePerUnit: 22500000,
-      description: 'Set infus lengkap',
-      stock: 500,
-      minStock: 100,
-    },
-    {
-      sku: 'MED-JRM-PC',
-      name: 'Jarum',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 850000,
-      description: 'Jarum infus 1 piece',
-      stock: 1000,
-      minStock: 200,
-    },
-    {
-      sku: 'MED-SWB-ULT-KT',
-      name: 'Ultrafik',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'kotak',
-      usageUnit: 'piece',
-      conversionFactor: 100,
-      pricePerUnit: 1000000,
-      description: 'Ultrafik swab 1 kotak (100 piece)',
-      stock: 20,
-      minStock: 5,
-    },
-    {
-      sku: 'MED-SWB-ONE-KT',
-      name: 'One Swab',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'kotak',
-      usageUnit: 'piece',
-      conversionFactor: 100,
-      pricePerUnit: 1000000,
-      description: 'One Swab 1 kotak (100 piece)',
-      stock: 25,
-      minStock: 5,
-    },
-    {
-      sku: 'MED-GLV-KT',
-      name: 'Handscoon',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'kotak',
-      usageUnit: 'piece',
-      conversionFactor: 100,
-      pricePerUnit: 65000,
-      description: 'Sarung tangan medis 1 kotak (100 pasang)',
-      stock: 50,
-      minStock: 10,
-    },
-    {
-      sku: 'MED-SYR-P3-PC',
-      name: 'Syringe 50cc Catheter Tip',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 750000,
-      description: 'Syringe 50cc dengan catheter tip',
-      stock: 200,
-      minStock: 50,
-    },
-    {
-      sku: 'MED-SYR-P2-PC',
-      name: 'Syringe 20cc Catheter Tip',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 750000,
-      description: 'Syringe 20cc dengan catheter tip',
-      stock: 300,
-      minStock: 75,
-    },
-    {
-      sku: 'MED-SYR-P1-PC',
-      name: 'Syringe 5cc Catheter Tip',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 750000,
-      description: 'Syringe 5cc dengan catheter tip',
-      stock: 400,
-      minStock: 100,
-    },
-    {
-      sku: 'MED-SFB-2500-PC',
-      name: 'Safety Box Sampah Medis 2500ml',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 750000,
-      description: 'Safety Box untuk sampah medis 2500ml (Include Inner & Tali)',
-      stock: 100,
-      minStock: 20,
-    },
-    {
-      sku: 'MED-OXI-GEA-PC',
-      name: 'Oximeter Gea FP-A200',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 750000,
-      description: 'Oximeter Gea FP-A200 (alat permanen)',
-      stock: 10,
-      minStock: 2,
-    },
+    // ==================== MEDICAL SUPPLIES (MED) ====================
+    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'IV Catheter ukuran 24G', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Ultrafik', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-TUB-001', name: 'BD TUBE ACB 8.5ml', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'BD Tube ACB 8.5ml', stock: 200, minStock: 50 },
+    { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Oneswab', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Plester', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-SPT-001', name: 'Spuit 20cc', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 20cc', stock: 300, minStock: 75 },
+    { sku: 'PRD-MED-SPT-002', name: 'Spuit 5cc (3cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/3cc', stock: 400, minStock: 100 },
+    { sku: 'PRD-MED-SPT-003', name: 'Spuit 5cc (10cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/10cc', stock: 400, minStock: 100 },
+    { sku: 'PRD-MED-NDL-001', name: 'Needle (Salin) (25G)', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Needle Salin 25G', stock: 1000, minStock: 200 },
+    { sku: 'PRD-MED-HDS-001', name: 'Handscoon S', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Sarung tangan medis ukuran S', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-HDS-002', name: 'Handscoon M', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Sarung tangan medis ukuran M', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-NPS-001', name: 'No Pain Spray', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Spray penghilang nyeri', stock: 30, minStock: 10 },
+    { sku: 'PRD-MED-HCC-001', name: 'Hot Cold Compress', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Kompres panas dingin', stock: 20, minStock: 5 },
+    { sku: 'PRD-MED-OXI-001', name: 'Oximeter Fingertip Omicron', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Pulse Oximeter', stock: 10, minStock: 2 },
+    { sku: 'PRD-MED-SYR-001', name: 'Syringe 50cc Catheher Tip', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 50cc dengan catheter tip', stock: 200, minStock: 50 },
+    { sku: 'PRD-MED-SYR-002', name: 'Syringe 20cc Catheher Tip', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 20cc dengan catheter tip', stock: 300, minStock: 75 },
+    { sku: 'PRD-MED-SYR-003', name: 'Syringe 5cc Catheher Tip', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc dengan catheter tip', stock: 400, minStock: 100 },
+    { sku: 'PRD-MED-SYR-004', name: 'Syringe 1cc Catheher Tip', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 1cc dengan catheter tip', stock: 500, minStock: 100 },
+    { sku: 'PRD-MED-RDL-001', name: 'RedLight Therapy', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'Alat terapi cahaya merah', stock: 5, minStock: 1 },
+    { sku: 'PRD-MED-THB-001', name: 'Thrombophop Gel 20 grab', category: ProductCategory.MEDICINE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Gel Thrombophop 20 gram', stock: 30, minStock: 10 },
+    { sku: 'PRD-MED-TNS-001', name: 'Tensi Digital Omron', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tensimeter digital Omron', stock: 8, minStock: 2 },
+    { sku: 'PRD-MED-TNS-002', name: 'Tensi Manual + Stetoskop', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tensimeter manual dengan stetoskop', stock: 10, minStock: 2 },
+    { sku: 'PRD-MED-TRQ-001', name: 'Tourniquet', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tourniquet untuk pemasangan infus', stock: 25, minStock: 5 },
 
-    // ============================================================
-    // OPERASIONAL (OPS) - Category: CONSUMABLE
-    // ============================================================
-    {
-      sku: 'OPS-PLT-RL',
-      name: 'Plestrin',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'roll',
-      usageUnit: 'piece',
-      conversionFactor: 50,
-      pricePerUnit: 1000000,
-      description: 'Plester medis 1 roll (50 potongan)',
-      stock: 30,
-      minStock: 10,
-    },
-    {
-      sku: 'OPS-KSH-4050-BK',
-      name: 'Kantong Sampah Hitam 40 x 50',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 20,
-      pricePerUnit: 65000,
-      description: 'Kantong sampah hitam ukuran 40 x 50 cm (20 kantong per pack)',
-      stock: 25,
-      minStock: 5,
-    },
-    {
-      sku: 'OPS-KSH-4060-BK',
-      name: 'Kantong Sampah Hitam 40 x 60',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 20,
-      pricePerUnit: 65000,
-      description: 'Kantong sampah hitam ukuran 40 x 60 cm (20 kantong per pack)',
-      stock: 25,
-      minStock: 5,
-    },
-    {
-      sku: 'OPS-KSH-60100-BK',
-      name: 'Kantong Sampah Hitam 60 x 100',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 20,
-      pricePerUnit: 65000,
-      description: 'Kantong sampah hitam ukuran 60 x 100 cm (20 kantong per pack)',
-      stock: 20,
-      minStock: 5,
-    },
-    {
-      sku: 'OPS-KSH-100120-BK',
-      name: 'Kantong Sampah Hitam 100 x 120',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 20,
-      pricePerUnit: 65000,
-      description: 'Kantong sampah hitam ukuran 100 x 120 cm (20 kantong per pack)',
-      stock: 15,
-      minStock: 3,
-    },
-    {
-      sku: 'OPS-BAT-AA-BK',
-      name: 'Baterai AA',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 4,
-      pricePerUnit: 750000,
-      description: 'Baterai AA 1 pack (4 baterai)',
-      stock: 40,
-      minStock: 10,
-    },
-    {
-      sku: 'OPS-BAT-AAA-BK',
-      name: 'Baterai AAA',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'piece',
-      conversionFactor: 4,
-      pricePerUnit: 750000,
-      description: 'Baterai AAA 1 pack (4 baterai)',
-      stock: 40,
-      minStock: 10,
-    },
-    {
-      sku: 'OPS-KRT-A4-RM',
-      name: 'Kertas HVS',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'rim',
-      usageUnit: 'lembar',
-      conversionFactor: 500,
-      pricePerUnit: 0,
-      description: 'Kertas HVS A4 1 rim (500 lembar)',
-      stock: 20,
-      minStock: 5,
-    },
-    {
-      sku: 'MED-TRP-3K-PC',
-      name: 'Tiang Infus Tripod 3 Kaki',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 65000,
-      description: 'Tiang infus tripod 3 kaki (alat permanen)',
-      stock: 15,
-      minStock: 3,
-    },
-    {
-      sku: 'MED-TNS-MNL-PC',
-      name: 'Tensi Manual + Stetoskop',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 0,
-      description: 'Tensimeter manual dengan stetoskop (alat permanen)',
-      stock: 10,
-      minStock: 2,
-    },
-    {
-      sku: 'MED-TNS-DGT-PC',
-      name: 'Tensi Digital',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 0,
-      description: 'Tensimeter digital (alat permanen)',
-      stock: 8,
-      minStock: 2,
-    },
-    {
-      sku: 'MED-BNT-INF-PC',
-      name: 'Bantal Indus',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 10500000,
-      description: 'Bantal untuk terapi infus (alat permanen)',
-      stock: 20,
-      minStock: 5,
-    },
-    {
-      sku: 'OPS-FRM-PDF-BK',
-      name: 'Form Pendaftaran',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'pack',
-      usageUnit: 'lembar',
-      conversionFactor: 100,
-      pricePerUnit: 10000000,
-      description: 'Form pendaftaran member 1 pack (100 lembar)',
-      stock: 10,
-      minStock: 2,
-    },
-    {
-      sku: 'MED-TRN-PC',
-      name: 'Tourniquet',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 20500000,
-      description: 'Tourniquet untuk pemasangan infus (alat permanen)',
-      stock: 25,
-      minStock: 5,
-    },
-    {
-      sku: 'MED-MAP-RM-PC',
-      name: 'Map Rekam Medis',
-      category: ProductCategory.CONSUMABLE,
-      baseUnit: 'piece',
-      usageUnit: 'piece',
-      conversionFactor: 1,
-      pricePerUnit: 15000,
-      description: 'Map untuk rekam medis pasien',
-      stock: 200,
-      minStock: 50,
-    },
-    {
-      sku: 'MED-GEL-TRP-20G',
-      name: 'Thrombophop Gel 20gr',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'tube',
-      usageUnit: 'gram',
-      conversionFactor: 20,
-      pricePerUnit: 0,
-      description: 'Thrombophop Gel 20 gram per tube',
-      stock: 30,
-      minStock: 10,
-    },
-    {
-      sku: 'OPS-SPR-NPN',
-      name: 'No Pain Spray',
-      category: ProductCategory.MEDICINE,
-      baseUnit: 'botol',
-      usageUnit: 'ml',
-      conversionFactor: 100,
-      pricePerUnit: 600000,
-      description: 'No Pain Spray 100ml per botol',
-      stock: 40,
-      minStock: 10,
-    },
-    {
-      sku: 'OPS-CMP-HTC',
-      name: 'Hot Cool Compress',
-      category: ProductCategory.DEVICE,
-      baseUnit: 'unit',
-      usageUnit: 'unit',
-      conversionFactor: 1,
-      pricePerUnit: 65000,
-      description: 'Hot/Cool compress pack (alat permanen)',
-      stock: 30,
-      minStock: 10,
-    },
-    // ❌ REMOVED DUPLICATE: NB H2S Konsentrat 100ml (not needed if we have 1ml vials)
+    // ==================== AIR NANO (ANN) ====================
+    { sku: 'PRD-ANN-KNG-001', name: 'Air Nano Kuning 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 600ml', stock: 100, minStock: 20 },
+    { sku: 'PRD-ANN-BRU-001', name: 'Air Nano Biru 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 600ml', stock: 100, minStock: 20 },
+    { sku: 'PRD-ANN-H2S-001', name: 'Air Nano Hijau H2S 600ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau H2S 600ml', stock: 100, minStock: 20 },
+    { sku: 'PRD-ANN-KNG-002', name: 'Air Nano Kuning 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Kuning 1500ml', stock: 60, minStock: 15 },
+    { sku: 'PRD-ANN-BRU-002', name: 'Air Nano Biru 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Biru 1500ml', stock: 60, minStock: 15 },
+    { sku: 'PRD-ANN-H2S-002', name: 'Air Nano Hijau H2S 1500ml', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Air Nano Hijau H2S 1500ml', stock: 60, minStock: 15 },
+
+    // ==================== CONSUMABLES (CON) ====================
+    { sku: 'PRD-CON-RKK-001', name: 'Rokok Kenkou', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Rokok Kenkou', stock: 200, minStock: 50 },
+
+    // ==================== FURNITURE (FUR) ====================
+    { sku: 'PRD-FUR-TIF-001', name: 'Tiang Infus Portable', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tiang infus portable', stock: 15, minStock: 3 },
+    { sku: 'PRD-FUR-TIF-002', name: 'Tiang Infus Beroda', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tiang infus dengan roda', stock: 10, minStock: 2 },
+    { sku: 'PRD-FUR-SFR-001', name: 'Sofa Recliner', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'Sofa recliner untuk pasien', stock: 5, minStock: 1 },
+    { sku: 'PRD-FUR-MJI-001', name: 'Meja dengan Tiang Infus', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'Meja dengan tiang infus terintegrasi', stock: 8, minStock: 2 },
+
+    // ==================== DISPOSAL (DIS) ====================
+    { sku: 'PRD-DIS-SBX-001', name: 'Safety Box Sampah Medis 2.5L Include Inner & Tali', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Safety Box Sampah Medis 2.5L', stock: 100, minStock: 20 },
+    { sku: 'PRD-DIS-KSH-001', name: 'Kantong Sampah Hitam 40 x 50', category: ProductCategory.CONSUMABLE, baseUnit: 'Pack', usageUnit: 'Pack', conversionFactor: 1, description: 'Kantong sampah hitam 40x50cm', stock: 50, minStock: 10 },
+    { sku: 'PRD-DIS-KSH-002', name: 'Kantong Sampah Hitam 60 x 100', category: ProductCategory.CONSUMABLE, baseUnit: 'Pack', usageUnit: 'Pack', conversionFactor: 1, description: 'Kantong sampah hitam 60x100cm', stock: 40, minStock: 10 },
+    { sku: 'PRD-DIS-KSH-003', name: 'Kantong Sampah Hitam 100 x 120', category: ProductCategory.CONSUMABLE, baseUnit: 'Pack', usageUnit: 'Pack', conversionFactor: 1, description: 'Kantong sampah hitam 100x120cm', stock: 30, minStock: 6 },
+    { sku: 'PRD-DIS-KSM-001', name: 'Kantong Sampah Medis 40 x 50', category: ProductCategory.CONSUMABLE, baseUnit: 'Pack', usageUnit: 'Pack', conversionFactor: 1, description: 'Kantong sampah medis 40x50cm', stock: 50, minStock: 10 },
+    { sku: 'PRD-DIS-KSM-002', name: 'Kantong Sampah Medis 60 x 100', category: ProductCategory.CONSUMABLE, baseUnit: 'Pack', usageUnit: 'Pack', conversionFactor: 1, description: 'Kantong sampah medis 60x100cm', stock: 40, minStock: 10 },
+    { sku: 'PRD-DIS-PLS-001', name: 'Plastik IMI', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Plastik IMI', stock: 100, minStock: 20 },
+
+    // ==================== ACCESSORIES (ACC) ====================
+    { sku: 'PRD-ACC-BTR-001', name: 'Baterai AA', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Baterai AA', stock: 160, minStock: 40 },
+    { sku: 'PRD-ACC-BTR-002', name: 'Baterai AAA', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Baterai AAA', stock: 160, minStock: 40 },
+    { sku: 'PRD-ACC-BTL-001', name: 'Bantal Infus', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Bantal untuk infus', stock: 20, minStock: 5 },
+    { sku: 'PRD-ACC-SLM-001', name: 'Selimut 120 x 160', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Selimut ukuran 120x160cm', stock: 15, minStock: 5 },
+    { sku: 'PRD-ACC-TNK-001', name: 'Tas Nakes 40 x 27.3 x 22.3 cm', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Tas nakes', stock: 10, minStock: 2 },
+
+    // ==================== DOCUMENTS (DOC) ====================
+    { sku: 'PRD-DOC-HVS-001', name: 'Kertas HVS', category: ProductCategory.CONSUMABLE, baseUnit: 'Rim', usageUnit: 'Rim', conversionFactor: 1, description: 'Kertas HVS A4', stock: 20, minStock: 5 },
+    { sku: 'PRD-DOC-MAP-001', name: 'Map Rekam Medis', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Map untuk rekam medis', stock: 200, minStock: 50 },
+    { sku: 'PRD-DOC-FRP-001', name: 'Form Pendaftaran', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Form pendaftaran pasien', stock: 500, minStock: 100 },
+    { sku: 'PRD-DOC-IFC-001', name: 'Inform Consent', category: ProductCategory.CONSUMABLE, baseUnit: 'Rangkap', usageUnit: 'Rangkap', conversionFactor: 1, description: 'Form informed consent', stock: 500, minStock: 100 },
   ];
 
   let created = 0;
@@ -605,16 +117,17 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
   console.log(`📋 Processing ${masterProducts.length} products across ${branches.length} branches...\n`);
 
   for (const product of masterProducts) {
-    // Create or update MasterProduct
+    // Create or update MasterProduct using SKU
     const existingProduct = await prisma.masterProduct.findUnique({
-      where: { name: product.name },
+      where: { sku: product.sku },
     });
 
     const masterProduct = await prisma.masterProduct.upsert({
-      where: { name: product.name },
+      where: { sku: product.sku },
       update: {
+        name: product.name,
         category: product.category,
-        unit: product.usageUnit, // Legacy field
+        unit: product.usageUnit,
         baseUnit: product.baseUnit,
         usageUnit: product.usageUnit,
         conversionFactor: product.conversionFactor,
@@ -622,9 +135,10 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
         isActive: true,
       },
       create: {
+        sku: product.sku,
         name: product.name,
         category: product.category,
-        unit: product.usageUnit, // Legacy field
+        unit: product.usageUnit,
         baseUnit: product.baseUnit,
         usageUnit: product.usageUnit,
         conversionFactor: product.conversionFactor,
@@ -652,9 +166,9 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
         // Different stock levels for different branches
         let stockAmount = product.stock;
         if (branch.branchCode === 'BDG') {
-          stockAmount = Math.floor(product.stock * 0.7); // Bandung: 70% stock
+          stockAmount = Math.floor(product.stock * 0.7);
         } else if (branch.branchCode === 'SBY') {
-          stockAmount = Math.floor(product.stock * 0.5); // Surabaya: 50% stock
+          stockAmount = Math.floor(product.stock * 0.5);
         }
 
         await prisma.inventoryItem.create({
@@ -697,12 +211,15 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
     console.log(`   • ${branch.name} (${branch.branchCode}): ${percentage} of base stock`);
   });
   
-  console.log('\n💡 Unit Conversion Examples:');
-  console.log('   • IFA + NO 2,5ml (250ml): 1 Botol = 1 Botol (wajib per terapi)');
-  console.log('   • IFA A + MG 500ml: 1 Botol = 1 Botol (special case)');
-  console.log('   • Handscoon: 1 kotak = 100 piece');
-  console.log('   • Kertas HVS: 1 rim = 500 lembar');
-  console.log('   • Baterai AA: 1 pack = 4 piece');
+  console.log('\n💡 SATUAN SESUAI LIST BARANG RAHO:');
+  console.log('   • IFA: Botol');
+  console.log('   • Cairan Terapi (NB-HHO, NB-NO, dll): ml');
+  console.log('   • Handscoon S/M: Kotak');
+  console.log('   • Oneswab: Kotak');
+  console.log('   • IV Cath, Ultrafik, Plesterin: Kotak');
+  console.log('   • Kantong Sampah: Pack');
+  console.log('   • Kertas HVS: Rim');
+  console.log('   • Inform Consent: Rangkap');
   console.log('──────────────────────────────────────────\n');
 }
 

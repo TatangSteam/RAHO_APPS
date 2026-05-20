@@ -1,5 +1,5 @@
 /**
- * RAHO Klinik - Testing/Sample Data Seeder
+ * Raho ERP - Testing/Sample Data Seeder
  * 
  * This seed file includes SAMPLE data for testing and development:
  * - Branches (Jakarta, Bandung, Surabaya)

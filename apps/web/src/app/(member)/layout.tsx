@@ -82,7 +82,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
             }}>R</div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                RAHO Klinik
+                Raho ERP
               </div>
               <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1 }}>
                 Portal Member

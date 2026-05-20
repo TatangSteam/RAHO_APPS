@@ -231,7 +231,7 @@ export async function seedCompleteTherapySessions(prisma: PrismaClient) {
           memberId: member.id,
           treatmentSessionId: null, // ✅ NULL = Member-level therapy plan
           keterangan: 'Rencana Terapi Nano Bubble untuk member ini. Fokus pada perbaikan sirkulasi dan penurunan tekanan darah. Kombinasi HHO, NO, dan O2 untuk meningkatkan oksigenasi jaringan.',
-          ifa: 500,
+          ifa250: 1, // IFA 250ml - 1 botol per terapi (default)
           hho: 300,
           h2: 200,
           no: 250,
@@ -319,7 +319,8 @@ export async function seedCompleteTherapySessions(prisma: PrismaClient) {
       await prisma.infusionExecution.create({
         data: {
           treatmentSessionId: session.id,
-          ifa: therapyPlan.ifa,
+          ifa250: therapyPlan.ifa250,
+          ifa500: therapyPlan.ifa500,
           hho: therapyPlan.hho,
           h2: therapyPlan.h2,
           no: therapyPlan.no,

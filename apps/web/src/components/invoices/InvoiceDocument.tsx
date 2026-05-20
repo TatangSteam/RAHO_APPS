@@ -287,7 +287,7 @@ export default function InvoiceDocument({ invoice }: Props) {
       {/* Footer */}
       <div className={styles.footer}>
         <p className={styles.footerText}>
-          Terima kasih atas kepercayaan Anda menggunakan layanan RAHO Klinik
+          Terima kasih atas kepercayaan Anda menggunakan layanan Raho ERP
         </p>
         <p className={styles.footerText}>
           Dokumen ini dicetak secara otomatis dan sah tanpa tanda tangan

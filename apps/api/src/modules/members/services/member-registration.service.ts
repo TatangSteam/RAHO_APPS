@@ -224,7 +224,7 @@ export class MemberRegistrationService {
       data: {
         userId: result.user.id,
         type: 'INFO',
-        title: 'Selamat Datang di RAHO Klinik',
+        title: 'Selamat Datang di Raho ERP',
         body: `Halo ${data.fullName}, akun Anda telah berhasil dibuat. Member No: ${memberNo}`,
         status: 'UNREAD',
       },

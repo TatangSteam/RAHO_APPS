@@ -13,25 +13,31 @@ interface Step2TherapyPlanProps {
 }
 
 // IFA fields are handled separately with radio selection
-const DOSE_FIELDS = [
-  { key: 'hho', label: 'HHO', unit: 'ml' },
-  { key: 'h2', label: 'H2', unit: 'ml' },
-  { key: 'no', label: 'NO', unit: 'ml' },
-  { key: 'gaso', label: 'GASO', unit: 'ml' },
-  { key: 'o2', label: 'O2', unit: 'ml' },
-  { key: 'o3', label: 'O3', unit: 'ml' },
-  { key: 'edta', label: 'EDTA', unit: 'ml' },
-  { key: 'mb', label: 'MB', unit: 'ml' },
-  { key: 'h2s', label: 'H2S', unit: 'ml' },
-  { key: 'kcl', label: 'KCL', unit: 'ml' },
-  { key: 'jmlNb', label: 'Jml.NB', unit: 'ml' },
+// AUTO-FILL fields (digunakan di infus aktual): NO, GASO (GT), MB, KCL, H2S, O3, O2, EDTA
+// MANUAL fields (tidak ada di infus aktual): HHO, H2, JML NB
+const AUTO_FILL_FIELDS = [
+  { key: 'no', label: 'NO', unit: 'ml', product: 'NB NO' },
+  { key: 'gaso', label: 'GASO', unit: 'ml', product: 'GT' },
+  { key: 'mb', label: 'MB', unit: 'ml', product: 'Methylene Blue' },
+  { key: 'kcl', label: 'KCL', unit: 'ml', product: 'KCL' },
+  { key: 'h2s', label: 'H2S', unit: 'ml', product: 'Cairan H2S' },
+  { key: 'o3', label: 'O3', unit: 'ml', product: 'Ozone' },
+  { key: 'o2', label: 'O2', unit: 'ml', product: 'Oxygen' },
+  { key: 'edta', label: 'EDTA', unit: 'ml', product: 'EDTA' },
+];
+
+const MANUAL_FIELDS = [
+  { key: 'hho', label: 'HHO', unit: 'ml', product: 'NB-HHO' },
+  { key: 'h2', label: 'H2', unit: 'ml', product: 'Hydrogen' },
+  { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', product: '' },
 ];
 
 // For display purposes (completed view)
 const ALL_DOSE_FIELDS = [
-  { key: 'ifa250', label: 'IFA 250ml', unit: 'Botol' },
+  { key: 'ifa250', label: 'IFA + NO 2,5ml', unit: 'Botol' },
   { key: 'ifa500', label: 'IFA 500ml', unit: 'Botol' },
-  ...DOSE_FIELDS,
+  ...AUTO_FILL_FIELDS,
+  ...MANUAL_FIELDS,
 ];
 
 export default function Step2TherapyPlan({
@@ -45,7 +51,7 @@ export default function Step2TherapyPlan({
 
   const [formData, setFormData] = useState<CreateTherapyPlanInput>({
     keterangan: '',
-    ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+    ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
     ifa500: undefined,
     hho: undefined,
     h2: undefined,
@@ -73,7 +79,8 @@ export default function Step2TherapyPlan({
     }
 
     // Validate at least one dose field is filled (IFA counts)
-    const hasAtLeastOneDose = hasIfa || DOSE_FIELDS.some((field) => {
+    const allDoseFields = [...AUTO_FILL_FIELDS, ...MANUAL_FIELDS];
+    const hasAtLeastOneDose = hasIfa || allDoseFields.some((field) => {
       const value = formData[field.key as keyof CreateTherapyPlanInput];
       return value !== undefined && value !== null && Number(value) > 0;
     });
@@ -210,7 +217,7 @@ export default function Step2TherapyPlan({
               />
               <div style={{ flex: 1 }}>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
-                  IFA 250ml + NO 2,5ml ⭐
+                  IFA + NO 2,5ml ⭐
                 </span>
                 <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
                   Default - Wajib 1 botol per terapi
@@ -257,7 +264,7 @@ export default function Step2TherapyPlan({
                   IFA 500ml (Alternatif)
                 </span>
                 <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                  Special case - Pengganti IFA 250ml
+                  Special case - Pengganti IFA + NO 2,5ml
                 </span>
               </div>
               {formData.ifa500 && formData.ifa500 > 0 && (
@@ -279,24 +286,77 @@ export default function Step2TherapyPlan({
           </div>
         </div>
 
-        {/* Other Dose Fields */}
-        <div className={styles.doseGrid}>
-          {DOSE_FIELDS.map((field) => (
-            <div key={field.key} className={styles.doseField}>
-              <label className={styles.doseLabel}>
-                {field.label} ({field.unit})
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
-                onChange={(e) => updateDose(field.key, e.target.value)}
-                className={styles.doseInput}
-                placeholder="0"
-                disabled={loading}
-              />
-            </div>
-          ))}
+        {/* AUTO-FILL FIELDS - Ada Booster Package */}
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '16px',
+          background: 'rgba(59,130,246,0.08)',
+          borderRadius: '8px',
+          border: '1px solid rgba(59,130,246,0.2)'
+        }}>
+          <p style={{ 
+            margin: '0 0 12px 0', 
+            fontSize: '13px', 
+            color: '#60a5fa',
+            fontWeight: '700'
+          }}>
+            🔄 Auto-Fill (Ada Booster Package)
+          </p>
+          <div className={styles.doseGrid}>
+            {AUTO_FILL_FIELDS.map((field) => (
+              <div key={field.key} className={styles.doseField}>
+                <label className={styles.doseLabel} style={{ color: '#60a5fa' }}>
+                  {field.label} <span style={{ fontSize: '10px', color: '#94a3b8' }}>({field.product})</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
+                  onChange={(e) => updateDose(field.key, e.target.value)}
+                  className={styles.doseInput}
+                  style={{ borderColor: 'rgba(59,130,246,0.3)' }}
+                  placeholder="0"
+                  disabled={loading}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* MANUAL FIELDS - Tidak Ada Booster Package */}
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '16px',
+          background: 'rgba(148,163,184,0.08)',
+          borderRadius: '8px',
+          border: '1px solid rgba(148,163,184,0.2)'
+        }}>
+          <p style={{ 
+            margin: '0 0 12px 0', 
+            fontSize: '13px', 
+            color: '#94a3b8',
+            fontWeight: '700'
+          }}>
+            ✏️ Manual Input (Tidak Ada Booster Package)
+          </p>
+          <div className={styles.doseGrid}>
+            {MANUAL_FIELDS.map((field) => (
+              <div key={field.key} className={styles.doseField}>
+                <label className={styles.doseLabel} style={{ color: '#94a3b8' }}>
+                  {field.label} {field.product && <span style={{ fontSize: '10px', color: '#64748b' }}>({field.product})</span>}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
+                  onChange={(e) => updateDose(field.key, e.target.value)}
+                  className={styles.doseInput}
+                  placeholder="0"
+                  disabled={loading}
+                />
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className={styles.formGroup}>

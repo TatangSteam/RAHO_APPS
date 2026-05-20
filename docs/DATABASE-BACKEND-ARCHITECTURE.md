@@ -1,6 +1,6 @@
 ﻿# Database & Backend Architecture Documentation
 
-> Dokumentasi lengkap database schema, backend architecture, dan seeding data untuk RAHO Klinik Management System
+> Dokumentasi lengkap database schema, backend architecture, dan seeding data untuk Raho ERP Management System
 
 ## 📊 Database Overview
 

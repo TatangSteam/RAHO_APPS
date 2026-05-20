@@ -93,7 +93,7 @@ export default function MemberDashboardPage() {
           Halo, {user.fullName.split(' ')[0]} 👋
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: 15 }}>
-          Selamat datang kembali di Portal Member RAHO Klinik
+          Selamat datang kembali di Portal Member Raho ERP
         </p>
       </div>
 

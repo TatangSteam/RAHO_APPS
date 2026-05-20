@@ -5,8 +5,8 @@ import { ToastProvider } from '@/components/providers/ToastProvider';
 
 export const metadata: Metadata = {
   title: {
-    default: 'RAHO Klinik',
-    template: '%s — RAHO Klinik',
+    default: 'Raho ERP',
+    template: '%s — Raho ERP',
   },
   description: 'Sistem Manajemen Klinik Terapi Infus RAHO',
   robots: { index: false, follow: false },

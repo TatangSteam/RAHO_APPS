@@ -1,4 +1,4 @@
-# Requirements & User Stories - RAHO Klinik Management System
+# Requirements & User Stories - Raho ERP Management System
 
 > Dokumentasi lengkap functional requirements dan user stories untuk sistem manajemen klinik RAHO
 
@@ -19,7 +19,7 @@
 ## 🎯 Project Overview
 
 ### Project Name
-**RAHO Klinik Management System**
+**Raho ERP Management System**
 
 ### Project Description
 Sistem manajemen klinik terintegrasi untuk mengelola operasional klinik terapi infus, mencakup manajemen member, paket terapi, sesi treatment, inventory, dan multi-branch operations.

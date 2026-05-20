@@ -87,39 +87,37 @@ export class InfusionService {
       });
 
       // Deduct stock for each material used AND create material usage records
-      // Map field names to product name patterns for searching
-      // IFA 250ml: "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi (satuan: Botol)
-      // IFA 500ml: "IFA A + MG 500ml" - alternatif/special case (satuan: Botol)
+      // Map field names to product SKU/name patterns for searching
+      // Sesuai List Barang RAHO Official
       const materials = [
-        { field: 'IFA250', namePattern: 'IFA + NO', qty: data.ifa250, unit: 'Botol' }, // IFA + NO 2,5ml (250ml) - wajib
-        { field: 'IFA500', namePattern: 'IFA A + MG', qty: data.ifa500, unit: 'Botol' }, // IFA A + MG 500ml - alternatif
-        { field: 'HHO', namePattern: 'HHO', qty: data.hho },
-        { field: 'H2', namePattern: 'H2', qty: data.h2 },
-        { field: 'NO', namePattern: 'NB-NO', qty: data.no },
-        { field: 'GASO', namePattern: 'Gasotransmitter', qty: data.gaso },
-        { field: 'O2', namePattern: 'O2', qty: data.o2 },
-        { field: 'O3', namePattern: 'Ozone', qty: data.o3 },
-        { field: 'EDTA', namePattern: 'EDTA', qty: data.edta },
-        { field: 'MB', namePattern: 'Methyln Blue', qty: data.mb },
-        { field: 'H2S', namePattern: 'H2S', qty: data.h2s },
-        { field: 'KCL', namePattern: 'KCL', qty: data.kcl },
-        { field: 'JML_NB', namePattern: 'JML/NB', qty: data.jmlNb },
+        // INFUS SET - WAJIB 1 piece per sesi terapi (otomatis)
+        { field: 'INFUS_SET', sku: 'PRD-INF-SET-001', namePattern: 'Infus Set', qty: 1, unit: 'Piece' },
+        // IFA - Satuan BOTOL
+        { field: 'IFA500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA 500ml', qty: data.ifa500, unit: 'Botol' },
+        { field: 'IFA250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA + NO 2,5ml', qty: data.ifa250, unit: 'Botol' },
+        // Cairan Terapi - Satuan ML
+        { field: 'HHO', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', qty: data.hho, unit: 'ml' },
+        { field: 'H2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', qty: data.h2, unit: 'ml' },
+        { field: 'NO', sku: 'PRD-NBT-CNO-001', namePattern: 'NB NO', qty: data.no, unit: 'ml' },
+        { field: 'GASO', sku: 'PRD-NBT-CGT-001', namePattern: 'NB Gasotransmitter', qty: data.gaso, unit: 'ml' },
+        { field: 'O3', sku: 'PRD-NBT-CO3-001', namePattern: 'Ozone', qty: data.o3, unit: 'ml' },
+        { field: 'O2', sku: 'PRD-NBT-CO2-001', namePattern: 'O2', qty: data.o2, unit: 'ml' },
+        { field: 'EDTA', sku: 'PRD-NBT-EDT-001', namePattern: 'EDTA', qty: data.edta, unit: 'ml' },
+        { field: 'MB', sku: 'PRD-NBT-CMB-001', namePattern: 'NB Methyln Blue', qty: data.mb, unit: 'ml' },
+        { field: 'H2S', sku: 'PRD-NBT-H2S-001', namePattern: 'Cairan H2S', qty: data.h2s, unit: 'ml' },
+        { field: 'KCL', sku: 'PRD-NBT-KCL-001', namePattern: 'KCL', qty: data.kcl, unit: 'ml' },
       ];
 
       for (const material of materials) {
         if (material.qty && material.qty > 0) {
-          console.log(`🔍 Processing material: ${material.field} (${material.namePattern}) - Qty: ${material.qty}`);
+          console.log(`🔍 Processing material: ${material.field} (${material.sku}) - Qty: ${material.qty}`);
           
-          // Find inventory item directly by name pattern and branch
-          // This ensures we find the product that actually exists in this branch's inventory
-          const inventoryItem = await tx.inventoryItem.findFirst({
+          // Find inventory item by SKU first, then fallback to name pattern
+          let inventoryItem = await tx.inventoryItem.findFirst({
             where: {
               branchId,
               masterProduct: {
-                name: { 
-                  contains: material.namePattern,
-                  mode: 'insensitive'
-                },
+                sku: material.sku,
                 isActive: true,
               }
             },
@@ -127,6 +125,25 @@ export class InfusionService {
               masterProduct: true,
             },
           });
+
+          // Fallback to name pattern if SKU not found
+          if (!inventoryItem) {
+            inventoryItem = await tx.inventoryItem.findFirst({
+              where: {
+                branchId,
+                masterProduct: {
+                  name: { 
+                    contains: material.namePattern,
+                    mode: 'insensitive'
+                  },
+                  isActive: true,
+                }
+              },
+              include: {
+                masterProduct: true,
+              },
+            });
+          }
 
           if (!inventoryItem) {
             console.warn(`⚠️ Inventory item not found for: ${material.namePattern} at branch ${branchId}`);

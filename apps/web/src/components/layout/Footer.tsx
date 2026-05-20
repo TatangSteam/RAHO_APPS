@@ -23,7 +23,7 @@ export function Footer({ className, style }: FooterProps) {
         ...style,
       }}
     >
-      © {currentYear} RAHO Klinik. All rights reserved.
+      © {currentYear} Raho ERP. All rights reserved.
     </footer>
   );
 }

@@ -51,21 +51,23 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
     console.log(`\n📍 Processing ${sessionCode} (${session.branch.name})`);
 
     // Map infusion fields to product name patterns
-    // These patterns match the product names in materials.seed.ts
-    // IFA: Default to "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi
+    // Sesuai List Barang RAHO Official
     const materials = [
-      { field: 'ifa', namePattern: 'IFA + NO', qty: infusion.ifa },
-      { field: 'hho', namePattern: 'HHO', qty: infusion.hho },
-      { field: 'h2', namePattern: 'H2', qty: infusion.h2 },
-      { field: 'no', namePattern: 'NB-NO', qty: infusion.no },
-      { field: 'gaso', namePattern: 'Gasotransmitter', qty: infusion.gaso },
-      { field: 'o2', namePattern: 'O2', qty: infusion.o2 },
-      { field: 'o3', namePattern: 'Ozone', qty: infusion.o3 },
-      { field: 'edta', namePattern: 'EDTA', qty: infusion.edta },
-      { field: 'mb', namePattern: 'Methyln Blue', qty: infusion.mb },
-      { field: 'h2s', namePattern: 'H2S', qty: infusion.h2s },
-      { field: 'kcl', namePattern: 'KCL', qty: infusion.kcl },
-      { field: 'jmlNb', namePattern: 'JML/NB', qty: infusion.jmlNb },
+      // IFA - Satuan BOTOL
+      { field: 'ifa250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA A + MG 250ml', qty: infusion.ifa250 },
+      { field: 'ifa500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA A + MG 500ml', qty: infusion.ifa500 },
+      // Cairan Terapi - Satuan ML
+      { field: 'hho', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', qty: infusion.hho },
+      { field: 'h2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', qty: infusion.h2 },
+      { field: 'no', sku: 'PRD-NBT-CNO-001', namePattern: 'NB-NO', qty: infusion.no },
+      { field: 'gaso', sku: 'PRD-NBT-CGT-001', namePattern: 'NB Gasotransmitter', qty: infusion.gaso },
+      { field: 'o2', namePattern: 'O2', qty: infusion.o2 }, // No specific SKU for O2
+      { field: 'o3', sku: 'PRD-NBT-CO3-001', namePattern: 'Ozone', qty: infusion.o3 },
+      { field: 'edta', sku: 'PRD-NBT-EDT-001', namePattern: 'EDTA', qty: infusion.edta },
+      { field: 'mb', sku: 'PRD-NBT-CMB-001', namePattern: 'NB Methyln Blue', qty: infusion.mb },
+      { field: 'h2s', sku: 'PRD-NBT-H2S-001', namePattern: 'Cairan H2S', qty: infusion.h2s },
+      { field: 'kcl', sku: 'PRD-NBT-KCL-001', namePattern: 'KCL', qty: infusion.kcl },
+      { field: 'jmlNb', namePattern: 'JML/NB', qty: infusion.jmlNb }, // No specific SKU
     ];
 
     let sessionCreated = 0;
@@ -74,15 +76,28 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
       if (!material.qty || Number(material.qty) <= 0) continue;
 
       try {
-        // Find master product by name pattern
-        const masterProduct = await prisma.masterProduct.findFirst({
-          where: {
-            name: {
-              contains: material.namePattern,
-              mode: 'insensitive',
+        // Find master product by SKU first, then fallback to name pattern
+        let masterProduct = null;
+        
+        if ((material as any).sku) {
+          masterProduct = await prisma.masterProduct.findFirst({
+            where: {
+              sku: (material as any).sku,
             },
-          },
-        });
+          });
+        }
+        
+        // Fallback to name pattern if SKU not found
+        if (!masterProduct) {
+          masterProduct = await prisma.masterProduct.findFirst({
+            where: {
+              name: {
+                contains: material.namePattern,
+                mode: 'insensitive',
+              },
+            },
+          });
+        }
 
         if (!masterProduct) {
           console.log(`  ⚠️  Product not found: ${material.namePattern}`);

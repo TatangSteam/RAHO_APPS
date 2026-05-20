@@ -211,7 +211,7 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                   gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
                   gap: '10px' 
                 }}>
-                  {infusion.ifa && (
+                  {infusion.ifa250 && (
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between',
@@ -221,9 +221,25 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                       borderRadius: 'var(--radius-md)',
                       border: '1px solid rgba(148,163,184,0.2)'
                     }}>
-                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>IFA</span>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>IFA + NO 2,5ml</span>
                       <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
-                        {infusion.ifa} ml
+                        {infusion.ifa250} Botol
+                      </span>
+                    </div>
+                  )}
+                  {infusion.ifa500 && (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(148,163,184,0.2)'
+                    }}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>IFA 500ml</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
+                        {infusion.ifa500} Botol
                       </span>
                     </div>
                   )}

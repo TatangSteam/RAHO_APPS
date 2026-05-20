@@ -1,5 +1,5 @@
 /**
- * RAHO Klinik - Essential System Data Seeder
+ * Raho ERP - Essential System Data Seeder
  * 
  * This seed file includes ONLY essential data required for system operation:
  * - Super Admin user (first admin account)

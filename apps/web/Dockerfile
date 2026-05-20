@@ -3,7 +3,7 @@ WORKDIR /usr/src/web
 
 # Build-time public envs for Next.js. These are injected by compose build.args.
 ARG NEXT_PUBLIC_API_URL=/api/v1
-ARG NEXT_PUBLIC_APP_NAME="RAHO Klinik"
+ARG NEXT_PUBLIC_APP_NAME="Raho ERP"
 ARG NEXT_PUBLIC_APP_VERSION="1.0.0"
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_PUBLIC_APP_NAME=${NEXT_PUBLIC_APP_NAME}

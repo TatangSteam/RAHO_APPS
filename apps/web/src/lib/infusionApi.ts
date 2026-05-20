@@ -6,7 +6,8 @@ export interface InfusionExecution {
   sessionCode?: string;
   memberName?: string;
   treatmentDate?: string;
-  ifa: number | null;
+  ifa250: number | null; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: number | null; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho: number | null;
   h2: number | null;
   no: number | null;

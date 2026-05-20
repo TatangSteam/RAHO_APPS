@@ -1,6 +1,6 @@
-# RAHO Klinik - Clinic Management System
+# Raho ERP - Clinic Management System
 
-> Sistem manajemen klinik terintegrasi untuk RAHO Klinik dengan dukungan multi-cabang, manajemen paket terapi, inventory, dan electronic medical records (EMR).
+> Sistem manajemen klinik terintegrasi untuk Raho ERP dengan dukungan multi-cabang, manajemen paket terapi, inventory, dan electronic medical records (EMR).
 
 ## 📋 Daftar Isi
 
@@ -22,7 +22,7 @@
 
 ## 🎯 Tentang Project
 
-RAHO Klinik Management System adalah aplikasi full-stack untuk mengelola operasional klinik kesehatan dengan fitur:
+RAHO ERP Management System adalah aplikasi full-stack untuk mengelola operasional klinik kesehatan dengan fitur:
 - Multi-branch management
 - Member & package management
 - Treatment session workflow (8 steps)
@@ -645,7 +645,7 @@ Gunakan [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 📝 License
 
-Proprietary - RAHO Klinik
+Proprietary - RAHO
 
 ---
 
@@ -682,4 +682,4 @@ Untuk pertanyaan atau issue, silakan hubungi tim development atau buat issue di 
 
 ---
 
-**Built with ❤️ for RAHO Klinik**
+**Built with ❤️ for RAHO**

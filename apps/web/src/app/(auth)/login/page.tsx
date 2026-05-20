@@ -91,7 +91,7 @@ export default function LoginPage() {
             <span>R</span>
           </div>
           <div>
-            <h1 className="login-title">RAHO Klinik</h1>
+            <h1 className="login-title">Raho ERP</h1>
             <p className="login-subtitle">Sistem Manajemen Terapi Infus</p>
           </div>
         </div>
@@ -198,7 +198,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="login-footer">
-          © {new Date().getFullYear()} RAHO Klinik. All rights reserved.
+          © {new Date().getFullYear()} Raho ERP. All rights reserved.
         </p>
       </div>
 

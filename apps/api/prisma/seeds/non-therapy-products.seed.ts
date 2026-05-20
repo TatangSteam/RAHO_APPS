@@ -7,10 +7,12 @@ import { PrismaClient, ProductType, AirNanoColor, AirNanoVolume, AirNanoUnit } f
  * 
  * AIR NANO PRODUCTS (PRD-ANN-xxx):
  * - ANN = Air Nano
- * - KNG = Kuning, BRU = Biru, H2S = Hijau H2S
+ * - KNG = Kuning, BRU = Biru, HJU = Hijau
  * - 3 colors: Kuning (K), Biru (B), Hijau (H)
  * - 2 volumes: 600ml, 1500ml
  * - 2 units: Botol (BL), Dus (DS)
+ * 
+ * NOTE: Air Nano Hijau TIDAK mengandung "H2S" di nama agar tidak tertukar dengan Cairan H2S therapy
  * 
  * ROKOK KENKOU (PRD-CON-RKK):
  * - CON = Konsumsi
@@ -22,6 +24,7 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
 
   // ============================================================
   // AIR NANO PRODUCTS - SKU: PRD-ANN-[Warna]-[Nomor]
+  // NOTE: Hijau TIDAK mengandung "H2S" di nama
   // ============================================================
   
   const airNanoProducts = [
@@ -43,8 +46,8 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
       price: 15_000
     },
     {
-      productCode: 'PRD-ANN-H2S-001',
-      name: 'Air Nano Hijau H2S 600ml 1 Botol',
+      productCode: 'PRD-ANN-HJU-001',
+      name: 'Air Nano Hijau 600ml 1 Botol',
       color: AirNanoColor.HIJAU,
       volume: AirNanoVolume.ML_600,
       unit: AirNanoUnit.BOTOL,
@@ -69,8 +72,8 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
       price: 35_000
     },
     {
-      productCode: 'PRD-ANN-H2S-002',
-      name: 'Air Nano Hijau H2S 1500ml 1 Botol',
+      productCode: 'PRD-ANN-HJU-002',
+      name: 'Air Nano Hijau 1500ml 1 Botol',
       color: AirNanoColor.HIJAU,
       volume: AirNanoVolume.ML_1500,
       unit: AirNanoUnit.BOTOL,
@@ -95,8 +98,8 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
       price: 360_000
     },
     {
-      productCode: 'PRD-ANN-H2S-003',
-      name: 'Air Nano Hijau H2S 600ml 1 Dus',
+      productCode: 'PRD-ANN-HJU-003',
+      name: 'Air Nano Hijau 600ml 1 Dus',
       color: AirNanoColor.HIJAU,
       volume: AirNanoVolume.ML_600,
       unit: AirNanoUnit.DUS,
@@ -121,8 +124,8 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
       price: 420_000
     },
     {
-      productCode: 'PRD-ANN-H2S-004',
-      name: 'Air Nano Hijau H2S 1500ml 1 Dus',
+      productCode: 'PRD-ANN-HJU-004',
+      name: 'Air Nano Hijau 1500ml 1 Dus',
       color: AirNanoColor.HIJAU,
       volume: AirNanoVolume.ML_1500,
       unit: AirNanoUnit.DUS,
@@ -194,7 +197,7 @@ export async function seedNonTherapyProducts(prisma: PrismaClient) {
   console.log(`   - PRD-ANN-KNG-003: Kuning 600ml Dus - Rp 360,000`);
   console.log(`   - PRD-ANN-KNG-004: Kuning 1500ml Dus - Rp 420,000`);
   console.log(`   - PRD-ANN-BRU-xxx: Biru (same prices)`);
-  console.log(`   - PRD-ANN-H2S-xxx: Hijau H2S (same prices)`);
+  console.log(`   - PRD-ANN-HJU-xxx: Hijau (same prices)`);
   console.log(`\n   ROKOK KENKOU (PRD-CON-RKK-xxx) - 2 variants:`);
   console.log(`   - PRD-CON-RKK-001: 1 Bungkus - Rp 20,000`);
   console.log(`   - PRD-CON-RKK-002: 1 Pack - Rp 200,000`);

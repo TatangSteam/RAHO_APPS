@@ -16,7 +16,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<CreateTherapyPlanInput>({
     keterangan: '',
-    ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+    ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
     ifa500: undefined,
     hho: undefined,
     h2: undefined,
@@ -68,7 +68,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
       setShowForm(false);
       setFormData({
         keterangan: '',
-        ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+        ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
         ifa500: undefined,
         hho: undefined,
         h2: undefined,
@@ -235,7 +235,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   />
                   <div style={{ flex: 1 }}>
                     <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
-                      IFA 250ml + NO 2,5ml ⭐
+                      IFA + NO 2,5ml ⭐
                     </span>
                     <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
                       Default - Wajib 1 botol per terapi
@@ -285,7 +285,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                       IFA 500ml (Alternatif)
                     </span>
                     <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                      Special case - Pengganti IFA 250ml
+                      Special case - Pengganti IFA + NO 2,5ml
                     </span>
                   </div>
                   {formData.ifa500 && formData.ifa500 > 0 && (
@@ -310,169 +310,203 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  HHO
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.hho ?? ''}
-                  onChange={(e) => handleInputChange('hho', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  H2
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.h2 ?? ''}
-                  onChange={(e) => handleInputChange('h2', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  NO
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.no ?? ''}
-                  onChange={(e) => handleInputChange('no', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
+            {/* AUTO-FILL FIELDS - Digunakan di Infus Aktual */}
+            <div style={{ 
+              marginBottom: '20px',
+              padding: '16px',
+              background: 'rgba(59,130,246,0.08)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(59,130,246,0.2)'
+            }}>
+              <p style={{ 
+                margin: '0 0 12px 0', 
+                fontSize: '13px', 
+                color: '#60a5fa',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                🔄 Auto-Fill (Digunakan di Infus Aktual)
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    NO <span style={{ fontSize: '10px', color: '#94a3b8' }}>(NB NO)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.no ?? ''}
+                    onChange={(e) => handleInputChange('no', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    GASO <span style={{ fontSize: '10px', color: '#94a3b8' }}>(GT)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.gaso ?? ''}
+                    onChange={(e) => handleInputChange('gaso', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    MB <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Methylene Blue)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.mb ?? ''}
+                    onChange={(e) => handleInputChange('mb', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    KCL
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.kcl ?? ''}
+                    onChange={(e) => handleInputChange('kcl', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    H2S <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Cairan H2S)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.h2s ?? ''}
+                    onChange={(e) => handleInputChange('h2s', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    O3 <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Ozone)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.o3 ?? ''}
+                    onChange={(e) => handleInputChange('o3', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    O2 <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Oxygen)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.o2 ?? ''}
+                    onChange={(e) => handleInputChange('o2', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
+                    EDTA
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.edta ?? ''}
+                    onChange={(e) => handleInputChange('edta', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
+                  />
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  GASO
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.gaso ?? ''}
-                  onChange={(e) => handleInputChange('gaso', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  O2
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.o2 ?? ''}
-                  onChange={(e) => handleInputChange('o2', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  O3
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.o3 ?? ''}
-                  onChange={(e) => handleInputChange('o3', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  EDTA
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.edta ?? ''}
-                  onChange={(e) => handleInputChange('edta', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  MB
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.mb ?? ''}
-                  onChange={(e) => handleInputChange('mb', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  H2S
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.h2s ?? ''}
-                  onChange={(e) => handleInputChange('h2s', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  KCL
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.kcl ?? ''}
-                  onChange={(e) => handleInputChange('kcl', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
-              </div>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  JML NB
-                </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.jmlNb ?? ''}
-                  onChange={(e) => handleInputChange('jmlNb', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
+            {/* MANUAL FIELDS - Tidak Ada di Infus Aktual */}
+            <div style={{ 
+              marginBottom: '24px',
+              padding: '16px',
+              background: 'rgba(148,163,184,0.08)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(148,163,184,0.2)'
+            }}>
+              <p style={{ 
+                margin: '0 0 12px 0', 
+                fontSize: '13px', 
+                color: '#94a3b8',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                ✏️ Manual Input
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
+                    HHO <span style={{ fontSize: '10px', color: '#64748b' }}>(NB-HHO)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.hho ?? ''}
+                    onChange={(e) => handleInputChange('hho', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
+                    H2 <span style={{ fontSize: '10px', color: '#64748b' }}>(Hydrogen)</span>
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.h2 ?? ''}
+                    onChange={(e) => handleInputChange('h2', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px' }}
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
+                    JML NB
+                  </label>
+                  <input
+                    className="form-input"
+                    type="number"
+                    step="0.01"
+                    value={formData.jmlNb ?? ''}
+                    onChange={(e) => handleInputChange('jmlNb', e.target.value)}
+                    placeholder="0.00"
+                    style={{ fontSize: '14px' }}
+                  />
+                </div>
               </div>
             </div>
 
@@ -649,7 +683,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                       borderRadius: 'var(--radius-md)',
                       border: '2px solid rgba(34,197,94,0.4)'
                     }}>
-                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#4ade80' }}>IFA 250ml ⭐</span>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#4ade80' }}>IFA + NO 2,5ml ⭐</span>
                       <span style={{ fontSize: '15px', fontWeight: '700', color: '#4ade80' }}>
                         {plan.ifa250} Botol
                       </span>

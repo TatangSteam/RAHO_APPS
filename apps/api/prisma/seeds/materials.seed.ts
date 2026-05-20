@@ -1,6 +1,29 @@
 import { PrismaClient, ProductCategory } from '@prisma/client';
 
 /**
+ * ⚠️ DEPRECATED - DO NOT USE THIS FILE! ⚠️
+ * 
+ * This file creates products with WRONG names like:
+ * - "EDTA 100ml", "EDTA 50ml" (should be just "EDTA" in ml)
+ * - "GASO 100ml" (should be "NB Gasotransmitter (GT)" in ml)
+ * - "H2 (Hydrogen) 100ml" (should be just "H2" in ml)
+ * - "H2S 1ml" (should be "Cairan H2S" in ml)
+ * - etc.
+ * 
+ * USE INSTEAD:
+ * - seedProducts() from products.seed.ts
+ * - seedConsolidatedInventoryItems() from inventory-items-consolidated.seed.ts
+ * 
+ * These follow the official "List Barang RAHO" exactly with correct:
+ * - SKU codes (e.g., PRD-NBT-HHO-001)
+ * - Product names (e.g., "NB-HHO", "H2", "Cairan H2S")
+ * - Units (ml for cairan terapi, Botol for IFA, Kotak for Handscoon, etc.)
+ * 
+ * This file is kept for reference only and is NOT exported from index.ts
+ * 
+ * ============================================================
+ * ORIGINAL DESCRIPTION (DEPRECATED):
+ * ============================================================
  * MATERIALS SEEDER
  * 
  * Purpose:
@@ -49,7 +72,7 @@ export async function seedMaterials(prisma: PrismaClient) {
     // CAIRAN INFUS UTAMA
     // ============================================================
     {
-      name: 'IFA A+MG 500ml',
+      name: 'IFA 500ml',
       category: ProductCategory.MEDICINE,
       baseUnit: 'botol',
       usageUnit: 'ml',
@@ -61,7 +84,7 @@ export async function seedMaterials(prisma: PrismaClient) {
       minStock: 10,
     },
     {
-      name: 'IFA A+MG 250ml',
+      name: 'IFA 250ml',
       category: ProductCategory.MEDICINE,
       baseUnit: 'botol',
       usageUnit: 'ml',
@@ -599,7 +622,7 @@ export async function seedMaterials(prisma: PrismaClient) {
   if (branchSurabaya) console.log(`   • ${branchSurabaya.name} (SBY): ~50% stock`);
 
   console.log(`\n💉 Infusion Field Mapping:`);
-  console.log('   • ifa → IFA A+MG 500ml, IFA A+MG 250ml');
+  console.log('   • ifa → IFA 500ml, IFA 250ml');
   console.log('   • hho → HHO 100ml, Nano Bubble HHO, NB HHO');
   console.log('   • h2 → H2 (Hydrogen)');
   console.log('   • no → NO (Nitric Oxide)');

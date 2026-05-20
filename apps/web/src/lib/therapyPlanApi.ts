@@ -4,8 +4,8 @@ export interface TherapyPlan {
   id: string;
   planCode: string;
   keterangan?: string;
-  ifa250?: number; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
-  ifa500?: number; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
+  ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
   h2?: number;
   no?: number;
@@ -33,8 +33,8 @@ export interface TherapyPlan {
 
 export interface CreateTherapyPlanInput {
   keterangan?: string;
-  ifa250?: number; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
-  ifa500?: number; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
+  ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
   h2?: number;
   no?: number;

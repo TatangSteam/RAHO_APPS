@@ -1,4 +1,4 @@
-# RAHO Klinik - Data Seed Lengkap
+# Raho ERP - Data Seed Lengkap
 
 ## Daftar Isi
 1. [Cabang (Branches)](#cabang-branches)
@@ -348,4 +348,4 @@ npx tsx prisma/seed.ts
 
 ---
 
-*Dokumen ini berisi data seed lengkap untuk sistem RAHO Klinik Management System. Semua nilai adalah data exact yang digunakan dalam proses seeding database.*
+*Dokumen ini berisi data seed lengkap untuk sistem Raho ERP Management System. Semua nilai adalah data exact yang digunakan dalam proses seeding database.*

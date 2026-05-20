@@ -190,7 +190,7 @@ export default function EditBranchPage() {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              placeholder="Contoh: RAHO Klinik Jakarta Pusat"
+              placeholder="Contoh: Raho ERP Jakarta Pusat"
               required
               className="form-input"
             />

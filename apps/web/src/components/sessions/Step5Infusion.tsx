@@ -29,7 +29,7 @@ const DOSE_FIELDS = [
 
 // For display purposes
 const ALL_DOSE_FIELDS = [
-  { key: 'ifa250', label: 'IFA 250ml', unit: 'Botol' },
+  { key: 'ifa250', label: 'IFA + NO 2,5ml', unit: 'Botol' },
   { key: 'ifa500', label: 'IFA 500ml', unit: 'Botol' },
   ...DOSE_FIELDS,
 ];
@@ -46,7 +46,7 @@ export default function Step5Infusion({
   const [hasDeviation, setHasDeviation] = useState(false);
 
   const [formData, setFormData] = useState<CreateInfusionInput>({
-    ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+    ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
     ifa500: undefined,
     hho: undefined,
     h2: undefined,
@@ -371,7 +371,7 @@ export default function Step5Infusion({
               />
               <div style={{ flex: 1 }}>
                 <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
-                  IFA 250ml + NO 2,5ml ⭐
+                  IFA + NO 2,5ml ⭐
                 </span>
                 <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
                   Default - Wajib 1 botol per terapi
@@ -428,7 +428,7 @@ export default function Step5Infusion({
                   IFA 500ml (Alternatif)
                 </span>
                 <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
-                  Special case - Pengganti IFA 250ml
+                  Special case - Pengganti IFA + NO 2,5ml
                   {therapyPlan?.ifa500 && <span style={{ marginLeft: '8px', color: '#60a5fa' }}>(Rencana: {Number(therapyPlan.ifa500)} Botol)</span>}
                 </span>
               </div>

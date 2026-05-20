@@ -73,7 +73,7 @@ async function createTherapyPlan(
     data: {
       planCode,
       treatmentSessionId: sessionId,
-      ifa: 500,
+      ifa250: 1, // IFA 250ml - 1 botol per terapi (default)
       hho: 30,
       keterangan: 'Terapi infus nano bubble untuk meningkatkan oksigenasi',
     },
@@ -134,7 +134,7 @@ async function createInfusion(
   return await prisma.infusionExecution.create({
     data: {
       treatmentSessionId: sessionId,
-      ifa: 500,
+      ifa250: 1, // IFA 250ml - 1 botol per terapi (default)
       hho: 30,
       bottleType: 'IFA',
       jenisCairan: 'NaCl 0.9%',

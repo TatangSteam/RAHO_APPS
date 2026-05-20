@@ -1,5 +1,5 @@
 /**
- * RAHO Klinik - Complete Database Seeder
+ * Raho ERP - Complete Database Seeder
  * 
  * This seed file runs BOTH:
  * 1. Essential seed (production-safe data)
@@ -37,8 +37,8 @@ async function main(): Promise<void> {
     console.log('📦 Seeding master products...');
     const products = await seedProducts(prisma);
 
-    console.log('📦 Seeding consolidated inventory items...');
-    await seedConsolidatedInventoryItems(prisma);
+    // Note: Consolidated inventory items will be seeded after branches are created
+    // This is done in the testing seed section
 
     console.log('⚙️  Seeding master types (booster & service types)...');
     await seedMasterTypes();
@@ -54,7 +54,7 @@ async function main(): Promise<void> {
     console.log('═══════════════════════════════════════════════════════════');
     console.log('\n📦 STEP 2/2: Running Testing Seed...\n');
 
-    const { seedBranches, assignBranchesToManager, seedUsers, assignStaffToBranches, assignManagerToBranches, seedPackagePricing, seedReferralCodes, seedMembersMultiBranch, seedMaterials } = await import('./seeds');
+    const { seedBranches, assignBranchesToManager, seedUsers, assignStaffToBranches, assignManagerToBranches, seedPackagePricing, seedReferralCodes, seedMembersMultiBranch } = await import('./seeds');
 
     console.log('🏢 Seeding branches...');
     const { branchPusat, branchBandung, branchSurabaya } = await seedBranches(prisma);
@@ -75,13 +75,10 @@ async function main(): Promise<void> {
     await assignStaffToBranches(prisma);
     await assignManagerToBranches(prisma);
 
-    console.log('\n💊 Seeding therapy materials...');
-    await seedMaterials(prisma);
-
-    // Cleanup: Remove any orphan MasterProducts that have no InventoryItem
-    // This prevents "Belum ada cabang" entries showing up in Master Products UI
-    console.log('\n🧹 Cleaning up orphan products...');
-    await cleanupOrphanProducts(prisma);
+    // NOW seed consolidated inventory items (after branches exist)
+    // This creates all products from List Barang RAHO official with inventory for each branch
+    console.log('\n📦 Seeding inventory items from List Barang RAHO...');
+    await seedConsolidatedInventoryItems(prisma);
 
     console.log('\n📊 Seeding test members with packages...\n');
     const allUsers = await prisma.user.findMany({ where: { role: { not: 'MEMBER' } } });
@@ -107,9 +104,7 @@ async function main(): Promise<void> {
     console.log('  manager@raho.id      → Manager@123     [ADMIN_MANAGER]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');
-    console.log(`  • ${products.length} master products`);
-    console.log(`  • 40 consolidated medical supplies`);
-    console.log(`  • 35 therapy materials (for sessions)`);
+    console.log(`  • ${products.length} master products (sesuai List Barang RAHO)`);
     console.log(`  • ${3} branches (Jakarta, Bandung, Surabaya)`);
     console.log(`  • ${2} admin users + ${12} branch staff`);
     console.log(`  • ${3} referral codes`);

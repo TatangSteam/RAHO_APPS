@@ -1,4 +1,4 @@
-# Alur Bisnis Utama - RAHO Klinik Management System
+# Alur Bisnis Utama - Raho ERP Management System
 
 > Dokumentasi lengkap alur bisnis dan workflow dari sistem manajemen klinik RAHO
 

@@ -96,18 +96,21 @@ const INFUSION_AUTO_FILL_MAPPING: Array<{
   namePattern: string;
   color: string;
 }> = [
+  // IFA - Wajib per sesi
   { field: 'ifa', label: 'IFA', namePattern: 'IFA', color: '#3b82f6' },
-  { field: 'hho', label: 'HHO', namePattern: 'HHO', color: '#06b6d4' },
-  { field: 'h2', label: 'H2', namePattern: 'H2 (Hydrogen)', color: '#8b5cf6' },
-  { field: 'no', label: 'NO', namePattern: 'NO (Nitric Oxide)', color: '#ec4899' },
-  { field: 'gaso', label: 'GASO', namePattern: 'GASO', color: '#f59e0b' },
-  { field: 'o2', label: 'O2', namePattern: 'O2 (Oxygen)', color: '#10b981' },
-  { field: 'o3', label: 'O3', namePattern: 'O3 (Ozone)', color: '#14b8a6' },
-  { field: 'edta', label: 'EDTA', namePattern: 'EDTA', color: '#a855f7' },
-  { field: 'mb', label: 'MB', namePattern: 'MB (Methylene Blue)', color: '#6366f1' },
-  { field: 'h2s', label: 'H2S', namePattern: 'H2S', color: '#84cc16' },
+  // Infus Set - Wajib per sesi (otomatis 1 piece)
+  { field: 'infusSet', label: 'Infus Set', namePattern: 'Infus Set', color: '#8b5cf6' },
+  // Auto-fill fields (dari form infus aktual)
+  { field: 'no', label: 'NO', namePattern: 'NB NO', color: '#ec4899' },
+  { field: 'gaso', label: 'GASO', namePattern: 'Gasotransmitter', color: '#f59e0b' },
+  { field: 'mb', label: 'MB', namePattern: 'Methyln Blue', color: '#6366f1' },
   { field: 'kcl', label: 'KCL', namePattern: 'KCL', color: '#f97316' },
-  { field: 'jmlnb', label: 'JML/NB', namePattern: 'NB Koktail', color: '#ef4444' },
+  { field: 'h2s', label: 'H2S', namePattern: 'Cairan H2S', color: '#84cc16' },
+  { field: 'o3', label: 'O3', namePattern: 'Ozone', color: '#14b8a6' },
+  { field: 'o2', label: 'O2', namePattern: 'O2 (Oxygen)', color: '#10b981' },
+  { field: 'edta', label: 'EDTA', namePattern: 'EDTA', color: '#a855f7' },
+  // Manual fields (tetap deduct stock tapi dari form manual)
+  { field: 'hho', label: 'HHO', namePattern: 'NB-HHO', color: '#06b6d4' },
 ];
 
 /**

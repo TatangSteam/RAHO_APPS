@@ -139,7 +139,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: ${WEB_NEXT_PUBLIC_API_URL:-/api/v1}
-        NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO Klinik}
+        NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO}
         NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
     image: raho-erp-web:latest
     container_name: raho-erp-web
@@ -148,7 +148,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       NEXT_PUBLIC_API_URL: ${WEB_NEXT_PUBLIC_API_URL:-/api/v1}
-      NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-RAHO Klinik}
+      NEXT_PUBLIC_APP_NAME: ${WEB_NEXT_PUBLIC_APP_NAME:-Raho ERP}
       NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
     depends_on:
       - api
