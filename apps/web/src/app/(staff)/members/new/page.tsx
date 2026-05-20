@@ -130,6 +130,11 @@ export default function NewMemberPage() {
 
   const handlePspChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Handle delete case - when files is null or empty
+    if (!e.target.files || e.target.files.length === 0) {
+      setPspFile(null);
+      return;
+    }
     if (file) {
       if (file.size > 5 * 1024 * 1024) {
         showToast.error('Ukuran file PSP maksimal 5MB');
@@ -151,15 +156,45 @@ export default function NewMemberPage() {
       return;
     }
 
-    // Validation
+    // Validation for required personal data fields
     if (!formData.fullName || formData.fullName.length < 3) {
       showToast.error('Nama lengkap minimal 3 karakter');
+      return;
+    }
+    if (!formData.nik || formData.nik.length < 16) {
+      showToast.error('NIK harus 16 digit');
       return;
     }
     if (!formData.phone || formData.phone.length < 10) {
       showToast.error('Nomor telepon minimal 10 digit');
       return;
     }
+    if (!formData.birthPlace) {
+      showToast.error('Tempat lahir wajib diisi');
+      return;
+    }
+    if (!formData.birthDate) {
+      showToast.error('Tanggal lahir wajib diisi');
+      return;
+    }
+    if (!formData.gender) {
+      showToast.error('Jenis kelamin wajib dipilih');
+      return;
+    }
+    if (!formData.occupation) {
+      showToast.error('Pekerjaan wajib diisi');
+      return;
+    }
+    if (!formData.address) {
+      showToast.error('Alamat wajib diisi');
+      return;
+    }
+    if (!formData.postalCode) {
+      showToast.error('Kode pos wajib diisi');
+      return;
+    }
+    
+    // Validation for account section
     if (!formData.memberEmail) {
       showToast.error('Email member wajib diisi');
       return;

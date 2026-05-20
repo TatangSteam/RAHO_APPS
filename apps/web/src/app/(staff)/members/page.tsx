@@ -180,13 +180,16 @@ export default function MembersPage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Kelola data member dan akses lintas cabang</p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              📥 Export Data
-            </button>
+            {/* Hide "Export Data" for DOCTOR and NURSE */}
+            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="btn btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                📥 Export Data
+              </button>
+            )}
             {/* Hide "Cari Lintas Cabang" for DOCTOR and NURSE - they can only see members in their branch */}
             {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
               <button

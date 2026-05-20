@@ -21,15 +21,17 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           justifyContent: 'center',
           color: 'white',
           fontWeight: '700',
-          fontSize: '18px'
+          fontSize: '18px',
+          flexShrink: 0
         }}>
           A
         </div>
         <h2 style={{ fontSize: '18px', fontWeight: '700', margin: 0 }}>Data Pribadi</h2>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
-        <div style={{ gridColumn: '1 / -1' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '16px' }}>
+        {/* Nama Lengkap - Full width */}
+        <div style={{ gridColumn: 'span 12' }}>
           <label className="form-label">
             Nama Lengkap <span style={{ color: '#ef4444' }}>*</span>
           </label>
@@ -44,19 +46,25 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        <div>
-          <label className="form-label">NIK</label>
+        {/* NIK - 6 cols on desktop, full on mobile */}
+        <div className="form-col-6">
+          <label className="form-label">
+            NIK <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <input
             type="text"
             name="nik"
             value={formData.nik || ''}
             onChange={onChange}
+            required
             className="form-input"
             placeholder="Nomor Induk Kependudukan"
+            maxLength={16}
           />
         </div>
 
-        <div>
+        {/* Nomor Telepon - 6 cols on desktop, full on mobile */}
+        <div className="form-col-6">
           <label className="form-label">
             Nomor Telepon <span style={{ color: '#ef4444' }}>*</span>
           </label>
@@ -72,35 +80,47 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        <div>
-          <label className="form-label">Tempat Lahir</label>
+        {/* Tempat Lahir - 4 cols on desktop */}
+        <div className="form-col-4">
+          <label className="form-label">
+            Tempat Lahir <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <input
             type="text"
             name="birthPlace"
             value={formData.birthPlace || ''}
             onChange={onChange}
+            required
             className="form-input"
             placeholder="Kota kelahiran"
           />
         </div>
 
-        <div>
-          <label className="form-label">Tanggal Lahir</label>
+        {/* Tanggal Lahir - 4 cols on desktop */}
+        <div className="form-col-4">
+          <label className="form-label">
+            Tanggal Lahir <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <input
             type="date"
             name="birthDate"
             value={formData.birthDate || ''}
             onChange={onChange}
+            required
             className="form-input"
           />
         </div>
 
-        <div>
-          <label className="form-label">Jenis Kelamin</label>
+        {/* Jenis Kelamin - 4 cols on desktop */}
+        <div className="form-col-4">
+          <label className="form-label">
+            Jenis Kelamin <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <select
             name="gender"
             value={formData.gender || ''}
             onChange={onChange}
+            required
             className="form-input"
           >
             <option value="">Pilih jenis kelamin</option>
@@ -109,7 +129,8 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           </select>
         </div>
 
-        <div>
+        {/* Email Pribadi - 6 cols (OPTIONAL) */}
+        <div className="form-col-6">
           <label className="form-label">Email Pribadi</label>
           <input
             type="email"
@@ -122,12 +143,32 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        <div style={{ gridColumn: '1 / -1' }}>
-          <label className="form-label">Alamat</label>
+        {/* Pekerjaan - 6 cols */}
+        <div className="form-col-6">
+          <label className="form-label">
+            Pekerjaan <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="text"
+            name="occupation"
+            value={formData.occupation || ''}
+            onChange={onChange}
+            required
+            className="form-input"
+            placeholder="Pekerjaan saat ini"
+          />
+        </div>
+
+        {/* Alamat - Full width */}
+        <div style={{ gridColumn: 'span 12' }}>
+          <label className="form-label">
+            Alamat <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <textarea
             name="address"
             value={formData.address || ''}
             onChange={onChange}
+            required
             rows={3}
             className="form-input"
             placeholder="Alamat lengkap"
@@ -135,31 +176,61 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        <div>
-          <label className="form-label">Pekerjaan</label>
+        {/* Kode Pos - 4 cols */}
+        <div className="form-col-4">
+          <label className="form-label">
+            Kode Pos <span style={{ color: '#ef4444' }}>*</span>
+          </label>
           <input
             type="text"
-            name="occupation"
-            value={formData.occupation || ''}
+            name="postalCode"
+            value={formData.postalCode || ''}
             onChange={onChange}
+            required
             className="form-input"
-            placeholder="Pekerjaan saat ini"
+            placeholder="12345"
+            maxLength={5}
           />
         </div>
 
-        <div>
+        {/* Status Pernikahan - 4 cols (OPTIONAL) */}
+        <div className="form-col-4">
           <label className="form-label">Status Pernikahan</label>
-          <input
-            type="text"
+          <select
             name="maritalStatus"
             value={formData.maritalStatus || ''}
             onChange={onChange}
             className="form-input"
-            placeholder="Belum Menikah / Menikah / Cerai"
-          />
+          >
+            <option value="">Pilih status</option>
+            <option value="Belum Menikah">Belum Menikah</option>
+            <option value="Menikah">Menikah</option>
+            <option value="Cerai">Cerai</option>
+          </select>
         </div>
 
-        <div>
+        {/* Sumber Info RAHO - 4 cols (OPTIONAL) */}
+        <div className="form-col-4">
+          <label className="form-label">Sumber Info RAHO</label>
+          <select
+            name="infoSource"
+            value={formData.infoSource || ''}
+            onChange={onChange}
+            className="form-input"
+          >
+            <option value="">Pilih sumber info</option>
+            <option value="Instagram">Instagram</option>
+            <option value="Facebook">Facebook</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Google">Google</option>
+            <option value="Teman/Keluarga">Teman/Keluarga</option>
+            <option value="Dokter">Dokter</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+
+        {/* Kontak Darurat - 6 cols (OPTIONAL) */}
+        <div className="form-col-6">
           <label className="form-label">Kontak Darurat</label>
           <input
             type="text"
@@ -171,7 +242,8 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        <div>
+        {/* Telepon Kontak Darurat - 6 cols (OPTIONAL) */}
+        <div className="form-col-6">
           <label className="form-label">Telepon Kontak Darurat</label>
           <input
             type="tel"
@@ -183,31 +255,27 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
             autoComplete="off"
           />
         </div>
-
-        <div>
-          <label className="form-label">Sumber Info RAHO</label>
-          <input
-            type="text"
-            name="infoSource"
-            value={formData.infoSource || ''}
-            onChange={onChange}
-            className="form-input"
-            placeholder="Dari mana Anda tahu RAHO?"
-          />
-        </div>
-
-        <div>
-          <label className="form-label">Kode Pos</label>
-          <input
-            type="text"
-            name="postalCode"
-            value={formData.postalCode || ''}
-            onChange={onChange}
-            className="form-input"
-            placeholder="12345"
-          />
-        </div>
       </div>
+
+      <style jsx>{`
+        .form-col-4 {
+          grid-column: span 4;
+        }
+        .form-col-6 {
+          grid-column: span 6;
+        }
+        @media (max-width: 768px) {
+          .form-col-4,
+          .form-col-6 {
+            grid-column: span 12;
+          }
+        }
+        @media (min-width: 769px) and (max-width: 1024px) {
+          .form-col-4 {
+            grid-column: span 6;
+          }
+        }
+      `}</style>
     </div>
   );
 }
