@@ -1,7 +1,24 @@
 // @ts-nocheck
-import { ShipmentStatus } from '@prisma/client';
+import { ShipmentStatus, DiscrepancyType } from '@prisma/client';
 import { ShipmentProcessingService } from './services/shipment-processing.service';
 import { ShipmentRetrievalService } from './services/shipment-retrieval.service';
+
+interface ReceiveShipmentInput {
+  receivedItems?: Array<{
+    masterProductId: string;
+    receivedQty: number;
+  }>;
+  discrepancies?: Array<{
+    masterProductId: string;
+    expectedQty: number;
+    receivedQty: number;
+    discrepancyType: DiscrepancyType;
+    notes?: string;
+    photoUrl?: string;
+    photoFileName?: string;
+  }>;
+  notes?: string;
+}
 
 /**
  * Main Shipment Service - Orchestrates shipment operations
@@ -16,24 +33,26 @@ export class ShipmentService {
   }
 
   /**
-   * Ship shipment (mark as shipped)
+   * Ship shipment (mark as shipped by Admin Manager)
    */
-  async shipShipment(shipmentId: string, userId: string, notes?: string) {
-    return await this.processingService.shipShipment(shipmentId, userId, notes);
+  async shipShipment(
+    shipmentId: string, 
+    userId: string, 
+    data?: { 
+      notes?: string;
+      shipmentPhotoUrl?: string;
+      shipmentPhotoName?: string;
+    }
+  ) {
+    return await this.processingService.shipShipment(shipmentId, userId, data);
   }
 
   /**
-   * Receive shipment (mark as received)
+   * Receive shipment (by Admin Cabang)
+   * Supports receiving with discrepancy reporting
    */
-  async receiveShipment(shipmentId: string, userId: string, branchId: string, notes?: string) {
-    return await this.processingService.receiveShipment(shipmentId, userId, branchId, notes);
-  }
-
-  /**
-   * Approve shipment (add stock to destination)
-   */
-  async approveShipment(shipmentId: string, userId: string, branchId: string, notes?: string) {
-    return await this.processingService.approveShipment(shipmentId, userId, branchId, notes);
+  async receiveShipment(shipmentId: string, userId: string, input: ReceiveShipmentInput = {}) {
+    return await this.processingService.receiveShipment(shipmentId, userId, input);
   }
 
   /**
@@ -48,5 +67,13 @@ export class ShipmentService {
    */
   async getShipmentById(shipmentId: string) {
     return await this.retrievalService.getShipmentById(shipmentId);
+  }
+
+  /**
+   * @deprecated Use receiveShipment instead
+   */
+  async approveShipment(shipmentId: string, userId: string, branchId: string, notes?: string) {
+    // Legacy method - redirect to receiveShipment
+    return await this.processingService.receiveShipment(shipmentId, userId, { notes });
   }
 }

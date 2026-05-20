@@ -4,6 +4,7 @@ import { StockRequestController } from './stock-request.controller';
 import { ShipmentController } from './shipment.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
+import { uploadPaymentProof } from '../../middleware/upload';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -21,6 +22,7 @@ const ALLSTAFF: Role[] = [
 ];
 
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
+const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER];
 
 // ============================================================
 // MASTER PRODUCTS (for inventory modal)
@@ -139,14 +141,22 @@ router.get(
 );
 
 // ============================================================
-// STOCK REQUESTS (ADMIN_CABANG and above only)
+// STOCK REQUESTS
 // ============================================================
 
-// Create stock request
+// Get pending review requests (for dashboard) - must be before :requestId route
+router.get(
+  '/stock-requests/pending-review',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.getPendingReviewRequests.bind(stockRequestController)
+);
+
+// Create stock request (ADMIN_CABANG only)
 router.post(
   '/stock-requests',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize([Role.ADMIN_CABANG]),
   stockRequestController.createRequest.bind(stockRequestController)
 );
 
@@ -166,24 +176,65 @@ router.get(
   stockRequestController.getRequestById.bind(stockRequestController)
 );
 
-// Approve stock request
+// Approve stock request for PREMIERE branch
 router.post(
-  '/stock-requests/:requestId/approve',
+  '/stock-requests/:requestId/approve-premiere',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
-  stockRequestController.approveRequest.bind(stockRequestController)
+  authorize(MANAGER_ROLES),
+  stockRequestController.approvePremiereRequest.bind(stockRequestController)
+);
+
+// Create invoice for PARTNERSHIP branch
+router.post(
+  '/stock-requests/:requestId/create-invoice',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.createPartnershipInvoice.bind(stockRequestController)
+);
+
+// Upload payment proof (ADMIN_MANAGER / SUPER_ADMIN - receives proof from Admin Cabang externally)
+router.post(
+  '/stock-requests/:requestId/upload-payment-proof',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  uploadPaymentProof.single('paymentProof'),
+  stockRequestController.uploadPaymentProof.bind(stockRequestController)
+);
+
+// Confirm payment (ADMIN_MANAGER / SUPER_ADMIN)
+router.post(
+  '/stock-requests/:requestId/confirm-payment',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.confirmPayment.bind(stockRequestController)
+);
+
+// Reject payment (ADMIN_MANAGER / SUPER_ADMIN)
+router.post(
+  '/stock-requests/:requestId/reject-payment',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.rejectPayment.bind(stockRequestController)
 );
 
 // Reject stock request
 router.post(
   '/stock-requests/:requestId/reject',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize(MANAGER_ROLES),
   stockRequestController.rejectRequest.bind(stockRequestController)
 );
 
+// Legacy approve endpoint (for backward compatibility)
+router.post(
+  '/stock-requests/:requestId/approve',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.approveRequest.bind(stockRequestController)
+);
+
 // ============================================================
-// SHIPMENTS (ADMIN_CABANG and above only)
+// SHIPMENTS
 // ============================================================
 
 // Get shipments
@@ -206,19 +257,19 @@ router.get(
 router.post(
   '/shipments/:shipmentId/ship',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize(MANAGER_ROLES),
   shipmentController.shipShipment.bind(shipmentController)
 );
 
-// Receive shipment (ADMIN_CABANG or higher)
+// Receive shipment (ADMIN_CABANG)
 router.post(
   '/shipments/:shipmentId/receive',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize([Role.ADMIN_CABANG]),
   shipmentController.receiveShipment.bind(shipmentController)
 );
 
-// Approve shipment (ADMIN_CABANG or higher)
+// Legacy approve shipment endpoint (for backward compatibility)
 router.post(
   '/shipments/:shipmentId/approve',
   authenticate,

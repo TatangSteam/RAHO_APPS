@@ -1,43 +1,74 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { inventoryApi, Shipment, ReceiveShipmentInput } from '@/lib/api/inventoryApi';
+import ShipModal from './components/ShipModal';
+import ReceiveModal from './components/ReceiveModal';
+import DetailModal from './components/DetailModal';
 import styles from './page.module.css';
 
-interface Shipment {
-  id: string;
-  shipmentCode: string;
-  fromBranchName: string;
-  toBranchName: string;
-  status: 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'APPROVED';
-  itemCount: number;
-  items: Array<{
-    id: string;
-    productName: string;
-    sentQty: number;
-    unit: string;
-  }>;
-  shippedAt?: string;
-  receivedAt?: string;
-  approvedAt?: string;
-  notes?: string;
-  createdAt: string;
-}
+type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
+
+const STATUS_LABELS: Record<string, string> = {
+  PREPARING: 'Sedang Disiapkan',
+  SHIPPED: 'Dikirim',
+  RECEIVED: 'Diterima',
+  RECEIVED_WITH_ISSUE: 'Diterima (Ada Masalah)',
+};
+
+const STATUS_ICONS: Record<string, string> = {
+  PREPARING: '📦',
+  SHIPPED: '🚚',
+  RECEIVED: '✅',
+  RECEIVED_WITH_ISSUE: '⚠️',
+};
 
 export default function ShipmentsPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<'ALL' | 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'APPROVED'>('ALL');
+  const [filter, setFilter] = useState<ShipmentStatus>('ALL');
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
-  const [showModal, setShowModal] = useState(false);
-  const [modalAction, setModalAction] = useState<'ship' | 'receive' | 'approve' | null>(null);
-  const [notes, setNotes] = useState('');
+  const [modalAction, setModalAction] = useState<'ship' | 'receive' | 'detail' | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  const fetchShipments = useCallback(async () => {
+    if (!accessToken) return;
+    
+    try {
+      setLoading(true);
+      const params: any = {};
+      if (filter !== 'ALL') {
+        params.status = filter;
+      }
+
+      const response = await inventoryApi.getShipments(params);
+      const responseBody = response.data;
+      
+      let shipmentsData: Shipment[] = [];
+      
+      if (responseBody?.data) {
+        if (Array.isArray(responseBody.data)) {
+          shipmentsData = responseBody.data;
+        } else if (responseBody.data.data && Array.isArray(responseBody.data.data)) {
+          shipmentsData = responseBody.data.data;
+        }
+      }
+      
+      setShipments(shipmentsData);
+    } catch (error: any) {
+      console.error('Shipments fetch error:', error);
+      showToast.error('Gagal memuat pengiriman');
+      setShipments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, filter]);
 
   useEffect(() => {
     setMounted(true);
@@ -51,107 +82,116 @@ export default function ShipmentsPage() {
       return;
     }
     fetchShipments();
-  }, [mounted, user, accessToken, filter]);
+  }, [mounted, user, accessToken, router, fetchShipments]);
 
-  const fetchShipments = async () => {
-    try {
-      setLoading(true);
-      
-      if (!accessToken) {
-        showToast.error('Token tidak ditemukan. Silakan login kembali.');
-        router.push('/login');
-        return;
-      }
-
-      const params = new URLSearchParams();
-      if (filter !== 'ALL') {
-        params.append('status', filter);
-      }
-
-      const response = await fetch(`/api/inventory/shipments?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          showToast.error('Sesi Anda telah berakhir. Silakan login kembali.');
-          router.push('/login');
-          return;
-        }
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      setShipments(data.data || []);
-    } catch (error) {
-      showToast.error('Gagal memuat pengiriman');
-      console.error('Shipments fetch error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAction = async (shipmentId: string, action: 'ship' | 'receive' | 'approve') => {
+  const handleShip = async (notes?: string) => {
+    if (!selectedShipment) return;
+    
     try {
       setActionLoading(true);
-      const endpoint = `/api/inventory/shipments/${shipmentId}/${action}`;
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ notes: notes || undefined }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || `Failed to ${action} shipment`);
-      }
-
-      const actionText =
-        action === 'ship' ? 'dikirim' : action === 'receive' ? 'diterima' : 'di-approve';
-      showToast.success(`Pengiriman berhasil ${actionText}`);
-      setShowModal(false);
-      setNotes('');
-      setSelectedShipment(null);
-      setModalAction(null);
+      await inventoryApi.shipShipment(selectedShipment.id, { notes });
+      showToast.success('Pengiriman berhasil dikirim');
+      closeModal();
       fetchShipments();
     } catch (error: any) {
-      showToast.error(error.message || 'Gagal memproses pengiriman');
+      showToast.error(error.response?.data?.message || 'Gagal mengirim pengiriman');
     } finally {
       setActionLoading(false);
     }
   };
 
+  const handleReceive = async (input: ReceiveShipmentInput) => {
+    if (!selectedShipment) return;
+    
+    try {
+      setActionLoading(true);
+      await inventoryApi.receiveShipment(selectedShipment.id, input);
+      const hasDiscrepancy = input.discrepancies && input.discrepancies.length > 0;
+      showToast.success(hasDiscrepancy ? 'Pengiriman diterima dengan catatan ketidaksesuaian' : 'Pengiriman berhasil diterima');
+      closeModal();
+      fetchShipments();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal menerima pengiriman');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedShipment(null);
+    setModalAction(null);
+  };
+
+  const openShipModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setModalAction('ship');
+  };
+
+  const openReceiveModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setModalAction('receive');
+  };
+
+  const openDetailModal = (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setModalAction('detail');
+  };
+
   const getStatusBadge = (status: string) => {
+    const icon = STATUS_ICONS[status] || '📋';
+    const label = STATUS_LABELS[status] || status;
+    
+    let bgColor = 'rgba(148, 163, 184, 0.2)';
+    let textColor = 'rgba(148, 163, 184, 0.9)';
+    let borderColor = 'rgba(148, 163, 184, 0.3)';
+    
     switch (status) {
       case 'PREPARING':
-        return <span className={`${styles.badge} ${styles.preparing}`}>📦 PREPARING</span>;
+        bgColor = 'rgba(251, 191, 36, 0.2)';
+        textColor = 'rgba(251, 191, 36, 0.9)';
+        borderColor = 'rgba(251, 191, 36, 0.3)';
+        break;
       case 'SHIPPED':
-        return <span className={`${styles.badge} ${styles.shipped}`}>🚚 SHIPPED</span>;
+        bgColor = 'rgba(59, 130, 246, 0.2)';
+        textColor = 'rgba(59, 130, 246, 0.9)';
+        borderColor = 'rgba(59, 130, 246, 0.3)';
+        break;
       case 'RECEIVED':
-        return <span className={`${styles.badge} ${styles.received}`}>📥 RECEIVED</span>;
-      case 'APPROVED':
-        return <span className={`${styles.badge} ${styles.approved}`}>✓ APPROVED</span>;
-      default:
-        return <span className={styles.badge}>{status}</span>;
+        bgColor = 'rgba(34, 197, 94, 0.2)';
+        textColor = 'rgba(34, 197, 94, 0.9)';
+        borderColor = 'rgba(34, 197, 94, 0.3)';
+        break;
+      case 'RECEIVED_WITH_ISSUE':
+        bgColor = 'rgba(249, 115, 22, 0.2)';
+        textColor = 'rgba(249, 115, 22, 0.9)';
+        borderColor = 'rgba(249, 115, 22, 0.3)';
+        break;
     }
+
+    return (
+      <span 
+        className={styles.badge} 
+        style={{ backgroundColor: bgColor, color: textColor, border: `1px solid ${borderColor}` }}
+      >
+        {icon} {label}
+      </span>
+    );
   };
 
   const canShip = (shipment: Shipment) => 
     ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && 
     shipment.status === 'PREPARING';
+    
   const canReceive = (shipment: Shipment) =>
-    ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '') &&
+    user?.role === 'ADMIN_CABANG' &&
     shipment.status === 'SHIPPED';
-  const canApprove = (shipment: Shipment) =>
-    ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '') &&
-    shipment.status === 'RECEIVED';
+
+  const filterOptions: { value: ShipmentStatus; label: string; icon: string }[] = [
+    { value: 'ALL', label: 'Semua', icon: '📋' },
+    { value: 'PREPARING', label: 'Disiapkan', icon: '📦' },
+    { value: 'SHIPPED', label: 'Dikirim', icon: '🚚' },
+    { value: 'RECEIVED', label: 'Diterima', icon: '✅' },
+  ];
 
   return (
     <div className={styles.container}>
@@ -162,21 +202,13 @@ export default function ShipmentsPage() {
 
       <div className={styles.filterBar}>
         <div className={styles.filters}>
-          {(['ALL', 'PREPARING', 'SHIPPED', 'RECEIVED', 'APPROVED'] as const).map((f) => (
+          {filterOptions.map((f) => (
             <button
-              key={f}
-              className={`${styles.filterBtn} ${filter === f ? styles.active : ''}`}
-              onClick={() => setFilter(f)}
+              key={f.value}
+              className={`${styles.filterBtn} ${filter === f.value ? styles.active : ''}`}
+              onClick={() => setFilter(f.value)}
             >
-              {f === 'ALL'
-                ? 'Semua'
-                : f === 'PREPARING'
-                  ? 'Preparing'
-                  : f === 'SHIPPED'
-                    ? 'Shipped'
-                    : f === 'RECEIVED'
-                      ? 'Received'
-                      : 'Approved'}
+              <span>{f.icon}</span> {f.label}
             </button>
           ))}
         </div>
@@ -191,7 +223,7 @@ export default function ShipmentsPage() {
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>🚚</div>
           <h3>Belum Ada Pengiriman</h3>
-          <p>Belum ada pengiriman stok yang dibuat. Pengiriman akan muncul setelah request stok di-approve.</p>
+          <p>Belum ada pengiriman stok. Pengiriman akan muncul setelah request stok disetujui.</p>
           <button 
             className={styles.emptyBtn}
             onClick={() => router.push('/inventory/stock-requests')}
@@ -202,7 +234,12 @@ export default function ShipmentsPage() {
       ) : (
         <div className={styles.shipmentsList} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
           {shipments.map((shipment) => (
-            <div key={shipment.id} className={styles.shipmentCard} style={{ display: 'flex', flexDirection: 'column' }}>
+            <div 
+              key={shipment.id} 
+              className={styles.shipmentCard} 
+              style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
+              onClick={() => openDetailModal(shipment)}
+            >
               <div className={styles.cardHeader}>
                 <div>
                   <h3>{shipment.shipmentCode}</h3>
@@ -214,7 +251,7 @@ export default function ShipmentsPage() {
               </div>
 
               <div className={styles.cardBody}>
-                {/* Timeline / Dates */}
+                {/* Timeline */}
                 <div className={styles.timeline}>
                   <div className={styles.timelineItem}>
                     <span className={styles.timelineLabel}>📅 Dibuat:</span>
@@ -223,8 +260,6 @@ export default function ShipmentsPage() {
                         day: 'numeric',
                         month: 'short',
                         year: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
                       })}
                     </span>
                   </div>
@@ -236,8 +271,6 @@ export default function ShipmentsPage() {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
                         })}
                       </span>
                     </div>
@@ -250,22 +283,6 @@ export default function ShipmentsPage() {
                           day: 'numeric',
                           month: 'short',
                           year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        })}
-                      </span>
-                    </div>
-                  )}
-                  {shipment.approvedAt && (
-                    <div className={styles.timelineItem}>
-                      <span className={styles.timelineLabel}>✅ Selesai:</span>
-                      <span className={styles.timelineDate}>
-                        {new Date(shipment.approvedAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit'
                         })}
                       </span>
                     </div>
@@ -274,7 +291,7 @@ export default function ShipmentsPage() {
 
                 <div className={styles.itemsCount}>
                   <span className={styles.label}>Items:</span>
-                  <span className={styles.value}>{shipment.itemCount}</span>
+                  <span className={styles.value}>{shipment.items.length}</span>
                 </div>
 
                 <div className={styles.items}>
@@ -283,6 +300,11 @@ export default function ShipmentsPage() {
                       <span className={styles.itemName}>{item.productName}</span>
                       <span className={styles.itemQty}>
                         {item.sentQty} {item.unit}
+                        {item.receivedQty !== undefined && item.receivedQty !== item.sentQty && (
+                          <span style={{ color: '#dc2626', marginLeft: '4px' }}>
+                            (diterima: {item.receivedQty})
+                          </span>
+                        )}
                       </span>
                     </div>
                   ))}
@@ -290,6 +312,27 @@ export default function ShipmentsPage() {
                     <div className={styles.moreItems}>+{shipment.items.length - 3} item lainnya</div>
                   )}
                 </div>
+
+                {/* Discrepancies */}
+                {shipment.discrepancies && shipment.discrepancies.length > 0 && (
+                  <div style={{ 
+                    marginTop: '12px', 
+                    padding: '8px 12px', 
+                    background: 'linear-gradient(145deg, rgba(239, 68, 68, 0.1) 0%, rgba(220, 38, 38, 0.15) 100%)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                  }}>
+                    <div style={{ fontWeight: 600, color: 'rgba(239, 68, 68, 0.9)', marginBottom: '4px' }}>
+                      ⚠️ Ketidaksesuaian ({shipment.discrepancies.length})
+                    </div>
+                    {shipment.discrepancies.slice(0, 2).map((d, i) => (
+                      <div key={i} style={{ color: 'rgba(239, 68, 68, 0.8)', fontSize: '0.75rem' }}>
+                        {d.productName}: {d.discrepancyType}
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {shipment.notes && (
                   <div className={styles.notesSection}>
@@ -299,15 +342,14 @@ export default function ShipmentsPage() {
                 )}
               </div>
 
-              {(canShip(shipment) || canReceive(shipment) || canApprove(shipment)) && (
+              {(canShip(shipment) || canReceive(shipment)) && (
                 <div className={styles.cardActions}>
                   {canShip(shipment) && (
                     <button
                       className={`${styles.btn} ${styles.ship}`}
-                      onClick={() => {
-                        setSelectedShipment(shipment);
-                        setModalAction('ship');
-                        setShowModal(true);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openShipModal(shipment);
                       }}
                     >
                       🚚 Kirim
@@ -316,25 +358,12 @@ export default function ShipmentsPage() {
                   {canReceive(shipment) && (
                     <button
                       className={`${styles.btn} ${styles.receive}`}
-                      onClick={() => {
-                        setSelectedShipment(shipment);
-                        setModalAction('receive');
-                        setShowModal(true);
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openReceiveModal(shipment);
                       }}
                     >
                       📥 Terima
-                    </button>
-                  )}
-                  {canApprove(shipment) && (
-                    <button
-                      className={`${styles.btn} ${styles.approve}`}
-                      onClick={() => {
-                        setSelectedShipment(shipment);
-                        setModalAction('approve');
-                        setShowModal(true);
-                      }}
-                    >
-                      ✓ Approve
                     </button>
                   )}
                 </div>
@@ -344,69 +373,40 @@ export default function ShipmentsPage() {
         </div>
       )}
 
-      {showModal && selectedShipment && modalAction && (
-        <div className={styles.modal}>
-          <div className={styles.modalContent}>
-            <h2>
-              {modalAction === 'ship'
-                ? '🚚 Kirim Pengiriman'
-                : modalAction === 'receive'
-                  ? '📥 Terima Pengiriman'
-                  : '✓ Approve Pengiriman'}
-            </h2>
-            <p className={styles.shipmentCode}>{selectedShipment.shipmentCode}</p>
+      {/* Ship Modal */}
+      {selectedShipment && modalAction === 'ship' && (
+        <ShipModal
+          shipment={selectedShipment}
+          onClose={closeModal}
+          onShip={handleShip}
+          loading={actionLoading}
+        />
+      )}
 
-            <div className={styles.itemsList}>
-              <h3>Items:</h3>
-              {selectedShipment.items.map((item) => (
-                <div key={item.id} className={styles.listItem}>
-                  <span>{item.productName}</span>
-                  <span className={styles.qty}>
-                    {item.sentQty} {item.unit}
-                  </span>
-                </div>
-              ))}
-            </div>
+      {/* Receive Modal */}
+      {selectedShipment && modalAction === 'receive' && (
+        <ReceiveModal
+          shipment={selectedShipment}
+          onClose={closeModal}
+          onReceive={handleReceive}
+          loading={actionLoading}
+        />
+      )}
 
-            <div className={styles.formGroup}>
-              <label>Catatan (Opsional):</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Masukkan catatan..."
-                rows={3}
-              />
-            </div>
-
-            <div className={styles.modalActions}>
-              <button
-                className={`${styles.btn} ${styles[modalAction]}`}
-                onClick={() => handleAction(selectedShipment.id, modalAction)}
-                disabled={actionLoading}
-              >
-                {actionLoading
-                  ? 'Memproses...'
-                  : modalAction === 'ship'
-                    ? '🚚 Kirim'
-                    : modalAction === 'receive'
-                      ? '📥 Terima'
-                      : '✓ Approve'}
-              </button>
-              <button
-                className={`${styles.btn} ${styles.cancel}`}
-                onClick={() => {
-                  setShowModal(false);
-                  setNotes('');
-                  setSelectedShipment(null);
-                  setModalAction(null);
-                }}
-                disabled={actionLoading}
-              >
-                Batal
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Detail Modal */}
+      {selectedShipment && modalAction === 'detail' && (
+        <DetailModal
+          shipment={selectedShipment}
+          onClose={closeModal}
+          onShip={canShip(selectedShipment) ? () => {
+            closeModal();
+            setTimeout(() => openShipModal(selectedShipment), 100);
+          } : undefined}
+          onReceive={canReceive(selectedShipment) ? () => {
+            closeModal();
+            setTimeout(() => openReceiveModal(selectedShipment), 100);
+          } : undefined}
+        />
       )}
     </div>
   );

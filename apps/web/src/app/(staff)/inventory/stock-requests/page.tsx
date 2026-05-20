@@ -1,33 +1,109 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { StockRequest, RequestItem, FilterType } from './types';
-import { useStockRequests } from './hooks/useStockRequests';
-import { useInventoryItems } from './hooks/useInventoryItems';
+import { inventoryApi } from '@/lib/api/inventoryApi';
+import { 
+  StockRequest, 
+  RequestItem, 
+  FilterType, 
+  InvoiceItemInput,
+  STATUS_LABELS,
+  STATUS_ICONS,
+} from './types';
 import StockRequestCard from './components/StockRequestCard';
 import ReviewModal from './components/ReviewModal';
 import CreateRequestModal from './components/CreateRequestModal';
+import UploadPaymentModal from './components/UploadPaymentModal';
 import styles from './page.module.css';
 
 export default function StockRequestsPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [filter, setFilter] = useState<FilterType>('ALL');
+  const [requests, setRequests] = useState<StockRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<StockRequest | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   
   // Create request modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
+  const [masterProducts, setMasterProducts] = useState<any[]>([]);
 
-  // Custom hooks
-  const { requests, loading, refetch } = useStockRequests(accessToken, filter);
-  const { inventoryItems, fetchInventoryItems } = useInventoryItems(accessToken);
+  // Fetch requests
+  const fetchRequests = useCallback(async () => {
+    if (!accessToken) return;
+    
+    try {
+      setLoading(true);
+      const params: any = {};
+      
+      if (filter !== 'ALL') {
+        params.status = filter;
+      }
+
+      const response = await inventoryApi.getStockRequests(params);
+      // API returns { success: true, data: { data: [...], pagination: {...} } }
+      // Axios response.data is the body: { success: true, data: { data: [...], pagination: {...} } }
+      const responseBody = response.data;
+      
+      // Extract the requests array from the nested structure
+      let requestsData: StockRequest[] = [];
+      
+      if (responseBody?.data) {
+        // responseBody.data is { data: [...], pagination: {...} }
+        if (Array.isArray(responseBody.data)) {
+          // Direct array response
+          requestsData = responseBody.data;
+        } else if (responseBody.data.data && Array.isArray(responseBody.data.data)) {
+          // Paginated response: { data: [...], pagination: {...} }
+          requestsData = responseBody.data.data;
+        }
+      }
+      
+      setRequests(requestsData);
+    } catch (error: any) {
+      console.error('Failed to fetch requests:', error);
+      showToast.error('Gagal memuat data request stok');
+      setRequests([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, filter]);
+
+  // Fetch master products for create modal
+  const fetchMasterProducts = useCallback(async () => {
+    if (!accessToken) return;
+    
+    try {
+      const response = await inventoryApi.getMasterProducts();
+      // API returns { success: true, data: { products: [...], total: number } }
+      const responseBody = response.data;
+      
+      let productsData: any[] = [];
+      
+      if (responseBody?.data) {
+        if (responseBody.data.products && Array.isArray(responseBody.data.products)) {
+          // Expected format: { products: [...], total: number }
+          productsData = responseBody.data.products;
+        } else if (Array.isArray(responseBody.data)) {
+          // Direct array response
+          productsData = responseBody.data;
+        }
+      }
+      
+      setMasterProducts(productsData);
+    } catch (error: any) {
+      console.error('Failed to fetch master products:', error);
+      setMasterProducts([]);
+    }
+  }, [accessToken]);
 
   useEffect(() => {
     setMounted(true);
@@ -40,177 +116,181 @@ export default function StockRequestsPage() {
       router.push('/login');
       return;
     }
-  }, [mounted, user, accessToken, router]);
+
+    fetchRequests();
+  }, [mounted, user, accessToken, router, fetchRequests]);
 
   useEffect(() => {
-    if (showCreateModal && inventoryItems.length === 0) {
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
-      console.log('Access Token:', accessToken ? 'Present' : 'Missing');
-      fetchInventoryItems();
+    if (showCreateModal && masterProducts.length === 0) {
+      fetchMasterProducts();
     }
-  }, [showCreateModal, inventoryItems.length, fetchInventoryItems, accessToken]);
+  }, [showCreateModal, masterProducts.length, fetchMasterProducts]);
 
+  // Create request handler
   const handleCreateRequest = async (requestItems: RequestItem[], requestNotes: string) => {
-    // Allow empty requests - no minimum item validation
-
-    // Validate all items have valid quantity (only for items that exist)
-    const invalidItems = requestItems.filter(item => item.requestedQty && item.requestedQty < 1);
-    if (invalidItems.length > 0) {
-      showToast.error('Semua item harus memiliki jumlah minimal 1');
-      return;
-    }
-
-    // Validate quantities don't exceed available stock
-    const overStockItems = requestItems.filter(item => {
-      const inventoryItem = inventoryItems.find(inv => inv.id === item.inventoryItemId);
-      return inventoryItem && item.requestedQty > inventoryItem.stock;
-    });
-
-    if (overStockItems.length > 0) {
-      const itemNames = overStockItems.map(item => item.productName).join(', ');
-      showToast.error(`Quantity melebihi stok tersedia untuk: ${itemNames}`);
+    if (requestItems.length === 0) {
+      showToast.error('Pilih minimal satu item');
       return;
     }
 
     try {
       setCreateLoading(true);
       
-      const requestPayload = {
+      await inventoryApi.createStockRequest({
         items: requestItems.map(item => ({
-          inventoryItemId: item.inventoryItemId,
+          masterProductId: item.masterProductId,
           requestedQty: item.requestedQty,
-          notes: item.notes?.trim() || undefined,
+          notes: item.notes,
         })),
-        notes: requestNotes.trim() || undefined,
-      };
-
-      // Detailed logging for debugging
-      console.group('🔍 CREATE REQUEST DEBUG');
-      console.log('API URL:', process.env.NEXT_PUBLIC_API_URL);
-      console.log('Full URL:', `${process.env.NEXT_PUBLIC_API_URL}/inventory/stock-requests`);
-      console.log('Access Token:', accessToken ? `${accessToken.substring(0, 20)}...` : 'MISSING');
-      console.log('Token Length:', accessToken?.length || 0);
-      console.log('User:', user);
-      console.log('User Role:', user?.role);
-      console.log('User Branch ID:', user?.branchId);
-      console.log('Request Payload:', requestPayload);
-      console.log('Total Items:', requestItems.length);
-      console.log('Total Quantity:', requestItems.reduce((sum, item) => sum + item.requestedQty, 0));
-      console.groupEnd();
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/stock-requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify(requestPayload),
+        notes: requestNotes || undefined,
       });
-
-      console.log('Response Status:', response.status);
-      console.log('Response Headers:', Object.fromEntries(response.headers.entries()));
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}`;
-        try {
-          const error = await response.json();
-          console.error('Error Response:', error);
-          errorMessage = error.message || errorMessage;
-        } catch (e) {
-          console.error('Could not parse error response');
-        }
-        throw new Error(errorMessage);
-      }
-
-      const result = await response.json();
-      console.log('✅ Request created successfully:', result);
       
-      showToast.success(`Request stok berhasil dibuat! Total ${requestItems.length} item dengan ${requestItems.reduce((sum, item) => sum + item.requestedQty, 0)} unit`);
+      showToast.success('Request stok berhasil dibuat!');
       setShowCreateModal(false);
-      refetch();
+      fetchRequests();
     } catch (error: any) {
-      console.error('❌ Create request error:', error);
-      showToast.error(error.message || 'Gagal membuat request stok');
+      console.error('Create request error:', error);
+      showToast.error(error.response?.data?.message || 'Gagal membuat request stok');
     } finally {
       setCreateLoading(false);
     }
   };
 
-  const handleApprove = async (requestId: string, reviewNotes: string) => {
-    if (!reviewNotes.trim()) {
-      showToast.error('Catatan review harus diisi');
-      return;
-    }
-
+  // Approve Premiere request
+  const handleApprovePremiereRequest = async (requestId: string, reviewNotes: string) => {
     try {
       setActionLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/stock-requests/${requestId}/approve`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ reviewNotes }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to approve request');
-      }
-
-      showToast.success('Request stok berhasil di-approve');
+      const response = await inventoryApi.approvePremiereRequest(requestId, reviewNotes);
+      const message = response.data?.data?.message || 'Request stok berhasil di-approve dan stok telah ditambahkan';
+      showToast.success(message);
       setShowModal(false);
       setSelectedRequest(null);
-      refetch();
+      fetchRequests();
     } catch (error: any) {
-      showToast.error(error.message || 'Gagal approve request stok');
+      showToast.error(error.response?.data?.message || 'Gagal approve request stok');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleReject = async (requestId: string, reviewNotes: string) => {
-    if (!reviewNotes.trim()) {
-      showToast.error('Catatan penolakan harus diisi');
-      return;
-    }
-
+  // Create Partnership invoice
+  const handleCreatePartnershipInvoice = async (requestId: string, items: InvoiceItemInput[], notes?: string) => {
     try {
       setActionLoading(true);
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/stock-requests/${requestId}/reject`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ reviewNotes }),
-      });
+      await inventoryApi.createPartnershipInvoice(requestId, { items, notes });
+      showToast.success('Invoice berhasil dibuat');
+      setShowModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal membuat invoice');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to reject request');
-      }
+  // Upload payment proof
+  const handleUploadPaymentProof = async (file: File) => {
+    if (!selectedRequest) return;
+    
+    try {
+      setActionLoading(true);
+      await inventoryApi.uploadPaymentProof(selectedRequest.id, file);
+      showToast.success('Bukti pembayaran berhasil diupload');
+      setShowPaymentModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal upload bukti pembayaran');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
+  // Confirm payment
+  const handleConfirmPayment = async (requestId: string, verificationNotes?: string) => {
+    try {
+      setActionLoading(true);
+      const response = await inventoryApi.confirmPayment(requestId, verificationNotes);
+      const message = response.data?.data?.message || 'Pembayaran dikonfirmasi dan stok telah ditambahkan';
+      showToast.success(message);
+      setShowModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal konfirmasi pembayaran');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reject payment
+  const handleRejectPayment = async (requestId: string, rejectionReason: string) => {
+    try {
+      setActionLoading(true);
+      await inventoryApi.rejectPayment(requestId, rejectionReason);
+      showToast.success('Pembayaran ditolak');
+      setShowModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal menolak pembayaran');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Reject request
+  const handleReject = async (requestId: string, reviewNotes: string) => {
+    try {
+      setActionLoading(true);
+      await inventoryApi.rejectRequest(requestId, reviewNotes);
       showToast.success('Request stok berhasil di-reject');
       setShowModal(false);
       setSelectedRequest(null);
-      refetch();
+      fetchRequests();
     } catch (error: any) {
-      showToast.error(error.message || 'Gagal reject request stok');
+      showToast.error(error.response?.data?.message || 'Gagal reject request stok');
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleReviewRequest = (request: StockRequest) => {
+  const handleReviewRequest = async (request: StockRequest) => {
+    // Fetch full request details to get invoice items
+    try {
+      const response = await inventoryApi.getStockRequestById(request.id);
+      const fullRequest = response.data?.data || request;
+      setSelectedRequest(fullRequest);
+      setShowModal(true);
+    } catch (error) {
+      console.error('Failed to fetch request details:', error);
+      // Fallback to list data if fetch fails
+      setSelectedRequest(request);
+      setShowModal(true);
+    }
+  };
+
+  const handleUploadPayment = (request: StockRequest) => {
     setSelectedRequest(request);
-    setShowModal(true);
+    setShowPaymentModal(true);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedRequest(null);
   };
+
+  const filterOptions: { value: FilterType; label: string; icon: string }[] = [
+    { value: 'ALL', label: 'Semua', icon: '📋' },
+    { value: 'PENDING', label: 'Pending', icon: '⏳' },
+    { value: 'WAITING_PAYMENT', label: 'Menunggu Bayar', icon: '💳' },
+    { value: 'PAYMENT_UPLOADED', label: 'Bukti Diupload', icon: '📤' },
+    { value: 'APPROVED', label: 'Disetujui', icon: '✅' },
+    { value: 'SHIPPED', label: 'Dikirim', icon: '🚚' },
+    { value: 'COMPLETED', label: 'Selesai', icon: '✔️' },
+    { value: 'REJECTED', label: 'Ditolak', icon: '❌' },
+  ];
 
   return (
     <div className={styles.container}>
@@ -220,33 +300,29 @@ export default function StockRequestsPage() {
       </div>
 
       <div className={styles.controls}>
-        <div className={styles.filters}>
-          {(['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const).map((f) => (
+        <div className={styles.filters} style={{ flexWrap: 'wrap', gap: '8px' }}>
+          {filterOptions.map((f) => (
             <button
-              key={f}
-              className={`${styles.filterBtn} ${filter === f ? styles.active : ''}`}
-              onClick={() => setFilter(f)}
-              data-status={f}
+              key={f.value}
+              className={`${styles.filterBtn} ${filter === f.value ? styles.active : ''}`}
+              onClick={() => setFilter(f.value)}
+              data-status={f.value}
               disabled={loading}
             >
-              <span className={styles.icon}>
-                {f === 'ALL' ? '📋' : 
-                 f === 'PENDING' ? '⏳' : 
-                 f === 'APPROVED' ? '✅' : '❌'}
-              </span>
-              {f === 'ALL' ? 'Semua' : 
-               f === 'PENDING' ? 'Pending' : 
-               f === 'APPROVED' ? 'Approved' : 'Rejected'}
+              <span className={styles.icon}>{f.icon}</span>
+              {f.label}
             </button>
           ))}
         </div>
         
-        <button 
-          className={styles.createBtn}
-          onClick={() => setShowCreateModal(true)}
-        >
-          ➕ Buat Request
-        </button>
+        {user?.role === 'ADMIN_CABANG' && (
+          <button 
+            className={styles.createBtn}
+            onClick={() => setShowCreateModal(true)}
+          >
+            ➕ Buat Request
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -258,13 +334,15 @@ export default function StockRequestsPage() {
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>📋</div>
           <h3>Belum Ada Request Stok</h3>
-          <p>Belum ada permintaan stok yang dibuat. Buat request baru untuk meminta stok dari cabang lain.</p>
-          <button 
-            className={styles.emptyBtn}
-            onClick={() => router.push('/inventory')}
-          >
-            🛒 Lihat Inventori
-          </button>
+          <p>Belum ada permintaan stok yang dibuat.</p>
+          {user?.role === 'ADMIN_CABANG' && (
+            <button 
+              className={styles.emptyBtn}
+              onClick={() => setShowCreateModal(true)}
+            >
+              ➕ Buat Request Baru
+            </button>
+          )}
         </div>
       ) : (
         <div className={styles.requestsList} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
@@ -274,6 +352,7 @@ export default function StockRequestsPage() {
               request={request}
               userRole={user?.role}
               onReview={handleReviewRequest}
+              onUploadPayment={handleUploadPayment}
             />
           ))}
         </div>
@@ -282,9 +361,25 @@ export default function StockRequestsPage() {
       {showModal && selectedRequest && (
         <ReviewModal
           request={selectedRequest}
+          userRole={user?.role}
           onClose={handleCloseModal}
-          onApprove={handleApprove}
+          onApprovePremiereRequest={handleApprovePremiereRequest}
+          onCreatePartnershipInvoice={handleCreatePartnershipInvoice}
+          onConfirmPayment={handleConfirmPayment}
+          onRejectPayment={handleRejectPayment}
           onReject={handleReject}
+          loading={actionLoading}
+        />
+      )}
+
+      {showPaymentModal && selectedRequest && (
+        <UploadPaymentModal
+          request={selectedRequest}
+          onClose={() => {
+            setShowPaymentModal(false);
+            setSelectedRequest(null);
+          }}
+          onUpload={handleUploadPaymentProof}
           loading={actionLoading}
         />
       )}
@@ -292,9 +387,9 @@ export default function StockRequestsPage() {
       <CreateRequestModal
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        inventoryItems={inventoryItems}
+        inventoryItems={masterProducts}
         onCreateRequest={handleCreateRequest}
-        onRefreshInventory={fetchInventoryItems}
+        onRefreshInventory={fetchMasterProducts}
         loading={createLoading}
       />
     </div>

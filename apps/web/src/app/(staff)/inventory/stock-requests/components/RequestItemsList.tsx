@@ -1,11 +1,18 @@
-import { InventoryItem, RequestItem } from '../types';
+'use client';
+
+import { InventoryItem, MasterProduct, RequestItem } from '../types';
 import styles from '../page.module.css';
 
 interface RequestItemsListProps {
   requestItems: RequestItem[];
-  inventoryItems: InventoryItem[];
-  onUpdateItem: (inventoryItemId: string, field: keyof RequestItem, value: any) => void;
-  onRemoveItem: (inventoryItemId: string) => void;
+  inventoryItems: InventoryItem[] | MasterProduct[];
+  onUpdateItem: (itemId: string, field: keyof RequestItem, value: any) => void;
+  onRemoveItem: (itemId: string) => void;
+}
+
+// Type guard to check if item is InventoryItem
+function isInventoryItem(item: InventoryItem | MasterProduct): item is InventoryItem {
+  return 'stock' in item;
 }
 
 export default function RequestItemsList({
@@ -19,6 +26,12 @@ export default function RequestItemsList({
   }
 
   const totalQuantity = requestItems.reduce((sum, item) => sum + item.requestedQty, 0);
+
+  const getItemId = (item: RequestItem) => item.masterProductId || item.inventoryItemId || '';
+
+  const findInventoryItem = (itemId: string) => {
+    return inventoryItems.find(inv => inv.id === itemId);
+  };
 
   return (
     <div className={styles.selectedSection}>
@@ -49,7 +62,7 @@ export default function RequestItemsList({
                 className={styles.bulkBtn}
                 onClick={() => {
                   requestItems.forEach(item => {
-                    onUpdateItem(item.inventoryItemId, 'requestedQty', qty);
+                    onUpdateItem(getItemId(item), 'requestedQty', qty);
                   });
                 }}
               >
@@ -62,47 +75,50 @@ export default function RequestItemsList({
       
       <div className={styles.selectedItems}>
         {requestItems.map((item) => {
-          const inventoryItem = inventoryItems.find(inv => inv.id === item.inventoryItemId);
-          const availableStock = inventoryItem?.stock || 0;
-          const isOverStock = item.requestedQty > availableStock;
+          const itemId = getItemId(item);
+          const inventoryItem = findInventoryItem(itemId);
+          const availableStock = inventoryItem && isInventoryItem(inventoryItem) ? inventoryItem.stock : Infinity;
+          const isOverStock = availableStock !== Infinity && item.requestedQty > availableStock;
           
           return (
-            <div key={item.inventoryItemId} className={styles.selectedItem}>
+            <div key={itemId} className={styles.selectedItem}>
               <div className={styles.itemDetails}>
                 <h4>{item.productName}</h4>
-                <div className={styles.stockIndicator}>
-                  <span className={`${styles.stockBadge} ${availableStock <= (inventoryItem?.minThreshold || 0) ? styles.lowStock : styles.normalStock}`}>
-                    Tersedia: {availableStock} {item.unit}
-                  </span>
-                  {isOverStock && (
-                    <span className={styles.errorBadge}>
-                      ⚠️ Melebihi stok!
+                {inventoryItem && isInventoryItem(inventoryItem) && (
+                  <div className={styles.stockIndicator}>
+                    <span className={`${styles.stockBadge} ${availableStock <= (inventoryItem.minThreshold || 0) ? styles.lowStock : styles.normalStock}`}>
+                      Tersedia: {availableStock} {item.unit}
                     </span>
-                  )}
-                </div>
+                    {isOverStock && (
+                      <span className={styles.errorBadge}>
+                        ⚠️ Melebihi stok!
+                      </span>
+                    )}
+                  </div>
+                )}
                 <div className={styles.qtyInput}>
                   <label>Jumlah:</label>
                   <div className={styles.qtyControls}>
                     <input
                       type="number"
                       min="1"
-                      max={availableStock}
+                      max={availableStock !== Infinity ? availableStock : undefined}
                       step="1"
                       value={item.requestedQty}
                       onChange={(e) => {
                         const value = parseInt(e.target.value) || 1;
-                        onUpdateItem(item.inventoryItemId, 'requestedQty', value);
+                        onUpdateItem(itemId, 'requestedQty', value);
                       }}
                       className={`${styles.numberInput} ${isOverStock ? styles.errorInput : ''}`}
                       placeholder="Masukkan jumlah"
                     />
                     <div className={styles.quickBtns}>
-                      {[10, 50, Math.min(100, availableStock)].map(qty => (
+                      {[10, 50, availableStock !== Infinity ? Math.min(100, availableStock) : 100].map(qty => (
                         <button 
                           key={qty}
                           type="button"
                           className={styles.quickBtn}
-                          onClick={() => onUpdateItem(item.inventoryItemId, 'requestedQty', Math.min(qty, availableStock))}
+                          onClick={() => onUpdateItem(itemId, 'requestedQty', availableStock !== Infinity ? Math.min(qty, availableStock) : qty)}
                         >
                           {qty}
                         </button>
@@ -114,7 +130,7 @@ export default function RequestItemsList({
                   <label>Catatan (opsional):</label>
                   <textarea
                     value={item.notes || ''}
-                    onChange={(e) => onUpdateItem(item.inventoryItemId, 'notes', e.target.value)}
+                    onChange={(e) => onUpdateItem(itemId, 'notes', e.target.value)}
                     placeholder="Catatan untuk item ini..."
                     rows={2}
                     className={styles.textarea}
@@ -123,7 +139,7 @@ export default function RequestItemsList({
               </div>
               <button
                 className={styles.removeItemBtn}
-                onClick={() => onRemoveItem(item.inventoryItemId)}
+                onClick={() => onRemoveItem(itemId)}
                 title="Hapus item"
               >
                 🗑️

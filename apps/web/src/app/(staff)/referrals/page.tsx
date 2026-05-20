@@ -56,9 +56,6 @@ export default function ReferralsPage() {
   };
 
   const fetchBranches = async () => {
-    // Only fetch branches if user is not ADMIN_CABANG
-    if (isAdminCabang) return;
-    
     try {
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data);
@@ -334,6 +331,8 @@ export default function ReferralsPage() {
       {showCreateModal && (
         <CreateReferralModal
           branches={branches}
+          userBranchId={user?.branchId}
+          isAdminCabang={isAdminCabang}
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
@@ -348,17 +347,21 @@ export default function ReferralsPage() {
 // Create Referral Modal Component
 function CreateReferralModal({
   branches,
+  userBranchId,
+  isAdminCabang,
   onClose,
   onSuccess,
 }: {
   branches: Branch[];
+  userBranchId?: string;
+  isAdminCabang: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }) {
   const [formData, setFormData] = useState<referralsApi.CreateReferralInput>({
     referrerName: '',
     referrerType: 'SALES',
-    branchId: '',
+    branchId: isAdminCabang && userBranchId ? userBranchId : '',
     phone: '',
     email: '',
   });
@@ -416,18 +419,29 @@ function CreateReferralModal({
 
             <div className={styles.formGroup}>
               <label>Cabang *</label>
-              <select
-                value={formData.branchId}
-                onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                required
-              >
-                <option value="">Pilih Cabang</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>
-                    {branch.name}
-                  </option>
-                ))}
-              </select>
+              {isAdminCabang ? (
+                // Admin Cabang: show read-only field with their branch
+                <input
+                  type="text"
+                  value={branches.find(b => b.id === userBranchId)?.name || 'Cabang Anda'}
+                  disabled
+                  style={{ backgroundColor: 'rgba(148, 163, 184, 0.1)', cursor: 'not-allowed' }}
+                />
+              ) : (
+                // Other roles: show dropdown
+                <select
+                  value={formData.branchId}
+                  onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
+                  required
+                >
+                  <option value="">Pilih Cabang</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
           </div>
 

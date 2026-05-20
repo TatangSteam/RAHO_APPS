@@ -26,18 +26,36 @@ export class ShipmentRetrievalService {
     const shipments = await prisma.shipment.findMany({
       where,
       include: {
-        items: true,
+        items: {
+          include: {
+            masterProduct: true,
+          },
+        },
         fromBranch: true,
         toBranch: true,
-        stockRequest: {
+        discrepancies: {
           include: {
-            items: {
-              include: {
-                inventoryItem: {
-                  include: {
-                    masterProduct: true,
-                  },
-                },
+            masterProduct: true,
+          },
+        },
+        stockRequest: {
+          select: {
+            id: true,
+            requestCode: true,
+            status: true,
+            branch: {
+              select: {
+                id: true,
+                name: true,
+                type: true,
+              },
+            },
+            invoice: {
+              select: {
+                id: true,
+                invoiceNumber: true,
+                totalAmount: true,
+                status: true,
               },
             },
           },
@@ -56,19 +74,29 @@ export class ShipmentRetrievalService {
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: true,
+        items: {
+          include: {
+            masterProduct: true,
+          },
+        },
         fromBranch: true,
         toBranch: true,
+        discrepancies: {
+          include: {
+            masterProduct: true,
+          },
+        },
         stockRequest: {
           include: {
             branch: true,
             items: {
               include: {
-                inventoryItem: {
-                  include: {
-                    masterProduct: true,
-                  },
-                },
+                masterProduct: true,
+              },
+            },
+            invoice: {
+              include: {
+                items: true,
               },
             },
           },
@@ -84,32 +112,13 @@ export class ShipmentRetrievalService {
       };
     }
 
-    return {
-      ...this.formatShipment(shipment),
-      stockRequest: shipment.stockRequest ? {
-        id: shipment.stockRequest.id,
-        requestCode: shipment.stockRequest.requestCode,
-        requestingBranchName: shipment.stockRequest.branch.name,
-      } : null,
-    };
+    return this.formatShipmentDetail(shipment);
   }
 
   /**
-   * Format shipment for response
+   * Format shipment for list response
    */
   private formatShipment(shipment: any) {
-    // Build item info map from stock request items
-    const itemInfoMap = new Map<string, { productName: string; unit: string; category: string }>();
-    if (shipment.stockRequest?.items) {
-      shipment.stockRequest.items.forEach((item: any) => {
-        itemInfoMap.set(item.inventoryItemId, {
-          productName: item.inventoryItem.masterProduct.name,
-          unit: item.inventoryItem.masterProduct.baseUnit || item.inventoryItem.masterProduct.unit,
-          category: item.inventoryItem.masterProduct.category,
-        });
-      });
-    }
-
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -117,24 +126,104 @@ export class ShipmentRetrievalService {
       fromBranchName: shipment.fromBranch.name,
       toBranchId: shipment.toBranchId,
       toBranchName: shipment.toBranch.name,
+      toBranchType: shipment.stockRequest?.branch?.type,
       status: shipment.status,
       notes: shipment.notes,
-      shippedAt: shipment.shippedAt?.toISOString(),
-      receivedAt: shipment.receivedAt?.toISOString(),
-      approvedAt: shipment.approvedAt?.toISOString(),
+      shipmentPhotoUrl: shipment.shipmentPhotoUrl,
       itemCount: shipment.items.length,
-      items: shipment.items.map((item: any) => {
-        const itemInfo = itemInfoMap.get(item.inventoryItemId);
-        return {
-          id: item.id,
-          inventoryItemId: item.inventoryItemId,
-          productName: itemInfo?.productName || 'Unknown Product',
-          unit: itemInfo?.unit || 'unit',
-          sentQty: Number(item.sentQty),
-        };
-      }),
+      totalItems: shipment.items.reduce((sum: number, item: any) => sum + Number(item.sentQty), 0),
+      hasDiscrepancies: shipment.discrepancies?.length > 0,
+      discrepancyCount: shipment.discrepancies?.length || 0,
+      items: shipment.items.map((item: any) => ({
+        id: item.id,
+        masterProductId: item.masterProductId,
+        productName: item.masterProduct.name,
+        productCategory: item.masterProduct.category,
+        sentQty: Number(item.sentQty),
+        receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
+        unit: item.masterProduct.baseUnit,
+      })),
+      // Stock request summary
+      stockRequest: shipment.stockRequest ? {
+        id: shipment.stockRequest.id,
+        requestCode: shipment.stockRequest.requestCode,
+        status: shipment.stockRequest.status,
+        branchName: shipment.stockRequest.branch?.name,
+        branchType: shipment.stockRequest.branch?.type,
+        invoice: shipment.stockRequest.invoice ? {
+          id: shipment.stockRequest.invoice.id,
+          invoiceNumber: shipment.stockRequest.invoice.invoiceNumber,
+          totalAmount: Number(shipment.stockRequest.invoice.totalAmount),
+          status: shipment.stockRequest.invoice.status,
+        } : null,
+      } : null,
+      // Timestamps
+      shippedBy: shipment.shippedBy,
+      shippedAt: shipment.shippedAt?.toISOString(),
+      receivedBy: shipment.receivedBy,
+      receivedAt: shipment.receivedAt?.toISOString(),
+      approvedBy: shipment.approvedBy,
+      approvedAt: shipment.approvedAt?.toISOString(),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Format shipment for detail response
+   */
+  private formatShipmentDetail(shipment: any) {
+    const base = this.formatShipment(shipment);
+
+    return {
+      ...base,
+      shipmentPhotoName: shipment.shipmentPhotoName,
+      // Full discrepancies
+      discrepancies: shipment.discrepancies?.map((d: any) => ({
+        id: d.id,
+        masterProductId: d.masterProductId,
+        productName: d.productName,
+        expectedQty: Number(d.expectedQty),
+        receivedQty: Number(d.receivedQty),
+        discrepancyType: d.discrepancyType,
+        notes: d.notes,
+        photoUrl: d.photoUrl,
+        photoFileName: d.photoFileName,
+        reportedBy: d.reportedBy,
+        createdAt: d.createdAt?.toISOString(),
+      })) || [],
+      // Full stock request
+      stockRequest: shipment.stockRequest ? {
+        id: shipment.stockRequest.id,
+        requestCode: shipment.stockRequest.requestCode,
+        status: shipment.stockRequest.status,
+        branchId: shipment.stockRequest.branch?.id,
+        branchName: shipment.stockRequest.branch?.name,
+        branchType: shipment.stockRequest.branch?.type,
+        items: shipment.stockRequest.items?.map((item: any) => ({
+          id: item.id,
+          masterProductId: item.masterProductId,
+          productName: item.masterProduct.name,
+          requestedQty: Number(item.requestedQty),
+          approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
+          unit: item.masterProduct.baseUnit,
+        })),
+        invoice: shipment.stockRequest.invoice ? {
+          id: shipment.stockRequest.invoice.id,
+          invoiceNumber: shipment.stockRequest.invoice.invoiceNumber,
+          subtotal: Number(shipment.stockRequest.invoice.subtotal),
+          totalAmount: Number(shipment.stockRequest.invoice.totalAmount),
+          status: shipment.stockRequest.invoice.status,
+          items: shipment.stockRequest.invoice.items?.map((item: any) => ({
+            id: item.id,
+            masterProductId: item.masterProductId,
+            productName: item.productName,
+            quantity: Number(item.quantity),
+            pricePerUnit: Number(item.pricePerUnit),
+            subtotal: Number(item.subtotal),
+          })),
+        } : null,
+      } : null,
     };
   }
 }

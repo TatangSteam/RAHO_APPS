@@ -1,14 +1,21 @@
-import { InventoryItem, RequestItem } from '../types';
+'use client';
+
+import { InventoryItem, MasterProduct, RequestItem } from '../types';
 import styles from '../page.module.css';
 
 interface InventoryItemSelectorProps {
-  inventoryItems: InventoryItem[];
-  filteredItems: InventoryItem[];
+  inventoryItems: InventoryItem[] | MasterProduct[];
+  filteredItems: InventoryItem[] | MasterProduct[];
   requestItems: RequestItem[];
   searchQuery: string;
-  onAddItem: (item: InventoryItem) => void;
+  onAddItem: (item: InventoryItem | MasterProduct) => void;
   onRefreshInventory: () => void;
   onResetFilters: () => void;
+}
+
+// Type guard to check if item is InventoryItem
+function isInventoryItem(item: InventoryItem | MasterProduct): item is InventoryItem {
+  return 'stock' in item;
 }
 
 export default function InventoryItemSelector({
@@ -34,6 +41,10 @@ export default function InventoryItemSelector({
     );
   };
 
+  const isItemAdded = (itemId: string) => {
+    return requestItems.some(ri => ri.masterProductId === itemId || ri.inventoryItemId === itemId);
+  };
+
   return (
     <div className={styles.inventoryGrid}>
       {inventoryItems.length === 0 ? (
@@ -57,19 +68,32 @@ export default function InventoryItemSelector({
               <h4>{highlightSearchTerm(item.name, searchQuery)}</h4>
               <p>Kategori: {highlightSearchTerm(item.category, searchQuery)}</p>
               
-              {/* Enhanced stock display with unit conversion */}
-              <div className={styles.stockInfo}>
-                <span className={`${styles.stockBadge} ${item.isLowStock ? styles.lowStock : styles.normalStock}`}>
-                  Stok: {item.stockDisplay}
-                </span>
-                <span className={styles.minStock}>Min: {item.thresholdDisplay}</span>
-              </div>
+              {/* Stock display for InventoryItem */}
+              {isInventoryItem(item) && (
+                <>
+                  <div className={styles.stockInfo}>
+                    <span className={`${styles.stockBadge} ${item.isLowStock ? styles.lowStock : styles.normalStock}`}>
+                      Stok: {item.stockDisplay}
+                    </span>
+                    <span className={styles.minStock}>Min: {item.thresholdDisplay}</span>
+                  </div>
 
-              {/* Show conversion info if different units */}
-              {item.baseUnit !== item.usageUnit && (
-                <div className={styles.conversionInfo}>
-                  <span className={styles.conversionLabel}>
-                    💡 1 {item.baseUnit} = {item.conversionFactor} {item.usageUnit}
+                  {/* Show conversion info if different units */}
+                  {item.baseUnit !== item.usageUnit && (
+                    <div className={styles.conversionInfo}>
+                      <span className={styles.conversionLabel}>
+                        💡 1 {item.baseUnit} = {item.conversionFactor} {item.usageUnit}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Unit display for MasterProduct */}
+              {!isInventoryItem(item) && (
+                <div className={styles.stockInfo}>
+                  <span className={styles.stockBadge}>
+                    Unit: {item.baseUnit}
                   </span>
                 </div>
               )}
@@ -79,16 +103,16 @@ export default function InventoryItemSelector({
                   {highlightSearchTerm(item.description, searchQuery)}
                 </p>
               )}
-              {item.storageLocation && (
+              {isInventoryItem(item) && item.storageLocation && (
                 <p className={styles.location}>📍 {item.storageLocation}</p>
               )}
             </div>
             <button
               className={styles.addItemBtn}
               onClick={() => onAddItem(item)}
-              disabled={requestItems.some(ri => ri.inventoryItemId === item.id)}
+              disabled={isItemAdded(item.id)}
             >
-              {requestItems.some(ri => ri.inventoryItemId === item.id) ? '✓ Ditambahkan' : '➕ Tambah'}
+              {isItemAdded(item.id) ? '✓ Ditambahkan' : '➕ Tambah'}
             </button>
           </div>
         ))

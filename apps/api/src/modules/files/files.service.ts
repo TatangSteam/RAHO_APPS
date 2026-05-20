@@ -121,6 +121,11 @@ export class FilesService {
       return;
     }
 
+    if (key.startsWith('uploads/stock-requests/')) {
+      await this.authorizeStockRequestPaymentProofAccess(key, user);
+      return;
+    }
+
     throw {
       status: 403,
       code: 'FILE_ACCESS_DENIED',
@@ -287,5 +292,84 @@ export class FilesService {
     if (!hasAccess) {
       throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
     }
+  }
+
+  private async authorizeStockRequestPaymentProofAccess(key: string, user: AuthUser): Promise<void> {
+    // Extract requestId from key: uploads/stock-requests/{requestId}/payment-proof-xxx.jpg
+    const match = key.match(/uploads\/stock-requests\/([^/]+)\//);
+    if (!match) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    const requestId = match[1];
+
+    // Find stock request by ID and verify the payment proof URL matches
+    const stockRequest = await prisma.stockRequest.findFirst({
+      where: {
+        id: requestId,
+      },
+      select: {
+        id: true,
+        branchId: true,
+        paymentProofUrl: true,
+      },
+    });
+
+    if (!stockRequest) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    // Verify the key matches the stored payment proof URL
+    const storedUrl = stockRequest.paymentProofUrl;
+    if (!storedUrl) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    // Check if the key matches the stored URL (handle various URL formats)
+    const keyMatches = 
+      storedUrl === key ||
+      storedUrl === `${env.API_PREFIX}/files/${key}` ||
+      storedUrl === `${env.API_URL}${env.API_PREFIX}/files/${key}` ||
+      storedUrl.endsWith(key) ||
+      storedUrl.includes(key);
+
+    if (!keyMatches) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    // Members cannot access stock request files
+    if (user.role === 'MEMBER') {
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
+
+    // SUPER_ADMIN has access to all files
+    if (user.role === 'SUPER_ADMIN') {
+      return;
+    }
+
+    // For ADMIN_MANAGER, check if they manage this branch
+    if (user.role === 'ADMIN_MANAGER') {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId: user.userId,
+          branchId: stockRequest.branchId,
+        },
+      });
+
+      if (managerBranch) {
+        return; // Manager has access to branches they manage
+      }
+      
+      // Admin Manager doesn't manage this branch
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
+
+    // For ADMIN_CABANG, check if it's their branch
+    const accessibleBranchIds = await this.getAccessibleBranchIds(user);
+    if (accessibleBranchIds && accessibleBranchIds.includes(stockRequest.branchId)) {
+      return;
+    }
+
+    throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
   }
 }
