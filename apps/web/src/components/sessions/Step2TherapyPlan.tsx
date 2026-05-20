@@ -12,8 +12,8 @@ interface Step2TherapyPlanProps {
   onComplete: () => void;
 }
 
+// IFA fields are handled separately with radio selection
 const DOSE_FIELDS = [
-  { key: 'ifa', label: 'IFA', unit: 'mg' },
   { key: 'hho', label: 'HHO', unit: 'ml' },
   { key: 'h2', label: 'H2', unit: 'ml' },
   { key: 'no', label: 'NO', unit: 'ml' },
@@ -27,6 +27,13 @@ const DOSE_FIELDS = [
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml' },
 ];
 
+// For display purposes (completed view)
+const ALL_DOSE_FIELDS = [
+  { key: 'ifa250', label: 'IFA 250ml', unit: 'Botol' },
+  { key: 'ifa500', label: 'IFA 500ml', unit: 'Botol' },
+  ...DOSE_FIELDS,
+];
+
 export default function Step2TherapyPlan({
   sessionId,
   therapyPlan,
@@ -38,7 +45,8 @@ export default function Step2TherapyPlan({
 
   const [formData, setFormData] = useState<CreateTherapyPlanInput>({
     keterangan: '',
-    ifa: undefined,
+    ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+    ifa500: undefined,
     hho: undefined,
     h2: undefined,
     no: undefined,
@@ -56,8 +64,16 @@ export default function Step2TherapyPlan({
     e.preventDefault();
     setError(null);
 
-    // Validate at least one dose field is filled
-    const hasAtLeastOneDose = DOSE_FIELDS.some((field) => {
+    // Validate IFA is selected (either 250 or 500)
+    const hasIfa = (formData.ifa250 && formData.ifa250 > 0) || (formData.ifa500 && formData.ifa500 > 0);
+    
+    if (!hasIfa) {
+      setError('Pilih salah satu tipe IFA (250ml atau 500ml)');
+      return;
+    }
+
+    // Validate at least one dose field is filled (IFA counts)
+    const hasAtLeastOneDose = hasIfa || DOSE_FIELDS.some((field) => {
       const value = formData[field.key as keyof CreateTherapyPlanInput];
       return value !== undefined && value !== null && Number(value) > 0;
     });
@@ -112,7 +128,7 @@ export default function Step2TherapyPlan({
 
         <div className={styles.completedContent}>
           <div className={styles.doseGrid + ' ' + styles.completed}>
-            {DOSE_FIELDS.map((field) => {
+            {ALL_DOSE_FIELDS.map((field) => {
               const value = therapyPlan[field.key as keyof TherapyPlan];
               if (!value) return null;
               return (
@@ -156,6 +172,114 @@ export default function Step2TherapyPlan({
       )}
 
       <form onSubmit={handleSubmit} className={styles.form}>
+        {/* IFA Selection - Mutually Exclusive */}
+        <div style={{ 
+          marginBottom: '20px',
+          padding: '16px',
+          background: 'rgba(34,197,94,0.1)',
+          borderRadius: '8px',
+          border: '2px solid rgba(34,197,94,0.3)'
+        }}>
+          <p style={{ 
+            margin: '0 0 12px 0', 
+            fontSize: '13px', 
+            color: '#4ade80',
+            fontWeight: '700'
+          }}>
+            🧪 IFA (Infus) - Pilih salah satu <span style={{ color: '#ef4444' }}>*</span>
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {/* IFA 250ml Option */}
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '12px',
+              padding: '12px 16px',
+              background: formData.ifa250 && formData.ifa250 > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              border: formData.ifa250 && formData.ifa250 > 0 ? '2px solid #4ade80' : '1px solid rgba(148,163,184,0.3)',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="radio"
+                name="ifaType"
+                checked={formData.ifa250 !== undefined && formData.ifa250 > 0}
+                onChange={() => setFormData({ ...formData, ifa250: 1, ifa500: undefined })}
+                style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
+                disabled={loading}
+              />
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
+                  IFA 250ml + NO 2,5ml ⭐
+                </span>
+                <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                  Default - Wajib 1 botol per terapi
+                </span>
+              </div>
+              {formData.ifa250 && formData.ifa250 > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.ifa250}
+                    onChange={(e) => setFormData({ ...formData, ifa250: parseInt(e.target.value) || 1, ifa500: undefined })}
+                    onClick={(e) => e.stopPropagation()}
+                    className={styles.doseInput}
+                    style={{ width: '70px', textAlign: 'center' }}
+                    disabled={loading}
+                  />
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                </div>
+              )}
+            </label>
+
+            {/* IFA 500ml Option */}
+            <label style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '12px',
+              padding: '12px 16px',
+              background: formData.ifa500 && formData.ifa500 > 0 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)',
+              borderRadius: '8px',
+              border: formData.ifa500 && formData.ifa500 > 0 ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
+              cursor: 'pointer'
+            }}>
+              <input
+                type="radio"
+                name="ifaType"
+                checked={formData.ifa500 !== undefined && formData.ifa500 > 0}
+                onChange={() => setFormData({ ...formData, ifa250: undefined, ifa500: 1 })}
+                style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
+                disabled={loading}
+              />
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: '14px', fontWeight: '600', color: '#fbbf24' }}>
+                  IFA 500ml (Alternatif)
+                </span>
+                <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                  Special case - Pengganti IFA 250ml
+                </span>
+              </div>
+              {formData.ifa500 && formData.ifa500 > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.ifa500}
+                    onChange={(e) => setFormData({ ...formData, ifa250: undefined, ifa500: parseInt(e.target.value) || 1 })}
+                    onClick={(e) => e.stopPropagation()}
+                    className={styles.doseInput}
+                    style={{ width: '70px', textAlign: 'center' }}
+                    disabled={loading}
+                  />
+                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                </div>
+              )}
+            </label>
+          </div>
+        </div>
+
+        {/* Other Dose Fields */}
         <div className={styles.doseGrid}>
           {DOSE_FIELDS.map((field) => (
             <div key={field.key} className={styles.doseField}>

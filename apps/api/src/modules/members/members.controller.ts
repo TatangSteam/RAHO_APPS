@@ -21,6 +21,10 @@ export class MembersController {
       const { search, status, branchCode, page, limit } = req.query;
       const { branchId, role, userId } = req.user!;
 
+      console.log('📊 [Members Controller] getMembers called');
+      console.log('  - User:', { userId, role, branchId });
+      console.log('  - Filters:', { search, status, branchCode, page, limit });
+
       const result = await membersService.getMembers(branchId, role as Role, {
         search: search as string,
         status: status as string,
@@ -30,8 +34,11 @@ export class MembersController {
         limit: limit ? parseInt(limit as string) : undefined,
       });
 
+      console.log('✅ [Members Controller] Found', result.members.length, 'members, total:', result.pagination.total);
+
       sendSuccess(res, result);
     } catch (error) {
+      console.error('❌ [Members Controller] Error:', error);
       next(error);
     }
   }

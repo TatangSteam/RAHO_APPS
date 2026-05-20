@@ -1,7 +1,7 @@
 /**
- * RAHO Klinik - Testing/Dummy Data Seeder
+ * RAHO Klinik - Testing/Sample Data Seeder
  * 
- * This seed file includes DUMMY data for testing and development:
+ * This seed file includes SAMPLE data for testing and development:
  * - Branches (Jakarta, Bandung, Surabaya)
  * - Admin users (SUPER_ADMIN, ADMIN_MANAGER)
  * - Branch staff users (doctors, nurses, admins)
@@ -192,7 +192,7 @@ async function generateMissingInvoices(prisma: PrismaClient): Promise<number> {
 // ══════════════════════════════════════════════════════════
 
 async function main(): Promise<void> {
-  console.log('🌱 Seeding TESTING/DUMMY data...');
+  console.log('🌱 Seeding TESTING/SAMPLE data...');
   console.log('ℹ️  This seed includes test data for development\n');
 
   try {
@@ -208,7 +208,7 @@ async function main(): Promise<void> {
     }
 
     // ══════════════════════════════════════════════════════════
-    // 1. BRANCHES (Dummy branches for testing)
+    // 1. BRANCHES (Sample branches for testing)
     // ══════════════════════════════════════════════════════════
     console.log('🏢 Seeding branches...');
     const { branchPusat, branchBandung, branchSurabaya } = await seedBranches(prisma);

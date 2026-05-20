@@ -793,7 +793,8 @@ export default function CreateSessionModal({
                           const selected = therapyPlans.find(p => p.id === selectedTherapyPlanId);
                           if (!selected) return null;
                           const doses = [
-                            selected.ifa && `IFA: ${selected.ifa}`,
+                            selected.ifa250 && `IFA 250ml: ${selected.ifa250} Botol`,
+                            selected.ifa500 && `IFA 500ml: ${selected.ifa500} Botol`,
                             selected.hho && `HHO: ${selected.hho}`,
                             selected.h2 && `H2: ${selected.h2}`,
                             selected.no && `NO: ${selected.no}`,
@@ -1287,7 +1288,8 @@ export default function CreateSessionModal({
                 }
 
                 const materials = [
-                  { label: 'IFA', value: selected.ifa, unit: 'mg' },
+                  { label: 'IFA 250ml + NO 2,5ml', value: selected.ifa250, unit: 'Botol' },
+                  { label: 'IFA 500ml (Alternatif)', value: selected.ifa500, unit: 'Botol' },
                   { label: 'HHO', value: selected.hho, unit: 'ml' },
                   { label: 'H2', value: selected.h2, unit: 'ml' },
                   { label: 'NO', value: selected.no, unit: 'ml' },

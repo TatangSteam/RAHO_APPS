@@ -16,7 +16,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<CreateTherapyPlanInput>({
     keterangan: '',
-    ifa: undefined,
+    ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+    ifa500: undefined,
     hho: undefined,
     h2: undefined,
     no: undefined,
@@ -67,7 +68,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
       setShowForm(false);
       setFormData({
         keterangan: '',
-        ifa: undefined,
+        ifa250: 1, // Default 1 botol IFA 250ml per terapi (wajib)
+        ifa500: undefined,
         hho: undefined,
         h2: undefined,
         no: undefined,
@@ -192,21 +194,123 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               </p>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
-              <div>
-                <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                  IFA
+            {/* IFA Section - Mutually Exclusive Selection */}
+            <div style={{ 
+              marginBottom: '20px',
+              padding: '16px',
+              background: 'rgba(34,197,94,0.1)',
+              borderRadius: 'var(--radius-md)',
+              border: '2px solid rgba(34,197,94,0.3)'
+            }}>
+              <p style={{ 
+                margin: '0 0 12px 0', 
+                fontSize: '13px', 
+                color: '#4ade80',
+                fontWeight: '700',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
+                🧪 IFA (Infus) - Pilih salah satu <span style={{ color: '#ef4444' }}>*</span>
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* IFA 250ml Option */}
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '12px',
+                  padding: '12px 16px',
+                  background: formData.ifa250 && formData.ifa250 > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
+                  borderRadius: 'var(--radius-md)',
+                  border: formData.ifa250 && formData.ifa250 > 0 ? '2px solid #4ade80' : '1px solid rgba(148,163,184,0.3)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}>
+                  <input
+                    type="radio"
+                    name="ifaType"
+                    checked={formData.ifa250 !== undefined && formData.ifa250 > 0}
+                    onChange={() => setFormData({ ...formData, ifa250: 1, ifa500: undefined })}
+                    style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
+                      IFA 250ml + NO 2,5ml ⭐
+                    </span>
+                    <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                      Default - Wajib 1 botol per terapi
+                    </span>
+                  </div>
+                  {formData.ifa250 && formData.ifa250 > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        className="form-input"
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={formData.ifa250}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setFormData({ ...formData, ifa250: val, ifa500: undefined });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ fontSize: '14px', width: '70px', textAlign: 'center' }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                    </div>
+                  )}
                 </label>
-                <input
-                  className="form-input"
-                  type="number"
-                  step="0.01"
-                  value={formData.ifa ?? ''}
-                  onChange={(e) => handleInputChange('ifa', e.target.value)}
-                  placeholder="0.00"
-                  style={{ fontSize: '14px' }}
-                />
+
+                {/* IFA 500ml Option */}
+                <label style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '12px',
+                  padding: '12px 16px',
+                  background: formData.ifa500 && formData.ifa500 > 0 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)',
+                  borderRadius: 'var(--radius-md)',
+                  border: formData.ifa500 && formData.ifa500 > 0 ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}>
+                  <input
+                    type="radio"
+                    name="ifaType"
+                    checked={formData.ifa500 !== undefined && formData.ifa500 > 0}
+                    onChange={() => setFormData({ ...formData, ifa250: undefined, ifa500: 1 })}
+                    style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: '14px', fontWeight: '600', color: '#fbbf24' }}>
+                      IFA 500ml (Alternatif)
+                    </span>
+                    <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                      Special case - Pengganti IFA 250ml
+                    </span>
+                  </div>
+                  {formData.ifa500 && formData.ifa500 > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <input
+                        className="form-input"
+                        type="number"
+                        step="1"
+                        min="1"
+                        value={formData.ifa500}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setFormData({ ...formData, ifa250: undefined, ifa500: val });
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ fontSize: '14px', width: '70px', textAlign: 'center' }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                    </div>
+                  )}
+                </label>
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   HHO
@@ -235,9 +339,6 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   NO
@@ -252,6 +353,9 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   GASO
@@ -280,9 +384,6 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   O3
@@ -297,6 +398,9 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '16px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   EDTA
@@ -325,9 +429,6 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   H2S
@@ -342,6 +443,9 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   style={{ fontSize: '14px' }}
                 />
               </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '24px' }}>
               <div>
                 <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                   KCL
@@ -535,19 +639,35 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', 
                   gap: '10px' 
                 }}>
-                  {plan.ifa && (
+                  {plan.ifa250 && (
                     <div style={{ 
                       display: 'flex', 
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '10px 14px',
-                      background: 'rgba(255,255,255,0.08)',
+                      background: 'rgba(34,197,94,0.15)',
                       borderRadius: 'var(--radius-md)',
-                      border: '1px solid rgba(148,163,184,0.2)'
+                      border: '2px solid rgba(34,197,94,0.4)'
                     }}>
-                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>IFA</span>
-                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
-                        {plan.ifa} ml
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#4ade80' }}>IFA 250ml ⭐</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#4ade80' }}>
+                        {plan.ifa250} Botol
+                      </span>
+                    </div>
+                  )}
+                  {plan.ifa500 && (
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      background: 'rgba(251,191,36,0.15)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '2px solid rgba(251,191,36,0.4)'
+                    }}>
+                      <span style={{ fontSize: '11px', fontWeight: '600', color: '#fbbf24' }}>IFA 500ml</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#fbbf24' }}>
+                        {plan.ifa500} Botol
                       </span>
                     </div>
                   )}

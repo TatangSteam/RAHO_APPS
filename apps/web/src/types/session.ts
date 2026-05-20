@@ -116,7 +116,8 @@ export interface TherapyPlan {
   planCode: string;
   treatmentSessionId: string;
   keterangan: string | null;
-  ifa: number | null;
+  ifa250: number | null; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: number | null; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho: number | null;
   h2: number | null;
   no: number | null;
@@ -147,7 +148,8 @@ export interface VitalSign {
 export interface InfusionExecution {
   id: string;
   treatmentSessionId: string;
-  ifa: number | null;
+  ifa250: number | null; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: number | null; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho: number | null;
   h2: number | null;
   no: number | null;
@@ -235,7 +237,8 @@ export interface CreateDiagnosisInput {
 
 export interface CreateTherapyPlanInput {
   keterangan?: string;
-  ifa?: number;
+  ifa250?: number; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500?: number; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
   h2?: number;
   no?: number;
@@ -274,7 +277,8 @@ export interface UpdateBoosterTypeInput {
 // ============================================================
 
 export interface CreateInfusionInput {
-  ifa?: number;
+  ifa250?: number; // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500?: number; // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
   h2?: number;
   no?: number;

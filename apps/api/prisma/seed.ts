@@ -3,7 +3,7 @@
  * 
  * This seed file runs BOTH:
  * 1. Essential seed (production-safe data)
- * 2. Testing seed (dummy data for development)
+ * 2. Testing seed (sample data for development)
  * 
  * Run with: npm run db:seed
  * Or: npx tsx prisma/seed.ts
@@ -49,7 +49,7 @@ async function main(): Promise<void> {
     console.log('\n✅ Essential seed completed!\n');
 
     // ══════════════════════════════════════════════════════════
-    // STEP 2: TESTING SEED (Dummy Data for Development)
+    // STEP 2: TESTING SEED (Sample Data for Development)
     // ══════════════════════════════════════════════════════════
     console.log('═══════════════════════════════════════════════════════════');
     console.log('\n📦 STEP 2/2: Running Testing Seed...\n');
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
     console.log('  3. Test member: budi.santoso@example.com → member123');
     console.log('\n📝 Note:');
     console.log('  • For production: npm run db:seed:essential (master data only)');
-    console.log('  • For testing: npm run db:seed:testing (dummy data)');
+    console.log('  • For testing: npm run db:seed:testing (sample data)');
   } catch (error) {
     console.error('\n❌ Seeding failed:', error);
     throw error;

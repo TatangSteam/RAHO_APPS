@@ -53,7 +53,8 @@ export class InfusionService {
     const plan = session.therapyPlan;
     if (plan) {
       const hasDeviation =
-        (data.ifa && Number(data.ifa) !== Number(plan.ifa || 0)) ||
+        (data.ifa250 && Number(data.ifa250) !== Number(plan.ifa250 || 0)) ||
+        (data.ifa500 && Number(data.ifa500) !== Number(plan.ifa500 || 0)) ||
         (data.hho && Number(data.hho) !== Number(plan.hho || 0)) ||
         (data.h2 && Number(data.h2) !== Number(plan.h2 || 0)) ||
         (data.no && Number(data.no) !== Number(plan.no || 0)) ||
@@ -87,10 +88,11 @@ export class InfusionService {
 
       // Deduct stock for each material used AND create material usage records
       // Map field names to product name patterns for searching
-      // IFA: Default to "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi
-      // For special case IFA A + MG 500ml, use separate field or manual selection
+      // IFA 250ml: "IFA + NO 2,5ml (250ml)" - wajib 1 botol per terapi (satuan: Botol)
+      // IFA 500ml: "IFA A + MG 500ml" - alternatif/special case (satuan: Botol)
       const materials = [
-        { field: 'IFA', namePattern: 'IFA + NO', qty: data.ifa }, // Default: IFA + NO 2,5ml (250ml)
+        { field: 'IFA250', namePattern: 'IFA + NO', qty: data.ifa250, unit: 'Botol' }, // IFA + NO 2,5ml (250ml) - wajib
+        { field: 'IFA500', namePattern: 'IFA A + MG', qty: data.ifa500, unit: 'Botol' }, // IFA A + MG 500ml - alternatif
         { field: 'HHO', namePattern: 'HHO', qty: data.hho },
         { field: 'H2', namePattern: 'H2', qty: data.h2 },
         { field: 'NO', namePattern: 'NB-NO', qty: data.no },

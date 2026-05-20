@@ -68,7 +68,8 @@ export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;
 
 export const createTherapyPlanSchema = z.object({
   keterangan: z.string().optional(),
-  ifa: z.number().optional(),
+  ifa250: z.number().optional(), // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: z.number().optional(), // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho: z.number().optional(),
   h2: z.number().optional(),
   no: z.number().optional(),
@@ -82,10 +83,23 @@ export const createTherapyPlanSchema = z.object({
   jmlNb: z.number().optional(),
 }).refine(
   (data) => {
-    // At least one dose field must be filled
-    return Object.values(data).some((val) => typeof val === 'number' && val > 0);
+    // IFA is mutually exclusive - only one can be selected
+    const hasIfa250 = data.ifa250 !== undefined && data.ifa250 > 0;
+    const hasIfa500 = data.ifa500 !== undefined && data.ifa500 > 0;
+    
+    // At least one IFA must be selected
+    if (!hasIfa250 && !hasIfa500) {
+      return false;
+    }
+    
+    // Cannot have both
+    if (hasIfa250 && hasIfa500) {
+      return false;
+    }
+    
+    return true;
   },
-  { message: 'Minimal satu field dosis harus diisi' }
+  { message: 'Pilih salah satu tipe IFA (250ml atau 500ml), tidak boleh keduanya' }
 );
 
 export type CreateTherapyPlanInput = z.infer<typeof createTherapyPlanSchema>;
@@ -119,7 +133,8 @@ export type UpdateBoosterTypeInput = z.infer<typeof updateBoosterTypeSchema>;
 // ============================================================
 
 export const createInfusionSchema = z.object({
-  ifa: z.number().optional(),
+  ifa250: z.number().optional(), // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500: z.number().optional(), // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho: z.number().optional(),
   h2: z.number().optional(),
   no: z.number().optional(),
@@ -140,7 +155,26 @@ export const createInfusionSchema = z.object({
     (val) => (val === '' ? undefined : val),
     z.string().datetime().optional()
   ),
-});
+}).refine(
+  (data) => {
+    // IFA is mutually exclusive - only one can be selected
+    const hasIfa250 = data.ifa250 !== undefined && data.ifa250 > 0;
+    const hasIfa500 = data.ifa500 !== undefined && data.ifa500 > 0;
+    
+    // At least one IFA must be selected
+    if (!hasIfa250 && !hasIfa500) {
+      return false;
+    }
+    
+    // Cannot have both
+    if (hasIfa250 && hasIfa500) {
+      return false;
+    }
+    
+    return true;
+  },
+  { message: 'Pilih salah satu tipe IFA (250ml atau 500ml), tidak boleh keduanya' }
+);
 
 export type CreateInfusionInput = z.infer<typeof createInfusionSchema>;
 

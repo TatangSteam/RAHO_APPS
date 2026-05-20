@@ -987,7 +987,9 @@ model TherapyPlan {
   memberId           String?  // NEW: For preparation (before session)
   treatmentSessionId String?  @unique // Make optional
   keterangan         String?  @db.Text
-  ifa                Decimal? @db.Decimal(10, 2)
+  // IFA fields - updated to support two types
+  ifa250             Decimal? @db.Decimal(10, 2) // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500             Decimal? @db.Decimal(10, 2) // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho                Decimal? @db.Decimal(10, 2)
   h2                 Decimal? @db.Decimal(10, 2)
   no                 Decimal? @db.Decimal(10, 2)
@@ -1030,11 +1032,13 @@ model VitalSign {
 model InfusionExecution {
   id                 String      @id @default(cuid())
   treatmentSessionId String      @unique
-  ifa                Decimal?    @db.Decimal(10, 2)
+  // IFA fields - updated to support two types
+  ifa250             Decimal?    @db.Decimal(10, 2) // IFA + NO 2,5ml (250ml) - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500             Decimal?    @db.Decimal(10, 2) // IFA A + MG 500ml - Alternatif/special case (satuan: Botol)
   hho                Decimal?    @db.Decimal(10, 2)
   h2                 Decimal?    @db.Decimal(10, 2)
   no                 Decimal?    @db.Decimal(10, 2)
-  gaso               Decimal?    @db.Decimal(10, 2)
+  gaso                Decimal?    @db.Decimal(10, 2)
   o2                 Decimal?    @db.Decimal(10, 2)
   o3                 Decimal?    @db.Decimal(10, 2)
   edta               Decimal?    @db.Decimal(10, 2)
