@@ -73,6 +73,15 @@ export class StockRequestCreationService {
       };
     }
 
+    // Validate notes is required
+    if (!data.notes || data.notes.trim() === '') {
+      throw {
+        status: 400,
+        code: 'NOTES_REQUIRED',
+        message: 'Keterangan request wajib diisi',
+      };
+    }
+
     // Validate master products exist
     const masterProductIds = data.items.map(item => item.masterProductId);
     const masterProducts = await prisma.masterProduct.findMany({

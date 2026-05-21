@@ -8,9 +8,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, Plus, Search, Filter, Edit, Trash2, Users, 
-  MapPin, Phone, ChevronLeft, ChevronRight 
+  MapPin, Phone, ChevronLeft, ChevronRight, RefreshCw, Eye, AlertTriangle
 } from 'lucide-react';
-import styles from '@/styles/branches.module.css';
 
 interface Branch {
   id: string;
@@ -43,30 +42,16 @@ export default function BranchesPage() {
 
   // Check authorization
   useEffect(() => {
-    console.log('🔍 [BranchesPage] User check:', { 
-      user, 
-      role: user?.role, 
-      hasAccess: user ? hasRole(user.role, MANAGER_ABOVE_ROLES) : false,
-      requiredRoles: MANAGER_ABOVE_ROLES 
-    });
-    
     if (!user) {
-      console.warn('⚠️ [BranchesPage] No user found, redirecting to login');
       router.push('/login');
       return;
     }
     
     if (!hasRole(user.role, MANAGER_ABOVE_ROLES)) {
-      console.warn('⚠️ [BranchesPage] User does not have required role:', { 
-        userRole: user?.role, 
-        requiredRoles: MANAGER_ABOVE_ROLES 
-      });
       showToast.error(`Akses ditolak. Role Anda: ${user.role}. Diperlukan: SUPER_ADMIN atau ADMIN_MANAGER`);
       router.push('/dashboard');
       return;
     }
-    
-    console.log('✅ [BranchesPage] User authorized, role:', user.role);
   }, [user, router]);
 
   useEffect(() => {
@@ -76,9 +61,7 @@ export default function BranchesPage() {
   }, [page, search, typeFilter, statusFilter, user]);
 
   const loadBranches = async () => {
-    if (!user || !hasRole(user.role, MANAGER_ABOVE_ROLES)) {
-      return;
-    }
+    if (!user || !hasRole(user.role, MANAGER_ABOVE_ROLES)) return;
 
     try {
       setLoading(true);
@@ -112,9 +95,7 @@ export default function BranchesPage() {
   };
 
   const handleDelete = async (branchId: string, branchName: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus cabang "${branchName}"?`)) {
-      return;
-    }
+    if (!confirm(`Apakah Anda yakin ingin menghapus cabang "${branchName}"?`)) return;
 
     try {
       await branchesApi.deleteBranch(branchId);
@@ -126,15 +107,15 @@ export default function BranchesPage() {
     }
   };
 
-  const getBranchTypeColor = (type: string) => {
-    switch (type) {
-      case 'PUSAT': return '#f59e0b';
-      case 'PREMIERE': return '#eab308';
-      case 'PARTNERSHIP': return '#3b82f6';
-      case 'KLINIK': return '#10b981';
-      case 'HOMECARE': return '#8b5cf6';
-      default: return '#6b7280';
-    }
+  const getBranchTypeStyle = (type: string) => {
+    const styles: Record<string, { bg: string; text: string; border: string }> = {
+      PUSAT: { bg: 'bg-amber-100 dark:bg-amber-500/20', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-500/30' },
+      PREMIERE: { bg: 'bg-yellow-100 dark:bg-yellow-500/20', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-500/30' },
+      PARTNERSHIP: { bg: 'bg-blue-100 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-500/30' },
+      KLINIK: { bg: 'bg-emerald-100 dark:bg-emerald-500/20', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/30' },
+      HOMECARE: { bg: 'bg-purple-100 dark:bg-purple-500/20', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-500/30' },
+    };
+    return styles[type] || { bg: 'bg-neutral-100 dark:bg-neutral-500/20', text: 'text-neutral-700 dark:text-neutral-400', border: 'border-neutral-200 dark:border-neutral-500/30' };
   };
 
   const getBranchTypeLabel = (type: string) => {
@@ -151,9 +132,11 @@ export default function BranchesPage() {
   // Show loading if user is not yet available
   if (!user) {
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.loadingSpinner} />
-        <p>Memuat informasi user...</p>
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="h-10 w-10 text-amber-500 animate-spin" />
+          <p className="text-neutral-500 dark:text-neutral-400">Memuat informasi user...</p>
+        </div>
       </div>
     );
   }
@@ -161,16 +144,18 @@ export default function BranchesPage() {
   // Check if user has access
   if (!hasRole(user.role, MANAGER_ABOVE_ROLES)) {
     return (
-      <div className={styles.accessDenied}>
-        <div className={styles.accessDeniedContent}>
-          <Building2 size={64} color="#ef4444" />
-          <h2>Akses Ditolak</h2>
-          <p>Anda tidak memiliki akses ke halaman ini.</p>
-          <p><strong>Role Anda:</strong> {user.role}</p>
-          <p><strong>Role yang Diperlukan:</strong> SUPER_ADMIN atau ADMIN_MANAGER</p>
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center p-6">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 max-w-md text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-red-100 dark:bg-red-500/20 mx-auto mb-4">
+            <AlertTriangle className="h-8 w-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">Akses Ditolak</h2>
+          <p className="text-neutral-500 dark:text-neutral-400 mb-4">Anda tidak memiliki akses ke halaman ini.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-1"><strong>Role Anda:</strong> {user.role}</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-6"><strong>Role yang Diperlukan:</strong> SUPER_ADMIN atau ADMIN_MANAGER</p>
           <button 
-            className={styles.backToDashboardBtn}
             onClick={() => router.push('/dashboard')}
+            className="px-6 py-2.5 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
           >
             Kembali ke Dashboard
           </button>
@@ -180,247 +165,265 @@ export default function BranchesPage() {
   }
 
   return (
-    <div className={styles.branchesPage}>
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-6">
       {/* Header */}
-      <div className={styles.pageHeader}>
-        <div className={styles.headerContent}>
-          <div className={styles.headerTitle}>
-            <div className={styles.headerIcon}>
-              <Building2 size={28} />
+      <div className="mb-8">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30">
+              <Building2 className="h-7 w-7 text-white" />
             </div>
-            <div className={styles.headerText}>
-              <h1>Pengaturan Cabang</h1>
-              <p>Kelola semua cabang klinik dengan mudah dan efisien</p>
+            <div>
+              <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Pengaturan Cabang</h1>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Kelola semua cabang klinik dengan mudah dan efisien</p>
             </div>
           </div>
-          <button className={styles.createBtn} onClick={() => router.push('/branches/create')}>
-            <Plus size={20} />
-            <span>Tambah Cabang</span>
+          <button 
+            onClick={() => router.push('/branches/create')}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+          >
+            <Plus className="h-5 w-5" />
+            Tambah Cabang
           </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#3b82f615', color: '#3b82f6' }}>
-            <Building2 size={24} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{total}</div>
-            <div className={styles.statLabel}>Total Cabang</div>
-          </div>
-        </div>
-        
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#10b98115', color: '#10b981' }}>
-            <Building2 size={24} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{activeCount}</div>
-            <div className={styles.statLabel}>Cabang Aktif</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-500/20">
+              <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{total}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">TOTAL CABANG</p>
+            </div>
           </div>
         </div>
-        
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#f59e0b15', color: '#f59e0b' }}>
-            <Users size={24} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{totalMembers}</div>
-            <div className={styles.statLabel}>Total Member</div>
+
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-500/20">
+              <Building2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{activeCount}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">CABANG AKTIF</p>
+            </div>
           </div>
         </div>
-        
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#8b5cf615', color: '#8b5cf6' }}>
-            <Users size={24} />
+
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20">
+              <Users className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalMembers}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">TOTAL MEMBER</p>
+            </div>
           </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{totalStaff}</div>
-            <div className={styles.statLabel}>Total Staff</div>
+        </div>
+
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+          <div className="flex items-center gap-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-100 dark:bg-purple-500/20">
+              <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalStaff}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">TOTAL STAFF</p>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className={styles.filtersSection}>
-        <div className={styles.searchBox}>
-          <Search size={18} />
-          <input
-            type="text"
-            placeholder="Cari cabang..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-          />
-        </div>
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl p-4 border border-neutral-200 dark:border-neutral-800 shadow-sm mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Cari cabang..."
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              className="w-full pl-11 pr-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white dark:focus:bg-neutral-700 transition-all"
+            />
+          </div>
 
-        <div className={styles.filterGroup}>
-          <Filter size={18} />
-          <select 
-            value={typeFilter} 
-            onChange={(e) => {
-              setTypeFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">Semua Tipe</option>
-            <option value="PUSAT">Pusat</option>
-            <option value="PREMIERE">Premiere</option>
-            <option value="PARTNERSHIP">Partnership</option>
-            <option value="KLINIK">Klinik</option>
-            <option value="HOMECARE">Homecare</option>
-          </select>
+          {/* Filter Dropdowns */}
+          <div className="flex items-center gap-3">
+            <Filter className="h-4 w-4 text-neutral-400" />
+            <select 
+              value={typeFilter} 
+              onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+              className="px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+            >
+              <option value="all">Semua Tipe</option>
+              <option value="PUSAT">Pusat</option>
+              <option value="PREMIERE">Premiere</option>
+              <option value="PARTNERSHIP">Partnership</option>
+              <option value="KLINIK">Klinik</option>
+              <option value="HOMECARE">Homecare</option>
+            </select>
 
-          <select 
-            value={statusFilter} 
-            onChange={(e) => {
-              setStatusFilter(e.target.value);
-              setPage(1);
-            }}
-          >
-            <option value="all">Semua Status</option>
-            <option value="active">Aktif</option>
-            <option value="inactive">Tidak Aktif</option>
-          </select>
+            <select 
+              value={statusFilter} 
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              className="px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+            >
+              <option value="all">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Tidak Aktif</option>
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Table */}
-      <div className={styles.tableContainer}>
+      <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className={styles.loadingState}>
-            <div className={styles.loadingSpinner} />
-            <p>Memuat data cabang...</p>
+          <div className="flex flex-col items-center justify-center py-20">
+            <RefreshCw className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-neutral-500 dark:text-neutral-400">Memuat data cabang...</p>
           </div>
         ) : branches.length === 0 ? (
-          <div className={styles.emptyState}>
-            <Building2 size={48} />
-            <h3>Belum Ada Cabang</h3>
-            <p>Mulai dengan menambahkan cabang pertama Anda.</p>
-            <button className={styles.createBtn} onClick={() => router.push('/branches/create')}>
-              <Plus size={18} />
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 mb-4">
+              <Building2 className="h-8 w-8 text-neutral-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Belum Ada Cabang</h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Mulai dengan menambahkan cabang pertama Anda.</p>
+            <button 
+              onClick={() => router.push('/branches/create')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
+            >
+              <Plus className="h-4 w-4" />
               Tambah Cabang
             </button>
           </div>
         ) : (
           <>
-            <table className={styles.branchesTable}>
-              <thead>
-                <tr>
-                  <th>Kode</th>
-                  <th>Nama Cabang</th>
-                  <th>Tipe</th>
-                  <th>Lokasi</th>
-                  <th>Kontak</th>
-                  <th>Members</th>
-                  <th>Status</th>
-                  <th>Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {branches.map((branch) => (
-                  <tr key={branch.id}>
-                    <td>
-                      <span className={styles.branchCode}>{branch.branchCode}</span>
-                    </td>
-                    <td>
-                      <div className={styles.branchNameCell}>
-                        <Building2 size={16} />
-                        <span>{branch.name}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span 
-                        className={styles.typeBadge}
-                        style={{ 
-                          background: `${getBranchTypeColor(branch.type)}20`,
-                          color: getBranchTypeColor(branch.type),
-                          borderColor: `${getBranchTypeColor(branch.type)}40`
-                        }}
-                      >
-                        {getBranchTypeLabel(branch.type)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className={styles.locationCell}>
-                        <MapPin size={14} />
-                        <span>{branch.city}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className={styles.contactCell}>
-                        <Phone size={14} />
-                        <span>{branch.phone}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className={styles.membersCell}>
-                        <Users size={14} />
-                        <span>{branch._count?.members || 0}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`${styles.statusBadge} ${branch.isActive ? styles.active : styles.inactive}`}>
-                        {branch.isActive ? 'Aktif' : 'Tidak Aktif'}
-                      </span>
-                    </td>
-                    <td>
-                      <div className={styles.actionButtons}>
-                        <button
-                          className={`${styles.actionBtn} ${styles.view}`}
-                          onClick={() => router.push(`/branches/${branch.id}`)}
-                          title="Lihat Detail"
-                        >
-                          <Building2 size={16} />
-                        </button>
-                        <button
-                          className={`${styles.actionBtn} ${styles.edit}`}
-                          onClick={() => router.push(`/branches/${branch.id}/edit`)}
-                          title="Edit"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button
-                          className={`${styles.actionBtn} ${styles.delete}`}
-                          onClick={() => handleDelete(branch.id, branch.name)}
-                          title="Hapus"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Kode</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Nama Cabang</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Tipe</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Lokasi</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Kontak</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Members</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Aksi</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                  {branches.map((branch) => {
+                    const typeStyle = getBranchTypeStyle(branch.type);
+                    return (
+                      <tr key={branch.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300">
+                            {branch.branchCode}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-neutral-400" />
+                            <span className="font-medium text-neutral-900 dark:text-white">{branch.name}</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg border ${typeStyle.bg} ${typeStyle.text} ${typeStyle.border}`}>
+                            {getBranchTypeLabel(branch.type)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
+                            <MapPin className="h-3.5 w-3.5" />
+                            {branch.city}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
+                            <Phone className="h-3.5 w-3.5" />
+                            {branch.phone}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-sm text-neutral-600 dark:text-neutral-400">
+                            <Users className="h-3.5 w-3.5" />
+                            {branch._count?.members || 0}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-lg ${
+                            branch.isActive 
+                              ? 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-400' 
+                              : 'bg-neutral-100 dark:bg-neutral-500/20 text-neutral-600 dark:text-neutral-400'
+                          }`}>
+                            {branch.isActive ? 'AKTIF' : 'TIDAK AKTIF'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => router.push(`/branches/${branch.id}`)}
+                              title="Lihat Detail"
+                              className="p-2 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => router.push(`/branches/${branch.id}/edit`)}
+                              title="Edit"
+                              className="p-2 rounded-lg text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(branch.id, branch.name)}
+                              title="Hapus"
+                              className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className={styles.pagination}>
+              <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200 dark:border-neutral-700">
                 <button
-                  className={styles.pageBtn}
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <ChevronLeft size={18} />
+                  <ChevronLeft className="h-4 w-4" />
                   Previous
                 </button>
                 
-                <div className={styles.pageInfo}>
+                <span className="text-sm text-neutral-500 dark:text-neutral-400">
                   Page {page} of {totalPages}
-                </div>
+                </span>
                 
                 <button
-                  className={styles.pageBtn}
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
-                  <ChevronRight size={18} />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             )}

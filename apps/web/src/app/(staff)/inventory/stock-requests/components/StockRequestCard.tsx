@@ -1,7 +1,22 @@
 'use client';
 
-import { StockRequest, STATUS_LABELS, STATUS_COLORS, STATUS_ICONS, StockRequestStatus } from '../types';
-import styles from '../page.module.css';
+import { 
+  Clock, 
+  CreditCard, 
+  Upload, 
+  CheckCircle, 
+  Truck, 
+  CheckCheck, 
+  XCircle,
+  Package,
+  FileText,
+  Eye,
+  ClipboardCheck,
+  Receipt,
+  Calendar,
+  Building2
+} from 'lucide-react';
+import { StockRequest, StockRequestStatus } from '../types';
 
 interface StockRequestCardProps {
   request: StockRequest;
@@ -11,6 +26,78 @@ interface StockRequestCardProps {
   onReceive?: (request: StockRequest) => void;
 }
 
+const STATUS_CONFIG: Record<StockRequestStatus, { 
+  label: string; 
+  icon: React.ReactNode; 
+  bgColor: string; 
+  textColor: string;
+  borderColor: string;
+}> = {
+  PENDING: { 
+    label: 'Menunggu Review', 
+    icon: <Clock className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-amber-50 dark:bg-amber-500/10',
+    textColor: 'text-amber-600 dark:text-amber-400',
+    borderColor: 'border-amber-200 dark:border-amber-500/30'
+  },
+  APPROVED: { 
+    label: 'Disetujui', 
+    icon: <CheckCircle className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-emerald-50 dark:bg-emerald-500/10',
+    textColor: 'text-emerald-600 dark:text-emerald-400',
+    borderColor: 'border-emerald-200 dark:border-emerald-500/30'
+  },
+  WAITING_PAYMENT: { 
+    label: 'Menunggu Pembayaran', 
+    icon: <CreditCard className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-purple-50 dark:bg-purple-500/10',
+    textColor: 'text-purple-600 dark:text-purple-400',
+    borderColor: 'border-purple-200 dark:border-purple-500/30'
+  },
+  PAYMENT_UPLOADED: { 
+    label: 'Bukti Diupload', 
+    icon: <Upload className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-blue-50 dark:bg-blue-500/10',
+    textColor: 'text-blue-600 dark:text-blue-400',
+    borderColor: 'border-blue-200 dark:border-blue-500/30'
+  },
+  PAYMENT_CONFIRMED: { 
+    label: 'Pembayaran Dikonfirmasi', 
+    icon: <CheckCircle className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-cyan-50 dark:bg-cyan-500/10',
+    textColor: 'text-cyan-600 dark:text-cyan-400',
+    borderColor: 'border-cyan-200 dark:border-cyan-500/30'
+  },
+  REJECTED: { 
+    label: 'Ditolak', 
+    icon: <XCircle className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-red-50 dark:bg-red-500/10',
+    textColor: 'text-red-600 dark:text-red-400',
+    borderColor: 'border-red-200 dark:border-red-500/30'
+  },
+  SHIPPED: { 
+    label: 'Dikirim', 
+    icon: <Truck className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-indigo-50 dark:bg-indigo-500/10',
+    textColor: 'text-indigo-600 dark:text-indigo-400',
+    borderColor: 'border-indigo-200 dark:border-indigo-500/30'
+  },
+  COMPLETED: { 
+    label: 'Selesai', 
+    icon: <CheckCheck className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-green-50 dark:bg-green-500/10',
+    textColor: 'text-green-600 dark:text-green-400',
+    borderColor: 'border-green-200 dark:border-green-500/30'
+  },
+  COMPLETED_WITH_ISSUE: { 
+    label: 'Selesai (Ada Masalah)', 
+    icon: <CheckCheck className="w-3.5 h-3.5" />, 
+    bgColor: 'bg-orange-50 dark:bg-orange-500/10',
+    textColor: 'text-orange-600 dark:text-orange-400',
+    borderColor: 'border-orange-200 dark:border-orange-500/30'
+  },
+};
+
 export default function StockRequestCard({ 
   request, 
   userRole, 
@@ -18,24 +105,7 @@ export default function StockRequestCard({
   onUploadPayment,
   onReceive,
 }: StockRequestCardProps) {
-  const getStatusBadge = (status: StockRequestStatus) => {
-    const color = STATUS_COLORS[status] || '#6b7280';
-    const icon = STATUS_ICONS[status] || '📋';
-    const label = STATUS_LABELS[status] || status;
-
-    return (
-      <span 
-        className={styles.badge} 
-        style={{ 
-          backgroundColor: `${color}20`,
-          color: color,
-          border: `1px solid ${color}40`,
-        }}
-      >
-        {icon} {label}
-      </span>
-    );
-  };
+  const statusConfig = STATUS_CONFIG[request.status] || STATUS_CONFIG.PENDING;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('id-ID', {
@@ -45,7 +115,14 @@ export default function StockRequestCard({
     }).format(amount);
   };
 
-  // Determine what actions are available
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
   const isManager = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER';
   const isAdminCabang = userRole === 'ADMIN_CABANG';
   
@@ -54,181 +131,200 @@ export default function StockRequestCard({
   const canReceive = isAdminCabang && request.status === 'SHIPPED';
 
   return (
-    <div className={styles.requestCard} style={{ display: 'flex', flexDirection: 'column' }}>
-      <div className={styles.cardHeader}>
-        <div className={styles.cardTitle}>
-          <h3>{request.requestCode}</h3>
-          <p className={styles.branch}>
-            {request.branchName}
-            <span style={{ 
-              marginLeft: '8px', 
-              padding: '2px 6px', 
-              borderRadius: '4px',
-              fontSize: '0.7rem',
-              backgroundColor: request.branchType === 'PREMIERE' ? '#dbeafe' : '#fef3c7',
-              color: request.branchType === 'PREMIERE' ? '#1d4ed8' : '#92400e',
-            }}>
-              {request.branchType}
-            </span>
-          </p>
+    <div className="group bg-white dark:bg-neutral-800 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500/50 transition-all duration-300 flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="p-5 pb-4">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-neutral-900 dark:text-white truncate">
+              {request.requestCode}
+            </h3>
+            <div className="flex items-center gap-2 mt-1">
+              <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+              <span className="text-sm text-neutral-500 dark:text-neutral-400 truncate">
+                {request.branchName}
+              </span>
+              <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md ${
+                request.branchType === 'PREMIERE' 
+                  ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' 
+                  : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
+              }`}>
+                {request.branchType}
+              </span>
+            </div>
+          </div>
+          
+          {/* Status Badge */}
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-lg border ${statusConfig.bgColor} ${statusConfig.textColor} ${statusConfig.borderColor}`}>
+            {statusConfig.icon}
+            <span className="hidden sm:inline">{statusConfig.label}</span>
+          </div>
         </div>
-        {getStatusBadge(request.status)}
-      </div>
 
-      <div className={styles.cardBody}>
         {/* Bundle Indicator */}
         {request.itemCount > 1 && (
-          <div className={styles.bundleIndicator}>
-            <span className={styles.bundleIcon}>📦</span>
-            <span>Bundle: {request.itemCount} item</span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 mb-3">
+            <Package className="w-3.5 h-3.5" />
+            Bundle: {request.itemCount} item
           </div>
         )}
-        
-        <div className={styles.itemsSection}>
-          <div className={styles.itemCount}>
-            <span className={styles.label}>Items</span>
-            <span className={styles.value}>{request.itemCount}</span>
-          </div>
 
-          <div className={styles.itemsList}>
+        {/* Items Section */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
+              Items
+            </span>
+            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-500/10 px-2 py-0.5 rounded-md">
+              {request.itemCount}
+            </span>
+          </div>
+          
+          <div className="space-y-1.5">
             {request.items.slice(0, 2).map((item) => (
-              <div key={item.id} className={styles.itemRow}>
-                <span className={styles.itemName}>{item.productName}</span>
-                <span className={styles.itemQty}>{item.requestedQty} {item.unit}</span>
+              <div 
+                key={item.id} 
+                className="flex items-center justify-between py-2 px-3 rounded-lg bg-neutral-50 dark:bg-neutral-700/50"
+              >
+                <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate flex-1 mr-2">
+                  {item.productName}
+                </span>
+                <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                  {item.requestedQty} {item.unit}
+                </span>
               </div>
             ))}
             {request.items.length > 2 && (
-              <div className={styles.moreItems}>+{request.items.length - 2} item lainnya</div>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center py-1">
+                +{request.items.length - 2} item lainnya
+              </p>
             )}
           </div>
         </div>
+      </div>
 
-        {/* Invoice Info for Partnership */}
+      {/* Info Cards */}
+      <div className="px-5 space-y-2">
+        {/* Invoice Info */}
         {request.invoice && (
-          <div style={{ 
-            marginTop: '12px', 
-            padding: '8px 12px', 
-            backgroundColor: '#f0fdf4', 
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#166534' }}>📄 {request.invoice.invoiceNumber}</span>
-              <span style={{ fontWeight: 600, color: '#166534' }}>
-                {formatCurrency(request.invoice.totalAmount)}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                {request.invoice.invoiceNumber}
               </span>
             </div>
+            <span className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+              {formatCurrency(request.invoice.totalAmount)}
+            </span>
           </div>
         )}
 
         {/* Shipment Info */}
         {request.shipment && (
-          <div style={{ 
-            marginTop: '8px', 
-            padding: '8px 12px', 
-            backgroundColor: '#eff6ff', 
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#1d4ed8' }}>🚚 {request.shipment.shipmentCode}</span>
-              <span style={{ color: '#1d4ed8' }}>{request.shipment.status}</span>
+          <div className="flex items-center justify-between p-3 rounded-xl bg-indigo-50 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20">
+            <div className="flex items-center gap-2">
+              <Truck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-sm font-medium text-indigo-700 dark:text-indigo-400">
+                {request.shipment.shipmentCode}
+              </span>
             </div>
+            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-100 dark:bg-indigo-500/20 px-2 py-0.5 rounded-md">
+              {request.shipment.status}
+            </span>
           </div>
         )}
 
         {/* Payment Proof Indicator */}
         {request.paymentProofUrl && (
-          <div style={{ 
-            marginTop: '8px', 
-            padding: '6px 12px', 
-            backgroundColor: '#fef3c7', 
-            borderRadius: '6px',
-            fontSize: '0.875rem',
-            color: '#92400e',
-          }}>
-            💳 Bukti pembayaran sudah diupload
-          </div>
-        )}
-
-        {request.notes && (
-          <div className={styles.notesSection}>
-            <span className={styles.label}>Catatan Request:</span>
-            <p className={styles.noteText}>{request.notes}</p>
-          </div>
-        )}
-
-        {/* Review Notes - show after reviewed */}
-        {request.reviewNotes && (
-          <div className={styles.notesSection} style={{ 
-            backgroundColor: request.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
-            borderLeft: `3px solid ${request.status === 'REJECTED' ? '#ef4444' : '#22c55e'}`,
-            padding: '8px 12px',
-            borderRadius: '4px',
-            marginTop: '8px',
-          }}>
-            <span className={styles.label} style={{ 
-              color: request.status === 'REJECTED' ? '#ef4444' : '#22c55e',
-              fontWeight: 600,
-            }}>
-              {request.status === 'REJECTED' ? '❌ Alasan Penolakan:' : '✅ Catatan Review:'}
+          <div className="flex items-center gap-2 p-3 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/20">
+            <CreditCard className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            <span className="text-sm font-medium text-amber-700 dark:text-amber-400">
+              Bukti pembayaran sudah diupload
             </span>
-            <p className={styles.noteText} style={{ marginTop: '4px' }}>{request.reviewNotes}</p>
           </div>
         )}
 
-        <div className={styles.footer}>
-          <span className={styles.date}>
-            {new Date(request.createdAt).toLocaleDateString('id-ID', {
-              year: 'numeric',
-              month: 'short',
-              day: 'numeric',
-            })}
-          </span>
-        </div>
+        {/* Notes */}
+        {request.notes && (
+          <div className="p-3 rounded-xl bg-neutral-50 dark:bg-neutral-700/50 border border-neutral-200 dark:border-neutral-600">
+            <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1">Catatan:</p>
+            <p className="text-sm text-neutral-700 dark:text-neutral-300 line-clamp-2">{request.notes}</p>
+          </div>
+        )}
+
+        {/* Review Notes */}
+        {request.reviewNotes && (
+          <div className={`p-3 rounded-xl border-l-4 ${
+            request.status === 'REJECTED' 
+              ? 'bg-red-50 dark:bg-red-500/10 border-red-500' 
+              : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-500'
+          }`}>
+            <p className={`text-xs font-semibold mb-1 ${
+              request.status === 'REJECTED' 
+                ? 'text-red-600 dark:text-red-400' 
+                : 'text-emerald-600 dark:text-emerald-400'
+            }`}>
+              {request.status === 'REJECTED' ? 'Alasan Penolakan:' : 'Catatan Review:'}
+            </p>
+            <p className="text-sm text-neutral-700 dark:text-neutral-300 line-clamp-2">
+              {request.reviewNotes}
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* Action Buttons */}
-      <div className={styles.cardActions}>
-        {canReview && (
-          <button
-            className={`${styles.actionBtn} ${styles.approve}`}
-            onClick={() => onReview(request)}
-          >
-            {request.status === 'PENDING' ? '📋 Review' : '✓ Konfirmasi'}
-          </button>
-        )}
+      {/* Footer */}
+      <div className="mt-auto p-5 pt-4 border-t border-neutral-100 dark:border-neutral-700/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+            <Calendar className="w-3.5 h-3.5" />
+            {formatDate(request.createdAt)}
+          </div>
 
-        {canUploadPayment && onUploadPayment && (
-          <button
-            className={`${styles.actionBtn} ${styles.approve}`}
-            onClick={() => onUploadPayment(request)}
-            style={{ backgroundColor: '#8b5cf6' }}
-          >
-            📤 Upload Bukti Bayar
-          </button>
-        )}
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {canReview && (
+              <button
+                onClick={() => onReview(request)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 shadow-sm hover:shadow transition-all"
+              >
+                <ClipboardCheck className="w-3.5 h-3.5" />
+                {request.status === 'PENDING' ? 'Review' : 'Konfirmasi'}
+              </button>
+            )}
 
-        {canReceive && onReceive && (
-          <button
-            className={`${styles.actionBtn} ${styles.approve}`}
-            onClick={() => onReceive(request)}
-            style={{ backgroundColor: '#10b981' }}
-          >
-            📦 Terima Barang
-          </button>
-        )}
+            {canUploadPayment && onUploadPayment && (
+              <button
+                onClick={() => onUploadPayment(request)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-500 text-white hover:bg-purple-600 shadow-sm hover:shadow transition-all"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload Bukti
+              </button>
+            )}
 
-        {/* View Details for completed/other statuses */}
-        {!canReview && !canUploadPayment && !canReceive && (
-          <button
-            className={`${styles.actionBtn}`}
-            onClick={() => onReview(request)}
-            style={{ backgroundColor: '#6b7280' }}
-          >
-            👁 Lihat Detail
-          </button>
-        )}
+            {canReceive && onReceive && (
+              <button
+                onClick={() => onReceive(request)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm hover:shadow transition-all"
+              >
+                <Package className="w-3.5 h-3.5" />
+                Terima
+              </button>
+            )}
+
+            {!canReview && !canUploadPayment && !canReceive && (
+              <button
+                onClick={() => onReview(request)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-neutral-500 dark:bg-neutral-600 text-white hover:bg-neutral-600 dark:hover:bg-neutral-500 shadow-sm hover:shadow transition-all"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Lihat Detail
+              </button>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

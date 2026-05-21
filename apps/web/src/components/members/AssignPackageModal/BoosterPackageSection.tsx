@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
+import { Rocket } from 'lucide-react';
 import { PackagePricing, ExtendedBoosterType, ServiceType } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
-import styles from '../AssignPackageModal.module.css';
 
 interface BoosterPackageSectionProps {
   pricingsList: PackagePricing[];
@@ -12,7 +12,6 @@ interface BoosterPackageSectionProps {
   updateBoosterServiceType: (pricingId: string, boosterType: ExtendedBoosterType, serviceType: ServiceType) => void;
 }
 
-// Built-in service type labels (fallback names if pricing.name doesn't include it)
 const SERVICE_TYPE_NAMES: Record<string, string> = {
   PM: 'Premiere',
   PS: 'Partnership',
@@ -21,7 +20,6 @@ const SERVICE_TYPE_NAMES: Record<string, string> = {
   PHC: 'Partnership Homecare',
 };
 
-// Separate component for quantity input to manage local state
 function BoosterQuantityInput({
   pricingId,
   boosterType,
@@ -35,7 +33,6 @@ function BoosterQuantityInput({
 }) {
   const [inputValue, setInputValue] = useState(String(quantity));
 
-  // Sync with external quantity changes
   useEffect(() => {
     setInputValue(String(quantity));
   }, [quantity]);
@@ -47,25 +44,21 @@ function BoosterQuantityInput({
       value={inputValue}
       onChange={(e) => {
         const value = e.target.value;
-        // Allow empty string or numbers only
         if (value === '' || /^\d+$/.test(value)) {
           setInputValue(value);
-          // Only update parent if valid number >= 1
           if (value !== '' && parseInt(value) >= 1) {
             updateBoosterQty(pricingId, boosterType, parseInt(value));
           }
         }
       }}
       onBlur={() => {
-        // On blur, enforce minimum of 1
         if (inputValue === '' || parseInt(inputValue) < 1) {
           setInputValue('1');
           updateBoosterQty(pricingId, boosterType, 1);
         }
       }}
       onFocus={(e) => e.target.select()}
-      className="form-input"
-      style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+      className="w-full px-3 py-2 text-xs rounded-lg border border-purple-300 dark:border-purple-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
       placeholder="1"
     />
   );
@@ -79,10 +72,8 @@ export default function BoosterPackageSection({
   updateBoosterQty,
   updateBoosterServiceType,
 }: BoosterPackageSectionProps) {
-  // All booster pricings from database
   const boosterPricings = pricingsList.filter(p => p.packageType === 'BOOSTER' && p.isActive);
 
-  // Group pricings by booster type → list of available service types
   const boosterMap = new Map<string, PackagePricing[]>();
   boosterPricings.forEach(pricing => {
     if (!pricing.boosterType) return;
@@ -91,78 +82,66 @@ export default function BoosterPackageSection({
     boosterMap.set(pricing.boosterType, list);
   });
 
-  // Convert to array of { boosterType, name, pricings (one per service type) }
   const uniqueBoosters = Array.from(boosterMap.entries()).map(([boosterType, pricings]) => ({
     boosterType,
-    // Use the first pricing's name (without the "- service" suffix) as label
     label: boosterType,
-    pricings, // All pricings for this booster type (one per service type)
+    pricings,
   }));
 
   return (
-    <div className={styles.section}>
-      <h4 className={`${styles.sectionTitle} ${styles.boosterTitle}`}>🚀 PAKET BOOSTER</h4>
-      <div className={`${styles.sectionBox} ${styles.boosterSection}`}>
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold text-purple-400 flex items-center gap-2">
+        <Rocket className="h-4 w-4" />
+        PAKET BOOSTER
+      </h4>
+      <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
         {uniqueBoosters.length === 0 && (
-          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Tidak ada paket booster tersedia.</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-500">Tidak ada paket booster tersedia.</p>
         )}
 
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>
+        <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-4">
           Pilih tipe booster yang diinginkan. Harga akan disesuaikan dengan tipe layanan yang dipilih.
         </p>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '12px' }}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {uniqueBoosters.map(({ boosterType, label, pricings: typePricings }) => {
-            // Use the first pricing as "anchor" for the booster checkbox
             const anchor = typePricings[0];
             if (!anchor) return null;
 
             const selected = isBoosterSelected(anchor.id, boosterType as ExtendedBoosterType);
             const sel = getBoosterSelection(anchor.id, boosterType as ExtendedBoosterType);
-
-            // Get current selected service type, default to first available
             const selectedServiceType = (sel?.serviceType || typePricings[0].serviceType || 'PM') as string;
-
-            // Find the pricing for the selected service type
             const selectedPricing = typePricings.find(p => p.serviceType === selectedServiceType) || typePricings[0];
             const pricePerSession = selectedPricing.price;
-            const serviceTypeName = SERVICE_TYPE_NAMES[selectedServiceType] || selectedServiceType;
 
             return (
               <div
                 key={boosterType}
-                style={{
-                  border: selected ? '2px solid var(--color-booster, #a855f7)' : '1px solid var(--border-color)',
-                  borderRadius: '8px',
-                  padding: '12px',
-                  background: selected ? 'rgba(168,85,247,0.08)' : 'var(--bg-card)',
-                  transition: 'all 0.15s',
-                }}
+                className={`p-3 rounded-xl border-2 transition-all ${
+                  selected 
+                    ? 'border-purple-400 dark:border-purple-500 bg-purple-100 dark:bg-purple-500/15' 
+                    : 'border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800/30 hover:border-purple-300 dark:hover:border-purple-500/50'
+                }`}
               >
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', marginBottom: selected ? '12px' : '0' }}>
+                <label className={`flex items-center gap-2 cursor-pointer ${selected ? 'mb-3' : ''}`}>
                   <input
                     type="checkbox"
                     checked={selected}
                     onChange={() => toggleBooster(anchor.id, boosterType as ExtendedBoosterType)}
-                    className={styles.packageCheckbox}
+                    className="w-4 h-4 rounded border-purple-400 dark:border-purple-500/50 text-purple-600 focus:ring-purple-500 bg-white dark:bg-neutral-800"
                   />
-                  <span style={{ fontWeight: '600', fontSize: '14px' }}>
-                    {label}
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                    ({typePricings.length} layanan)
-                  </span>
+                  <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{label}</span>
+                  <span className="text-xs text-neutral-500 dark:text-neutral-500">({typePricings.length} layanan)</span>
                 </label>
 
                 {selected && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div className="space-y-3">
                     <div>
-                      <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }}>Tipe Layanan</label>
+                      <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1">Tipe Layanan</label>
                       <select
                         value={selectedServiceType}
                         onChange={(e) => updateBoosterServiceType(anchor.id, boosterType as ExtendedBoosterType, e.target.value as ServiceType)}
-                        className="form-input"
-                        style={{ fontSize: '12px', padding: '6px 8px', width: '100%' }}
+                        className="w-full px-3 py-2 text-xs rounded-lg border border-purple-300 dark:border-purple-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       >
                         {typePricings.map(p => {
                           const stCode = p.serviceType || '';
@@ -177,7 +156,7 @@ export default function BoosterPackageSection({
                     </div>
 
                     <div>
-                      <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }}>Jumlah</label>
+                      <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1">Jumlah</label>
                       <BoosterQuantityInput
                         pricingId={anchor.id}
                         boosterType={boosterType as ExtendedBoosterType}
@@ -186,16 +165,16 @@ export default function BoosterPackageSection({
                       />
                     </div>
 
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                    <div className="text-xs text-neutral-600 dark:text-neutral-400 border-t border-purple-200 dark:border-purple-500/20 pt-2 space-y-1">
+                      <div className="flex justify-between">
                         <span>Harga per sesi:</span>
                         <span>{formatCurrency(pricePerSession)}</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                      <div className="flex justify-between">
                         <span>Total sesi:</span>
                         <span>{selectedPricing.totalSessions * (sel?.quantity || 1)}</span>
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '700', color: 'var(--color-booster, #a855f7)', marginTop: '6px', fontSize: '12px' }}>
+                      <div className="flex justify-between font-bold text-purple-600 dark:text-purple-400 text-sm pt-1">
                         <span>Total Harga:</span>
                         <span>{formatCurrency(pricePerSession * selectedPricing.totalSessions * (sel?.quantity || 1))}</span>
                       </div>

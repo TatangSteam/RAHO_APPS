@@ -7,10 +7,12 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ImpersonationProvider } from '@/contexts/ImpersonationContext';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
+import { clsx } from 'clsx';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   // Debug log
@@ -30,6 +32,23 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     setMounted(true);
   }, []);
 
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileOpen]);
+
   // Save collapsed state to localStorage whenever it changes
   const handleToggle = () => {
     setCollapsed((c) => {
@@ -39,6 +58,14 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
     });
   };
 
+  const handleMobileMenuToggle = () => {
+    setMobileOpen((prev) => !prev);
+  };
+
+  const handleMobileClose = () => {
+    setMobileOpen(false);
+  };
+
   // Prevent flash of wrong state
   if (!mounted) {
     return null;
@@ -46,13 +73,28 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
 
   return (
     <ImpersonationProvider>
-      <div className="app-layout">
+      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] transition-colors duration-300">
         <ImpersonationBanner />
-        <Sidebar collapsed={collapsed} onToggle={handleToggle} />
-        <div className={`app-main ${collapsed ? 'sidebar-collapsed' : ''}`}>
-          <Header />
-          <main className="app-content fade-in">{children}</main>
-          <Footer className="staff-footer" />
+        <Sidebar 
+          collapsed={collapsed} 
+          onToggle={handleToggle}
+          mobileOpen={mobileOpen}
+          onMobileClose={handleMobileClose}
+        />
+        <div 
+          className={clsx(
+            'min-h-screen flex flex-col transition-all duration-300',
+            // Desktop: margin based on sidebar state
+            // Mobile: no margin (sidebar is overlay)
+            'lg:ml-[260px]',
+            collapsed && 'lg:ml-[72px]'
+          )}
+        >
+          <Header onMobileMenuToggle={handleMobileMenuToggle} />
+          <main className="flex-1 p-4 sm:p-6 animate-in fade-in duration-300">
+            {children}
+          </main>
+          <Footer />
         </div>
       </div>
     </ImpersonationProvider>

@@ -1,8 +1,10 @@
 'use client';
 
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { useThemeStore } from '@/stores/themeStore';
 import { Role } from '@/types/auth';
+import { clsx } from 'clsx';
 
 const ROLE_LABELS: Record<Role, string> = {
   SUPER_ADMIN: 'Super Admin',
@@ -14,6 +16,16 @@ const ROLE_LABELS: Record<Role, string> = {
   MEMBER: 'Member',
 };
 
+const ROLE_COLORS: Record<Role, string> = {
+  SUPER_ADMIN:   'text-rose-500 dark:text-rose-400',
+  ADMIN_MANAGER: 'text-purple-500 dark:text-purple-400',
+  ADMIN_CABANG:  'text-amber-600 dark:text-amber-400',
+  ADMIN_LAYANAN: 'text-emerald-500 dark:text-emerald-400',
+  DOCTOR:        'text-blue-500 dark:text-blue-400',
+  NURSE:         'text-cyan-500 dark:text-cyan-400',
+  MEMBER:        'text-slate-500 dark:text-slate-400',
+};
+
 interface HeaderProps {
   onMobileMenuToggle?: () => void;
   unreadCount?: number;
@@ -21,16 +33,19 @@ interface HeaderProps {
 
 export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
   const { user } = useAuthStore();
+  const { theme, toggleTheme } = useThemeStore();
+  
   if (!user) return null;
 
   const role = user.role as Role;
 
   return (
-    <header className="app-header">
+    <header className="sticky top-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 bg-white dark:bg-[#0a0a0a] border-b border-neutral-200 dark:border-neutral-800 transition-colors duration-300">
       {/* Left */}
-      <div className="header-left">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {/* Mobile menu button */}
         <button
-          className="btn-icon mobile-menu-btn"
+          className="lg:hidden w-10 h-10 rounded-xl flex items-center justify-center text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
           onClick={onMobileMenuToggle}
           aria-label="Toggle menu"
         >
@@ -39,118 +54,55 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
       </div>
 
       {/* Right */}
-      <div className="header-right">
+      <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        {/* Theme Toggle */}
+        <button 
+          className={clsx(
+            'w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
+            'text-neutral-500 dark:text-neutral-400',
+            'hover:text-amber-600 dark:hover:text-amber-400',
+            'hover:bg-amber-50 dark:hover:bg-amber-500/10'
+          )}
+          onClick={toggleTheme}
+          aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+
         {/* Notifications */}
-        <button className="btn-icon header-notif" aria-label="Notifikasi" id="btn-notifications">
-          <Bell size={18} />
+        <button 
+          className={clsx(
+            'relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
+            'text-neutral-500 dark:text-neutral-400',
+            'hover:text-amber-600 dark:hover:text-amber-400',
+            'hover:bg-amber-50 dark:hover:bg-amber-500/10'
+          )}
+          aria-label="Notifikasi" 
+          id="btn-notifications"
+        >
+          <Bell size={20} />
           {unreadCount > 0 && (
-            <span className="notif-badge">
+            <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-[#0a0a0a]">
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
         </button>
 
         {/* User Chip */}
-        <div className="header-user-chip">
-          <div className="header-avatar">
+        <div className="flex items-center gap-2 sm:gap-2.5 py-1.5 pl-1.5 pr-2 sm:pr-3 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-200 group">
+          <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center text-sm font-bold text-black flex-shrink-0 shadow-md shadow-amber-500/25 group-hover:shadow-amber-500/35 transition-shadow">
             {user.fullName.charAt(0).toUpperCase()}
           </div>
-          <div className="header-user-info">
-            <p className="header-user-name">{user.fullName}</p>
-            <p className="header-user-role">{ROLE_LABELS[role]}</p>
+          <div className="hidden sm:flex flex-col gap-0">
+            <p className="text-sm font-semibold text-neutral-900 dark:text-white leading-tight truncate max-w-[120px] lg:max-w-[160px]">
+              {user.fullName}
+            </p>
+            <p className={clsx('text-xs leading-tight', ROLE_COLORS[role])}>
+              {ROLE_LABELS[role]}
+            </p>
           </div>
         </div>
       </div>
-
-      <style>{`
-        .app-header {
-          position: sticky;
-          top: 0;
-          z-index: 50;
-          background: rgba(15, 23, 42, 0.85);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          border-bottom: 1px solid var(--surface-border);
-          height: 64px;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0 24px;
-          gap: 16px;
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          flex: 1;
-          min-width: 0;
-        }
-
-        .mobile-menu-btn { display: none; }
-
-        .header-right {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-shrink: 0;
-        }
-
-        .header-notif { position: relative; }
-        .notif-badge {
-          position: absolute;
-          top: 2px; right: 2px;
-          min-width: 17px; height: 17px;
-          background: var(--color-danger);
-          color: #fff;
-          font-size: 10px;
-          font-weight: 700;
-          border-radius: 99px;
-          display: flex; align-items: center; justify-content: center;
-          padding: 0 4px;
-          border: 2px solid var(--surface-bg);
-          line-height: 1;
-        }
-
-        .header-user-chip {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 6px 12px 6px 6px;
-          background: rgba(30,41,59,0.6);
-          border: 1px solid var(--surface-border);
-          border-radius: var(--radius-lg);
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-        .header-user-chip:hover {
-          background: rgba(30,41,59,0.9);
-          border-color: rgba(148,163,184,0.2);
-        }
-        .header-avatar {
-          width: 32px; height: 32px;
-          background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800));
-          border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 13px; font-weight: 700; color: #fff;
-          flex-shrink: 0;
-        }
-        .header-user-info { display: flex; flex-direction: column; gap: 1px; }
-        .header-user-name {
-          font-size: 13px; font-weight: 600; color: var(--text-primary);
-          white-space: nowrap; line-height: 1.2;
-        }
-        .header-user-role { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
-
-        @media (max-width: 1024px) {
-          .mobile-menu-btn { display: flex; }
-          .header-user-info { display: none; }
-        }
-
-        @media (max-width: 640px) {
-          .app-header { padding: 0 16px; }
-        }
-      `}</style>
     </header>
   );
 }

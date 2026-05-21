@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Activity, Package, Boxes,
-  ShoppingCart, Bell, MessageSquare, ChevronLeft,
+  Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2,
   UserCog, Truck,
 } from 'lucide-react';
@@ -38,13 +38,13 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Dashboard',
         href: '/dashboard',
-        icon: <LayoutDashboard size={18} />,
+        icon: <LayoutDashboard size={20} />,
         roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Dashboard',
         href: '/admin/super-admin',
-        icon: <Shield size={18} />,
+        icon: <Shield size={20} />,
         roles: ['SUPER_ADMIN'],
       },
     ],
@@ -55,13 +55,13 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Member',
         href: '/members',
-        icon: <Users size={18} />,
+        icon: <Users size={20} />,
         roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Sesi Terapi',
         href: '/sessions',
-        icon: <Activity size={18} />,
+        icon: <Activity size={20} />,
         roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
     ],
@@ -72,19 +72,19 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Stok',
         href: '/inventory',
-        icon: <Boxes size={18} />,
+        icon: <Boxes size={20} />,
         roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Request Stok',
         href: '/inventory/stock-requests',
-        icon: <ClipboardList size={18} />,
+        icon: <ClipboardList size={20} />,
         roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
         label: 'Pengiriman',
         href: '/inventory/shipments',
-        icon: <Truck size={18} />,
+        icon: <Truck size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
     ],
@@ -95,13 +95,13 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Notifikasi',
         href: '/notifications',
-        icon: <Bell size={18} />,
+        icon: <Bell size={20} />,
         roles: ALL_STAFF,
       },
       {
         label: 'Chat',
         href: '/chat',
-        icon: <MessageSquare size={18} />,
+        icon: <MessageSquare size={20} />,
         roles: ALL_STAFF,
       },
     ],
@@ -112,25 +112,25 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Pengaturan Cabang',
         href: '/branches',
-        icon: <Building2 size={18} />,
+        icon: <Building2 size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
       {
         label: 'Kelola Staff',
         href: '/staff',
-        icon: <UserCog size={18} />,
+        icon: <UserCog size={20} />,
         roles: ['ADMIN_CABANG'],
       },
       {
         label: 'Kode Referral',
         href: '/referrals',
-        icon: <FileText size={18} />,
+        icon: <FileText size={20} />,
         roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
         label: 'Harga Paket',
         href: '/admin/package-pricing',
-        icon: <Package size={18} />,
+        icon: <Package size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_CABANG'],
       },
     ],
@@ -141,19 +141,19 @@ const MENU_GROUPS: MenuGroup[] = [
       {
         label: 'Admin Managers',
         href: '/admin/managers',
-        icon: <UserCog size={18} />,
+        icon: <UserCog size={20} />,
         roles: ['SUPER_ADMIN'],
       },
       {
         label: 'Master Produk',
         href: '/admin/master-products',
-        icon: <Boxes size={18} />,
+        icon: <Boxes size={20} />,
         roles: ['SUPER_ADMIN'],
       },
       {
         label: 'Audit Log',
         href: '/admin/audit-logs',
-        icon: <ClipboardList size={18} />,
+        icon: <ClipboardList size={20} />,
         roles: ['SUPER_ADMIN'],
       },
     ],
@@ -173,13 +173,13 @@ const ROLE_LABELS: Record<Role, string> = {
 };
 
 const ROLE_COLORS: Record<Role, string> = {
-  SUPER_ADMIN:   '#f43f5e',
-  ADMIN_MANAGER: '#a855f7',
-  ADMIN_CABANG:  '#f59e0b',
-  ADMIN_LAYANAN: '#22c55e',
-  DOCTOR:        '#3b82f6',
-  NURSE:         '#06b6d4',
-  MEMBER:        '#64748b',
+  SUPER_ADMIN:   'text-rose-500 dark:text-rose-400',
+  ADMIN_MANAGER: 'text-purple-500 dark:text-purple-400',
+  ADMIN_CABANG:  'text-amber-600 dark:text-amber-400',
+  ADMIN_LAYANAN: 'text-emerald-500 dark:text-emerald-400',
+  DOCTOR:        'text-blue-500 dark:text-blue-400',
+  NURSE:         'text-cyan-500 dark:text-cyan-400',
+  MEMBER:        'text-slate-500 dark:text-slate-400',
 };
 
 // ── Props ─────────────────────────────────────────────────────
@@ -187,11 +187,13 @@ const ROLE_COLORS: Record<Role, string> = {
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────
 
-export function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -205,19 +207,14 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
 
   const handleLogout = async () => {
     try {
-      // Get refresh token before clearing auth
       const { refreshToken } = useAuthStore.getState();
-      
-      // Call logout API to create audit log
       if (refreshToken) {
         const { logoutApi } = await import('@/lib/authApi');
         await logoutApi(refreshToken);
       }
     } catch (error) {
       console.error('Logout API error:', error);
-      // Continue with logout even if API call fails
     } finally {
-      // Clear local state and redirect
       clearAuth();
       document.cookie = 'raho-auth-token=; path=/; max-age=0';
       window.location.href = '/login';
@@ -225,120 +222,193 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
   };
 
   const isActive = (href: string) => {
-    if (href === '/dashboard') {
-      return pathname === href;
-    }
-    
-    // For inventory routes, use exact matching to prevent conflicts
-    if (href === '/inventory') {
-      return pathname === '/inventory';
-    }
-    
-    // For sub-routes, check exact match or proper sub-path
-    if (pathname === href) {
-      return true;
-    }
-    
-    // Only consider it active if it's a proper sub-path (with trailing slash)
+    if (href === '/dashboard') return pathname === href;
+    if (href === '/inventory') return pathname === '/inventory';
+    if (pathname === href) return true;
     return pathname.startsWith(href + '/');
   };
 
-  return (
-    <aside className={clsx('sidebar', collapsed && 'sidebar-collapsed')}>
+  const handleNavClick = () => {
+    // Close mobile menu when navigating
+    if (mobileOpen && onMobileClose) {
+      onMobileClose();
+    }
+  };
+
+  const sidebarContent = (
+    <>
       {/* Header */}
-      <div className="sidebar-header">
-        <div className="sidebar-brand">
-          <div className="sidebar-logo">R</div>
+      <div className={clsx(
+        'flex items-center h-16 flex-shrink-0',
+        collapsed ? 'justify-center px-3' : 'justify-between px-4'
+      )}>
+        <div className={clsx(
+          'flex items-center gap-3 overflow-hidden min-w-0',
+          collapsed && 'justify-center'
+        )}>
+          {/* Logo */}
+          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center text-lg font-extrabold text-black flex-shrink-0 shadow-lg shadow-amber-500/25">
+            R
+          </div>
           {!collapsed && (
-            <div className="sidebar-brand-text">
-              <span className="sidebar-brand-name">RAHO</span>
-              <span className="sidebar-brand-desc">Klinik System</span>
+            <div className="flex flex-col overflow-hidden">
+              <span className="text-base font-bold text-neutral-900 dark:text-white tracking-wide whitespace-nowrap">
+                RAHO
+              </span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400 whitespace-nowrap">
+                Premier Club
+              </span>
             </div>
           )}
         </div>
-        <button className="sidebar-collapse-btn" onClick={onToggle} aria-label="Toggle sidebar">
-          <ChevronLeft size={16} className={clsx('collapse-icon', collapsed && 'rotated')} />
+        
+        {/* Desktop collapse button */}
+        {!collapsed && (
+          <button 
+            className={clsx(
+              'hidden lg:flex w-8 h-8 rounded-lg items-center justify-center flex-shrink-0',
+              'bg-neutral-100 dark:bg-neutral-800',
+              'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white',
+              'hover:bg-neutral-200 dark:hover:bg-neutral-700',
+              'transition-all duration-200'
+            )}
+            onClick={onToggle} 
+            aria-label="Collapse sidebar"
+          >
+            <ChevronLeft size={18} />
+          </button>
+        )}
+
+        {/* Mobile close button */}
+        <button 
+          className={clsx(
+            'lg:hidden w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+            'bg-neutral-100 dark:bg-neutral-800',
+            'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white',
+            'hover:bg-neutral-200 dark:hover:bg-neutral-700',
+            'transition-all duration-200'
+          )}
+          onClick={onMobileClose} 
+          aria-label="Close menu"
+        >
+          <X size={18} />
         </button>
       </div>
 
-      {/* User Info */}
+      {/* Collapsed Toggle Button - Desktop only */}
+      {collapsed && (
+        <div className="hidden lg:flex justify-center py-3">
+          <button 
+            className={clsx(
+              'w-10 h-10 rounded-lg flex items-center justify-center',
+              'bg-neutral-100 dark:bg-neutral-800',
+              'text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white',
+              'hover:bg-neutral-200 dark:hover:bg-neutral-700',
+              'transition-all duration-200'
+            )}
+            onClick={onToggle} 
+            aria-label="Expand sidebar"
+          >
+            <ChevronLeft size={18} className="rotate-180" />
+          </button>
+        </div>
+      )}
+
+      {/* User Info - Expanded */}
       {!collapsed && (
-        <div className="sidebar-user">
-          <div className="sidebar-user-avatar">
+        <div className="flex items-center gap-3 px-4 py-4 flex-shrink-0">
+          <div className="w-10 h-10 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center text-sm font-semibold text-neutral-700 dark:text-white flex-shrink-0">
             {user.fullName.charAt(0).toUpperCase()}
           </div>
-          <div className="sidebar-user-info">
-            <p className="sidebar-user-name">{user.fullName}</p>
-            <span
-              className="sidebar-user-role"
-              style={{ color: ROLE_COLORS[role] }}
-            >
+          <div className="flex flex-col gap-0.5 overflow-hidden min-w-0">
+            <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
+              {user.fullName}
+            </p>
+            <span className={clsx('text-xs font-medium', ROLE_COLORS[role])}>
               {ROLE_LABELS[role]}
             </span>
             {user.branchCode && (
-              <span className="sidebar-user-branch">Cab. {user.branchCode}</span>
+              <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                Cab. {user.branchCode}
+              </span>
             )}
           </div>
         </div>
       )}
 
+      {/* User Info - Collapsed */}
       {collapsed && (
         <div 
-          className="sidebar-user-mini"
+          className="hidden lg:flex justify-center py-3 relative cursor-pointer group"
           onMouseEnter={() => setHoveredItem('user-profile')}
           onMouseLeave={() => setHoveredItem(null)}
         >
-          <div className="sidebar-user-avatar">{user.fullName.charAt(0).toUpperCase()}</div>
+          <div className="w-10 h-10 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center text-sm font-semibold text-neutral-700 dark:text-white transition-transform duration-200 group-hover:scale-105">
+            {user.fullName.charAt(0).toUpperCase()}
+          </div>
           {hoveredItem === 'user-profile' && (
-            <div className="sidebar-tooltip">
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>{user.fullName}</div>
-              <div style={{ fontSize: 11, color: ROLE_COLORS[role] }}>{ROLE_LABELS[role]}</div>
-              {user.branchCode && <div style={{ fontSize: 10, opacity: 0.7 }}>Cab. {user.branchCode}</div>}
-            </div>
+            <Tooltip>
+              <div className="font-semibold mb-0.5">{user.fullName}</div>
+              <div className={clsx('text-xs', ROLE_COLORS[role])}>{ROLE_LABELS[role]}</div>
+              {user.branchCode && <div className="text-[10px] text-neutral-500">Cab. {user.branchCode}</div>}
+            </Tooltip>
           )}
         </div>
       )}
 
       {/* Navigation */}
-      <nav className="sidebar-nav">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 flex flex-col gap-1">
         {MENU_GROUPS.map((group, gi) => {
-          const visibleItems = group.items.filter((item) =>
-            item.roles.includes(role),
-          );
+          const visibleItems = group.items.filter((item) => item.roles.includes(role));
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={gi} className="sidebar-group">
+            <div key={gi} className="flex flex-col gap-0.5">
               {!collapsed && group.title && (
-                <p className="sidebar-group-title">{group.title}</p>
+                <p className="text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider px-3 pt-4 pb-2">
+                  {group.title}
+                </p>
               )}
+              {collapsed && gi > 0 && <div className="hidden lg:block h-px bg-neutral-200 dark:bg-neutral-800 my-2 mx-1" />}
               {visibleItems.map((item) => (
                 <div 
                   key={item.href}
-                  style={{ position: 'relative' }}
+                  className="relative"
                   onMouseEnter={() => collapsed && setHoveredItem(item.href)}
                   onMouseLeave={() => collapsed && setHoveredItem(null)}
                 >
                   <Link
                     href={item.href}
-                    className={clsx('sidebar-item', isActive(item.href) && 'active', collapsed && 'sidebar-item-collapsed')}
-                  >
-                    <span className="sidebar-item-icon">{item.icon}</span>
-                    {!collapsed && (
-                      <>
-                        <span className="sidebar-item-label">{item.label}</span>
-                        {item.badge && (
-                          <span className="sidebar-item-badge">{item.badge}</span>
-                        )}
-                      </>
+                    onClick={handleNavClick}
+                    className={clsx(
+                      'flex items-center gap-3 rounded-xl text-sm font-medium',
+                      'transition-all duration-200 relative select-none',
+                      collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
+                      isActive(item.href)
+                        ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
+                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
                     )}
-                    {isActive(item.href) && <span className="sidebar-item-indicator" />}
+                  >
+                    <span className="flex items-center justify-center flex-shrink-0">
+                      {item.icon}
+                    </span>
+                    <span className={clsx(collapsed ? 'lg:hidden' : '')}>
+                      {item.label}
+                    </span>
+                    {item.badge && !collapsed && (
+                      <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
+                        {item.badge}
+                      </span>
+                    )}
+                    {isActive(item.href) && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
+                    )}
                   </Link>
                   {collapsed && hoveredItem === item.href && (
-                    <div className="sidebar-tooltip">
+                    <Tooltip>
                       {item.label}
-                      {item.badge && <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.8 }}>({item.badge})</span>}
-                    </div>
+                      {item.badge && <span className="ml-1.5 text-[10px] opacity-80">({item.badge})</span>}
+                    </Tooltip>
                   )}
                 </div>
               ))}
@@ -348,281 +418,86 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </nav>
 
       {/* Footer */}
-      <div className="sidebar-footer">
+      <div className="px-3 py-3 flex-shrink-0">
         <div 
-          style={{ position: 'relative' }}
+          className="relative"
           onMouseEnter={() => collapsed && setHoveredItem('logout')}
           onMouseLeave={() => collapsed && setHoveredItem(null)}
         >
           <button 
-            className={clsx('sidebar-item sidebar-logout', collapsed && 'sidebar-item-collapsed')} 
+            className={clsx(
+              'flex items-center gap-3 rounded-xl text-sm font-medium w-full',
+              'text-neutral-500 dark:text-neutral-400',
+              'hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400',
+              'transition-all duration-200',
+              collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5'
+            )}
             onClick={handleLogout} 
             id="btn-logout"
           >
-            <span className="sidebar-item-icon"><LogOut size={18} /></span>
-            {!collapsed && <span className="sidebar-item-label">Keluar</span>}
+            <span className="flex items-center justify-center flex-shrink-0">
+              <LogOut size={20} />
+            </span>
+            <span className={clsx(collapsed ? 'lg:hidden' : '')}>Keluar</span>
           </button>
           {collapsed && hoveredItem === 'logout' && (
-            <div className="sidebar-tooltip">Keluar</div>
+            <Tooltip>Keluar</Tooltip>
           )}
         </div>
       </div>
+    </>
+  );
 
-      <style>{`
-        .sidebar {
-          position: fixed;
-          top: 0; left: 0; bottom: 0;
-          width: var(--sidebar-width);
-          background: var(--sidebar-bg);
-          border-right: 1px solid var(--sidebar-border);
-          display: flex;
-          flex-direction: column;
-          z-index: 100;
-          transition: width var(--transition-normal);
-          overflow: hidden;
-        }
-        .sidebar.sidebar-collapsed { width: var(--sidebar-width-collapsed); }
+  return (
+    <>
+      {/* Mobile Overlay */}
+      {mobileOpen && (
+        <div 
+          className="lg:hidden fixed inset-0 bg-black/50 z-[99] backdrop-blur-sm"
+          onClick={onMobileClose}
+        />
+      )}
 
-        /* Header */
-        .sidebar-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 20px 16px 16px;
-          border-bottom: 1px solid var(--sidebar-border);
-          flex-shrink: 0;
-        }
-        .sidebar-collapsed .sidebar-header {
-          flex-direction: column;
-          gap: 12px;
-          padding: 16px 12px;
-        }
-        .sidebar-brand {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          overflow: hidden;
-          min-width: 0;
-        }
-        .sidebar-collapsed .sidebar-brand {
-          justify-content: center;
-        }
-        .sidebar-logo {
-          width: 36px; height: 36px;
-          background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800));
-          border-radius: var(--radius-md);
-          display: flex; align-items: center; justify-content: center;
-          font-size: 16px; font-weight: 800; color: #fff;
-          flex-shrink: 0;
-          box-shadow: 0 2px 8px rgba(37,99,235,0.35);
-        }
-        .sidebar-brand-text { 
-          display: flex; 
-          flex-direction: column; 
-          overflow: hidden;
-          opacity: 1;
-          max-width: 200px;
-          transition: all var(--transition-fast);
-        }
-        .sidebar-collapsed .sidebar-brand-text {
-          opacity: 0;
-          max-width: 0;
-        }
-        .sidebar-brand-name {
-          font-size: 15px; font-weight: 700; color: var(--text-primary);
-          letter-spacing: 0.03em; white-space: nowrap;
-        }
-        .sidebar-brand-desc { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+      {/* Desktop Sidebar */}
+      <aside 
+        className={clsx(
+          'hidden lg:flex fixed top-0 left-0 bottom-0 z-[100] flex-col',
+          'bg-white dark:bg-[#0a0a0a]',
+          'border-r border-neutral-200 dark:border-neutral-800',
+          'transition-all duration-300 ease-in-out',
+          collapsed ? 'w-[72px]' : 'w-[260px]'
+        )}
+      >
+        {sidebarContent}
+      </aside>
 
-        .sidebar-collapse-btn {
-          width: 28px; height: 28px;
-          background: rgba(148,163,184,0.08);
-          border: 1px solid var(--sidebar-border);
-          border-radius: var(--radius-sm);
-          display: flex; align-items: center; justify-content: center;
-          cursor: pointer;
-          color: var(--text-muted);
-          transition: all var(--transition-fast);
-          flex-shrink: 0;
-        }
-        .sidebar-collapse-btn:hover { background: rgba(148,163,184,0.15); color: var(--text-primary); }
-        .collapse-icon { transition: transform var(--transition-normal); }
-        .collapse-icon.rotated { transform: rotate(180deg); }
+      {/* Mobile Sidebar */}
+      <aside 
+        className={clsx(
+          'lg:hidden fixed top-0 left-0 bottom-0 z-[100] flex flex-col w-[280px]',
+          'bg-white dark:bg-[#0a0a0a]',
+          'border-r border-neutral-200 dark:border-neutral-800',
+          'transition-transform duration-300 ease-in-out',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full'
+        )}
+      >
+        {sidebarContent}
+      </aside>
+    </>
+  );
+}
 
-        /* User */
-        .sidebar-user {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px;
-          border-bottom: 1px solid var(--sidebar-border);
-          flex-shrink: 0;
-          overflow: hidden;
-        }
-        .sidebar-user-mini {
-          display: flex;
-          justify-content: center;
-          padding: 12px 16px;
-          border-bottom: 1px solid var(--sidebar-border);
-          flex-shrink: 0;
-          position: relative;
-          cursor: pointer;
-        }
-        .sidebar-user-mini:hover .sidebar-user-avatar {
-          transform: scale(1.05);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        .sidebar-user-avatar {
-          width: 36px; height: 36px;
-          background: linear-gradient(135deg, #334155, #1e293b);
-          border: 2px solid var(--surface-border);
-          border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 14px; font-weight: 600; color: var(--text-primary);
-          flex-shrink: 0;
-          transition: all var(--transition-fast);
-        }
-        .sidebar-user-info { display: flex; flex-direction: column; gap: 1px; overflow: hidden; min-width: 0; }
-        .sidebar-user-name {
-          font-size: 13px; font-weight: 600; color: var(--text-primary);
-          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .sidebar-user-role { font-size: 11px; font-weight: 500; }
-        .sidebar-user-branch { font-size: 11px; color: var(--text-muted); }
+// ── Tooltip Component ─────────────────────────────────────────
 
-        /* Nav */
-        .sidebar-nav {
-          flex: 1;
-          overflow-y: auto;
-          overflow-x: hidden;
-          padding: 12px 8px;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .sidebar-group { display: flex; flex-direction: column; gap: 1px; }
-        .sidebar-group + .sidebar-group { margin-top: 8px; }
-        .sidebar-group-title {
-          font-size: 10px;
-          font-weight: 600;
-          color: var(--text-muted);
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          padding: 8px 10px 4px;
-          white-space: nowrap;
-        }
-
-        /* Nav Item */
-        .sidebar-item {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 10px 12px;
-          border-radius: var(--radius-md);
-          color: var(--text-secondary);
-          font-size: 13px;
-          font-weight: 500;
-          cursor: pointer;
-          border: none;
-          background: none;
-          text-decoration: none;
-          width: 100%;
-          position: relative;
-          transition: all var(--transition-fast);
-          white-space: nowrap;
-          overflow: hidden;
-          user-select: none;
-        }
-        .sidebar-item-collapsed {
-          justify-content: center;
-          padding: 10px;
-        }
-        .sidebar-item:hover {
-          background: rgba(59, 130, 246, 0.08);
-          color: var(--text-primary);
-        }
-        .sidebar-item.active {
-          background: rgba(59, 130, 246, 0.12);
-          color: var(--color-primary-400);
-          font-weight: 600;
-        }
-        .sidebar-item-icon {
-          display: flex; align-items: center; justify-content: center;
-          flex-shrink: 0; width: 18px;
-        }
-        .sidebar-item-label { flex: 1; }
-        .sidebar-item-badge {
-          background: rgba(239,68,68,0.2);
-          color: #f87171;
-          font-size: 10px;
-          font-weight: 700;
-          padding: 2px 7px;
-          border-radius: 99px;
-          border: 1px solid rgba(239,68,68,0.3);
-        }
-        .sidebar-item-indicator {
-          position: absolute;
-          left: 0; top: 50%;
-          transform: translateY(-50%);
-          width: 3px; height: 60%;
-          background: var(--color-primary-500);
-          border-radius: 0 3px 3px 0;
-        }
-
-        /* Logout */
-        .sidebar-logout { color: var(--text-muted) !important; }
-        .sidebar-logout:hover { background: rgba(239,68,68,0.08) !important; color: #f87171 !important; }
-
-        /* Footer */
-        .sidebar-footer {
-          padding: 8px;
-          border-top: 1px solid var(--sidebar-border);
-          flex-shrink: 0;
-        }
-
-        /* Tooltip */
-        .sidebar-tooltip {
-          position: absolute;
-          left: calc(100% + 12px);
-          top: 50%;
-          transform: translateY(-50%);
-          background: var(--surface-card);
-          border: 1px solid var(--surface-border);
-          border-radius: var(--radius-md);
-          padding: 8px 12px;
-          font-size: 12px;
-          font-weight: 500;
-          color: var(--text-primary);
-          white-space: nowrap;
-          z-index: 1000;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          pointer-events: none;
-          animation: tooltipFadeIn 0.15s ease-out;
-        }
-        .sidebar-tooltip::before {
-          content: '';
-          position: absolute;
-          right: 100%;
-          top: 50%;
-          transform: translateY(-50%);
-          border: 6px solid transparent;
-          border-right-color: var(--surface-border);
-        }
-        .sidebar-tooltip::after {
-          content: '';
-          position: absolute;
-          right: 100%;
-          top: 50%;
-          transform: translateY(-50%);
-          border: 5px solid transparent;
-          border-right-color: var(--surface-card);
-          margin-right: -1px;
-        }
-        @keyframes tooltipFadeIn {
-          from { opacity: 0; transform: translateY(-50%) translateX(-4px); }
-          to { opacity: 1; transform: translateY(-50%) translateX(0); }
-        }
-      `}</style>
-    </aside>
+function Tooltip({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="absolute left-[calc(100%+12px)] top-1/2 -translate-y-1/2 z-[1000] pointer-events-none animate-in fade-in slide-in-from-left-1 duration-150">
+      <div className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-lg px-3 py-2 text-xs font-medium text-neutral-900 dark:text-white whitespace-nowrap shadow-lg dark:shadow-xl">
+        {children}
+      </div>
+      {/* Arrow */}
+      <div className="absolute right-full top-1/2 -translate-y-1/2 border-[6px] border-transparent border-r-neutral-200 dark:border-r-neutral-700" />
+      <div className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent border-r-white dark:border-r-neutral-900 mr-[-1px]" />
+    </div>
   );
 }

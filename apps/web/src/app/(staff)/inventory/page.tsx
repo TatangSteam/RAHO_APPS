@@ -7,7 +7,11 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { api } from '@/lib/api';
-import styles from './page.module.css';
+import { 
+  Package, Search, AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, 
+  ClipboardList, Truck, Building2, RefreshCw, X, Edit3, ShoppingCart, MapPin,
+  ArrowUpDown, Save
+} from 'lucide-react';
 
 interface InventoryItem {
   id: string;
@@ -52,8 +56,7 @@ export default function InventoryPage() {
   const [filter, setFilter] = useState<'ALL' | 'LOW_STOCK'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
-  const [modalMounted, setModalMounted] = useState(false);
-  
+
   // Branch selector for Super Admin and Admin Manager
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
@@ -78,13 +81,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     setMounted(true);
-    setModalMounted(true);
   }, []);
-
-  // Debug modal state
-  useEffect(() => {
-    console.log('Modal state changed:', { editModalOpen, selectedItem: selectedItem?.masterProduct?.name });
-  }, [editModalOpen, selectedItem]);
 
   // Fetch branches for Super Admin and Admin Manager
   const fetchBranches = useCallback(async () => {
@@ -96,7 +93,6 @@ export default function InventoryPage() {
       const branchesData = response.data?.data || [];
       setBranches(branchesData);
       
-      // Set default branch if user has one, otherwise use first branch
       if (user?.branchId) {
         setSelectedBranchId(user.branchId);
       } else if (branchesData.length > 0) {
@@ -117,18 +113,15 @@ export default function InventoryPage() {
       return;
     }
     
-    // For Super Admin and Admin Manager, fetch branches first
     if (canSelectBranch) {
       fetchBranches();
     } else {
-      // For Admin Cabang, use their branch directly
       if (user.branchId) {
         setSelectedBranchId(user.branchId);
       }
     }
   }, [mounted, user, accessToken, canSelectBranch, fetchBranches]);
 
-  // Fetch inventory when branch is selected
   useEffect(() => {
     if (selectedBranchId && accessToken) {
       fetchInventoryItems(selectedBranchId);
@@ -171,9 +164,7 @@ export default function InventoryPage() {
 
       const endpoint = format === 'csv' ? '/api/inventory/export/csv' : '/api/inventory/export/excel';
       const response = await fetch(endpoint, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-        },
+        headers: { 'Authorization': `Bearer ${accessToken}` },
       });
 
       if (!response.ok) {
@@ -181,18 +172,14 @@ export default function InventoryPage() {
         throw new Error(`HTTP ${response.status}`);
       }
 
-      // Get filename from Content-Disposition header or use default
       const contentDisposition = response.headers.get('Content-Disposition');
       let filename = `inventori-${Date.now()}.${format === 'csv' ? 'csv' : 'xlsx'}`;
       
       if (contentDisposition) {
         const filenameMatch = contentDisposition.match(/filename="?(.+)"?/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
+        if (filenameMatch) filename = filenameMatch[1];
       }
 
-      // Download file
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
@@ -212,13 +199,11 @@ export default function InventoryPage() {
   };
 
   const handleOpenEditModal = (item: InventoryItem) => {
-    console.log('Opening edit modal for item:', item);
     setSelectedItem(item);
     setAdjustment('');
     setReason('');
     setConversionFactor(item.masterProduct.conversionFactor.toString());
     setEditModalOpen(true);
-    console.log('Modal state set to true');
   };
 
   const handleCloseEditModal = () => {
@@ -243,7 +228,6 @@ export default function InventoryPage() {
       return;
     }
 
-    // Validate conversion factor if changed
     const conversionFactorNum = parseFloat(conversionFactor);
     const hasConversionChange = conversionFactorNum !== selectedItem.masterProduct.conversionFactor;
     
@@ -255,14 +239,12 @@ export default function InventoryPage() {
     try {
       setAdjusting(true);
       
-      // Update conversion factor if changed
       if (hasConversionChange) {
         await api.patch(`/master-products/${selectedItem.masterProductId}`, {
           conversionFactor: conversionFactorNum,
         });
       }
       
-      // Adjust stock
       await inventoryApi.adjustStock(selectedItem.id, {
         adjustment: adjustmentNum,
         reason: reason.trim(),
@@ -270,7 +252,7 @@ export default function InventoryPage() {
 
       showToast.success('Stok berhasil disesuaikan');
       handleCloseEditModal();
-      fetchInventoryItems(selectedBranchId); // Refresh data
+      fetchInventoryItems(selectedBranchId);
     } catch (error: any) {
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyesuaikan stok';
       showToast.error(errorMessage);
@@ -288,33 +270,22 @@ export default function InventoryPage() {
     return matchesFilter && matchesSearch;
   });
 
-  const getCategoryBadge = (category: string) => {
-    const categoryMap: Record<string, string> = {
-      MEDICINE: '💊',
-      DEVICE: '🔧',
-      CONSUMABLE: '📦',
+  const getCategoryIcon = (category: string) => {
+    const icons: Record<string, { icon: string; color: string; bg: string }> = {
+      MEDICINE: { icon: '💊', color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-100 dark:bg-pink-500/20' },
+      DEVICE: { icon: '🔧', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-100 dark:bg-blue-500/20' },
+      CONSUMABLE: { icon: '📦', color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-100 dark:bg-amber-500/20' },
     };
-    return categoryMap[category] || '📦';
-  };
-
-  const getStockStatus = (item: InventoryItem) => {
-    if (item.stockInfo.isLowStock) {
-      return <span className={`${styles.stockStatus} ${styles.low}`}>⚠️ Stok Rendah</span>;
-    }
-    return <span className={`${styles.stockStatus} ${styles.normal}`}>✓ Normal</span>;
+    return icons[category] || icons.CONSUMABLE;
   };
 
   const getCategoryName = (category: string) => {
-    const categoryNames: Record<string, string> = {
-      MEDICINE: 'Obat',
-      DEVICE: 'Alat',
-      CONSUMABLE: 'Konsumabel',
+    const names: Record<string, string> = {
+      MEDICINE: 'OBAT',
+      DEVICE: 'ALAT',
+      CONSUMABLE: 'KONSUMABEL',
     };
-    return categoryNames[category] || category;
-  };
-
-  const getStockPercentage = (item: InventoryItem) => {
-    return Math.min((item.stockInfo.baseStock / Math.max(item.stockInfo.minThresholdBase, 1)) * 100, 100);
+    return names[category] || category;
   };
 
   // Calculate statistics
@@ -322,186 +293,67 @@ export default function InventoryPage() {
   const lowStockItems = items.filter((i) => i.stockInfo.isLowStock).length;
   const normalStockItems = totalItems - lowStockItems;
 
-  // Modal component
-  const EditStockModalContent = () => {
+  if (!mounted) return null;
+
+  // Edit Stock Modal
+  const EditStockModal = () => {
     if (!editModalOpen || !selectedItem) return null;
 
-    return (
-      <div 
-        style={{ 
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999999,
-          padding: '20px'
-        }}
-        onClick={handleCloseEditModal}
-      >
-        <div 
-          style={{
-            background: 'var(--surface-card)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '0',
-            maxWidth: '600px',
-            width: '100%',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4)',
-            border: '1px solid var(--surface-border)',
-            position: 'relative'
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Modal Header */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '24px 30px',
-            borderBottom: '1px solid var(--surface-border)',
-            background: 'var(--surface-input)'
-          }}>
-            <div>
-              <h2 style={{ 
-                margin: '0 0 4px 0', 
-                fontSize: '20px', 
-                fontWeight: '700',
-                color: 'var(--text-primary)'
-              }}>
-                ✏️ Edit Stok
-              </h2>
-              <p style={{
-                margin: '0',
-                fontSize: '14px',
-                color: 'var(--text-secondary)',
-                fontWeight: '500'
-              }}>
-                {selectedItem.masterProduct.name}
-              </p>
-            </div>
-            <button
-              onClick={handleCloseEditModal}
-              style={{
-                background: 'none',
-                border: 'none',
-                fontSize: '24px',
-                cursor: 'pointer',
-                color: 'var(--text-secondary)',
-                padding: '8px',
-                borderRadius: 'var(--radius-md)',
-                transition: 'all var(--transition-fast)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.color = 'var(--text-primary)';
-                e.currentTarget.style.background = 'var(--surface-border)';
-                e.currentTarget.style.transform = 'scale(1.1)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.color = 'var(--text-secondary)';
-                e.currentTarget.style.background = 'none';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Modal Body */}
-          <div style={{ padding: '30px' }}>
-            {/* Current Stock Info */}
-            <div style={{ 
-              marginBottom: '24px', 
-              padding: '20px', 
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid rgba(59, 130, 246, 0.1)'
-            }}>
-              <div style={{ 
-                fontSize: '14px', 
-                color: 'var(--text-secondary)', 
-                marginBottom: '8px',
-                fontWeight: '600',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px'
-              }}>
-                📦 Stok Saat Ini
+    const modalContent = (
+      <div className="fixed inset-0 z-[9999] overflow-hidden">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={handleCloseEditModal} />
+        <div className="flex min-h-full items-center justify-center p-4">
+          <div
+            className="relative w-full max-w-lg bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700">
+              <div className="flex items-center gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/30">
+                  <Edit3 className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Edit Stok</h2>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">{selectedItem.masterProduct.name}</p>
+                </div>
               </div>
-              <div style={{ 
-                fontSize: '24px', 
-                fontWeight: '700', 
-                color: 'var(--color-primary-600)',
-                marginBottom: '4px'
-              }}>
-                {selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
-              </div>
-              <div style={{ 
-                fontSize: '14px', 
-                color: 'var(--text-secondary)',
-                fontWeight: '500'
-              }}>
-                ({selectedItem.stockInfo.usageStock.toFixed(0)} {selectedItem.stockInfo.usageUnit})
-              </div>
+              <button onClick={handleCloseEditModal} className="rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all">
+                <X className="h-5 w-5" />
+              </button>
             </div>
 
-            {/* Form Fields */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Body */}
+            <div className="p-6 space-y-5">
+              {/* Current Stock Info */}
+              <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Stok Saat Ini</p>
+                <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
+                  {selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
+                </p>
+                <p className="text-sm text-blue-600 dark:text-blue-400/80">
+                  ({selectedItem.stockInfo.usageStock.toFixed(0)} {selectedItem.stockInfo.usageUnit})
+                </p>
+              </div>
+
               {/* Conversion Factor */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  color: 'var(--text-primary)'
-                }}>
-                  🔄 Konversi (1 {selectedItem.stockInfo.baseUnit} = ? {selectedItem.stockInfo.usageUnit})
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                  <ArrowUpDown className="h-4 w-4" />
+                  Konversi (1 {selectedItem.stockInfo.baseUnit} = ? {selectedItem.stockInfo.usageUnit})
                 </label>
                 <input
                   type="number"
                   value={conversionFactor}
                   onChange={(e) => setConversionFactor(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    color: 'var(--text-primary)',
-                    background: 'var(--surface-input)',
-                    boxSizing: 'border-box',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = 'var(--color-primary-500)';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'var(--surface-border)';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
 
               {/* Stock Adjustment */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  color: 'var(--text-primary)'
-                }}>
-                  📊 Penyesuaian Stok ({selectedItem.stockInfo.baseUnit}) *
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  Penyesuaian Stok ({selectedItem.stockInfo.baseUnit}) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -509,435 +361,361 @@ export default function InventoryPage() {
                   value={adjustment}
                   onChange={(e) => setAdjustment(e.target.value)}
                   placeholder="Contoh: 10 untuk tambah, -5 untuk kurang"
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    color: 'var(--text-primary)',
-                    background: 'var(--surface-input)',
-                    boxSizing: 'border-box',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = 'var(--color-primary-500)';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'var(--surface-border)';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
               </div>
 
               {/* Reason */}
-              <div>
-                <label style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontSize: '14px', 
-                  fontWeight: '600', 
-                  color: 'var(--text-primary)'
-                }}>
-                  📝 Catatan / Alasan *
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  Catatan / Alasan <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Contoh: Koreksi stok fisik, Barang rusak, dll"
                   rows={3}
-                  style={{
-                    width: '100%',
-                    padding: '12px 16px',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: 'var(--radius-md)',
-                    fontSize: '14px',
-                    fontFamily: 'inherit',
-                    color: 'var(--text-primary)',
-                    background: 'var(--surface-input)',
-                    resize: 'vertical',
-                    boxSizing: 'border-box',
-                    transition: 'all var(--transition-fast)',
-                    minHeight: '80px'
-                  }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = 'var(--color-primary-500)';
-                    e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)';
-                  }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = 'var(--surface-border)';
-                    e.target.style.boxShadow = 'none';
-                  }}
+                  className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all resize-none"
                 />
               </div>
 
               {/* Live Preview */}
               {adjustment && !isNaN(parseFloat(adjustment)) && (
-                <div style={{
-                  padding: '16px 20px',
-                  background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(22, 163, 74, 0.05) 100%)',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(34, 197, 94, 0.2)'
-                }}>
-                  <div style={{ 
-                    fontSize: '14px', 
-                    color: 'var(--text-secondary)', 
-                    marginBottom: '4px',
-                    fontWeight: '600'
-                  }}>
-                    📈 Preview Stok Setelah Penyesuaian:
-                  </div>
-                  <div style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '700', 
-                    color: 'var(--color-success)'
-                  }}>
+                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">Preview Stok Setelah Penyesuaian:</p>
+                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
                     {(selectedItem.stockInfo.baseStock + parseFloat(adjustment)).toFixed(2)} {selectedItem.stockInfo.baseUnit}
-                  </div>
+                  </p>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* Modal Footer */}
-          <div style={{
-            display: 'flex',
-            gap: '12px',
-            padding: '24px 30px',
-            borderTop: '1px solid var(--surface-border)',
-            background: 'var(--surface-input)'
-          }}>
-            <button
-              onClick={handleCloseEditModal}
-              style={{
-                flex: 1,
-                padding: '12px 24px',
-                background: 'var(--surface-card)',
-                color: 'var(--text-primary)',
-                border: '1px solid var(--surface-border)',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--surface-border)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--surface-card)';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              Batal
-            </button>
-            <button
-              onClick={handleAdjustStock}
-              disabled={adjusting || !adjustment || !reason.trim()}
-              style={{
-                flex: 1,
-                padding: '12px 24px',
-                background: adjusting || !adjustment || !reason.trim() 
-                  ? 'var(--surface-border)' 
-                  : 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700))',
-                color: adjusting || !adjustment || !reason.trim() ? 'var(--text-secondary)' : 'white',
-                border: 'none',
-                borderRadius: 'var(--radius-md)',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: adjusting || !adjustment || !reason.trim() ? 'not-allowed' : 'pointer',
-                transition: 'all var(--transition-fast)',
-                boxShadow: adjusting || !adjustment || !reason.trim() 
-                  ? 'none' 
-                  : '0 4px 12px rgba(37, 99, 235, 0.3)'
-              }}
-              onMouseEnter={(e) => {
-                if (!adjusting && adjustment && reason.trim()) {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-600))';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                  e.currentTarget.style.boxShadow = '0 6px 20px rgba(37, 99, 235, 0.4)';
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!adjusting && adjustment && reason.trim()) {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, var(--color-primary-600), var(--color-primary-700))';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.3)';
-                }
-              }}
-            >
-              {adjusting ? '⏳ Menyimpan...' : '💾 Simpan Perubahan'}
-            </button>
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-200 dark:border-neutral-700">
+              <button
+                onClick={handleCloseEditModal}
+                className="px-5 py-2.5 text-sm font-semibold rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
+              >
+                Batal
+              </button>
+              <button
+                onClick={handleAdjustStock}
+                disabled={adjusting || !adjustment || !reason.trim()}
+                className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {adjusting ? (
+                  <><RefreshCw className="h-4 w-4 animate-spin" /> Menyimpan...</>
+                ) : (
+                  <><Save className="h-4 w-4" /> Simpan Perubahan</>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
     );
+
+    return createPortal(modalContent, document.body);
   };
 
   return (
     <>
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <div className={styles.headerContent}>
-            <div className={styles.headerText}>
-              <h1>📦 Inventori Stok</h1>
-              <p>Kelola dan monitor stok barang {canSelectBranch ? '' : 'di cabang Anda'}</p>
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-6">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30">
+                <Package className="h-7 w-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Inventori Stok</h1>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  Kelola dan monitor stok barang {canSelectBranch ? '' : 'di cabang Anda'}
+                </p>
+              </div>
             </div>
-            
-            {/* Branch Selector for Super Admin and Admin Manager */}
-            {canSelectBranch && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '12px',
-                marginLeft: 'auto',
-                marginRight: '16px',
-              }}>
-                <label style={{ 
-                  color: 'var(--text-secondary)', 
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                }}>
-                  🏢 Cabang:
-                </label>
-                <select
-                  value={selectedBranchId}
-                  onChange={(e) => setSelectedBranchId(e.target.value)}
-                  disabled={loadingBranches}
-                  style={{
-                    padding: '8px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--surface-border)',
-                    background: 'var(--surface-card)',
-                    color: 'var(--text-primary)',
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    minWidth: '200px',
-                    cursor: loadingBranches ? 'wait' : 'pointer',
-                  }}
-                >
-                  {loadingBranches ? (
-                    <option>Memuat cabang...</option>
-                  ) : branches.length === 0 ? (
-                    <option value="">Tidak ada cabang</option>
-                  ) : (
-                    branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.name} ({branch.branchCode}) - {branch.type}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
-            )}
-            
-            {canAccessStockRequests && (
-              <div className={styles.headerActions}>
-                <button 
-                  className={styles.actionBtn}
-                  onClick={() => router.push('/inventory/stock-requests')}
-                >
-                  📋 Request Stok
-                </button>
-                <button 
-                  className={styles.actionBtn}
-                  onClick={() => router.push('/inventory/shipments')}
-                >
-                  🚚 Pengiriman
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
 
-      {/* Statistics Cards */}
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}>
-            📦
-          </div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Total Item</p>
-            <h3 className={styles.statValue}>{totalItems}</h3>
-          </div>
-        </div>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' }}>
-            ⚠️
-          </div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Stok Rendah</p>
-            <h3 className={styles.statValue}>{lowStockItems}</h3>
-          </div>
-        </div>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)' }}>
-            ✓
-          </div>
-          <div className={styles.statContent}>
-            <p className={styles.statLabel}>Stok Normal</p>
-            <h3 className={styles.statValue}>{normalStockItems}</h3>
-          </div>
-        </div>
-      </div>
-
-      <div className={styles.controls}>
-        <div className={styles.searchBox}>
-          <input
-            type="text"
-            placeholder="Cari produk..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className={styles.searchInput}
-          />
-        </div>
-
-        <div className={styles.filters}>
-          <button
-            className={`${styles.filterBtn} ${filter === 'ALL' ? styles.active : ''}`}
-            onClick={() => setFilter('ALL')}
-          >
-            Semua ({items.length})
-          </button>
-          <button
-            className={`${styles.filterBtn} ${filter === 'LOW_STOCK' ? styles.active : ''}`}
-            onClick={() => setFilter('LOW_STOCK')}
-          >
-            Stok Rendah ({items.filter((i) => i.stockInfo.isLowStock).length})
-          </button>
-        </div>
-
-        <div className={styles.exportButtons}>
-          <button
-            className={styles.exportBtn}
-            onClick={() => handleExport('csv')}
-            title="Export ke CSV"
-          >
-            📄 CSV
-          </button>
-          <button
-            className={styles.exportBtn}
-            onClick={() => handleExport('excel')}
-            title="Export ke Excel"
-          >
-            📊 Excel
-          </button>
-        </div>
-      </div>
-
-      {loading ? (
-        <div className={styles.loading}>
-          <div className={styles.loadingSpinner}>⏳</div>
-          <p>Memuat data inventori...</p>
-        </div>
-      ) : !selectedBranchId && canSelectBranch ? (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>🏢</div>
-          <h3>Pilih Cabang</h3>
-          <p>Pilih cabang terlebih dahulu untuk melihat data inventori</p>
-        </div>
-      ) : filteredItems.length === 0 ? (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>📦</div>
-          <h3>{searchTerm ? 'Tidak Ditemukan' : 'Belum Ada Item'}</h3>
-          <p>
-            {searchTerm 
-              ? `Tidak ada item yang cocok dengan pencarian "${searchTerm}"`
-              : 'Belum ada item inventori yang terdaftar di cabang ini'}
-          </p>
-          {searchTerm && (
-            <button 
-              className={styles.emptyBtn}
-              onClick={() => setSearchTerm('')}
-            >
-              🔄 Reset Pencarian
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className={styles.itemsGrid}>
-          {filteredItems.map((item) => (
-            <div key={item.id} className={`${styles.itemCard} ${item.stockInfo.isLowStock ? styles.lowStockCard : ''}`}>
-              <div className={styles.cardHeader}>
-                <div className={styles.categoryIconWrapper}>
-                  <div className={styles.categoryIcon}>{getCategoryBadge(item.masterProduct.category)}</div>
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Branch Selector */}
+              {canSelectBranch && (
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-neutral-500" />
+                  <select
+                    value={selectedBranchId}
+                    onChange={(e) => setSelectedBranchId(e.target.value)}
+                    disabled={loadingBranches}
+                    className="px-4 py-2.5 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all min-w-[200px]"
+                  >
+                    {loadingBranches ? (
+                      <option>Memuat cabang...</option>
+                    ) : branches.length === 0 ? (
+                      <option value="">Tidak ada cabang</option>
+                    ) : (
+                      branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.branchCode})
+                        </option>
+                      ))
+                    )}
+                  </select>
                 </div>
-                <div className={styles.itemInfo}>
-                  <h3>{item.masterProduct.name}</h3>
-                  <p className={styles.category}>{getCategoryName(item.masterProduct.category)}</p>
-                </div>
-                {getStockStatus(item)}
-              </div>
+              )}
 
-              <div className={styles.cardBody}>
-                <div className={styles.stockInfo}>
-                  <div className={styles.stockRow}>
-                    <span className={styles.label}>Stok Saat Ini</span>
-                    <span className={`${styles.value} ${item.stockInfo.isLowStock ? styles.lowValue : ''}`}>
-                      {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
-                      <span style={{ fontSize: '12px', color: '#94a3b8', marginLeft: '4px' }}>
-                        ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
-                      </span>
-                    </span>
-                  </div>
-                  
-                  {/* Conversion Factor Display */}
-                  <div className={styles.stockRow} style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px solid var(--border-color)' }}>
-                    <span className={styles.label} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      Konversi
-                    </span>
-                    <span className={styles.value} style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                      1 {item.stockInfo.baseUnit} = {item.masterProduct.conversionFactor} {item.stockInfo.usageUnit}
-                    </span>
-                  </div>
-                </div>
-
-                {item.storageLocation && (
-                  <div className={styles.location}>
-                    <span className={styles.locationIcon}>📍</span>
-                    <span className={styles.locationText}>{item.storageLocation}</span>
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.cardFooter}>
-                {item.stockInfo.isLowStock && canAccessStockRequests && (
+              {/* Action Buttons */}
+              {canAccessStockRequests && (
+                <>
                   <button
-                    className={styles.requestBtn}
                     onClick={() => router.push('/inventory/stock-requests')}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all"
                   >
-                    <span>🛒</span>
-                    <span>Request Stok</span>
+                    <ClipboardList className="h-4 w-4" />
+                    Request Stok
                   </button>
-                )}
-                {canEditStock && (
                   <button
-                    className={styles.editBtn}
-                    onClick={() => {
-                      console.log('Edit button clicked for item:', item.masterProduct.name);
-                      handleOpenEditModal(item);
-                    }}
-                    style={{ marginLeft: item.stockInfo.isLowStock && canAccessStockRequests ? '8px' : '0' }}
+                    onClick={() => router.push('/inventory/shipments')}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all"
                   >
-                    <span>✏️</span>
-                    <span>Edit Stok</span>
+                    <Truck className="h-4 w-4" />
+                    Pengiriman
                   </button>
-                )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-400 to-purple-600 shadow-lg shadow-purple-500/30">
+                <Package className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Total Item</p>
+                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalItems}</p>
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-rose-400 to-red-600 shadow-lg shadow-red-500/30">
+                <AlertTriangle className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Stok Rendah</p>
+                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{lowStockItems}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl p-5 border border-neutral-200 dark:border-neutral-800 shadow-sm">
+            <div className="flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-green-600 shadow-lg shadow-green-500/30">
+                <CheckCircle2 className="h-6 w-6 text-white" />
+              </div>
+              <div>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">Stok Normal</p>
+                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{normalStockItems}</p>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* Controls */}
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl p-4 border border-neutral-200 dark:border-neutral-800 shadow-sm mb-6">
+          <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+            {/* Search */}
+            <div className="relative flex-1">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+              <input
+                type="text"
+                placeholder="Cari produk..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-11 pr-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-neutral-50 dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white dark:focus:bg-neutral-700 transition-all"
+              />
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setFilter('ALL')}
+                className={`px-4 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                  filter === 'ALL'
+                    ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/30'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                }`}
+              >
+                Semua ({items.length})
+              </button>
+              <button
+                onClick={() => setFilter('LOW_STOCK')}
+                className={`px-4 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                  filter === 'LOW_STOCK'
+                    ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                    : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                }`}
+              >
+                Stok Rendah ({lowStockItems})
+              </button>
+            </div>
+
+            {/* Export Buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleExport('csv')}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all"
+              >
+                <FileText className="h-4 w-4" />
+                CSV
+              </button>
+              <button
+                onClick={() => handleExport('excel')}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Excel
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <RefreshCw className="h-10 w-10 text-amber-500 animate-spin mb-4" />
+            <p className="text-neutral-500 dark:text-neutral-400">Memuat data inventori...</p>
+          </div>
+        ) : !selectedBranchId && canSelectBranch ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 mb-4">
+              <Building2 className="h-8 w-8 text-neutral-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Pilih Cabang</h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">Pilih cabang terlebih dahulu untuk melihat data inventori</p>
+          </div>
+        ) : filteredItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 mb-4">
+              <Package className="h-8 w-8 text-neutral-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+              {searchTerm ? 'Tidak Ditemukan' : 'Belum Ada Item'}
+            </h3>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
+              {searchTerm
+                ? `Tidak ada item yang cocok dengan pencarian "${searchTerm}"`
+                : 'Belum ada item inventori yang terdaftar di cabang ini'}
+            </p>
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="px-4 py-2 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              >
+                Reset Pencarian
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredItems.map((item) => {
+              const categoryStyle = getCategoryIcon(item.masterProduct.category);
+              return (
+                <div
+                  key={item.id}
+                  className={`bg-white dark:bg-neutral-900 rounded-2xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${
+                    item.stockInfo.isLowStock
+                      ? 'border-red-200 dark:border-red-500/30'
+                      : 'border-neutral-200 dark:border-neutral-800'
+                  }`}
+                >
+
+                  {/* Card Header */}
+                  <div className="p-4 flex items-start gap-3">
+                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${categoryStyle.bg} text-xl flex-shrink-0`}>
+                      {categoryStyle.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-neutral-900 dark:text-white truncate">{item.masterProduct.name}</h3>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">{getCategoryName(item.masterProduct.category)}</p>
+                    </div>
+                    {item.stockInfo.isLowStock ? (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
+                        <AlertTriangle className="h-3 w-3" />
+                        Stok Rendah
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" />
+                        NORMAL
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="px-4 pb-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-neutral-500 dark:text-neutral-400">Stok Saat Ini</span>
+                      <div className="text-right">
+                        <span className={`text-lg font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
+                          {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                        </span>
+                        <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-1">
+                          ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                      <span className="text-xs text-neutral-400 dark:text-neutral-500">Konversi</span>
+                      <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                        1 {item.stockInfo.baseUnit} = {item.masterProduct.conversionFactor} {item.stockInfo.usageUnit}
+                      </span>
+                    </div>
+
+                    {item.storageLocation && (
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                        <MapPin className="h-3 w-3" />
+                        {item.storageLocation}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card Footer */}
+                  {(item.stockInfo.isLowStock && canAccessStockRequests) || canEditStock ? (
+                    <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-2">
+                      {item.stockInfo.isLowStock && canAccessStockRequests && (
+                        <button
+                          onClick={() => router.push('/inventory/stock-requests')}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5" />
+                          Request Stok
+                        </button>
+                      )}
+                      {canEditStock && (
+                        <button
+                          onClick={() => handleOpenEditModal(item)}
+                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          Edit Stok
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Render modal using portal to ensure it's on top */}
-      {modalMounted && typeof window !== 'undefined' && createPortal(
-        <EditStockModalContent />,
-        document.body
-      )}
+      {/* Edit Stock Modal */}
+      <EditStockModal />
     </>
   );
 }

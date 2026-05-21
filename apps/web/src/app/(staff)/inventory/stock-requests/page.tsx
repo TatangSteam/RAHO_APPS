@@ -6,18 +6,40 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { 
+  ClipboardList, 
+  Plus, 
+  Clock, 
+  CreditCard, 
+  Upload, 
+  CheckCircle, 
+  Truck, 
+  CheckCheck, 
+  XCircle,
+  Package,
+  Loader2,
+  RefreshCw
+} from 'lucide-react';
+import { 
   StockRequest, 
   RequestItem, 
   FilterType, 
   InvoiceItemInput,
-  STATUS_LABELS,
-  STATUS_ICONS,
 } from './types';
 import StockRequestCard from './components/StockRequestCard';
 import ReviewModal from './components/ReviewModal';
 import CreateRequestModal from './components/CreateRequestModal';
 import UploadPaymentModal from './components/UploadPaymentModal';
-import styles from './page.module.css';
+
+const filterOptions: { value: FilterType; label: string; icon: React.ReactNode; color: string }[] = [
+  { value: 'ALL', label: 'Semua', icon: <ClipboardList className="w-4 h-4" />, color: 'bg-neutral-500' },
+  { value: 'PENDING', label: 'Pending', icon: <Clock className="w-4 h-4" />, color: 'bg-amber-500' },
+  { value: 'WAITING_PAYMENT', label: 'Menunggu Bayar', icon: <CreditCard className="w-4 h-4" />, color: 'bg-purple-500' },
+  { value: 'PAYMENT_UPLOADED', label: 'Bukti Diupload', icon: <Upload className="w-4 h-4" />, color: 'bg-blue-500' },
+  { value: 'APPROVED', label: 'Disetujui', icon: <CheckCircle className="w-4 h-4" />, color: 'bg-emerald-500' },
+  { value: 'SHIPPED', label: 'Dikirim', icon: <Truck className="w-4 h-4" />, color: 'bg-indigo-500' },
+  { value: 'COMPLETED', label: 'Selesai', icon: <CheckCheck className="w-4 h-4" />, color: 'bg-green-500' },
+  { value: 'REJECTED', label: 'Ditolak', icon: <XCircle className="w-4 h-4" />, color: 'bg-red-500' },
+];
 
 export default function StockRequestsPage() {
   const router = useRouter();
@@ -31,38 +53,26 @@ export default function StockRequestsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   
-  // Create request modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
   const [masterProducts, setMasterProducts] = useState<any[]>([]);
 
-  // Fetch requests
   const fetchRequests = useCallback(async () => {
     if (!accessToken) return;
     
     try {
       setLoading(true);
       const params: any = {};
-      
-      if (filter !== 'ALL') {
-        params.status = filter;
-      }
+      if (filter !== 'ALL') params.status = filter;
 
       const response = await inventoryApi.getStockRequests(params);
-      // API returns { success: true, data: { data: [...], pagination: {...} } }
-      // Axios response.data is the body: { success: true, data: { data: [...], pagination: {...} } }
       const responseBody = response.data;
       
-      // Extract the requests array from the nested structure
       let requestsData: StockRequest[] = [];
-      
       if (responseBody?.data) {
-        // responseBody.data is { data: [...], pagination: {...} }
         if (Array.isArray(responseBody.data)) {
-          // Direct array response
           requestsData = responseBody.data;
         } else if (responseBody.data.data && Array.isArray(responseBody.data.data)) {
-          // Paginated response: { data: [...], pagination: {...} }
           requestsData = responseBody.data.data;
         }
       }
@@ -77,23 +87,18 @@ export default function StockRequestsPage() {
     }
   }, [accessToken, filter]);
 
-  // Fetch master products for create modal
   const fetchMasterProducts = useCallback(async () => {
     if (!accessToken) return;
     
     try {
       const response = await inventoryApi.getMasterProducts();
-      // API returns { success: true, data: { products: [...], total: number } }
       const responseBody = response.data;
       
       let productsData: any[] = [];
-      
       if (responseBody?.data) {
         if (responseBody.data.products && Array.isArray(responseBody.data.products)) {
-          // Expected format: { products: [...], total: number }
           productsData = responseBody.data.products;
         } else if (Array.isArray(responseBody.data)) {
-          // Direct array response
           productsData = responseBody.data;
         }
       }
@@ -111,12 +116,10 @@ export default function StockRequestsPage() {
 
   useEffect(() => {
     if (!mounted) return;
-    
     if (!user || !accessToken) {
       router.push('/login');
       return;
     }
-
     fetchRequests();
   }, [mounted, user, accessToken, router, fetchRequests]);
 
@@ -126,7 +129,6 @@ export default function StockRequestsPage() {
     }
   }, [showCreateModal, masterProducts.length, fetchMasterProducts]);
 
-  // Create request handler
   const handleCreateRequest = async (requestItems: RequestItem[], requestNotes: string) => {
     if (requestItems.length === 0) {
       showToast.error('Pilih minimal satu item');
@@ -135,7 +137,6 @@ export default function StockRequestsPage() {
 
     try {
       setCreateLoading(true);
-      
       await inventoryApi.createStockRequest({
         items: requestItems.map(item => ({
           masterProductId: item.masterProductId,
@@ -156,12 +157,11 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Approve Premiere request
   const handleApprovePremiereRequest = async (requestId: string, reviewNotes: string) => {
     try {
       setActionLoading(true);
       const response = await inventoryApi.approvePremiereRequest(requestId, reviewNotes);
-      const message = response.data?.data?.message || 'Request stok berhasil di-approve dan stok telah ditambahkan';
+      const message = response.data?.data?.message || 'Request stok berhasil di-approve';
       showToast.success(message);
       setShowModal(false);
       setSelectedRequest(null);
@@ -173,7 +173,6 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Create Partnership invoice
   const handleCreatePartnershipInvoice = async (requestId: string, items: InvoiceItemInput[], notes?: string) => {
     try {
       setActionLoading(true);
@@ -189,7 +188,6 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Upload payment proof
   const handleUploadPaymentProof = async (file: File) => {
     if (!selectedRequest) return;
     
@@ -207,12 +205,11 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Confirm payment
   const handleConfirmPayment = async (requestId: string, verificationNotes?: string) => {
     try {
       setActionLoading(true);
       const response = await inventoryApi.confirmPayment(requestId, verificationNotes);
-      const message = response.data?.data?.message || 'Pembayaran dikonfirmasi dan stok telah ditambahkan';
+      const message = response.data?.data?.message || 'Pembayaran dikonfirmasi';
       showToast.success(message);
       setShowModal(false);
       setSelectedRequest(null);
@@ -224,7 +221,6 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Reject payment
   const handleRejectPayment = async (requestId: string, rejectionReason: string) => {
     try {
       setActionLoading(true);
@@ -240,7 +236,6 @@ export default function StockRequestsPage() {
     }
   };
 
-  // Reject request
   const handleReject = async (requestId: string, reviewNotes: string) => {
     try {
       setActionLoading(true);
@@ -257,7 +252,6 @@ export default function StockRequestsPage() {
   };
 
   const handleReviewRequest = async (request: StockRequest) => {
-    // Fetch full request details to get invoice items
     try {
       const response = await inventoryApi.getStockRequestById(request.id);
       const fullRequest = response.data?.data || request;
@@ -265,7 +259,6 @@ export default function StockRequestsPage() {
       setShowModal(true);
     } catch (error) {
       console.error('Failed to fetch request details:', error);
-      // Fallback to list data if fetch fails
       setSelectedRequest(request);
       setShowModal(true);
     }
@@ -281,71 +274,97 @@ export default function StockRequestsPage() {
     setSelectedRequest(null);
   };
 
-  const filterOptions: { value: FilterType; label: string; icon: string }[] = [
-    { value: 'ALL', label: 'Semua', icon: '📋' },
-    { value: 'PENDING', label: 'Pending', icon: '⏳' },
-    { value: 'WAITING_PAYMENT', label: 'Menunggu Bayar', icon: '💳' },
-    { value: 'PAYMENT_UPLOADED', label: 'Bukti Diupload', icon: '📤' },
-    { value: 'APPROVED', label: 'Disetujui', icon: '✅' },
-    { value: 'SHIPPED', label: 'Dikirim', icon: '🚚' },
-    { value: 'COMPLETED', label: 'Selesai', icon: '✔️' },
-    { value: 'REJECTED', label: 'Ditolak', icon: '❌' },
-  ];
-
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1>📋 Request Stok</h1>
-        <p>Kelola permintaan stok dari cabang</p>
-      </div>
-
-      <div className={styles.controls}>
-        <div className={styles.filters} style={{ flexWrap: 'wrap', gap: '8px' }}>
-          {filterOptions.map((f) => (
-            <button
-              key={f.value}
-              className={`${styles.filterBtn} ${filter === f.value ? styles.active : ''}`}
-              onClick={() => setFilter(f.value)}
-              data-status={f.value}
-              disabled={loading}
-            >
-              <span className={styles.icon}>{f.icon}</span>
-              {f.label}
-            </button>
-          ))}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900 dark:text-white flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30">
+              <ClipboardList className="h-5 w-5 text-white" />
+            </div>
+            Request Stok
+          </h1>
+          <p className="text-neutral-500 dark:text-neutral-400 mt-1">
+            Kelola permintaan stok dari cabang
+          </p>
         </div>
-        
-        {user?.role === 'ADMIN_CABANG' && (
-          <button 
-            className={styles.createBtn}
-            onClick={() => setShowCreateModal(true)}
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => fetchRequests()}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
           >
-            ➕ Buat Request
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
-        )}
-      </div>
 
-      {loading ? (
-        <div className={styles.loading}>
-          <div className={styles.loadingSpinner}>⏳</div>
-          <p>Memuat data...</p>
-        </div>
-      ) : requests.length === 0 ? (
-        <div className={styles.empty}>
-          <div className={styles.emptyIcon}>📋</div>
-          <h3>Belum Ada Request Stok</h3>
-          <p>Belum ada permintaan stok yang dibuat.</p>
           {user?.role === 'ADMIN_CABANG' && (
             <button 
-              className={styles.emptyBtn}
               onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 hover:shadow-amber-500/40 transition-all"
             >
-              ➕ Buat Request Baru
+              <Plus className="h-4 w-4" />
+              Buat Request
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Filter Tabs */}
+      <div className="flex flex-wrap gap-2">
+        {filterOptions.map((f) => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            disabled={loading}
+            className={`inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all ${
+              filter === f.value
+                ? `${f.color} text-white shadow-lg`
+                : 'bg-white dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 border border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-neutral-50 dark:hover:bg-neutral-700'
+            }`}
+          >
+            {f.icon}
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20">
+          <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mb-4">
+            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+          </div>
+          <p className="text-neutral-600 dark:text-neutral-400 font-medium">Memuat data...</p>
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-neutral-800/50 rounded-2xl border border-neutral-200 dark:border-neutral-700">
+          <div className="w-20 h-20 rounded-full bg-neutral-100 dark:bg-neutral-700 flex items-center justify-center mb-4">
+            <Package className="w-10 h-10 text-neutral-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">
+            Belum Ada Request Stok
+          </h3>
+          <p className="text-neutral-500 dark:text-neutral-400 mb-6 text-center max-w-md">
+            {filter === 'ALL' 
+              ? 'Belum ada permintaan stok yang dibuat.'
+              : `Tidak ada request dengan status "${filterOptions.find(f => f.value === filter)?.label}".`
+            }
+          </p>
+          {user?.role === 'ADMIN_CABANG' && (
+            <button 
+              onClick={() => setShowCreateModal(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              Buat Request Baru
             </button>
           )}
         </div>
       ) : (
-        <div className={styles.requestsList} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {requests.map((request) => (
             <StockRequestCard
               key={request.id}
@@ -358,6 +377,7 @@ export default function StockRequestsPage() {
         </div>
       )}
 
+      {/* Modals */}
       {showModal && selectedRequest && (
         <ReviewModal
           request={selectedRequest}
