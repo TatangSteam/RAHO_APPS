@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { AddOnPricing, AIR_NANO_PRICING, ROKOK_KENKOU_PRICING } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
 import styles from '../AssignPackageModal.module.css';
@@ -7,6 +8,58 @@ interface AddOnSectionProps {
   getAddOnQuantity: (code: string) => number;
   toggleAddOn: (addon: AddOnPricing) => void;
   updateAddOnQuantity: (code: string, quantity: number) => void;
+}
+
+// Separate component for quantity input to manage local state
+function AddOnQuantityInput({
+  code,
+  quantity,
+  updateAddOnQuantity,
+  className,
+}: {
+  code: string;
+  quantity: number;
+  updateAddOnQuantity: (code: string, quantity: number) => void;
+  className?: string;
+}) {
+  const [inputValue, setInputValue] = useState(String(quantity));
+
+  // Sync with external quantity changes
+  useEffect(() => {
+    setInputValue(String(quantity));
+  }, [quantity]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={inputValue}
+      onChange={(e) => {
+        const value = e.target.value;
+        // Allow empty string or numbers only
+        if (value === '' || /^\d+$/.test(value)) {
+          setInputValue(value);
+          // Only update parent if valid number >= 1
+          if (value !== '' && parseInt(value) >= 1) {
+            updateAddOnQuantity(code, parseInt(value));
+          }
+        }
+      }}
+      onBlur={() => {
+        // On blur, enforce minimum of 1
+        if (inputValue === '' || parseInt(inputValue) < 1) {
+          setInputValue('1');
+          updateAddOnQuantity(code, 1);
+        }
+      }}
+      onFocus={(e) => {
+        // Select all on focus for easy replacement
+        e.target.select();
+      }}
+      className={className}
+      placeholder="1"
+    />
+  );
 }
 
 export default function AddOnSection({
@@ -34,26 +87,11 @@ export default function AddOnSection({
                 {isAddOnSelected(addon.code) && (
                   <div className={styles.addonDetails}>
                     <label className="form-label" style={{ fontSize: '12px' }}>Jumlah</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={getAddOnQuantity(addon.code) || 1}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        // Allow only numbers and empty string
-                        if (value === '' || /^\d+$/.test(value)) {
-                          const numValue = value === '' ? 1 : parseInt(value);
-                          if (numValue >= 1) {
-                            updateAddOnQuantity(addon.code, numValue);
-                          }
-                        }
-                      }}
-                      onFocus={(e) => {
-                        // Select all on focus for easy replacement
-                        e.target.select();
-                      }}
+                    <AddOnQuantityInput
+                      code={addon.code}
+                      quantity={getAddOnQuantity(addon.code)}
+                      updateAddOnQuantity={updateAddOnQuantity}
                       className={`form-input ${styles.addonQuantityInput}`}
-                      placeholder="1"
                     />
                     <p className={styles.addonTotal}>Total: {formatCurrency(addon.price * getAddOnQuantity(addon.code))}</p>
                   </div>
@@ -74,26 +112,11 @@ export default function AddOnSection({
             {isAddOnSelected(ROKOK_KENKOU_PRICING.code) && (
               <div className={styles.addonDetails}>
                 <label className="form-label" style={{ fontSize: '12px' }}>Jumlah Bungkus</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={getAddOnQuantity(ROKOK_KENKOU_PRICING.code) || 1}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    // Allow only numbers and empty string
-                    if (value === '' || /^\d+$/.test(value)) {
-                      const numValue = value === '' ? 1 : parseInt(value);
-                      if (numValue >= 1) {
-                        updateAddOnQuantity(ROKOK_KENKOU_PRICING.code, numValue);
-                      }
-                    }
-                  }}
-                  onFocus={(e) => {
-                    // Select all on focus for easy replacement
-                    e.target.select();
-                  }}
+                <AddOnQuantityInput
+                  code={ROKOK_KENKOU_PRICING.code}
+                  quantity={getAddOnQuantity(ROKOK_KENKOU_PRICING.code)}
+                  updateAddOnQuantity={updateAddOnQuantity}
                   className={`form-input ${styles.addonQuantityInput}`}
-                  placeholder="1"
                 />
                 <p className={styles.addonTotal}>Total: {formatCurrency(ROKOK_KENKOU_PRICING.price * getAddOnQuantity(ROKOK_KENKOU_PRICING.code))}</p>
               </div>

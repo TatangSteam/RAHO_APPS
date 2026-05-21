@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { PackagePricing, ExtendedBoosterType, ServiceType } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
 import styles from '../AssignPackageModal.module.css';
@@ -19,6 +20,56 @@ const SERVICE_TYPE_NAMES: Record<string, string> = {
   PDA: 'Partnership Dr. Abhi',
   PHC: 'Partnership Homecare',
 };
+
+// Separate component for quantity input to manage local state
+function BoosterQuantityInput({
+  pricingId,
+  boosterType,
+  quantity,
+  updateBoosterQty,
+}: {
+  pricingId: string;
+  boosterType: ExtendedBoosterType;
+  quantity: number;
+  updateBoosterQty: (pricingId: string, boosterType: ExtendedBoosterType, quantity: number) => void;
+}) {
+  const [inputValue, setInputValue] = useState(String(quantity));
+
+  // Sync with external quantity changes
+  useEffect(() => {
+    setInputValue(String(quantity));
+  }, [quantity]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={inputValue}
+      onChange={(e) => {
+        const value = e.target.value;
+        // Allow empty string or numbers only
+        if (value === '' || /^\d+$/.test(value)) {
+          setInputValue(value);
+          // Only update parent if valid number >= 1
+          if (value !== '' && parseInt(value) >= 1) {
+            updateBoosterQty(pricingId, boosterType, parseInt(value));
+          }
+        }
+      }}
+      onBlur={() => {
+        // On blur, enforce minimum of 1
+        if (inputValue === '' || parseInt(inputValue) < 1) {
+          setInputValue('1');
+          updateBoosterQty(pricingId, boosterType, 1);
+        }
+      }}
+      onFocus={(e) => e.target.select()}
+      className="form-input"
+      style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
+      placeholder="1"
+    />
+  );
+}
 
 export default function BoosterPackageSection({
   pricingsList,
@@ -127,23 +178,11 @@ export default function BoosterPackageSection({
 
                     <div>
                       <label className="form-label" style={{ fontSize: '11px', marginBottom: '4px', display: 'block' }}>Jumlah</label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={sel?.quantity || 1}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || /^\d+$/.test(value)) {
-                            const numValue = value === '' ? 1 : parseInt(value);
-                            if (numValue >= 1) {
-                              updateBoosterQty(anchor.id, boosterType as ExtendedBoosterType, numValue);
-                            }
-                          }
-                        }}
-                        onFocus={(e) => e.target.select()}
-                        className="form-input"
-                        style={{ width: '100%', fontSize: '12px', padding: '6px 8px' }}
-                        placeholder="1"
+                      <BoosterQuantityInput
+                        pricingId={anchor.id}
+                        boosterType={boosterType as ExtendedBoosterType}
+                        quantity={sel?.quantity || 1}
+                        updateBoosterQty={updateBoosterQty}
                       />
                     </div>
 

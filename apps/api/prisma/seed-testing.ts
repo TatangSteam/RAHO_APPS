@@ -31,7 +31,7 @@ import {
   seedPackagePricing,
   seedReferralCodes,
   seedMembersMultiBranch,
-  seedMaterials,
+  seedConsolidatedInventoryItems,
 } from './seeds';
 
 const prisma = new PrismaClient();
@@ -276,10 +276,10 @@ async function main(): Promise<void> {
     await assignManagerToBranches(prisma);
 
     // ══════════════════════════════════════════════════════════
-    // 7.5. THERAPY MATERIALS (Inventory for sessions)
+    // 7.5. INVENTORY ITEMS (Materials for sessions)
     // ══════════════════════════════════════════════════════════
-    console.log('\n💊 Seeding therapy materials...');
-    await seedMaterials(prisma);
+    console.log('\n💊 Seeding inventory items...');
+    await seedConsolidatedInventoryItems(prisma);
 
     // ══════════════════════════════════════════════════════════
     // 8. TEST MEMBERS WITH PACKAGES
