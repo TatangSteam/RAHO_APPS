@@ -31,7 +31,7 @@ enum BranchType {
   PUSAT
   KLINIK
   HOMECARE
-  PREMIERE
+  PREMIER
   PARTNERSHIP
 }
 
@@ -140,7 +140,7 @@ enum StockMutationType {
 
 enum StockRequestStatus {
   PENDING // Baru dibuat, menunggu review
-  APPROVED // Disetujui (untuk Premiere)
+  APPROVED // Disetujui (untuk Premier)
   WAITING_PAYMENT // Menunggu pembayaran (untuk Partnership)
   PAYMENT_UPLOADED // Bukti bayar sudah diupload
   PAYMENT_CONFIRMED // Pembayaran dikonfirmasi
@@ -199,6 +199,12 @@ enum AuditAction {
   LOGOUT
 }
 
+enum OverstockStatus {
+  AVAILABLE // Masih tersedia untuk digunakan
+  PARTIALLY_USED // Sebagian sudah terpakai
+  FULLY_USED // Sudah habis terpakai
+}
+
 // ============================================================
 // CORE DOMAIN
 // ============================================================
@@ -236,6 +242,7 @@ model Branch {
   staffBranches       StaffBranch[]              @relation("StaffBranches")
   referralCodes       ReferralCode[]
   auditLogs           AuditLog[]
+  overstocks          BranchOverstock[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -1193,6 +1200,7 @@ model MasterProduct {
   shipmentItems            ShipmentItem[]
   stockRequestInvoiceItems StockRequestInvoiceItem[]
   shipmentDiscrepancies    ShipmentDiscrepancy[]
+  overstocks               BranchOverstock[]
 
   @@index([category, isActive])
   @@index([isActive])
@@ -1288,10 +1296,11 @@ model StockRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branch   Branch               @relation(fields: [branchId], references: [id])
-  items    StockRequestItem[]
-  invoice  StockRequestInvoice?
-  shipment Shipment?
+  branch          Branch               @relation(fields: [branchId], references: [id])
+  items           StockRequestItem[]
+  invoice         StockRequestInvoice?
+  shipment        Shipment?
+  overstockUsages OverstockUsage[]
 
   @@index([branchId, status])
   @@index([status])
@@ -1301,17 +1310,20 @@ model StockRequest {
 }
 
 model StockRequestItem {
-  id              String   @id @default(cuid())
-  stockRequestId  String
-  inventoryItemId String? // Optional - for existing inventory items
-  masterProductId String // Required - reference to master product
-  requestedQty    Decimal  @db.Decimal(10, 2)
-  approvedQty     Decimal? @db.Decimal(10, 2) // Qty approved by manager (can differ from requested)
-  notes           String?
+  id                String   @id @default(cuid())
+  stockRequestId    String
+  inventoryItemId   String? // Optional - for existing inventory items
+  masterProductId   String // Required - reference to master product
+  requestedQty      Decimal  @db.Decimal(10, 2)
+  approvedQty       Decimal? @db.Decimal(10, 2) // Qty approved by manager (can differ from requested)
+  overstockDeducted Decimal? @db.Decimal(10, 2) // Qty deducted from existing overstock
+  finalQty          Decimal? @db.Decimal(10, 2) // Final qty after overstock deduction (requestedQty - overstockDeducted)
+  notes             String?
 
-  stockRequest  StockRequest   @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
-  inventoryItem InventoryItem? @relation(fields: [inventoryItemId], references: [id])
-  masterProduct MasterProduct  @relation(fields: [masterProductId], references: [id])
+  stockRequest    StockRequest     @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem?   @relation(fields: [inventoryItemId], references: [id])
+  masterProduct   MasterProduct    @relation(fields: [masterProductId], references: [id])
+  overstockUsages OverstockUsage[]
 
   @@index([stockRequestId])
   @@index([masterProductId])
@@ -1349,6 +1361,7 @@ model Shipment {
   toBranch      Branch                @relation("ShipmentTo", fields: [toBranchId], references: [id])
   items         ShipmentItem[]
   discrepancies ShipmentDiscrepancy[]
+  overstocks    BranchOverstock[]
 
   @@index([toBranchId, status])
   @@index([status])
@@ -1363,6 +1376,9 @@ model ShipmentItem {
   masterProductId String
   sentQty         Decimal  @db.Decimal(10, 2)
   receivedQty     Decimal? @db.Decimal(10, 2) // Actual qty received
+  requestedQty    Decimal? @db.Decimal(10, 2) // Original requested qty (for overstock tracking)
+  overstockQty    Decimal? @db.Decimal(10, 2) // Overstock qty (sentQty - requestedQty)
+  overstockReason String? // Reason for overstock (required if overstockQty > 0)
 
   shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   masterProduct MasterProduct @relation(fields: [masterProductId], references: [id])
@@ -1422,7 +1438,9 @@ model StockRequestInvoiceItem {
   id              String  @id @default(cuid())
   invoiceId       String
   masterProductId String
+  sku             String? // Snapshot SKU produk
   productName     String // Snapshot nama produk
+  description     String? // Snapshot keterangan produk
   quantity        Decimal @db.Decimal(10, 2)
   pricePerUnit    Decimal @db.Decimal(12, 2)
   subtotal        Decimal @db.Decimal(12, 2)
@@ -1457,6 +1475,55 @@ model ShipmentDiscrepancy {
   @@index([masterProductId])
   @@index([discrepancyType])
   @@map("shipment_discrepancies")
+}
+
+// ============================================================
+// OVERSTOCK DOMAIN
+// ============================================================
+
+// Tracks overstock (excess items sent beyond requested quantity)
+model BranchOverstock {
+  id               String          @id @default(cuid())
+  branchId         String
+  masterProductId  String
+  quantity         Decimal         @db.Decimal(10, 2) // Remaining overstock quantity
+  originalQty      Decimal         @db.Decimal(10, 2) // Original overstock quantity
+  reason           String // Reason for overstock (required)
+  sourceShipmentId String
+  status           OverstockStatus @default(AVAILABLE)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  branch         Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  masterProduct  MasterProduct    @relation(fields: [masterProductId], references: [id], onDelete: Cascade)
+  sourceShipment Shipment         @relation(fields: [sourceShipmentId], references: [id], onDelete: Cascade)
+  usages         OverstockUsage[]
+
+  @@index([branchId])
+  @@index([masterProductId])
+  @@index([status])
+  @@index([branchId, masterProductId, status])
+  @@index([sourceShipmentId])
+  @@map("branch_overstocks")
+}
+
+// Tracks how overstock is consumed by stock requests
+model OverstockUsage {
+  id                 String   @id @default(cuid())
+  overstockId        String
+  stockRequestId     String
+  stockRequestItemId String
+  quantityUsed       Decimal  @db.Decimal(10, 2)
+  createdAt          DateTime @default(now())
+
+  overstock        BranchOverstock  @relation(fields: [overstockId], references: [id], onDelete: Cascade)
+  stockRequest     StockRequest     @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+  stockRequestItem StockRequestItem @relation(fields: [stockRequestItemId], references: [id], onDelete: Cascade)
+
+  @@index([overstockId])
+  @@index([stockRequestId])
+  @@index([stockRequestItemId])
+  @@map("overstock_usages")
 }
 
 // ============================================================

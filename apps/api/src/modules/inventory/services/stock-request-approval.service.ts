@@ -22,7 +22,7 @@ interface CreateInvoiceInput {
  * - ADMIN_MANAGER: Can only approve requests from branches they manage
  * 
  * Flow based on Branch Type:
- * - PREMIERE: Direct approval → Create shipment
+ * - PREMIER: Direct approval → Create shipment
  * - PARTNERSHIP: Create invoice → Wait for payment → Confirm payment → Create shipment
  */
 export class StockRequestApprovalService {
@@ -133,7 +133,7 @@ export class StockRequestApprovalService {
 
   /**
    * Add stock to branch inventory
-   * Called after approval (Premiere) or payment confirmation (Partnership)
+   * Called after approval (Premier) or payment confirmation (Partnership)
    */
   private async addStockToBranch(
     tx: any,
@@ -213,19 +213,19 @@ export class StockRequestApprovalService {
   }
 
   /**
-   * Approve stock request for PREMIERE branch (no payment required)
+   * Approve stock request for PREMIER branch (no payment required)
    * Creates shipment after approval
    */
-  async approvePremiereRequest(requestId: string, userId: string, reviewNotes?: string) {
+  async approvePremierRequest(requestId: string, userId: string, reviewNotes?: string) {
     const request = await this.getRequestWithValidation(requestId, ['PENDING']);
     const user = await this.validateManagerPermission(userId, request.branchId);
 
-    // Verify branch is PREMIERE
-    if (request.branch.type !== BranchType.PREMIERE) {
+    // Verify branch is PREMIER
+    if (request.branch.type !== BranchType.PREMIER) {
       throw {
         status: 422,
         code: 'INVALID_BRANCH_TYPE',
-        message: 'Endpoint ini hanya untuk cabang Premiere. Gunakan endpoint invoice untuk Partnership.',
+        message: 'Endpoint ini hanya untuk cabang Premier. Gunakan endpoint invoice untuk Partnership.',
       };
     }
 
@@ -261,7 +261,7 @@ export class StockRequestApprovalService {
           toBranchId: request.branchId,
           stockRequestId: requestId,
           status: 'PREPARING',
-          notes: `Pengiriman untuk permintaan ${request.requestCode} (Premiere)`,
+          notes: `Pengiriman untuk permintaan ${request.requestCode} (Premier)`,
           items: {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
@@ -290,9 +290,9 @@ export class StockRequestApprovalService {
       resource: 'StockRequest',
       resourceId: requestId,
       meta: { 
-        action: 'APPROVE_PREMIERE', 
+        action: 'APPROVE_PREMIER', 
         shipmentId: result.shipment.id,
-        branchType: 'PREMIERE',
+        branchType: 'PREMIER',
       },
     });
 
@@ -314,7 +314,7 @@ export class StockRequestApprovalService {
       throw {
         status: 422,
         code: 'INVALID_BRANCH_TYPE',
-        message: 'Endpoint ini hanya untuk cabang Partnership. Gunakan endpoint approve untuk Premiere.',
+        message: 'Endpoint ini hanya untuk cabang Partnership. Gunakan endpoint approve untuk Premier.',
       };
     }
 
@@ -341,7 +341,9 @@ export class StockRequestApprovalService {
       
       return {
         masterProductId: item.masterProductId,
+        sku: requestItem?.masterProduct.sku || null,
         productName: requestItem?.masterProduct.name || 'Unknown',
+        description: requestItem?.masterProduct.description || null,
         quantity: item.quantity,
         pricePerUnit: item.pricePerUnit,
         subtotal: itemSubtotal,

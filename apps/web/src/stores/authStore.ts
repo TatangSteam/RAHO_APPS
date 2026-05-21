@@ -28,6 +28,7 @@ interface AuthState {
 interface AuthActions {
   setAuth: (user: AuthUser, tokens: TokenPair) => void;
   setAccessToken: (accessToken: string, refreshToken: string) => void;
+  updateUserAvatar: (avatarUrl: string | null) => void;
   clearAuth: () => void;
 }
 
@@ -65,6 +66,11 @@ export const useAuthStore = create<AuthStore>()(
 
       setAccessToken: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
+
+      updateUserAvatar: (avatarUrl) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, avatarUrl } : null,
+        })),
 
       clearAuth: () => {
         set(initialState);

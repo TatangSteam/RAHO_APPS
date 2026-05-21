@@ -34,10 +34,10 @@ export class StockRequestController {
   }
 
   /**
-   * Approve request for PREMIERE branch
-   * POST /api/v1/inventory/stock-requests/:requestId/approve-premiere
+   * Approve request for PREMIER branch
+   * POST /api/v1/inventory/stock-requests/:requestId/approve-premier
    */
-  async approvePremiereRequest(req: Request, res: Response, next: NextFunction) {
+  async approvePremierRequest(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
       const { reviewNotes } = req.body;
@@ -47,7 +47,7 @@ export class StockRequestController {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
       }
 
-      const result = await stockRequestService.approvePremiereRequest(requestId, userId, reviewNotes);
+      const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);
@@ -352,7 +352,7 @@ export class StockRequestController {
         });
         return sendSuccess(res, result);
       } else {
-        const result = await stockRequestService.approvePremiereRequest(requestId, userId, reviewNotes);
+        const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
         return sendSuccess(res, result);
       }
     } catch (err: any) {

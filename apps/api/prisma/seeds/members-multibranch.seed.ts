@@ -87,12 +87,12 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
       continue;
     }
 
-    // Get package pricings for this branch - SESUAI LIST HARGA (PM = Premiere)
+    // Get package pricings for this branch - SESUAI LIST HARGA (PM = Premier)
     const nb7pm = await prisma.packagePricing.findFirst({
       where: { 
         branchId: branch.id, 
         packageType: 'BASIC', 
-        productCode: 'TNB-P7-PM' // 7X Premiere
+        productCode: 'TNB-P7-PM' // 7X Premier
       }
     });
 
@@ -100,7 +100,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
       where: { 
         branchId: branch.id, 
         packageType: 'BOOSTER',
-        productCode: 'BST-NO-P1-PM' // Booster NO Premiere
+        productCode: 'BST-NO-P1-PM' // Booster NO Premier
       }
     });
 
@@ -226,7 +226,7 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
             packageCode: `PKG-${branch.branchCode}-BSC-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
             packageType: 'BASIC',
             packagePricingId: nb7pm.id,
-            productCode: 'TNB-P7-PM', // PM = Premiere
+            productCode: 'TNB-P7-PM', // PM = Premier
             serviceType: 'PM',
             totalSessions: nb7pm.totalSessions,
             usedSessions: 0,
@@ -255,9 +255,9 @@ export async function seedMembersMultiBranch(prisma: PrismaClient, branches: any
       }
 
       if (pkgConfig.type === 'BOOSTER' || pkgConfig.type === 'BUNDLE') {
-        // LIST HARGA LAMA - Service Type Pricing (PM = Premiere)
+        // LIST HARGA LAMA - Service Type Pricing (PM = Premier)
         const SERVICE_TYPE_PRICING: Record<string, number> = {
-          PM: 1_000_000,   // Premiere
+          PM: 1_000_000,   // Premier
           PS: 650_000,     // Partnership
           PTY: 600_000,    // Partnership Attiya
           PDA: 65_000,     // Partnership Dr. Abhi (per ml)

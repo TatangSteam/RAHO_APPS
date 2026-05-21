@@ -10,10 +10,10 @@ import {
 
 // ── Default Package Pricing Data ──────────────────────────────
 const DEFAULT_THERAPY_PACKAGES = [
-  // Premiere (PM) - Main packages
-  { name: 'Terapi Nano Bubble 1X Premiere', totalSessions: 1, price: 2_000_000, productCode: 'TNB-P1-PM' },
-  { name: 'Terapi Nano Bubble 7X Premiere', totalSessions: 7, price: 12_500_000, productCode: 'TNB-P7-PM' },
-  { name: 'Terapi Nano Bubble 15X Premiere', totalSessions: 15, price: 22_500_000, productCode: 'TNB-P15-PM' },
+  // Premier (PM) - Main packages
+  { name: 'Terapi Nano Bubble 1X Premier', totalSessions: 1, price: 2_000_000, productCode: 'TNB-P1-PM' },
+  { name: 'Terapi Nano Bubble 7X Premier', totalSessions: 7, price: 12_500_000, productCode: 'TNB-P7-PM' },
+  { name: 'Terapi Nano Bubble 15X Premier', totalSessions: 15, price: 22_500_000, productCode: 'TNB-P15-PM' },
   
   // Partnership (PS)
   { name: 'Terapi Nano Bubble 1X Partnership', totalSessions: 1, price: 850_000, productCode: 'TNB-P1-PS' },
@@ -21,11 +21,11 @@ const DEFAULT_THERAPY_PACKAGES = [
   // Partnership Homecare (PHC)
   { name: 'Terapi Nano Bubble 1X Partnership Homecare', totalSessions: 1, price: 1_000_000, productCode: 'TNB-P1-PHC' },
   
-  // Free Packages (Bonus) - Premiere
-  { name: 'FREE Terapi Nano Bubble dan Booster 2X Premiere', totalSessions: 2, price: 0, productCode: 'FRE-TRP-F2-PM' },
-  { name: 'FREE Terapi Nano Bubble dan Booster 3X Premiere', totalSessions: 3, price: 0, productCode: 'FRE-TRP-F3-PM' },
-  { name: 'FREE Terapi Nano Bubble dan Booster 4X Premiere', totalSessions: 4, price: 0, productCode: 'FRE-TRP-F4-PM' },
-  { name: 'FREE Terapi Nano Bubble dan Booster 5X Premiere', totalSessions: 5, price: 0, productCode: 'FRE-TRP-F5-PM' },
+  // Free Packages (Bonus) - Premier
+  { name: 'FREE Terapi Nano Bubble dan Booster 2X Premier', totalSessions: 2, price: 0, productCode: 'FRE-TRP-F2-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 3X Premier', totalSessions: 3, price: 0, productCode: 'FRE-TRP-F3-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 4X Premier', totalSessions: 4, price: 0, productCode: 'FRE-TRP-F4-PM' },
+  { name: 'FREE Terapi Nano Bubble dan Booster 5X Premier', totalSessions: 5, price: 0, productCode: 'FRE-TRP-F5-PM' },
 ];
 
 const DEFAULT_BOOSTER_TYPES = [
@@ -39,7 +39,7 @@ const DEFAULT_BOOSTER_TYPES = [
 ];
 
 const DEFAULT_SERVICE_TYPES = [
-  { code: 'PM', name: 'Premiere', price: 1_000_000 },
+  { code: 'PM', name: 'Premier', price: 1_000_000 },
   { code: 'PS', name: 'Partnership', price: 650_000 },
   { code: 'PTY', name: 'Partnership Attiya', price: 600_000 },
   { code: 'PDA', name: 'Partnership Dr. Abhi', price: 65_000 },

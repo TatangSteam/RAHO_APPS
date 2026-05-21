@@ -7,7 +7,7 @@ export interface Branch {
   address: string;
   city: string;
   phone: string;
-  type: 'KLINIK' | 'HOMECARE' | 'PREMIERE' | 'PARTNERSHIP';
+  type: 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
   operatingHours?: string;
   isActive: boolean;
   createdBy?: string;
@@ -26,7 +26,7 @@ export interface CreateBranchInput {
   address: string;
   city: string;
   phone: string;
-  type?: 'KLINIK' | 'HOMECARE' | 'PREMIERE' | 'PARTNERSHIP';
+  type?: 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
   operatingHours?: string;
 }
 
@@ -35,7 +35,7 @@ export interface UpdateBranchInput {
   address?: string;
   city?: string;
   phone?: string;
-  type?: 'KLINIK' | 'HOMECARE' | 'PREMIERE' | 'PARTNERSHIP';
+  type?: 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
   operatingHours?: string;
   isActive?: boolean;
 }

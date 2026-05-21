@@ -267,7 +267,7 @@ export default function BranchDetailPage() {
   const getBranchTypeColor = (type: string) => {
     switch (type) {
       case 'PUSAT': return '#f59e0b';
-      case 'PREMIERE': return '#eab308';
+      case 'PREMIER': return '#eab308';
       case 'PARTNERSHIP': return '#3b82f6';
       case 'KLINIK': return '#10b981';
       case 'HOMECARE': return '#8b5cf6';

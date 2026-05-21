@@ -1925,7 +1925,7 @@ export default function PackagePricingPage() {
                           <option value="">-- Pilih Tipe Layanan --</option>
                           
                           {/* Hardcoded default options */}
-                          <option value="PM">PM - Premiere (Rp 1.000.000)</option>
+                          <option value="PM">PM - Premier (Rp 1.000.000)</option>
                           <option value="PS">PS - Partnership (Rp 650.000)</option>
                           <option value="PTY">PTY - Partnership Attiya (Rp 600.000)</option>
                           <option value="PDA">PDA - Partnership Dr. Abhi (Rp 65.000/ml)</option>
@@ -2192,7 +2192,7 @@ export default function PackagePricingPage() {
                       value={masterFormData.name}
                       onChange={(e) => setMasterFormData({ ...masterFormData, name: e.target.value })}
                       className={styles.formInput}
-                      placeholder={masterTab === 'booster' ? 'Contoh: Nitric Oxide' : 'Contoh: Premiere'}
+                      placeholder={masterTab === 'booster' ? 'Contoh: Nitric Oxide' : 'Contoh: Premier'}
                     />
                   </div>
 

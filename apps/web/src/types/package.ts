@@ -10,7 +10,7 @@ export type ServiceType = 'PM' | 'PS' | 'PTY' | 'PDA' | 'PHC';
 
 // Service type pricing configuration
 export const SERVICE_TYPE_PRICING: Record<ServiceType, { name: string; pricePerSession: number; unit?: string }> = {
-  PM: { name: 'Premiere', pricePerSession: 1_000_000 },
+  PM: { name: 'Premier', pricePerSession: 1_000_000 },
   PS: { name: 'Partnership', pricePerSession: 650_000 },
   PTY: { name: 'Partnership Attiya', pricePerSession: 600_000 },
   PDA: { name: 'Partnership Dr. Abhi', pricePerSession: 65_000, unit: 'ml' },

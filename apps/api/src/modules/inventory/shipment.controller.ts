@@ -10,11 +10,17 @@ export class ShipmentController {
   /**
    * Ship shipment (Admin Manager / Super Admin)
    * POST /api/v1/inventory/shipments/:shipmentId/ship
+   * 
+   * Body:
+   * - notes: string (optional)
+   * - shipmentPhotoUrl: string (optional)
+   * - shipmentPhotoName: string (optional)
+   * - items: Array of { masterProductId, sentQty, overstockReason? } (optional - for overstock)
    */
   async shipShipment(req: Request, res: Response, next: NextFunction) {
     try {
       const { shipmentId } = req.params;
-      const { notes, shipmentPhotoUrl, shipmentPhotoName } = req.body;
+      const { notes, shipmentPhotoUrl, shipmentPhotoName, items } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -25,6 +31,7 @@ export class ShipmentController {
         notes,
         shipmentPhotoUrl,
         shipmentPhotoName,
+        items,
       });
       return sendSuccess(res, result);
     } catch (err: any) {

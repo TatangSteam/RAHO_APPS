@@ -8,11 +8,11 @@ export async function seedBranches(prisma: PrismaClient) {
     update: {},
     create: {
       branchCode: 'PST',
-      name: 'RAHO Premiere Jakarta',
+      name: 'RAHO Premier Jakarta',
       address: 'Jl. Sudirman Kav. 52-53, Jakarta Selatan',
       city: 'Jakarta',
       phone: '021-12345678',
-      type: BranchType.PREMIERE,
+      type: BranchType.PREMIER,
       operatingHours: '24 Jam',
     },
   });
@@ -36,11 +36,11 @@ export async function seedBranches(prisma: PrismaClient) {
     update: {},
     create: {
       branchCode: 'SBY',
-      name: 'RAHO Premiere Surabaya',
+      name: 'RAHO Premier Surabaya',
       address: 'Jl. Tunjungan No. 25, Surabaya',
       city: 'Surabaya',
       phone: '031-55667788',
-      type: BranchType.PREMIERE,
+      type: BranchType.PREMIER,
       operatingHours: '08:00 - 22:00',
     },
   });

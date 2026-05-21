@@ -479,6 +479,13 @@ export default function InventoryPage() {
                     <Truck className="h-4 w-4" />
                     Pengiriman
                   </button>
+                  <button
+                    onClick={() => router.push('/inventory/overstock')}
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-all"
+                  >
+                    <Package className="h-4 w-4" />
+                    Overstock
+                  </button>
                 </>
               )}
             </div>

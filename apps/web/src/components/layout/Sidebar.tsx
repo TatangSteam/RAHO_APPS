@@ -316,9 +316,23 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
       {/* User Info - Expanded */}
       {!collapsed && (
-        <div className="flex items-center gap-3 px-4 py-4 flex-shrink-0">
-          <div className="w-10 h-10 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center text-sm font-semibold text-neutral-700 dark:text-white flex-shrink-0">
-            {user.fullName.charAt(0).toUpperCase()}
+        <Link 
+          href="/profile"
+          onClick={handleNavClick}
+          className="flex items-center gap-3 px-4 py-4 flex-shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors rounded-xl mx-2"
+        >
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 overflow-hidden">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.fullName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-black font-bold">
+                {user.fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-0.5 overflow-hidden min-w-0">
             <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
@@ -333,27 +347,40 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
               </span>
             )}
           </div>
-        </div>
+        </Link>
       )}
 
       {/* User Info - Collapsed */}
       {collapsed && (
-        <div 
+        <Link 
+          href="/profile"
+          onClick={handleNavClick}
           className="hidden lg:flex justify-center py-3 relative cursor-pointer group"
           onMouseEnter={() => setHoveredItem('user-profile')}
           onMouseLeave={() => setHoveredItem(null)}
         >
-          <div className="w-10 h-10 bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-800 rounded-full flex items-center justify-center text-sm font-semibold text-neutral-700 dark:text-white transition-transform duration-200 group-hover:scale-105">
-            {user.fullName.charAt(0).toUpperCase()}
+          <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden transition-transform duration-200 group-hover:scale-105">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.fullName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-black font-bold">
+                {user.fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           {hoveredItem === 'user-profile' && (
             <Tooltip>
               <div className="font-semibold mb-0.5">{user.fullName}</div>
               <div className={clsx('text-xs', ROLE_COLORS[role])}>{ROLE_LABELS[role]}</div>
               {user.branchCode && <div className="text-[10px] text-neutral-500">Cab. {user.branchCode}</div>}
+              <div className="text-[10px] text-amber-500 mt-1">Klik untuk lihat profil</div>
             </Tooltip>
           )}
-        </div>
+        </Link>
       )}
 
       {/* Navigation */}

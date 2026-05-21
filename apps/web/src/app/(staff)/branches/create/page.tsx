@@ -12,7 +12,7 @@ export default function CreateBranchPage() {
   const [formData, setFormData] = useState({
     branchCode: '',
     name: '',
-    type: 'KLINIK' as 'PUSAT' | 'PREMIERE' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE',
+    type: 'KLINIK' as 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE',
     address: '',
     city: '',
     phone: '',
@@ -95,7 +95,7 @@ export default function CreateBranchPage() {
                 className="form-input"
               >
                 <option value="PUSAT">Pusat</option>
-                <option value="PREMIERE">Premiere</option>
+                <option value="PREMIER">Premier</option>
                 <option value="PARTNERSHIP">Partnership</option>
                 <option value="KLINIK">Klinik</option>
                 <option value="HOMECARE">Homecare</option>

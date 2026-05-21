@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { InventoryController } from './inventory.controller';
 import { StockRequestController } from './stock-request.controller';
 import { ShipmentController } from './shipment.controller';
+import { OverstockController } from './overstock.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { uploadPaymentProof } from '../../middleware/upload';
@@ -11,6 +12,7 @@ const router = Router();
 const inventoryController = new InventoryController();
 const stockRequestController = new StockRequestController();
 const shipmentController = new ShipmentController();
+const overstockController = new OverstockController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -176,12 +178,12 @@ router.get(
   stockRequestController.getRequestById.bind(stockRequestController)
 );
 
-// Approve stock request for PREMIERE branch
+// Approve stock request for PREMIER branch
 router.post(
-  '/stock-requests/:requestId/approve-premiere',
+  '/stock-requests/:requestId/approve-premier',
   authenticate,
   authorize(MANAGER_ROLES),
-  stockRequestController.approvePremiereRequest.bind(stockRequestController)
+  stockRequestController.approvePremierRequest.bind(stockRequestController)
 );
 
 // Create invoice for PARTNERSHIP branch
@@ -275,6 +277,42 @@ router.post(
   authenticate,
   authorize(ADMIN_ROLES),
   shipmentController.approveShipment.bind(shipmentController)
+);
+
+// ============================================================
+// OVERSTOCK
+// ============================================================
+
+// Get overstock for a branch
+router.get(
+  '/overstock',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  overstockController.getOverstock.bind(overstockController)
+);
+
+// Get overstock summary for a branch
+router.get(
+  '/overstock/summary',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  overstockController.getOverstockSummary.bind(overstockController)
+);
+
+// Preview overstock deduction for stock request items
+router.post(
+  '/overstock/preview',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  overstockController.previewOverstockDeduction.bind(overstockController)
+);
+
+// Get available overstock quantity for a specific product
+router.get(
+  '/overstock/available/:branchId/:masterProductId',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  overstockController.getAvailableOverstock.bind(overstockController)
 );
 
 export default router;

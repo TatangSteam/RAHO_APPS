@@ -145,7 +145,7 @@ export default function StockRequestCard({
                 {request.branchName}
               </span>
               <span className={`inline-flex items-center px-2 py-0.5 text-[10px] font-semibold rounded-md ${
-                request.branchType === 'PREMIERE' 
+                request.branchType === 'PREMIER' 
                   ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' 
                   : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
               }`}>

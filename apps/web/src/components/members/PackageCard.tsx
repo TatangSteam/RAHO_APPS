@@ -39,7 +39,7 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
         if (parts.length >= 3) {
           const serviceType = parts[2];
           const serviceNames: Record<string, string> = {
-            'PM': 'Premiere',
+            'PM': 'Premier',
             'PS': 'Partnership',
             'PTY': 'Partnership Attiya',
             'PDA': 'Partnership Dr. Abhi',
@@ -82,7 +82,7 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
           const serviceType = parts[3];
           
           const serviceNames: Record<string, string> = {
-            'PM': 'Premiere',
+            'PM': 'Premier',
             'PS': 'Partnership',
             'PTY': 'Partnership Attiya',
             'PDA': 'Partnership Dr. Abhi',

@@ -4,19 +4,19 @@ import { PrismaClient, PackageType } from '@prisma/client';
  * OFFICIAL PRICING STRUCTURE (Sesuai List Harga.md)
  * 
  * THERAPY PACKAGES (9 items):
- * - TNB-P1-PM: Terapi Nano Bubble 1X Premiere = Rp 2,000,000
- * - TNB-P7-PM: Terapi Nano Bubble 7X Premiere = Rp 12,500,000
- * - TNB-P15-PM: Terapi Nano Bubble 15X Premiere = Rp 22,500,000
+ * - TNB-P1-PM: Terapi Nano Bubble 1X Premier = Rp 2,000,000
+ * - TNB-P7-PM: Terapi Nano Bubble 7X Premier = Rp 12,500,000
+ * - TNB-P15-PM: Terapi Nano Bubble 15X Premier = Rp 22,500,000
  * - TNB-P1-PS: Terapi Nano Bubble 1X Partnership = Rp 850,000
  * - TNB-P1-PHC: Terapi Nano Bubble 1X Partnership Homecare = Rp 1,000,000
- * - FRE-TRP-F2-PM: FREE 2X Premiere = Rp 0
- * - FRE-TRP-F3-PM: FREE 3X Premiere = Rp 0
- * - FRE-TRP-F4-PM: FREE 4X Premiere = Rp 0
- * - FRE-TRP-F5-PM: FREE 5X Premiere = Rp 0
+ * - FRE-TRP-F2-PM: FREE 2X Premier = Rp 0
+ * - FRE-TRP-F3-PM: FREE 3X Premier = Rp 0
+ * - FRE-TRP-F4-PM: FREE 4X Premier = Rp 0
+ * - FRE-TRP-F5-PM: FREE 5X Premier = Rp 0
  * 
  * BOOSTER PACKAGES (7 types: NO, GT, MB, KCL, H2S, HK, O3):
  * Each booster type has 5 service type variants with different pricing:
- * - PM (Premiere): Rp 1,000,000 per session
+ * - PM (Premier): Rp 1,000,000 per session
  * - PS (Partnership): Rp 650,000 per session
  * - PTY (Partnership Attiya): Rp 600,000 per session
  * - PDA (Partnership Dr. Abhi): Rp 65,000 per ml
@@ -24,7 +24,7 @@ import { PrismaClient, PackageType } from '@prisma/client';
  * 
  * Total: 7 booster types × 5 service types = 35 booster packages per branch
  * 
- * NOTE: HC code is ONLY for actual Homecare service type (PHC), not for main Premiere packages.
+ * NOTE: HC code is ONLY for actual Homecare service type (PHC), not for main Premier packages.
  * NOTE: All prices are stored in database and can be edited independently.
  */
 
@@ -39,10 +39,10 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
     // ============================================================
     
     const therapyPackages = [
-      // Premiere (PM) - Main packages
-      { name: 'Terapi Nano Bubble 1X Premiere', totalSessions: 1, price: 2_000_000, code: 'NB1PM', productCode: 'TNB-P1-PM' },
-      { name: 'Terapi Nano Bubble 7X Premiere', totalSessions: 7, price: 12_500_000, code: 'NB7PM', productCode: 'TNB-P7-PM' },
-      { name: 'Terapi Nano Bubble 15X Premiere', totalSessions: 15, price: 22_500_000, code: 'NB15PM', productCode: 'TNB-P15-PM' },
+      // Premier (PM) - Main packages
+      { name: 'Terapi Nano Bubble 1X Premier', totalSessions: 1, price: 2_000_000, code: 'NB1PM', productCode: 'TNB-P1-PM' },
+      { name: 'Terapi Nano Bubble 7X Premier', totalSessions: 7, price: 12_500_000, code: 'NB7PM', productCode: 'TNB-P7-PM' },
+      { name: 'Terapi Nano Bubble 15X Premier', totalSessions: 15, price: 22_500_000, code: 'NB15PM', productCode: 'TNB-P15-PM' },
       
       // Partnership (PS)
       { name: 'Terapi Nano Bubble 1X Partnership', totalSessions: 1, price: 850_000, code: 'NB1PS', productCode: 'TNB-P1-PS' },
@@ -50,11 +50,11 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
       // Partnership Homecare (PHC)
       { name: 'Terapi Nano Bubble 1X Partnership Homecare', totalSessions: 1, price: 1_000_000, code: 'NB1PHC', productCode: 'TNB-P1-PHC' },
       
-      // Free Packages (Bonus) - Premiere
-      { name: 'FREE Terapi Nano Bubble dan Booster 2X Premiere', totalSessions: 2, price: 0, code: 'FREF2PM', productCode: 'FRE-TRP-F2-PM' },
-      { name: 'FREE Terapi Nano Bubble dan Booster 3X Premiere', totalSessions: 3, price: 0, code: 'FREF3PM', productCode: 'FRE-TRP-F3-PM' },
-      { name: 'FREE Terapi Nano Bubble dan Booster 4X Premiere', totalSessions: 4, price: 0, code: 'FREF4PM', productCode: 'FRE-TRP-F4-PM' },
-      { name: 'FREE Terapi Nano Bubble dan Booster 5X Premiere', totalSessions: 5, price: 0, code: 'FREF5PM', productCode: 'FRE-TRP-F5-PM' },
+      // Free Packages (Bonus) - Premier
+      { name: 'FREE Terapi Nano Bubble dan Booster 2X Premier', totalSessions: 2, price: 0, code: 'FREF2PM', productCode: 'FRE-TRP-F2-PM' },
+      { name: 'FREE Terapi Nano Bubble dan Booster 3X Premier', totalSessions: 3, price: 0, code: 'FREF3PM', productCode: 'FRE-TRP-F3-PM' },
+      { name: 'FREE Terapi Nano Bubble dan Booster 4X Premier', totalSessions: 4, price: 0, code: 'FREF4PM', productCode: 'FRE-TRP-F4-PM' },
+      { name: 'FREE Terapi Nano Bubble dan Booster 5X Premier', totalSessions: 5, price: 0, code: 'FREF5PM', productCode: 'FRE-TRP-F5-PM' },
     ];
 
     for (const pkg of therapyPackages) {
@@ -112,7 +112,7 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
     ];
 
     const serviceTypes = [
-      { code: 'PM', name: 'Premiere', price: 1_000_000 },
+      { code: 'PM', name: 'Premier', price: 1_000_000 },
       { code: 'PS', name: 'Partnership', price: 650_000 },
       { code: 'PTY', name: 'Partnership Attiya', price: 600_000 },
       { code: 'PDA', name: 'Partnership Dr. Abhi', price: 65_000 }, // per ml
@@ -168,20 +168,20 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
   console.log(`\n✅ Package pricings: Created for ${branches.length} branches`);
   console.log(`\n📋 PRICING REFERENCE (Sesuai List Harga):`);
   console.log(`\n   THERAPY PACKAGES (9 items):`);
-  console.log(`   - TNB-P1-PM (1X Premiere): Rp 2,000,000`);
-  console.log(`   - TNB-P7-PM (7X Premiere): Rp 12,500,000`);
-  console.log(`   - TNB-P15-PM (15X Premiere): Rp 22,500,000`);
+  console.log(`   - TNB-P1-PM (1X Premier): Rp 2,000,000`);
+  console.log(`   - TNB-P7-PM (7X Premier): Rp 12,500,000`);
+  console.log(`   - TNB-P15-PM (15X Premier): Rp 22,500,000`);
   console.log(`   - TNB-P1-PS (1X Partnership): Rp 850,000`);
   console.log(`   - TNB-P1-PHC (1X Partnership Homecare): Rp 1,000,000`);
-  console.log(`   - FRE-TRP-F2-PM (FREE 2X Premiere): Rp 0`);
-  console.log(`   - FRE-TRP-F3-PM (FREE 3X Premiere): Rp 0`);
-  console.log(`   - FRE-TRP-F4-PM (FREE 4X Premiere): Rp 0`);
-  console.log(`   - FRE-TRP-F5-PM (FREE 5X Premiere): Rp 0`);
+  console.log(`   - FRE-TRP-F2-PM (FREE 2X Premier): Rp 0`);
+  console.log(`   - FRE-TRP-F3-PM (FREE 3X Premier): Rp 0`);
+  console.log(`   - FRE-TRP-F4-PM (FREE 4X Premier): Rp 0`);
+  console.log(`   - FRE-TRP-F5-PM (FREE 5X Premier): Rp 0`);
   console.log(`\n   BOOSTER PACKAGES (7 types × 5 service types = 35 per branch):`);
   console.log(`   Booster Types:`);
   console.log(`   - NO, GT, MB, KCL, H2S, HK (H2S Konsentrat), O3`);
   console.log(`\n   Service Types & Pricing:`);
-  console.log(`   - PM (Premiere): Rp 1,000,000/session`);
+  console.log(`   - PM (Premier): Rp 1,000,000/session`);
   console.log(`   - PS (Partnership): Rp 650,000/session`);
   console.log(`   - PTY (Partnership Attiya): Rp 600,000/session`);
   console.log(`   - PDA (Partnership Dr. Abhi): Rp 65,000/ml`);

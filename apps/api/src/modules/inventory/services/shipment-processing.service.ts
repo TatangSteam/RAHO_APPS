@@ -23,11 +23,12 @@ interface ReceiveShipmentInput {
 }
 
 /**
- * Service for processing shipments (ship, receive with discrepancy support)
+ * Service for processing shipments (ship, receive with discrepancy support, overstock handling)
  */
 export class ShipmentProcessingService {
   /**
-   * Ship shipment (mark as shipped by Admin Manager)
+   * Ship shipment with overstock support (mark as shipped by Admin Manager)
+   * Allows sending more items than requested with mandatory reason
    */
   async shipShipment(
     shipmentId: string, 
@@ -36,6 +37,11 @@ export class ShipmentProcessingService {
       notes?: string;
       shipmentPhotoUrl?: string;
       shipmentPhotoName?: string;
+      items?: Array<{
+        masterProductId: string;
+        sentQty: number;
+        overstockReason?: string;
+      }>;
     }
   ) {
     // Validate user is SUPER_ADMIN or ADMIN_MANAGER
@@ -52,7 +58,7 @@ export class ShipmentProcessingService {
       };
     }
 
-    // Get shipment
+    // Get shipment with stock request items
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
@@ -63,7 +69,11 @@ export class ShipmentProcessingService {
         },
         fromBranch: true,
         toBranch: true,
-        stockRequest: true,
+        stockRequest: {
+          include: {
+            items: true,
+          },
+        },
       },
     });
 
@@ -101,8 +111,53 @@ export class ShipmentProcessingService {
       }
     }
 
+    // Validate overstock items have reasons
+    if (data?.items) {
+      for (const item of data.items) {
+        const requestItem = shipment.stockRequest?.items.find(
+          ri => ri.masterProductId === item.masterProductId
+        );
+        const requestedQty = requestItem ? Number(requestItem.requestedQty) : 0;
+        
+        if (item.sentQty > requestedQty && !item.overstockReason) {
+          const product = shipment.items.find(i => i.masterProductId === item.masterProductId);
+          throw {
+            status: 400,
+            code: 'OVERSTOCK_REASON_REQUIRED',
+            message: `Alasan overstock wajib diisi untuk ${product?.masterProduct.name || 'item'} (kirim ${item.sentQty} > diminta ${requestedQty})`,
+          };
+        }
+      }
+    }
+
     // Update shipment and stock request status
     const result = await prisma.$transaction(async (tx) => {
+      // Update shipment items with new quantities and overstock info
+      if (data?.items) {
+        for (const itemData of data.items) {
+          const shipmentItem = shipment.items.find(
+            i => i.masterProductId === itemData.masterProductId
+          );
+          if (shipmentItem) {
+            const requestItem = shipment.stockRequest?.items.find(
+              ri => ri.masterProductId === itemData.masterProductId
+            );
+            const requestedQty = requestItem ? Number(requestItem.requestedQty) : Number(shipmentItem.sentQty);
+            const overstockQty = Math.max(0, itemData.sentQty - requestedQty);
+
+            await tx.shipmentItem.update({
+              where: { id: shipmentItem.id },
+              data: {
+                sentQty: itemData.sentQty,
+                requestedQty: requestedQty,
+                overstockQty: overstockQty > 0 ? overstockQty : null,
+                overstockReason: overstockQty > 0 ? itemData.overstockReason : null,
+              },
+            });
+          }
+        }
+      }
+
       // Update shipment
       const updatedShipment = await tx.shipment.update({
         where: { id: shipmentId },
@@ -150,6 +205,10 @@ export class ShipmentProcessingService {
         action: 'SHIP', 
         shipmentCode: shipment.shipmentCode,
         toBranchId: shipment.toBranchId,
+        hasOverstock: data?.items?.some(i => {
+          const requestItem = shipment.stockRequest?.items.find(ri => ri.masterProductId === i.masterProductId);
+          return i.sentQty > (requestItem ? Number(requestItem.requestedQty) : 0);
+        }),
       },
     });
 
@@ -158,7 +217,7 @@ export class ShipmentProcessingService {
 
   /**
    * Receive shipment (by Admin Cabang)
-   * Supports receiving with discrepancy reporting
+   * Supports receiving with discrepancy reporting and overstock creation
    */
   async receiveShipment(
     shipmentId: string, 
@@ -222,6 +281,14 @@ export class ShipmentProcessingService {
     const hasDiscrepancies = input.discrepancies && input.discrepancies.length > 0;
     const newStatus = hasDiscrepancies ? 'RECEIVED_WITH_ISSUE' : 'RECEIVED';
     const requestStatus = hasDiscrepancies ? 'COMPLETED_WITH_ISSUE' : 'COMPLETED';
+
+    // Track created overstocks for response
+    const createdOverstocks: Array<{
+      masterProductId: string;
+      productName: string;
+      quantity: number;
+      reason: string;
+    }> = [];
 
     // Process receiving
     const result = await prisma.$transaction(async (tx) => {
@@ -303,7 +370,7 @@ export class ShipmentProcessingService {
         });
       }
 
-      // Add stock to destination branch
+      // Add stock to destination branch and create overstock records
       for (const item of shipment.items) {
         // Determine actual received quantity
         let actualReceivedQty = Number(item.sentQty);
@@ -362,6 +429,29 @@ export class ShipmentProcessingService {
             createdBy: userId,
           },
         });
+
+        // Create overstock record if there's excess
+        const overstockQty = item.overstockQty ? Number(item.overstockQty) : 0;
+        if (overstockQty > 0 && item.overstockReason) {
+          await tx.branchOverstock.create({
+            data: {
+              branchId: shipment.toBranchId,
+              masterProductId: item.masterProductId,
+              quantity: overstockQty,
+              originalQty: overstockQty,
+              reason: item.overstockReason,
+              sourceShipmentId: shipmentId,
+              status: 'AVAILABLE',
+            },
+          });
+
+          createdOverstocks.push({
+            masterProductId: item.masterProductId,
+            productName: item.masterProduct.name,
+            quantity: overstockQty,
+            reason: item.overstockReason,
+          });
+        }
       }
 
       return updatedShipment;
@@ -379,10 +469,18 @@ export class ShipmentProcessingService {
         shipmentCode: shipment.shipmentCode,
         hasDiscrepancies,
         discrepancyCount: input.discrepancies?.length || 0,
+        overstocksCreated: createdOverstocks.length,
       },
     });
 
-    return this.formatShipment(result);
+    const formattedResult = this.formatShipment(result);
+    
+    // Add overstock info to response
+    if (createdOverstocks.length > 0) {
+      (formattedResult as any).overstocksCreated = createdOverstocks;
+    }
+
+    return formattedResult;
   }
 
   /**
@@ -406,7 +504,10 @@ export class ShipmentProcessingService {
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
         sentQty: Number(item.sentQty),
+        requestedQty: item.requestedQty ? Number(item.requestedQty) : null,
         receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
+        overstockQty: item.overstockQty ? Number(item.overstockQty) : null,
+        overstockReason: item.overstockReason,
         unit: item.masterProduct.baseUnit,
       })),
       discrepancies: shipment.discrepancies?.map((d: any) => ({

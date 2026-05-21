@@ -13,7 +13,7 @@ export type StockRequestStatus =
   | 'COMPLETED' 
   | 'COMPLETED_WITH_ISSUE';
 
-export type BranchType = 'PREMIERE' | 'PARTNERSHIP' | 'PUSAT';
+export type BranchType = 'PREMIER' | 'PARTNERSHIP' | 'PUSAT';
 
 export interface StockRequestItem {
   id: string;
@@ -22,8 +22,16 @@ export interface StockRequestItem {
   productCategory: string;
   requestedQty: number;
   approvedQty?: number;
+  overstockDeducted?: number;
+  finalQty?: number;
   unit: string;
   notes?: string;
+  overstockUsages?: Array<{
+    id: string;
+    quantityUsed: number;
+    reason?: string;
+    sourceShipmentCode?: string;
+  }>;
 }
 
 export interface StockRequestInvoice {
@@ -41,7 +49,9 @@ export interface StockRequestInvoice {
   items?: Array<{
     id: string;
     masterProductId: string;
+    sku?: string;
     productName: string;
+    description?: string;
     quantity: number;
     pricePerUnit: number;
     subtotal: number;

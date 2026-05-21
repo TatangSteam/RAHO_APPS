@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { inventoryApi, Shipment, ReceiveShipmentInput } from '@/lib/api/inventoryApi';
+import { inventoryApi, Shipment, ReceiveShipmentInput, ShipShipmentInput } from '@/lib/api/inventoryApi';
 import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
 import { ShipModal, ReceiveModal, DetailModal } from './components';
 
@@ -75,13 +75,21 @@ export default function ShipmentsPage() {
     fetchShipments();
   }, [mounted, user, accessToken, router, fetchShipments]);
 
-  const handleShip = async (notes?: string) => {
+  const handleShip = async (data: ShipShipmentInput) => {
     if (!selectedShipment) return;
     
     try {
       setActionLoading(true);
-      await inventoryApi.shipShipment(selectedShipment.id, { notes });
-      showToast.success('Pengiriman berhasil dikirim');
+      const response = await inventoryApi.shipShipment(selectedShipment.id, data);
+      
+      // Check if there was overstock
+      const hasOverstock = data.items?.some(item => item.overstockReason);
+      if (hasOverstock) {
+        showToast.success('Pengiriman berhasil dikirim dengan overstock');
+      } else {
+        showToast.success('Pengiriman berhasil dikirim');
+      }
+      
       closeModal();
       fetchShipments();
     } catch (error: any) {

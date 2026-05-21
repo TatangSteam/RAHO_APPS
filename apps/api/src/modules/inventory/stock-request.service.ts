@@ -10,7 +10,7 @@ import { StockRequestRetrievalService } from './services/stock-request-retrieval
  * Flow:
  * 1. Admin Cabang creates request (PENDING)
  * 2. Admin Manager reviews:
- *    - PREMIERE: Approve → Create Shipment (APPROVED)
+ *    - PREMIER: Approve → Create Shipment (APPROVED)
  *    - PARTNERSHIP: Create Invoice (WAITING_PAYMENT)
  * 3. Partnership flow:
  *    - Admin Cabang uploads payment proof (PAYMENT_UPLOADED)
@@ -45,10 +45,10 @@ export class StockRequestService {
   // ============================================================
 
   /**
-   * Approve request for PREMIERE branch (no payment required)
+   * Approve request for PREMIER branch (no payment required)
    */
-  async approvePremiereRequest(requestId: string, userId: string, reviewNotes?: string) {
-    return await this.approvalService.approvePremiereRequest(requestId, userId, reviewNotes);
+  async approvePremierRequest(requestId: string, userId: string, reviewNotes?: string) {
+    return await this.approvalService.approvePremierRequest(requestId, userId, reviewNotes);
   }
 
   /**
@@ -168,11 +168,11 @@ export class StockRequestService {
   // ============================================================
 
   /**
-   * @deprecated Use approvePremiereRequest or createPartnershipInvoice instead
+   * @deprecated Use approvePremierRequest or createPartnershipInvoice instead
    */
   async approveRequest(requestId: string, userId: string, reviewNotes?: string) {
     // This will be handled by the approval service based on branch type
-    return await this.approvalService.approvePremiereRequest(requestId, userId, reviewNotes);
+    return await this.approvalService.approvePremierRequest(requestId, userId, reviewNotes);
   }
 }
 

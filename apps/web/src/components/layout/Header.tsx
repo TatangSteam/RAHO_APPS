@@ -1,9 +1,12 @@
 'use client';
 
+import Link from 'next/link';
+import { useEffect } from 'react';
 import { Bell, Menu, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { Role } from '@/types/auth';
+import { api } from '@/lib/api';
 import { clsx } from 'clsx';
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -32,8 +35,24 @@ interface HeaderProps {
 }
 
 export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
-  const { user } = useAuthStore();
+  const { user, updateUserAvatar } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
+  
+  // Fetch avatar on mount if not already loaded
+  useEffect(() => {
+    if (user && !user.avatarUrl) {
+      api.get('/auth/me')
+        .then((res) => {
+          const avatarUrl = res.data.data?.profile?.avatarUrl;
+          if (avatarUrl) {
+            updateUserAvatar(avatarUrl);
+          }
+        })
+        .catch(() => {
+          // Silently fail - avatar is optional
+        });
+    }
+  }, [user, updateUserAvatar]);
   
   if (!user) return null;
 
@@ -88,10 +107,23 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
           )}
         </button>
 
-        {/* User Chip */}
-        <div className="flex items-center gap-2 sm:gap-2.5 py-1.5 pl-1.5 pr-2 sm:pr-3 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-200 group">
-          <div className="w-8 h-8 bg-gradient-to-br from-amber-500 to-amber-600 rounded-lg flex items-center justify-center text-sm font-bold text-black flex-shrink-0 shadow-md shadow-amber-500/25 group-hover:shadow-amber-500/35 transition-shadow">
-            {user.fullName.charAt(0).toUpperCase()}
+        {/* User Chip - Links to Profile */}
+        <Link 
+          href={role === 'MEMBER' ? '/me/profile' : '/profile'}
+          className="flex items-center gap-2 sm:gap-2.5 py-1.5 pl-1.5 pr-2 sm:pr-3 bg-neutral-100 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-800 hover:border-neutral-300 dark:hover:border-neutral-700 transition-all duration-200 group"
+        >
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md shadow-amber-500/25 group-hover:shadow-amber-500/35 transition-shadow">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt={user.fullName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-sm font-bold text-black">
+                {user.fullName.charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div className="hidden sm:flex flex-col gap-0">
             <p className="text-sm font-semibold text-neutral-900 dark:text-white leading-tight truncate max-w-[120px] lg:max-w-[160px]">
@@ -101,7 +133,7 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
               {ROLE_LABELS[role]}
             </p>
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

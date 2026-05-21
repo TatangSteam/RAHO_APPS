@@ -21,7 +21,7 @@ export default function BranchHeader({ branch, onBack }: BranchHeaderProps) {
           <span className={`${styles.typeBadge} ${styles[branch.type.toLowerCase()]}`}>
             {branch.type === 'KLINIK' ? '🏥 Klinik' : 
              branch.type === 'HOMECARE' ? '🏠 Homecare' :
-             branch.type === 'PREMIERE' ? '⭐ Premiere' : '🤝 Partnership'}
+             branch.type === 'PREMIER' ? '⭐ Premier' : '🤝 Partnership'}
           </span>
           <span className={`${styles.statusBadge} ${branch.isActive ? styles.active : styles.inactive}`}>
             {branch.isActive ? '✓ Aktif' : '✗ Nonaktif'}

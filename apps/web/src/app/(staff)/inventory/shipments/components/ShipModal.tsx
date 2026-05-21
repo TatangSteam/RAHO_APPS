@@ -2,19 +2,30 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Truck, Package, Send, MessageSquare, RefreshCw, ChevronRight } from 'lucide-react';
-import { Shipment } from '@/lib/api/inventoryApi';
+import { X, Truck, Package, Send, MessageSquare, RefreshCw, ChevronRight, AlertTriangle, Plus, Minus, Info } from 'lucide-react';
+import { Shipment, ShipShipmentInput } from '@/lib/api/inventoryApi';
+
+interface ShipmentItemWithOverstock {
+  masterProductId: string;
+  productName: string;
+  requestedQty: number;
+  sentQty: number;
+  unit: string;
+  overstockReason: string;
+}
 
 interface ShipModalProps {
   shipment: Shipment;
   onClose: () => void;
-  onShip: (notes?: string) => Promise<void>;
+  onShip: (data: ShipShipmentInput) => Promise<void>;
   loading: boolean;
 }
 
 export default function ShipModal({ shipment, onClose, onShip, loading }: ShipModalProps) {
   const [mounted, setMounted] = useState(false);
   const [notes, setNotes] = useState('');
+  const [items, setItems] = useState<ShipmentItemWithOverstock[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setMounted(true);
@@ -28,8 +39,90 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
     };
   }, []);
 
+  // Initialize items from shipment
+  useEffect(() => {
+    setItems(shipment.items.map(item => ({
+      masterProductId: item.masterProductId,
+      productName: item.productName,
+      requestedQty: item.sentQty, // sentQty is the requested qty at this stage
+      sentQty: item.sentQty,
+      unit: item.unit,
+      overstockReason: '',
+    })));
+  }, [shipment]);
+
+  const updateItemQty = (masterProductId: string, delta: number) => {
+    setItems(prev => prev.map(item => {
+      if (item.masterProductId === masterProductId) {
+        const newQty = Math.max(1, item.sentQty + delta);
+        return { ...item, sentQty: newQty };
+      }
+      return item;
+    }));
+    // Clear error when qty changes
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[masterProductId];
+      return newErrors;
+    });
+  };
+
+  const updateItemSentQty = (masterProductId: string, value: number) => {
+    setItems(prev => prev.map(item => {
+      if (item.masterProductId === masterProductId) {
+        return { ...item, sentQty: Math.max(1, value) };
+      }
+      return item;
+    }));
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[masterProductId];
+      return newErrors;
+    });
+  };
+
+  const updateOverstockReason = (masterProductId: string, reason: string) => {
+    setItems(prev => prev.map(item => {
+      if (item.masterProductId === masterProductId) {
+        return { ...item, overstockReason: reason };
+      }
+      return item;
+    }));
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[masterProductId];
+      return newErrors;
+    });
+  };
+
+  const hasOverstock = items.some(item => item.sentQty > item.requestedQty);
+
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    for (const item of items) {
+      if (item.sentQty > item.requestedQty && !item.overstockReason.trim()) {
+        newErrors[item.masterProductId] = 'Alasan overstock wajib diisi';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async () => {
-    await onShip(notes || undefined);
+    if (!validate()) return;
+
+    const data: ShipShipmentInput = {
+      notes: notes || undefined,
+      items: items.map(item => ({
+        masterProductId: item.masterProductId,
+        sentQty: item.sentQty,
+        overstockReason: item.sentQty > item.requestedQty ? item.overstockReason : undefined,
+      })),
+    };
+
+    await onShip(data);
   };
 
   if (!mounted) return null;
@@ -46,7 +139,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
       {/* Modal Container */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div
-          className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
           role="dialog"
           aria-modal="true"
           onClick={(e) => e.stopPropagation()}
@@ -97,33 +190,139 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
               </div>
             </div>
 
+            {/* Overstock Info Banner */}
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
+              <div className="flex items-start gap-3">
+                <Info className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-400">Fitur Overstock</p>
+                  <p className="text-xs text-amber-400/80 mt-1">
+                    Anda dapat mengirim lebih banyak dari jumlah yang diminta. Kelebihan akan dicatat sebagai overstock 
+                    dan otomatis dikurangi dari request berikutnya. Alasan overstock wajib diisi jika mengirim lebih.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Items Section */}
             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
               <h3 className="text-sm font-semibold text-blue-400 mb-4 flex items-center gap-2">
                 <Package className="h-4 w-4" />
-                Items yang akan dikirim ({shipment.items.length} item)
+                Items yang akan dikirim ({items.length} item)
               </h3>
               
-              <div className="space-y-2">
-                {shipment.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-blue-500/10 border border-blue-500/20"
-                  >
-                    <span className="font-medium text-neutral-700 dark:text-neutral-200">
-                      {item.productName}
-                    </span>
-                    <span className="font-bold text-blue-500">
-                      {item.sentQty} {item.unit}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-4">
+                {items.map((item) => {
+                  const isOverstock = item.sentQty > item.requestedQty;
+                  const overstockQty = isOverstock ? item.sentQty - item.requestedQty : 0;
+                  const hasError = !!errors[item.masterProductId];
+
+                  return (
+                    <div
+                      key={item.masterProductId}
+                      className={`p-4 rounded-xl border transition-all ${
+                        isOverstock 
+                          ? 'bg-amber-500/10 border-amber-500/30' 
+                          : 'bg-blue-500/10 border-blue-500/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="font-medium text-neutral-700 dark:text-neutral-200">
+                          {item.productName}
+                        </span>
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                          Diminta: {item.requestedQty} {item.unit}
+                        </span>
+                      </div>
+
+                      {/* Quantity Controls */}
+                      <div className="flex items-center gap-3 mb-3">
+                        <span className="text-sm text-neutral-500 dark:text-neutral-400 w-20">Kirim:</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateItemQty(item.masterProductId, -1)}
+                            className="p-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
+                          >
+                            <Minus className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.sentQty}
+                            onChange={(e) => updateItemSentQty(item.masterProductId, parseInt(e.target.value) || 1)}
+                            className="w-20 px-3 py-2 text-center text-sm font-bold rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateItemQty(item.masterProductId, 1)}
+                            className="p-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
+                          >
+                            <Plus className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
+                          </button>
+                          <span className="text-sm font-medium text-neutral-500 dark:text-neutral-400">
+                            {item.unit}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Overstock Badge & Reason */}
+                      {isOverstock && (
+                        <div className="mt-3 pt-3 border-t border-amber-500/30">
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-400" />
+                            <span className="text-sm font-semibold text-amber-400">
+                              Overstock: +{overstockQty} {item.unit}
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            value={item.overstockReason}
+                            onChange={(e) => updateOverstockReason(item.masterProductId, e.target.value)}
+                            placeholder="Alasan overstock (wajib diisi)..."
+                            className={`w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
+                              hasError 
+                                ? 'border-red-500 dark:border-red-500' 
+                                : 'border-amber-500/30'
+                            }`}
+                          />
+                          {hasError && (
+                            <p className="text-xs text-red-500 mt-1">{errors[item.masterProductId]}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
+            {/* Summary */}
+            {hasOverstock && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <h3 className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Ringkasan Overstock
+                </h3>
+                <div className="space-y-1">
+                  {items.filter(i => i.sentQty > i.requestedQty).map(item => (
+                    <div key={item.masterProductId} className="flex justify-between text-sm">
+                      <span className="text-neutral-400">{item.productName}</span>
+                      <span className="text-emerald-400 font-medium">
+                        +{item.sentQty - item.requestedQty} {item.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-emerald-400/70 mt-3">
+                  Overstock akan dicatat dan otomatis dikurangi dari request stok berikutnya.
+                </p>
+              </div>
+            )}
+
             {/* Notes Section */}
-            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
-              <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+              <h3 className="text-sm font-semibold text-neutral-600 dark:text-neutral-400 mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Catatan Pengiriman (Opsional)
               </h3>
@@ -132,7 +331,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Masukkan catatan pengiriman..."
                 rows={3}
-                className="w-full px-4 py-3 text-sm rounded-xl border border-amber-500/30 bg-neutral-800/50 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent resize-none"
+                className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
             </div>
           </div>

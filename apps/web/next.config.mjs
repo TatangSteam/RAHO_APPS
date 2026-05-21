@@ -10,6 +10,38 @@ const nextConfig = {
     // your project has ESLint errors.
     ignoreDuringBuilds: true,
   },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+        port: '9000',
+        pathname: '/raho-uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'localhost',
+        port: '9000',
+        pathname: '/raho-uploads/**',
+      },
+      {
+        protocol: 'http',
+        hostname: '127.0.0.1',
+        port: '9000',
+        pathname: '/raho-uploads/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.amazonaws.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.digitaloceanspaces.com',
+        pathname: '/**',
+      },
+    ],
+  },
   async rewrites() {
     return [
       {

@@ -81,8 +81,8 @@ export async function seedMasterTypes() {
   const serviceTypes = [
     {
       code: 'PM',
-      name: 'Premiere',
-      description: 'Premiere service',
+      name: 'Premier',
+      description: 'Premier service',
       price: 1000000,
       sortOrder: 1,
       isActive: true,

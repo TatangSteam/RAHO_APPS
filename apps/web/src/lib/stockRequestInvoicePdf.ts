@@ -139,16 +139,17 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
 
     const tableData = invoice.items?.map((item) => {
       const qty = item.quantity;
-      const description = item.productName;
+      const sku = item.sku || '-';
+      const description = item.productName + (item.description ? `\n${item.description}` : '');
       const price = formatNumberWithDots(item.pricePerUnit);
       const total = formatNumberWithDots(item.subtotal);
 
-      return [qty.toString(), description, `Rp ${price}`, `Rp ${total}`];
+      return [qty.toString(), sku, description, `Rp ${price}`, `Rp ${total}`];
     }) || [];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Qty', 'Nama Produk', 'Harga Satuan', 'Subtotal']],
+      head: [['Qty', 'Kode', 'Nama Produk / Keterangan', 'Harga Satuan', 'Subtotal']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -164,10 +165,11 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
         cellPadding: 3
       },
       columnStyles: {
-        0: { cellWidth: 20, halign: 'center' },
-        1: { cellWidth: 80 },
-        2: { cellWidth: 35, halign: 'right' },
-        3: { cellWidth: 35, halign: 'right' }
+        0: { cellWidth: 15, halign: 'center' },
+        1: { cellWidth: 30, halign: 'center' },
+        2: { cellWidth: 60 },
+        3: { cellWidth: 32, halign: 'right' },
+        4: { cellWidth: 32, halign: 'right' }
       },
       margin: { left: margin, right: margin },
     });

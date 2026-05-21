@@ -137,7 +137,7 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
                 className={styles.input}
                 disabled={loading}
               >
-                <option value="PREMIERE">⭐ Premiere</option>
+                <option value="PREMIER">⭐ Premier</option>
                 <option value="PARTNERSHIP">🤝 Partnership</option>
               </select>
             </div>

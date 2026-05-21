@@ -42,12 +42,77 @@ export interface ReceiveShipmentInput {
   notes?: string;
 }
 
+export interface ShipShipmentInput {
+  notes?: string;
+  shipmentPhotoUrl?: string;
+  shipmentPhotoName?: string;
+  items?: Array<{
+    masterProductId: string;
+    sentQty: number;
+    overstockReason?: string;
+  }>;
+}
+
+export interface OverstockPreviewItem {
+  masterProductId: string;
+  requestedQty: number;
+  availableOverstock: number;
+  deductedQty: number;
+  finalQty: number;
+  overstockDetails: Array<{
+    quantity: number;
+    reason: string;
+    sourceShipmentCode: string;
+    createdAt: string;
+  }>;
+}
+
+export interface BranchOverstock {
+  id: string;
+  branchId: string;
+  masterProductId: string;
+  productName: string;
+  productCategory: string;
+  unit: string;
+  quantity: number;
+  originalQty: number;
+  reason: string;
+  status: 'AVAILABLE' | 'PARTIALLY_USED' | 'FULLY_USED';
+  sourceShipment: {
+    id: string;
+    shipmentCode: string;
+    createdAt: string;
+  } | null;
+  usages: Array<{
+    id: string;
+    quantityUsed: number;
+    stockRequestCode: string;
+    createdAt: string;
+  }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OverstockSummary {
+  masterProductId: string;
+  productName: string;
+  productCategory: string;
+  unit: string;
+  totalQuantity: number;
+  records: Array<{
+    id: string;
+    quantity: number;
+    reason: string;
+    createdAt: string;
+  }>;
+}
+
 export interface StockRequest {
   id: string;
   requestCode: string;
   branchId: string;
   branchName: string;
-  branchType: 'PREMIERE' | 'PARTNERSHIP' | 'PUSAT';
+  branchType: 'PREMIER' | 'PARTNERSHIP' | 'PUSAT';
   status: string;
   notes?: string;
   itemCount: number;
@@ -96,7 +161,10 @@ export interface Shipment {
     productName: string;
     productCategory?: string;
     sentQty: number;
+    requestedQty?: number;
     receivedQty?: number;
+    overstockQty?: number;
+    overstockReason?: string;
     unit: string;
   }>;
   discrepancies?: Array<{
@@ -108,6 +176,12 @@ export interface Shipment {
     discrepancyType: string;
     notes?: string;
     photoUrl?: string;
+  }>;
+  overstocksCreated?: Array<{
+    masterProductId: string;
+    productName: string;
+    quantity: number;
+    reason: string;
   }>;
   shippedBy?: string;
   shippedAt?: string;
@@ -207,10 +281,10 @@ export const inventoryApi = {
   },
 
   /**
-   * Approve stock request for PREMIERE branch
+   * Approve stock request for PREMIER branch
    */
-  approvePremiereRequest: (requestId: string, reviewNotes?: string) => {
-    return api.post(`/inventory/stock-requests/${requestId}/approve-premiere`, { reviewNotes });
+  approvePremierRequest: (requestId: string, reviewNotes?: string) => {
+    return api.post(`/inventory/stock-requests/${requestId}/approve-premier`, { reviewNotes });
   },
 
   /**
@@ -281,8 +355,9 @@ export const inventoryApi = {
 
   /**
    * Ship shipment (Admin Manager / Super Admin)
+   * Supports sending more items than requested (overstock)
    */
-  shipShipment: (shipmentId: string, data?: { notes?: string; shipmentPhotoUrl?: string; shipmentPhotoName?: string }) => {
+  shipShipment: (shipmentId: string, data?: ShipShipmentInput) => {
     return api.post(`/inventory/shipments/${shipmentId}/ship`, data);
   },
 
@@ -322,5 +397,37 @@ export const inventoryApi = {
       params: { branchId },
       responseType: 'blob',
     });
+  },
+
+  // ============================================================
+  // OVERSTOCK
+  // ============================================================
+
+  /**
+   * Get overstock for a branch
+   */
+  getOverstock: (params: { branchId?: string; masterProductId?: string; status?: string }) => {
+    return api.get('/inventory/overstock', { params });
+  },
+
+  /**
+   * Get overstock summary for a branch (grouped by product)
+   */
+  getOverstockSummary: (branchId: string) => {
+    return api.get('/inventory/overstock/summary', { params: { branchId } });
+  },
+
+  /**
+   * Preview overstock deduction for stock request items
+   */
+  previewOverstockDeduction: (branchId: string, items: Array<{ masterProductId: string; requestedQty: number }>) => {
+    return api.post('/inventory/overstock/preview', { branchId, items });
+  },
+
+  /**
+   * Get available overstock quantity for a specific product
+   */
+  getAvailableOverstock: (branchId: string, masterProductId: string) => {
+    return api.get(`/inventory/overstock/available/${branchId}/${masterProductId}`);
   },
 };

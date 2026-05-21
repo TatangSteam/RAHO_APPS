@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role, BranchType } from '@prisma/client';
+import { OverstockService } from './overstock.service';
 
 export interface CreateStockRequestInput {
   items: Array<{
@@ -12,19 +13,22 @@ export interface CreateStockRequestInput {
   notes?: string;
 }
 
+const overstockService = new OverstockService();
+
 /**
  * Service for creating stock requests
  * 
  * Flow:
  * 1. Admin Cabang creates request with master products
- * 2. Request status starts as PENDING
- * 3. Admin Manager reviews and approves/rejects
- * 4. For Partnership branches: Invoice is created, payment required
- * 5. For Premiere branches: Direct approval and shipment
+ * 2. System auto-deducts available overstock (FIFO)
+ * 3. Request status starts as PENDING
+ * 4. Admin Manager reviews and approves/rejects
+ * 5. For Partnership branches: Invoice is created, payment required
+ * 6. For Premier branches: Direct approval and shipment
  */
 export class StockRequestCreationService {
   /**
-   * Create stock request
+   * Create stock request with automatic overstock deduction
    */
   async createRequest(data: CreateStockRequestInput, branchId: string, userId: string) {
     // Validate user role - only ADMIN_CABANG can create requests
@@ -110,42 +114,95 @@ export class StockRequestCreationService {
       }
     }
 
+    // Get overstock info for all items
+    const overstockInfo = await overstockService.getOverstockInfoForRequest(branchId, data.items);
+
     // Generate request code
     const requestCode = await this.generateRequestCode(branchId);
 
-    // Create request with items
-    const request = await prisma.stockRequest.create({
-      data: {
-        requestCode,
-        branchId: branchId,
-        requestedBy: userId,
-        status: 'PENDING',
-        notes: data.notes,
-        items: {
-          create: data.items.map(item => ({
-            masterProductId: item.masterProductId,
-            requestedQty: item.requestedQty,
-            notes: item.notes,
-          })),
-        },
-      },
-      include: {
-        items: {
-          include: {
-            masterProduct: true,
+    // Create request with items (including overstock deduction info)
+    const request = await prisma.$transaction(async (tx) => {
+      // Create the stock request
+      const newRequest = await tx.stockRequest.create({
+        data: {
+          requestCode,
+          branchId: branchId,
+          requestedBy: userId,
+          status: 'PENDING',
+          notes: data.notes,
+          items: {
+            create: data.items.map(item => {
+              const itemOverstock = overstockInfo.find(o => o.masterProductId === item.masterProductId);
+              return {
+                masterProductId: item.masterProductId,
+                requestedQty: item.requestedQty,
+                overstockDeducted: itemOverstock?.deductedQty || 0,
+                finalQty: itemOverstock?.finalQty || item.requestedQty,
+                notes: item.notes,
+              };
+            }),
           },
         },
-        branch: true,
-      },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+            },
+          },
+          branch: true,
+        },
+      });
+
+      // Apply overstock deductions for items that have available overstock
+      for (const item of newRequest.items) {
+        const itemOverstock = overstockInfo.find(o => o.masterProductId === item.masterProductId);
+        if (itemOverstock && itemOverstock.deductedQty > 0) {
+          await overstockService.applyOverstockDeduction(
+            branchId,
+            item.masterProductId,
+            Number(item.requestedQty),
+            newRequest.id,
+            item.id,
+            userId
+          );
+        }
+      }
+
+      // Refetch to get updated data
+      return await tx.stockRequest.findUnique({
+        where: { id: newRequest.id },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+              overstockUsages: {
+                include: {
+                  overstock: {
+                    include: {
+                      sourceShipment: {
+                        select: {
+                          shipmentCode: true,
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          branch: true,
+        },
+      });
     });
 
     // Audit log
+    const totalDeducted = overstockInfo.reduce((sum, o) => sum + o.deductedQty, 0);
     await logAudit({
       userId,
       branchId,
       action: AuditAction.CREATE,
       resource: 'StockRequest',
-      resourceId: request.id,
+      resourceId: request!.id,
       meta: { 
         requestCode, 
         branchId, 
@@ -155,10 +212,12 @@ export class StockRequestCreationService {
           masterProductId: i.masterProductId,
           requestedQty: i.requestedQty,
         })),
+        overstockDeducted: totalDeducted > 0,
+        totalOverstockDeducted: totalDeducted,
       },
     });
 
-    return this.formatStockRequest(request);
+    return this.formatStockRequest(request!);
   }
 
   /**
@@ -218,8 +277,16 @@ export class StockRequestCreationService {
         productCategory: item.masterProduct.category,
         requestedQty: Number(item.requestedQty),
         approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
+        overstockDeducted: item.overstockDeducted ? Number(item.overstockDeducted) : 0,
+        finalQty: item.finalQty ? Number(item.finalQty) : Number(item.requestedQty),
         unit: item.masterProduct.baseUnit,
         notes: item.notes,
+        overstockUsages: item.overstockUsages?.map((u: any) => ({
+          id: u.id,
+          quantityUsed: Number(u.quantityUsed),
+          reason: u.overstock?.reason,
+          sourceShipmentCode: u.overstock?.sourceShipment?.shipmentCode,
+        })) || [],
       })),
       createdAt: request.createdAt.toISOString(),
       updatedAt: request.updatedAt.toISOString(),

@@ -2,7 +2,7 @@ import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnPricing, AddOnTy
 
 // Built-in service type label mapping (fallback labels)
 const SERVICE_TYPE_NAMES: Record<string, string> = {
-  PM: 'Premiere',
+  PM: 'Premier',
   PS: 'Partnership',
   PTY: 'Partnership Attiya',
   PDA: 'Partnership Dr. Abhi',

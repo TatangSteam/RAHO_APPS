@@ -217,7 +217,9 @@ export class ShipmentRetrievalService {
           items: shipment.stockRequest.invoice.items?.map((item: any) => ({
             id: item.id,
             masterProductId: item.masterProductId,
+            sku: item.sku,
             productName: item.productName,
+            description: item.description,
             quantity: Number(item.quantity),
             pricePerUnit: Number(item.pricePerUnit),
             subtotal: Number(item.subtotal),

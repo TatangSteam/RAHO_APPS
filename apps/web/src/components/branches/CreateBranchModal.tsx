@@ -21,7 +21,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     address: '',
     city: '',
     phone: '',
-    type: 'PREMIERE',
+    type: 'PREMIER',
     operatingHours: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -41,7 +41,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
         address: '',
         city: '',
         phone: '',
-        type: 'PREMIERE',
+        type: 'PREMIER',
         operatingHours: '',
       });
       setErrors({});
@@ -160,7 +160,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
                 className={styles.input}
                 disabled={loading}
               >
-                <option value="PREMIERE">⭐ Premiere</option>
+                <option value="PREMIER">⭐ Premier</option>
                 <option value="PARTNERSHIP">🤝 Partnership</option>
               </select>
             </div>

@@ -12,7 +12,7 @@ interface ReviewModalProps {
   request: StockRequest;
   userRole?: string;
   onClose: () => void;
-  onApprovePremiereRequest: (requestId: string, reviewNotes: string) => Promise<void>;
+  onApprovePremierRequest: (requestId: string, reviewNotes: string) => Promise<void>;
   onCreatePartnershipInvoice: (requestId: string, items: InvoiceItemInput[], notes?: string) => Promise<void>;
   onConfirmPayment: (requestId: string, verificationNotes?: string) => Promise<void>;
   onRejectPayment: (requestId: string, rejectionReason: string) => Promise<void>;
@@ -24,7 +24,7 @@ export default function ReviewModal({
   request, 
   userRole,
   onClose, 
-  onApprovePremiereRequest,
+  onApprovePremierRequest,
   onCreatePartnershipInvoice,
   onConfirmPayment,
   onRejectPayment,
@@ -128,14 +128,14 @@ export default function ReviewModal({
   };
 
   const handleApprove = async () => {
-    if (request.branchType === 'PREMIERE') {
+    if (request.branchType === 'PREMIER') {
       if (!reviewNotes.trim()) {
         setNotesError(true);
         showToast.error('Catatan review harus diisi sebelum approve');
         return;
       }
       setNotesError(false);
-      await onApprovePremiereRequest(request.id, reviewNotes);
+      await onApprovePremierRequest(request.id, reviewNotes);
     } else {
       const total = parseFloat(totalInvoiceAmount) || 0;
       if (total <= 0) {
@@ -297,7 +297,7 @@ export default function ReviewModal({
                     <Building2 className="h-4 w-4" />
                     <span className="font-medium">{request.branchName}</span>
                     <span className={`px-2 py-0.5 text-xs font-semibold rounded-md ${
-                      request.branchType === 'PREMIERE' 
+                      request.branchType === 'PREMIER' 
                         ? 'bg-blue-500/20 text-blue-400' 
                         : 'bg-amber-500/20 text-amber-400'
                     }`}>
@@ -625,7 +625,7 @@ export default function ReviewModal({
                 ) : (
                   <>
                     <Check className="h-4 w-4" />
-                    {request.branchType === 'PREMIERE' ? 'Approve Request' : 'Buat Invoice'}
+                    {request.branchType === 'PREMIER' ? 'Approve Request' : 'Buat Invoice'}
                   </>
                 )}
               </button>

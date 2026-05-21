@@ -13,7 +13,7 @@ export interface BranchListParams {
 export interface CreateBranchData {
   branchCode: string;
   name: string;
-  type: 'PUSAT' | 'PREMIERE' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE';
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE';
   address: string;
   city: string;
   phone: string;

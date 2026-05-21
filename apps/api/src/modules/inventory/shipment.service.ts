@@ -34,6 +34,7 @@ export class ShipmentService {
 
   /**
    * Ship shipment (mark as shipped by Admin Manager)
+   * Supports sending more items than requested (overstock)
    */
   async shipShipment(
     shipmentId: string, 
@@ -42,6 +43,11 @@ export class ShipmentService {
       notes?: string;
       shipmentPhotoUrl?: string;
       shipmentPhotoName?: string;
+      items?: Array<{
+        masterProductId: string;
+        sentQty: number;
+        overstockReason?: string;
+      }>;
     }
   ) {
     return await this.processingService.shipShipment(shipmentId, userId, data);

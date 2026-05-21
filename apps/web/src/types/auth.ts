@@ -19,6 +19,7 @@ export interface AuthUser {
   branchCode: string | null;
   fullName: string;
   staffCode: string | null;
+  avatarUrl?: string | null;
 }
 
 export interface TokenPair {

@@ -35,12 +35,12 @@ export async function seedDashboardTestData(prisma: PrismaClient, branches: any[
     return;
   }
 
-  // Get package pricings - SESUAI LIST HARGA (PM = Premiere)
+  // Get package pricings - SESUAI LIST HARGA (PM = Premier)
   const nb7pm = await prisma.packagePricing.findFirst({
     where: { 
       branchId: branchPusat.id, 
       packageType: 'BASIC', 
-      productCode: 'TNB-P7-PM' // 7X Premiere
+      productCode: 'TNB-P7-PM' // 7X Premier
     }
   });
 
@@ -48,7 +48,7 @@ export async function seedDashboardTestData(prisma: PrismaClient, branches: any[
     where: { 
       branchId: branchPusat.id, 
       packageType: 'BASIC', 
-      productCode: 'TNB-P15-PM' // 15X Premiere
+      productCode: 'TNB-P15-PM' // 15X Premier
     }
   });
 
@@ -56,7 +56,7 @@ export async function seedDashboardTestData(prisma: PrismaClient, branches: any[
     where: { 
       branchId: branchPusat.id, 
       packageType: 'BOOSTER',
-      productCode: 'BST-NO-P1-PM' // Booster NO Premiere
+      productCode: 'BST-NO-P1-PM' // Booster NO Premier
     }
   });
 

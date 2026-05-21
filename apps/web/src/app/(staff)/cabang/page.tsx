@@ -95,7 +95,7 @@ export default function CabangPage() {
             <div className="branch-badges">
               <span className="branch-code">{branch.branchCode}</span>
               {branch.type === 'PUSAT' && (
-                <span className="branch-type-badge">PREMIERE</span>
+                <span className="branch-type-badge">PREMIER</span>
               )}
               {branch.isActive && (
                 <span className="status-badge active">✓ Aktif</span>

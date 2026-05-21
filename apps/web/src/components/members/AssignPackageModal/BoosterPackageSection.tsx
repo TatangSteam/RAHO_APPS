@@ -13,7 +13,7 @@ interface BoosterPackageSectionProps {
 }
 
 const SERVICE_TYPE_NAMES: Record<string, string> = {
-  PM: 'Premiere',
+  PM: 'Premier',
   PS: 'Partnership',
   PTY: 'Partnership Attiya',
   PDA: 'Partnership Dr. Abhi',

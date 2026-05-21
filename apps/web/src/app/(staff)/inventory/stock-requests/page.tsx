@@ -157,10 +157,10 @@ export default function StockRequestsPage() {
     }
   };
 
-  const handleApprovePremiereRequest = async (requestId: string, reviewNotes: string) => {
+  const handleApprovePremierRequest = async (requestId: string, reviewNotes: string) => {
     try {
       setActionLoading(true);
-      const response = await inventoryApi.approvePremiereRequest(requestId, reviewNotes);
+      const response = await inventoryApi.approvePremierRequest(requestId, reviewNotes);
       const message = response.data?.data?.message || 'Request stok berhasil di-approve';
       showToast.success(message);
       setShowModal(false);
@@ -383,7 +383,7 @@ export default function StockRequestsPage() {
           request={selectedRequest}
           userRole={user?.role}
           onClose={handleCloseModal}
-          onApprovePremiereRequest={handleApprovePremiereRequest}
+          onApprovePremierRequest={handleApprovePremierRequest}
           onCreatePartnershipInvoice={handleCreatePartnershipInvoice}
           onConfirmPayment={handleConfirmPayment}
           onRejectPayment={handleRejectPayment}

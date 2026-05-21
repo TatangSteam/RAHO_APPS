@@ -125,4 +125,13 @@ export const meApi = {
     const res = await api.get('/me/invoices', { params: { page, limit } })
     return { data: res.data.data, meta: res.data.meta }
   },
+
+  uploadAvatar: async (file: File): Promise<{ avatarUrl: string }> => {
+    const formData = new FormData()
+    formData.append('avatar', file)
+    const res = await api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data.data
+  },
 }

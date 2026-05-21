@@ -7,7 +7,7 @@ export const createBranchSchema = z.object({
   address: z.string().min(5),
   city: z.string().min(2).max(50),
   phone: z.string().min(8).max(20),
-  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIERE', 'PARTNERSHIP']).default('PREMIERE'),
+  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIER', 'PARTNERSHIP']).default('PREMIER'),
   operatingHours: z.string().optional(),
 });
 
@@ -19,7 +19,7 @@ export const updateBranchSchema = z.object({
   address: z.string().min(5).optional(),
   city: z.string().min(2).max(50).optional(),
   phone: z.string().min(8).max(20).optional(),
-  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIERE', 'PARTNERSHIP']).optional(),
+  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIER', 'PARTNERSHIP']).optional(),
   operatingHours: z.string().optional(),
   isActive: z.boolean().optional(),
 });
@@ -32,7 +32,7 @@ export const listBranchesQuerySchema = z.object({
   limit: z.coerce.number().int().positive().max(100).default(20),
   search: z.string().optional(),
   isActive: z.enum(['true', 'false']).optional(),
-  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIERE', 'PARTNERSHIP']).optional(),
+  type: z.enum(['KLINIK', 'HOMECARE', 'PREMIER', 'PARTNERSHIP']).optional(),
 });
 
 export type ListBranchesQuery = z.infer<typeof listBranchesQuerySchema>;
