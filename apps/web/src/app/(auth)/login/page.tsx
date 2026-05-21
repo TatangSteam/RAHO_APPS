@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, LogIn, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/authStore';
 import { loginApi } from '@/lib/authApi';
@@ -83,258 +83,218 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <div className="login-card">
-        {/* Logo & Brand */}
-        <div className="login-brand">
-          <div className="login-logo">
-            <span>R</span>
-          </div>
-          <div>
-            <h1 className="login-title">Raho ERP</h1>
-            <p className="login-subtitle">Sistem Manajemen Terapi Infus</p>
-          </div>
+    <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#0a0a0a] overflow-hidden">
+      {/* Left Side - Image with Premium Overlay */}
+      <div className="hidden lg:block lg:w-[60%] xl:w-[65%] relative bg-[#0a0a0a] overflow-hidden">
+        {/* Background Image */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/asset/login-bg.png"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        
+        {/* Animated Gold Particles Overlay */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-2 h-2 bg-amber-400/30 rounded-full animate-pulse" />
+          <div className="absolute top-1/3 right-1/3 w-1.5 h-1.5 bg-amber-300/40 rounded-full animate-pulse delay-300" />
+          <div className="absolute bottom-1/4 left-1/3 w-1 h-1 bg-amber-500/30 rounded-full animate-pulse delay-500" />
+          <div className="absolute top-1/2 right-1/4 w-2 h-2 bg-amber-400/20 rounded-full animate-pulse delay-700" />
         </div>
-
-        <hr className="divider" style={{ margin: '24px 0' }} />
-
-        <h2 className="login-heading">Masuk ke Akun</h2>
-        <p className="login-desc">
-          Silakan masukkan email dan password Anda
-        </p>
-
-        {/* Logout Message Alert */}
-        {logoutMessage && (
-          <div className="login-info-alert" role="alert">
-            <AlertCircle size={16} />
-            <span>{logoutMessage}</span>
-          </div>
-        )}
-
-        {/* Server Error Alert */}
-        {serverError && (
-          <div className="login-error-alert" role="alert">
-            <AlertCircle size={16} />
-            <span>{serverError}</span>
-          </div>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit(onSubmit)} noValidate className="login-form">
-          {/* Email */}
-          <div className="form-group">
-            <label htmlFor="email" className="form-label">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              placeholder="dokter@raho.id"
-              className={`form-input ${errors.email ? 'error' : ''}`}
-              {...register('email')}
-            />
-            {errors.email && (
-              <p className="form-error">
-                <AlertCircle size={12} />
-                {errors.email.message}
-              </p>
-            )}
-          </div>
-
-          {/* Password */}
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">
-              Password
-            </label>
-            <div className="input-wrapper">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                className={`form-input ${errors.password ? 'error' : ''}`}
-                style={{ paddingRight: '44px' }}
-                {...register('password')}
-              />
-              <button
-                type="button"
-                className="password-toggle"
-                onClick={() => setShowPassword((p) => !p)}
-                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            {errors.password && (
-              <p className="form-error">
-                <AlertCircle size={12} />
-                {errors.password.message}
-              </p>
-            )}
-          </div>
-
-          {/* Submit */}
-          <button
-            type="submit"
-            id="btn-login"
-            className="btn btn-primary btn-full btn-lg"
-            disabled={isSubmitting}
-            style={{ marginTop: '8px' }}
-          >
-            {isSubmitting ? (
-              <>
-                <span className="spinner" style={{ width: 18, height: 18 }} />
-                Memproses…
-              </>
-            ) : (
-              <>
-                <LogIn size={18} />
-                Masuk
-              </>
-            )}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <p className="login-footer">
-          © {new Date().getFullYear()} Raho ERP. All rights reserved.
-        </p>
+        
+        {/* Premium Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#0a0a0a]/20 to-[#0a0a0a]" />
       </div>
 
-      <style>{`
-        .login-card {
-          position: relative;
-          z-index: 1;
-          background: var(--surface-card);
-          border: 1px solid var(--surface-border);
-          border-radius: var(--radius-2xl);
-          padding: 40px;
-          width: 100%;
-          max-width: 440px;
-          box-shadow: var(--shadow-lg);
-          animation: fadeIn 0.4s both;
-        }
+      {/* Right Side - Premium Login Form */}
+      <div className="flex-1 lg:w-[40%] xl:w-[35%] min-h-screen flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-[#0a0a0a] relative">
+        {/* Subtle Background Pattern */}
+        <div className="absolute inset-0 opacity-[0.02]" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, #d4a853 1px, transparent 0)`,
+          backgroundSize: '40px 40px'
+        }} />
+        
+        {/* Ambient Glow */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-amber-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-amber-600/5 rounded-full blur-3xl" />
 
-        .login-brand {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
+        <div className="w-full max-w-md relative z-10">
+          {/* Mobile Logo */}
+          <div className="lg:hidden flex flex-col items-center mb-10">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/asset/login-bg.png"
+              alt="Raho Premier Club"
+              className="w-48 h-auto object-contain"
+            />
+          </div>
 
-        .login-logo {
-          width: 52px;
-          height: 52px;
-          border-radius: var(--radius-lg);
-          background: linear-gradient(135deg, var(--color-primary-600), var(--color-primary-800));
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 22px;
-          font-weight: 800;
-          color: #fff;
-          box-shadow: 0 4px 16px rgba(37, 99, 235, 0.4);
-          flex-shrink: 0;
-        }
+          {/* Premium Header with Icon */}
+          <div className="mb-10 text-center lg:text-left">
 
-        .login-title {
-          font-size: 20px;
-          font-weight: 700;
-          color: var(--text-primary);
-          line-height: 1.2;
-        }
+            <h1 className="text-4xl font-bold mb-3">
+              <span className="bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 bg-clip-text text-transparent">
+                Selamat Datang
+              </span>
+            </h1>
+            <p className="text-neutral-400 text-lg">
+              Masuk ke <span className="text-amber-500/80 font-medium">Raho Premier Club</span>
+            </p>
+          </div>
 
-        .login-subtitle {
-          font-size: 12px;
-          color: var(--text-muted);
-          margin-top: 2px;
-        }
+          {/* Logout Message Alert */}
+          {logoutMessage && (
+            <div className="flex items-center gap-3 p-4 mb-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl text-amber-400 text-sm backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertCircle size={18} className="flex-shrink-0" />
+              <span>{logoutMessage}</span>
+            </div>
+          )}
 
-        .login-heading {
-          font-size: 18px;
-          font-weight: 600;
-          color: var(--text-primary);
-          margin-bottom: 6px;
-        }
+          {/* Server Error Alert */}
+          {serverError && (
+            <div className="flex items-center gap-3 p-4 mb-6 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-400 text-sm backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+              <AlertCircle size={18} className="flex-shrink-0" />
+              <span>{serverError}</span>
+            </div>
+          )}
 
-        .login-desc {
-          font-size: 13px;
-          color: var(--text-secondary);
-          margin-bottom: 24px;
-        }
+          {/* Premium Glassmorphism Form Card */}
+          <div className="p-8 rounded-3xl bg-neutral-900/50 backdrop-blur-xl border border-neutral-800/50 shadow-2xl shadow-black/20">
+            <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
+              {/* Email */}
+              <div className="space-y-2">
+                <label htmlFor="email" className="block text-sm font-medium text-neutral-300">
+                  Email
+                </label>
+                <div className="relative group">
+                  <input
+                    id="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="nama@raho.id"
+                    className={`
+                      w-full px-5 py-4 rounded-xl
+                      bg-neutral-800/50 border
+                      text-white placeholder-neutral-500
+                      transition-all duration-300
+                      focus:outline-none focus:ring-2 focus:ring-amber-500/50
+                      ${errors.email 
+                        ? 'border-red-500/50 focus:border-red-500' 
+                        : 'border-neutral-700/50 hover:border-neutral-600 focus:border-amber-500'
+                      }
+                    `}
+                    {...register('email')}
+                  />
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/0 via-amber-500/0 to-amber-500/0 group-focus-within:from-amber-500/5 group-focus-within:via-amber-500/10 group-focus-within:to-amber-500/5 transition-all duration-500 pointer-events-none" />
+                </div>
+                {errors.email && (
+                  <p className="flex items-center gap-1.5 text-xs text-red-400 mt-1">
+                    <AlertCircle size={12} />
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
 
-        .login-info-alert {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          background: rgba(59, 130, 246, 0.1);
-          border: 1px solid rgba(59, 130, 246, 0.25);
-          border-radius: var(--radius-md);
-          color: #3b82f6;
-          font-size: 13px;
-          margin-bottom: 20px;
-          animation: slideDown 0.3s ease-out;
-        }
+              {/* Password */}
+              <div className="space-y-2">
+                <label htmlFor="password" className="block text-sm font-medium text-neutral-300">
+                  Password
+                </label>
+                <div className="relative group">
+                  <input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    className={`
+                      w-full px-5 py-4 pr-14 rounded-xl
+                      bg-neutral-800/50 border
+                      text-white placeholder-neutral-500
+                      transition-all duration-300
+                      focus:outline-none focus:ring-2 focus:ring-amber-500/50
+                      ${errors.password 
+                        ? 'border-red-500/50 focus:border-red-500' 
+                        : 'border-neutral-700/50 hover:border-neutral-600 focus:border-amber-500'
+                      }
+                    `}
+                    {...register('password')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((p) => !p)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-lg text-neutral-400 hover:text-amber-400 hover:bg-amber-500/10 transition-all duration-200"
+                    aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                  <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/0 via-amber-500/0 to-amber-500/0 group-focus-within:from-amber-500/5 group-focus-within:via-amber-500/10 group-focus-within:to-amber-500/5 transition-all duration-500 pointer-events-none" />
+                </div>
+                {errors.password && (
+                  <p className="flex items-center gap-1.5 text-xs text-red-400 mt-1">
+                    <AlertCircle size={12} />
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
 
-        .login-error-alert {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.25);
-          border-radius: var(--radius-md);
-          color: #f87171;
-          font-size: 13px;
-          margin-bottom: 20px;
-        }
+              {/* Premium Submit Button */}
+              <button
+                type="submit"
+                id="btn-login"
+                disabled={isSubmitting}
+                className={`
+                  relative w-full flex items-center justify-center gap-3 
+                  px-8 py-4 mt-8 rounded-xl
+                  font-semibold text-base uppercase tracking-wider
+                  transition-all duration-300 overflow-hidden
+                  ${isSubmitting 
+                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
+                    : 'bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 text-black hover:from-amber-400 hover:via-amber-500 hover:to-amber-500 hover:shadow-xl hover:shadow-amber-500/25 hover:-translate-y-0.5 active:translate-y-0 active:shadow-lg'
+                  }
+                `}
+              >
+                {/* Button Shine Effect */}
+                {!isSubmitting && (
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" />
+                )}
+                
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <LogIn size={20} />
+                    <span>Masuk</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
 
-        @keyframes slideDown {
-          from {
-            opacity: 0;
-            transform: translateY(-10px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
+          {/* Help Text */}
+          <div className="text-center mt-8">
+            <p className="text-sm text-neutral-500">
+              Butuh bantuan? <span className="text-amber-500/70 hover:text-amber-400 cursor-pointer transition-colors">Hubungi administrator</span>
+            </p>
+          </div>
 
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 18px;
-        }
+          {/* Premium Footer */}
+          <div className="mt-12 pt-8 border-t border-neutral-800/50">
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2 text-amber-500/60">
 
-        .input-wrapper {
-          position: relative;
-        }
-
-        .password-toggle {
-          position: absolute;
-          right: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: var(--text-muted);
-          display: flex;
-          align-items: center;
-          padding: 4px;
-          border-radius: var(--radius-sm);
-          transition: color var(--transition-fast);
-        }
-        .password-toggle:hover { color: var(--text-secondary); }
-
-        .login-footer {
-          text-align: center;
-          font-size: 12px;
-          color: var(--text-muted);
-          margin-top: 28px;
-        }
-      `}</style>
-    </>
+              </div>
+              <div className="flex items-center justify-center gap-4 text-xs text-neutral-600">
+                <span>© {new Date().getFullYear()} Raho Premier Club</span>
+                <span className="w-1 h-1 rounded-full bg-amber-500/30" />
+                <span className="text-amber-600/50">Reverse Aging & Homeostasis</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

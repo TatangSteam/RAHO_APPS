@@ -23,9 +23,26 @@ const config: Config = {
           950: '#172554',
         },
       },
+      animation: {
+        'in': 'animateIn 0.5s ease-out',
+        'shake': 'shake 0.5s ease-in-out',
+      },
+      keyframes: {
+        animateIn: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '25%': { transform: 'translateX(-5px)' },
+          '75%': { transform: 'translateX(5px)' },
+        },
+      },
     },
   },
-  plugins: [],
+  plugins: [
+    require('tailwindcss-animate'),
+  ],
 };
 
 export default config;
