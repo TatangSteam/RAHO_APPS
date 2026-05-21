@@ -27,7 +27,7 @@ export async function seedUsers(
     // ============================================================
     {
       email: 'superadmin@raho.id',
-      password: 'SuperAdmin@123',
+      password: 'SuP3r4Dm1n',
       role: Role.SUPER_ADMIN,
       branchId: null, // SUPER_ADMIN tidak perlu branchId
       staffCode: 'SA-20260413-RAHO',

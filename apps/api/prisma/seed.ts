@@ -100,7 +100,7 @@ async function main(): Promise<void> {
     console.log('\n🎉 COMPLETE SEED FINISHED SUCCESSFULLY!\n');
     console.log('──────────────────────────────────────────');
     console.log('📧 Admin accounts:');
-    console.log('  superadmin@raho.id   → SuperAdmin@123  [SUPER_ADMIN]');
+    console.log('  superadmin@raho.id   → SuP3r4Dm1n  [SUPER_ADMIN]');
     console.log('  manager@raho.id      → Manager@123     [ADMIN_MANAGER]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');

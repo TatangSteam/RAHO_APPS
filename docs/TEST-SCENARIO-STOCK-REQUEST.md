@@ -16,10 +16,11 @@ Dokumen ini berisi skenario pengujian untuk fitur Request Stok yang mencakup:
 
 | Role | Email | Password | Branch |
 |------|-------|----------|--------|
-| Super Admin | superadmin@raho.id | SuperAdmin@123 | - |
+| Super Admin | superadmin@raho.id | SuP3r4Dm1n | - |
 | Admin Manager | manager1@raho.id | Manager@123 | Manages multiple branches |
 | Admin Cabang (Premiere) | admincabang.pst@raho.id | AdminCabang@123 | RAHO Premiere Jakarta |
 | Admin Cabang (Partnership) | admincabang.bdg@raho.id | AdminCabang@123 | | RAHO Partnership Bandung |
+
 
 ### Test Data Requirements
 - Master Products sudah tersedia di database

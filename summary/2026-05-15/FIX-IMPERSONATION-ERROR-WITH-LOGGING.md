@@ -133,7 +133,7 @@ POST http://localhost:4000/api/v1/admin/impersonate/cmp44ett3000aze4k4awme4e0 40
 ```bash
 # Login as super admin
 Email: superadmin@raho.id
-Password: SuperAdmin@123
+Password: SuP3r4Dm1n
 
 # Try to impersonate Admin Manager
 - Should see logs in console
