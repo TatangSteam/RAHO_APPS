@@ -577,6 +577,43 @@ export default function ReviewModal({
             </div>
           )}
 
+          {/* Existing Review Notes - Show when request has been reviewed */}
+          {request.reviewNotes && (
+            <div className={modalStyles.section}>
+              <div className={`${modalStyles.sectionBox}`} style={{
+                background: request.status === 'REJECTED' 
+                  ? 'rgba(239, 68, 68, 0.1)' 
+                  : 'rgba(34, 197, 94, 0.1)',
+                borderColor: request.status === 'REJECTED' 
+                  ? 'rgba(239, 68, 68, 0.3)' 
+                  : 'rgba(34, 197, 94, 0.3)',
+              }}>
+                <h3 className={modalStyles.sectionTitle} style={{
+                  color: request.status === 'REJECTED' ? '#ef4444' : '#22c55e',
+                }}>
+                  {request.status === 'REJECTED' ? '❌ Alasan Penolakan' : '✅ Catatan Review'}
+                </h3>
+                <p style={{ 
+                  color: 'var(--text-primary)', 
+                  fontSize: '0.9rem',
+                  lineHeight: '1.5',
+                  whiteSpace: 'pre-wrap',
+                }}>
+                  {request.reviewNotes}
+                </p>
+                {request.reviewedAt && (
+                  <p style={{ 
+                    color: 'var(--text-muted)', 
+                    fontSize: '0.8rem', 
+                    marginTop: '8px' 
+                  }}>
+                    🕐 Direview: {new Date(request.reviewedAt).toLocaleString('id-ID')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Notes Input - Only show for managers */}
           {isManager && (
             <div className={modalStyles.section}>

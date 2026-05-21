@@ -153,8 +153,27 @@ export default function StockRequestCard({
 
         {request.notes && (
           <div className={styles.notesSection}>
-            <span className={styles.label}>Catatan:</span>
+            <span className={styles.label}>Catatan Request:</span>
             <p className={styles.noteText}>{request.notes}</p>
+          </div>
+        )}
+
+        {/* Review Notes - show after reviewed */}
+        {request.reviewNotes && (
+          <div className={styles.notesSection} style={{ 
+            backgroundColor: request.status === 'REJECTED' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+            borderLeft: `3px solid ${request.status === 'REJECTED' ? '#ef4444' : '#22c55e'}`,
+            padding: '8px 12px',
+            borderRadius: '4px',
+            marginTop: '8px',
+          }}>
+            <span className={styles.label} style={{ 
+              color: request.status === 'REJECTED' ? '#ef4444' : '#22c55e',
+              fontWeight: 600,
+            }}>
+              {request.status === 'REJECTED' ? '❌ Alasan Penolakan:' : '✅ Catatan Review:'}
+            </span>
+            <p className={styles.noteText} style={{ marginTop: '4px' }}>{request.reviewNotes}</p>
           </div>
         )}
 

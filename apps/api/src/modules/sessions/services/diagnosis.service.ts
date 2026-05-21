@@ -7,14 +7,17 @@ import { Role, AuditAction } from '@prisma/client';
 
 export class DiagnosisService {
   /**
-   * Link an existing diagnosis to an encounter for a therapy session.
+   * Create a session-specific diagnosis copy for an encounter.
    * 
-   * This function finds an existing diagnosis by matching the diagnosis text
-   * and links it to the encounter. If no matching diagnosis is found,
-   * it creates a new one.
+   * This function creates a NEW diagnosis record for each therapy session,
+   * copying data from the selected diagnosis. This prevents the original
+   * diagnosis from being modified and allows the same diagnosis to be
+   * used across multiple sessions.
    * 
-   * IMPORTANT: Diagnoses should be created from the Member Detail page first.
-   * This function is used to link an existing diagnosis to a therapy session.
+   * IMPORTANT: 
+   * - Original diagnoses (with encounterId = null) are created from Member Detail page
+   * - Session diagnoses (with encounterId set) are copies created for each session
+   * - This prevents duplicate diagnoses appearing in member's diagnosis list
    */
   async createDiagnosis(encounterId: string, data: CreateDiagnosisInput, userId: string) {
     // Check if diagnosis already linked to this encounter
@@ -40,38 +43,6 @@ export class DiagnosisService {
       throw { status: 404, code: 'ENCOUNTER_NOT_FOUND', message: 'Encounter tidak ditemukan' };
     }
 
-    // Try to find existing diagnosis for this member with matching diagnosis text
-    const existingDiagnosis = await prisma.diagnosis.findFirst({
-      where: {
-        memberId: encounter.memberId,
-        diagnosa: data.diagnosa,
-        encounterId: null, // Only find unlinked diagnoses
-      },
-    });
-
-    if (existingDiagnosis) {
-      // Link existing diagnosis to this encounter
-      const linkedDiagnosis = await prisma.diagnosis.update({
-        where: { id: existingDiagnosis.id },
-        data: { encounterId },
-      });
-
-      await logAudit({
-        userId,
-        action: AuditAction.UPDATE,
-        resource: 'Diagnosis',
-        resourceId: linkedDiagnosis.id,
-        meta: { 
-          action: 'LINK_TO_ENCOUNTER',
-          diagnosisCode: linkedDiagnosis.diagnosisCode, 
-          encounterId 
-        },
-      });
-
-      return linkedDiagnosis;
-    }
-
-    // If no existing diagnosis found, create a new one
     // Validate doctor
     const doctor = await prisma.user.findUnique({
       where: { id: data.doktorPemeriksa },
@@ -86,8 +57,9 @@ export class DiagnosisService {
     }
 
     // Generate diagnosis code with sequence
+    // Use "DXS" prefix for session diagnoses to differentiate from member diagnoses "DX"
     const branchCode = encounter.branch.branchCode;
-    const prefix = `DX-${branchCode}-`;
+    const prefix = `DXS-${branchCode}-`;
     const lastDiagnosis = await prisma.diagnosis.findFirst({
       where: { diagnosisCode: { startsWith: prefix } },
       orderBy: { diagnosisCode: 'desc' },
@@ -97,14 +69,26 @@ export class DiagnosisService {
       ? parseInt(lastDiagnosis.diagnosisCode.split('-').pop() || '0') + 1 
       : 1;
     
-    const diagnosisCode = generateDiagnosisCode(branchCode, sequence);
+    const diagnosisCode = generateDiagnosisCode(branchCode, sequence, 'DXS');
 
+    // Always create a new diagnosis record for this session
+    // This is a "session copy" of the original diagnosis
     const diagnosis = await prisma.diagnosis.create({
       data: {
         diagnosisCode,
         memberId: encounter.memberId,
-        encounterId,
-        ...data,
+        encounterId, // Link to this specific encounter/session
+        doktorPemeriksa: data.doktorPemeriksa,
+        diagnosa: data.diagnosa,
+        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        icdPrimer: data.icdPrimer || null,
+        icdSekunder: data.icdSekunder || null,
+        icdTersier: data.icdTersier || null,
+        keluhanRiwayatSekarang: data.keluhanRiwayatSekarang || null,
+        riwayatPenyakitTerdahulu: data.riwayatPenyakitTerdahulu || null,
+        riwayatSosialKebiasaan: data.riwayatSosialKebiasaan || null,
+        riwayatPengobatan: data.riwayatPengobatan || null,
+        pemeriksaanFisik: data.pemeriksaanFisik || null,
         pemeriksaanTambahan: data.pemeriksaanTambahan || undefined,
       },
     });
@@ -114,7 +98,12 @@ export class DiagnosisService {
       action: AuditAction.CREATE,
       resource: 'Diagnosis',
       resourceId: diagnosis.id,
-      meta: { diagnosisCode, encounterId },
+      meta: { 
+        diagnosisCode, 
+        encounterId,
+        action: 'SESSION_DIAGNOSIS_COPY',
+        originalDiagnosa: data.diagnosa,
+      },
     });
 
     return diagnosis;

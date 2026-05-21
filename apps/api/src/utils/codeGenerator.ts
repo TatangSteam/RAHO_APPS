@@ -107,11 +107,16 @@ export function generateSessionCode(branchCode: string, infusKe: number): string
 // ── Diagnosis ─────────────────────────────────────────────────
 
 /**
- * Generate diagnosis code: DX-{BRANCH}-{YYMM}-{SEQ:05}
- * @example DX-PST-2604-00001
+ * Generate diagnosis code: {PREFIX}-{BRANCH}-{YYMM}-{SEQ:05}
+ * @param branchCode - Branch code (e.g., "PST")
+ * @param sequence - Sequence number
+ * @param prefix - Optional prefix, defaults to "DX" for member diagnoses
+ *                 Use "DXS" for session-specific diagnosis copies
+ * @example DX-PST-2604-00001 (member diagnosis)
+ * @example DXS-PST-2604-00001 (session diagnosis copy)
  */
-export function generateDiagnosisCode(branchCode: string, sequence: number): string {
-  return `DX-${branchCode}-${getYYMM()}-${pad(sequence)}`;
+export function generateDiagnosisCode(branchCode: string, sequence: number, prefix: string = 'DX'): string {
+  return `${prefix}-${branchCode}-${getYYMM()}-${pad(sequence)}`;
 }
 
 // ── Therapy Plan ──────────────────────────────────────────────

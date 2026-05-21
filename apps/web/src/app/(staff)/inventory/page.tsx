@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useAuthStore } from '@/stores/authStore';
@@ -37,6 +37,13 @@ interface InventoryItem {
   };
 }
 
+interface Branch {
+  id: string;
+  branchCode: string;
+  name: string;
+  type: string;
+}
+
 export default function InventoryPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
@@ -46,6 +53,11 @@ export default function InventoryPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [mounted, setMounted] = useState(false);
   const [modalMounted, setModalMounted] = useState(false);
+  
+  // Branch selector for Super Admin and Admin Manager
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
+  const [loadingBranches, setLoadingBranches] = useState(false);
   
   // Edit stock modal state
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -60,6 +72,9 @@ export default function InventoryPage() {
   
   // Admin Cabang can edit stock in their own branch
   const canEditStock = user?.role === 'ADMIN_CABANG';
+  
+  // Check if user can select branches (Super Admin or Admin Manager)
+  const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   useEffect(() => {
     setMounted(true);
@@ -71,6 +86,29 @@ export default function InventoryPage() {
     console.log('Modal state changed:', { editModalOpen, selectedItem: selectedItem?.masterProduct?.name });
   }, [editModalOpen, selectedItem]);
 
+  // Fetch branches for Super Admin and Admin Manager
+  const fetchBranches = useCallback(async () => {
+    if (!canSelectBranch || !accessToken) return;
+    
+    try {
+      setLoadingBranches(true);
+      const response = await api.get('/branches');
+      const branchesData = response.data?.data || [];
+      setBranches(branchesData);
+      
+      // Set default branch if user has one, otherwise use first branch
+      if (user?.branchId) {
+        setSelectedBranchId(user.branchId);
+      } else if (branchesData.length > 0) {
+        setSelectedBranchId(branchesData[0].id);
+      }
+    } catch (error) {
+      console.error('Failed to fetch branches:', error);
+    } finally {
+      setLoadingBranches(false);
+    }
+  }, [canSelectBranch, accessToken, user?.branchId]);
+
   useEffect(() => {
     if (!mounted) return;
     
@@ -79,10 +117,25 @@ export default function InventoryPage() {
       return;
     }
     
-    fetchInventoryItems();
-  }, [mounted, user, accessToken]);
+    // For Super Admin and Admin Manager, fetch branches first
+    if (canSelectBranch) {
+      fetchBranches();
+    } else {
+      // For Admin Cabang, use their branch directly
+      if (user.branchId) {
+        setSelectedBranchId(user.branchId);
+      }
+    }
+  }, [mounted, user, accessToken, canSelectBranch, fetchBranches]);
 
-  const fetchInventoryItems = async () => {
+  // Fetch inventory when branch is selected
+  useEffect(() => {
+    if (selectedBranchId && accessToken) {
+      fetchInventoryItems(selectedBranchId);
+    }
+  }, [selectedBranchId, accessToken]);
+
+  const fetchInventoryItems = async (branchId: string) => {
     try {
       setLoading(true);
       
@@ -92,12 +145,12 @@ export default function InventoryPage() {
         return;
       }
 
-      if (!user?.branchId) {
-        showToast.error('Branch ID tidak ditemukan.');
+      if (!branchId) {
+        showToast.error('Pilih cabang terlebih dahulu.');
         return;
       }
 
-      const response = await inventoryApi.getAvailableItems(user.branchId);
+      const response = await inventoryApi.getAvailableItems(branchId);
       setItems(response.data.data || []);
     } catch (error) {
       showToast.error('Gagal memuat data inventori');
@@ -217,7 +270,7 @@ export default function InventoryPage() {
 
       showToast.success('Stok berhasil disesuaikan');
       handleCloseEditModal();
-      fetchInventoryItems(); // Refresh data
+      fetchInventoryItems(selectedBranchId); // Refresh data
     } catch (error: any) {
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyesuaikan stok';
       showToast.error(errorMessage);
@@ -631,8 +684,56 @@ export default function InventoryPage() {
           <div className={styles.headerContent}>
             <div className={styles.headerText}>
               <h1>📦 Inventori Stok</h1>
-              <p>Kelola dan monitor stok barang di cabang Anda</p>
+              <p>Kelola dan monitor stok barang {canSelectBranch ? '' : 'di cabang Anda'}</p>
             </div>
+            
+            {/* Branch Selector for Super Admin and Admin Manager */}
+            {canSelectBranch && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                marginLeft: 'auto',
+                marginRight: '16px',
+              }}>
+                <label style={{ 
+                  color: 'var(--text-secondary)', 
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                }}>
+                  🏢 Cabang:
+                </label>
+                <select
+                  value={selectedBranchId}
+                  onChange={(e) => setSelectedBranchId(e.target.value)}
+                  disabled={loadingBranches}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-card)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    minWidth: '200px',
+                    cursor: loadingBranches ? 'wait' : 'pointer',
+                  }}
+                >
+                  {loadingBranches ? (
+                    <option>Memuat cabang...</option>
+                  ) : branches.length === 0 ? (
+                    <option value="">Tidak ada cabang</option>
+                  ) : (
+                    branches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name} ({branch.branchCode}) - {branch.type}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+            )}
+            
             {canAccessStockRequests && (
               <div className={styles.headerActions}>
                 <button 
@@ -732,6 +833,12 @@ export default function InventoryPage() {
           <div className={styles.loadingSpinner}>⏳</div>
           <p>Memuat data inventori...</p>
         </div>
+      ) : !selectedBranchId && canSelectBranch ? (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>🏢</div>
+          <h3>Pilih Cabang</h3>
+          <p>Pilih cabang terlebih dahulu untuk melihat data inventori</p>
+        </div>
       ) : filteredItems.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>📦</div>
@@ -739,7 +846,7 @@ export default function InventoryPage() {
           <p>
             {searchTerm 
               ? `Tidak ada item yang cocok dengan pencarian "${searchTerm}"`
-              : 'Belum ada item inventori yang terdaftar di sistem'}
+              : 'Belum ada item inventori yang terdaftar di cabang ini'}
           </p>
           {searchTerm && (
             <button 

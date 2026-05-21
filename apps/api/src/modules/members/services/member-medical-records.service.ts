@@ -35,6 +35,7 @@ export class MemberMedicalRecordsService {
 
   /**
    * Get member diagnoses
+   * Only returns original diagnoses (encounterId = null), not session copies
    */
   async getMemberDiagnoses(memberId: string) {
     // Verify member exists
@@ -46,10 +47,13 @@ export class MemberMedicalRecordsService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Get all diagnoses for this member
+    // Get only original diagnoses (not session copies)
+    // Original diagnoses have encounterId = null
+    // Session copies have encounterId set and diagnosisCode starting with "DXS-"
     const diagnoses = await prisma.diagnosis.findMany({
       where: {
         memberId,
+        encounterId: null, // Only original diagnoses, not session copies
       },
       orderBy: {
         createdAt: 'desc',
