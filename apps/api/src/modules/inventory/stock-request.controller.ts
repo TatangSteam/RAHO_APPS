@@ -20,15 +20,23 @@ export class StockRequestController {
       const branchId = req.user?.branchId;
       const userId = req.user?.userId;
 
+      // Debug logging
+      console.log('=== CREATE STOCK REQUEST ===');
+      console.log('User:', { userId, branchId, role: req.user?.role });
+      console.log('Body:', JSON.stringify({ items, notes }, null, 2));
+
       if (!branchId || !userId) {
-        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+        console.log('ERROR: Missing branchId or userId');
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi atau tidak memiliki cabang');
       }
 
       const data: CreateStockRequestInput = { items, notes };
       const result = await stockRequestService.createRequest(data, branchId, userId);
 
+      console.log('SUCCESS: Stock request created');
       return sendSuccess(res, result, 201);
     } catch (err: any) {
+      console.log('ERROR:', err.code || err.message || err);
       next(err);
     }
   }

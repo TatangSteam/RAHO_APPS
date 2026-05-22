@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, FileText, Info, Image, Trash2, RefreshCw, Building2, CreditCard } from 'lucide-react';
+import { X, Upload, FileText, Info, ImageIcon, Trash2, RefreshCw, Building2, CreditCard, Download, CheckCircle2 } from 'lucide-react';
 import { StockRequest } from '../types';
 import { showToast } from '@/lib/toast';
+import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 
 interface UploadPaymentModalProps {
   request: StockRequest;
@@ -23,6 +24,7 @@ export default function UploadPaymentModal({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -98,6 +100,45 @@ export default function UploadPaymentModal({
     }).format(amount);
   };
 
+  const handleDownloadInvoice = async () => {
+    if (!request.invoice) {
+      showToast.error('Invoice tidak ditemukan');
+      return;
+    }
+    
+    setDownloadingPdf(true);
+    try {
+      let invoiceItems = request.invoice.items;
+      
+      if (!invoiceItems || invoiceItems.length === 0) {
+        const totalQty = request.items.reduce((sum, i) => sum + i.requestedQty, 0);
+        const pricePerUnit = totalQty > 0 ? Math.round(request.invoice.totalAmount / totalQty) : 0;
+        
+        invoiceItems = request.items.map(item => ({
+          id: item.id,
+          masterProductId: item.masterProductId,
+          productName: item.productName,
+          quantity: item.requestedQty,
+          pricePerUnit: pricePerUnit,
+          subtotal: pricePerUnit * item.requestedQty,
+        }));
+      }
+      
+      const invoiceWithItems = {
+        ...request,
+        invoice: { ...request.invoice, items: invoiceItems },
+      };
+      
+      await generateStockRequestInvoicePDF(invoiceWithItems);
+      showToast.success('Invoice PDF berhasil didownload');
+    } catch (error) {
+      console.error('Error generating invoice PDF:', error);
+      showToast.error('Gagal membuat PDF invoice');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const removeFile = () => {
     setFile(null);
     setPreview(null);
@@ -106,116 +147,100 @@ export default function UploadPaymentModal({
   if (!mounted) return null;
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Backdrop */}
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+      {/* Backdrop with blur */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-black/80 backdrop-blur-md"
         onClick={onClose}
-        aria-hidden="true"
       />
 
-      {/* Modal Container */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => e.stopPropagation()}
-        >
+      {/* Modal */}
+      <div className="relative w-full max-w-lg mx-4 animate-in fade-in zoom-in-95 duration-200">
+        <div className="bg-gradient-to-b from-neutral-900 to-neutral-950 rounded-2xl border border-neutral-800 shadow-2xl shadow-black/50 overflow-hidden">
+          
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 shadow-lg shadow-purple-500/30">
-                <Upload className="h-6 w-6 text-white" />
+          <div className="relative px-6 pt-6 pb-4">
+            {/* Decorative gradient line */}
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+            
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
+                  <Upload className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Upload Bukti Pembayaran</h2>
+                  <p className="text-sm text-neutral-400 font-mono">{request.requestCode}</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                  Upload Bukti Pembayaran
-                </h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  {request.requestCode}
-                </p>
-              </div>
+              <button
+                onClick={onClose}
+                className="p-2 rounded-lg text-neutral-500 hover:text-white hover:bg-neutral-800 transition-all"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </div>
 
-          {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
-            {/* Request Info Card */}
-            <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
-              <div className="flex items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-neutral-600 dark:text-neutral-300">
-                    <Building2 className="h-4 w-4" />
-                    <span className="font-medium">{request.branchName}</span>
-                    <span className="px-2 py-0.5 text-xs font-semibold rounded-md bg-amber-500/20 text-amber-400">
-                      PARTNERSHIP
-                    </span>
-                  </div>
-                </div>
-                <div className="px-3 py-1.5 rounded-full text-sm font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                  💰 Menunggu Pembayaran
-                </div>
+          {/* Content */}
+          <div className="px-6 pb-6 space-y-4">
+            
+            {/* Branch Info */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-800/50 border border-neutral-700/50">
+              <div className="flex items-center gap-3">
+                <Building2 className="w-4 h-4 text-neutral-400" />
+                <span className="text-sm font-medium text-neutral-200">{request.branchName}</span>
               </div>
+              <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                PARTNERSHIP
+              </span>
             </div>
 
-            {/* Info Box */}
-            <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                  <Info className="h-5 w-5 text-blue-400" />
+            {/* Invoice Card */}
+            {request.invoice && (
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="w-4 h-4 text-emerald-400" />
+                  <span className="text-sm font-semibold text-emerald-400">Invoice</span>
                 </div>
-                <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-blue-400 mb-1">Informasi</h4>
-                  <p className="text-sm text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                    Upload bukti pembayaran yang dikirimkan oleh Admin Cabang melalui WhatsApp atau Email. 
-                    Setelah diupload, Anda dapat memverifikasi dan mengkonfirmasi pembayaran.
+                
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-sm font-mono text-neutral-300">{request.invoice.invoiceNumber}</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">{request.itemCount} item</p>
+                  </div>
+                  <p className="text-2xl font-bold text-emerald-400">
+                    {formatCurrency(request.invoice.totalAmount)}
                   </p>
                 </div>
-              </div>
-            </div>
 
-            {/* Invoice Info */}
-            {request.invoice && (
-              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                    <FileText className="h-5 w-5 text-emerald-400" />
-                  </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-semibold text-emerald-400 mb-2">Detail Invoice</h4>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-neutral-600 dark:text-neutral-300">
-                          {request.invoice.invoiceNumber}
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                          {request.itemCount} item
-                        </p>
-                      </div>
-                      <p className="text-xl font-bold text-emerald-400">
-                        {formatCurrency(request.invoice.totalAmount)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <button
+                  onClick={handleDownloadInvoice}
+                  disabled={downloadingPdf}
+                  className="w-full py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {downloadingPdf ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      Membuat PDF...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Download Invoice PDF
+                    </>
+                  )}
+                </button>
               </div>
             )}
 
-            {/* File Upload Section */}
-            <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
-              <div className="flex items-center gap-2 mb-4">
-                <CreditCard className="h-5 w-5 text-purple-400" />
-                <h4 className="text-sm font-semibold text-purple-400">File Bukti Pembayaran</h4>
+            {/* Upload Section */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-amber-400" />
+                <span className="text-sm font-semibold text-amber-400">Bukti Pembayaran</span>
               </div>
-              
+
               {!preview ? (
                 <div
                   onDragEnter={handleDrag}
@@ -223,20 +248,20 @@ export default function UploadPaymentModal({
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
                   onClick={() => document.getElementById('payment-file-input')?.click()}
-                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                     dragActive 
-                      ? 'border-purple-500 bg-purple-500/20' 
-                      : 'border-purple-500/40 bg-purple-500/5 hover:border-purple-500/60 hover:bg-purple-500/10'
+                      ? 'border-amber-500 bg-amber-500/10' 
+                      : 'border-neutral-700 bg-neutral-800/30 hover:border-amber-500/50 hover:bg-neutral-800/50'
                   }`}
                 >
-                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 flex items-center justify-center">
-                    <Image className="h-8 w-8 text-purple-400" />
+                  <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
+                    <ImageIcon className="w-7 h-7 text-neutral-500" />
                   </div>
-                  <p className="font-semibold text-neutral-900 dark:text-white mb-1">
+                  <p className="text-sm font-medium text-neutral-300 mb-1">
                     {dragActive ? 'Lepaskan file di sini' : 'Drag & drop atau klik untuk memilih'}
                   </p>
-                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                    Format: JPG, PNG, JPEG (Maks. 5MB)
+                  <p className="text-xs text-neutral-500">
+                    JPG, PNG, JPEG • Maks. 5MB
                   </p>
                   <input
                     id="payment-file-input"
@@ -248,66 +273,74 @@ export default function UploadPaymentModal({
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="rounded-xl overflow-hidden bg-neutral-900/50 border border-purple-500/20">
+                  {/* Preview Image */}
+                  <div className="relative rounded-xl overflow-hidden bg-neutral-900 border border-neutral-700">
                     <img 
                       src={preview} 
                       alt="Preview"
-                      className="w-full max-h-[250px] object-contain"
+                      className="w-full max-h-48 object-contain"
                     />
-                  </div>
-                  <div className="flex items-center justify-between p-3 rounded-lg bg-purple-500/10">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                        <FileText className="h-5 w-5 text-purple-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm text-neutral-900 dark:text-white truncate">
-                          {file?.name}
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                          {file ? `${(file.size / 1024).toFixed(1)} KB` : ''}
-                        </p>
-                      </div>
+                    <div className="absolute top-2 right-2">
+                      <button
+                        onClick={removeFile}
+                        className="p-2 rounded-lg bg-red-500/90 hover:bg-red-500 text-white transition-all shadow-lg"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={removeFile}
-                      className="flex-shrink-0 px-3 py-2 rounded-lg bg-red-500/20 text-red-400 text-xs font-semibold hover:bg-red-500/30 transition-colors flex items-center gap-1.5"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Hapus
-                    </button>
+                  </div>
+                  
+                  {/* File Info */}
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-neutral-200 truncate">{file?.name}</p>
+                      <p className="text-xs text-neutral-500">
+                        {file ? `${(file.size / 1024).toFixed(1)} KB` : ''}
+                      </p>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
+
+            {/* Info Note */}
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-blue-300/80 leading-relaxed">
+                Upload bukti transfer dari Admin Cabang. Setelah diupload, Anda dapat memverifikasi dan mengkonfirmasi pembayaran.
+              </p>
+            </div>
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 flex-shrink-0">
+          <div className="px-6 py-4 bg-neutral-900/50 border-t border-neutral-800 flex items-center justify-end gap-3">
             <button
               onClick={onClose}
               disabled={loading}
-              className="px-5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all disabled:opacity-50"
+              className="px-5 py-2.5 rounded-xl text-sm font-semibold text-neutral-400 hover:text-white hover:bg-neutral-800 transition-all disabled:opacity-50"
             >
               Batal
             </button>
             <button
               onClick={handleUpload}
               disabled={loading || !file}
-              className={`px-6 py-2.5 rounded-xl font-semibold transition-all flex items-center gap-2 ${
+              className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
                 file
-                  ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/30'
-                  : 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white shadow-lg shadow-amber-500/25'
+                  : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
               }`}
             >
               {loading ? (
                 <>
-                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <RefreshCw className="w-4 h-4 animate-spin" />
                   Mengupload...
                 </>
               ) : (
                 <>
-                  <Upload className="h-4 w-4" />
+                  <Upload className="w-4 h-4" />
                   Upload & Simpan
                 </>
               )}

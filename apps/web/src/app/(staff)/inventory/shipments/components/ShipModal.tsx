@@ -8,8 +8,9 @@ import { Shipment, ShipShipmentInput } from '@/lib/api/inventoryApi';
 interface ShipmentItemWithOverstock {
   masterProductId: string;
   productName: string;
-  requestedQty: number;
-  sentQty: number;
+  originalRequestedQty: number; // Original request amount
+  overstockDeducted: number; // Amount already deducted from overstock
+  sentQty: number; // Amount to send (default = originalRequestedQty - overstockDeducted)
   unit: string;
   overstockReason: string;
 }
@@ -41,20 +42,32 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
 
   // Initialize items from shipment
   useEffect(() => {
-    setItems(shipment.items.map(item => ({
-      masterProductId: item.masterProductId,
-      productName: item.productName,
-      requestedQty: item.sentQty, // sentQty is the requested qty at this stage
-      sentQty: item.sentQty,
-      unit: item.unit,
-      overstockReason: '',
-    })));
+    setItems(shipment.items.map(item => {
+      // Get original requested qty and overstock info
+      const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
+      const overstockDeducted = (item as any).overstockDeducted || 0;
+      
+      return {
+        masterProductId: item.masterProductId,
+        productName: item.productName,
+        // Original requested amount (before overstock deduction)
+        originalRequestedQty,
+        // Amount already deducted from overstock
+        overstockDeducted,
+        // Default sentQty is the finalQty (after overstock deduction)
+        // This can be 0 if overstock covers everything
+        sentQty: item.sentQty,
+        unit: item.unit,
+        overstockReason: '',
+      };
+    }));
   }, [shipment]);
 
   const updateItemQty = (masterProductId: string, delta: number) => {
     setItems(prev => prev.map(item => {
       if (item.masterProductId === masterProductId) {
-        const newQty = Math.max(1, item.sentQty + delta);
+        // Allow 0 if overstock covers everything
+        const newQty = Math.max(0, item.sentQty + delta);
         return { ...item, sentQty: newQty };
       }
       return item;
@@ -70,7 +83,8 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
   const updateItemSentQty = (masterProductId: string, value: number) => {
     setItems(prev => prev.map(item => {
       if (item.masterProductId === masterProductId) {
-        return { ...item, sentQty: Math.max(1, value) };
+        // Allow 0 if overstock covers everything
+        return { ...item, sentQty: Math.max(0, value) };
       }
       return item;
     }));
@@ -95,13 +109,16 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
     });
   };
 
-  const hasOverstock = items.some(item => item.sentQty > item.requestedQty);
+  const hasOverstock = items.some(item => item.sentQty > (item.originalRequestedQty - item.overstockDeducted));
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     
     for (const item of items) {
-      if (item.sentQty > item.requestedQty && !item.overstockReason.trim()) {
+      // Calculate the expected amount to send (after overstock deduction)
+      const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
+      // If sending more than expected, require overstock reason
+      if (item.sentQty > expectedSentQty && !item.overstockReason.trim()) {
         newErrors[item.masterProductId] = 'Alasan overstock wajib diisi';
       }
     }
@@ -115,11 +132,14 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
 
     const data: ShipShipmentInput = {
       notes: notes || undefined,
-      items: items.map(item => ({
-        masterProductId: item.masterProductId,
-        sentQty: item.sentQty,
-        overstockReason: item.sentQty > item.requestedQty ? item.overstockReason : undefined,
-      })),
+      items: items.map(item => {
+        const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
+        return {
+          masterProductId: item.masterProductId,
+          sentQty: item.sentQty,
+          overstockReason: item.sentQty > expectedSentQty ? item.overstockReason : undefined,
+        };
+      }),
     };
 
     await onShip(data);
@@ -191,6 +211,31 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
             </div>
 
             {/* Overstock Info Banner */}
+            {items.some(item => item.overstockDeducted > 0) && (
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-semibold text-purple-400">Overstock Sudah Dikurangi</p>
+                    <p className="text-xs text-purple-400/80 mt-1">
+                      Beberapa item sudah dikurangi dari overstock yang tersedia. Jumlah yang perlu dikirim sudah disesuaikan.
+                    </p>
+                    <div className="mt-2 space-y-1">
+                      {items.filter(item => item.overstockDeducted > 0).map(item => (
+                        <div key={item.masterProductId} className="flex justify-between text-xs">
+                          <span className="text-purple-300">{item.productName}</span>
+                          <span className="text-purple-400 font-medium">
+                            Diminta: {item.originalRequestedQty} → Overstock: -{item.overstockDeducted} → Kirim: {item.originalRequestedQty - item.overstockDeducted} {item.unit}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Overstock Info Banner */}
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
               <div className="flex items-start gap-3">
                 <Info className="h-5 w-5 text-amber-400 flex-shrink-0 mt-0.5" />
@@ -213,8 +258,9 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
               
               <div className="space-y-4">
                 {items.map((item) => {
-                  const isOverstock = item.sentQty > item.requestedQty;
-                  const overstockQty = isOverstock ? item.sentQty - item.requestedQty : 0;
+                  const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
+                  const isOverstock = item.sentQty > expectedSentQty;
+                  const overstockQty = isOverstock ? item.sentQty - expectedSentQty : 0;
                   const hasError = !!errors[item.masterProductId];
 
                   return (
@@ -223,16 +269,28 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                       className={`p-4 rounded-xl border transition-all ${
                         isOverstock 
                           ? 'bg-amber-500/10 border-amber-500/30' 
-                          : 'bg-blue-500/10 border-blue-500/20'
+                          : item.overstockDeducted > 0
+                            ? 'bg-purple-500/10 border-purple-500/30'
+                            : 'bg-blue-500/10 border-blue-500/20'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <span className="font-medium text-neutral-700 dark:text-neutral-200">
                           {item.productName}
                         </span>
-                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                          Diminta: {item.requestedQty} {item.unit}
-                        </span>
+                        <div className="text-right">
+                          <span className="text-xs text-neutral-500 dark:text-neutral-400 block">
+                            Diminta asli: {item.originalRequestedQty} {item.unit}
+                          </span>
+                          {item.overstockDeducted > 0 && (
+                            <span className="text-xs text-purple-400 block">
+                              Overstock: -{item.overstockDeducted} {item.unit}
+                            </span>
+                          )}
+                          <span className="text-xs text-emerald-400 font-medium block">
+                            Perlu dikirim: {expectedSentQty} {item.unit}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Quantity Controls */}
@@ -248,9 +306,9 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                           </button>
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             value={item.sentQty}
-                            onChange={(e) => updateItemSentQty(item.masterProductId, parseInt(e.target.value) || 1)}
+                            onChange={(e) => updateItemSentQty(item.masterProductId, parseInt(e.target.value) || 0)}
                             className="w-20 px-3 py-2 text-center text-sm font-bold rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <button
@@ -272,7 +330,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                           <div className="flex items-center gap-2 mb-2">
                             <AlertTriangle className="h-4 w-4 text-amber-400" />
                             <span className="text-sm font-semibold text-amber-400">
-                              Overstock: +{overstockQty} {item.unit}
+                              Overstock Baru: +{overstockQty} {item.unit}
                             </span>
                           </div>
                           <input
@@ -302,20 +360,23 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
                 <h3 className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
                   <Package className="h-4 w-4" />
-                  Ringkasan Overstock
+                  Ringkasan Overstock Baru
                 </h3>
                 <div className="space-y-1">
-                  {items.filter(i => i.sentQty > i.requestedQty).map(item => (
-                    <div key={item.masterProductId} className="flex justify-between text-sm">
-                      <span className="text-neutral-400">{item.productName}</span>
-                      <span className="text-emerald-400 font-medium">
-                        +{item.sentQty - item.requestedQty} {item.unit}
-                      </span>
-                    </div>
-                  ))}
+                  {items.filter(i => i.sentQty > (i.originalRequestedQty - i.overstockDeducted)).map(item => {
+                    const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
+                    return (
+                      <div key={item.masterProductId} className="flex justify-between text-sm">
+                        <span className="text-neutral-400">{item.productName}</span>
+                        <span className="text-emerald-400 font-medium">
+                          +{item.sentQty - expectedSentQty} {item.unit}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
                 <p className="text-xs text-emerald-400/70 mt-3">
-                  Overstock akan dicatat dan otomatis dikurangi dari request stok berikutnya.
+                  Overstock baru akan dicatat dan otomatis dikurangi dari request stok berikutnya.
                 </p>
               </div>
             )}

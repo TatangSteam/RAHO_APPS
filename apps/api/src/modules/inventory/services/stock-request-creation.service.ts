@@ -31,13 +31,21 @@ export class StockRequestCreationService {
    * Create stock request with automatic overstock deduction
    */
   async createRequest(data: CreateStockRequestInput, branchId: string, userId: string) {
+    console.log('=== STOCK REQUEST CREATION SERVICE ===');
+    console.log('Input data:', JSON.stringify(data, null, 2));
+    console.log('Branch ID:', branchId);
+    console.log('User ID:', userId);
+
     // Validate user role - only ADMIN_CABANG can create requests
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true, branchId: true },
     });
 
+    console.log('User from DB:', user);
+
     if (!user || user.role !== Role.ADMIN_CABANG) {
+      console.log('ERROR: User role is not ADMIN_CABANG');
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -47,6 +55,7 @@ export class StockRequestCreationService {
 
     // Verify user belongs to the branch
     if (user.branchId !== branchId) {
+      console.log('ERROR: Branch mismatch - user.branchId:', user.branchId, 'branchId:', branchId);
       throw {
         status: 403,
         code: 'BRANCH_MISMATCH',
@@ -61,6 +70,7 @@ export class StockRequestCreationService {
     });
 
     if (!branch) {
+      console.log('ERROR: Branch not found');
       throw {
         status: 404,
         code: 'BRANCH_NOT_FOUND',
@@ -68,8 +78,62 @@ export class StockRequestCreationService {
       };
     }
 
+    console.log('Branch:', branch);
+
+    // Check for pending shipments (PREPARING or SHIPPED status)
+    const pendingShipments = await prisma.shipment.findMany({
+      where: {
+        toBranchId: branchId,
+        status: { in: ['PREPARING', 'SHIPPED'] },
+      },
+      select: {
+        id: true,
+        shipmentCode: true,
+        status: true,
+        stockRequest: {
+          select: {
+            requestCode: true,
+          },
+        },
+      },
+    });
+
+    if (pendingShipments.length > 0) {
+      const shipmentCodes = pendingShipments.map(s => s.shipmentCode).join(', ');
+      console.log('ERROR: Pending shipments found:', shipmentCodes);
+      throw {
+        status: 422,
+        code: 'PENDING_SHIPMENT_EXISTS',
+        message: `Tidak dapat membuat request baru. Masih ada pengiriman yang belum selesai: ${shipmentCodes}. Harap terima pengiriman terlebih dahulu.`,
+      };
+    }
+
+    // Also check for pending stock requests (not yet completed)
+    const pendingRequests = await prisma.stockRequest.findMany({
+      where: {
+        branchId,
+        status: { in: ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'APPROVED', 'SHIPPED'] },
+      },
+      select: {
+        id: true,
+        requestCode: true,
+        status: true,
+      },
+    });
+
+    if (pendingRequests.length > 0) {
+      const requestCodes = pendingRequests.map(r => r.requestCode).join(', ');
+      console.log('ERROR: Pending requests found:', requestCodes);
+      throw {
+        status: 422,
+        code: 'PENDING_REQUEST_EXISTS',
+        message: `Tidak dapat membuat request baru. Masih ada request yang belum selesai: ${requestCodes}. Harap selesaikan request sebelumnya terlebih dahulu.`,
+      };
+    }
+
     // Validate items
-    if (!data.items || data.items.length === 0) {
+    if (!data.items || !Array.isArray(data.items) || data.items.length === 0) {
+      console.log('ERROR: Items required - items:', data.items);
       throw {
         status: 400,
         code: 'ITEMS_REQUIRED',
@@ -78,7 +142,8 @@ export class StockRequestCreationService {
     }
 
     // Validate notes is required
-    if (!data.notes || data.notes.trim() === '') {
+    if (!data.notes || typeof data.notes !== 'string' || data.notes.trim() === '') {
+      console.log('ERROR: Notes required - notes:', data.notes);
       throw {
         status: 400,
         code: 'NOTES_REQUIRED',
@@ -88,6 +153,8 @@ export class StockRequestCreationService {
 
     // Validate master products exist
     const masterProductIds = data.items.map(item => item.masterProductId);
+    console.log('Master product IDs:', masterProductIds);
+    
     const masterProducts = await prisma.masterProduct.findMany({
       where: { 
         id: { in: masterProductIds },
@@ -95,17 +162,23 @@ export class StockRequestCreationService {
       },
     });
 
+    console.log('Found master products:', masterProducts.length, 'of', masterProductIds.length);
+
     if (masterProducts.length !== masterProductIds.length) {
+      const foundIds = masterProducts.map(p => p.id);
+      const missingIds = masterProductIds.filter(id => !foundIds.includes(id));
+      console.log('ERROR: Missing products:', missingIds);
       throw {
         status: 404,
         code: 'PRODUCT_NOT_FOUND',
-        message: 'Beberapa produk tidak ditemukan atau tidak aktif',
+        message: `Beberapa produk tidak ditemukan atau tidak aktif: ${missingIds.join(', ')}`,
       };
     }
 
     // Validate quantities
     for (const item of data.items) {
       if (!item.requestedQty || item.requestedQty <= 0) {
+        console.log('ERROR: Invalid quantity for item:', item);
         throw {
           status: 400,
           code: 'INVALID_QUANTITY',
@@ -113,6 +186,8 @@ export class StockRequestCreationService {
         };
       }
     }
+
+    console.log('All validations passed, proceeding with creation...');
 
     // Get overstock info for all items
     const overstockInfo = await overstockService.getOverstockInfoForRequest(branchId, data.items);
@@ -163,7 +238,8 @@ export class StockRequestCreationService {
             Number(item.requestedQty),
             newRequest.id,
             item.id,
-            userId
+            userId,
+            tx  // Pass the transaction context
           );
         }
       }

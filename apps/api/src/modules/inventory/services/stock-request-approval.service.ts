@@ -265,7 +265,9 @@ export class StockRequestApprovalService {
           items: {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
-              sentQty: item.requestedQty,
+              // Use finalQty (after overstock deduction) instead of requestedQty
+              sentQty: item.finalQty || item.requestedQty,
+              requestedQty: item.requestedQty, // Keep original for reference
             })),
           },
         },
@@ -607,7 +609,9 @@ export class StockRequestApprovalService {
           items: {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
-              sentQty: item.requestedQty,
+              // Use finalQty (after overstock deduction) instead of requestedQty
+              sentQty: item.finalQty || item.requestedQty,
+              requestedQty: item.requestedQty, // Keep original for reference
             })),
           },
         },

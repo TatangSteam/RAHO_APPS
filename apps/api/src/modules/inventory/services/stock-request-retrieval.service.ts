@@ -295,6 +295,8 @@ export class StockRequestRetrievalService {
         productCategory: item.masterProduct.category,
         requestedQty: Number(item.requestedQty),
         approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
+        overstockDeducted: item.overstockDeducted ? Number(item.overstockDeducted) : 0,
+        finalQty: item.finalQty ? Number(item.finalQty) : Number(item.requestedQty),
         unit: item.masterProduct.baseUnit,
         notes: item.notes,
       })),

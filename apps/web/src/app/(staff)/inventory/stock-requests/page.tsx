@@ -135,23 +135,64 @@ export default function StockRequestsPage() {
       return;
     }
 
+    if (!requestNotes || requestNotes.trim() === '') {
+      showToast.error('Keterangan request wajib diisi');
+      return;
+    }
+
+    // Prepare request data
+    const requestData = {
+      items: requestItems.map(item => ({
+        masterProductId: item.masterProductId,
+        requestedQty: item.requestedQty,
+        notes: item.notes || undefined,
+      })),
+      notes: requestNotes.trim(),
+    };
+
+    // Debug logging
+    console.log('=== CREATE STOCK REQUEST DEBUG ===');
+    console.log('User:', { userId: user?.userId, role: user?.role, branchId: user?.branchId });
+    console.log('Request data:', JSON.stringify(requestData, null, 2));
+
     try {
       setCreateLoading(true);
-      await inventoryApi.createStockRequest({
-        items: requestItems.map(item => ({
-          masterProductId: item.masterProductId,
-          requestedQty: item.requestedQty,
-          notes: item.notes,
-        })),
-        notes: requestNotes || undefined,
-      });
+      await inventoryApi.createStockRequest(requestData);
       
       showToast.success('Request stok berhasil dibuat!');
       setShowCreateModal(false);
       fetchRequests();
     } catch (error: any) {
-      console.error('Create request error:', error);
-      showToast.error(error.response?.data?.message || 'Gagal membuat request stok');
+      console.error('=== CREATE REQUEST ERROR ===');
+      console.error('Error:', error);
+      console.error('Response status:', error.response?.status);
+      console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
+      
+      // Extract error message from response
+      const errorData = error.response?.data;
+      let errorMessage = 'Gagal membuat request stok';
+      
+      if (errorData?.error?.message) {
+        errorMessage = errorData.error.message;
+      } else if (errorData?.message) {
+        errorMessage = errorData.message;
+      } else if (errorData?.error?.code) {
+        // Map error codes to user-friendly messages
+        const errorCodes: Record<string, string> = {
+          'INSUFFICIENT_PERMISSIONS': 'Anda tidak memiliki izin untuk membuat request stok',
+          'BRANCH_MISMATCH': 'Anda hanya dapat membuat request untuk cabang Anda sendiri',
+          'BRANCH_NOT_FOUND': 'Cabang tidak ditemukan',
+          'ITEMS_REQUIRED': 'Minimal satu item harus dipilih',
+          'NOTES_REQUIRED': 'Keterangan request wajib diisi',
+          'PRODUCT_NOT_FOUND': 'Beberapa produk tidak ditemukan atau tidak aktif',
+          'INVALID_QUANTITY': 'Jumlah yang diminta harus lebih dari 0',
+          'PENDING_SHIPMENT_EXISTS': 'Masih ada pengiriman yang belum selesai. Harap terima pengiriman terlebih dahulu.',
+          'PENDING_REQUEST_EXISTS': 'Masih ada request yang belum selesai. Harap selesaikan request sebelumnya terlebih dahulu.',
+        };
+        errorMessage = errorCodes[errorData.error.code] || errorData.error.code;
+      }
+      
+      showToast.error(errorMessage);
     } finally {
       setCreateLoading(false);
     }

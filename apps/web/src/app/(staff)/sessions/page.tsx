@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
+import { branchesApi } from '@/lib/api/branchesApi';
+import { api } from '@/lib/api';
 import type { SessionDetail } from '@/types/session';
 import styles from './page.module.css';
 
@@ -335,33 +337,23 @@ export default function SessionsPage() {
   useEffect(() => {
     const loadFilterOptions = async () => {
       try {
-        // Load branches
-        const branchesRes = await fetch('/api/v1/branches', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        });
-        if (branchesRes.ok) {
-          const branchesData = await branchesRes.json();
-          setBranches(branchesData.data || []);
-        }
+        // Load branches using branchesApi
+        const branchesRes = await branchesApi.listBranches();
+        setBranches(branchesRes.data?.data || []);
 
-        // Load staff (doctors and nurses)
-        const usersRes = await fetch('/api/v1/users?roles=DOCTOR,NURSE', {
-          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-        });
-        if (usersRes.ok) {
-          const usersData = await usersRes.json();
-          const users = usersData.data || [];
-          setDoctors(users.filter((u: any) => u.role === 'DOCTOR').map((u: any) => ({
-            id: u.id,
-            fullName: u.profile?.fullName || u.email,
-            role: u.role,
-          })));
-          setNurses(users.filter((u: any) => u.role === 'NURSE').map((u: any) => ({
-            id: u.id,
-            fullName: u.profile?.fullName || u.email,
-            role: u.role,
-          })));
-        }
+        // Load staff (doctors and nurses) using api instance
+        const usersRes = await api.get('/users', { params: { roles: 'DOCTOR,NURSE' } });
+        const users = usersRes.data?.data || [];
+        setDoctors(users.filter((u: any) => u.role === 'DOCTOR').map((u: any) => ({
+          id: u.id,
+          fullName: u.profile?.fullName || u.email,
+          role: u.role,
+        })));
+        setNurses(users.filter((u: any) => u.role === 'NURSE').map((u: any) => ({
+          id: u.id,
+          fullName: u.profile?.fullName || u.email,
+          role: u.role,
+        })));
       } catch (error) {
         console.error('Error loading filter options:', error);
       }

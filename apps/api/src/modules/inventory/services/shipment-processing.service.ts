@@ -117,14 +117,16 @@ export class ShipmentProcessingService {
         const requestItem = shipment.stockRequest?.items.find(
           ri => ri.masterProductId === item.masterProductId
         );
-        const requestedQty = requestItem ? Number(requestItem.requestedQty) : 0;
+        const originalRequestedQty = requestItem ? Number(requestItem.requestedQty) : 0;
+        const overstockDeducted = requestItem?.overstockDeducted ? Number(requestItem.overstockDeducted) : 0;
+        const expectedSentQty = originalRequestedQty - overstockDeducted;
         
-        if (item.sentQty > requestedQty && !item.overstockReason) {
+        if (item.sentQty > expectedSentQty && !item.overstockReason) {
           const product = shipment.items.find(i => i.masterProductId === item.masterProductId);
           throw {
             status: 400,
             code: 'OVERSTOCK_REASON_REQUIRED',
-            message: `Alasan overstock wajib diisi untuk ${product?.masterProduct.name || 'item'} (kirim ${item.sentQty} > diminta ${requestedQty})`,
+            message: `Alasan overstock wajib diisi untuk ${product?.masterProduct.name || 'item'} (kirim ${item.sentQty} > perlu dikirim ${expectedSentQty})`,
           };
         }
       }
@@ -142,14 +144,23 @@ export class ShipmentProcessingService {
             const requestItem = shipment.stockRequest?.items.find(
               ri => ri.masterProductId === itemData.masterProductId
             );
-            const requestedQty = requestItem ? Number(requestItem.requestedQty) : Number(shipmentItem.sentQty);
-            const overstockQty = Math.max(0, itemData.sentQty - requestedQty);
+            // Get original requested qty
+            const originalRequestedQty = requestItem ? Number(requestItem.requestedQty) : Number(shipmentItem.sentQty);
+            // Get overstock that was already deducted
+            const overstockDeducted = requestItem?.overstockDeducted ? Number(requestItem.overstockDeducted) : 0;
+            // Expected sent qty is original minus what was already deducted from overstock
+            const expectedSentQty = originalRequestedQty - overstockDeducted;
+            // Calculate new overstock (if sending more than expected)
+            const overstockQty = Math.max(0, itemData.sentQty - expectedSentQty);
+
+            console.log(`[ShipmentProcessing] Item ${itemData.masterProductId}: originalReq=${originalRequestedQty}, overstockDeducted=${overstockDeducted}, expectedSent=${expectedSentQty}, actualSent=${itemData.sentQty}, newOverstock=${overstockQty}`);
+            console.log(`[ShipmentProcessing] overstockReason: ${itemData.overstockReason}`);
 
             await tx.shipmentItem.update({
               where: { id: shipmentItem.id },
               data: {
                 sentQty: itemData.sentQty,
-                requestedQty: requestedQty,
+                requestedQty: originalRequestedQty, // Store original for reference
                 overstockQty: overstockQty > 0 ? overstockQty : null,
                 overstockReason: overstockQty > 0 ? itemData.overstockReason : null,
               },

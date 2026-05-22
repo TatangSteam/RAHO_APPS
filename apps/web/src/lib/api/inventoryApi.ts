@@ -162,6 +162,8 @@ export interface Shipment {
     productCategory?: string;
     sentQty: number;
     requestedQty?: number;
+    originalRequestedQty?: number; // Original request amount before overstock deduction
+    overstockDeducted?: number; // Amount already deducted from overstock
     receivedQty?: number;
     overstockQty?: number;
     overstockReason?: string;

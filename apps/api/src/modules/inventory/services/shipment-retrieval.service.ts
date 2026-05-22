@@ -50,6 +50,14 @@ export class ShipmentRetrievalService {
                 type: true,
               },
             },
+            items: {
+              select: {
+                masterProductId: true,
+                requestedQty: true,
+                overstockDeducted: true,
+                finalQty: true,
+              },
+            },
             invoice: {
               select: {
                 id: true,
@@ -134,15 +142,41 @@ export class ShipmentRetrievalService {
       totalItems: shipment.items.reduce((sum: number, item: any) => sum + Number(item.sentQty), 0),
       hasDiscrepancies: shipment.discrepancies?.length > 0,
       discrepancyCount: shipment.discrepancies?.length || 0,
-      items: shipment.items.map((item: any) => ({
-        id: item.id,
-        masterProductId: item.masterProductId,
-        productName: item.masterProduct.name,
-        productCategory: item.masterProduct.category,
-        sentQty: Number(item.sentQty),
-        receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
-        unit: item.masterProduct.baseUnit,
-      })),
+      items: shipment.items.map((item: any) => {
+        // Get original requestedQty and overstock info from StockRequestItem
+        let originalRequestedQty = Number(item.sentQty); // Default to sentQty
+        let overstockDeducted = 0;
+        
+        // Try to get from StockRequestItem for accurate original request info
+        if (shipment.stockRequest?.items) {
+          const stockRequestItem = shipment.stockRequest.items.find(
+            (sri: any) => sri.masterProductId === item.masterProductId
+          );
+          if (stockRequestItem) {
+            originalRequestedQty = Number(stockRequestItem.requestedQty);
+            overstockDeducted = stockRequestItem.overstockDeducted ? Number(stockRequestItem.overstockDeducted) : 0;
+          }
+        }
+        
+        // requestedQty in ShipmentItem is the original request amount (stored for reference)
+        // sentQty is the amount to send (after overstock deduction = finalQty)
+        const requestedQty = item.requestedQty ? Number(item.requestedQty) : originalRequestedQty;
+        
+        return {
+          id: item.id,
+          masterProductId: item.masterProductId,
+          productName: item.masterProduct.name,
+          productCategory: item.masterProduct.category,
+          sentQty: Number(item.sentQty),
+          requestedQty, // Original requested amount
+          originalRequestedQty, // Same as requestedQty, for clarity
+          overstockDeducted, // Amount already deducted from overstock
+          overstockQty: item.overstockQty ? Number(item.overstockQty) : null, // New overstock from this shipment
+          overstockReason: item.overstockReason || null, // Reason for overstock
+          receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
+          unit: item.masterProduct.baseUnit,
+        };
+      }),
       // Stock request summary
       stockRequest: shipment.stockRequest ? {
         id: shipment.stockRequest.id,

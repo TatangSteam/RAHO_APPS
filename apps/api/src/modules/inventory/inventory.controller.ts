@@ -47,6 +47,7 @@ export class InventoryController {
         select: {
           id: true,
           name: true,
+          sku: true,
           category: true,
           baseUnit: true,
           usageUnit: true,

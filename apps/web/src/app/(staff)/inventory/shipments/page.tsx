@@ -326,30 +326,60 @@ export default function ShipmentsPage() {
 
                 {/* Items List */}
                 <div className="space-y-2">
-                  {shipment.items.slice(0, 3).map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between py-2 px-3 rounded-lg bg-blue-500/10 border border-blue-500/20"
-                    >
-                      <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200 truncate">
-                        {item.productName}
-                      </span>
-                      <span className="flex-shrink-0 text-sm font-semibold text-blue-500">
-                        {item.sentQty} {item.unit}
-                        {item.receivedQty !== undefined && item.receivedQty !== item.sentQty && (
-                          <span className="text-red-500 ml-1">
-                            (diterima: {item.receivedQty})
+                  {shipment.items.slice(0, 3).map((item) => {
+                    const hasOverstock = item.overstockQty && item.overstockQty > 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex flex-col py-2 px-3 rounded-lg ${
+                          hasOverstock 
+                            ? 'bg-purple-500/10 border border-purple-500/20' 
+                            : 'bg-blue-500/10 border border-blue-500/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium text-neutral-700 dark:text-neutral-200 truncate">
+                            {item.productName}
                           </span>
+                          <span className={`flex-shrink-0 text-sm font-semibold ${hasOverstock ? 'text-purple-500' : 'text-blue-500'}`}>
+                            {item.sentQty} {item.unit}
+                            {item.receivedQty !== undefined && item.receivedQty !== item.sentQty && (
+                              <span className="text-red-500 ml-1">
+                                (diterima: {item.receivedQty})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        {hasOverstock && (
+                          <div className="mt-1 text-xs text-purple-400">
+                            <span className="font-semibold">+{item.overstockQty} lebih</span>
+                            {item.overstockReason && (
+                              <span className="ml-1 text-purple-300">• {item.overstockReason}</span>
+                            )}
+                          </div>
                         )}
-                      </span>
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                   {shipment.items.length > 3 && (
                     <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center py-1">
                       +{shipment.items.length - 3} item lainnya
                     </p>
                   )}
                 </div>
+
+                {/* Overstock Summary */}
+                {shipment.items.some(item => item.overstockQty && item.overstockQty > 0) && (
+                  <div className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                    <div className="flex items-center gap-2 text-purple-400 font-semibold text-sm mb-1">
+                      <Package className="h-4 w-4" />
+                      Overstock ({shipment.items.filter(i => i.overstockQty && i.overstockQty > 0).length} item)
+                    </div>
+                    <p className="text-xs text-purple-300">
+                      Pengiriman ini memiliki item yang dikirim lebih dari permintaan
+                    </p>
+                  </div>
+                )}
 
                 {/* Discrepancies */}
                 {shipment.discrepancies && shipment.discrepancies.length > 0 && (

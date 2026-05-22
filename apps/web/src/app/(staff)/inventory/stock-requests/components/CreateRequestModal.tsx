@@ -2,10 +2,17 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Check, RefreshCw, Trash2, Package, Search, Filter, AlertTriangle, Info } from 'lucide-react';
+import { X, Plus, Check, RefreshCw, Trash2, Package, Search, Filter, AlertTriangle, Info, Truck, Clock } from 'lucide-react';
 import { MasterProduct, RequestItem } from '../types';
 import { inventoryApi, OverstockPreviewItem } from '@/lib/api/inventoryApi';
 import { useAuthStore } from '@/stores/authStore';
+
+interface PendingInfo {
+  hasPendingShipments: boolean;
+  hasPendingRequests: boolean;
+  pendingShipments: Array<{ shipmentCode: string; status: string }>;
+  pendingRequests: Array<{ requestCode: string; status: string }>;
+}
 
 interface CreateRequestModalProps {
   isOpen: boolean;
@@ -34,12 +41,75 @@ export default function CreateRequestModal({
   const [touched, setTouched] = useState(false);
   const [overstockPreview, setOverstockPreview] = useState<OverstockPreviewItem[]>([]);
   const [loadingOverstock, setLoadingOverstock] = useState(false);
+  const [pendingInfo, setPendingInfo] = useState<PendingInfo | null>(null);
+  const [loadingPendingInfo, setLoadingPendingInfo] = useState(false);
 
   // Mount check for portal
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
+
+  // Fetch pending shipments and requests when modal opens
+  useEffect(() => {
+    const fetchPendingInfo = async () => {
+      if (!isOpen || !user?.branchId) return;
+      
+      try {
+        setLoadingPendingInfo(true);
+        
+        // Fetch pending shipments
+        const shipmentsResponse = await inventoryApi.getShipments({ status: 'PREPARING' });
+        const shippedResponse = await inventoryApi.getShipments({ status: 'SHIPPED' });
+        
+        let pendingShipments: Array<{ shipmentCode: string; status: string }> = [];
+        
+        // Extract shipments for this branch
+        const extractShipments = (response: any) => {
+          const data = response.data?.data;
+          if (Array.isArray(data)) {
+            return data
+              .filter((s: any) => s.toBranchId === user.branchId)
+              .map((s: any) => ({ shipmentCode: s.shipmentCode, status: s.status }));
+          }
+          return [];
+        };
+        
+        pendingShipments = [
+          ...extractShipments(shipmentsResponse),
+          ...extractShipments(shippedResponse),
+        ];
+        
+        // Fetch pending requests
+        const requestsResponse = await inventoryApi.getStockRequests({});
+        let pendingRequests: Array<{ requestCode: string; status: string }> = [];
+        
+        const requestsData = requestsResponse.data?.data;
+        if (Array.isArray(requestsData)) {
+          pendingRequests = requestsData
+            .filter((r: any) => 
+              r.branchId === user.branchId && 
+              ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'APPROVED', 'SHIPPED'].includes(r.status)
+            )
+            .map((r: any) => ({ requestCode: r.requestCode, status: r.status }));
+        }
+        
+        setPendingInfo({
+          hasPendingShipments: pendingShipments.length > 0,
+          hasPendingRequests: pendingRequests.length > 0,
+          pendingShipments,
+          pendingRequests,
+        });
+      } catch (error) {
+        console.error('Failed to fetch pending info:', error);
+        setPendingInfo(null);
+      } finally {
+        setLoadingPendingInfo(false);
+      }
+    };
+    
+    fetchPendingInfo();
+  }, [isOpen, user?.branchId]);
 
   // Filter items
   useEffect(() => {
@@ -220,8 +290,67 @@ export default function CreateRequestModal({
 
           {/* Body */}
           <div className="flex-1 overflow-hidden flex flex-col lg:flex-row min-h-0">
+            {/* Pending Warning Banner */}
+            {(pendingInfo?.hasPendingShipments || pendingInfo?.hasPendingRequests) && (
+              <div className="absolute top-20 left-0 right-0 z-10 mx-6 mt-2">
+                <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-red-400 mb-2">
+                        Tidak dapat membuat request baru
+                      </p>
+                      {pendingInfo?.hasPendingShipments && (
+                        <div className="mb-2">
+                          <p className="text-xs text-red-300 mb-1 flex items-center gap-1">
+                            <Truck className="h-3 w-3" />
+                            Pengiriman yang belum selesai:
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {pendingInfo.pendingShipments.map((s, i) => (
+                              <span key={i} className="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-300">
+                                {s.shipmentCode} ({s.status})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {pendingInfo?.hasPendingRequests && (
+                        <div>
+                          <p className="text-xs text-red-300 mb-1 flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            Request yang belum selesai:
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {pendingInfo.pendingRequests.map((r, i) => (
+                              <span key={i} className="px-2 py-0.5 text-xs rounded bg-red-500/20 text-red-300">
+                                {r.requestCode} ({r.status})
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      <p className="text-xs text-red-300/70 mt-2">
+                        Harap selesaikan pengiriman atau request yang ada terlebih dahulu.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Loading Pending Info */}
+            {loadingPendingInfo && (
+              <div className="absolute top-20 left-0 right-0 z-10 mx-6 mt-2">
+                <div className="p-4 rounded-xl bg-neutral-500/10 border border-neutral-500/30 flex items-center gap-3">
+                  <RefreshCw className="h-4 w-4 text-neutral-400 animate-spin" />
+                  <span className="text-sm text-neutral-400">Memeriksa status pengiriman...</span>
+                </div>
+              </div>
+            )}
+
             {/* Left Panel - Product Selection */}
-            <div className="flex-1 flex flex-col p-6 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-700 min-h-0 overflow-hidden">
+            <div className={`flex-1 flex flex-col p-6 border-b lg:border-b-0 lg:border-r border-neutral-200 dark:border-neutral-700 min-h-0 overflow-hidden ${(pendingInfo?.hasPendingShipments || pendingInfo?.hasPendingRequests) ? 'pt-32' : ''}`}>
               <div className="flex-shrink-0 mb-4">
                 <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3 flex items-center gap-2">
                   <Package className="h-4 w-4 text-amber-500" />
@@ -504,9 +633,9 @@ export default function CreateRequestModal({
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading || !isFormValid}
+                disabled={loading || !isFormValid || pendingInfo?.hasPendingShipments || pendingInfo?.hasPendingRequests}
                 className={`px-6 py-2.5 text-sm font-semibold rounded-xl transition-all inline-flex items-center gap-2 ${
-                  isFormValid
+                  isFormValid && !pendingInfo?.hasPendingShipments && !pendingInfo?.hasPendingRequests
                     ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 hover:shadow-amber-500/40'
                     : 'bg-neutral-300 dark:bg-neutral-700 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
                 }`}

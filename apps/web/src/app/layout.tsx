@@ -12,9 +12,9 @@ export const metadata: Metadata = {
   description: 'Sistem Manajemen Klinik Terapi Infus RAHO',
   robots: { index: false, follow: false },
   icons: {
-    icon: '/asset/logo_tab_RAHO.png',
-    shortcut: '/asset/logo_tab_RAHO.png',
-    apple: '/asset/logo_tab_RAHO.png',
+    icon: '/icon.png',
+    shortcut: '/icon.png',
+    apple: '/icon.png',
   },
 };
 

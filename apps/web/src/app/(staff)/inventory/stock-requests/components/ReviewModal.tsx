@@ -383,21 +383,50 @@ export default function ReviewModal({
                 </h3>
                 
                 <div className="space-y-2">
-                  {request.items.map((item) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between p-4 rounded-xl bg-blue-500/10 border border-blue-500/20"
-                    >
-                      <div>
-                        <p className="font-semibold text-neutral-900 dark:text-white">{item.productName}</p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{item.productCategory}</p>
+                  {request.items.map((item) => {
+                    const hasOverstock = item.overstockDeducted && item.overstockDeducted > 0;
+                    return (
+                      <div
+                        key={item.id}
+                        className={`p-4 rounded-xl border ${
+                          hasOverstock 
+                            ? 'bg-purple-500/10 border-purple-500/20' 
+                            : 'bg-blue-500/10 border-blue-500/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-neutral-900 dark:text-white">{item.productName}</p>
+                            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{item.productCategory}</p>
+                          </div>
+                          <div className="text-right">
+                            {hasOverstock ? (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm text-neutral-400 line-through">{item.requestedQty}</span>
+                                  <span className="text-lg font-bold text-amber-500">{item.finalQty}</span>
+                                  <span className="text-sm text-neutral-500 dark:text-neutral-400">{item.unit}</span>
+                                </div>
+                                <p className="text-xs text-purple-400 mt-1">
+                                  Overstock: -{item.overstockDeducted} {item.unit}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <span className="text-lg font-bold text-amber-500">{item.requestedQty}</span>
+                                <span className="text-sm text-neutral-500 dark:text-neutral-400 ml-1">{item.unit}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        {item.notes && (
+                          <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400 italic">
+                            Catatan: {item.notes}
+                          </p>
+                        )}
                       </div>
-                      <div className="text-right">
-                        <span className="text-lg font-bold text-amber-500">{item.requestedQty}</span>
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400 ml-1">{item.unit}</span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Total Price Input for Partnership PENDING - Single Total Amount */}

@@ -9,7 +9,6 @@ import {
   CheckCheck, 
   XCircle,
   Package,
-  FileText,
   Eye,
   ClipboardCheck,
   Receipt,
@@ -181,19 +180,25 @@ export default function StockRequestCard({
           </div>
           
           <div className="space-y-1.5">
-            {request.items.slice(0, 2).map((item) => (
-              <div 
-                key={item.id} 
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-neutral-50 dark:bg-neutral-700/50"
-              >
-                <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate flex-1 mr-2">
-                  {item.productName}
-                </span>
-                <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">
-                  {item.requestedQty} {item.unit}
-                </span>
-              </div>
-            ))}
+            {request.items.slice(0, 2).map((item) => {
+              // Show finalQty if overstock was deducted, otherwise show requestedQty
+              const displayQty = (item.overstockDeducted && item.overstockDeducted > 0) 
+                ? item.finalQty 
+                : item.requestedQty;
+              return (
+                <div 
+                  key={item.id} 
+                  className="flex items-center justify-between py-2 px-3 rounded-lg bg-neutral-50 dark:bg-neutral-700/50"
+                >
+                  <span className="text-sm text-neutral-700 dark:text-neutral-300 truncate flex-1 mr-2">
+                    {item.productName}
+                  </span>
+                  <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                    {displayQty} {item.unit}
+                  </span>
+                </div>
+              );
+            })}
             {request.items.length > 2 && (
               <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center py-1">
                 +{request.items.length - 2} item lainnya

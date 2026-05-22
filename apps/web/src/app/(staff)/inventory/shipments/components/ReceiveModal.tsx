@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, PackageCheck, AlertTriangle, MessageSquare, RefreshCw, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { X, Package, PackageCheck, AlertTriangle, MessageSquare, RefreshCw, ChevronRight, CheckCircle2, Info, TrendingUp } from 'lucide-react';
 import { Shipment, ReceiveShipmentInput } from '@/lib/api/inventoryApi';
 
 type DiscrepancyType = 'SHORTAGE' | 'DAMAGE' | 'WRONG_ITEM' | 'OTHER';
@@ -178,6 +178,63 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               </div>
             </div>
 
+            {/* Overstock Info Banner - Show if any item has overstock */}
+            {shipment.items.some(item => (item.overstockQty && item.overstockQty > 0) || ((item as any).originalRequestedQty && item.sentQty > ((item as any).originalRequestedQty - ((item as any).overstockDeducted || 0)))) && (
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                <div className="flex items-start gap-3">
+                  <TrendingUp className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-purple-400">Kelebihan Pengiriman (Overstock)</p>
+                    <p className="text-xs text-purple-400/80 mt-1">
+                      Pengiriman ini mengandung kelebihan stok yang akan dicatat sebagai overstock cabang Anda. 
+                      Overstock akan otomatis dikurangi dari permintaan stok berikutnya.
+                    </p>
+                    <div className="mt-3 space-y-2">
+                      {shipment.items.filter(item => {
+                        const overstockQty = item.overstockQty || 0;
+                        const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
+                        const overstockDeducted = (item as any).overstockDeducted || 0;
+                        const expectedSentQty = originalRequestedQty - overstockDeducted;
+                        const newOverstock = item.sentQty - expectedSentQty;
+                        return overstockQty > 0 || newOverstock > 0;
+                      }).map(item => {
+                        const overstockQty = item.overstockQty || 0;
+                        const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
+                        const overstockDeducted = (item as any).overstockDeducted || 0;
+                        const expectedSentQty = originalRequestedQty - overstockDeducted;
+                        const newOverstock = overstockQty > 0 ? overstockQty : (item.sentQty - expectedSentQty);
+                        
+                        return (
+                          <div key={item.masterProductId} className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-purple-300">{item.productName}</span>
+                              <span className="text-sm font-bold text-purple-400">+{newOverstock} {item.unit}</span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 text-xs text-purple-400/70">
+                              <span>Diminta: {originalRequestedQty}</span>
+                              {overstockDeducted > 0 && (
+                                <>
+                                  <span>•</span>
+                                  <span>Overstock lama: -{overstockDeducted}</span>
+                                </>
+                              )}
+                              <span>•</span>
+                              <span>Dikirim: {item.sentQty}</span>
+                            </div>
+                            <div className="mt-2 p-2 rounded bg-amber-500/15 border border-amber-500/30">
+                              <p className="text-xs text-amber-400">
+                                <span className="font-semibold">Catatan:</span> {item.overstockReason || `Kelebihan pengiriman +${newOverstock} ${item.unit}`}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Items Section */}
             <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
               <h3 className="text-sm font-semibold text-emerald-400 mb-4 flex items-center gap-2">
@@ -190,22 +247,46 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                   const receivedItem = receivedItems.find(r => r.masterProductId === item.masterProductId);
                   const hasIssue = receivedItem && receivedItem.receivedQty !== item.sentQty;
                   
+                  // Calculate overstock info
+                  const overstockQty = item.overstockQty || 0;
+                  const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
+                  const overstockDeducted = (item as any).overstockDeducted || 0;
+                  const expectedSentQty = originalRequestedQty - overstockDeducted;
+                  const hasOverstock = overstockQty > 0 || item.sentQty > expectedSentQty;
+                  const newOverstockQty = overstockQty > 0 ? overstockQty : (item.sentQty - expectedSentQty);
+                  
                   return (
                     <div
                       key={item.id}
                       className={`p-4 rounded-xl border transition-all ${
                         hasIssue 
                           ? 'bg-red-500/15 border-red-500/40' 
-                          : 'bg-emerald-500/10 border-emerald-500/20'
+                          : hasOverstock
+                            ? 'bg-purple-500/10 border-purple-500/30'
+                            : 'bg-emerald-500/10 border-emerald-500/20'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-3">
-                        <span className="font-semibold text-neutral-700 dark:text-neutral-200">
-                          {item.productName}
-                        </span>
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400">
-                          Dikirim: {item.sentQty} {item.unit}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-neutral-700 dark:text-neutral-200">
+                            {item.productName}
+                          </span>
+                          {hasOverstock && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">
+                              +{newOverstockQty} overstock
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <span className="text-sm text-neutral-500 dark:text-neutral-400 block">
+                            Dikirim: {item.sentQty} {item.unit}
+                          </span>
+                          {hasOverstock && (
+                            <span className="text-xs text-purple-400 block">
+                              (Diminta: {originalRequestedQty}{overstockDeducted > 0 ? `, Overstock lama: -${overstockDeducted}` : ''})
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <label className="text-sm text-neutral-500 dark:text-neutral-400 min-w-[70px]">
@@ -219,7 +300,9 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                           className={`w-24 px-3 py-2 text-sm rounded-lg border bg-neutral-800/50 text-white focus:outline-none focus:ring-2 transition-all ${
                             hasIssue 
                               ? 'border-red-500/50 focus:ring-red-500' 
-                              : 'border-emerald-500/30 focus:ring-emerald-500'
+                              : hasOverstock
+                                ? 'border-purple-500/30 focus:ring-purple-500'
+                                : 'border-emerald-500/30 focus:ring-emerald-500'
                           }`}
                         />
                         <span className="text-sm text-neutral-500 dark:text-neutral-400">
@@ -232,6 +315,20 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                           </span>
                         )}
                       </div>
+                      {/* Show overstock reason if available */}
+                      {hasOverstock && (
+                        <div className="mt-3 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-xs font-semibold text-amber-400">Catatan dari Pengirim:</p>
+                              <p className="text-sm text-amber-300 mt-1">
+                                {item.overstockReason || `Kelebihan pengiriman +${newOverstockQty} ${item.unit}`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

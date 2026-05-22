@@ -123,9 +123,9 @@ export default function LoginPage() {
           <div className="lg:hidden flex flex-col items-center mb-10">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/asset/login-bg.png"
+              src="/asset/logo_tab_RAHO.png"
               alt="Raho Premier Club"
-              className="w-48 h-auto object-contain"
+              className="w-32 h-auto object-contain"
             />
           </div>
 

@@ -162,6 +162,8 @@ export class OverstockService {
   /**
    * Apply overstock deduction to a stock request item
    * Returns the amount deducted and updates overstock records
+   * 
+   * @param tx - Optional Prisma transaction client. If provided, uses the existing transaction.
    */
   async applyOverstockDeduction(
     branchId: string,
@@ -169,7 +171,8 @@ export class OverstockService {
     requestedQty: number,
     stockRequestId: string,
     stockRequestItemId: string,
-    userId: string
+    userId: string,
+    tx?: any // Prisma transaction client
   ): Promise<{
     deductedQty: number;
     finalQty: number;
@@ -180,8 +183,11 @@ export class OverstockService {
       sourceShipmentCode: string;
     }>;
   }> {
+    // Use provided transaction or prisma client
+    const client = tx || prisma;
+
     // Get available overstocks (FIFO order)
-    const availableOverstocks = await prisma.branchOverstock.findMany({
+    const availableOverstocks = await client.branchOverstock.findMany({
       where: {
         branchId,
         masterProductId,
@@ -206,7 +212,11 @@ export class OverstockService {
       };
     }
 
-    let remainingToDeduct = requestedQty;
+    // Calculate total available overstock
+    const totalAvailableOverstock = availableOverstocks.reduce((sum, o) => sum + Number(o.quantity), 0);
+    
+    // Maximum we can deduct is the minimum of available overstock and requested quantity
+    let remainingToDeduct = Math.min(totalAvailableOverstock, requestedQty);
     let totalDeducted = 0;
     const usedOverstocks: Array<{
       overstockId: string;
@@ -215,8 +225,8 @@ export class OverstockService {
       sourceShipmentCode: string;
     }> = [];
 
-    // Apply deductions in transaction
-    await prisma.$transaction(async (tx) => {
+    // Helper function to apply deductions
+    const applyDeductions = async (dbClient: any) => {
       for (const overstock of availableOverstocks) {
         if (remainingToDeduct <= 0) break;
 
@@ -227,7 +237,7 @@ export class OverstockService {
         const newQty = availableQty - deductAmount;
         const newStatus: OverstockStatus = newQty <= 0 ? 'FULLY_USED' : 'PARTIALLY_USED';
 
-        await tx.branchOverstock.update({
+        await dbClient.branchOverstock.update({
           where: { id: overstock.id },
           data: {
             quantity: newQty,
@@ -236,7 +246,7 @@ export class OverstockService {
         });
 
         // Create usage record
-        await tx.overstockUsage.create({
+        await dbClient.overstockUsage.create({
           data: {
             overstockId: overstock.id,
             stockRequestId,
@@ -257,16 +267,29 @@ export class OverstockService {
       }
 
       // Update stock request item with deduction info
-      await tx.stockRequestItem.update({
+      await dbClient.stockRequestItem.update({
         where: { id: stockRequestItemId },
         data: {
           overstockDeducted: totalDeducted,
           finalQty: requestedQty - totalDeducted,
         },
       });
-    });
+    };
 
-    // Audit log
+    // If we have a transaction, use it directly; otherwise create a new one
+    if (tx) {
+      console.log(`[OverstockService] Applying deduction within transaction for product ${masterProductId}`);
+      console.log(`[OverstockService] Available overstocks: ${availableOverstocks.length}, Total available: ${totalAvailableOverstock}`);
+      console.log(`[OverstockService] Requested qty: ${requestedQty}, Will deduct: ${Math.min(totalAvailableOverstock, requestedQty)}`);
+      await applyDeductions(tx);
+      console.log(`[OverstockService] Deduction complete. Total deducted: ${totalDeducted}`);
+    } else {
+      await prisma.$transaction(async (newTx) => {
+        await applyDeductions(newTx);
+      });
+    }
+
+    // Audit log (outside transaction is fine)
     if (totalDeducted > 0) {
       await logAudit({
         userId,

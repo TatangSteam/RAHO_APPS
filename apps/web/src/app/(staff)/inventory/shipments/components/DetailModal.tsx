@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare } from 'lucide-react';
+import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info } from 'lucide-react';
 import { Shipment } from '@/lib/api/inventoryApi';
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
@@ -175,28 +175,102 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
               </h3>
               
               <div className="space-y-2">
-                {shipment.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-blue-500/10 border border-blue-500/20"
-                  >
-                    <span className="font-medium text-neutral-700 dark:text-neutral-200">
-                      {item.productName}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-blue-400 px-3 py-1 bg-blue-500/15 rounded-full text-sm">
-                        {item.sentQty} {item.unit}
-                      </span>
-                      {item.receivedQty !== undefined && item.receivedQty !== item.sentQty && (
-                        <span className="text-xs text-red-400 px-2 py-1 bg-red-500/15 rounded-full">
-                          Diterima: {item.receivedQty}
+                {shipment.items.map((item) => {
+                  const hasOverstock = item.overstockQty && item.overstockQty > 0;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`p-3 rounded-lg border ${
+                        hasOverstock 
+                          ? 'bg-purple-500/10 border-purple-500/30' 
+                          : 'bg-blue-500/10 border-blue-500/20'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium text-neutral-700 dark:text-neutral-200">
+                          {item.productName}
                         </span>
+                        <div className="flex items-center gap-2">
+                          <span className={`font-bold px-3 py-1 rounded-full text-sm ${
+                            hasOverstock 
+                              ? 'text-purple-400 bg-purple-500/15' 
+                              : 'text-blue-400 bg-blue-500/15'
+                          }`}>
+                            {item.sentQty} {item.unit}
+                          </span>
+                          {item.receivedQty !== undefined && item.receivedQty !== item.sentQty && (
+                            <span className="text-xs text-red-400 px-2 py-1 bg-red-500/15 rounded-full">
+                              Diterima: {item.receivedQty}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {hasOverstock && (
+                        <div className="mt-2 pt-2 border-t border-purple-500/20">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="px-2 py-0.5 rounded bg-purple-500/20 text-purple-400 font-semibold">
+                              +{item.overstockQty} lebih dari permintaan
+                            </span>
+                            {item.requestedQty && (
+                              <span className="text-neutral-500">
+                                (diminta: {item.requestedQty} {item.unit})
+                              </span>
+                            )}
+                          </div>
+                          {/* Overstock Reason - Amber Box */}
+                          <div className="mt-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                            <div className="flex items-start gap-2">
+                              <Info className="h-4 w-4 text-amber-400 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-xs font-semibold text-amber-400">Alasan Kelebihan:</p>
+                                <p className="text-sm text-amber-300 mt-1">
+                                  {item.overstockReason || `Kelebihan pengiriman +${item.overstockQty} ${item.unit}`}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+
+            {/* Overstock Summary */}
+            {shipment.items.some(item => item.overstockQty && item.overstockQty > 0) && (
+              <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                <h3 className="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                  <Package className="h-4 w-4" />
+                  Ringkasan Overstock
+                </h3>
+                <div className="space-y-3">
+                  {shipment.items
+                    .filter(item => item.overstockQty && item.overstockQty > 0)
+                    .map((item) => (
+                      <div key={item.id} className="p-3 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <div className="flex items-center justify-between">
+                          <span className="text-neutral-600 dark:text-neutral-300 font-medium">{item.productName}</span>
+                          <span className="font-semibold text-purple-400">+{item.overstockQty} {item.unit}</span>
+                        </div>
+                        {/* Overstock Reason */}
+                        <div className="mt-2 p-2 rounded bg-amber-500/10 border border-amber-500/30">
+                          <div className="flex items-start gap-2">
+                            <Info className="h-3.5 w-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-300">
+                              <span className="font-semibold">Alasan:</span> {item.overstockReason || `Kelebihan pengiriman +${item.overstockQty} ${item.unit}`}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  }
+                </div>
+                <p className="mt-3 text-xs text-purple-300 border-t border-purple-500/20 pt-3">
+                  Item overstock akan ditambahkan ke stok cabang tujuan dan dapat digunakan untuk mengurangi permintaan stok berikutnya.
+                </p>
+              </div>
+            )}
 
             {/* Discrepancies */}
             {shipment.discrepancies && shipment.discrepancies.length > 0 && (
