@@ -74,11 +74,14 @@ export class StockRequestController {
 
       // Validate each item has required fields
       for (const item of items) {
-        if (!item.masterProductId || !item.quantity || !item.pricePerUnit) {
+        if (!item.masterProductId || item.quantity === undefined || item.pricePerUnit === undefined) {
           return sendError(res, 400, 'INVALID_ITEM', 'Setiap item harus memiliki masterProductId, quantity, dan pricePerUnit');
         }
-        if (item.quantity <= 0 || item.pricePerUnit < 0) {
-          return sendError(res, 400, 'INVALID_VALUES', 'Quantity harus > 0 dan harga tidak boleh negatif');
+        if (item.quantity <= 0) {
+          return sendError(res, 400, 'INVALID_VALUES', 'Quantity harus > 0');
+        }
+        if (item.pricePerUnit < 0) {
+          return sendError(res, 400, 'INVALID_VALUES', 'Harga tidak boleh negatif');
         }
       }
 

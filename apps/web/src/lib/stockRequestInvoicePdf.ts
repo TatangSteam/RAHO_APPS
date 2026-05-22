@@ -141,15 +141,13 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
       const qty = item.quantity;
       const sku = item.sku || '-';
       const description = item.productName + (item.description ? `\n${item.description}` : '');
-      const price = formatNumberWithDots(item.pricePerUnit);
-      const total = formatNumberWithDots(item.subtotal);
 
-      return [qty.toString(), sku, description, `Rp ${price}`, `Rp ${total}`];
+      return [sku, qty.toString(), description];
     }) || [];
 
     autoTable(doc, {
       startY: currentY,
-      head: [['Qty', 'Kode', 'Nama Produk / Keterangan', 'Harga Satuan', 'Subtotal']],
+      head: [['Kode Barang', 'Qty', 'Nama Produk / Keterangan']],
       body: tableData,
       theme: 'grid',
       headStyles: {
@@ -165,32 +163,22 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
         cellPadding: 3
       },
       columnStyles: {
-        0: { cellWidth: 15, halign: 'center' },
-        1: { cellWidth: 30, halign: 'center' },
-        2: { cellWidth: 60 },
-        3: { cellWidth: 32, halign: 'right' },
-        4: { cellWidth: 32, halign: 'right' }
+        0: { cellWidth: 40, halign: 'center' },
+        1: { cellWidth: 20, halign: 'center' },
+        2: { cellWidth: 'auto' }
       },
       margin: { left: margin, right: margin },
     });
 
     // ============================================================
-    // SUMMARY SECTION
+    // SUMMARY SECTION - Total Only
     // ============================================================
     currentY = (doc as any).lastAutoTable.finalY + 8;
 
     const summaryX = pageWidth - margin - 70;
     const summaryValueX = pageWidth - margin;
 
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-
-    // Subtotal
-    doc.text('Subtotal', summaryX, currentY);
-    doc.text(`Rp ${formatNumberWithDots(invoice.subtotal)}`, summaryValueX, currentY, { align: 'right' });
-
     // Total line
-    currentY += 5;
     doc.setDrawColor(25, 118, 210);
     doc.setLineWidth(0.5);
     doc.line(summaryX, currentY, summaryValueX, currentY);

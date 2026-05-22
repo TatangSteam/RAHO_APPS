@@ -115,7 +115,6 @@ export default function ReviewModal({
   // Build invoice items from total amount (distribute evenly)
   const buildInvoiceItems = (): InvoiceItemInput[] => {
     const total = parseFloat(totalInvoiceAmount) || 0;
-    if (total <= 0) return [];
     
     const totalQty = request.items.reduce((sum, item) => sum + item.requestedQty, 0);
     const pricePerUnit = totalQty > 0 ? Math.round(total / totalQty) : 0;
@@ -138,9 +137,9 @@ export default function ReviewModal({
       await onApprovePremierRequest(request.id, reviewNotes);
     } else {
       const total = parseFloat(totalInvoiceAmount) || 0;
-      if (total <= 0) {
-        showToast.error('Total harga invoice harus diisi');
-        return;
+      // Allow 0 price (free items)
+      if (totalInvoiceAmount === '' && total === 0) {
+        // If input is empty, treat as 0 (free)
       }
       const invoiceItems = buildInvoiceItems();
       await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
