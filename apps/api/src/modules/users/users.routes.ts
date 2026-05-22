@@ -19,6 +19,8 @@ import {
   removeUserFromBranch,
   getAvailableBranchesForUser,
   setPrimaryBranch,
+  getStaffPerformanceSummary,
+  getStaffSessionHistory,
 } from './users.controller';
 
 export const usersRouter = Router();
@@ -37,6 +39,26 @@ usersRouter.get(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   getMedicalStaffNotInBranch,
+);
+
+// ══════════════════════════════════════════════════════════════
+// STAFF PERFORMANCE (Kinerja Staff)
+// ══════════════════════════════════════════════════════════════
+
+// ── Get Staff Performance Summary ─────────────────────────────
+usersRouter.get(
+  '/performance/summary',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  getStaffPerformanceSummary,
+);
+
+// ── Get Staff Session History ─────────────────────────────────
+usersRouter.get(
+  '/performance/:staffId/history',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  getStaffSessionHistory,
 );
 
 // ── Get Staff by Role (for dropdowns) ─────────────────────────

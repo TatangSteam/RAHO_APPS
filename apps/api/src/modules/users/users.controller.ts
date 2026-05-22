@@ -22,6 +22,10 @@ import {
   getAvailableBranchesForUserService,
   setPrimaryBranchService,
 } from './users.service';
+import {
+  getStaffPerformanceSummaryService,
+  getStaffSessionHistoryService,
+} from './services/staff-performance.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile } from '@config/minio';
@@ -379,5 +383,59 @@ export async function setPrimaryBranch(req: Request, res: Response, next: NextFu
     });
 
     sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STAFF PERFORMANCE (Kinerja Staff)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get staff performance summary for a branch
+ * GET /users/performance/summary
+ */
+export async function getStaffPerformanceSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, startDate, endDate, page, limit } = req.query;
+    
+    const result = await getStaffPerformanceSummaryService(
+      {
+        branchId: branchId as string | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        page: page ? parseInt(page as string, 10) : undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+      },
+      req.user.role as Role,
+      req.user.branchId,
+    );
+
+    sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
+  } catch (err) { next(err); }
+}
+
+/**
+ * Get detailed session history for a specific staff member
+ * GET /users/performance/:staffId/history
+ */
+export async function getStaffSessionHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { staffId } = req.params;
+    const { position, startDate, endDate, page, limit } = req.query;
+    
+    const result = await getStaffSessionHistoryService(
+      staffId,
+      {
+        position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        page: page ? parseInt(page as string, 10) : undefined,
+        limit: limit ? parseInt(limit as string, 10) : undefined,
+      },
+      req.user.role as Role,
+      req.user.branchId,
+    );
+
+    sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
   } catch (err) { next(err); }
 }

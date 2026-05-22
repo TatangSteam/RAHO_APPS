@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { VitalSign, VitalType } from '@/types/session';
@@ -48,6 +48,7 @@ export default function Step8VitalAfter({
     SATURASI: false,
     PI: false,
   });
+  const [savingAll, setSavingAll] = useState(false);
 
   // Load existing vital signs (SESUDAH only)
   useEffect(() => {
@@ -77,6 +78,19 @@ export default function Step8VitalAfter({
     setSaved(newSaved);
   }, [vitalSigns]);
 
+  // Check if all fields have valid values (real-time validation)
+  const allFieldsValid = useMemo(() => {
+    return VITAL_FIELDS.every((field) => {
+      const value = values[field.type];
+      if (!value || value === '') return false;
+      const numValue = Number(value);
+      return !isNaN(numValue) && numValue > 0;
+    });
+  }, [values]);
+
+  // Check if all fields are saved to database
+  const allFieldsSaved = VITAL_FIELDS.every((field) => saved[field.type]);
+
   const handleBlur = async (type: VitalType) => {
     const value = values[type];
     if (!value || value === '') return;
@@ -84,7 +98,10 @@ export default function Step8VitalAfter({
     const numValue = Number(value);
     if (isNaN(numValue) || numValue <= 0) return;
 
-    setSaving({ ...saving, [type]: true });
+    // Skip if already saved with same value
+    if (saved[type]) return;
+
+    setSaving((prev) => ({ ...prev, [type]: true }));
 
     try {
       const field = VITAL_FIELDS.find((f) => f.type === type);
@@ -96,29 +113,52 @@ export default function Step8VitalAfter({
         recordedBy: user?.userId || '',
       });
 
-      setSaved({ ...saved, [type]: true });
-      
-      // Check if all fields are saved - but don't auto-complete
-      const allSaved = VITAL_FIELDS.every((field) => {
-        if (field.type === type) return true;
-        return saved[field.type] || values[field.type] === '';
-      });
-
-      // Only call onComplete if user explicitly wants to move on
-      // Don't auto-complete to prevent unwanted navigation
-      if (allSaved) {
-        // User can manually click next step when ready
-      }
+      setSaved((prev) => ({ ...prev, [type]: true }));
     } catch (err: any) {
       console.error('Failed to save vital sign:', err);
     } finally {
-      setSaving({ ...saving, [type]: false });
+      setSaving((prev) => ({ ...prev, [type]: false }));
     }
   };
 
   const handleChange = (type: VitalType, value: string) => {
-    setValues({ ...values, [type]: value });
-    setSaved({ ...saved, [type]: false });
+    setValues((prev) => ({ ...prev, [type]: value }));
+    setSaved((prev) => ({ ...prev, [type]: false }));
+  };
+
+  // Save all unsaved fields at once
+  const handleSaveAll = async () => {
+    setSavingAll(true);
+    
+    try {
+      // Save all unsaved fields
+      const unsavedFields = VITAL_FIELDS.filter((field) => !saved[field.type]);
+      
+      for (const field of unsavedFields) {
+        const value = values[field.type];
+        if (!value || value === '') continue;
+        
+        const numValue = Number(value);
+        if (isNaN(numValue) || numValue <= 0) continue;
+
+        await sessionApi.upsertVitalSign(sessionId, {
+          pencatatan: field.type,
+          waktuCatat: 'SESUDAH',
+          value: numValue,
+          unit: field.unit,
+          recordedBy: user?.userId || '',
+        });
+
+        setSaved((prev) => ({ ...prev, [field.type]: true }));
+      }
+
+      // Call onComplete after all saved
+      onComplete();
+    } catch (err: any) {
+      console.error('Failed to save vital signs:', err);
+    } finally {
+      setSavingAll(false);
+    }
   };
 
   if (isLocked) {
@@ -157,16 +197,22 @@ export default function Step8VitalAfter({
     );
   }
 
-  const allFieldsSaved = VITAL_FIELDS.every((field) => saved[field.type]);
+  // Show success state if all saved, or ready state if all valid but not all saved
+  const showSuccessState = allFieldsSaved;
+  const showReadyState = allFieldsValid && !allFieldsSaved;
 
   return (
     <div style={{
       padding: '24px',
-      background: allFieldsSaved
+      background: showSuccessState
         ? 'linear-gradient(135deg, rgba(34,197,94,0.05), rgba(22,163,74,0.05))'
+        : showReadyState
+        ? 'linear-gradient(135deg, rgba(245,158,11,0.05), rgba(217,119,6,0.05))'
         : 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(147,51,234,0.05))',
-      border: allFieldsSaved
+      border: showSuccessState
         ? '2px solid rgba(34,197,94,0.3)'
+        : showReadyState
+        ? '2px solid rgba(245,158,11,0.3)'
         : '2px solid rgba(59,130,246,0.3)',
       borderRadius: 'var(--radius-lg)',
     }}>
@@ -175,8 +221,10 @@ export default function Step8VitalAfter({
           width: '48px',
           height: '48px',
           borderRadius: '50%',
-          background: allFieldsSaved
+          background: showSuccessState
             ? 'linear-gradient(135deg, #22c55e, #16a34a)'
+            : showReadyState
+            ? 'linear-gradient(135deg, #f59e0b, #d97706)'
             : 'linear-gradient(135deg, #3b82f6, #2563eb)',
           display: 'flex',
           alignItems: 'center',
@@ -184,18 +232,20 @@ export default function Step8VitalAfter({
           color: 'white',
           fontWeight: '700',
           fontSize: '20px',
-          boxShadow: allFieldsSaved
+          boxShadow: showSuccessState
             ? '0 4px 12px rgba(34,197,94,0.3)'
+            : showReadyState
+            ? '0 4px 12px rgba(245,158,11,0.3)'
             : '0 4px 12px rgba(59,130,246,0.3)'
         }}>
-          {allFieldsSaved ? '✓' : '8'}
+          {showSuccessState ? '✓' : '8'}
         </div>
         <div>
           <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '4px', color: '#f1f5f9' }}>
             💉 Tanda Vital SESUDAH
           </h3>
           <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-            Auto-save saat blur (keluar dari field)
+            {showReadyState ? 'Siap disimpan - klik tombol Simpan' : 'Isi semua field untuk menyimpan'}
           </p>
         </div>
       </div>
@@ -257,7 +307,62 @@ export default function Step8VitalAfter({
         ))}
       </div>
 
-      {allFieldsSaved && (
+      {/* Ready to Save Message - Show when all fields valid but not all saved */}
+      {showReadyState && (
+        <div style={{
+          marginTop: '16px',
+          padding: '12px 16px',
+          background: 'rgba(245,158,11,0.1)',
+          border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 'var(--radius-md)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '12px'
+        }}>
+          <span style={{ fontSize: '13px', color: '#f59e0b', fontWeight: '600' }}>
+            ✓ Semua field sudah terisi - siap disimpan
+          </span>
+          <button
+            onClick={handleSaveAll}
+            disabled={savingAll}
+            style={{
+              padding: '8px 16px',
+              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: savingAll ? 'not-allowed' : 'pointer',
+              opacity: savingAll ? 0.7 : 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            {savingAll ? (
+              <>
+                <div style={{
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid white',
+                  borderTopColor: 'transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 0.6s linear infinite'
+                }} />
+                Menyimpan...
+              </>
+            ) : (
+              <>💾 Simpan</>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* Success Message - Show when all fields saved */}
+      {showSuccessState && (
         <div style={{
           marginTop: '16px',
           padding: '12px 16px',
@@ -284,7 +389,7 @@ export default function Step8VitalAfter({
               cursor: 'pointer'
             }}
           >
-            💾 Save
+            💾 Simpan
           </button>
         </div>
       )}

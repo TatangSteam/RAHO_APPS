@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2,
-  UserCog, Truck,
+  UserCog, Truck, BarChart3,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -120,6 +120,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/staff',
         icon: <UserCog size={20} />,
         roles: ['ADMIN_CABANG'],
+      },
+      {
+        label: 'Kinerja Staff',
+        href: '/staff-performance',
+        icon: <BarChart3 size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
         label: 'Kode Referral',
