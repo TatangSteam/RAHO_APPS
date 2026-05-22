@@ -31,6 +31,14 @@ router.post(
   controller.exportMembers.bind(controller)
 );
 
+// POST /api/v1/members/export/preview - Get export preview count
+router.post(
+  '/export/preview',
+  authenticate,
+  authorize(ADMIN_PLUS),
+  controller.getExportPreview.bind(controller)
+);
+
 // GET /api/v1/members/lookup - Lookup member by memberNo
 router.get(
   '/lookup',

@@ -411,39 +411,51 @@ export class MembersController {
 
   async exportMembers(req: Request, res: Response, next: NextFunction) {
     try {
-      const { search, status, format = 'xlsx' } = req.query;
       const { userId, branchId, role } = req.user!;
-      const fields = req.body.fields || {
-        basicInfo: true,
-        contactInfo: true,
-        medicalInfo: false,
-        packages: false,
-        sessions: false,
-        diagnosis: false,
+      const { filters, options, format = 'xlsx' } = req.body;
+
+      // Default columns if not specified
+      const exportOptions = {
+        columns: options?.columns || ['memberNo', 'fullName', 'phone', 'email', 'registrationBranch', 'status'],
+        groupBy: options?.groupBy || 'none',
+        sortBy: options?.sortBy || 'memberNo',
+        sortOrder: options?.sortOrder || 'asc',
+        includeSubtotals: options?.includeSubtotals || false,
+        includeGrandTotal: options?.includeGrandTotal || false,
       };
 
       const data = await exportService.exportMembers(userId, role as Role, branchId, {
-        fields,
-        format: format as 'csv' | 'json' | 'xlsx',
-        search: search as string,
-        status: status as string,
+        filters: filters || {},
+        options: exportOptions,
+        format: format as 'csv' | 'xlsx',
       });
 
+      const timestamp = new Date().toISOString().slice(0, 10);
+
       if (format === 'csv') {
-        const csv = exportService.generateCSV(data);
-        res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.csv`);
+        const csv = exportService.generateCSV(data, exportOptions);
+        res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+        res.setHeader('Content-Disposition', `attachment; filename=members-export-${timestamp}.csv`);
         res.send(csv);
-      } else if (format === 'xlsx') {
-        const buffer = await exportService.generateXLSX(data);
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.xlsx`);
-        res.send(buffer);
       } else {
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Content-Disposition', `attachment; filename=members-${Date.now()}.json`);
-        res.json(data);
+        const buffer = await exportService.generateXLSX(data, exportOptions);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', `attachment; filename=members-export-${timestamp}.xlsx`);
+        res.send(buffer);
       }
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getExportPreview(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId, branchId, role } = req.user!;
+      const { filters } = req.body;
+
+      const count = await exportService.getPreviewCount(userId, role as Role, branchId, filters || {});
+
+      sendSuccess(res, { count });
     } catch (error) {
       next(error);
     }
