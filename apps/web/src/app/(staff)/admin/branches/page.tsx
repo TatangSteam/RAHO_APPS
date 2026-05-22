@@ -120,7 +120,7 @@ export default function BranchesPage() {
                     <span className={`${styles.typeBadge} ${styles[branch.type.toLowerCase()]}`}>
                       {branch.type === 'KLINIK' ? '🏥 Klinik' : 
                        branch.type === 'HOMECARE' ? '🏠 Homecare' :
-                       branch.type === 'PREMIER' ? '⭐ Premier' : '🤝 Partnership'}
+                       branch.type === 'PREMIER' ? '⭐ Premier (Cabang)' : '🤝 Partnership'}
                     </span>
                     <span className={`${styles.statusBadge} ${branch.isActive ? styles.active : styles.inactive}`}>
                       {branch.isActive ? '✓ Aktif' : '✗ Nonaktif'}

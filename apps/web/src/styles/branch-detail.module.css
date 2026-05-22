@@ -279,7 +279,7 @@
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-xl);
-  overflow: hidden;
+  overflow: visible;
   box-shadow: var(--shadow-lg);
 }
 
@@ -334,6 +334,7 @@
 .tabContent {
   padding: 32px;
   min-height: 400px;
+  overflow-x: auto;
 }
 
 /* ── Tab Header ─────────────────────────────────────────── */

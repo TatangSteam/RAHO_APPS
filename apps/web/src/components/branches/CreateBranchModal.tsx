@@ -160,7 +160,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
                 className={styles.input}
                 disabled={loading}
               >
-                <option value="PREMIER">⭐ Premier</option>
+                <option value="PREMIER">⭐ Premier (Cabang)</option>
                 <option value="PARTNERSHIP">🤝 Partnership</option>
               </select>
             </div>

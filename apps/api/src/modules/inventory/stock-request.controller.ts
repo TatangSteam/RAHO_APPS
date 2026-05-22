@@ -331,6 +331,8 @@ export class StockRequestController {
   /**
    * Legacy approve endpoint (for backward compatibility)
    * POST /api/v1/inventory/stock-requests/:requestId/approve
+   * 
+   * Now both PREMIER and PARTNERSHIP use the same invoice flow
    */
   async approveRequest(req: Request, res: Response, next: NextFunction) {
     try {
@@ -352,17 +354,18 @@ export class StockRequestController {
         return sendError(res, 404, 'REQUEST_NOT_FOUND', 'Permintaan stok tidak ditemukan');
       }
 
-      // Route to appropriate handler based on branch type
-      if (request.branch.type === BranchType.PARTNERSHIP) {
+      // Both PREMIER and PARTNERSHIP now use the same invoice flow
+      if (request.branch.type === BranchType.PARTNERSHIP || request.branch.type === BranchType.PREMIER) {
         if (!invoiceItems || !Array.isArray(invoiceItems) || invoiceItems.length === 0) {
-          return sendError(res, 400, 'INVOICE_ITEMS_REQUIRED', 'Untuk cabang Partnership, item invoice harus diisi');
+          return sendError(res, 400, 'INVOICE_ITEMS_REQUIRED', 'Item invoice harus diisi');
         }
-        const result = await stockRequestService.createPartnershipInvoice(requestId, userId, { 
+        const result = await stockRequestService.createInvoice(requestId, userId, { 
           items: invoiceItems, 
           notes: reviewNotes 
         });
         return sendSuccess(res, result);
       } else {
+        // For other branch types (PUSAT, KLINIK, HOMECARE), use direct approval
         const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
         return sendSuccess(res, result);
       }

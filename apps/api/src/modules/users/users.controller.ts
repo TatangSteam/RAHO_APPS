@@ -15,6 +15,12 @@ import {
   resetPasswordService,
   updateAvatarService,
   getStaffByRoleService,
+  getMedicalStaffNotInBranchService,
+  getUserBranchesService,
+  assignUserToBranchService,
+  removeUserFromBranchService,
+  getAvailableBranchesForUserService,
+  setPrimaryBranchService,
 } from './users.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
@@ -236,5 +242,142 @@ export async function listBranchStaff(req: Request, res: Response, next: NextFun
     }));
     
     sendSuccess(res, { users: transformedUsers, total, page, limit });
+  } catch (err) { next(err); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// STAFF BRANCH MANAGEMENT (Multi-Branch Assignment)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get medical staff (DOCTOR/NURSE) not assigned to a specific branch
+ * GET /users/medical-staff?excludeBranchId={branchId}
+ */
+export async function getMedicalStaffNotInBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { excludeBranchId } = req.query;
+    
+    if (!excludeBranchId || typeof excludeBranchId !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BRANCH_ID_REQUIRED', message: 'excludeBranchId query parameter is required.' }
+      });
+      return;
+    }
+
+    const staff = await getMedicalStaffNotInBranchService(excludeBranchId);
+    sendSuccess(res, staff);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Get all branches assigned to a user (DOCTOR/NURSE)
+ * GET /users/:userId/branches
+ */
+export async function getUserBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const result = await getUserBranchesService(userId);
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Assign a user (DOCTOR/NURSE) to a branch
+ * POST /users/:userId/branches
+ */
+export async function assignUserToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const { branchId } = req.body;
+
+    if (!branchId) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BRANCH_ID_REQUIRED', message: 'branchId is required in request body.' }
+      });
+      return;
+    }
+
+    const result = await assignUserToBranchService(userId, branchId);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'CREATE',
+      resource: 'StaffBranch',
+      resourceId: result.staffBranchId,
+      meta: { targetUserId: userId, assignedBranchId: branchId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendCreated(res, result);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Remove a user (DOCTOR/NURSE) from a branch
+ * DELETE /users/:userId/branches/:branchId
+ */
+export async function removeUserFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId, branchId } = req.params;
+
+    const result = await removeUserFromBranchService(userId, branchId);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'DELETE',
+      resource: 'StaffBranch',
+      resourceId: `${userId}_${branchId}`,
+      meta: { targetUserId: userId, removedBranchId: branchId },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Get available branches for a user (branches not yet assigned)
+ * GET /users/:userId/branches/available
+ */
+export async function getAvailableBranchesForUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const branches = await getAvailableBranchesForUserService(userId);
+    sendSuccess(res, branches);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Set a branch as the primary branch for a user (DOCTOR/NURSE)
+ * PATCH /users/:userId/branches/:branchId/set-primary
+ */
+export async function setPrimaryBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId, branchId } = req.params;
+
+    const result = await setPrimaryBranchService(userId, branchId);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'UPDATE',
+      resource: 'User',
+      resourceId: userId,
+      meta: { 
+        action: 'set_primary_branch',
+        oldPrimaryBranch: result.oldPrimaryBranch,
+        newPrimaryBranch: result.newPrimaryBranch,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
   } catch (err) { next(err); }
 }

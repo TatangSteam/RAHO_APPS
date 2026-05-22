@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
-import { showToast } from '@/lib/toast';
+import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { 
   UserCog, Plus, Edit, Trash2, Search, 
@@ -129,9 +129,11 @@ export default function StaffManagementPage() {
   };
 
   const handleDeleteStaff = async (staffMember: Staff) => {
-    if (!confirm(`Apakah Anda yakin ingin menonaktifkan ${staffMember.profile.fullName}?`)) {
-      return;
-    }
+    const confirmed = await confirm.warning(
+      'Nonaktifkan Staff',
+      `Apakah Anda yakin ingin menonaktifkan ${staffMember.profile.fullName}?`
+    );
+    if (!confirmed) return;
 
     try {
       await api.delete(`/users/${staffMember.id}`);

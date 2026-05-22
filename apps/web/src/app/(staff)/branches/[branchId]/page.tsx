@@ -5,14 +5,13 @@ import { useRouter, useParams } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { api } from '@/lib/api';
-import { showToast } from '@/lib/toast';
+import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope
 } from 'lucide-react';
-import styles from '@/styles/branch-detail.module.css';
 
 // Import CRUD Modals
 import MemberCrudModal from '@/components/branches/MemberCrudModal';
@@ -20,6 +19,18 @@ import StaffCrudModal from '@/components/branches/StaffCrudModal';
 import InventoryCrudModal from '@/components/branches/InventoryCrudModal';
 import InventoryBatchAddModal from '@/components/branches/InventoryBatchAddModal';
 import AssignManagerModal from '@/components/branches/AssignManagerModal';
+import AssignMedicalStaffModal from '@/components/branches/AssignMedicalStaffModal';
+import ManageStaffBranchesModal from '@/components/branches/ManageStaffBranchesModal';
+
+// Import Tailwind Tables
+import StaffTable from '@/components/branches/StaffTable';
+import MembersTable from '@/components/branches/MembersTable';
+import InventoryTable from '@/components/branches/InventoryTable';
+import ManagersTable from '@/components/branches/ManagersTable';
+
+// ═══════════════════════════════════════════════════════════════
+// TYPES
+// ═══════════════════════════════════════════════════════════════
 
 interface Branch {
   id: string;
@@ -99,9 +110,75 @@ interface Manager {
 }
 
 type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing';
-
 type CrudModalType = 'member' | 'staff' | 'inventory' | null;
 type CrudAction = 'create' | 'edit' | 'delete';
+
+
+// ═══════════════════════════════════════════════════════════════
+// HELPER COMPONENTS
+// ═══════════════════════════════════════════════════════════════
+
+function StatCard({ icon, value, label, color }: { 
+  icon: React.ReactNode; 
+  value: number; 
+  label: string; 
+  color: 'blue' | 'green' | 'amber' 
+}) {
+  const colorClasses = {
+    blue: 'bg-blue-500/10 text-blue-600 dark:text-blue-500',
+    green: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-500',
+    amber: 'bg-amber-500/10 text-amber-600 dark:text-amber-500',
+  };
+
+  return (
+    <div className="flex items-center gap-4 p-6 bg-white dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-xl hover:border-amber-500/30 transition-all duration-300 group shadow-sm dark:shadow-none">
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${colorClasses[color]}`}>
+        {icon}
+      </div>
+      <div>
+        <div className="text-3xl font-bold text-neutral-900 dark:text-white">{value}</div>
+        <div className="text-sm text-neutral-500 dark:text-neutral-400 font-medium uppercase tracking-wide">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, icon, label, badge }: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`
+        flex items-center gap-2.5 px-5 py-4 font-semibold text-sm transition-all duration-200 relative whitespace-nowrap
+        ${active 
+          ? 'text-amber-600 dark:text-amber-400' 
+          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200'
+        }
+      `}
+    >
+      {icon}
+      <span>{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="px-2 py-0.5 text-xs font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-full">
+          {badge}
+        </span>
+      )}
+      {active && (
+        <div className="absolute bottom-0 left-5 right-5 h-0.5 bg-amber-500 rounded-full" />
+      )}
+    </button>
+  );
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
 
 export default function BranchDetailPage() {
   const router = useRouter();
@@ -142,19 +219,20 @@ export default function BranchDetailPage() {
     data?: any;
   }>({ type: null, action: 'create' });
 
-  // Assign Manager Modal state
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
-
-  // Batch Add Inventory Modal state
   const [showBatchAddModal, setShowBatchAddModal] = useState(false);
+  const [showAssignMedicalStaffModal, setShowAssignMedicalStaffModal] = useState(false);
+  const [manageStaffBranchesModal, setManageStaffBranchesModal] = useState<{
+    isOpen: boolean;
+    userId: string;
+    staffName: string;
+    staffRole: 'DOCTOR' | 'NURSE';
+  }>({ isOpen: false, userId: '', staffName: '', staffRole: 'DOCTOR' });
+
 
   // Check authorization
   useEffect(() => {
     if (!user || !hasRole(user.role, MANAGER_ABOVE_ROLES)) {
-      console.log('🔍 [BranchDetail] Current user:', user);
-      console.log('🔍 [BranchDetail] User role:', user?.role);
-      console.log('🔍 [BranchDetail] Required roles:', MANAGER_ABOVE_ROLES);
-      console.log('🔍 [BranchDetail] Has access:', user ? hasRole(user.role, MANAGER_ABOVE_ROLES) : false);
       showToast.error('Anda tidak memiliki akses ke halaman ini');
       router.push('/dashboard');
       return;
@@ -192,52 +270,29 @@ export default function BranchDetailPage() {
 
     try {
       setTabLoading(true);
-      console.log(`🔍 [BranchDetail] Loading ${activeTab} data for branch:`, branchId);
 
       if (activeTab === 'members') {
-        console.log('🔍 [BranchDetail] Starting members API call...');
         const response = await branchesApi.getBranchMembers(branchId, { page: 1, limit: 100 });
-        console.log('🔍 [BranchDetail] Members response full:', JSON.stringify(response, null, 2));
-        console.log('🔍 [BranchDetail] Members response.data:', response.data);
-        console.log('🔍 [BranchDetail] Members response.data.data:', response.data.data);
-        
-        const membersResult = response.data.data; // { members: [...], pagination: {...} }
-        console.log('🔍 [BranchDetail] Members result:', membersResult);
-        
+        const membersResult = response.data.data;
         const membersData = membersResult?.members || [];
-        console.log('🔍 [BranchDetail] Members data final:', membersData, 'length:', membersData.length, 'isArray:', Array.isArray(membersData));
-        
         setMembers(Array.isArray(membersData) ? membersData : []);
-        console.log('🔍 [BranchDetail] Members state set, length:', membersData.length);
       } else if (activeTab === 'inventory') {
         const response = await inventoryApi.getInventoryItems(branchId, {});
-        console.log('🔍 [BranchDetail] Inventory response:', response.data);
         const inventoryData = response.data.data;
-        console.log('🔍 [BranchDetail] Inventory data:', inventoryData, 'isArray:', Array.isArray(inventoryData));
         setInventory(Array.isArray(inventoryData) ? inventoryData : []);
       } else if (activeTab === 'staff') {
         const response = await branchesApi.getBranchStaff(branchId, { page: 1, limit: 100 });
-        console.log('🔍 [BranchDetail] Staff response:', response.data);
-        const staffResult = response.data.data; // { users: [...], total: ..., page: ..., limit: ... }
+        const staffResult = response.data.data;
         const staffData = staffResult?.users || staffResult || [];
-        console.log('🔍 [BranchDetail] Staff data:', staffData, 'isArray:', Array.isArray(staffData));
         setStaff(Array.isArray(staffData) ? staffData : []);
       } else if (activeTab === 'managers') {
         const response = await branchesApi.getBranchManagers(branchId);
-        console.log('🔍 [BranchDetail] Managers response:', response.data);
         const managersData = response.data.data?.managers || [];
-        console.log('🔍 [BranchDetail] Managers data:', managersData, 'isArray:', Array.isArray(managersData));
         setManagers(Array.isArray(managersData) ? managersData : []);
       }
     } catch (error: any) {
-      console.error(`❌ [BranchDetail] Error loading ${activeTab} data:`, error);
-      if (error.response) {
-        console.error('❌ [BranchDetail] Error response:', error.response.data);
-        console.error('❌ [BranchDetail] Error status:', error.response.status);
-      }
+      console.error(`Error loading ${activeTab} data:`, error);
       showToast.error(`Gagal memuat data ${activeTab}`);
-      
-      // Reset to empty arrays on error
       if (activeTab === 'members') setMembers([]);
       else if (activeTab === 'inventory') setInventory([]);
       else if (activeTab === 'staff') setStaff([]);
@@ -247,12 +302,11 @@ export default function BranchDetailPage() {
     }
   };
 
+
   const handleDelete = async () => {
     if (!branch) return;
-    
-    if (!confirm(`Apakah Anda yakin ingin menghapus cabang "${branch.name}"?`)) {
-      return;
-    }
+    const confirmed = await confirm.delete(branch.name);
+    if (!confirmed) return;
 
     try {
       await branchesApi.deleteBranch(branchId);
@@ -264,18 +318,17 @@ export default function BranchDetailPage() {
     }
   };
 
-  const getBranchTypeColor = (type: string) => {
-    switch (type) {
-      case 'PUSAT': return '#f59e0b';
-      case 'PREMIER': return '#eab308';
-      case 'PARTNERSHIP': return '#3b82f6';
-      case 'KLINIK': return '#10b981';
-      case 'HOMECARE': return '#8b5cf6';
-      default: return '#6b7280';
-    }
+  const getBranchTypeStyles = (type: string) => {
+    const styles: Record<string, { bg: string; text: string; border: string }> = {
+      PUSAT: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
+      PREMIER: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30' },
+      PARTNERSHIP: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
+      KLINIK: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
+      HOMECARE: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30' },
+    };
+    return styles[type] || { bg: 'bg-neutral-500/15', text: 'text-neutral-400', border: 'border-neutral-500/30' };
   };
 
-  // CRUD Modal handlers
   const openCrudModal = (type: CrudModalType, action: CrudAction, data?: any) => {
     setCrudModal({ type, action, data });
   };
@@ -286,797 +339,421 @@ export default function BranchDetailPage() {
 
   const handleCrudSuccess = () => {
     closeCrudModal();
-    loadTabData(); // Refresh current tab data
-    if (branch) {
-      loadBranch(); // Refresh branch stats
-    }
+    loadTabData();
+    if (branch) loadBranch();
   };
 
   const handleDeleteItem = async (type: 'member' | 'staff' | 'inventory', id: string, name: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus ${name}?`)) {
-      return;
-    }
-
-    console.log('🔍 [BranchDetail] Delete attempt:', { type, id, name });
-    console.log('🔍 [BranchDetail] Current user:', user);
+    const confirmed = await confirm.delete(name);
+    if (!confirmed) return;
 
     try {
-      // Handle delete based on type
       if (type === 'member') {
-        console.log('🔍 [BranchDetail] Calling DELETE /members/' + id);
         await api.delete(`/members/${id}`);
         showToast.success('Member berhasil dihapus');
       } else if (type === 'staff') {
-        console.log('🔍 [BranchDetail] Calling DELETE /users/' + id);
         await api.delete(`/users/${id}`);
         showToast.success('Staff berhasil dihapus');
       } else if (type === 'inventory') {
-        console.log('🔍 [BranchDetail] Calling DELETE /inventory/items/' + id);
         await api.delete(`/inventory/items/${id}`);
         showToast.success('Item inventori berhasil dihapus');
       }
-      
       handleCrudSuccess();
     } catch (error: any) {
-      console.error(`❌ [BranchDetail] Error deleting ${type}:`, error);
-      console.error('❌ [BranchDetail] Error response:', error.response?.data);
-      console.error('❌ [BranchDetail] Error status:', error.response?.status);
+      console.error(`Error deleting ${type}:`, error);
       showToast.error(error.response?.data?.message || `Gagal menghapus ${type}`);
     }
   };
 
+
+  // Loading state
   if (loading) {
     return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.loadingSpinner} />
-        <p>Memuat data cabang...</p>
+      <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-neutral-300 dark:border-neutral-700 border-t-amber-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-neutral-500 dark:text-neutral-400">Memuat data cabang...</p>
+        </div>
       </div>
     );
   }
 
   if (!branch) return null;
 
+  const typeStyles = getBranchTypeStyles(branch.type);
+
   return (
-    <div className={styles.branchDetailPage}>
-      {/* Header */}
-      <div className={styles.pageHeader}>
-        <button className={styles.backButton} onClick={() => router.push('/branches')}>
-          <ArrowLeft size={20} />
-        </button>
+    <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-6">
         
-        <div className={styles.headerContent}>
-          <div className={styles.headerLeft}>
-            <div className={styles.branchInfo}>
-              <div className={styles.branchIcon}>
-                <Building2 size={24} />
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* HEADER SECTION */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="bg-white dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-2xl p-6 lg:p-8 relative overflow-hidden shadow-sm dark:shadow-none">
+          {/* Gradient accent line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
+          
+          {/* Back button */}
+          <button 
+            onClick={() => router.push('/branches')}
+            className="inline-flex items-center gap-2 px-4 py-2 mb-6 text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-white bg-neutral-100 dark:bg-neutral-800/50 hover:bg-neutral-200 dark:hover:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg transition-all duration-200"
+          >
+            <ArrowLeft size={18} />
+            <span className="font-medium">Kembali</span>
+          </button>
+
+          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+            {/* Branch Info */}
+            <div className="flex items-start gap-5">
+              <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <Building2 size={28} className="text-white" />
               </div>
-              <div className={styles.branchDetails}>
-                <div className={styles.branchMeta}>
-                  <span className={styles.branchCode}>{branch.branchCode}</span>
-                  <span 
-                    className={styles.typeBadge}
-                    style={{ 
-                      background: `${getBranchTypeColor(branch.type)}20`,
-                      color: getBranchTypeColor(branch.type),
-                      borderColor: `${getBranchTypeColor(branch.type)}40`
-                    }}
-                  >
-                    {branch.type}
+              
+              <div>
+                {/* Badges */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <span className="px-3 py-1 text-xs font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-lg font-mono tracking-wider">
+                    {branch.branchCode}
                   </span>
-                  <span className={`${styles.statusBadge} ${branch.isActive ? styles.active : styles.inactive}`}>
+                  <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${typeStyles.bg} ${typeStyles.text} ${typeStyles.border}`}>
+                    {branch.type === 'PREMIER' ? 'Premier (Cabang)' : branch.type}
+                  </span>
+                  <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
+                    branch.isActive 
+                      ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
+                      : 'bg-neutral-500/15 text-neutral-500 dark:text-neutral-400 border-neutral-500/30'
+                  }`}>
                     {branch.isActive ? 'Aktif' : 'Tidak Aktif'}
                   </span>
                 </div>
-                <h1>{branch.name}</h1>
-                <div className={styles.branchLocation}>
+                
+                {/* Branch name */}
+                <h1 className="text-2xl lg:text-3xl font-bold text-neutral-900 dark:text-white mb-2">{branch.name}</h1>
+                
+                {/* Location */}
+                <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
                   <MapPin size={16} />
                   <span>{branch.city}</span>
                 </div>
               </div>
             </div>
-          </div>
-          
-          <div className={styles.headerActions}>
-            <button 
-              className={`${styles.actionButton} ${styles.edit}`}
-              onClick={() => router.push(`/branches/${branchId}/edit`)}
-            >
-              <Edit size={18} />
-              <span>Edit</span>
-            </button>
-            <button 
-              className={`${styles.actionButton} ${styles.delete}`}
-              onClick={handleDelete}
-            >
-              <Trash2 size={18} />
-              <span>Hapus</span>
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Stats Grid */}
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#3b82f615', color: '#3b82f6' }}>
-            <Users size={20} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{branch.stats?.totalMembers || 0}</div>
-            <div className={styles.statLabel}>Total Members</div>
-          </div>
-        </div>
-        
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#10b98115', color: '#10b981' }}>
-            <UserCog size={20} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{branch.stats?.activeUsers || 0}</div>
-            <div className={styles.statLabel}>Staff Aktif</div>
-          </div>
-        </div>
-        
-        <div className={styles.statCard}>
-          <div className={styles.statIcon} style={{ background: '#f59e0b15', color: '#f59e0b' }}>
-            <Package size={20} />
-          </div>
-          <div className={styles.statInfo}>
-            <div className={styles.statValue}>{branch.stats?.activePackages || 0}</div>
-            <div className={styles.statLabel}>Paket Aktif</div>
-          </div>
-        </div>
-      </div>
 
-      {/* Tabs */}
-      <div className={styles.tabsContainer}>
-        <div className={styles.tabsNav}>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'overview' ? styles.active : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            <Activity size={18} />
-            <span>Overview</span>
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'members' ? styles.active : ''}`}
-            onClick={() => setActiveTab('members')}
-          >
-            <Users size={18} />
-            <span>Members</span>
-            {branch.stats && (
-              <span className="tab-badge">{branch.stats.totalMembers}</span>
-            )}
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'inventory' ? styles.active : ''}`}
-            onClick={() => setActiveTab('inventory')}
-          >
-            <Package size={18} />
-            <span>Stok</span>
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'staff' ? styles.active : ''}`}
-            onClick={() => setActiveTab('staff')}
-          >
-            <UserCog size={18} />
-            <span>Staff</span>
-            {branch.stats && (
-              <span className="tab-badge">{branch.stats.activeUsers}</span>
-            )}
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'managers' ? styles.active : ''}`}
-            onClick={() => setActiveTab('managers')}
-          >
-            <Shield size={18} />
-            <span>Managers</span>
-          </button>
-          {user?.role === 'SUPER_ADMIN' && (
-            <button
-              className={`${styles.tabButton} ${activeTab === 'pricing' ? styles.active : ''}`}
-              onClick={() => setActiveTab('pricing')}
-            >
-              <DollarSign size={18} />
-              <span>Harga Paket</span>
-            </button>
-          )}
-        </div>
-
-        {/* Tab Content */}
-        <div className={styles.tabContent}>
-          {activeTab === 'overview' && (
-            <div className={styles.overviewGrid}>
-              <div className={styles.infoSection}>
-                <h3>
-                  <MapPin size={18} />
-                  Informasi Lokasi
-                </h3>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Alamat</span>
-                  <span className={styles.infoValue}>{branch.address}</span>
-                </div>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Kota</span>
-                  <span className={styles.infoValue}>{branch.city}</span>
-                </div>
-              </div>
-
-              <div className={styles.infoSection}>
-                <h3>
-                  <Phone size={18} />
-                  Kontak & Operasional
-                </h3>
-                <div className={styles.infoItem}>
-                  <span className={styles.infoLabel}>Telepon</span>
-                  <span className={styles.infoValue}>{branch.phone}</span>
-                </div>
-                {branch.operatingHours && (
-                  <div className={styles.infoItem}>
-                    <span className={styles.infoLabel}>Jam Operasional</span>
-                    <span className={styles.infoValue}>{branch.operatingHours}</span>
-                  </div>
-                )}
-              </div>
+            {/* Action buttons */}
+            <div className="flex gap-3">
+              <button 
+                onClick={() => router.push(`/branches/${branchId}/edit`)}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-emerald-500/50 transition-all duration-200"
+              >
+                <Edit size={18} />
+                <span>Edit</span>
+              </button>
+              <button 
+                onClick={handleDelete}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-neutral-700 dark:text-neutral-200 hover:text-red-600 dark:hover:text-red-400 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-red-500/50 transition-all duration-200"
+              >
+                <Trash2 size={18} />
+                <span>Hapus</span>
+              </button>
             </div>
-          )}
+          </div>
+        </div>
 
-          {activeTab === 'members' && (
-            <div>
-              <div className={styles.tabHeader}>
-                <h2>Members</h2>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                  <select 
-                    className={styles.filterSelect}
-                    value={memberBranchFilter}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === 'all' || value === 'registered' || value === 'lintas') {
-                        setMemberBranchFilter(value);
-                      }
-                    }}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      border: '1px solid var(--surface-border)',
-                      background: 'var(--surface-card)',
-                      color: 'var(--text-primary)',
-                      fontSize: '14px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <option value="all">Semua Cabang</option>
-                    <option value="registered">Terdaftar di Cabang Ini</option>
-                    <option value="lintas">Member Lintas Cabang</option>
-                  </select>
-                  <button 
-                    className={styles.addButton}
-                    onClick={() => openCrudModal('member', 'create')}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Member</span>
-                  </button>
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* STATS GRID */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard 
+            icon={<Users size={24} />} 
+            value={branch.stats?.totalMembers || 0} 
+            label="Total Members" 
+            color="blue" 
+          />
+          <StatCard 
+            icon={<UserCog size={24} />} 
+            value={branch.stats?.activeUsers || 0} 
+            label="Staff Aktif" 
+            color="green" 
+          />
+          <StatCard 
+            icon={<Package size={24} />} 
+            value={branch.stats?.activePackages || 0} 
+            label="Paket Aktif" 
+            color="amber" 
+          />
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* TABS SECTION */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <div className="bg-white dark:bg-neutral-900/50 border border-neutral-200 dark:border-neutral-800 rounded-2xl overflow-hidden shadow-sm dark:shadow-none">
+          {/* Tab Navigation */}
+          <div className="flex overflow-x-auto bg-neutral-50 dark:bg-neutral-900/80 border-b border-neutral-200 dark:border-neutral-800">
+            <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={18} />} label="Overview" />
+            <TabButton active={activeTab === 'members'} onClick={() => setActiveTab('members')} icon={<Users size={18} />} label="Members" badge={branch.stats?.totalMembers} />
+            <TabButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Package size={18} />} label="Stok" />
+            <TabButton active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<UserCog size={18} />} label="Staff" badge={branch.stats?.activeUsers} />
+            <TabButton active={activeTab === 'managers'} onClick={() => setActiveTab('managers')} icon={<Shield size={18} />} label="Managers" />
+            {user?.role === 'SUPER_ADMIN' && (
+              <TabButton active={activeTab === 'pricing'} onClick={() => setActiveTab('pricing')} icon={<DollarSign size={18} />} label="Harga Paket" />
+            )}
+          </div>
+
+
+          {/* Tab Content */}
+          <div className="p-6 lg:p-8">
+            {/* Overview Tab */}
+            {activeTab === 'overview' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Location Info */}
+                <div className="bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700/50 rounded-xl p-6">
+                  <h3 className="flex items-center gap-3 text-lg font-semibold text-neutral-900 dark:text-white mb-5">
+                    <MapPin size={20} className="text-amber-500" />
+                    Informasi Lokasi
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center py-3 border-b border-neutral-200 dark:border-neutral-700/50">
+                      <span className="text-neutral-500 dark:text-neutral-400">Alamat</span>
+                      <span className="text-neutral-900 dark:text-white font-medium text-right max-w-[60%]">{branch.address}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-3">
+                      <span className="text-neutral-500 dark:text-neutral-400">Kota</span>
+                      <span className="text-neutral-900 dark:text-white font-medium">{branch.city}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Info */}
+                <div className="bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700/50 rounded-xl p-6">
+                  <h3 className="flex items-center gap-3 text-lg font-semibold text-neutral-900 dark:text-white mb-5">
+                    <Phone size={20} className="text-amber-500" />
+                    Kontak & Operasional
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center py-3 border-b border-neutral-200 dark:border-neutral-700/50">
+                      <span className="text-neutral-500 dark:text-neutral-400">Telepon</span>
+                      <span className="text-neutral-900 dark:text-white font-medium">{branch.phone}</span>
+                    </div>
+                    {branch.operatingHours && (
+                      <div className="flex justify-between items-center py-3">
+                        <span className="text-neutral-500 dark:text-neutral-400">Jam Operasional</span>
+                        <span className="text-neutral-900 dark:text-white font-medium">{branch.operatingHours}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
+            )}
 
-              {tabLoading ? (
-                <div className={styles.loadingState}>
-                  <div className={styles.loadingSpinner} />
-                  <p>Memuat data members...</p>
+
+            {/* Members Tab */}
+            {activeTab === 'members' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Members</h2>
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <select 
+                      value={memberBranchFilter}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === 'all' || value === 'registered' || value === 'lintas') {
+                          setMemberBranchFilter(value);
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 text-sm font-medium cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50"
+                    >
+                      <option value="all">Semua Cabang</option>
+                      <option value="registered">Terdaftar di Cabang Ini</option>
+                      <option value="lintas">Member Lintas Cabang</option>
+                    </select>
+                    <button 
+                      onClick={() => openCrudModal('member', 'create')}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+                    >
+                      <Plus size={18} />
+                      <span>Tambah Member</span>
+                    </button>
+                  </div>
                 </div>
-              ) : !Array.isArray(filteredMembers) || filteredMembers.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <Users size={48} />
-                  <h3>Belum Ada Member</h3>
-                  <p>
-                    {memberBranchFilter === 'registered' 
-                      ? 'Belum ada member yang terdaftar di cabang ini.'
-                      : memberBranchFilter === 'lintas'
-                      ? 'Belum ada member lintas cabang.'
-                      : 'Cabang ini belum memiliki member terdaftar.'}
-                  </p>
-                  <button 
-                    className={styles.emptyStateButton}
-                    onClick={() => openCrudModal('member', 'create')}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Member Pertama</span>
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div style={{ 
-                    marginBottom: '16px', 
-                    padding: '12px 16px', 
-                    background: 'rgba(59,130,246,0.1)', 
-                    border: '1px solid rgba(59,130,246,0.2)',
-                    borderRadius: '8px',
-                    fontSize: '14px',
-                    color: 'var(--text-secondary)'
-                  }}>
-                    Menampilkan <strong>{filteredMembers.length}</strong> dari <strong>{members.length}</strong> member
+
+                {filteredMembers.length > 0 && (
+                  <div className="mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg text-sm text-neutral-600 dark:text-neutral-400">
+                    Menampilkan <strong className="text-blue-600 dark:text-blue-400">{filteredMembers.length}</strong> dari <strong className="text-blue-600 dark:text-blue-400">{members.length}</strong> member
                     {memberBranchFilter === 'registered' && ' yang terdaftar di cabang ini'}
                     {memberBranchFilter === 'lintas' && ' lintas cabang'}
                   </div>
-                  <table className={styles.dataTable}>
-                    <thead>
-                      <tr>
-                        <th>No. Member</th>
-                        <th>Nama Lengkap</th>
-                        <th>Email</th>
-                        <th>Telepon</th>
-                        <th>Cabang Registrasi</th>
-                        <th>Tanggal Daftar</th>
-                        <th>Status</th>
-                        <th>Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredMembers.map((member) => (
-                        <tr key={member.memberId}>
-                          <td>
-                            <div className={styles.memberCell}>
-                              <div className={styles.memberAvatar}>
-                                {member.fullName.charAt(0).toUpperCase()}
-                              </div>
-                              <div className={styles.memberInfo}>
-                                <div className={styles.memberCode}>{member.memberNo}</div>
-                                {member.isLintas && (
-                                  <span style={{
-                                    fontSize: '10px',
-                                    padding: '2px 6px',
-                                    background: 'rgba(139,92,246,0.15)',
-                                    color: '#8b5cf6',
-                                    borderRadius: '4px',
-                                    fontWeight: 600,
-                                  }}>
-                                    LINTAS
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <div className={styles.memberName}>{member.fullName}</div>
-                          </td>
-                          <td>
-                            <div className={styles.memberEmail}>{member.email}</div>
-                          </td>
-                          <td>{member.phone}</td>
-                          <td>
-                            <span style={{
-                              padding: '4px 8px',
-                              background: member.registrationBranch === branch?.branchCode 
-                                ? 'rgba(34,197,94,0.15)' 
-                                : 'rgba(59,130,246,0.15)',
-                              color: member.registrationBranch === branch?.branchCode 
-                                ? '#22c55e' 
-                                : '#3b82f6',
-                              borderRadius: '6px',
-                              fontSize: '12px',
-                              fontWeight: 600,
-                            }}>
-                              {member.registrationBranch}
-                            </span>
-                          </td>
-                          <td>{new Date(member.createdAt).toLocaleDateString('id-ID')}</td>
-                          <td>
-                            <span className={`${styles.statusBadge} ${member.isActive ? styles.active : styles.inactive}`}>
-                              {member.isActive ? 'Aktif' : 'Tidak Aktif'}
-                            </span>
-                          </td>
-                          <td>
-                            <div className={styles.actionButtons}>
-                              <button 
-                                className={`${styles.actionBtn} ${styles.edit}`}
-                                onClick={() => openCrudModal('member', 'edit', member)}
-                                title="Edit Member"
-                              >
-                                <Edit size={14} />
-                              </button>
-                              <button 
-                                className={`${styles.actionBtn} ${styles.delete}`}
-                                onClick={() => handleDeleteItem('member', member.memberId, member.fullName)}
-                                title="Hapus Member"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div>
-          )}
+                )}
 
-          {activeTab === 'inventory' && (
-            <div>
-              <div className={styles.tabHeader}>
-                <h2>Inventori</h2>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button 
-                    className={styles.addButton}
-                    onClick={() => setShowBatchAddModal(true)}
-                    style={{ 
-                      background: 'var(--surface-secondary)', 
-                      color: 'var(--text-primary)',
-                      border: '1px solid var(--surface-border)'
-                    }}
-                  >
-                    <Layers size={18} />
-                    <span>Tambah Batch</span>
-                  </button>
-                  <button 
-                    className={styles.addButton}
-                    onClick={() => openCrudModal('inventory', 'create')}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Item</span>
-                  </button>
-                </div>
+                <MembersTable
+                  data={filteredMembers}
+                  loading={tabLoading}
+                  currentBranchCode={branch?.branchCode}
+                  onEdit={(member) => openCrudModal('member', 'edit', member)}
+                  onDelete={(member) => handleDeleteItem('member', member.memberId, member.fullName)}
+                  onAddMember={() => openCrudModal('member', 'create')}
+                />
               </div>
+            )}
 
-              {tabLoading ? (
-                <div className={styles.loadingState}>
-                  <div className={styles.loadingSpinner} />
-                  <p>Memuat data stok...</p>
-                </div>
-              ) : !Array.isArray(inventory) || inventory.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <Package size={48} />
-                  <h3>Belum Ada Stok</h3>
-                  <p>Cabang ini belum memiliki data inventori.</p>
-                  <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '16px' }}>
-                    <button 
-                      className={styles.emptyStateButton}
+
+            {/* Inventory Tab */}
+            {activeTab === 'inventory' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Inventori</h2>
+                  <div className="flex gap-3">
+                    <button
                       onClick={() => setShowBatchAddModal(true)}
-                      style={{ 
-                        background: 'var(--surface-secondary)', 
-                        color: 'var(--text-primary)',
-                        border: '1px solid var(--surface-border)'
-                      }}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 transition-colors"
                     >
                       <Layers size={18} />
                       <span>Tambah Batch</span>
                     </button>
                     <button 
-                      className={styles.emptyStateButton}
                       onClick={() => openCrudModal('inventory', 'create')}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
                     >
                       <Plus size={18} />
                       <span>Tambah Item</span>
                     </button>
                   </div>
                 </div>
-              ) : (
-                <table className={styles.dataTable}>
-                  <thead>
-                    <tr>
-                      <th>Nama Item</th>
-                      <th>Kategori</th>
-                      <th>Stok Saat Ini</th>
-                      <th>Min. Stok</th>
-                      <th>Lokasi</th>
-                      <th>Status</th>
-                      <th>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {inventory.map((item) => (
-                      <tr key={item.id}>
-                        <td>
-                          <div className={styles.inventoryItem}>
-                            <div className={styles.inventoryIcon}>
-                              <Package size={16} />
-                            </div>
-                            <span>{item.name}</span>
-                          </div>
-                        </td>
-                        <td>{item.category}</td>
-                        <td>
-                          <div className={styles.stockInfo}>
-                            <span className={styles.stockValue}>{item.stockDisplay}</span>
-                          </div>
-                        </td>
-                        <td>{item.thresholdDisplay}</td>
-                        <td>{item.storageLocation || '-'}</td>
-                        <td>
-                          {item.isLowStock && (
-                            <span className={styles.lowStockBadge}>Stok Rendah</span>
-                          )}
-                        </td>
-                        <td>
-                          <div className={styles.actionButtons}>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.edit}`}
-                              onClick={() => openCrudModal('inventory', 'edit', item)}
-                              title="Edit Item"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.delete}`}
-                              onClick={() => handleDeleteItem('inventory', item.id, item.name)}
-                              title="Hapus Item"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
 
-          {activeTab === 'staff' && (
-            <div>
-              <div className={styles.tabHeader}>
-                <h2>Staff</h2>
-                <button 
-                  className={styles.addButton}
-                  onClick={() => openCrudModal('staff', 'create')}
-                >
-                  <Plus size={18} />
-                  <span>Tambah Staff</span>
-                </button>
+                <InventoryTable
+                  data={inventory}
+                  loading={tabLoading}
+                  onEdit={(item) => openCrudModal('inventory', 'edit', item)}
+                  onDelete={(item) => handleDeleteItem('inventory', item.id, item.name)}
+                  onAddItem={() => openCrudModal('inventory', 'create')}
+                />
               </div>
+            )}
 
-              {tabLoading ? (
-                <div className={styles.loadingState}>
-                  <div className={styles.loadingSpinner} />
-                  <p>Memuat data staff...</p>
-                </div>
-              ) : !Array.isArray(staff) || staff.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <UserCog size={48} />
-                  <h3>Belum Ada Staff</h3>
-                  <p>Cabang ini belum memiliki staff terdaftar.</p>
-                  <button 
-                    className={styles.emptyStateButton}
-                    onClick={() => openCrudModal('staff', 'create')}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Staff Pertama</span>
-                  </button>
-                </div>
-              ) : (
-                <table className={styles.dataTable}>
-                  <thead>
-                    <tr>
-                      <th>Staff Code</th>
-                      <th>Nama Lengkap</th>
-                      <th>Email</th>
-                      <th>Telepon</th>
-                      <th>Role</th>
-                      <th>Status</th>
-                      <th>Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {staff.map((user) => (
-                      <tr key={user.id}>
-                        <td>
-                          <div className={styles.staffCell}>
-                            <div className={styles.staffAvatar}>
-                              {user.profile?.fullName?.charAt(0).toUpperCase() || 'U'}
-                            </div>
-                            <div className={styles.staffInfo}>
-                              <div className={styles.staffCode}>{user.staffCode}</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <div className={styles.staffName}>{user.profile?.fullName || '-'}</div>
-                          <div className={styles.staffRole}>{user.role}</div>
-                        </td>
-                        <td>{user.email}</td>
-                        <td>{user.profile?.phone || '-'}</td>
-                        <td>{user.role}</td>
-                        <td>
-                          <span className={`${styles.statusBadge} ${user.isActive ? styles.active : styles.inactive}`}>
-                            {user.isActive ? 'Aktif' : 'Tidak Aktif'}
-                          </span>
-                        </td>
-                        <td>
-                          <div className={styles.actionButtons}>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.edit}`}
-                              onClick={() => openCrudModal('staff', 'edit', user)}
-                              title="Edit Staff"
-                            >
-                              <Edit size={14} />
-                            </button>
-                            <button 
-                              className={`${styles.actionBtn} ${styles.delete}`}
-                              onClick={() => handleDeleteItem('staff', user.id, user.profile?.fullName || user.email)}
-                              title="Hapus Staff"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
-
-          {activeTab === 'managers' && (
-            <div>
-              <div className={styles.tabHeader}>
-                <div>
-                  <h2>Admin Managers</h2>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-                    Daftar Admin Manager yang di-assign ke cabang ini
-                  </p>
-                </div>
-                {user?.role === 'SUPER_ADMIN' && (
-                  <button 
-                    className={styles.addButton}
-                    onClick={() => setShowAssignManagerModal(true)}
-                    style={{ background: '#8b5cf6' }}
-                  >
-                    <Plus size={18} />
-                    <span>Tambah Manager</span>
-                  </button>
-                )}
-              </div>
-
-              {tabLoading ? (
-                <div className={styles.loadingState}>
-                  <div className={styles.loadingSpinner} />
-                  <p>Memuat data managers...</p>
-                </div>
-              ) : !Array.isArray(managers) || managers.length === 0 ? (
-                <div className={styles.emptyState}>
-                  <Shield size={48} />
-                  <h3>Belum Ada Admin Manager</h3>
-                  <p>Cabang ini belum memiliki Admin Manager yang di-assign.</p>
-                  {user?.role === 'SUPER_ADMIN' && (
+            {/* Staff Tab */}
+            {activeTab === 'staff' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Staff</h2>
+                  <div className="flex gap-3">
                     <button 
-                      className={styles.emptyStateButton}
-                      onClick={() => setShowAssignManagerModal(true)}
-                      style={{ background: '#8b5cf6' }}
+                      onClick={() => setShowAssignMedicalStaffModal(true)}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 bg-purple-50 dark:bg-purple-500/15 hover:bg-purple-100 dark:hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 font-medium rounded-lg border border-purple-200 dark:border-purple-500/30 transition-colors"
+                    >
+                      <Stethoscope size={18} />
+                      <span>Assign Dokter/Nakes</span>
+                    </button>
+                    <button 
+                      onClick={() => openCrudModal('staff', 'create')}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
                     >
                       <Plus size={18} />
-                      <span>Assign Manager Pertama</span>
+                      <span>Tambah Staff</span>
+                    </button>
+                  </div>
+                </div>
+
+                <StaffTable
+                  data={staff}
+                  loading={tabLoading}
+                  onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
+                  onDelete={(staffUser) => handleDeleteItem('staff', staffUser.id, staffUser.profile?.fullName || staffUser.email)}
+                  onManageBranches={(staffUser) => setManageStaffBranchesModal({
+                    isOpen: true,
+                    userId: staffUser.id,
+                    staffName: staffUser.profile?.fullName || staffUser.email,
+                    staffRole: staffUser.role as 'DOCTOR' | 'NURSE',
+                  })}
+                  onAddStaff={() => openCrudModal('staff', 'create')}
+                />
+              </div>
+            )}
+
+
+            {/* Managers Tab */}
+            {activeTab === 'managers' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <div>
+                    <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Admin Managers</h2>
+                    <p className="text-neutral-500 dark:text-neutral-400 text-sm mt-1">Daftar Admin Manager yang di-assign ke cabang ini</p>
+                  </div>
+                  {user?.role === 'SUPER_ADMIN' && (
+                    <button 
+                      onClick={() => setShowAssignManagerModal(true)}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-purple-500/20"
+                    >
+                      <Plus size={18} />
+                      <span>Tambah Manager</span>
                     </button>
                   )}
                 </div>
-              ) : (
-                <table className={styles.dataTable}>
-                  <thead>
-                    <tr>
-                      <th>Nama</th>
-                      <th>Email</th>
-                      <th>Telepon</th>
-                      <th>Tanggal Assign</th>
-                      <th>Login Terakhir</th>
-                      <th>Status</th>
-                      {user?.role === 'SUPER_ADMIN' && <th>Aksi</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {managers.map((manager) => (
-                      <tr key={manager.id}>
-                        <td>
-                          <div className={styles.staffCell}>
-                            <div className={styles.staffAvatar} style={{ background: 'rgba(139,92,246,0.15)', color: '#8b5cf6' }}>
-                              {manager.fullName?.charAt(0).toUpperCase() || 'M'}
-                            </div>
-                            <div className={styles.staffInfo}>
-                              <div className={styles.staffName}>{manager.fullName || '-'}</div>
-                              <div style={{ fontSize: '11px', color: '#8b5cf6', fontWeight: 600 }}>ADMIN_MANAGER</div>
-                            </div>
-                          </div>
-                        </td>
-                        <td>{manager.email}</td>
-                        <td>{manager.phone || '-'}</td>
-                        <td>{new Date(manager.assignedAt).toLocaleDateString('id-ID')}</td>
-                        <td>
-                          {manager.lastLoginAt 
-                            ? new Date(manager.lastLoginAt).toLocaleDateString('id-ID', {
-                                day: '2-digit',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            : '-'
-                          }
-                        </td>
-                        <td>
-                          <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
-                            {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
-                          </span>
-                        </td>
-                        {user?.role === 'SUPER_ADMIN' && (
-                          <td>
-                            <div className={styles.actionButtons}>
-                              <button 
-                                className={`${styles.actionBtn} ${styles.delete}`}
-                                onClick={async () => {
-                                  if (!confirm(`Apakah Anda yakin ingin menghapus ${manager.fullName} dari cabang ini?`)) {
-                                    return;
-                                  }
-                                  try {
-                                    await branchesApi.unassignManager(branchId, manager.id);
-                                    showToast.success('Admin Manager berhasil di-unassign');
-                                    loadTabData();
-                                  } catch (error: any) {
-                                    showToast.error(error.response?.data?.message || 'Gagal unassign Admin Manager');
-                                  }
-                                }}
-                                title="Hapus dari Cabang"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          )}
 
-          {activeTab === 'pricing' && user?.role === 'SUPER_ADMIN' && (
-            <div>
-              <div className={styles.tabHeader}>
-                <div>
-                  <h2>Harga Paket Cabang</h2>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-                    Kelola harga paket khusus untuk cabang {branch.name}
-                  </p>
+                <ManagersTable
+                  data={managers}
+                  loading={tabLoading}
+                  canManage={user?.role === 'SUPER_ADMIN'}
+                  onUnassign={async (manager) => {
+                    const confirmed = await confirm.warning(
+                      'Hapus Manager dari Cabang',
+                      `Apakah Anda yakin ingin menghapus ${manager.fullName} dari cabang ini?`
+                    );
+                    if (!confirmed) return;
+                    try {
+                      await branchesApi.unassignManager(branchId, manager.id);
+                      showToast.success('Admin Manager berhasil di-unassign');
+                      loadTabData();
+                    } catch (error: any) {
+                      showToast.error(error.response?.data?.message || 'Gagal unassign Admin Manager');
+                    }
+                  }}
+                  onAssignManager={() => setShowAssignManagerModal(true)}
+                />
+              </div>
+            )}
+
+            {/* Pricing Tab */}
+            {activeTab === 'pricing' && user?.role === 'SUPER_ADMIN' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <div>
+                    <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Harga Paket Cabang</h2>
+                    <p className="text-neutral-500 dark:text-neutral-400 text-sm mt-1">Kelola harga paket khusus untuk cabang {branch.name}</p>
+                  </div>
+                  <button 
+                    onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
+                  >
+                    <DollarSign size={18} />
+                    <span>Kelola Harga Paket</span>
+                  </button>
                 </div>
-                <button 
-                  className={styles.addButton}
-                  onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
-                  style={{ background: '#f59e0b' }}
-                >
-                  <DollarSign size={18} />
-                  <span>Kelola Harga Paket</span>
-                </button>
-              </div>
 
-              <div style={{ 
-                padding: '40px', 
-                textAlign: 'center',
-                background: 'var(--surface-card)',
-                borderRadius: '12px',
-                border: '1px solid var(--surface-border)'
-              }}>
-                <DollarSign size={48} style={{ color: '#f59e0b', marginBottom: '16px' }} />
-                <h3 style={{ marginBottom: '8px', color: 'var(--text-primary)' }}>Pengaturan Harga Paket</h3>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', maxWidth: '400px', margin: '0 auto 24px' }}>
-                  Klik tombol di atas untuk mengelola harga paket khusus cabang ini. 
-                  Anda dapat mengatur harga paket BASIC dan BOOSTER yang berbeda dari harga global.
-                </p>
-                <button 
-                  className={styles.emptyStateButton}
-                  onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
-                  style={{ background: '#f59e0b' }}
-                >
-                  <DollarSign size={18} />
-                  <span>Buka Halaman Harga Paket</span>
-                </button>
+                <div className="text-center py-16 bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700/50 rounded-xl">
+                  <DollarSign size={56} className="mx-auto mb-4 text-amber-500" />
+                  <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Pengaturan Harga Paket</h3>
+                  <p className="text-neutral-500 dark:text-neutral-400 max-w-md mx-auto mb-6">
+                    Klik tombol di atas untuk mengelola harga paket khusus cabang ini. 
+                    Anda dapat mengatur harga paket BASIC dan BOOSTER yang berbeda dari harga global.
+                  </p>
+                  <button 
+                    onClick={() => router.push(`/admin/package-pricing?branchId=${branchId}`)}
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors"
+                  >
+                    <DollarSign size={18} />
+                    <span>Buka Halaman Harga Paket</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
-      {/* CRUD Modals */}
+
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      {/* MODALS */}
+      {/* ═══════════════════════════════════════════════════════════════ */}
+      
       {crudModal.type === 'member' && (
         <MemberCrudModal
           isOpen={true}
@@ -1108,10 +785,10 @@ export default function BranchDetailPage() {
           action={crudModal.action}
           branchId={branchId}
           inventoryData={crudModal.data}
+          existingProductIds={inventory.map(item => item.masterProductId || '')}
         />
       )}
 
-      {/* Assign Manager Modal */}
       {showAssignManagerModal && branch && (
         <AssignManagerModal
           isOpen={showAssignManagerModal}
@@ -1125,7 +802,6 @@ export default function BranchDetailPage() {
         />
       )}
 
-      {/* Batch Add Inventory Modal */}
       {showBatchAddModal && (
         <InventoryBatchAddModal
           isOpen={showBatchAddModal}
@@ -1139,6 +815,29 @@ export default function BranchDetailPage() {
         />
       )}
 
+      {showAssignMedicalStaffModal && branch && (
+        <AssignMedicalStaffModal
+          isOpen={showAssignMedicalStaffModal}
+          onClose={() => setShowAssignMedicalStaffModal(false)}
+          onSuccess={() => {
+            setShowAssignMedicalStaffModal(false);
+            loadTabData();
+          }}
+          branchId={branchId}
+          branchName={branch.name}
+        />
+      )}
+
+      {manageStaffBranchesModal.isOpen && (
+        <ManageStaffBranchesModal
+          isOpen={manageStaffBranchesModal.isOpen}
+          onClose={() => setManageStaffBranchesModal({ isOpen: false, userId: '', staffName: '', staffRole: 'DOCTOR' })}
+          onSuccess={() => loadTabData()}
+          userId={manageStaffBranchesModal.userId}
+          staffName={manageStaffBranchesModal.staffName}
+          staffRole={manageStaffBranchesModal.staffRole}
+        />
+      )}
     </div>
   );
 }

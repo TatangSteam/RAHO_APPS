@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import * as referralsApi from '@/lib/api/referralsApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { useAuthStore } from '@/stores/authStore';
+import { showToast, confirm } from '@/lib/toast';
 import { 
   FileText, Plus, Search, Eye, Trash2, X, 
   Download, FileSpreadsheet, Users, Phone, Mail, Building2, 
@@ -72,13 +73,15 @@ export default function ReferralsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Apakah Anda yakin ingin menghapus kode referral ini?')) return;
+    const confirmed = await confirm.delete('kode referral ini');
+    if (!confirmed) return;
     try {
       await referralsApi.deleteReferral(id);
+      showToast.success('Kode referral berhasil dihapus');
       fetchReferrals();
     } catch (error) {
       console.error('Error deleting referral:', error);
-      alert('Gagal menghapus kode referral');
+      showToast.error('Gagal menghapus kode referral');
     }
   };
 

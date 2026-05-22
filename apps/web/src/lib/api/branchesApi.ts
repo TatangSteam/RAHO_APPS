@@ -156,4 +156,50 @@ export const branchesApi = {
   getAuditLogs: (params?: AuditLogParams) => {
     return api.get('/branches/system/audit-logs', { params });
   },
+
+  // ============================================================
+  // STAFF BRANCH MANAGEMENT (Multi-Branch Assignment)
+  // ============================================================
+
+  /**
+   * Get medical staff (DOCTOR/NURSE) not assigned to a specific branch
+   */
+  getMedicalStaffNotInBranch: (excludeBranchId: string) => {
+    return api.get('/users/medical-staff', { params: { excludeBranchId } });
+  },
+
+  /**
+   * Get all branches assigned to a user (DOCTOR/NURSE)
+   */
+  getUserBranches: (userId: string) => {
+    return api.get(`/users/${userId}/branches`);
+  },
+
+  /**
+   * Get available branches for a user (branches not yet assigned)
+   */
+  getAvailableBranchesForUser: (userId: string) => {
+    return api.get(`/users/${userId}/branches/available`);
+  },
+
+  /**
+   * Assign a user (DOCTOR/NURSE) to a branch
+   */
+  assignUserToBranch: (userId: string, branchId: string) => {
+    return api.post(`/users/${userId}/branches`, { branchId });
+  },
+
+  /**
+   * Remove a user (DOCTOR/NURSE) from a branch
+   */
+  removeUserFromBranch: (userId: string, branchId: string) => {
+    return api.delete(`/users/${userId}/branches/${branchId}`);
+  },
+
+  /**
+   * Set a branch as the primary branch for a user (DOCTOR/NURSE)
+   */
+  setPrimaryBranch: (userId: string, branchId: string) => {
+    return api.patch(`/users/${userId}/branches/${branchId}/set-primary`);
+  },
 };

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
-import { showToast } from '@/lib/toast';
+import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
@@ -95,7 +95,8 @@ export default function BranchesPage() {
   };
 
   const handleDelete = async (branchId: string, branchName: string) => {
-    if (!confirm(`Apakah Anda yakin ingin menghapus cabang "${branchName}"?`)) return;
+    const confirmed = await confirm.delete(branchName);
+    if (!confirmed) return;
 
     try {
       await branchesApi.deleteBranch(branchId);
@@ -119,6 +120,7 @@ export default function BranchesPage() {
   };
 
   const getBranchTypeLabel = (type: string) => {
+    if (type === 'PREMIER') return 'Premier (Cabang)';
     return type.charAt(0) + type.slice(1).toLowerCase();
   };
 
@@ -264,7 +266,7 @@ export default function BranchesPage() {
             >
               <option value="all">Semua Tipe</option>
               <option value="PUSAT">Pusat</option>
-              <option value="PREMIER">Premier</option>
+              <option value="PREMIER">Premier (Cabang)</option>
               <option value="PARTNERSHIP">Partnership</option>
               <option value="KLINIK">Klinik</option>
               <option value="HOMECARE">Homecare</option>

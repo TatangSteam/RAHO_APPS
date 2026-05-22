@@ -148,7 +148,7 @@ export default function StockRequestCard({
                   ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' 
                   : 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400'
               }`}>
-                {request.branchType}
+                {request.branchType === 'PREMIER' ? 'Premier (Cabang)' : request.branchType}
               </span>
             </div>
           </div>

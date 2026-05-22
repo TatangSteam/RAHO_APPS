@@ -12,7 +12,8 @@ interface ReviewModalProps {
   request: StockRequest;
   userRole?: string;
   onClose: () => void;
-  onApprovePremierRequest: (requestId: string, reviewNotes: string) => Promise<void>;
+  /** @deprecated No longer used - both Premier and Partnership use onCreatePartnershipInvoice */
+  onApprovePremierRequest?: (requestId: string, reviewNotes: string) => Promise<void>;
   onCreatePartnershipInvoice: (requestId: string, items: InvoiceItemInput[], notes?: string) => Promise<void>;
   onConfirmPayment: (requestId: string, verificationNotes?: string) => Promise<void>;
   onRejectPayment: (requestId: string, rejectionReason: string) => Promise<void>;
@@ -24,7 +25,8 @@ export default function ReviewModal({
   request, 
   userRole,
   onClose, 
-  onApprovePremierRequest,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  onApprovePremierRequest, // Deprecated - kept for backward compatibility
   onCreatePartnershipInvoice,
   onConfirmPayment,
   onRejectPayment,
@@ -127,23 +129,14 @@ export default function ReviewModal({
   };
 
   const handleApprove = async () => {
-    if (request.branchType === 'PREMIER') {
-      if (!reviewNotes.trim()) {
-        setNotesError(true);
-        showToast.error('Catatan review harus diisi sebelum approve');
-        return;
-      }
-      setNotesError(false);
-      await onApprovePremierRequest(request.id, reviewNotes);
-    } else {
-      const total = parseFloat(totalInvoiceAmount) || 0;
-      // Allow 0 price (free items)
-      if (totalInvoiceAmount === '' && total === 0) {
-        // If input is empty, treat as 0 (free)
-      }
-      const invoiceItems = buildInvoiceItems();
-      await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
+    // Both PREMIER and PARTNERSHIP now use the same invoice flow
+    const total = parseFloat(totalInvoiceAmount) || 0;
+    // Allow 0 price (free items)
+    if (totalInvoiceAmount === '' && total === 0) {
+      // If input is empty, treat as 0 (free)
     }
+    const invoiceItems = buildInvoiceItems();
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
   };
 
   const handleConfirmPayment = async () => {
@@ -300,7 +293,7 @@ export default function ReviewModal({
                         ? 'bg-blue-500/20 text-blue-400' 
                         : 'bg-amber-500/20 text-amber-400'
                     }`}>
-                      {request.branchType}
+                      {request.branchType === 'PREMIER' ? 'Premier (Cabang)' : request.branchType}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
@@ -332,7 +325,7 @@ export default function ReviewModal({
             )}
 
             {/* Tabs */}
-            {request.branchType === 'PARTNERSHIP' && (request.invoice || request.paymentProofUrl) && (
+            {(request.branchType === 'PARTNERSHIP' || request.branchType === 'PREMIER') && (request.invoice || request.paymentProofUrl) && (
               <div className="flex gap-2 border-b border-neutral-200 dark:border-neutral-700 pb-3">
                 <button
                   onClick={() => setActiveTab('items')}
@@ -429,8 +422,8 @@ export default function ReviewModal({
                   })}
                 </div>
 
-                {/* Total Price Input for Partnership PENDING - Single Total Amount */}
-                {isManager && request.branchType === 'PARTNERSHIP' && request.status === 'PENDING' && (
+                {/* Total Price Input for PENDING requests - Single Total Amount */}
+                {isManager && (request.branchType === 'PARTNERSHIP' || request.branchType === 'PREMIER') && request.status === 'PENDING' && (
                   <div className="mt-6 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
                     <h4 className="text-sm font-semibold text-emerald-400 mb-3 flex items-center gap-2">
                       <CreditCard className="h-4 w-4" />
@@ -446,10 +439,13 @@ export default function ReviewModal({
                           const rawValue = e.target.value.replace(/\./g, '').replace(/[^0-9]/g, '');
                           setTotalInvoiceAmount(rawValue);
                         }}
-                        placeholder="Masukkan total harga"
+                        placeholder="Masukkan total harga (0 untuk gratis)"
                         className="flex-1 px-4 py-3 text-lg font-semibold rounded-xl border border-emerald-500/30 bg-neutral-800/50 text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                       />
                     </div>
+                    <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                      Masukkan 0 atau kosongkan untuk transfer gratis
+                    </p>
                   </div>
                 )}
               </div>
@@ -653,7 +649,7 @@ export default function ReviewModal({
                 ) : (
                   <>
                     <Check className="h-4 w-4" />
-                    {request.branchType === 'PREMIER' ? 'Approve Request' : 'Buat Invoice'}
+                    Buat Invoice
                   </>
                 )}
               </button>

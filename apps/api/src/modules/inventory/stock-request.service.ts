@@ -10,10 +10,9 @@ import { StockRequestRetrievalService } from './services/stock-request-retrieval
  * Flow:
  * 1. Admin Cabang creates request (PENDING)
  * 2. Admin Manager reviews:
- *    - PREMIER: Approve → Create Shipment (APPROVED)
- *    - PARTNERSHIP: Create Invoice (WAITING_PAYMENT)
- * 3. Partnership flow:
- *    - Admin Cabang uploads payment proof (PAYMENT_UPLOADED)
+ *    - PREMIER & PARTNERSHIP: Create Invoice (WAITING_PAYMENT)
+ * 3. Payment flow:
+ *    - Admin Manager uploads payment proof (PAYMENT_UPLOADED)
  *    - Admin Manager confirms payment (PAYMENT_CONFIRMED) → Create Shipment
  * 4. Admin Manager ships (SHIPPED)
  * 5. Admin Cabang receives (COMPLETED or COMPLETED_WITH_ISSUE)
@@ -52,6 +51,25 @@ export class StockRequestService {
   }
 
   /**
+   * Create invoice for stock request (unified flow for both Premier and Partnership)
+   */
+  async createInvoice(
+    requestId: string, 
+    userId: string, 
+    invoiceData: {
+      items: Array<{
+        masterProductId: string;
+        quantity: number;
+        pricePerUnit: number;
+      }>;
+      notes?: string;
+    }
+  ) {
+    return await this.approvalService.createInvoice(requestId, userId, invoiceData);
+  }
+
+  /**
+   * @deprecated Use createInvoice instead. Kept for backward compatibility.
    * Create invoice for PARTNERSHIP branch
    */
   async createPartnershipInvoice(

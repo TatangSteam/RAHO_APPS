@@ -14,6 +14,7 @@ interface InventoryCrudModalProps {
   action: 'create' | 'edit' | 'delete';
   branchId: string;
   inventoryData?: any;
+  existingProductIds?: string[]; // IDs of products already in inventory
 }
 
 interface MasterProduct {
@@ -78,7 +79,8 @@ export default function InventoryCrudModal({
   onSuccess,
   action,
   branchId,
-  inventoryData
+  inventoryData,
+  existingProductIds = []
 }: InventoryCrudModalProps) {
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -172,9 +174,14 @@ export default function InventoryCrudModal({
     return Array.from(cats).sort();
   }, [masterProducts]);
 
-  // Filter products based on search and category
+  // Get available products (excluding already added ones)
+  const availableProducts = useMemo(() => {
+    return masterProducts.filter(product => !existingProductIds.includes(product.id));
+  }, [masterProducts, existingProductIds]);
+
+  // Filter products based on search and category, excluding already added products
   const filteredProducts = useMemo(() => {
-    return masterProducts.filter(product => {
+    return availableProducts.filter(product => {
       const matchesSearch = !searchQuery || 
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.category.toLowerCase().includes(searchQuery.toLowerCase());
@@ -183,7 +190,7 @@ export default function InventoryCrudModal({
       
       return matchesSearch && matchesCategory;
     });
-  }, [masterProducts, searchQuery, selectedCategory]);
+  }, [availableProducts, searchQuery, selectedCategory]);
 
   // Group products by category for display
   const groupedProducts = useMemo(() => {
@@ -502,7 +509,8 @@ export default function InventoryCrudModal({
                       fontSize: '12px',
                       color: 'var(--text-muted)'
                     }}>
-                      Menampilkan {filteredProducts.length} dari {masterProducts.length} produk
+                      Menampilkan {filteredProducts.length} dari {availableProducts.length} produk tersedia
+                      {existingProductIds.length > 0 && ` (${existingProductIds.length} sudah ada di inventori)`}
                     </div>
 
                     {/* Product List */}

@@ -22,8 +22,9 @@ interface CreateInvoiceInput {
  * - ADMIN_MANAGER: Can only approve requests from branches they manage
  * 
  * Flow based on Branch Type:
- * - PREMIER: Direct approval → Create shipment
- * - PARTNERSHIP: Create invoice → Wait for payment → Confirm payment → Create shipment
+ * - PREMIER & PARTNERSHIP: Create invoice → Wait for payment → Confirm payment → Create shipment
+ *   (Both branch types now follow the same invoice/payment flow)
+ * - PUSAT: Direct internal transfers (not handled here)
  */
 export class StockRequestApprovalService {
   // Branch code for external/system shipments
@@ -133,7 +134,7 @@ export class StockRequestApprovalService {
 
   /**
    * Add stock to branch inventory
-   * Called after approval (Premier) or payment confirmation (Partnership)
+   * Called after payment confirmation (for both Premier and Partnership branches)
    */
   private async addStockToBranch(
     tx: any,
@@ -213,110 +214,38 @@ export class StockRequestApprovalService {
   }
 
   /**
-   * Approve stock request for PREMIER branch (no payment required)
-   * Creates shipment after approval
+   * @deprecated Use createInvoice instead. Both Premier and Partnership now follow the same invoice flow.
+   * This method is kept for backward compatibility but now redirects to createInvoice.
    */
   async approvePremierRequest(requestId: string, userId: string, reviewNotes?: string) {
+    // Redirect to the unified invoice creation flow
+    // Create a minimal invoice with 0 price (can be updated later if needed)
     const request = await this.getRequestWithValidation(requestId, ['PENDING']);
-    const user = await this.validateManagerPermission(userId, request.branchId);
+    
+    // Build invoice items with 0 price (free transfer for Premier)
+    const invoiceItems = request.items.map(item => ({
+      masterProductId: item.masterProductId,
+      quantity: Number(item.requestedQty),
+      pricePerUnit: 0,
+    }));
 
-    // Verify branch is PREMIER
-    if (request.branch.type !== BranchType.PREMIER) {
-      throw {
-        status: 422,
-        code: 'INVALID_BRANCH_TYPE',
-        message: 'Endpoint ini hanya untuk cabang Premier. Gunakan endpoint invoice untuk Partnership.',
-      };
-    }
-
-    const senderBranch = await this.getOrCreateExternalBranch();
-    const shipmentCode = await this.generateShipmentCode(senderBranch.id, request.branchId);
-
-    // Create shipment and update request in transaction
-    const result = await prisma.$transaction(async (tx) => {
-      // Update request status to APPROVED
-      const updatedRequest = await tx.stockRequest.update({
-        where: { id: requestId },
-        data: {
-          status: 'APPROVED',
-          reviewedBy: userId,
-          reviewedAt: new Date(),
-          reviewNotes,
-        },
-        include: {
-          items: {
-            include: {
-              masterProduct: true,
-            },
-          },
-          branch: true,
-        },
-      });
-
-      // Create shipment
-      const shipment = await tx.shipment.create({
-        data: {
-          shipmentCode,
-          fromBranchId: senderBranch.id,
-          toBranchId: request.branchId,
-          stockRequestId: requestId,
-          status: 'PREPARING',
-          notes: `Pengiriman untuk permintaan ${request.requestCode} (Premier)`,
-          items: {
-            create: request.items.map(item => ({
-              masterProductId: item.masterProductId,
-              // Use finalQty (after overstock deduction) instead of requestedQty
-              sentQty: item.finalQty || item.requestedQty,
-              requestedQty: item.requestedQty, // Keep original for reference
-            })),
-          },
-        },
-        include: {
-          items: {
-            include: {
-              masterProduct: true,
-            },
-          },
-          fromBranch: true,
-          toBranch: true,
-        },
-      });
-
-      return { updatedRequest, shipment };
-    });
-
-    // Audit logs
-    await logAudit({
-      userId,
-      action: AuditAction.UPDATE,
-      resource: 'StockRequest',
-      resourceId: requestId,
-      meta: { 
-        action: 'APPROVE_PREMIER', 
-        shipmentId: result.shipment.id,
-        branchType: 'PREMIER',
-      },
-    });
-
-    return {
-      request: this.formatStockRequest(result.updatedRequest),
-      shipment: this.formatShipment(result.shipment),
-    };
+    return this.createInvoice(requestId, userId, { items: invoiceItems, notes: reviewNotes });
   }
 
   /**
-   * Create invoice for PARTNERSHIP branch
+   * Create invoice for stock request (unified flow for both Premier and Partnership branches)
+   * This is the main approval method - creates invoice and sets status to WAITING_PAYMENT
    */
-  async createPartnershipInvoice(requestId: string, userId: string, invoiceData: CreateInvoiceInput) {
+  async createInvoice(requestId: string, userId: string, invoiceData: CreateInvoiceInput) {
     const request = await this.getRequestWithValidation(requestId, ['PENDING']);
     const user = await this.validateManagerPermission(userId, request.branchId);
 
-    // Verify branch is PARTNERSHIP
-    if (request.branch.type !== BranchType.PARTNERSHIP) {
+    // Both PREMIER and PARTNERSHIP branches now use the same invoice flow
+    if (request.branch.type !== BranchType.PREMIER && request.branch.type !== BranchType.PARTNERSHIP) {
       throw {
         status: 422,
         code: 'INVALID_BRANCH_TYPE',
-        message: 'Endpoint ini hanya untuk cabang Partnership. Gunakan endpoint approve untuk Premier.',
+        message: 'Endpoint ini hanya untuk cabang Premier (Cabang) atau Partnership.',
       };
     }
 
@@ -417,7 +346,7 @@ export class StockRequestApprovalService {
         requestId,
         invoiceNumber,
         totalAmount: subtotal,
-        branchType: 'PARTNERSHIP',
+        branchType: request.branch.type,
       },
     });
 
@@ -425,6 +354,15 @@ export class StockRequestApprovalService {
       request: this.formatStockRequest(result.updatedRequest),
       invoice: this.formatInvoice(result.invoice),
     };
+  }
+
+  /**
+   * @deprecated Use createInvoice instead. This method is kept for backward compatibility.
+   * Create invoice for PARTNERSHIP branch (now also works for PREMIER)
+   */
+  async createPartnershipInvoice(requestId: string, userId: string, invoiceData: CreateInvoiceInput) {
+    // Redirect to the unified createInvoice method
+    return this.createInvoice(requestId, userId, invoiceData);
   }
 
   /**

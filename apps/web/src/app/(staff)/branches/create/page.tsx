@@ -95,7 +95,7 @@ export default function CreateBranchPage() {
                 className="form-input"
               >
                 <option value="PUSAT">Pusat</option>
-                <option value="PREMIER">Premier</option>
+                <option value="PREMIER">Premier (Cabang)</option>
                 <option value="PARTNERSHIP">Partnership</option>
                 <option value="KLINIK">Klinik</option>
                 <option value="HOMECARE">Homecare</option>

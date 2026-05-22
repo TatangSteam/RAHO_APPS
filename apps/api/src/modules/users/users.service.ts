@@ -363,3 +363,378 @@ export async function getStaffByRoleService(
     fullName: s.profile?.fullName || '',
   }));
 }
+
+// ══════════════════════════════════════════════════════════════
+// STAFF BRANCH MANAGEMENT (Multi-Branch Assignment)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get medical staff (DOCTOR/NURSE) that are NOT assigned to a specific branch
+ * Used for "Assign Staff from Other Branch" modal
+ */
+export async function getMedicalStaffNotInBranchService(excludeBranchId: string) {
+  // Get all DOCTOR and NURSE users who are NOT in the specified branch
+  const staff = await prisma.user.findMany({
+    where: {
+      role: { in: [Role.DOCTOR, Role.NURSE] },
+      isActive: true,
+      // Exclude users who already have StaffBranch record for this branch
+      NOT: {
+        staffBranches: {
+          some: {
+            branchId: excludeBranchId,
+          },
+        },
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      staffCode: true,
+      branchId: true,
+      profile: {
+        select: {
+          fullName: true,
+          phone: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+      staffBranches: {
+        select: {
+          branch: {
+            select: {
+              id: true,
+              branchCode: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { role: 'asc' },
+      { profile: { fullName: 'asc' } },
+    ],
+  });
+
+  return staff.map((s) => ({
+    id: s.id,
+    email: s.email,
+    role: s.role,
+    staffCode: s.staffCode,
+    fullName: s.profile?.fullName || '',
+    phone: s.profile?.phone || '',
+    primaryBranch: s.branch,
+    assignedBranches: s.staffBranches.map((sb) => sb.branch),
+  }));
+}
+
+/**
+ * Get all branches assigned to a specific user (DOCTOR/NURSE)
+ * Used for "Manage Staff Branches" modal
+ */
+export async function getUserBranchesService(userId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      role: true,
+      branchId: true,
+      profile: {
+        select: {
+          fullName: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+      staffBranches: {
+        select: {
+          id: true,
+          branchId: true,
+          createdAt: true,
+          branch: {
+            select: {
+              id: true,
+              branchCode: true,
+              name: true,
+              type: true,
+            },
+          },
+        },
+        orderBy: {
+          branch: { name: 'asc' },
+        },
+      },
+    },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  // Only DOCTOR and NURSE can have multi-branch assignments
+  if (user.role !== Role.DOCTOR && user.role !== Role.NURSE) {
+    throw errors.badRequest('INVALID_ROLE', 'Hanya DOCTOR dan NURSE yang dapat memiliki multi-branch assignment.');
+  }
+
+  return {
+    userId: user.id,
+    fullName: user.profile?.fullName || '',
+    role: user.role,
+    primaryBranch: user.branch,
+    assignedBranches: user.staffBranches.map((sb) => ({
+      staffBranchId: sb.id,
+      branchId: sb.branchId,
+      branchCode: sb.branch.branchCode,
+      branchName: sb.branch.name,
+      branchType: sb.branch.type,
+      assignedAt: sb.createdAt,
+      isPrimary: sb.branchId === user.branchId,
+    })),
+  };
+}
+
+/**
+ * Assign a user (DOCTOR/NURSE) to a new branch
+ */
+export async function assignUserToBranchService(userId: string, branchId: string) {
+  // Validate user exists and is DOCTOR or NURSE
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, profile: { select: { fullName: true } } },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  if (user.role !== Role.DOCTOR && user.role !== Role.NURSE) {
+    throw errors.badRequest('INVALID_ROLE', 'Hanya DOCTOR dan NURSE yang dapat di-assign ke cabang lain.');
+  }
+
+  // Validate branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, name: true, branchCode: true },
+  });
+
+  if (!branch) throw errors.notFound('Branch tidak ditemukan.');
+
+  // Check if already assigned
+  const existing = await prisma.staffBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId,
+        branchId,
+      },
+    },
+  });
+
+  if (existing) {
+    throw errors.conflict('ALREADY_ASSIGNED', `${user.profile?.fullName || 'User'} sudah di-assign ke cabang ${branch.name}.`);
+  }
+
+  // Create assignment
+  const staffBranch = await prisma.staffBranch.create({
+    data: {
+      userId,
+      branchId,
+    },
+    select: {
+      id: true,
+      userId: true,
+      branchId: true,
+      createdAt: true,
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  return {
+    staffBranchId: staffBranch.id,
+    userId: staffBranch.userId,
+    branch: staffBranch.branch,
+    assignedAt: staffBranch.createdAt,
+  };
+}
+
+/**
+ * Set a branch as the primary branch for a user (DOCTOR/NURSE)
+ * The new primary branch must already be in the user's assigned branches
+ */
+export async function setPrimaryBranchService(userId: string, branchId: string) {
+  // Validate user exists and is DOCTOR or NURSE
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { 
+      id: true, 
+      branchId: true, 
+      role: true, 
+      profile: { select: { fullName: true } } 
+    },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  if (user.role !== Role.DOCTOR && user.role !== Role.NURSE) {
+    throw errors.badRequest('INVALID_ROLE', 'Hanya DOCTOR dan NURSE yang dapat memiliki multi-branch assignment.');
+  }
+
+  // Check if already primary
+  if (user.branchId === branchId) {
+    throw errors.badRequest('ALREADY_PRIMARY', 'Cabang ini sudah menjadi cabang utama.');
+  }
+
+  // Validate branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, name: true, branchCode: true },
+  });
+
+  if (!branch) throw errors.notFound('Branch tidak ditemukan.');
+
+  // Check if user is assigned to this branch
+  const staffBranch = await prisma.staffBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId,
+        branchId,
+      },
+    },
+  });
+
+  if (!staffBranch) {
+    throw errors.badRequest('NOT_ASSIGNED', 'User belum di-assign ke cabang ini. Tambahkan cabang terlebih dahulu.');
+  }
+
+  // Get old primary branch info for audit
+  const oldBranch = user.branchId ? await prisma.branch.findUnique({
+    where: { id: user.branchId },
+    select: { name: true, branchCode: true },
+  }) : null;
+
+  // Update user's primary branch
+  await prisma.user.update({
+    where: { id: userId },
+    data: { branchId },
+  });
+
+  // Ensure old primary branch is still in StaffBranch (if not already)
+  if (user.branchId) {
+    const oldStaffBranch = await prisma.staffBranch.findUnique({
+      where: {
+        userId_branchId: {
+          userId,
+          branchId: user.branchId,
+        },
+      },
+    });
+
+    if (!oldStaffBranch) {
+      // Add old primary to StaffBranch so user still has access
+      await prisma.staffBranch.create({
+        data: {
+          userId,
+          branchId: user.branchId,
+        },
+      });
+    }
+  }
+
+  return {
+    success: true,
+    message: `Cabang utama berhasil diubah ke ${branch.name}`,
+    oldPrimaryBranch: oldBranch ? { name: oldBranch.name, branchCode: oldBranch.branchCode } : null,
+    newPrimaryBranch: { name: branch.name, branchCode: branch.branchCode },
+  };
+}
+
+/**
+ * Remove a user (DOCTOR/NURSE) from a branch
+ * Cannot remove from primary branch
+ */
+export async function removeUserFromBranchService(userId: string, branchId: string) {
+  // Validate user exists
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, branchId: true, role: true, profile: { select: { fullName: true } } },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  // Cannot remove from primary branch
+  if (user.branchId === branchId) {
+    throw errors.badRequest('CANNOT_REMOVE_PRIMARY', 'Tidak dapat menghapus assignment dari cabang utama. Ubah cabang utama terlebih dahulu.');
+  }
+
+  // Check if assignment exists
+  const staffBranch = await prisma.staffBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId,
+        branchId,
+      },
+    },
+  });
+
+  if (!staffBranch) {
+    throw errors.notFound('Assignment tidak ditemukan.');
+  }
+
+  // Delete assignment
+  await prisma.staffBranch.delete({
+    where: {
+      userId_branchId: {
+        userId,
+        branchId,
+      },
+    },
+  });
+
+  return { success: true, message: 'Assignment berhasil dihapus.' };
+}
+
+/**
+ * Get all branches (for dropdown in assign modal)
+ * Optionally exclude branches where user is already assigned
+ */
+export async function getAvailableBranchesForUserService(userId: string) {
+  // Get user's current assignments
+  const userBranches = await prisma.staffBranch.findMany({
+    where: { userId },
+    select: { branchId: true },
+  });
+
+  const assignedBranchIds = userBranches.map((ub) => ub.branchId);
+
+  // Get all active branches not yet assigned
+  const branches = await prisma.branch.findMany({
+    where: {
+      isActive: true,
+      id: { notIn: assignedBranchIds },
+    },
+    select: {
+      id: true,
+      branchCode: true,
+      name: true,
+      type: true,
+      city: true,
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  return branches;
+}
