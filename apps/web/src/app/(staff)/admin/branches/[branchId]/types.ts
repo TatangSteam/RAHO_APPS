@@ -26,6 +26,9 @@ export interface User {
   lastLoginAt?: string;
   createdAt: string;
   therapyCount?: number;
+  therapyCountAsDoctor?: number;
+  therapyCountAsNurse?: number;
+  therapyCountAsAdminLayanan?: number;
   profile: {
     fullName: string;
     phone?: string;

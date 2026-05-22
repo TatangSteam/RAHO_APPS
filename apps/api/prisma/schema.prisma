@@ -1182,18 +1182,21 @@ model DoctorEvaluationHistory {
 // ============================================================
 
 model MasterProduct {
-  id               String          @id @default(cuid())
-  sku              String?         @unique // SKU code like PRD-INF-IFA-001
-  name             String          @unique
-  category         ProductCategory
-  unit             String // Legacy field, kept for backward compatibility
-  baseUnit         String          @map("base_unit") // Storage unit (botol, box, pack)
-  usageUnit        String          @map("usage_unit") // Usage unit (ml, tablet, gram)
-  conversionFactor Decimal         @default(1.0) @map("conversion_factor") @db.Decimal(10, 4) // How many usage units per base unit
-  description      String?
-  isActive         Boolean         @default(true)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  id                   String          @id @default(cuid())
+  sku                  String?         @unique // SKU code like PRD-INF-IFA-001
+  name                 String          @unique
+  category             ProductCategory
+  unit                 String // Legacy field, kept for backward compatibility
+  baseUnit             String          @map("base_unit") // Storage unit (botol, box, pack)
+  usageUnit            String          @map("usage_unit") // Usage unit (ml, tablet, gram)
+  conversionFactor     Decimal         @default(1.0) @map("conversion_factor") @db.Decimal(10, 4) // How many usage units per base unit
+  description          String?
+  isAutoUsedPerSession Boolean         @default(false) @map("is_auto_used_per_session") // Auto-deduct 1 unit per infusion session
+  isAutoAddedToBranch  Boolean         @default(false) @map("is_auto_added_to_branch") // Auto-add to new branch inventory
+  defaultInitialStock  Decimal?        @map("default_initial_stock") @db.Decimal(10, 4) // Default stock when auto-added to branch
+  isActive             Boolean         @default(true)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
 
   inventoryItems           InventoryItem[]
   stockRequestItems        StockRequestItem[]

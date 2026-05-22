@@ -1,6 +1,6 @@
 'use client';
 
-import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus } from 'lucide-react';
+import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus, Activity } from 'lucide-react';
 import DataTable, { 
   Column, 
   AvatarCell, 
@@ -20,6 +20,10 @@ interface Staff {
   role: string;
   staffCode: string;
   isActive: boolean;
+  therapyCount?: number;
+  therapyCountAsDoctor?: number;
+  therapyCountAsNurse?: number;
+  therapyCountAsAdminLayanan?: number;
   profile: {
     fullName: string;
     phone: string;
@@ -89,15 +93,15 @@ export default function StaffTable({
     {
       key: 'email',
       header: 'Email',
-      width: '200px',
+      width: '180px',
       render: (staff) => (
-        <span className="text-neutral-600 dark:text-neutral-400 text-sm truncate block max-w-[180px]">{staff.email}</span>
+        <span className="text-neutral-600 dark:text-neutral-400 text-sm truncate block max-w-[160px]">{staff.email}</span>
       ),
     },
     {
       key: 'phone',
       header: 'Telepon',
-      width: '130px',
+      width: '120px',
       render: (staff) => (
         <span className="text-neutral-600 dark:text-neutral-400 text-sm">{staff.profile?.phone || '-'}</span>
       ),
@@ -109,6 +113,90 @@ export default function StaffTable({
       render: (staff) => (
         <RoleBadge role={staff.role} icon={getRoleIcon(staff.role)} />
       ),
+    },
+    {
+      key: 'therapyCount',
+      header: 'Kinerja Terapi',
+      width: '200px',
+      render: (staff) => {
+        const asDoctor = staff.therapyCountAsDoctor || 0;
+        const asNurse = staff.therapyCountAsNurse || 0;
+        const asAdmin = staff.therapyCountAsAdminLayanan || 0;
+        const total = staff.therapyCount || 0;
+        
+        // For ADMIN_CABANG, show all three counts
+        if (staff.role === 'ADMIN_CABANG') {
+          return (
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-1.5">
+                <Activity size={12} className="text-amber-500" />
+                <span className="text-sm font-semibold text-neutral-900 dark:text-white">{total} total</span>
+              </div>
+              <div className="flex flex-wrap gap-1 text-xs">
+                {asDoctor > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                    Dokter: {asDoctor}
+                  </span>
+                )}
+                {asNurse > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400">
+                    Nakes: {asNurse}
+                  </span>
+                )}
+                {asAdmin > 0 && (
+                  <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
+                    Admin: {asAdmin}
+                  </span>
+                )}
+                {total === 0 && (
+                  <span className="text-neutral-400 dark:text-neutral-500">Belum ada</span>
+                )}
+              </div>
+            </div>
+          );
+        }
+        
+        // For DOCTOR, show doctor count
+        if (staff.role === 'DOCTOR') {
+          return (
+            <div className="flex items-center gap-1.5">
+              <Activity size={12} className="text-blue-500" />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {asDoctor} sesi
+              </span>
+            </div>
+          );
+        }
+        
+        // For NURSE, show nurse count
+        if (staff.role === 'NURSE') {
+          return (
+            <div className="flex items-center gap-1.5">
+              <Activity size={12} className="text-green-500" />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {asNurse} sesi
+              </span>
+            </div>
+          );
+        }
+        
+        // For ADMIN_LAYANAN, show admin count
+        if (staff.role === 'ADMIN_LAYANAN') {
+          return (
+            <div className="flex items-center gap-1.5">
+              <Activity size={12} className="text-purple-500" />
+              <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                {asAdmin} sesi
+              </span>
+            </div>
+          );
+        }
+        
+        // Default
+        return (
+          <span className="text-sm text-neutral-400 dark:text-neutral-500">-</span>
+        );
+      },
     },
     {
       key: 'isActive',

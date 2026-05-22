@@ -75,9 +75,10 @@ export async function listUsersService(
   ]);
 
   // Get therapy counts for doctors, nurses, and admin layanan
+  // Separated by role position (not user role) for accurate performance tracking
   const userIds = users.map(u => u.id);
   
-  // Count for doctors
+  // Count sessions where user acted as doctor
   const doctorCounts = await prisma.treatmentSession.groupBy({
     by: ['doctorId'],
     where: {
@@ -87,7 +88,7 @@ export async function listUsersService(
     _count: true,
   });
 
-  // Count for nurses
+  // Count sessions where user acted as nurse
   const nurseCounts = await prisma.treatmentSession.groupBy({
     by: ['nurseId'],
     where: {
@@ -97,7 +98,7 @@ export async function listUsersService(
     _count: true,
   });
 
-  // Count for admin layanan
+  // Count sessions where user acted as admin layanan
   const adminLayananCounts = await prisma.treatmentSession.groupBy({
     by: ['adminLayananId'],
     where: {
@@ -107,24 +108,31 @@ export async function listUsersService(
     _count: true,
   });
 
-  const therapyCountMap = new Map<string, number>();
+  // Create separate maps for each role position
+  const doctorCountMap = new Map<string, number>();
+  const nurseCountMap = new Map<string, number>();
+  const adminLayananCountMap = new Map<string, number>();
   
-  // Merge all counts
-  doctorCounts.forEach(tc => therapyCountMap.set(tc.doctorId, tc._count));
-  nurseCounts.forEach(tc => {
-    const current = therapyCountMap.get(tc.nurseId) || 0;
-    therapyCountMap.set(tc.nurseId, current + tc._count);
-  });
-  adminLayananCounts.forEach(tc => {
-    const current = therapyCountMap.get(tc.adminLayananId) || 0;
-    therapyCountMap.set(tc.adminLayananId, current + tc._count);
-  });
+  doctorCounts.forEach(tc => doctorCountMap.set(tc.doctorId, tc._count));
+  nurseCounts.forEach(tc => nurseCountMap.set(tc.nurseId, tc._count));
+  adminLayananCounts.forEach(tc => adminLayananCountMap.set(tc.adminLayananId, tc._count));
 
-  // Add therapy count to users
-  const usersWithTherapyCount = users.map(user => ({
-    ...user,
-    therapyCount: therapyCountMap.get(user.id) || 0,
-  }));
+  // Add therapy counts to users - separated by position
+  const usersWithTherapyCount = users.map(user => {
+    const asDoctor = doctorCountMap.get(user.id) || 0;
+    const asNurse = nurseCountMap.get(user.id) || 0;
+    const asAdminLayanan = adminLayananCountMap.get(user.id) || 0;
+    
+    return {
+      ...user,
+      // Total therapy count (sum of all positions)
+      therapyCount: asDoctor + asNurse + asAdminLayanan,
+      // Separated counts by position
+      therapyCountAsDoctor: asDoctor,
+      therapyCountAsNurse: asNurse,
+      therapyCountAsAdminLayanan: asAdminLayanan,
+    };
+  });
 
   return { users: usersWithTherapyCount, total, page, limit };
 }
@@ -280,19 +288,31 @@ export async function updateAvatarService(userId: string, avatarUrl: string) {
 
 // ── Get Staff by Role (for dropdowns) ────────────────────────
 
+/**
+ * Get staff by role for dropdown selection
+ * 
+ * SPECIAL CASE: ADMIN_CABANG is a "super role" that can be assigned to:
+ * - Admin Layanan position
+ * - Doctor position  
+ * - Nurse position
+ * 
+ * So when fetching DOCTOR, NURSE, or ADMIN_LAYANAN lists, we also include ADMIN_CABANG users.
+ */
 export async function getStaffByRoleService(
   role: Role,
   branchId?: string,
 ) {
   // For DOCTOR and NURSE, use StaffBranch for multi-branch support
+  // Also include ADMIN_CABANG users who can act as doctors/nurses
   if ((role === Role.DOCTOR || role === Role.NURSE) && branchId) {
-    // Use raw query until Prisma client is regenerated
-    const staff = await prisma.$queryRaw<Array<{
+    // Get staff with the specific role via StaffBranch
+    const roleStaff = await prisma.$queryRaw<Array<{
       id: string;
       staffCode: string;
       fullName: string;
+      role: string;
     }>>`
-      SELECT DISTINCT u.id, u."staffCode", up."fullName"
+      SELECT DISTINCT u.id, u."staffCode", up."fullName", u.role
       FROM users u
       INNER JOIN staff_branches sb ON u.id = sb."userId"
       INNER JOIN user_profiles up ON u.id = up."userId"
@@ -302,11 +322,43 @@ export async function getStaffByRoleService(
       ORDER BY up."fullName" ASC
     `;
 
-    return staff.map((s) => ({
-      userId: s.id,
-      staffCode: s.staffCode || '',
-      fullName: s.fullName || '',
-    }));
+    // Also get ADMIN_CABANG users from the same branch (they can act as doctor/nurse)
+    const adminCabangStaff = await prisma.user.findMany({
+      where: {
+        role: Role.ADMIN_CABANG,
+        branchId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        staffCode: true,
+        role: true,
+        profile: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
+      orderBy: { profile: { fullName: 'asc' } },
+    });
+
+    // Combine both lists
+    const combinedStaff = [
+      ...roleStaff.map((s) => ({
+        userId: s.id,
+        staffCode: s.staffCode || '',
+        fullName: s.fullName || '',
+        role: s.role,
+      })),
+      ...adminCabangStaff.map((s) => ({
+        userId: s.id,
+        staffCode: s.staffCode || '',
+        fullName: `${s.profile?.fullName || ''} (Admin Cabang)`,
+        role: s.role,
+      })),
+    ];
+
+    return combinedStaff;
   }
 
   // For DOCTOR and NURSE without branchId, return all active staff
@@ -314,12 +366,13 @@ export async function getStaffByRoleService(
   if ((role === Role.DOCTOR || role === Role.NURSE) && !branchId) {
     const staff = await prisma.user.findMany({
       where: {
-        role,
+        role: { in: [role, Role.ADMIN_CABANG] }, // Include ADMIN_CABANG
         isActive: true,
       },
       select: {
         id: true,
         staffCode: true,
+        role: true,
         profile: {
           select: {
             fullName: true,
@@ -332,7 +385,41 @@ export async function getStaffByRoleService(
     return staff.map((s) => ({
       userId: s.id,
       staffCode: s.staffCode,
-      fullName: s.profile?.fullName || '',
+      fullName: s.role === Role.ADMIN_CABANG 
+        ? `${s.profile?.fullName || ''} (Admin Cabang)` 
+        : s.profile?.fullName || '',
+      role: s.role,
+    }));
+  }
+
+  // For ADMIN_LAYANAN, also include ADMIN_CABANG (they can act as admin layanan)
+  if (role === Role.ADMIN_LAYANAN) {
+    const staff = await prisma.user.findMany({
+      where: {
+        role: { in: [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG] },
+        isActive: true,
+        ...(branchId ? { branchId } : {}),
+      },
+      select: {
+        id: true,
+        staffCode: true,
+        role: true,
+        profile: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
+      orderBy: { profile: { fullName: 'asc' } },
+    });
+
+    return staff.map((s) => ({
+      userId: s.id,
+      staffCode: s.staffCode,
+      fullName: s.role === Role.ADMIN_CABANG 
+        ? `${s.profile?.fullName || ''} (Admin Cabang)` 
+        : s.profile?.fullName || '',
+      role: s.role,
     }));
   }
 

@@ -239,7 +239,18 @@ export default function CreateSessionModal({
         ]);
         setAdminLayananList(adminList);
         setDoctors(doctorsList);
+      } else if (userRole === 'ADMIN_CABANG') {
+        // ADMIN_CABANG can select all three: Admin Layanan, Doctor, and Nurse
+        const [adminList, doctorsList, nursesList] = await Promise.all([
+          usersApi.getAdminLayanan(user?.branchId || undefined),
+          usersApi.getDoctors(user?.branchId || undefined),
+          usersApi.getNurses(user?.branchId || undefined),
+        ]);
+        setAdminLayananList(adminList);
+        setDoctors(doctorsList);
+        setNurses(nursesList);
       } else {
+        // ADMIN_LAYANAN - auto-assign as admin layanan, select doctor and nurse
         const [doctorsList, nursesList] = await Promise.all([
           usersApi.getDoctors(user?.branchId || undefined),
           usersApi.getNurses(user?.branchId || undefined),
@@ -270,7 +281,13 @@ export default function CreateSessionModal({
     } else if (userRole === 'NURSE') {
       if (!selectedAdminLayananId) { setError('Admin Layanan harus dipilih'); return; }
       if (!selectedDoctorId) { setError('Dokter harus dipilih'); return; }
+    } else if (userRole === 'ADMIN_CABANG') {
+      // ADMIN_CABANG must select all three
+      if (!selectedAdminLayananId) { setError('Admin Layanan harus dipilih'); return; }
+      if (!selectedDoctorId) { setError('Dokter harus dipilih'); return; }
+      if (!selectedNurseId) { setError('Nakes harus dipilih'); return; }
     } else {
+      // ADMIN_LAYANAN - auto-assign as admin layanan
       if (!selectedDoctorId) { setError('Dokter harus dipilih'); return; }
       if (!selectedNurseId) { setError('Nakes harus dipilih'); return; }
     }
@@ -307,7 +324,11 @@ export default function CreateSessionModal({
         data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: user?.userId || '', nurseId: selectedNurseId };
       } else if (userRole === 'NURSE') {
         data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: selectedDoctorId, nurseId: user?.userId || '' };
+      } else if (userRole === 'ADMIN_CABANG') {
+        // ADMIN_CABANG selects all three positions
+        data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: selectedDoctorId, nurseId: selectedNurseId };
       } else {
+        // ADMIN_LAYANAN - auto-assign as admin layanan
         data = { ...baseData, adminLayananId: user?.userId || '', doctorId: selectedDoctorId, nurseId: selectedNurseId };
       }
 
@@ -679,6 +700,18 @@ export default function CreateSessionModal({
 
                 {user?.role !== 'DOCTOR' && user?.role !== 'NURSE' && (
                   <>
+                    {/* Admin Layanan dropdown - only for ADMIN_CABANG */}
+                    {user?.role === 'ADMIN_CABANG' && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+                          <Users className="h-4 w-4" /> Admin Layanan <span className="text-red-500">*</span>
+                        </label>
+                        <select value={selectedAdminLayananId} onChange={(e) => setSelectedAdminLayananId(e.target.value)} className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all" disabled={loading}>
+                          <option value="">Pilih admin layanan...</option>
+                          {adminLayananList.map((admin) => (<option key={admin.userId} value={admin.userId}>{admin.fullName}</option>))}
+                        </select>
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                         <Users className="h-4 w-4" /> Dokter Utama <span className="text-red-500">*</span>

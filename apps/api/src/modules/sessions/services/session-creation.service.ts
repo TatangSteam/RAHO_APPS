@@ -220,17 +220,21 @@ export class SessionCreationService {
 
   /**
    * Validate doctor
+   * ADMIN_CABANG can also act as doctor
    */
   private async validateDoctor(doctorId: string) {
     const doctor = await prisma.user.findUnique({
       where: { id: doctorId },
     });
 
-    if (!doctor || doctor.role !== Role.DOCTOR || !doctor.isActive) {
+    // Allow both DOCTOR and ADMIN_CABANG to be assigned as doctor
+    const allowedRoles = [Role.DOCTOR, Role.ADMIN_CABANG];
+    
+    if (!doctor || !allowedRoles.includes(doctor.role as Role) || !doctor.isActive) {
       throw {
         status: 403,
         code: 'INVALID_DOCTOR',
-        message: 'Dokter tidak valid atau tidak aktif',
+        message: 'Dokter tidak valid atau tidak aktif. Hanya DOCTOR atau ADMIN_CABANG yang dapat di-assign sebagai dokter.',
       };
     }
 
@@ -239,17 +243,21 @@ export class SessionCreationService {
 
   /**
    * Validate nurse
+   * ADMIN_CABANG can also act as nurse
    */
   private async validateNurse(nurseId: string) {
     const nurse = await prisma.user.findUnique({
       where: { id: nurseId },
     });
 
-    if (!nurse || nurse.role !== Role.NURSE || !nurse.isActive) {
+    // Allow both NURSE and ADMIN_CABANG to be assigned as nurse
+    const allowedRoles = [Role.NURSE, Role.ADMIN_CABANG];
+    
+    if (!nurse || !allowedRoles.includes(nurse.role as Role) || !nurse.isActive) {
       throw {
         status: 403,
         code: 'INVALID_NURSE',
-        message: 'Nakes tidak valid atau tidak aktif',
+        message: 'Nakes tidak valid atau tidak aktif. Hanya NURSE atau ADMIN_CABANG yang dapat di-assign sebagai nakes.',
       };
     }
 

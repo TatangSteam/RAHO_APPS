@@ -99,6 +99,55 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
   };
 }
 
+// ── Helper: Auto-add Products to Branch Inventory ─────────────
+async function autoAddProductsToBranchInventory(branchId: string) {
+  console.log(`📦 Auto-adding products to branch inventory: ${branchId}`);
+  
+  // Find all products with isAutoAddedToBranch = true
+  const autoAddProducts = await prisma.masterProduct.findMany({
+    where: {
+      isAutoAddedToBranch: true,
+      isActive: true,
+    },
+  });
+
+  if (autoAddProducts.length === 0) {
+    console.log(`  ℹ️ No products configured for auto-add to branch`);
+    return { productsAdded: 0 };
+  }
+
+  let addedCount = 0;
+  for (const product of autoAddProducts) {
+    // Check if inventory item already exists
+    const existing = await prisma.inventoryItem.findUnique({
+      where: {
+        masterProductId_branchId: {
+          masterProductId: product.id,
+          branchId,
+        },
+      },
+    });
+
+    if (!existing) {
+      await prisma.inventoryItem.create({
+        data: {
+          masterProductId: product.id,
+          branchId,
+          stock: product.defaultInitialStock || 0,
+          minThreshold: 10, // Default minimum threshold
+        },
+      });
+      console.log(`  ✅ Added ${product.name} with stock: ${product.defaultInitialStock || 0} ${product.baseUnit}`);
+      addedCount++;
+    } else {
+      console.log(`  ℹ️ ${product.name} already exists in branch inventory`);
+    }
+  }
+
+  console.log(`  ✅ Auto-added ${addedCount} products to branch inventory`);
+  return { productsAdded: addedCount };
+}
+
 // ── Shared Branch Select ──────────────────────────────────────
 const branchSelect = {
   id: true,
@@ -326,6 +375,15 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
   } catch (error) {
     console.error(`⚠️ Failed to create default package pricings for branch ${branch.branchCode}:`, error);
     // Don't throw - branch creation should still succeed even if pricing creation fails
+  }
+
+  // Auto-add products with isAutoAddedToBranch flag to branch inventory
+  try {
+    const inventoryResult = await autoAddProductsToBranchInventory(branch.id);
+    console.log(`✅ Auto-added ${inventoryResult.productsAdded} products to branch ${branch.branchCode} inventory`);
+  } catch (error) {
+    console.error(`⚠️ Failed to auto-add products to branch ${branch.branchCode} inventory:`, error);
+    // Don't throw - branch creation should still succeed even if inventory creation fails
   }
 
   return branch;

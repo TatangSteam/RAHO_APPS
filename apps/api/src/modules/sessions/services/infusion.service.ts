@@ -86,12 +86,107 @@ export class InfusionService {
         },
       });
 
+      // ✨ AUTO-USE PRODUCTS with isAutoUsedPerSession flag (e.g., Infus Set + Pelengkap)
+      const autoUseProducts = await tx.masterProduct.findMany({
+        where: {
+          isAutoUsedPerSession: true,
+          isActive: true,
+        },
+      });
+
+      for (const autoProduct of autoUseProducts) {
+        console.log(`🔄 Auto-using product: ${autoProduct.name} (${autoProduct.sku})`);
+        
+        // Find inventory item for this product at this branch
+        const autoInventoryItem = await tx.inventoryItem.findFirst({
+          where: {
+            branchId,
+            masterProductId: autoProduct.id,
+          },
+          include: {
+            masterProduct: true,
+          },
+        });
+
+        if (!autoInventoryItem) {
+          console.warn(`⚠️ Auto-use product ${autoProduct.name} not found in branch ${branchId} inventory`);
+          continue; // Skip if not in inventory
+        }
+
+        const autoQty = 1; // Always use 1 unit per session
+        const autoStockBefore = Number(autoInventoryItem.stock);
+        const autoStockAfter = autoStockBefore - autoQty;
+
+        if (autoStockAfter < 0) {
+          throw {
+            status: 409,
+            code: 'STOCK_INSUFFICIENT',
+            message: `Stok ${autoProduct.name} tidak mencukupi. Tersedia: ${autoStockBefore} ${autoProduct.baseUnit}`,
+          };
+        }
+
+        // Update stock
+        await tx.inventoryItem.update({
+          where: { id: autoInventoryItem.id },
+          data: { stock: autoStockAfter },
+        });
+
+        // Create stock mutation
+        await tx.stockMutation.create({
+          data: {
+            inventoryItemId: autoInventoryItem.id,
+            type: StockMutationType.USED,
+            quantity: autoQty,
+            stockBefore: autoStockBefore,
+            stockAfter: autoStockAfter,
+            referenceType: 'InfusionExecution',
+            referenceId: infusion.id,
+            notes: `[AUTO] Digunakan otomatis untuk sesi ${session.sessionCode}: ${autoQty} ${autoProduct.usageUnit}`,
+            createdBy: userId,
+          },
+        });
+
+        // Create material usage record
+        await tx.materialUsage.create({
+          data: {
+            treatmentSessionId: sessionId,
+            inventoryItemId: autoInventoryItem.id,
+            quantity: autoQty,
+            unit: autoProduct.usageUnit,
+            recordedBy: userId,
+          },
+        });
+
+        console.log(`✅ Auto-used ${autoProduct.name}: ${autoQty} ${autoProduct.usageUnit}`);
+
+        // Check if stock is critical
+        if (autoStockAfter < Number(autoInventoryItem.minThreshold)) {
+          const adminCabang = await tx.user.findMany({
+            where: {
+              branchId,
+              role: Role.ADMIN_CABANG,
+              isActive: true,
+            },
+          });
+
+          for (const admin of adminCabang) {
+            await tx.notification.create({
+              data: {
+                userId: admin.id,
+                type: 'INFO',
+                title: 'Stok Kritis',
+                body: `Stok ${autoProduct.name} hampir habis 🔴`,
+                status: 'UNREAD',
+              },
+            });
+          }
+        }
+      }
+
       // Deduct stock for each material used AND create material usage records
       // Map field names to product SKU/name patterns for searching
       // Sesuai List Barang RAHO Official
       const materials = [
-        // INFUS SET - WAJIB 1 piece per sesi terapi (otomatis)
-        { field: 'INFUS_SET', sku: 'PRD-INF-SET-001', namePattern: 'Infus Set', qty: 1, unit: 'Piece' },
         // IFA - Satuan BOTOL
         { field: 'IFA500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA 500ml', qty: data.ifa500, unit: 'Botol' },
         { field: 'IFA250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA + NO 2,5ml', qty: data.ifa250, unit: 'Botol' },

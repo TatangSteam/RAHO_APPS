@@ -24,7 +24,20 @@ export async function seedProducts(prisma: PrismaClient) {
     // ==================== INFUS (INF) ====================
     { sku: 'PRD-INF-IFA-001', name: 'IFA 500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA 500ml' },
     { sku: 'PRD-INF-IFA-002', name: 'IFA + NO 2,5ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA + NO 2,5ml (default per terapi)' },
-    { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus lengkap - WAJIB per sesi terapi' },
+    { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus standar' },
+    { 
+      sku: 'PRD-INF-SET-002', 
+      name: 'Infus Set + Pelengkap', 
+      category: ProductCategory.DEVICE, 
+      unit: 'Piece', 
+      baseUnit: 'Piece', 
+      usageUnit: 'Piece', 
+      conversionFactor: 1, 
+      description: 'Set infus lengkap dengan pelengkap - WAJIB otomatis digunakan per sesi terapi',
+      isAutoUsedPerSession: true,
+      isAutoAddedToBranch: true,
+      defaultInitialStock: 100, // Default 100 piece untuk cabang baru
+    },
 
     // ==================== NANOBUBBLE THERAPY (NBT) ====================
     { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble HHO - untuk field: hho' },
@@ -120,8 +133,23 @@ export async function seedProducts(prisma: PrismaClient) {
         usageUnit: p.usageUnit,
         conversionFactor: p.conversionFactor,
         description: p.description,
+        isAutoUsedPerSession: (p as any).isAutoUsedPerSession ?? false,
+        isAutoAddedToBranch: (p as any).isAutoAddedToBranch ?? false,
+        defaultInitialStock: (p as any).defaultInitialStock ?? null,
       },
-      create: p,
+      create: {
+        sku: p.sku,
+        name: p.name,
+        category: p.category,
+        unit: p.unit,
+        baseUnit: p.baseUnit,
+        usageUnit: p.usageUnit,
+        conversionFactor: p.conversionFactor,
+        description: p.description,
+        isAutoUsedPerSession: (p as any).isAutoUsedPerSession ?? false,
+        isAutoAddedToBranch: (p as any).isAutoAddedToBranch ?? false,
+        defaultInitialStock: (p as any).defaultInitialStock ?? null,
+      },
     });
     createdProducts.push({ ...product, sku: p.sku });
   }
