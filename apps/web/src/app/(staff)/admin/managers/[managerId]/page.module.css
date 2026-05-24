@@ -1,19 +1,7 @@
 /* Light Theme - Manager Detail Page */
 
 /* ===== CSS Variables ===== */
-:root {
-  --surface-card: #ffffff;
-  --surface-border: #e5e7eb;
-  --surface-input: #f9fafb;
-  --surface-hover: #f3f4f6;
-  --text-primary: #111827;
-  --text-secondary: #374151;
-  --text-muted: #6b7280;
-  --accent-orange: #f59e0b;
-  --accent-orange-hover: #d97706;
-  --accent-orange-light: #fef3c7;
-  --accent-orange-border: #fcd34d;
-}
+/* moved to global styles (globals.css) under the .light theme */
 
 /* ===== Container ===== */
 .container {

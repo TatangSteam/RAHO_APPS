@@ -24,10 +24,22 @@
   --color-primary-600: #d97706;
   --color-primary-700: #b45309;
   --color-primary-800: #92400e;
-  --color-primary-900: #78350f;
-  --color-primary-950: #451a03;
+  --text-primary:   #171717;
+  --text-secondary: #525252;
+  --text-muted:     #737373;
+  --text-inverse:   #fafafa;
 
-  /* ── Semantic ─────────────────────────────────────────── */
+  /* Page-specific / legacy variables used by some modules */
+  --surface-card: #ffffff;
+  --surface-border: #e5e7eb;
+  --surface-input: #f9fafb;
+  --surface-hover: #f3f4f6;
+
+  /* Accent (orange) variables used across staff pages */
+  --accent-orange: #f59e0b;
+  --accent-orange-hover: #d97706;
+  --accent-orange-light: #fef3c7;
+  --accent-orange-border: #fcd34d;
   --color-success:  #22c55e;
   --color-warning:  #f59e0b;
   --color-danger:   #ef4444;
