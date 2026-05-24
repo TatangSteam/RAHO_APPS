@@ -84,7 +84,7 @@ The Super Admin Impersonation feature is **complete and ready for production dep
 
 2. **Essential Seed Update** ✅
    - Super Admin user added to `seed-essential.ts`
-   - Default credentials: superadmin@raho.id / Sup3r4dM1n@123
+   - Default credentials: superadmin@raho.id / Sup3r4dM1n
    - Password must be changed after first login
 
 3. **Environment Variables** ✅

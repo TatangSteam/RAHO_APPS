@@ -1,23 +1,31 @@
-/* Dark Theme - Consistent with App */
+/* Light Theme - Manager Detail Page */
+
+/* ===== CSS Variables ===== */
+:root {
+  --surface-card: #ffffff;
+  --surface-border: #e5e7eb;
+  --surface-input: #f9fafb;
+  --surface-hover: #f3f4f6;
+  --text-primary: #111827;
+  --text-secondary: #374151;
+  --text-muted: #6b7280;
+  --accent-orange: #f59e0b;
+  --accent-orange-hover: #d97706;
+  --accent-orange-light: #fef3c7;
+  --accent-orange-border: #fcd34d;
+}
+
+/* ===== Container ===== */
 .container {
   padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
-  background-color: #0f172a !important;
+  background-color: var(--surface-input);
   min-height: 100vh;
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
-.container * {
-  color: inherit;
-}
-
-.container p,
-.container div,
-.container span {
-  color: #f1f5f9;
-}
-
+/* ===== Loading & Error States ===== */
 .loading,
 .error {
   display: flex;
@@ -26,7 +34,7 @@
   justify-content: center;
   min-height: 400px;
   gap: 16px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .loadingSpinner {
@@ -39,7 +47,7 @@
   to { transform: rotate(360deg); }
 }
 
-/* Header */
+/* ===== Header ===== */
 .header {
   margin-bottom: 32px;
 }
@@ -49,10 +57,10 @@
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   cursor: pointer;
   transition: all 0.2s;
@@ -60,9 +68,16 @@
 }
 
 .backButton:hover {
-  background: #334155;
-  color: #e2e8f0;
-  border-color: #3b82f6;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-orange);
+}
+
+.headerRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
 }
 
 .headerInfo {
@@ -75,7 +90,7 @@
   width: 80px;
   height: 80px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-orange-hover));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,19 +98,19 @@
   font-weight: 700;
   color: white;
   flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .headerText h1 {
   font-size: 28px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
 }
 
 .email {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--text-muted);
   margin-bottom: 12px;
   display: block;
 }
@@ -110,16 +125,22 @@
 }
 
 .statusBadge.active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: #dcfce7;
+  color: #16a34a;
 }
 
 .statusBadge.inactive {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: #fee2e2;
+  color: #dc2626;
 }
 
-/* Stats Grid */
+.headerActions {
+  display: flex;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* ===== Stats Grid ===== */
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -128,8 +149,8 @@
 }
 
 .statCard {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 20px;
   display: flex;
@@ -139,16 +160,16 @@
 }
 
 .statCard:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  border-color: var(--accent-orange);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
 }
 
 .statIcon {
   width: 56px;
   height: 56px;
   border-radius: 10px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--accent-orange-light);
+  color: var(--accent-orange);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -162,20 +183,20 @@
 .statValue {
   font-size: 28px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 6px;
 }
 
 .statLabel {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
-/* Branches Section */
+/* ===== Branches Section ===== */
 .branchesSection {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 24px;
 }
@@ -183,8 +204,19 @@
 .branchesSection h2 {
   font-size: 20px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   margin: 0 0 20px 0;
+}
+
+.branchesSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.branchesSectionHeader h2 {
+  margin: 0;
 }
 
 .emptyState {
@@ -193,7 +225,7 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #64748b;
+  color: var(--text-muted);
   gap: 12px;
 }
 
@@ -203,18 +235,18 @@
   gap: 16px;
 }
 
-/* Branch Card */
+/* ===== Branch Card ===== */
 .branchCard {
-  border: 1px solid #334155;
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
   overflow: hidden;
   transition: all 0.2s;
-  background: #0f172a;
+  background: var(--surface-card);
 }
 
 .branchCard:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  border-color: var(--accent-orange);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
 }
 
 .branchHeader {
@@ -223,12 +255,12 @@
   justify-content: space-between;
   padding: 16px 20px;
   cursor: pointer;
-  background: #1e293b;
+  background: var(--surface-input);
   transition: background 0.2s;
 }
 
 .branchHeader:hover {
-  background: #334155;
+  background: var(--surface-hover);
 }
 
 .branchInfo {
@@ -242,8 +274,8 @@
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--accent-orange-light);
+  color: var(--accent-orange);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -253,13 +285,13 @@
 .branchInfo h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   margin: 0 0 4px 0;
 }
 
 .branchMeta {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -269,18 +301,18 @@
 .branchCode {
   font-family: 'Courier New', monospace;
   font-weight: 600;
-  color: #3b82f6;
+  color: var(--accent-orange);
 }
 
 .separator {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .branchStats {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .statBadge {
@@ -288,24 +320,24 @@
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  background: rgba(59, 130, 246, 0.15);
+  background: var(--accent-orange-light);
   border-radius: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #3b82f6;
+  color: var(--accent-orange-hover);
 }
 
-/* Branch Content */
+/* ===== Branch Content ===== */
 .branchContent {
-  border-top: 1px solid #334155;
-  background: #1e293b;
+  border-top: 1px solid var(--surface-border);
+  background: var(--surface-card);
 }
 
 .tabs {
   display: flex;
   gap: 4px;
   padding: 16px 20px 0;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .tab {
@@ -316,7 +348,7 @@
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -324,14 +356,14 @@
 }
 
 .tab:hover {
-  color: #f1f5f9;
-  background: #334155;
+  color: var(--text-primary);
+  background: var(--surface-hover);
   border-radius: 8px 8px 0 0;
 }
 
 .tab.active {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
+  color: var(--accent-orange);
+  border-bottom-color: var(--accent-orange);
 }
 
 .tabContent {
@@ -341,18 +373,18 @@
 .emptyMessage {
   text-align: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 14px;
 }
 
-/* Data Table */
+/* ===== Data Table ===== */
 .dataTable {
   width: 100%;
   border-collapse: collapse;
 }
 
 .dataTable thead {
-  background: #0f172a;
+  background: var(--surface-input);
 }
 
 .dataTable th {
@@ -360,19 +392,19 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .dataTable tbody tr {
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
   transition: background 0.2s;
 }
 
 .dataTable tbody tr:hover {
-  background: #334155;
+  background: var(--surface-hover);
 }
 
 .dataTable tbody tr:last-child {
@@ -382,14 +414,14 @@
 .dataTable td {
   padding: 14px 16px;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--text-secondary);
 }
 
 .roleBadge {
   display: inline-block;
   padding: 4px 10px;
-  background: rgba(99, 102, 241, 0.15);
-  color: #818cf8;
+  background: #ede9fe;
+  color: #7c3aed;
   border-radius: 6px;
   font-size: 12px;
   font-weight: 500;
@@ -398,7 +430,7 @@
 .memberCode {
   font-family: 'Courier New', monospace;
   font-weight: 600;
-  color: #3b82f6;
+  color: var(--accent-orange);
   font-size: 13px;
 }
 
@@ -418,24 +450,25 @@
 }
 
 .statusDot.active {
-  color: #10b981;
+  color: #16a34a;
 }
 
 .statusDot.active::before {
-  background: #10b981;
+  background: #22c55e;
 }
 
 .statusDot.inactive {
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .statusDot.inactive::before {
   background: #ef4444;
 }
 
+/* ===== Buttons ===== */
 .backBtn {
   padding: 10px 20px;
-  background: #3b82f6;
+  background: var(--accent-orange);
   color: white;
   border: none;
   border-radius: 8px;
@@ -446,13 +479,13 @@
 }
 
 .backBtn:hover {
-  background: #2563eb;
+  background: var(--accent-orange-hover);
 }
 
 .actionBtn {
   padding: 6px 12px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
   cursor: pointer;
   font-size: 16px;
@@ -460,22 +493,9 @@
 }
 
 .actionBtn:hover {
-  background: #334155;
-  border-color: #3b82f6;
+  background: var(--surface-hover);
+  border-color: var(--accent-orange);
   transform: scale(1.1);
-}
-
-
-/* Branches Section Header */
-.branchesSectionHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.branchesSectionHeader h2 {
-  margin: 0;
 }
 
 .addBranchBtn {
@@ -483,7 +503,7 @@
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: #3b82f6;
+  background: var(--accent-orange);
   color: white;
   border: none;
   border-radius: 8px;
@@ -494,7 +514,7 @@
 }
 
 .addBranchBtn:hover {
-  background: #2563eb;
+  background: var(--accent-orange-hover);
   transform: translateY(-1px);
 }
 
@@ -503,7 +523,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: #3b82f6;
+  background: var(--accent-orange);
   color: white;
   border: none;
   border-radius: 8px;
@@ -515,28 +535,27 @@
 }
 
 .addBranchBtnEmpty:hover {
-  background: #2563eb;
+  background: var(--accent-orange-hover);
   transform: translateY(-1px);
 }
 
-/* Remove Branch Button */
 .removeBranchBtn {
   display: flex;
   align-items: center;
   justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: #fee2e2;
+  border: 1px solid #fecaca;
   border-radius: 6px;
-  color: #ef4444;
+  color: #dc2626;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .removeBranchBtn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
+  background: #fecaca;
+  border-color: #dc2626;
 }
 
 .removeBranchBtn:disabled {
@@ -550,23 +569,94 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   transition: color 0.2s;
 }
 
 .expandIcon:hover {
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
-/* Modal Styles */
+.editBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--accent-orange);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.editBtn:hover {
+  background: var(--accent-orange-hover);
+  transform: translateY(-1px);
+}
+
+.activateBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #dcfce7;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.activateBtn:hover:not(:disabled) {
+  background: #bbf7d0;
+  border-color: #22c55e;
+  transform: translateY(-1px);
+}
+
+.activateBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deleteBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.deleteBtn:hover:not(:disabled) {
+  background: #fecaca;
+  border-color: #dc2626;
+}
+
+.deleteBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ===== Modal Styles ===== */
 .modalOverlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -575,15 +665,15 @@
 }
 
 .modal {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 16px;
   width: 100%;
   max-width: 560px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
 .modalHeader {
@@ -591,13 +681,13 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .modalHeader h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -607,18 +697,18 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .modalCloseBtn:hover {
-  background: #334155;
-  color: #f1f5f9;
-  border-color: #3b82f6;
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-orange);
 }
 
 .modalContent {
@@ -634,11 +724,19 @@
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: var(--text-muted);
   gap: 12px;
 }
 
-/* Branch Select List */
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--surface-border);
+}
+
+/* ===== Branch Select List ===== */
 .branchSelectList {
   display: flex;
   flex-direction: column;
@@ -650,15 +748,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 10px;
   transition: all 0.2s;
 }
 
 .branchSelectItem:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+  border-color: var(--accent-orange);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.1);
 }
 
 .branchSelectInfo {
@@ -672,8 +770,8 @@
   width: 40px;
   height: 40px;
   border-radius: 8px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
+  background: var(--accent-orange-light);
+  color: var(--accent-orange);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -683,13 +781,13 @@
 .branchSelectName {
   font-size: 15px;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 
 .branchSelectMeta {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -700,7 +798,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: #3b82f6;
+  background: var(--accent-orange);
   color: white;
   border: none;
   border-radius: 6px;
@@ -712,7 +810,7 @@
 }
 
 .assignBtn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--accent-orange-hover);
 }
 
 .assignBtn:disabled {
@@ -720,103 +818,17 @@
   cursor: not-allowed;
 }
 
-
-/* Header Row with Actions */
-.headerRow {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.headerActions {
-  display: flex;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.editBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.editBtn:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-}
-
-.activateBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.activateBtn:hover:not(:disabled) {
-  background: rgba(16, 185, 129, 0.25);
-  border-color: #10b981;
-  transform: translateY(-1px);
-}
-
-.activateBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.deleteBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.deleteBtn:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: #ef4444;
-}
-
-.deleteBtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Edit Modal */
+/* ===== Edit Modal ===== */
 .editModal {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 16px;
   width: 100%;
   max-width: 500px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
 }
 
 .formGroup {
@@ -827,39 +839,39 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #e2e8f0;
+  color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
 .required {
-  color: #ef4444;
+  color: #dc2626;
 }
 
 .hint {
   font-size: 12px;
   font-weight: 400;
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .input {
   width: 100%;
   padding: 12px 14px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  color: #f1f5f9;
+  color: var(--text-primary);
   font-size: 14px;
   transition: all 0.2s;
 }
 
 .input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
 .input::placeholder {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .passwordInput {
@@ -877,7 +889,7 @@
   right: 12px;
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--text-muted);
   cursor: pointer;
   padding: 4px;
   display: flex;
@@ -887,7 +899,7 @@
 }
 
 .passwordToggle:hover {
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
 .toggleContainer {
@@ -898,10 +910,10 @@
 .toggleBtn {
   flex: 1;
   padding: 10px 16px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -909,29 +921,21 @@
 }
 
 .toggleBtn:hover {
-  border-color: #3b82f6;
+  border-color: var(--accent-orange);
 }
 
 .toggleBtn.active {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: #3b82f6;
-  color: #3b82f6;
-}
-
-.modalFooter {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid #334155;
+  background: var(--accent-orange-light);
+  border-color: var(--accent-orange);
+  color: var(--accent-orange-hover);
 }
 
 .cancelBtn {
   padding: 10px 20px;
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -939,8 +943,8 @@
 }
 
 .cancelBtn:hover:not(:disabled) {
-  background: #334155;
-  color: #f1f5f9;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .cancelBtn:disabled {
@@ -950,7 +954,7 @@
 
 .saveBtn {
   padding: 10px 20px;
-  background: #3b82f6;
+  background: var(--accent-orange);
   border: none;
   border-radius: 8px;
   color: white;
@@ -961,10 +965,59 @@
 }
 
 .saveBtn:hover:not(:disabled) {
-  background: #2563eb;
+  background: var(--accent-orange-hover);
 }
 
 .saveBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+
+  .headerRow {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .headerActions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .headerActions button {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .branchHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .branchStats {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dataTable {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .modal,
+  .editModal {
+    max-width: 100%;
+    margin: 10px;
+  }
 }

@@ -31,9 +31,13 @@ export default function VerifyPaymentModal({
   const [paymentProof, setPaymentProof] = useState<PaymentProof>({ file: null, preview: null });
   const [error, setError] = useState<string>('');
 
-  // Lock body scroll when modal is open
+  // Reset state when modal opens or closes
   useEffect(() => {
     if (show) {
+      // Reset state when modal opens
+      setPaymentProof({ file: null, preview: null });
+      setError('');
+      onProofChange({ file: null, preview: null });
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';

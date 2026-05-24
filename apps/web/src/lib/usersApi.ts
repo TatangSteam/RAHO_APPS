@@ -25,6 +25,12 @@ export interface StaffPerformance {
     asAdminLayanan: number;
     total: number;
   };
+  // Optional branch info - included when viewing all branches (Super Admin)
+  branch?: {
+    id: string;
+    branchCode: string;
+    name: string;
+  };
 }
 
 export interface StaffPerformanceSummaryResponse {

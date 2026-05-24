@@ -1,6 +1,6 @@
 'use client';
 
-import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus, Activity } from 'lucide-react';
+import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus, Activity, Key } from 'lucide-react';
 import DataTable, { 
   Column, 
   AvatarCell, 
@@ -40,7 +40,9 @@ interface StaffTableProps {
   onEdit: (staff: Staff) => void;
   onDelete: (staff: Staff) => void;
   onManageBranches: (staff: Staff) => void;
+  onManageCredentials?: (staff: Staff) => void;
   onAddStaff: () => void;
+  showCredentialsButton?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -74,7 +76,9 @@ export default function StaffTable({
   onEdit,
   onDelete,
   onManageBranches,
+  onManageCredentials,
   onAddStaff,
+  showCredentialsButton = false,
 }: StaffTableProps) {
   
   const columns: Column<Staff>[] = [
@@ -213,10 +217,18 @@ export default function StaffTable({
     {
       key: 'actions',
       header: 'Aksi',
-      width: '140px',
+      width: '180px',
       align: 'right',
       render: (staff) => (
         <ActionButtons>
+          {showCredentialsButton && onManageCredentials && (
+            <ActionButton
+              onClick={() => onManageCredentials(staff)}
+              icon={<Key size={14} />}
+              title="Kelola Kredensial"
+              variant="amber"
+            />
+          )}
           {(staff.role === 'DOCTOR' || staff.role === 'NURSE') && (
             <ActionButton
               onClick={() => onManageBranches(staff)}

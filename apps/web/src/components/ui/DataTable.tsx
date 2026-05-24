@@ -380,7 +380,7 @@ export function ActionButton({
   onClick: (e: React.MouseEvent) => void;
   icon: ReactNode;
   title: string;
-  variant?: 'default' | 'edit' | 'delete' | 'view' | 'purple';
+  variant?: 'default' | 'edit' | 'delete' | 'view' | 'purple' | 'amber';
   disabled?: boolean;
 }) {
   const variantClasses = {
@@ -389,6 +389,7 @@ export function ActionButton({
     delete: 'bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20',
     view: 'bg-emerald-100 text-emerald-600 hover:bg-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20',
     purple: 'bg-purple-100 text-purple-600 hover:bg-purple-200 dark:bg-purple-500/10 dark:text-purple-400 dark:hover:bg-purple-500/20',
+    amber: 'bg-amber-100 text-amber-600 hover:bg-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20',
   };
 
   return (

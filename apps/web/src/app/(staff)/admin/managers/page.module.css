@@ -1,45 +1,50 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ADMIN MANAGERS PAGE - Professional Light Theme
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 .container {
-  padding: 24px;
+  padding: 2rem;
   max-width: 1600px;
   margin: 0 auto;
-  background-color: transparent;
+  min-height: 100vh;
 }
 
 .pageHeader {
-  margin-bottom: 32px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid #334155;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .headerContent {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 1rem;
 }
 
 .headerIcon {
   width: 56px;
   height: 56px;
   border-radius: 16px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+  border: 1px solid #d8b4fe;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 28px;
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  font-size: 1.75rem;
 }
 
 .headerText h1 {
-  margin: 0 0 4px;
-  font-size: 28px;
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
+  letter-spacing: -0.025em;
 }
 
 .headerText p {
   margin: 0;
-  font-size: 15px;
-  color: #94a3b8;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
 }
 
 .content {
@@ -52,20 +57,16 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  color: #94a3b8;
+  color: var(--text-secondary);
+  gap: 1rem;
 }
 
 .spinner {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 3rem;
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

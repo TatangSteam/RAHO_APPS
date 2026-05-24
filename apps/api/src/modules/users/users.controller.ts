@@ -21,6 +21,8 @@ import {
   removeUserFromBranchService,
   getAvailableBranchesForUserService,
   setPrimaryBranchService,
+  getUserCredentialsService,
+  updateUserEmailService,
 } from './users.service';
 import {
   getStaffPerformanceSummaryService,
@@ -437,5 +439,65 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
     );
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
+  } catch (err) { next(err); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CREDENTIAL MANAGEMENT (Super Admin Only)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Get user credentials (email, role, etc.) - Super Admin only
+ * GET /users/:userId/credentials
+ */
+export async function getUserCredentials(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const credentials = await getUserCredentialsService(userId);
+    sendSuccess(res, credentials);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Update user email - Super Admin only
+ * PATCH /users/:userId/email
+ */
+export async function updateUserEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { userId } = req.params;
+    const { email } = req.body;
+
+    if (!email || typeof email !== 'string') {
+      res.status(400).json({
+        success: false,
+        error: { code: 'EMAIL_REQUIRED', message: 'Email baru diperlukan.' }
+      });
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'INVALID_EMAIL', message: 'Format email tidak valid.' }
+      });
+      return;
+    }
+
+    const result = await updateUserEmailService(userId, email);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'UPDATE',
+      resource: 'User',
+      resourceId: userId,
+      meta: { action: 'email_change', newEmail: email },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
   } catch (err) { next(err); }
 }

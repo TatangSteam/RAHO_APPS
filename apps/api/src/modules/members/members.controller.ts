@@ -460,4 +460,52 @@ export class MembersController {
       next(error);
     }
   }
+
+  // ============================================================
+  // CREDENTIAL MANAGEMENT METHODS (Super Admin Only)
+  // ============================================================
+
+  async getMemberCredentials(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const result = await membersService.getMemberCredentials(memberId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateMemberEmail(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const { email } = req.body;
+      const { userId } = req.user!;
+
+      if (!email || typeof email !== 'string') {
+        throw { status: 400, code: 'VALIDATION_ERROR', message: 'Email wajib diisi' };
+      }
+
+      const result = await membersService.updateMemberEmail(memberId, email, userId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetMemberPassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const { newPassword } = req.body;
+      const { userId } = req.user!;
+
+      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+        throw { status: 400, code: 'VALIDATION_ERROR', message: 'Password minimal 6 karakter' };
+      }
+
+      const result = await membersService.resetMemberPassword(memberId, newPassword, userId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
 }

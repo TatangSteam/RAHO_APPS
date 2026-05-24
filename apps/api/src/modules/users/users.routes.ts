@@ -21,6 +21,8 @@ import {
   setPrimaryBranch,
   getStaffPerformanceSummary,
   getStaffSessionHistory,
+  getUserCredentials,
+  updateUserEmail,
 } from './users.controller';
 
 export const usersRouter = Router();
@@ -166,4 +168,24 @@ usersRouter.patch(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   setPrimaryBranch,
+);
+
+// ══════════════════════════════════════════════════════════════
+// CREDENTIAL MANAGEMENT (Super Admin Only)
+// ══════════════════════════════════════════════════════════════
+
+// ── Get User Credentials ──────────────────────────────────────
+usersRouter.get(
+  '/:userId/credentials',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  getUserCredentials,
+);
+
+// ── Update User Email ─────────────────────────────────────────
+usersRouter.patch(
+  '/:userId/email',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  updateUserEmail,
 );

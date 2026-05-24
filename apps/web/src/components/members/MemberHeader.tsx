@@ -3,16 +3,18 @@
 import { useEffect, useState } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { Key } from 'lucide-react';
 
 interface MemberHeaderProps {
   member: MemberDetail;
   onBack: () => void;
   onSendNotification: () => void;
   onEdit: () => void;
+  onManageCredentials?: () => void;
   isSuperAdmin: boolean;
 }
 
-export default function MemberHeader({ member, onBack, onSendNotification, onEdit, isSuperAdmin }: MemberHeaderProps) {
+export default function MemberHeader({ member, onBack, onSendNotification, onEdit, onManageCredentials, isSuperAdmin }: MemberHeaderProps) {
   // Get profile photo from documents
   const profilePhoto = member.documents?.find(doc => doc.documentType === 'FOTO_PROFIL');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
@@ -118,6 +120,23 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
           <button onClick={onSendNotification} className="btn btn-secondary">
             📧 Kirim Notifikasi
           </button>
+          {isSuperAdmin && onManageCredentials && (
+            <button 
+              onClick={onManageCredentials} 
+              className="btn btn-secondary"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                background: 'linear-gradient(135deg, #f59e0b20, #d9770620)',
+                borderColor: '#f59e0b50',
+                color: '#f59e0b'
+              }}
+            >
+              <Key size={16} />
+              Kredensial
+            </button>
+          )}
           {isSuperAdmin && (
             <button onClick={onEdit} className="btn btn-primary">
               ✏️ Edit

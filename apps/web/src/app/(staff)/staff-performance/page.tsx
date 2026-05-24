@@ -8,7 +8,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import {
   Activity, Search, Eye, Building2, ChevronLeft, ChevronRight,
-  Users, Loader2, Calendar, Stethoscope, Heart, UserCog,
+  Users, Calendar, Stethoscope, Heart, UserCog,
   TrendingUp, Filter, BarChart3
 } from 'lucide-react';
 
@@ -70,6 +70,7 @@ export default function StaffPerformancePage() {
   const [endDate, setEndDate] = useState('');
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   useEffect(() => {
@@ -81,10 +82,14 @@ export default function StaffPerformancePage() {
     if (isAdminCabang && user?.branchId) {
       setBranchFilter(user.branchId);
     }
-  }, [isAdminCabang, user?.branchId]);
+    // For SUPER_ADMIN, default to "all" (Semua Cabang)
+    if (isSuperAdmin && !branchFilter) {
+      setBranchFilter('all');
+    }
+  }, [isAdminCabang, isSuperAdmin, user?.branchId]);
 
   useEffect(() => {
-    // Only fetch if we have a branch selected (required)
+    // Only fetch if we have a branch selected (required) or Super Admin with 'all'
     if (branchFilter || isAdminCabang) {
       fetchPerformance();
     }
@@ -158,48 +163,48 @@ export default function StaffPerformancePage() {
 
       {/* Summary Cards */}
       {data && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-500/20">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-500/20 dark:to-amber-600/20">
                 <Activity className="h-5 w-5 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalSessions}</p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Total Sesi</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Total Sesi</p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-500/20">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-500/20 dark:to-blue-600/20">
                 <Stethoscope className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsDoctor}</p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Sebagai Dokter</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sbg Dokter</p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-green-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-100 dark:bg-green-500/20">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-green-100 to-green-200 dark:from-green-500/20 dark:to-green-600/20">
                 <Heart className="h-5 w-5 text-green-600 dark:text-green-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsNurse}</p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Sebagai Nakes</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sbg Nakes</p>
               </div>
             </div>
           </div>
-          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-purple-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-500/20">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-500/20 dark:to-purple-600/20">
                 <UserCog className="h-5 w-5 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">{totalAsAdmin}</p>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400">Sebagai Admin</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Sbg Admin</p>
               </div>
             </div>
           </div>
@@ -207,61 +212,74 @@ export default function StaffPerformancePage() {
       )}
 
       {/* Filters */}
-      <div className="mb-6 flex flex-col md:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Cari nama atau kode staff..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-          />
-        </div>
-
-        {canSelectBranch && (
-          <select
-            value={branchFilter}
-            onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
-            className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all min-w-[200px]"
-          >
-            <option value="">Pilih Cabang</option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>{branch.name}</option>
-            ))}
-          </select>
-        )}
-
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+      <div className="mb-6 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+        <div className="flex flex-col lg:flex-row gap-4">
+          {/* Search */}
+          <div className="relative flex-1">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
             <input
-              type="date"
-              value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-              className="pl-10 pr-3 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+              type="text"
+              placeholder="Cari nama atau kode staff..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-11 pr-4 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
             />
           </div>
-          <span className="text-neutral-400">-</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-            className="px-3 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-          />
+
+          {/* Branch Filter */}
+          {canSelectBranch && (
+            <div className="relative min-w-[180px]">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+              <select
+                value={branchFilter}
+                onChange={(e) => { setBranchFilter(e.target.value); setPage(1); }}
+                className="w-full pl-10 pr-8 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all appearance-none cursor-pointer"
+              >
+                {isSuperAdmin && (
+                  <option value="all">📊 Semua Cabang</option>
+                )}
+                <option value="">Pilih Cabang</option>
+                {branches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>{branch.name}</option>
+                ))}
+              </select>
+              <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 rotate-90 pointer-events-none" />
+            </div>
+          )}
+
+          {/* Date Range */}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                className="pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
+              />
+            </div>
+            <span className="text-neutral-400 text-sm">—</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+              className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Branch Info */}
-      {data?.branch && (
-        <div className="mb-4 flex items-center gap-2 text-sm text-neutral-600 dark:text-neutral-400">
-          <Building2 className="h-4 w-4" />
-          <span>Menampilkan data untuk cabang: <strong className="text-neutral-900 dark:text-white">{data.branch.name}</strong></span>
+      {/* Branch Info Badge */}
+      {data?.branch && branchFilter !== 'all' && (
+        <div className="mb-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-sm">
+          <Building2 className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          <span className="text-neutral-600 dark:text-neutral-400">Cabang:</span>
+          <span className="font-semibold text-amber-700 dark:text-amber-400">{data.branch.name}</span>
         </div>
       )}
 
       {/* No Branch Selected */}
-      {!branchFilter && canSelectBranch && !loading && (
+      {!branchFilter && canSelectBranch && !loading && !isSuperAdmin && (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-12 text-center">
           <div className="flex flex-col items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
@@ -280,54 +298,95 @@ export default function StaffPerformancePage() {
       {/* Table */}
       {(branchFilter || isAdminCabang) && (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm overflow-hidden">
+          {/* Table Header Info */}
+          <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-amber-500" />
+              <span className="font-semibold text-neutral-900 dark:text-white">Daftar Staff</span>
+              <span className="text-sm text-neutral-500 dark:text-neutral-400">
+                ({filteredStaff.length} staff)
+              </span>
+            </div>
+            {data?.dateRange?.startDate && (
+              <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                <Calendar className="h-4 w-4" />
+                <span>
+                  {new Date(data.dateRange.startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {data.dateRange.endDate && ` - ${new Date(data.dateRange.endDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}`}
+                </span>
+              </div>
+            )}
+          </div>
+
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-700">
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Staff</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Role</th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-center gap-1">
-                      <Stethoscope size={12} />
-                      Dokter
+                <tr className="bg-neutral-50/80 dark:bg-neutral-800/80 sticky top-0 z-10">
+                  <th className="px-4 sm:px-6 py-3.5 text-left text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                      <span className="w-6 text-center">#</span>
+                      Staff
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-center gap-1">
-                      <Heart size={12} />
-                      Nakes
+                  {branchFilter === 'all' && (
+                    <th className="px-4 sm:px-6 py-3.5 text-left text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <Building2 size={12} />
+                        Cabang
+                      </div>
+                    </th>
+                  )}
+                  <th className="px-4 sm:px-6 py-3.5 text-left text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">Role</th>
+                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Stethoscope size={14} className="text-blue-500" />
+                      <span className="hidden sm:inline">Dokter</span>
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                    <div className="flex items-center justify-center gap-1">
-                      <UserCog size={12} />
-                      Admin
+                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <Heart size={14} className="text-green-500" />
+                      <span className="hidden sm:inline">Nakes</span>
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Total</th>
-                  <th className="px-6 py-4 text-center text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Aksi</th>
+                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <UserCog size={14} className="text-purple-500" />
+                      <span className="hidden sm:inline">Admin</span>
+                    </div>
+                  </th>
+                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <TrendingUp size={14} className="text-amber-500" />
+                      <span className="hidden sm:inline">Total</span>
+                    </div>
+                  </th>
+                  <th className="px-4 sm:px-6 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-                        <span className="text-neutral-500 dark:text-neutral-400">Memuat data...</span>
+                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="relative">
+                          <div className="h-12 w-12 rounded-full border-4 border-neutral-200 dark:border-neutral-700"></div>
+                          <div className="absolute inset-0 h-12 w-12 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+                        </div>
+                        <span className="text-sm text-neutral-500 dark:text-neutral-400">Memuat data kinerja...</span>
                       </div>
                     </td>
                   </tr>
                 ) : filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-6 py-16 text-center">
-                      <div className="flex flex-col items-center gap-3">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-neutral-100 dark:bg-neutral-800">
+                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
+                      <div className="flex flex-col items-center gap-4">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800">
                           <Users className="h-8 w-8 text-neutral-400" />
                         </div>
                         <div>
-                          <p className="text-neutral-900 dark:text-white font-medium">Tidak ada data staff</p>
-                          <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                          <p className="text-neutral-900 dark:text-white font-semibold">Tidak ada data staff</p>
+                          <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                             {search ? 'Coba ubah kata kunci pencarian' : 'Belum ada staff di cabang ini'}
                           </p>
                         </div>
@@ -335,63 +394,117 @@ export default function StaffPerformancePage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredStaff.map((staff) => (
-                    <tr key={staff.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-amber-600 text-black font-semibold text-sm flex-shrink-0 overflow-hidden">
-                            {staff.avatarUrl ? (
-                              <img src={staff.avatarUrl} alt={staff.fullName} className="w-full h-full object-cover" />
-                            ) : (
-                              staff.fullName.charAt(0).toUpperCase()
-                            )}
+                  filteredStaff.map((staff, index) => {
+                    const rank = index + 1 + ((page - 1) * limit);
+                    const isTopThree = rank <= 3 && staff.performance.total > 0;
+                    
+                    return (
+                      <tr 
+                        key={staff.id} 
+                        className={`group transition-all duration-200 ${
+                          isTopThree 
+                            ? 'bg-amber-50/50 dark:bg-amber-500/5 hover:bg-amber-100/50 dark:hover:bg-amber-500/10' 
+                            : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                        }`}
+                      >
+                        <td className="px-4 sm:px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            {/* Rank Badge */}
+                            <div className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold flex-shrink-0 ${
+                              rank === 1 ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-black shadow-lg shadow-amber-500/30' :
+                              rank === 2 ? 'bg-gradient-to-br from-neutral-300 to-neutral-400 text-black' :
+                              rank === 3 ? 'bg-gradient-to-br from-orange-400 to-orange-600 text-white' :
+                              'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400'
+                            }`}>
+                              {rank}
+                            </div>
+                            {/* Avatar */}
+                            <div className={`flex h-10 w-10 items-center justify-center rounded-xl text-sm font-bold flex-shrink-0 overflow-hidden ${
+                              isTopThree 
+                                ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-black ring-2 ring-amber-400/50' 
+                                : 'bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-600 text-neutral-700 dark:text-neutral-200'
+                            }`}>
+                              {staff.avatarUrl ? (
+                                <img src={staff.avatarUrl} alt={staff.fullName} className="w-full h-full object-cover" />
+                              ) : (
+                                staff.fullName.charAt(0).toUpperCase()
+                              )}
+                            </div>
+                            {/* Name & Code */}
+                            <div className="min-w-0">
+                              <p className={`font-semibold truncate ${isTopThree ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-900 dark:text-white'}`}>
+                                {staff.fullName}
+                              </p>
+                              <p className="text-xs text-neutral-500 dark:text-neutral-400 font-mono">{staff.staffCode}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-medium text-neutral-900 dark:text-white">{staff.fullName}</p>
-                            <p className="text-xs text-neutral-500 dark:text-neutral-400">{staff.staffCode}</p>
+                        </td>
+                        {branchFilter === 'all' && (
+                          <td className="px-4 sm:px-6 py-4">
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700">
+                              <Building2 size={12} className="text-neutral-400" />
+                              <span className="truncate max-w-[100px]">{staff.branch?.name || '-'}</span>
+                            </span>
+                          </td>
+                        )}
+                        <td className="px-4 sm:px-6 py-4">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold border ${getRoleColor(staff.role)} border-current/20`}>
+                            {getRoleIcon(staff.role)}
+                            <span className="hidden sm:inline">{getRoleLabel(staff.role)}</span>
+                          </span>
+                        </td>
+                        {/* Performance Numbers */}
+                        <td className="px-3 sm:px-4 py-4 text-center">
+                          <div className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold transition-all ${
+                            staff.performance.asDoctor > 0 
+                              ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400' 
+                              : 'text-neutral-300 dark:text-neutral-600'
+                          }`}>
+                            {staff.performance.asDoctor}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${getRoleColor(staff.role)}`}>
-                          {getRoleIcon(staff.role)}
-                          {getRoleLabel(staff.role)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`font-semibold ${staff.performance.asDoctor > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-neutral-400'}`}>
-                          {staff.performance.asDoctor}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`font-semibold ${staff.performance.asNurse > 0 ? 'text-green-600 dark:text-green-400' : 'text-neutral-400'}`}>
-                          {staff.performance.asNurse}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className={`font-semibold ${staff.performance.asAdminLayanan > 0 ? 'text-purple-600 dark:text-purple-400' : 'text-neutral-400'}`}>
-                          {staff.performance.asAdminLayanan}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold text-sm">
-                          <TrendingUp size={14} />
-                          {staff.performance.total}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center justify-center">
-                          <button
-                            onClick={() => handleViewDetail(staff.id)}
-                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all"
-                          >
-                            <Eye size={16} />
-                            Detail
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        </td>
+                        <td className="px-3 sm:px-4 py-4 text-center">
+                          <div className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold transition-all ${
+                            staff.performance.asNurse > 0 
+                              ? 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400' 
+                              : 'text-neutral-300 dark:text-neutral-600'
+                          }`}>
+                            {staff.performance.asNurse}
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-4 py-4 text-center">
+                          <div className={`inline-flex items-center justify-center h-8 min-w-[2rem] px-2 rounded-lg text-sm font-bold transition-all ${
+                            staff.performance.asAdminLayanan > 0 
+                              ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-400' 
+                              : 'text-neutral-300 dark:text-neutral-600'
+                          }`}>
+                            {staff.performance.asAdminLayanan}
+                          </div>
+                        </td>
+                        <td className="px-3 sm:px-4 py-4 text-center">
+                          <div className={`inline-flex items-center justify-center gap-1 h-8 px-3 rounded-lg text-sm font-bold ${
+                            staff.performance.total > 0
+                              ? 'bg-gradient-to-r from-amber-100 to-amber-200 dark:from-amber-500/20 dark:to-amber-600/20 text-amber-700 dark:text-amber-400 shadow-sm'
+                              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400'
+                          }`}>
+                            {staff.performance.total > 0 && <TrendingUp size={12} />}
+                            {staff.performance.total}
+                          </div>
+                        </td>
+                        <td className="px-4 sm:px-6 py-4">
+                          <div className="flex items-center justify-center">
+                            <button
+                              onClick={() => handleViewDetail(staff.id)}
+                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-medium bg-amber-50 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/20 border border-amber-200 dark:border-amber-500/30 transition-all group-hover:shadow-md group-hover:shadow-amber-500/10"
+                            >
+                              <Eye size={14} />
+                              <span className="hidden sm:inline">Detail</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -399,18 +512,18 @@ export default function StaffPerformancePage() {
 
           {/* Pagination */}
           {totalPages > 1 && (
-            <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-200 dark:border-neutral-800">
-              <div className="text-sm text-neutral-500 dark:text-neutral-400">
-                Menampilkan {((page - 1) * limit) + 1} - {Math.min(page * limit, data?.total || 0)} dari {data?.total || 0} staff
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 sm:px-6 py-4 border-t border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/30">
+              <div className="text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 order-2 sm:order-1">
+                Menampilkan <span className="font-semibold text-neutral-700 dark:text-neutral-300">{((page - 1) * limit) + 1}</span> - <span className="font-semibold text-neutral-700 dark:text-neutral-300">{Math.min(page * limit, data?.total || 0)}</span> dari <span className="font-semibold text-neutral-700 dark:text-neutral-300">{data?.total || 0}</span> staff
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 order-1 sm:order-2">
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="flex items-center justify-center h-9 w-9 sm:w-auto sm:px-3 text-sm font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                  Prev
+                  <span className="hidden sm:inline ml-1">Prev</span>
                 </button>
                 <div className="flex items-center gap-1">
                   {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
@@ -428,9 +541,9 @@ export default function StaffPerformancePage() {
                       <button
                         key={pageNum}
                         onClick={() => setPage(pageNum)}
-                        className={`w-10 h-10 text-sm font-medium rounded-lg transition-all ${
+                        className={`h-9 w-9 text-sm font-semibold rounded-lg transition-all ${
                           page === pageNum
-                            ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/30'
+                            ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-black shadow-lg shadow-amber-500/30'
                             : 'bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700'
                         }`}
                       >
@@ -442,9 +555,9 @@ export default function StaffPerformancePage() {
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="flex items-center gap-1 px-3 py-2 text-sm font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  className="flex items-center justify-center h-9 w-9 sm:w-auto sm:px-3 text-sm font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
-                  Next
+                  <span className="hidden sm:inline mr-1">Next</span>
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>

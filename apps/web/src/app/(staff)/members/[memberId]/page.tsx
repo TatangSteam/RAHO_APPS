@@ -24,6 +24,7 @@ import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
+import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 
 export default function MemberDetailPage() {
   const router = useRouter();
@@ -118,6 +119,9 @@ export default function MemberDetailPage() {
     refundProofUrl?: string;
     refundProofFileName?: string;
   } | null>(null);
+
+  // Credentials modal state (Super Admin only)
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -451,6 +455,7 @@ export default function MemberDetailPage() {
         onBack={() => router.back()}
         onSendNotification={() => setShowNotifModal(true)}
         onEdit={() => router.push(`/members/${memberId}/edit`)}
+        onManageCredentials={() => setShowCredentialsModal(true)}
         isSuperAdmin={isSuperAdmin}
       />
 
@@ -510,6 +515,9 @@ export default function MemberDetailPage() {
                 loading={loadingPackages}
                 onVerifyPayment={(packageId: string) => {
                   setSelectedPackageId(packageId);
+                  // Reset state before opening modal
+                  setVerifyNotes('');
+                  setPaymentProof({ file: null, preview: null });
                   setShowVerifyModal(true);
                 }}
                 onRefundPackage={(packageId: string, packageCode: string, finalPrice: number) => {
@@ -700,6 +708,15 @@ export default function MemberDetailPage() {
           refundData={refundDetailData}
         />
       )}
+
+      {/* Member Credentials Modal (Super Admin Only) */}
+      <MemberCredentialsModal
+        isOpen={showCredentialsModal}
+        onClose={() => setShowCredentialsModal(false)}
+        memberId={memberId}
+        memberName={member.profile.fullName}
+        onSuccess={() => loadMemberDetail()}
+      />
     </>
   );
 }

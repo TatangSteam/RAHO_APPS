@@ -21,6 +21,8 @@ import InventoryBatchAddModal from '@/components/branches/InventoryBatchAddModal
 import AssignManagerModal from '@/components/branches/AssignManagerModal';
 import AssignMedicalStaffModal from '@/components/branches/AssignMedicalStaffModal';
 import ManageStaffBranchesModal from '@/components/branches/ManageStaffBranchesModal';
+import StaffCredentialsModal from '@/components/branches/StaffCredentialsModal';
+import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 
 // Import Tailwind Tables
 import StaffTable from '@/components/branches/StaffTable';
@@ -228,6 +230,20 @@ export default function BranchDetailPage() {
     staffName: string;
     staffRole: 'DOCTOR' | 'NURSE';
   }>({ isOpen: false, userId: '', staffName: '', staffRole: 'DOCTOR' });
+  
+  // Credentials Modal state (Super Admin only)
+  const [credentialsModal, setCredentialsModal] = useState<{
+    isOpen: boolean;
+    staffId: string;
+    staffName: string;
+  }>({ isOpen: false, staffId: '', staffName: '' });
+
+  // Member Credentials Modal state (Super Admin only)
+  const [memberCredentialsModal, setMemberCredentialsModal] = useState<{
+    isOpen: boolean;
+    memberId: string;
+    memberName: string;
+  }>({ isOpen: false, memberId: '', memberName: '' });
 
 
   // Check authorization
@@ -588,9 +604,15 @@ export default function BranchDetailPage() {
                   data={filteredMembers}
                   loading={tabLoading}
                   currentBranchCode={branch?.branchCode}
+                  showCredentialsButton={user?.role === 'SUPER_ADMIN'}
                   onEdit={(member) => openCrudModal('member', 'edit', member)}
                   onDelete={(member) => handleDeleteItem('member', member.memberId, member.fullName)}
                   onAddMember={() => openCrudModal('member', 'create')}
+                  onManageCredentials={(member) => setMemberCredentialsModal({
+                    isOpen: true,
+                    memberId: member.memberId,
+                    memberName: member.fullName,
+                  })}
                 />
               </div>
             )}
@@ -655,6 +677,7 @@ export default function BranchDetailPage() {
                 <StaffTable
                   data={staff}
                   loading={tabLoading}
+                  showCredentialsButton={user?.role === 'SUPER_ADMIN'}
                   onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
                   onDelete={(staffUser) => handleDeleteItem('staff', staffUser.id, staffUser.profile?.fullName || staffUser.email)}
                   onManageBranches={(staffUser) => setManageStaffBranchesModal({
@@ -662,6 +685,11 @@ export default function BranchDetailPage() {
                     userId: staffUser.id,
                     staffName: staffUser.profile?.fullName || staffUser.email,
                     staffRole: staffUser.role as 'DOCTOR' | 'NURSE',
+                  })}
+                  onManageCredentials={(staffUser) => setCredentialsModal({
+                    isOpen: true,
+                    staffId: staffUser.id,
+                    staffName: staffUser.profile?.fullName || staffUser.email,
                   })}
                   onAddStaff={() => openCrudModal('staff', 'create')}
                 />
@@ -836,6 +864,28 @@ export default function BranchDetailPage() {
           userId={manageStaffBranchesModal.userId}
           staffName={manageStaffBranchesModal.staffName}
           staffRole={manageStaffBranchesModal.staffRole}
+        />
+      )}
+
+      {/* Staff Credentials Modal (Super Admin Only) */}
+      {credentialsModal.isOpen && (
+        <StaffCredentialsModal
+          isOpen={credentialsModal.isOpen}
+          onClose={() => setCredentialsModal({ isOpen: false, staffId: '', staffName: '' })}
+          staffId={credentialsModal.staffId}
+          staffName={credentialsModal.staffName}
+          onSuccess={() => loadTabData()}
+        />
+      )}
+
+      {/* Member Credentials Modal (Super Admin Only) */}
+      {memberCredentialsModal.isOpen && (
+        <MemberCredentialsModal
+          isOpen={memberCredentialsModal.isOpen}
+          onClose={() => setMemberCredentialsModal({ isOpen: false, memberId: '', memberName: '' })}
+          memberId={memberCredentialsModal.memberId}
+          memberName={memberCredentialsModal.memberName}
+          onSuccess={() => loadTabData()}
         />
       )}
     </div>

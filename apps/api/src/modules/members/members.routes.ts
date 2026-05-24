@@ -220,4 +220,32 @@ router.get(
   controller.getMemberInfusions.bind(controller)
 );
 
+// ============================================================
+// CREDENTIAL MANAGEMENT ROUTES (Super Admin Only)
+// ============================================================
+
+// GET /api/v1/members/:memberId/credentials - Get member credentials
+router.get(
+  '/:memberId/credentials',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  controller.getMemberCredentials.bind(controller)
+);
+
+// PATCH /api/v1/members/:memberId/email - Update member email
+router.patch(
+  '/:memberId/email',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  controller.updateMemberEmail.bind(controller)
+);
+
+// POST /api/v1/members/:memberId/reset-password - Reset member password
+router.post(
+  '/:memberId/reset-password',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  controller.resetMemberPassword.bind(controller)
+);
+
 export default router;

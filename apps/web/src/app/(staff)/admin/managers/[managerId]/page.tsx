@@ -126,7 +126,17 @@ export default function AdminManagerDetailPage() {
 
       if (response.ok) {
         const result = await response.json();
-        setBranchStaff(prev => ({ ...prev, [branchId]: result.data || [] }));
+        // API returns { users: [...], total, page, limit } inside data
+        const staffData = result.data?.users || result.data || [];
+        // Transform to match Staff interface
+        const transformedStaff = Array.isArray(staffData) ? staffData.map((s: any) => ({
+          id: s.id,
+          email: s.email,
+          fullName: s.profile?.fullName || s.fullName || '-',
+          role: s.role,
+          isActive: s.isActive,
+        })) : [];
+        setBranchStaff(prev => ({ ...prev, [branchId]: transformedStaff }));
       }
     } catch (error) {
       console.error(`Error loading staff for branch ${branchId}:`, error);

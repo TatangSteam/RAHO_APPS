@@ -1,81 +1,88 @@
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ADMIN MANAGERS TAB - Professional Light Theme
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
 .adminManagersTab {
   width: 100%;
-  background-color: transparent;
 }
 
+/* ─── Header ────────────────────────────────────────────────────────────────── */
 .header {
-  margin-bottom: 24px;
+  margin-bottom: 1.5rem;
 }
 
 .headerContent {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-  
+  gap: 1.25rem;
+  flex-wrap: wrap;
 }
 
 .headerTitle h2 {
-  margin: 0 0 8px;
-  font-size: 24px;
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
 .headerTitle p {
   margin: 0;
-  font-size: 14px;
-  color: #94a3b8;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
 }
 
 .addButton {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
   white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
 .addButton:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, #d97706, #b45309);
   transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
 }
 
 .addIcon {
-  font-size: 18px;
+  font-size: 1.125rem;
   font-weight: 700;
 }
 
+/* ─── Stats Grid ────────────────────────────────────────────────────────────── */
 .statsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
 }
 
 .statCard {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 20px;
-  background: #1e293b;
+  gap: 1rem;
+  padding: 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
-  border: 1px solid #334155;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
 .statCard:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  border-color: #f59e0b;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .statIcon {
@@ -86,6 +93,7 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  font-size: 1.5rem;
 }
 
 .statInfo {
@@ -93,46 +101,54 @@
 }
 
 .statValue {
-  font-size: 28px;
+  font-size: 1.75rem;
   font-weight: 700;
-  color: #f1f5f9;
-  margin-bottom: 4px;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
+  line-height: 1.1;
 }
 
 .statLabel {
-  font-size: 13px;
-  color: #94a3b8;
-  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
+/* ─── Filters Section ───────────────────────────────────────────────────────── */
 .filtersSection {
   display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
   flex-wrap: wrap;
+  padding: 1.25rem;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
 }
 
 .searchBox {
   flex: 1;
-  min-width: 250px;
+  min-width: 280px;
   position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  transition: all 0.2s;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  transition: all 0.2s ease;
 }
 
 .searchBox:focus-within {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
 .searchBox svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -140,95 +156,94 @@
   flex: 1;
   border: none;
   outline: none;
-  font-size: 14px;
-  color: #f1f5f9;
+  font-size: 0.9rem;
+  color: var(--text-primary);
   background: transparent;
 }
 
 .searchBox input::placeholder {
-  color: #64748b;
+  color: var(--text-muted);
 }
 
 .filterGroup {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
 }
 
 .filterGroup svg {
-  color: #94a3b8;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .filterGroup select {
   border: none;
   outline: none;
-  font-size: 14px;
-  color: #f1f5f9;
+  font-size: 0.9rem;
+  color: var(--text-primary);
   background: none;
   cursor: pointer;
   font-weight: 500;
 }
 
+/* ─── Table Container ───────────────────────────────────────────────────────── */
 .tableContainer {
-  background: #1e293b;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
-  border: 1px solid #334155;
   overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .loadingState,
 .emptyState {
   text-align: center;
-  padding: 60px 20px;
-  color: #94a3b8;
+  padding: 4rem 1.5rem;
+  color: var(--text-secondary);
 }
 
 .loadingSpinner {
-  font-size: 48px;
-  margin-bottom: 16px;
+  font-size: 3rem;
+  margin-bottom: 1rem;
   animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .emptyState svg {
-  margin: 0 auto 20px;
-  color: #64748b;
+  margin: 0 auto 1.25rem;
+  color: var(--text-muted);
 }
 
 .emptyState h3 {
-  margin: 0 0 8px;
-  font-size: 18px;
+  margin: 0 0 0.5rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
 .emptyState p {
-  margin: 0 0 24px;
-  font-size: 14px;
-  color: #94a3b8;
+  margin: 0 0 1.5rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
 }
 
+/* ─── Table ─────────────────────────────────────────────────────────────────── */
 .managersTable {
   width: 100%;
   border-collapse: collapse;
 }
 
 .managersTable thead {
-  background: #0f172a;
-  border-bottom: 1px solid #334155;
+  background: rgba(249, 250, 251, 0.8);
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .managersTable th {
@@ -236,18 +251,18 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .managersTable tbody tr {
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
   transition: background 0.2s;
 }
 
 .managersTable tbody tr:hover {
-  background: #334155;
+  background: rgba(245, 158, 11, 0.04);
 }
 
 .managersTable tbody tr:last-child {
@@ -257,9 +272,11 @@
 .managersTable td {
   padding: 16px;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--text-primary);
+  vertical-align: middle;
 }
 
+/* ─── Name Cell ─────────────────────────────────────────────────────────────── */
 .nameCell {
   display: flex;
   align-items: center;
@@ -270,7 +287,7 @@
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -282,32 +299,39 @@
 
 .fullName {
   font-weight: 600;
-  color: #f1f5f9;
+  color: var(--text-primary);
 }
 
 .email {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
+/* ─── Status Badge ──────────────────────────────────────────────────────────── */
 .statusBadge {
   display: inline-flex;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border: 1px solid;
 }
 
 .statusBadge.active {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
+  background: #dcfce7;
+  border-color: #86efac;
+  color: #15803d;
 }
 
 .statusBadge.inactive {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
 }
 
+/* ─── Branches Cell ─────────────────────────────────────────────────────────── */
 .branchesCell {
   position: relative;
 }
@@ -321,13 +345,13 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
-  background: rgba(59, 130, 246, 0.15);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
+  padding: 6px 12px;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
   font-size: 12px;
   font-weight: 600;
-  color: #3b82f6;
+  color: #1d4ed8;
 }
 
 .branchTooltip {
@@ -337,10 +361,10 @@
   left: 0;
   margin-top: 8px;
   padding: 12px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
   z-index: 100;
   min-width: 250px;
 }
@@ -354,7 +378,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid var(--surface-border);
 }
 
 .branchItem:last-child {
@@ -364,26 +388,27 @@
 .branchCode {
   font-size: 12px;
   font-weight: 600;
-  color: #3b82f6;
+  color: #f59e0b;
   min-width: 60px;
 }
 
 .branchName {
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--text-primary);
 }
 
 .noBranches {
-  color: #64748b;
+  color: var(--text-muted);
   font-size: 13px;
   font-style: italic;
 }
 
 .date {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
+/* ─── Action Buttons ────────────────────────────────────────────────────────── */
 .actionButtons {
   display: flex;
   gap: 8px;
@@ -391,65 +416,69 @@
 }
 
 .actionBtn {
-  width: 32px;
-  height: 32px;
-  border: 1px solid #334155;
-  background: #1e293b;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface-card);
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .actionBtn:hover {
-  background: #334155;
-  border-color: #3b82f6;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .actionBtn.edit:hover {
-  background: rgba(59, 130, 246, 0.15);
+  background: #dbeafe;
   border-color: #3b82f6;
+  color: #2563eb;
 }
 
 .actionBtn.deactivate:hover {
-  background: rgba(239, 68, 68, 0.15);
+  background: #fee2e2;
   border-color: #ef4444;
+  color: #dc2626;
 }
 
 .impersonateBtn {
   /* Styles from ImpersonateButton.module.css will apply */
 }
 
+/* ─── Pagination ────────────────────────────────────────────────────────────── */
 .pagination {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px 20px;
-  border-top: 1px solid #334155;
-  background: #0f172a;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid var(--surface-border);
+  background: rgba(0, 0, 0, 0.02);
 }
 
 .pageBtn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 14px;
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: #334155;
-  border-color: #3b82f6;
+  background: var(--surface-hover);
+  border-color: #f59e0b;
 }
 
 .pageBtn:disabled {
@@ -459,20 +488,20 @@
 
 .pageInfo {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
-/* View Detail Button */
+/* ─── View Detail Button ────────────────────────────────────────────────────── */
 .viewDetailBtn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
@@ -480,11 +509,32 @@
 }
 
 .viewDetailBtn:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, #d97706, #b45309);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
   transform: translateY(-1px);
 }
 
 .viewDetailBtn:active {
   transform: translateY(0);
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .headerContent {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .addButton {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filtersSection {
+    flex-direction: column;
+  }
+
+  .searchBox {
+    min-width: 100%;
+  }
 }

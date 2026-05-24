@@ -276,6 +276,83 @@ export async function resetPasswordService(
   await prisma.user.update({ where: { id: targetUserId }, data: { password: hashed } });
 }
 
+// ── Get User Credentials (Super Admin Only) ──────────────────
+
+export async function getUserCredentialsService(targetUserId: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      staffCode: true,
+      isActive: true,
+      createdAt: true,
+      lastLoginAt: true,
+      profile: {
+        select: {
+          fullName: true,
+          phone: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  return {
+    id: user.id,
+    email: user.email,
+    role: user.role,
+    staffCode: user.staffCode,
+    fullName: user.profile?.fullName || '',
+    phone: user.profile?.phone || '',
+    isActive: user.isActive,
+    createdAt: user.createdAt,
+    lastLoginAt: user.lastLoginAt,
+    branch: user.branch,
+    // Note: Password is never returned, only can be reset
+  };
+}
+
+// ── Update User Email (Super Admin Only) ─────────────────────
+
+export async function updateUserEmailService(targetUserId: string, newEmail: string) {
+  const user = await prisma.user.findUnique({ where: { id: targetUserId } });
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  // Check if email is already used by another user
+  const existingUser = await prisma.user.findUnique({ where: { email: newEmail } });
+  if (existingUser && existingUser.id !== targetUserId) {
+    throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user lain.');
+  }
+
+  const updatedUser = await prisma.user.update({
+    where: { id: targetUserId },
+    data: { email: newEmail },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      staffCode: true,
+      profile: {
+        select: {
+          fullName: true,
+        },
+      },
+    },
+  });
+
+  return updatedUser;
+}
+
 // ── Update Avatar ─────────────────────────────────────────────
 
 export async function updateAvatarService(userId: string, avatarUrl: string) {

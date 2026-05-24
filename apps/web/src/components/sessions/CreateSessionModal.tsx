@@ -652,8 +652,17 @@ export default function CreateSessionModal({
                 </div>
 
                 {/* Staff Selection - Role Based */}
+                {/* DOCTOR: Auto-fill as Dokter, select Admin Layanan + Nakes */}
                 {user?.role === 'DOCTOR' && (
                   <>
+                    {/* Auto-filled Dokter info */}
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Dokter Utama: {user?.fullName || 'Anda'}</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400/80">Otomatis terisi sebagai dokter yang membuat sesi</p>
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                         <Users className="h-4 w-4" /> Admin Layanan <span className="text-red-500">*</span>
@@ -675,8 +684,17 @@ export default function CreateSessionModal({
                   </>
                 )}
 
+                {/* NURSE: Auto-fill as Nakes, select Admin Layanan + Dokter */}
                 {user?.role === 'NURSE' && (
                   <>
+                    {/* Auto-filled Nakes info */}
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Nakes Utama: {user?.fullName || 'Anda'}</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400/80">Otomatis terisi sebagai nakes yang membuat sesi</p>
+                      </div>
+                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                         <Users className="h-4 w-4" /> Admin Layanan <span className="text-red-500">*</span>
@@ -698,20 +716,17 @@ export default function CreateSessionModal({
                   </>
                 )}
 
-                {user?.role !== 'DOCTOR' && user?.role !== 'NURSE' && (
+                {/* ADMIN_LAYANAN: Auto-fill as Admin Layanan, select Dokter + Nakes */}
+                {user?.role === 'ADMIN_LAYANAN' && (
                   <>
-                    {/* Admin Layanan dropdown - only for ADMIN_CABANG */}
-                    {user?.role === 'ADMIN_CABANG' && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
-                          <Users className="h-4 w-4" /> Admin Layanan <span className="text-red-500">*</span>
-                        </label>
-                        <select value={selectedAdminLayananId} onChange={(e) => setSelectedAdminLayananId(e.target.value)} className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all" disabled={loading}>
-                          <option value="">Pilih admin layanan...</option>
-                          {adminLayananList.map((admin) => (<option key={admin.userId} value={admin.userId}>{admin.fullName}</option>))}
-                        </select>
+                    {/* Auto-filled Admin Layanan info */}
+                    <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                      <CheckCircle2 className="h-5 w-5 text-emerald-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">Admin Layanan: {user?.fullName || 'Anda'}</p>
+                        <p className="text-xs text-emerald-600 dark:text-emerald-400/80">Otomatis terisi sebagai admin layanan yang membuat sesi</p>
                       </div>
-                    )}
+                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                         <Users className="h-4 w-4" /> Dokter Utama <span className="text-red-500">*</span>
@@ -733,8 +748,41 @@ export default function CreateSessionModal({
                   </>
                 )}
 
-                {/* Additional Doctors */}
-                {(user?.role !== 'DOCTOR' && user?.role !== 'NURSE') && getAvailableDoctors().length > 0 && (
+                {/* ADMIN_CABANG: Must select all three - Admin Layanan, Dokter, Nakes */}
+                {user?.role === 'ADMIN_CABANG' && (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+                        <Users className="h-4 w-4" /> Admin Layanan <span className="text-red-500">*</span>
+                      </label>
+                      <select value={selectedAdminLayananId} onChange={(e) => setSelectedAdminLayananId(e.target.value)} className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all" disabled={loading}>
+                        <option value="">Pilih admin layanan...</option>
+                        {adminLayananList.map((admin) => (<option key={admin.userId} value={admin.userId}>{admin.fullName}</option>))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+                        <Users className="h-4 w-4" /> Dokter Utama <span className="text-red-500">*</span>
+                      </label>
+                      <select value={selectedDoctorId} onChange={(e) => setSelectedDoctorId(e.target.value)} className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all" disabled={loading}>
+                        <option value="">Pilih dokter utama...</option>
+                        {doctors.map((doc) => (<option key={doc.userId} value={doc.userId}>{doc.fullName}</option>))}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+                        <Users className="h-4 w-4" /> Nakes Utama <span className="text-red-500">*</span>
+                      </label>
+                      <select value={selectedNurseId} onChange={(e) => setSelectedNurseId(e.target.value)} className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all" disabled={loading}>
+                        <option value="">Pilih nakes utama...</option>
+                        {nurses.map((nurse) => (<option key={nurse.userId} value={nurse.userId}>{nurse.fullName}</option>))}
+                      </select>
+                    </div>
+                  </>
+                )}
+
+                {/* Additional Doctors - Show for ADMIN_LAYANAN and ADMIN_CABANG */}
+                {(user?.role === 'ADMIN_LAYANAN' || user?.role === 'ADMIN_CABANG') && getAvailableDoctors().length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Dokter Tambahan</label>
@@ -767,8 +815,8 @@ export default function CreateSessionModal({
                   </div>
                 )}
 
-                {/* Additional Nurses */}
-                {(user?.role !== 'DOCTOR' && user?.role !== 'NURSE') && getAvailableNurses().length > 0 && (
+                {/* Additional Nurses - Show for ADMIN_LAYANAN and ADMIN_CABANG */}
+                {(user?.role === 'ADMIN_LAYANAN' || user?.role === 'ADMIN_CABANG') && getAvailableNurses().length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Nakes Tambahan</label>

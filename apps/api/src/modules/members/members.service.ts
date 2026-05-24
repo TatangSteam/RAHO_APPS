@@ -208,6 +208,31 @@ export class MembersService {
   async getMemberInfusions(memberId: string) {
     return await this.medicalRecordsService.getMemberInfusions(memberId);
   }
+
+  // ============================================================
+  // CREDENTIAL MANAGEMENT (Super Admin Only)
+  // ============================================================
+
+  /**
+   * Get member credentials (email, user info)
+   */
+  async getMemberCredentials(memberId: string) {
+    return await this.updateService.getMemberCredentials(memberId);
+  }
+
+  /**
+   * Update member email
+   */
+  async updateMemberEmail(memberId: string, email: string, adminUserId: string) {
+    return await this.updateService.updateMemberEmail(memberId, email, adminUserId);
+  }
+
+  /**
+   * Reset member password
+   */
+  async resetMemberPassword(memberId: string, newPassword: string, adminUserId: string) {
+    return await this.updateService.resetMemberPassword(memberId, newPassword, adminUserId);
+  }
 }
 
 // Export MemberFilters type for use in other modules

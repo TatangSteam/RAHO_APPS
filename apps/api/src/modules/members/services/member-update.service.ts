@@ -2,6 +2,9 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+
+const HASH_ROUNDS = 12;
 
 /**
  * Service for updating member data
@@ -204,6 +207,151 @@ export class MemberUpdateService {
       userEmail: member.user?.email,
       createdAt: member.createdAt.toISOString(),
       updatedAt: member.updatedAt.toISOString(),
+    };
+  }
+
+  // ============================================================
+  // CREDENTIAL MANAGEMENT (Super Admin Only)
+  // ============================================================
+
+  /**
+   * Get member credentials (email, user info)
+   */
+  async getMemberCredentials(memberId: string) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        user: {
+          include: {
+            profile: true,
+          },
+        },
+        registrationBranch: {
+          select: {
+            id: true,
+            branchCode: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    return {
+      id: member.id,
+      memberNo: member.memberNo,
+      userId: member.userId,
+      email: member.user.email,
+      fullName: member.user.profile?.fullName || '',
+      phone: member.user.profile?.phone || '',
+      isActive: member.isActive,
+      createdAt: member.createdAt.toISOString(),
+      lastLoginAt: member.user.lastLoginAt?.toISOString() || null,
+      registrationBranch: member.registrationBranch,
+    };
+  }
+
+  /**
+   * Update member email
+   */
+  async updateMemberEmail(memberId: string, newEmail: string, adminUserId: string) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        user: true,
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    // Check if email is already used by another user
+    const existingUser = await prisma.user.findUnique({ where: { email: newEmail } });
+    if (existingUser && existingUser.id !== member.userId) {
+      throw { status: 409, code: 'EMAIL_DUPLICATE', message: 'Email sudah digunakan oleh user lain' };
+    }
+
+    // Update email
+    const updatedUser = await prisma.user.update({
+      where: { id: member.userId },
+      data: { email: newEmail },
+      select: {
+        id: true,
+        email: true,
+      },
+    });
+
+    // Audit log
+    await logAudit({
+      userId: adminUserId,
+      branchId: member.registrationBranchId,
+      action: AuditAction.UPDATE,
+      resource: 'MemberCredentials',
+      resourceId: memberId,
+      meta: {
+        action: 'update_email',
+        oldEmail: member.user.email,
+        newEmail: newEmail,
+        memberNo: member.memberNo,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Email berhasil diubah',
+      email: updatedUser.email,
+    };
+  }
+
+  /**
+   * Reset member password
+   */
+  async resetMemberPassword(memberId: string, newPassword: string, adminUserId: string) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        user: {
+          include: {
+            profile: true,
+          },
+        },
+      },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, HASH_ROUNDS);
+
+    // Update password
+    await prisma.user.update({
+      where: { id: member.userId },
+      data: { password: hashedPassword },
+    });
+
+    // Audit log
+    await logAudit({
+      userId: adminUserId,
+      branchId: member.registrationBranchId,
+      action: AuditAction.UPDATE,
+      resource: 'MemberCredentials',
+      resourceId: memberId,
+      meta: {
+        action: 'reset_password',
+        memberNo: member.memberNo,
+        memberName: member.user.profile?.fullName,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Password berhasil di-reset',
     };
   }
 }

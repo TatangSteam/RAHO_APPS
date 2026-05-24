@@ -372,12 +372,18 @@ export class MemberRetrievalService {
 
   /**
    * Lookup member by member number
+   * This is used for cross-branch member search to grant access
+   * Returns limited info for members without access (for grant access flow)
    */
   async lookupMember(memberNo: string, branchId: string | null, role: Role) {
     const member = await prisma.member.findUnique({
       where: { memberNo },
       include: {
-        user: true,
+        user: {
+          include: {
+            profile: true,
+          },
+        },
         registrationBranch: true,
         branchAccesses: {
           include: {
@@ -391,26 +397,27 @@ export class MemberRetrievalService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
-    // Check access based on role
-    if (role !== Role.SUPER_ADMIN) {
-      if (!branchId) {
-        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Branch ID diperlukan' };
-      }
-
-      const hasAccess =
+    // Check if user already has access to this member
+    const hasAccess = role === Role.SUPER_ADMIN || (
+      branchId && (
         member.registrationBranchId === branchId ||
-        member.branchAccesses.some(access => access.branchId === branchId);
+        member.branchAccesses.some(access => access.branchId === branchId)
+      )
+    );
 
-      if (!hasAccess) {
-        throw {
-          status: 403,
-          code: 'MEMBER_ACCESS_DENIED',
-          message: 'Anda tidak memiliki akses ke member ini',
-        };
-      }
-    }
-
-    return this.formatMemberData(member);
+    // For lookup (cross-branch search), we return limited info
+    // This allows staff to find members from other branches and grant access
+    return {
+      memberNo: member.memberNo,
+      fullName: member.user.profile?.fullName || '-',
+      phone: member.user.profile?.phoneNumber || '-',
+      isActive: member.user.isActive,
+      registrationBranch: member.registrationBranch?.name || '-',
+      isRegistrationBranch: branchId === member.registrationBranchId,
+      sudahAdaAkses: hasAccess,
+      // Only include memberId if user has access (for navigation)
+      ...(hasAccess && { memberId: member.id }),
+    };
   }
 
   /**

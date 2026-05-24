@@ -25,8 +25,10 @@ interface StaffSessionHistoryQuery {
 }
 
 /**
- * Get staff performance summary for a branch
+ * Get staff performance summary for a branch or all branches
  * Returns list of staff with their therapy counts by position
+ * 
+ * SUPER_ADMIN can pass branchId='all' to see all branches combined
  */
 export async function getStaffPerformanceSummaryService(
   query: StaffPerformanceQuery,
@@ -37,13 +39,20 @@ export async function getStaffPerformanceSummaryService(
   const skip = (page - 1) * limit;
 
   // Determine which branch to query
-  let targetBranchId = branchId;
+  let targetBranchId: string | undefined = branchId;
+  let isAllBranches = false;
+
   if (callerRole === Role.ADMIN_CABANG) {
     // ADMIN_CABANG can only see their own branch
     targetBranchId = callerBranchId || undefined;
+  } else if (callerRole === Role.SUPER_ADMIN && branchId === 'all') {
+    // SUPER_ADMIN can see all branches
+    isAllBranches = true;
+    targetBranchId = undefined;
   }
 
-  if (!targetBranchId) {
+  // For non-Super Admin, branch is required
+  if (!isAllBranches && !targetBranchId) {
     throw errors.badRequest('BRANCH_REQUIRED', 'Branch ID diperlukan');
   }
 
@@ -60,18 +69,22 @@ export async function getStaffPerformanceSummaryService(
     dateFilter.treatmentDate = treatmentDateFilter;
   }
 
-  // Get all staff in the branch (excluding MEMBER and ADMIN_MANAGER)
+  // Build user where clause
+  const userWhere: Prisma.UserWhereInput = {
+    isActive: true,
+    NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER, Role.SUPER_ADMIN] } },
+    ...(isAllBranches ? {} : { branchId: targetBranchId }),
+  };
+
+  // Get all staff (excluding MEMBER, ADMIN_MANAGER, SUPER_ADMIN)
   const staff = await prisma.user.findMany({
-    where: {
-      branchId: targetBranchId,
-      isActive: true,
-      NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER] } },
-    },
+    where: userWhere,
     select: {
       id: true,
       email: true,
       role: true,
       staffCode: true,
+      branchId: true,
       profile: {
         select: {
           fullName: true,
@@ -79,6 +92,13 @@ export async function getStaffPerformanceSummaryService(
           avatarUrl: true,
         },
       },
+      branch: isAllBranches ? {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      } : undefined,
     },
     skip,
     take: limit,
@@ -87,6 +107,9 @@ export async function getStaffPerformanceSummaryService(
 
   const staffIds = staff.map((s) => s.id);
 
+  // Build session where clause for counting
+  const sessionBranchFilter = isAllBranches ? {} : { branchId: targetBranchId };
+
   // Count sessions by position for each staff
   const [doctorCounts, nurseCounts, adminCounts] = await Promise.all([
     // Sessions as Doctor
@@ -94,7 +117,7 @@ export async function getStaffPerformanceSummaryService(
       by: ['doctorId'],
       where: {
         doctorId: { in: staffIds },
-        branchId: targetBranchId,
+        ...sessionBranchFilter,
         isCompleted: true,
         ...dateFilter,
       },
@@ -105,7 +128,7 @@ export async function getStaffPerformanceSummaryService(
       by: ['nurseId'],
       where: {
         nurseId: { in: staffIds },
-        branchId: targetBranchId,
+        ...sessionBranchFilter,
         isCompleted: true,
         ...dateFilter,
       },
@@ -116,7 +139,7 @@ export async function getStaffPerformanceSummaryService(
       by: ['adminLayananId'],
       where: {
         adminLayananId: { in: staffIds },
-        branchId: targetBranchId,
+        ...sessionBranchFilter,
         isCompleted: true,
         ...dateFilter,
       },
@@ -144,6 +167,8 @@ export async function getStaffPerformanceSummaryService(
       fullName: s.profile?.fullName || '',
       phone: s.profile?.phone || '',
       avatarUrl: s.profile?.avatarUrl || null,
+      // Include branch info when showing all branches
+      ...(isAllBranches && (s as any).branch ? { branch: (s as any).branch } : {}),
       performance: {
         asDoctor,
         asNurse,
@@ -158,21 +183,20 @@ export async function getStaffPerformanceSummaryService(
 
   // Get total count for pagination
   const totalStaff = await prisma.user.count({
-    where: {
-      branchId: targetBranchId,
-      isActive: true,
-      NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER] } },
-    },
+    where: userWhere,
   });
 
-  // Get branch info
-  const branch = await prisma.branch.findUnique({
-    where: { id: targetBranchId },
-    select: { id: true, branchCode: true, name: true },
-  });
+  // Get branch info (null if all branches)
+  let branch = null;
+  if (!isAllBranches && targetBranchId) {
+    branch = await prisma.branch.findUnique({
+      where: { id: targetBranchId },
+      select: { id: true, branchCode: true, name: true },
+    });
+  }
 
   return {
-    branch,
+    branch: isAllBranches ? { id: 'all', branchCode: 'ALL', name: 'Semua Cabang' } : branch,
     staff: staffWithPerformance,
     total: totalStaff,
     page,
@@ -181,6 +205,7 @@ export async function getStaffPerformanceSummaryService(
       startDate: startDate || null,
       endDate: endDate || null,
     },
+    isAllBranches,
   };
 }
 

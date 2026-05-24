@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Edit, Trash2, Plus } from 'lucide-react';
+import { Users, Edit, Trash2, Plus, Key } from 'lucide-react';
 import DataTable, { 
   Column, 
   AvatarCell, 
@@ -35,6 +35,8 @@ interface MembersTableProps {
   onEdit: (member: Member) => void;
   onDelete: (member: Member) => void;
   onAddMember: () => void;
+  showCredentialsButton?: boolean;
+  onManageCredentials?: (member: Member) => void;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -48,6 +50,8 @@ export default function MembersTable({
   onEdit,
   onDelete,
   onAddMember,
+  showCredentialsButton = false,
+  onManageCredentials,
 }: MembersTableProps) {
   
   const columns: Column<Member>[] = [
@@ -134,10 +138,18 @@ export default function MembersTable({
     {
       key: 'actions',
       header: 'Aksi',
-      width: '100px',
+      width: '140px',
       align: 'right',
       render: (member) => (
         <ActionButtons>
+          {showCredentialsButton && onManageCredentials && (
+            <ActionButton
+              onClick={() => onManageCredentials(member)}
+              icon={<Key size={14} />}
+              title="Kelola Kredensial"
+              variant="amber"
+            />
+          )}
           <ActionButton
             onClick={() => onEdit(member)}
             icon={<Edit size={14} />}
