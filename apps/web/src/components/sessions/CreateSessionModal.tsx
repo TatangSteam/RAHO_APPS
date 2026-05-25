@@ -275,6 +275,17 @@ export default function CreateSessionModal({
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }
     if (!selectedTherapyPlanId) { setError('Therapy plan harus dipilih'); return; }
 
+    // Validasi IFA - therapy plan harus memiliki IFA 250 atau IFA 500
+    const selectedPlanForValidation = therapyPlans.find(p => p.id === selectedTherapyPlanId);
+    if (selectedPlanForValidation) {
+      const hasIfa = (selectedPlanForValidation.ifa250 && selectedPlanForValidation.ifa250 > 0) || 
+                     (selectedPlanForValidation.ifa500 && selectedPlanForValidation.ifa500 > 0);
+      if (!hasIfa) {
+        setError('Therapy plan harus memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau edit therapy plan untuk menambahkan IFA.');
+        return;
+      }
+    }
+
     if (userRole === 'DOCTOR') {
       if (!selectedAdminLayananId) { setError('Admin Layanan harus dipilih'); return; }
       if (!selectedNurseId) { setError('Nakes harus dipilih'); return; }
@@ -626,26 +637,47 @@ export default function CreateSessionModal({
                         required
                       >
                         <option value="">Pilih therapy plan...</option>
-                        {therapyPlans.map((plan) => (
-                          <option key={plan.id} value={plan.id}>
-                            {plan.planCode} - {new Date(plan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          </option>
-                        ))}
+                        {therapyPlans.map((plan) => {
+                          const hasIfa = (plan.ifa250 && plan.ifa250 > 0) || (plan.ifa500 && plan.ifa500 > 0);
+                          const ifaInfo = hasIfa 
+                            ? `✓ IFA: ${plan.ifa250 || 0}x250ml, ${plan.ifa500 || 0}x500ml` 
+                            : '⚠ Tidak ada IFA';
+                          return (
+                            <option key={plan.id} value={plan.id}>
+                              {plan.planCode} - {new Date(plan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ({ifaInfo})
+                            </option>
+                          );
+                        })}
                       </select>
                       {selectedPlan && (
-                        <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                          <div className="flex items-start gap-2">
-                            <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                            <div>
-                              <p className="text-xs text-blue-700 dark:text-blue-400">
-                                Klik tab "Detail Therapy Plan" untuk melihat detail lengkap
-                              </p>
-                              <p className="text-xs text-blue-600 dark:text-blue-400/80 mt-1">
-                                IFA 250: {selectedPlan.ifa250 || 0} Botol • HHO: {selectedPlan.hho || '-'} • NO: {selectedPlan.no || '-'} ...
-                              </p>
+                        <>
+                          {/* Warning jika tidak ada IFA */}
+                          {!((selectedPlan.ifa250 && selectedPlan.ifa250 > 0) || (selectedPlan.ifa500 && selectedPlan.ifa500 > 0)) && (
+                            <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+                              <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                              <div>
+                                <p className="text-sm font-semibold text-red-700 dark:text-red-400">Therapy plan tidak memiliki IFA</p>
+                                <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Setiap sesi terapi wajib memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau edit therapy plan ini.</p>
+                              </div>
                             </div>
-                          </div>
-                        </div>
+                          )}
+                          {/* Info box jika ada IFA */}
+                          {((selectedPlan.ifa250 && selectedPlan.ifa250 > 0) || (selectedPlan.ifa500 && selectedPlan.ifa500 > 0)) && (
+                            <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                              <div className="flex items-start gap-2">
+                                <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs text-blue-700 dark:text-blue-400">
+                                    Klik tab "Detail Therapy Plan" untuk melihat detail lengkap
+                                  </p>
+                                  <p className="text-xs text-blue-600 dark:text-blue-400/80 mt-1">
+                                    IFA 250: {selectedPlan.ifa250 || 0} Botol • IFA 500: {selectedPlan.ifa500 || 0} Botol • HHO: {selectedPlan.hho || '-'} • NO: {selectedPlan.no || '-'} ...
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}

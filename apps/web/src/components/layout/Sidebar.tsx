@@ -253,8 +253,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           collapsed && 'justify-center'
         )}>
           {/* Logo */}
-          <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center text-lg font-extrabold text-black flex-shrink-0 shadow-lg shadow-amber-500/25">
-            R
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
+            <img 
+              src="/asset/logo_tab_RAHO.png" 
+              alt="RAHO" 
+              className="w-full h-full object-cover"
+            />
           </div>
           {!collapsed && (
             <div className="flex flex-col overflow-hidden">
