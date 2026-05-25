@@ -2,7 +2,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '@config/env';
 import { Role } from '@prisma/client';
 
-interface ImpersonationData {
+export interface ImpersonationData {
   userId: string;
   email: string;
   role: Role;

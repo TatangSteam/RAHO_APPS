@@ -1,7 +1,7 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import {
   LayoutDashboard, Syringe, Package,
@@ -11,6 +11,7 @@ import { logoutApi } from '@/lib/authApi'
 import { Footer } from '@/components/layout/Footer'
 import { useThemeStore } from '@/stores/themeStore'
 import { api } from '@/lib/api'
+import { meApi } from '@/lib/api/meApi'
 
 const NAV_ITEMS = [
   { href: '/me/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -22,10 +23,11 @@ const NAV_ITEMS = [
 export default function MemberLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const { user, refreshToken, clearAuth } = useAuthStore()
+  const { user, refreshToken, clearAuth, updateUserAvatar } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null)
+  const avatarFetchedRef = useRef(false)
 
   // Load avatar with authentication
   const loadAvatar = useCallback(async (avatarUrl: string) => {
@@ -61,13 +63,33 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
     }
   }, [])
 
+  // Fetch avatar from profile if not in auth store
+  const fetchAvatarFromProfile = useCallback(async () => {
+    if (avatarFetchedRef.current) return
+    avatarFetchedRef.current = true
+    
+    try {
+      const profile = await meApi.getProfile()
+      if (profile.avatarUrl) {
+        // Update auth store so it persists
+        updateUserAvatar(profile.avatarUrl)
+        loadAvatar(profile.avatarUrl)
+      }
+    } catch (error) {
+      console.error('Failed to fetch profile for avatar:', error)
+    }
+  }, [loadAvatar, updateUserAvatar])
+
   useEffect(() => {
     if (!user) {
       router.replace('/login')
     } else if (user.avatarUrl) {
       loadAvatar(user.avatarUrl)
+    } else {
+      // If no avatarUrl in auth store, fetch from profile API
+      fetchAvatarFromProfile()
     }
-  }, [user, router, loadAvatar])
+  }, [user, router, loadAvatar, fetchAvatarFromProfile])
 
   // Cleanup blob URL on unmount
   useEffect(() => {

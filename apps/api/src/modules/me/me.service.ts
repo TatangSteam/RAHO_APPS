@@ -112,13 +112,11 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
     throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan.' };
   }
 
+  // Get last session from ANY package type
   const lastSession = await prisma.treatmentSession.findFirst({
     where: {
       encounter: {
         memberId,
-        memberPackage: {
-          packageType: 'BASIC',
-        },
       },
     },
     orderBy: { treatmentDate: 'desc' },
@@ -155,14 +153,12 @@ export async function getMemberSessionsService(
 ): Promise<{ data: MemberSession[]; total: number }> {
   const skip = (page - 1) * limit;
 
+  // Get ALL sessions for this member, regardless of package type
   const [sessions, total] = await Promise.all([
     prisma.treatmentSession.findMany({
       where: {
         encounter: {
           memberId,
-          memberPackage: {
-            packageType: 'BASIC',
-          },
         },
       },
       orderBy: { treatmentDate: 'desc' },
@@ -197,9 +193,6 @@ export async function getMemberSessionsService(
       where: {
         encounter: {
           memberId,
-          memberPackage: {
-            packageType: 'BASIC',
-          },
         },
       },
     }),

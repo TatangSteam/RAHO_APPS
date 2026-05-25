@@ -20,7 +20,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
   const user = await prisma.user.findUnique({
     where: { email: input.email },
     include: {
-      profile: { select: { fullName: true } },
+      profile: { select: { fullName: true, avatarUrl: true } },
       branch: { select: { id: true, branchCode: true } },
     },
   });
@@ -79,7 +79,10 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
 
   return {
     ...tokens,
-    user: payload,
+    user: {
+      ...payload,
+      avatarUrl: user.profile?.avatarUrl ?? null,
+    },
   };
 }
 

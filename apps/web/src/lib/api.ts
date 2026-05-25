@@ -272,8 +272,12 @@ api.interceptors.response.use(
     const is401 = error.response?.status === 401;
     const is401Expired = is401 && errCode === 'AUTH_TOKEN_EXPIRED';
 
-    // If 401 and not a retry attempt
-    if (is401 && !originalRequest._retry) {
+    // Skip unauthorized handling for auth endpoints (login, register, etc.)
+    // These endpoints return 401 for invalid credentials, not for expired tokens
+    const isAuthEndpoint = originalRequest?.url?.startsWith('/auth/');
+    
+    // If 401 and not a retry attempt and not an auth endpoint
+    if (is401 && !originalRequest._retry && !isAuthEndpoint) {
       // If it's AUTH_TOKEN_EXPIRED, try to refresh
       if (is401Expired) {
         if (isRefreshing) {
