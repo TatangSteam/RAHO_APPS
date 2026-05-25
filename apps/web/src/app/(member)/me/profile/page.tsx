@@ -1,9 +1,9 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { meApi, MemberProfile } from '@/lib/api/meApi'
+import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { User, MapPin, Phone, Mail, Calendar, CreditCard, Building2, Camera, Loader2, Check } from 'lucide-react'
-import Image from 'next/image'
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor'
 
 export default function MemberProfilePage() {
@@ -13,13 +13,67 @@ export default function MemberProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [compressing, setCompressing] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null)
+  const [avatarLoading, setAvatarLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load avatar with authentication
+  const loadAvatar = useCallback(async (avatarUrl: string) => {
+    try {
+      setAvatarLoading(true)
+      
+      // Extract file path from URL
+      let filePath = avatarUrl
+      if (avatarUrl.startsWith('http')) {
+        const urlObj = new URL(avatarUrl)
+        filePath = urlObj.pathname
+      }
+      // Clean up the path - handle various URL formats
+      // Remove leading slash
+      filePath = filePath.replace(/^\//, '')
+      // Remove api/v1/files/ prefix
+      filePath = filePath.replace(/^api\/v1\/files\//, '')
+      // Remove files/ prefix
+      filePath = filePath.replace(/^files\//, '')
+      // If path starts with a bucket name (not 'uploads'), remove it
+      // MinIO URLs: /bucket-name/uploads/... -> uploads/...
+      if (!filePath.startsWith('uploads/') && !filePath.startsWith('session-photos/')) {
+        const parts = filePath.split('/')
+        if (parts.length > 1 && (parts[1] === 'uploads' || parts[1] === 'session-photos')) {
+          filePath = parts.slice(1).join('/')
+        }
+      }
+      
+      const response = await api.get(`/files/${filePath}`, { responseType: 'blob' })
+      const blobUrl = URL.createObjectURL(response.data)
+      setAvatarBlobUrl(blobUrl)
+    } catch (error) {
+      console.error('Failed to load avatar:', error)
+      setAvatarBlobUrl(null)
+    } finally {
+      setAvatarLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     meApi.getProfile()
-      .then(setProfile)
+      .then((data) => {
+        setProfile(data)
+        if (data.avatarUrl) {
+          loadAvatar(data.avatarUrl)
+        }
+      })
       .finally(() => setLoading(false))
-  }, [])
+  }, [loadAvatar])
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarBlobUrl) {
+        URL.revokeObjectURL(avatarBlobUrl)
+      }
+    }
+  }, [avatarBlobUrl])
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click()
@@ -64,6 +118,14 @@ export default function MemberProfilePage() {
       setProfile(prev => prev ? { ...prev, avatarUrl: result.avatarUrl } : null)
       // Update the auth store so Header shows the new avatar
       updateUserAvatar(result.avatarUrl)
+      // Load the new avatar
+      if (result.avatarUrl) {
+        // Revoke old blob URL
+        if (avatarBlobUrl) {
+          URL.revokeObjectURL(avatarBlobUrl)
+        }
+        loadAvatar(result.avatarUrl)
+      }
       setUploadSuccess(true)
       setTimeout(() => setUploadSuccess(false), 2000)
     } catch (error) {
@@ -72,7 +134,7 @@ export default function MemberProfilePage() {
     } finally {
       setUploading(false)
     }
-  }, [updateUserAvatar])
+  }, [updateUserAvatar, loadAvatar, avatarBlobUrl])
 
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
@@ -123,14 +185,16 @@ export default function MemberProfilePage() {
                 onClick={handleAvatarClick}
                 className="relative w-24 h-24 rounded-full overflow-hidden cursor-pointer ring-4 ring-amber-500/20 hover:ring-amber-500/40 transition-all"
               >
-                {profile.avatarUrl ? (
-                  <Image
-                    key={profile.avatarUrl}
-                    src={profile.avatarUrl}
+                {avatarLoading ? (
+                  <div className="w-full h-full bg-neutral-800 flex items-center justify-center">
+                    <Loader2 className="h-6 w-6 text-amber-500 animate-spin" />
+                  </div>
+                ) : avatarBlobUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarBlobUrl}
                     alt={profile.fullName || 'Avatar'}
-                    fill
-                    className="object-cover"
-                    unoptimized
+                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-3xl font-bold">

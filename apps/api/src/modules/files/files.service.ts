@@ -41,6 +41,11 @@ export class FilesService {
         etag: response.ETag || '',
       };
     } catch (error: any) {
+      // Re-throw errors that already have a status code (from authorization)
+      if (error.status) {
+        throw error;
+      }
+
       // Handle S3/MinIO errors
       if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
         throw {
@@ -116,6 +121,11 @@ export class FilesService {
       return;
     }
 
+    if (key.startsWith('uploads/profiles/')) {
+      await this.authorizeProfilePhotoAccess(key, user);
+      return;
+    }
+
     if (key.startsWith('uploads/payment-proofs/')) {
       await this.authorizePaymentProofAccess(key, user);
       return;
@@ -131,6 +141,88 @@ export class FilesService {
       code: 'FILE_ACCESS_DENIED',
       message: 'Anda tidak memiliki akses ke file ini',
     };
+  }
+
+  private async authorizeProfilePhotoAccess(key: string, user: AuthUser): Promise<void> {
+    // Profile photos are stored as: uploads/profiles/{userId}/avatar-xxx.ext
+    // Extract userId from the path
+    const match = key.match(/uploads\/profiles\/([^/]+)\//);
+    if (!match) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    const fileOwnerId = match[1];
+
+    // User can access their own profile photo
+    if (user.userId === fileOwnerId) {
+      return;
+    }
+
+    // Check if the profile photo exists in database
+    const profile = await prisma.userProfile.findFirst({
+      where: {
+        userId: fileOwnerId,
+        OR: [
+          { avatarUrl: key },
+          { avatarUrl: `${env.API_PREFIX}/files/${key}` },
+          { avatarUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
+          { avatarUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
+          { avatarUrl: { endsWith: key } },
+        ],
+      },
+      select: {
+        userId: true,
+        user: {
+          select: {
+            role: true,
+            branchId: true,
+            member: {
+              select: {
+                registrationBranchId: true,
+                branchAccesses: {
+                  select: { branchId: true },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!profile) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    // MEMBER can only access their own profile photo (already checked above)
+    if (user.role === 'MEMBER') {
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
+
+    // Staff can access profile photos of members in their branch
+    const accessibleBranchIds = await this.getAccessibleBranchIds(user);
+    if (!accessibleBranchIds) {
+      return; // Privileged role has access to all
+    }
+
+    // If the profile owner is a member, check branch access
+    if (profile.user.member) {
+      const memberBranchIds = [
+        profile.user.member.registrationBranchId,
+        ...profile.user.member.branchAccesses.map((access) => access.branchId),
+      ];
+
+      const hasAccess = memberBranchIds.some((branchId) => accessibleBranchIds.includes(branchId));
+      if (hasAccess) {
+        return;
+      }
+    }
+
+    // If the profile owner is staff, check if they share a branch
+    if (profile.user.branchId && accessibleBranchIds.includes(profile.user.branchId)) {
+      return;
+    }
+
+    throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
   }
 
   private async authorizeSessionPhotoAccess(key: string, user: AuthUser): Promise<void> {

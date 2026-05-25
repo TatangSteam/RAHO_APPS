@@ -1,7 +1,7 @@
 'use client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Image from 'next/image'
 import {
   LayoutDashboard, Syringe, Package,
@@ -10,6 +10,7 @@ import {
 import { logoutApi } from '@/lib/authApi'
 import { Footer } from '@/components/layout/Footer'
 import { useThemeStore } from '@/stores/themeStore'
+import { api } from '@/lib/api'
 
 const NAV_ITEMS = [
   { href: '/me/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,12 +25,58 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
   const { user, refreshToken, clearAuth } = useAuthStore()
   const { theme, toggleTheme } = useThemeStore()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [avatarBlobUrl, setAvatarBlobUrl] = useState<string | null>(null)
+
+  // Load avatar with authentication
+  const loadAvatar = useCallback(async (avatarUrl: string) => {
+    try {
+      // Extract file path from URL
+      let filePath = avatarUrl
+      if (avatarUrl.startsWith('http')) {
+        const urlObj = new URL(avatarUrl)
+        filePath = urlObj.pathname
+      }
+      // Clean up the path - handle various URL formats
+      // Remove leading slash
+      filePath = filePath.replace(/^\//, '')
+      // Remove api/v1/files/ prefix
+      filePath = filePath.replace(/^api\/v1\/files\//, '')
+      // Remove files/ prefix
+      filePath = filePath.replace(/^files\//, '')
+      // If path starts with a bucket name (not 'uploads'), remove it
+      // MinIO URLs: /bucket-name/uploads/... -> uploads/...
+      if (!filePath.startsWith('uploads/') && !filePath.startsWith('session-photos/')) {
+        const parts = filePath.split('/')
+        if (parts.length > 1 && (parts[1] === 'uploads' || parts[1] === 'session-photos')) {
+          filePath = parts.slice(1).join('/')
+        }
+      }
+      
+      const response = await api.get(`/files/${filePath}`, { responseType: 'blob' })
+      const blobUrl = URL.createObjectURL(response.data)
+      setAvatarBlobUrl(blobUrl)
+    } catch (error) {
+      console.error('Failed to load avatar:', error)
+      setAvatarBlobUrl(null)
+    }
+  }, [])
 
   useEffect(() => {
     if (!user) {
       router.replace('/login')
+    } else if (user.avatarUrl) {
+      loadAvatar(user.avatarUrl)
     }
-  }, [user, router])
+  }, [user, router, loadAvatar])
+
+  // Cleanup blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (avatarBlobUrl) {
+        URL.revokeObjectURL(avatarBlobUrl)
+      }
+    }
+  }, [avatarBlobUrl])
 
   // Close mobile menu on route change
   useEffect(() => {
@@ -120,9 +167,18 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
                 onClick={() => router.push('/me/profile')}
                 className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-semibold text-sm">
-                  {user?.fullName?.[0]?.toUpperCase() ?? 'M'}
-                </div>
+                {avatarBlobUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarBlobUrl}
+                    alt={user?.fullName || 'Avatar'}
+                    className="w-8 h-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-semibold text-sm">
+                    {user?.fullName?.[0]?.toUpperCase() ?? 'M'}
+                  </div>
+                )}
                 <div className="text-left">
                   <div className="text-sm font-semibold text-neutral-900 dark:text-white leading-tight truncate max-w-[120px]">
                     {user?.fullName ?? 'Member'}
@@ -165,9 +221,18 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
                 onClick={() => router.push('/me/profile')}
                 className="w-full flex items-center gap-3 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors"
               >
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-semibold">
-                  {user?.fullName?.[0]?.toUpperCase() ?? 'M'}
-                </div>
+                {avatarBlobUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarBlobUrl}
+                    alt={user?.fullName || 'Avatar'}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white font-semibold">
+                    {user?.fullName?.[0]?.toUpperCase() ?? 'M'}
+                  </div>
+                )}
                 <div className="text-left flex-1">
                   <div className="font-semibold text-neutral-900 dark:text-white">
                     {user?.fullName ?? 'Member'}
