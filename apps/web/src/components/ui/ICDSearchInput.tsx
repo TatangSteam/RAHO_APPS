@@ -94,7 +94,7 @@ export default function ICDSearchInput({
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
+              gap: '12px',
               padding: '10px 14px',
               background: 'var(--surface-input)',
               border: '1px solid var(--surface-border)',
@@ -103,7 +103,7 @@ export default function ICDSearchInput({
             }}
             onClick={() => !disabled && setShowDropdown(true)}
           >
-            <span style={{ flex: 1, fontSize: '14px', fontWeight: '600', color: 'var(--color-primary-400)' }}>
+            <span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--color-primary-400)', flexShrink: 0 }}>
               {value}
             </span>
             <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-secondary)' }}>
@@ -124,6 +124,7 @@ export default function ICDSearchInput({
                   padding: '4px',
                   display: 'flex',
                   alignItems: 'center',
+                  flexShrink: 0,
                 }}
               >
                 ✕
