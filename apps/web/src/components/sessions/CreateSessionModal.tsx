@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Package, Stethoscope, Calendar, MapPin, AlertTriangle, CheckCircle2, RefreshCw, Plus, Trash2, FileText, Info, Users } from 'lucide-react';
+import { X, User, Package, Stethoscope, Calendar, MapPin, AlertTriangle, CheckCircle2, RefreshCw, FileText, Info, Users } from 'lucide-react';
 import { sessionApi } from '@/lib/sessionApi';
 import { memberApi } from '@/lib/memberApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
+import { inventoryApi } from '@/lib/api/inventoryApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { CreateSessionInput, SessionType, Diagnosis } from '@/types/session';
 import type { MemberPackage } from '@/types/member';
@@ -56,17 +57,15 @@ export default function CreateSessionModal({
   const [selectedAdminLayananId, setSelectedAdminLayananId] = useState('');
   const [selectedDoctorId, setSelectedDoctorId] = useState('');
   const [selectedNurseId, setSelectedNurseId] = useState('');
-  const [additionalDoctorIds, setAdditionalDoctorIds] = useState<string[]>([]);
-  const [additionalNurseIds, setAdditionalNurseIds] = useState<string[]>([]);
-  
-  const [showAddDoctor, setShowAddDoctor] = useState(false);
-  const [tempDoctorId, setTempDoctorId] = useState('');
-  const [showAddNurse, setShowAddNurse] = useState(false);
-  const [tempNurseId, setTempNurseId] = useState('');
   
   const [treatmentDate, setTreatmentDate] = useState('');
   const [pelaksanaan, setPelaksanaan] = useState<SessionType>('ON_SITE');
   const [activeTab, setActiveTab] = useState<'form' | 'therapyPlan'>('form');
+
+  // Infus Set stock validation
+  const [infusSetStock, setInfusSetStock] = useState<number | null>(null);
+  const [loadingInfusSetStock, setLoadingInfusSetStock] = useState(false);
+  const [infusSetProductName, setInfusSetProductName] = useState('Infus Set + Pelengkap');
 
   useEffect(() => {
     setMounted(true);
@@ -93,6 +92,7 @@ export default function CreateSessionModal({
   useEffect(() => {
     if (isOpen) {
       loadStaff();
+      loadInfusSetStock();
       const now = new Date();
       const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
         .toISOString()
@@ -100,6 +100,33 @@ export default function CreateSessionModal({
       setTreatmentDate(localDateTime);
     }
   }, [isOpen]);
+
+  const loadInfusSetStock = async () => {
+    if (!user?.branchId) return;
+    
+    try {
+      setLoadingInfusSetStock(true);
+      const response = await inventoryApi.getAvailableItems(user.branchId);
+      const items = response.data || response;
+      
+      // Find Infus Set + Pelengkap (PRD-INF-SET-002) or Infus Set (PRD-INF-SET-001)
+      const infusSetItem = Array.isArray(items) ? items.find((item: any) => 
+        item.sku === 'PRD-INF-SET-002' || item.sku === 'PRD-INF-SET-001'
+      ) : null;
+      
+      if (infusSetItem) {
+        setInfusSetStock(infusSetItem.quantity || 0);
+        setInfusSetProductName(infusSetItem.name || 'Infus Set + Pelengkap');
+      } else {
+        setInfusSetStock(0);
+      }
+    } catch (err) {
+      console.error('Failed to load infus set stock:', err);
+      setInfusSetStock(null);
+    } finally {
+      setLoadingInfusSetStock(false);
+    }
+  };
 
   const loadMemberData = async (id: string) => {
     try {
@@ -271,6 +298,13 @@ export default function CreateSessionModal({
 
     if (!memberId) { setError('Member harus dipilih'); return; }
     if (!hasDiagnosis) { setError('Member belum memiliki diagnosa. Silakan buat diagnosa terlebih dahulu.'); return; }
+    
+    // Validasi Infus Set Stock - WAJIB tersedia
+    if (infusSetStock !== null && infusSetStock < 1) {
+      setError(`Stok ${infusSetProductName} habis. Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`);
+      return;
+    }
+    
     if (!selectedPackageId) { setError('Paket Basic harus dipilih'); return; }
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }
     if (!selectedTherapyPlanId) { setError('Therapy plan harus dipilih'); return; }
@@ -324,8 +358,6 @@ export default function CreateSessionModal({
         memberPackageId: selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
         therapyPlanId: selectedTherapyPlanId,
-        additionalDoctorIds,
-        additionalNurseIds,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
       };
@@ -373,42 +405,9 @@ export default function CreateSessionModal({
       setSelectedDoctorId('');
       setSelectedNurseId('');
       setSelectedAdminLayananId('');
-      setAdditionalDoctorIds([]);
-      setAdditionalNurseIds([]);
-      setShowAddDoctor(false);
-      setTempDoctorId('');
-      setShowAddNurse(false);
-      setTempNurseId('');
       onClose();
     }
   };
-
-  const handleAddDoctor = () => {
-    if (tempDoctorId && !additionalDoctorIds.includes(tempDoctorId)) {
-      setAdditionalDoctorIds([...additionalDoctorIds, tempDoctorId]);
-      setTempDoctorId('');
-      setShowAddDoctor(false);
-    }
-  };
-
-  const handleRemoveDoctor = (doctorId: string) => {
-    setAdditionalDoctorIds(additionalDoctorIds.filter(id => id !== doctorId));
-  };
-
-  const handleAddNurse = () => {
-    if (tempNurseId && !additionalNurseIds.includes(tempNurseId)) {
-      setAdditionalNurseIds([...additionalNurseIds, tempNurseId]);
-      setTempNurseId('');
-      setShowAddNurse(false);
-    }
-  };
-
-  const handleRemoveNurse = (nurseId: string) => {
-    setAdditionalNurseIds(additionalNurseIds.filter(id => id !== nurseId));
-  };
-
-  const getAvailableDoctors = () => doctors.filter(d => d.userId !== selectedDoctorId && !additionalDoctorIds.includes(d.userId));
-  const getAvailableNurses = () => nurses.filter(n => n.userId !== selectedNurseId && !additionalNurseIds.includes(n.userId));
 
   if (!isOpen || !mounted) return null;
 
@@ -540,6 +539,34 @@ export default function CreateSessionModal({
                   <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
                     <CheckCircle2 className="h-5 w-5 text-emerald-500" />
                     <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Member memiliki {diagnoses.length} diagnosa</p>
+                  </div>
+                )}
+
+                {/* Infus Set Stock Warning */}
+                {loadingInfusSetStock && (
+                  <div className="flex items-center gap-2 p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                    <RefreshCw className="h-4 w-4 animate-spin text-neutral-500" />
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400">Memeriksa stok Infus Set...</p>
+                  </div>
+                )}
+                {!loadingInfusSetStock && infusSetStock !== null && infusSetStock < 1 && (
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Stok {infusSetProductName} habis!</p>
+                      <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">
+                        Tidak dapat membuat sesi terapi karena stok {infusSetProductName} tidak tersedia. 
+                        Silakan request stok terlebih dahulu di menu Inventory.
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {!loadingInfusSetStock && infusSetStock !== null && infusSetStock >= 1 && (
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-400">
+                      Stok {infusSetProductName}: <span className="font-bold">{infusSetStock}</span> tersedia
+                    </p>
                   </div>
                 )}
 
@@ -811,74 +838,6 @@ export default function CreateSessionModal({
                       </select>
                     </div>
                   </>
-                )}
-
-                {/* Additional Doctors - Show for ADMIN_LAYANAN and ADMIN_CABANG */}
-                {(user?.role === 'ADMIN_LAYANAN' || user?.role === 'ADMIN_CABANG') && getAvailableDoctors().length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Dokter Tambahan</label>
-                      <button type="button" onClick={() => setShowAddDoctor(!showAddDoctor)} className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
-                        <Plus className="h-3 w-3" /> Tambah
-                      </button>
-                    </div>
-                    {showAddDoctor && (
-                      <div className="flex gap-2">
-                        <select value={tempDoctorId} onChange={(e) => setTempDoctorId(e.target.value)} className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
-                          <option value="">Pilih dokter...</option>
-                          {getAvailableDoctors().map((doc) => (<option key={doc.userId} value={doc.userId}>{doc.fullName}</option>))}
-                        </select>
-                        <button type="button" onClick={handleAddDoctor} className="px-3 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors">Tambah</button>
-                      </div>
-                    )}
-                    {additionalDoctorIds.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {additionalDoctorIds.map((id) => {
-                          const doc = doctors.find(d => d.userId === id);
-                          return (
-                            <span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
-                              {doc?.fullName}
-                              <button type="button" onClick={() => handleRemoveDoctor(id)} className="hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Additional Nurses - Show for ADMIN_LAYANAN and ADMIN_CABANG */}
-                {(user?.role === 'ADMIN_LAYANAN' || user?.role === 'ADMIN_CABANG') && getAvailableNurses().length > 0 && (
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Nakes Tambahan</label>
-                      <button type="button" onClick={() => setShowAddNurse(!showAddNurse)} className="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
-                        <Plus className="h-3 w-3" /> Tambah
-                      </button>
-                    </div>
-                    {showAddNurse && (
-                      <div className="flex gap-2">
-                        <select value={tempNurseId} onChange={(e) => setTempNurseId(e.target.value)} className="flex-1 px-3 py-2 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500">
-                          <option value="">Pilih nakes...</option>
-                          {getAvailableNurses().map((nurse) => (<option key={nurse.userId} value={nurse.userId}>{nurse.fullName}</option>))}
-                        </select>
-                        <button type="button" onClick={handleAddNurse} className="px-3 py-2 text-sm rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-colors">Tambah</button>
-                      </div>
-                    )}
-                    {additionalNurseIds.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {additionalNurseIds.map((id) => {
-                          const nurse = nurses.find(n => n.userId === id);
-                          return (
-                            <span key={id} className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-lg bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400">
-                              {nurse?.fullName}
-                              <button type="button" onClick={() => handleRemoveNurse(id)} className="hover:text-red-500"><Trash2 className="h-3 w-3" /></button>
-                            </span>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
                 )}
 
                 {/* Treatment Date */}

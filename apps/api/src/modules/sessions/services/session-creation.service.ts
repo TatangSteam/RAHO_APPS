@@ -43,16 +43,19 @@ export class SessionCreationService {
       await this.validateBoosterPackage(sessionData.boosterPackageId, branchId);
     }
 
-    // 9. Get branch for code generation
+    // 9. Validate infus set stock availability
+    await this.validateInfusSetStock(branchId);
+
+    // 10. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch) {
       throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
     }
 
-    // 10. Calculate infusKe (global and branch-specific)
+    // 11. Calculate infusKe (global and branch-specific)
     const { globalInfusKe, branchInfusKe } = await this.calculateInfusKe(sessionData.memberId, branchId);
 
-    // 11. Create session in transaction
+    // 12. Create session in transaction
     const result = await this.createSessionTransaction(
       sessionData,
       branchId,
@@ -61,7 +64,7 @@ export class SessionCreationService {
       memberPackage
     );
 
-    // 12. Audit log
+    // 13. Audit log
     await logAudit({
       userId,
       action: AuditAction.CREATE,
@@ -385,6 +388,62 @@ export class SessionCreationService {
     }
 
     return boosterPackage;
+  }
+
+  /**
+   * Validate infus set stock availability
+   * IMPORTANT: "Infus Set + Pelengkap" is mandatory for every therapy session
+   * Session cannot be created if stock is not available
+   */
+  private async validateInfusSetStock(branchId: string) {
+    // Find the "Infus Set + Pelengkap" product (SKU: PRD-INF-SET-002) or fallback to "Infus Set" (SKU: PRD-INF-SET-001)
+    const infusSetProduct = await prisma.masterProduct.findFirst({
+      where: {
+        OR: [
+          { sku: 'PRD-INF-SET-002' }, // Infus Set + Pelengkap (preferred)
+          { sku: 'PRD-INF-SET-001' }, // Infus Set (fallback)
+        ],
+      },
+      orderBy: {
+        sku: 'desc', // PRD-INF-SET-002 comes first
+      },
+    });
+
+    if (!infusSetProduct) {
+      throw {
+        status: 422,
+        code: 'INFUS_SET_NOT_CONFIGURED',
+        message: 'Produk Infus Set + Pelengkap belum dikonfigurasi di sistem. Hubungi administrator.',
+      };
+    }
+
+    // Check inventory stock for this branch
+    const inventoryItem = await prisma.inventoryItem.findFirst({
+      where: {
+        branchId,
+        masterProductId: infusSetProduct.id,
+      },
+    });
+
+    if (!inventoryItem) {
+      throw {
+        status: 422,
+        code: 'INFUS_SET_NOT_IN_INVENTORY',
+        message: `Produk "${infusSetProduct.name}" belum tersedia di inventory cabang ini. Silakan request stok terlebih dahulu.`,
+      };
+    }
+
+    if (inventoryItem.quantity < 1) {
+      throw {
+        status: 422,
+        code: 'INFUS_SET_OUT_OF_STOCK',
+        message: `Stok "${infusSetProduct.name}" habis (tersisa: ${inventoryItem.quantity}). Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`,
+      };
+    }
+
+    console.log(`✅ [INFUS SET] Stock available: ${inventoryItem.quantity} ${infusSetProduct.unit || 'piece'} of "${infusSetProduct.name}"`);
+    
+    return { infusSetProduct, inventoryItem };
   }
 
   /**
