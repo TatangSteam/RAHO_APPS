@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { photoApi, type SessionPhoto } from '@/lib/photoApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 
 interface Step7PhotoProps {
   sessionId: string;
@@ -21,7 +22,9 @@ export default function Step7Photo({
 }: Step7PhotoProps) {
   const { user } = useAuthStore();
   const [uploading, setUploading] = useState(false);
+  const [compressing, setCompressing] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
+  const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -67,7 +70,7 @@ export default function Step7Photo({
     };
   }, [preview]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -77,22 +80,39 @@ export default function Step7Photo({
       return;
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      showToast.error('Ukuran file maksimal 5MB');
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      showToast.error('Ukuran file maksimal 10MB');
       return;
     }
 
-    // Show preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload file
-    await uploadPhoto(file);
-  };
+    // Compress the image first
+    if (isImageFile(file)) {
+      setCompressing(true);
+      try {
+        const result = await compressImageWithPreset(file, 'sessionPhoto');
+        setPreview(URL.createObjectURL(result.blob));
+        setCompressionInfo({
+          original: result.originalSize,
+          compressed: result.compressedSize
+        });
+        // Upload the compressed file
+        await uploadPhoto(result.file);
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        // Fallback to original file
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+        setCompressionInfo(null);
+        await uploadPhoto(file);
+      } finally {
+        setCompressing(false);
+      }
+    }
+  }, [sessionId, user?.userId, onComplete]);
 
   const uploadPhoto = async (file: File) => {
     setUploading(true);
@@ -119,6 +139,7 @@ export default function Step7Photo({
       await photoApi.deletePhoto(sessionId);
       showToast.success('Foto berhasil dihapus');
       setPreview(null);
+      setCompressionInfo(null);
       onComplete();
     } catch (error: any) {
       console.error('Error deleting photo:', error);
@@ -248,11 +269,20 @@ export default function Step7Photo({
                 gap: '16px',
                 marginBottom: '16px',
                 fontSize: '13px',
-                color: '#94a3b8'
+                color: '#94a3b8',
+                flexWrap: 'wrap'
               }}>
                 <span>📄 {photo.fileName}</span>
                 <span>•</span>
                 <span>📦 {formatFileSize(photo.fileSize)}</span>
+                {compressionInfo && (
+                  <>
+                    <span>•</span>
+                    <span style={{ color: '#22c55e' }}>
+                      ✓ Dikompresi dari {formatFileSize(compressionInfo.original)}
+                    </span>
+                  </>
+                )}
                 <span>•</span>
                 <span>🕐 {new Date(photo.createdAt).toLocaleString('id-ID')}</span>
               </div>
@@ -261,7 +291,7 @@ export default function Step7Photo({
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
+                disabled={uploading || compressing}
                 style={{
                   padding: '10px 20px',
                   background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
@@ -270,17 +300,17 @@ export default function Step7Photo({
                   color: 'white',
                   fontSize: '14px',
                   fontWeight: '600',
-                  cursor: uploading ? 'not-allowed' : 'pointer',
-                  opacity: uploading ? 0.5 : 1
+                  cursor: uploading || compressing ? 'not-allowed' : 'pointer',
+                  opacity: uploading || compressing ? 0.5 : 1
                 }}
               >
-                🔄 Ganti Foto
+                {compressing ? '⏳ Mengkompresi...' : '🔄 Ganti Foto'}
               </button>
 
               {photo && (
                 <button
                   onClick={handleDeletePhoto}
-                  disabled={uploading}
+                  disabled={uploading || compressing}
                   style={{
                     padding: '10px 20px',
                     background: 'linear-gradient(135deg, #ef4444, #dc2626)',
@@ -289,8 +319,8 @@ export default function Step7Photo({
                     color: 'white',
                     fontSize: '14px',
                     fontWeight: '600',
-                    cursor: uploading ? 'not-allowed' : 'pointer',
-                    opacity: uploading ? 0.5 : 1
+                    cursor: uploading || compressing ? 'not-allowed' : 'pointer',
+                    opacity: uploading || compressing ? 0.5 : 1
                   }}
                 >
                   🗑️ Hapus Foto
@@ -304,29 +334,29 @@ export default function Step7Photo({
               width: '80px',
               height: '80px',
               margin: '0 auto 16px',
-              background: 'rgba(59,130,246,0.1)',
+              background: compressing ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)',
               borderRadius: '50%',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '40px'
             }}>
-              📸
+              {compressing ? '⏳' : '📸'}
             </div>
 
             <p style={{ fontSize: '16px', fontWeight: '600', color: '#f1f5f9', marginBottom: '8px' }}>
-              Upload Foto Sesi
+              {compressing ? 'Mengkompresi Gambar...' : 'Upload Foto Sesi'}
             </p>
             <p style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '20px' }}>
-              Format: JPG, PNG, GIF • Maksimal 5MB
+              Format: JPG, PNG, GIF • Maksimal 10MB (akan dikompresi otomatis)
             </p>
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              disabled={uploading || compressing}
               style={{
                 padding: '12px 32px',
-                background: uploading
+                background: uploading || compressing
                   ? 'rgba(59,130,246,0.3)'
                   : 'linear-gradient(135deg, #3b82f6, #2563eb)',
                 border: 'none',
@@ -334,11 +364,11 @@ export default function Step7Photo({
                 color: 'white',
                 fontSize: '15px',
                 fontWeight: '600',
-                cursor: uploading ? 'not-allowed' : 'pointer',
-                boxShadow: uploading ? 'none' : '0 4px 12px rgba(59,130,246,0.3)'
+                cursor: uploading || compressing ? 'not-allowed' : 'pointer',
+                boxShadow: uploading || compressing ? 'none' : '0 4px 12px rgba(59,130,246,0.3)'
               }}
             >
-              {uploading ? '⏳ Mengupload...' : '📤 Pilih Foto'}
+              {uploading ? '⏳ Mengupload...' : compressing ? '⏳ Mengkompresi...' : '📤 Pilih Foto'}
             </button>
           </div>
         )}
@@ -349,7 +379,7 @@ export default function Step7Photo({
           accept="image/*"
           onChange={handleFileSelect}
           style={{ display: 'none' }}
-          disabled={uploading}
+          disabled={uploading || compressing}
         />
       </div>
 

@@ -4,6 +4,7 @@ import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, DocumentType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { uploadFile } from '../../../config/minio';
+import { processFile } from '../../../utils/imageProcessor';
 
 /**
  * Service for member registration
@@ -237,12 +238,20 @@ export class MemberRegistrationService {
 
     if (files.psp) {
       try {
-        console.log('📄 [Create Member] Uploading PSP document...');
-        const pspKey = `uploads/members/${result.member.id}/documents/psp-${Date.now()}.${files.psp.mimetype.split('/')[1]}`;
-        console.log('  - Key:', pspKey);
-        console.log('  - MIME type:', files.psp.mimetype);
+        console.log('📄 [Create Member] Processing and uploading PSP document...');
         
-        const pspResult = await uploadFile(files.psp.buffer, pspKey, files.psp.mimetype);
+        // Process/compress the image
+        const processed = await processFile(files.psp.buffer, files.psp.mimetype, 'document');
+        const fileExt = processed.mimeType === 'image/jpeg' ? 'jpg' : 
+                        processed.mimeType === 'application/pdf' ? 'pdf' :
+                        files.psp.mimetype.split('/')[1];
+        
+        const pspKey = `uploads/members/${result.member.id}/documents/psp-${Date.now()}.${fileExt}`;
+        console.log('  - Key:', pspKey);
+        console.log('  - Original size:', (files.psp.size / 1024).toFixed(1), 'KB');
+        console.log('  - Processed size:', (processed.buffer.length / 1024).toFixed(1), 'KB');
+        
+        const pspResult = await uploadFile(processed.buffer, pspKey, processed.mimeType);
         console.log('  ✅ PSP uploaded to MinIO');
         console.log('  - URL:', pspResult.url);
 
@@ -252,8 +261,8 @@ export class MemberRegistrationService {
             documentType: DocumentType.PERSETUJUAN_SETELAH_PENJELASAN,
             fileUrl: pspResult.url,
             fileName: files.psp.originalname,
-            fileSize: files.psp.size,
-            mimeType: files.psp.mimetype,
+            fileSize: processed.buffer.length,
+            mimeType: processed.mimeType,
             uploadedBy: userId,
           },
         });
@@ -267,12 +276,20 @@ export class MemberRegistrationService {
 
     if (files.photo) {
       try {
-        console.log('📸 [Create Member] Uploading profile photo...');
-        const photoKey = `uploads/members/${result.member.id}/documents/profile-${Date.now()}.${files.photo.mimetype.split('/')[1]}`;
-        console.log('  - Key:', photoKey);
-        console.log('  - MIME type:', files.photo.mimetype);
+        console.log('📸 [Create Member] Processing and uploading profile photo...');
         
-        const photoResult = await uploadFile(files.photo.buffer, photoKey, files.photo.mimetype);
+        // Process/compress the image
+        const processed = await processFile(files.photo.buffer, files.photo.mimetype, 'profilePhoto');
+        const fileExt = processed.mimeType === 'image/jpeg' ? 'jpg' : 
+                        processed.mimeType === 'image/webp' ? 'webp' :
+                        files.photo.mimetype.split('/')[1];
+        
+        const photoKey = `uploads/members/${result.member.id}/documents/profile-${Date.now()}.${fileExt}`;
+        console.log('  - Key:', photoKey);
+        console.log('  - Original size:', (files.photo.size / 1024).toFixed(1), 'KB');
+        console.log('  - Processed size:', (processed.buffer.length / 1024).toFixed(1), 'KB');
+        
+        const photoResult = await uploadFile(processed.buffer, photoKey, processed.mimeType);
         console.log('  ✅ Photo uploaded to MinIO');
         console.log('  - URL:', photoResult.url);
 
@@ -282,8 +299,8 @@ export class MemberRegistrationService {
             documentType: DocumentType.FOTO_PROFIL,
             fileUrl: photoResult.url,
             fileName: files.photo.originalname,
-            fileSize: files.photo.size,
-            mimeType: files.photo.mimetype,
+            fileSize: processed.buffer.length,
+            mimeType: processed.mimeType,
             uploadedBy: userId,
           },
         });

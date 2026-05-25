@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Info, ImageIcon, Trash2, RefreshCw, Building2, CreditCard, Download, CheckCircle2 } from 'lucide-react';
 import { StockRequest } from '../types';
 import { showToast } from '@/lib/toast';
 import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
+import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 
 interface UploadPaymentModalProps {
   request: StockRequest;
@@ -25,6 +26,8 @@ export default function UploadPaymentModal({
   const [preview, setPreview] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [compressing, setCompressing] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -45,24 +48,43 @@ export default function UploadPaymentModal({
     }
   };
 
-  const processFile = (selectedFile: File) => {
+  const processFile = useCallback(async (selectedFile: File) => {
     if (!selectedFile.type.startsWith('image/')) {
       showToast.error('Hanya file gambar yang diperbolehkan');
       return;
     }
     
-    if (selectedFile.size > 5 * 1024 * 1024) {
-      showToast.error('Ukuran file maksimal 5MB');
+    if (selectedFile.size > 10 * 1024 * 1024) {
+      showToast.error('Ukuran file maksimal 10MB');
       return;
     }
 
-    setFile(selectedFile);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPreview(reader.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
-  };
+    // Compress the image
+    if (isImageFile(selectedFile)) {
+      setCompressing(true);
+      try {
+        const result = await compressImageWithPreset(selectedFile, 'paymentProof');
+        setFile(result.file);
+        setPreview(URL.createObjectURL(result.blob));
+        setCompressionInfo({
+          original: result.originalSize,
+          compressed: result.compressedSize
+        });
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        // Fallback to original file
+        setFile(selectedFile);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setPreview(reader.result as string);
+        };
+        reader.readAsDataURL(selectedFile);
+        setCompressionInfo(null);
+      } finally {
+        setCompressing(false);
+      }
+    }
+  }, []);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -142,6 +164,7 @@ export default function UploadPaymentModal({
   const removeFile = () => {
     setFile(null);
     setPreview(null);
+    setCompressionInfo(null);
   };
 
   if (!mounted) return null;
@@ -247,21 +270,31 @@ export default function UploadPaymentModal({
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  onClick={() => document.getElementById('payment-file-input')?.click()}
-                  className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                    dragActive 
-                      ? 'border-amber-500 bg-amber-500/10' 
-                      : 'border-neutral-700 bg-neutral-800/30 hover:border-amber-500/50 hover:bg-neutral-800/50'
+                  onClick={() => !compressing && document.getElementById('payment-file-input')?.click()}
+                  className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${
+                    compressing
+                      ? 'border-blue-500 bg-blue-500/10 cursor-wait'
+                      : dragActive 
+                        ? 'border-amber-500 bg-amber-500/10' 
+                        : 'border-neutral-700 bg-neutral-800/30 hover:border-amber-500/50 hover:bg-neutral-800/50 cursor-pointer'
                   }`}
                 >
                   <div className="w-14 h-14 mx-auto mb-4 rounded-full bg-neutral-800 flex items-center justify-center">
-                    <ImageIcon className="w-7 h-7 text-neutral-500" />
+                    {compressing ? (
+                      <RefreshCw className="w-7 h-7 text-blue-400 animate-spin" />
+                    ) : (
+                      <ImageIcon className="w-7 h-7 text-neutral-500" />
+                    )}
                   </div>
                   <p className="text-sm font-medium text-neutral-300 mb-1">
-                    {dragActive ? 'Lepaskan file di sini' : 'Drag & drop atau klik untuk memilih'}
+                    {compressing 
+                      ? 'Mengkompresi gambar...' 
+                      : dragActive 
+                        ? 'Lepaskan file di sini' 
+                        : 'Drag & drop atau klik untuk memilih'}
                   </p>
                   <p className="text-xs text-neutral-500">
-                    JPG, PNG, JPEG • Maks. 5MB
+                    JPG, PNG, JPEG • Maks. 10MB (akan dikompresi otomatis)
                   </p>
                   <input
                     id="payment-file-input"
@@ -269,6 +302,7 @@ export default function UploadPaymentModal({
                     accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
+                    disabled={compressing}
                   />
                 </div>
               ) : (
@@ -298,7 +332,12 @@ export default function UploadPaymentModal({
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-neutral-200 truncate">{file?.name}</p>
                       <p className="text-xs text-neutral-500">
-                        {file ? `${(file.size / 1024).toFixed(1)} KB` : ''}
+                        {file ? formatFileSize(file.size) : ''}
+                        {compressionInfo && (
+                          <span className="text-emerald-400 ml-2">
+                            (dikompresi dari {formatFileSize(compressionInfo.original)})
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>

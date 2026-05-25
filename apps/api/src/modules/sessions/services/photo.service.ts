@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma';
 import { uploadFile, deleteFile } from '../../../config/minio';
 import { env } from '../../../config/env';
 import { v4 as uuidv4 } from 'uuid';
+import { processFile, isImage } from '../../../utils/imageProcessor';
 
 export class PhotoService {
   async uploadPhoto(
@@ -45,23 +46,30 @@ export class PhotoService {
       }
     }
 
-    // Generate unique filename
-    const fileExtension = file.originalname.split('.').pop();
+    // Process and compress image
+    console.log(`[PhotoService] Processing session photo: ${file.originalname} (${(file.size / 1024).toFixed(1)}KB)`);
+    const processed = await processFile(file.buffer, file.mimetype, 'sessionPhoto');
+
+    // Generate unique filename with correct extension
+    const fileExtension = processed.mimeType === 'image/jpeg' ? 'jpg' : 
+                          processed.mimeType === 'image/webp' ? 'webp' : 
+                          processed.mimeType === 'image/png' ? 'png' : 
+                          file.originalname.split('.').pop();
     const fileName = `${uuidv4()}.${fileExtension}`;
     const key = `session-photos/${fileName}`;
 
-    // Upload to MinIO using the minio config helper
-    const uploadResult = await uploadFile(file.buffer, key, file.mimetype);
+    // Upload processed image to MinIO
+    const uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
 
     // Use API endpoint URL instead of direct MinIO URL
     const apiUrl = `${env.API_URL}/api/v1/files/${key}`;
 
-    // Save or update in database
+    // Save or update in database with processed file info
     const photoData = {
-      fileUrl: apiUrl, // Use API URL instead of MinIO URL
+      fileUrl: apiUrl,
       fileName: file.originalname,
-      fileSize: file.size,
-      mimeType: file.mimetype,
+      fileSize: processed.buffer.length, // Use compressed size
+      mimeType: processed.mimeType,
       uploadedBy,
     };
 

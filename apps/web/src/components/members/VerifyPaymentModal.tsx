@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './VerifyPaymentModal.module.css';
+import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 
 interface PaymentProof {
   file: File | null;
@@ -30,6 +31,8 @@ export default function VerifyPaymentModal({
 }: VerifyPaymentModalProps) {
   const [paymentProof, setPaymentProof] = useState<PaymentProof>({ file: null, preview: null });
   const [error, setError] = useState<string>('');
+  const [compressing, setCompressing] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
 
   // Reset state when modal opens or closes
   useEffect(() => {
@@ -37,6 +40,7 @@ export default function VerifyPaymentModal({
       // Reset state when modal opens
       setPaymentProof({ file: null, preview: null });
       setError('');
+      setCompressionInfo(null);
       onProofChange({ file: null, preview: null });
       document.body.style.overflow = 'hidden';
     } else {
@@ -58,7 +62,7 @@ export default function VerifyPaymentModal({
     return () => window.removeEventListener('keydown', handleEsc);
   }, [show, onClose]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -69,30 +73,51 @@ export default function VerifyPaymentModal({
       return;
     }
 
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024;
+    // Validate file size (max 10MB before compression)
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      setError('Ukuran file maksimal 5MB');
+      setError('Ukuran file maksimal 10MB');
       return;
     }
 
     setError('');
 
-    // Create preview for images
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const preview = reader.result as string;
-      const proof = { file, preview };
-      setPaymentProof(proof);
-      onProofChange(proof);
-    };
-    reader.readAsDataURL(file);
-  };
+    // Compress the image
+    if (isImageFile(file)) {
+      setCompressing(true);
+      try {
+        const result = await compressImageWithPreset(file, 'paymentProof');
+        const preview = URL.createObjectURL(result.blob);
+        const proof = { file: result.file, preview };
+        setPaymentProof(proof);
+        setCompressionInfo({
+          original: result.originalSize,
+          compressed: result.compressedSize
+        });
+        onProofChange(proof);
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        // Fallback to original file
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const preview = reader.result as string;
+          const proof = { file, preview };
+          setPaymentProof(proof);
+          setCompressionInfo(null);
+          onProofChange(proof);
+        };
+        reader.readAsDataURL(file);
+      } finally {
+        setCompressing(false);
+      }
+    }
+  }, [onProofChange]);
 
   const handleRemoveFile = () => {
     setPaymentProof({ file: null, preview: null });
     onProofChange({ file: null, preview: null });
     setError('');
+    setCompressionInfo(null);
   };
 
   if (!show) return null;
@@ -137,10 +162,19 @@ export default function VerifyPaymentModal({
               📸 Bukti Pembayaran (Wajib) *
             </label>
             <p className={styles.formHint}>
-              Upload foto struk atau bukti transfer (JPG atau PNG, max 5MB)
+              Upload foto struk atau bukti transfer (JPG atau PNG, max 10MB - akan dikompresi otomatis)
             </p>
 
-            {paymentProof.file ? (
+            {compressing ? (
+              <div className={styles.uploadBox} style={{ cursor: 'wait' }}>
+                <div className={styles.uploadContent}>
+                  <span className={styles.uploadIcon}>⏳</span>
+                  <span className={styles.uploadText}>
+                    Mengkompresi gambar...
+                  </span>
+                </div>
+              </div>
+            ) : paymentProof.file ? (
               <div className={styles.filePreview}>
                 <div className={styles.imagePreview}>
                   <img src={paymentProof.preview!} alt="Payment proof" />
@@ -148,7 +182,12 @@ export default function VerifyPaymentModal({
                 <div className={styles.fileInfo}>
                   <div className={styles.fileName}>{paymentProof.file.name}</div>
                   <div className={styles.fileSize}>
-                    {(paymentProof.file.size / 1024).toFixed(2)} KB
+                    {formatFileSize(paymentProof.file.size)}
+                    {compressionInfo && (
+                      <span style={{ color: '#22c55e', marginLeft: '8px' }}>
+                        (dikompresi dari {formatFileSize(compressionInfo.original)})
+                      </span>
+                    )}
                   </div>
                 </div>
                 <button
@@ -174,7 +213,7 @@ export default function VerifyPaymentModal({
                   </span>
                 </div>
               </label>
-            )}
+            )}}
 
             {error && <div className={styles.errorMessage}>{error}</div>}
           </div>
@@ -205,7 +244,7 @@ export default function VerifyPaymentModal({
           </button>
           <button
             onClick={onSubmit}
-            disabled={submitting || !paymentProof.file}
+            disabled={submitting || !paymentProof.file || compressing}
             className={`${styles.button} ${styles.buttonPrimary}`}
             title={!paymentProof.file ? 'Bukti pembayaran wajib diupload' : ''}
           >

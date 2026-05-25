@@ -74,6 +74,45 @@ export async function deleteFile(key: string): Promise<void> {
 }
 
 /**
+ * Safely delete a file from MinIO (won't throw if file doesn't exist)
+ * Use this when deleting files that may or may not exist
+ * @param key - Object key in the bucket
+ * @returns true if deleted successfully, false if error occurred
+ */
+export async function safeDeleteFile(key: string): Promise<boolean> {
+  try {
+    await s3Client.send(
+      new DeleteObjectCommand({ Bucket: env.MINIO_BUCKET, Key: key }),
+    );
+    console.log(`[MinIO] Successfully deleted file: ${key}`);
+    return true;
+  } catch (error) {
+    console.error(`[MinIO] Failed to delete file: ${key}`, error);
+    return false;
+  }
+}
+
+/**
+ * Delete a file from MinIO using its full URL
+ * Extracts the key from the URL and deletes the file
+ * @param url - Full URL of the file
+ * @returns true if deleted successfully, false if error occurred
+ */
+export async function deleteFileByUrl(url: string): Promise<boolean> {
+  if (!url) {
+    return false;
+  }
+  
+  const key = extractKeyFromUrl(url);
+  if (!key) {
+    console.warn(`[MinIO] Could not extract key from URL: ${url}`);
+    return false;
+  }
+  
+  return safeDeleteFile(key);
+}
+
+/**
  * Extract the MinIO key from a full URL
  */
 export function extractKeyFromUrl(url: string): string {

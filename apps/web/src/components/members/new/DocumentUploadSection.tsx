@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { compressImageWithPreset, isImageFile, formatFileSize } from '@/lib/imageCompressor';
 
 interface DocumentUploadSectionProps {
   pspFile: File | null;
@@ -19,24 +20,86 @@ export default function DocumentUploadSection({
 }: DocumentUploadSectionProps) {
   const [pspPreview, setPspPreview] = useState<string | null>(null);
   const [showPspModal, setShowPspModal] = useState(false);
+  const [compressing, setCompressing] = useState<'psp' | 'photo' | null>(null);
+  const [compressionInfo, setCompressionInfo] = useState<{
+    psp?: { original: number; compressed: number };
+    photo?: { original: number; compressed: number };
+  }>({});
 
-  const handlePspChangeWithPreview = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePspChangeWithPreview = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Create preview for images
-      if (file.type.startsWith('image/')) {
+    if (!file) return;
+
+    // For PDF files, skip compression
+    if (file.type === 'application/pdf') {
+      setPspPreview(URL.createObjectURL(file));
+      onPspChange(e);
+      return;
+    }
+
+    // For images, compress before passing to parent
+    if (isImageFile(file)) {
+      setCompressing('psp');
+      try {
+        const result = await compressImageWithPreset(file, 'document');
+        setPspPreview(URL.createObjectURL(result.blob));
+        setCompressionInfo(prev => ({
+          ...prev,
+          psp: { original: result.originalSize, compressed: result.compressedSize }
+        }));
+        
+        // Create a fake event with the compressed file
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(result.file);
+        const fakeEvent = {
+          target: { files: dataTransfer.files }
+        } as React.ChangeEvent<HTMLInputElement>;
+        onPspChange(fakeEvent);
+      } catch (error) {
+        console.error('Error compressing PSP image:', error);
+        // Fallback to original file
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setPspPreview(reader.result as string);
-        };
+        reader.onloadend = () => setPspPreview(reader.result as string);
         reader.readAsDataURL(file);
-      } else if (file.type === 'application/pdf') {
-        // For PDF, create object URL
-        setPspPreview(URL.createObjectURL(file));
+        onPspChange(e);
+      } finally {
+        setCompressing(null);
       }
     }
-    onPspChange(e);
-  };
+  }, [onPspChange]);
+
+  const handlePhotoChangeWithCompression = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!isImageFile(file)) {
+      onPhotoChange(e);
+      return;
+    }
+
+    setCompressing('photo');
+    try {
+      const result = await compressImageWithPreset(file, 'profilePhoto');
+      setCompressionInfo(prev => ({
+        ...prev,
+        photo: { original: result.originalSize, compressed: result.compressedSize }
+      }));
+      
+      // Create a fake event with the compressed file
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(result.file);
+      const fakeEvent = {
+        target: { files: dataTransfer.files }
+      } as React.ChangeEvent<HTMLInputElement>;
+      onPhotoChange(fakeEvent);
+    } catch (error) {
+      console.error('Error compressing photo:', error);
+      // Fallback to original file
+      onPhotoChange(e);
+    } finally {
+      setCompressing(null);
+    }
+  }, [onPhotoChange]);
 
   const isPdf = pspFile?.type === 'application/pdf';
 
@@ -126,9 +189,16 @@ export default function DocumentUploadSection({
               onChange={handlePspChangeWithPreview}
               style={{ display: 'none' }}
               id="psp-upload"
+              disabled={compressing === 'psp'}
             />
-            <label htmlFor="psp-upload" style={{ cursor: 'pointer', display: 'block' }}>
-              {pspFile ? (
+            <label htmlFor="psp-upload" style={{ cursor: compressing === 'psp' ? 'wait' : 'pointer', display: 'block' }}>
+              {compressing === 'psp' ? (
+                <div>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>⏳</div>
+                  <p style={{ fontWeight: '600', color: '#3b82f6', marginBottom: '4px' }}>Mengkompresi gambar...</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mohon tunggu sebentar</p>
+                </div>
+              ) : pspFile ? (
                 <div>
                   {isPdf ? (
                     <div style={{ fontSize: '48px', marginBottom: '12px' }}>📄</div>
@@ -150,6 +220,11 @@ export default function DocumentUploadSection({
                   <p style={{ fontWeight: '600', color: '#22c55e', marginBottom: '4px', wordBreak: 'break-all' }}>{pspFile.name}</p>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '12px' }}>
                     {(pspFile.size / 1024 / 1024).toFixed(2)} MB
+                    {compressionInfo.psp && (
+                      <span style={{ color: '#22c55e', marginLeft: '8px' }}>
+                        (dikompresi dari {formatFileSize(compressionInfo.psp.original)})
+                      </span>
+                    )}
                   </p>
                 </div>
               ) : (
@@ -230,18 +305,25 @@ export default function DocumentUploadSection({
             const file = e.dataTransfer.files[0];
             if (file) {
               const fakeEvent = { target: { files: [file] } } as any;
-              onPhotoChange(fakeEvent);
+              handlePhotoChangeWithCompression(fakeEvent);
             }
           }}>
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp"
-              onChange={onPhotoChange}
+              onChange={handlePhotoChangeWithCompression}
               style={{ display: 'none' }}
               id="photo-upload"
+              disabled={compressing === 'photo'}
             />
-            <label htmlFor="photo-upload" style={{ cursor: 'pointer', display: 'block' }}>
-              {photoPreview ? (
+            <label htmlFor="photo-upload" style={{ cursor: compressing === 'photo' ? 'wait' : 'pointer', display: 'block' }}>
+              {compressing === 'photo' ? (
+                <div>
+                  <div style={{ fontSize: '48px', marginBottom: '12px' }}>⏳</div>
+                  <p style={{ fontWeight: '600', color: '#3b82f6', marginBottom: '4px' }}>Mengkompresi foto...</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Mohon tunggu sebentar</p>
+                </div>
+              ) : photoPreview ? (
                 <div>
                   <img
                     src={photoPreview}
@@ -256,7 +338,14 @@ export default function DocumentUploadSection({
                     }}
                   />
                   <p style={{ fontWeight: '600', color: '#22c55e', marginBottom: '4px', wordBreak: 'break-all' }}>{photoFile?.name}</p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Klik untuk mengganti foto</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    Klik untuk mengganti foto
+                    {compressionInfo.photo && (
+                      <span style={{ color: '#22c55e', display: 'block', marginTop: '4px' }}>
+                        ✓ Dikompresi: {formatFileSize(compressionInfo.photo.original)} → {formatFileSize(compressionInfo.photo.compressed)}
+                      </span>
+                    )}
+                  </p>
                 </div>
               ) : (
                 <div>

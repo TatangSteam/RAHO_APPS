@@ -1,15 +1,17 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { meApi, MemberProfile } from '@/lib/api/meApi'
 import { useAuthStore } from '@/stores/authStore'
 import { User, MapPin, Phone, Mail, Calendar, CreditCard, Building2, Camera, Loader2, Check } from 'lucide-react'
 import Image from 'next/image'
+import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor'
 
 export default function MemberProfilePage() {
   const { updateUserAvatar } = useAuthStore()
   const [profile, setProfile] = useState<MemberProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [compressing, setCompressing] = useState(false)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -23,7 +25,7 @@ export default function MemberProfilePage() {
     fileInputRef.current?.click()
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -33,15 +35,32 @@ export default function MemberProfilePage() {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Ukuran file maksimal 5MB')
+    // Validate file size (max 10MB before compression)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Ukuran file maksimal 10MB')
       return
     }
 
     try {
+      let fileToUpload = file
+
+      // Compress the image first
+      if (isImageFile(file)) {
+        setCompressing(true)
+        try {
+          const result = await compressImageWithPreset(file, 'profilePhoto')
+          fileToUpload = result.file
+          console.log(`[MemberProfile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
+        } catch (error) {
+          console.error('Error compressing avatar:', error)
+          // Continue with original file
+        } finally {
+          setCompressing(false)
+        }
+      }
+
       setUploading(true)
-      const result = await meApi.uploadAvatar(file)
+      const result = await meApi.uploadAvatar(fileToUpload)
       setProfile(prev => prev ? { ...prev, avatarUrl: result.avatarUrl } : null)
       // Update the auth store so Header shows the new avatar
       updateUserAvatar(result.avatarUrl)
@@ -53,7 +72,7 @@ export default function MemberProfilePage() {
     } finally {
       setUploading(false)
     }
-  }
+  }, [updateUserAvatar])
 
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
@@ -106,10 +125,12 @@ export default function MemberProfilePage() {
               >
                 {profile.avatarUrl ? (
                   <Image
+                    key={profile.avatarUrl}
                     src={profile.avatarUrl}
                     alt={profile.fullName || 'Avatar'}
                     fill
                     className="object-cover"
+                    unoptimized
                   />
                 ) : (
                   <div className="w-full h-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-3xl font-bold">
@@ -119,7 +140,9 @@ export default function MemberProfilePage() {
                 
                 {/* Overlay */}
                 <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                  {uploading ? (
+                  {compressing ? (
+                    <Loader2 className="h-6 w-6 text-blue-400 animate-spin" />
+                  ) : uploading ? (
                     <Loader2 className="h-6 w-6 text-white animate-spin" />
                   ) : uploadSuccess ? (
                     <Check className="h-6 w-6 text-green-400" />
@@ -129,7 +152,7 @@ export default function MemberProfilePage() {
                 </div>
               </div>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 text-center mt-2">
-                Klik untuk ubah foto
+                {compressing ? 'Mengkompresi...' : 'Klik untuk ubah foto'}
               </p>
             </div>
 

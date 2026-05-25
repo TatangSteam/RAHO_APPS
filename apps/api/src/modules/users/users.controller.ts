@@ -30,8 +30,9 @@ import {
 } from './services/staff-performance.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
-import { uploadFile } from '@config/minio';
+import { uploadFile, deleteFileByUrl } from '@config/minio';
 import { Role } from '@prisma/client';
+import { prisma } from '@lib/prisma';
 
 export async function listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -185,7 +186,22 @@ export async function uploadAvatar(req: Request, res: Response, next: NextFuncti
       return;
     }
 
-    const key = `uploads/profiles/${req.user.userId}/avatar.${req.file.mimetype.split('/')[1]}`;
+    // Get current avatar URL to delete old file
+    const currentProfile = await prisma.userProfile.findUnique({
+      where: { userId: req.user.userId },
+      select: { avatarUrl: true },
+    });
+
+    // Delete old avatar if exists
+    if (currentProfile?.avatarUrl) {
+      await deleteFileByUrl(currentProfile.avatarUrl);
+      console.log(`[Avatar] Deleted old avatar for user ${req.user.userId}`);
+    }
+
+    // Add timestamp to filename to prevent browser caching
+    const timestamp = Date.now();
+    const extension = req.file.mimetype.split('/')[1];
+    const key = `uploads/profiles/${req.user.userId}/avatar-${timestamp}.${extension}`;
     const { url } = await uploadFile(req.file.buffer, key, req.file.mimetype);
 
     const profile = await updateAvatarService(req.user.userId, url);

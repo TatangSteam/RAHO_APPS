@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role, BranchType, StockRequestStatus, StockMutationType } from '@prisma/client';
+import { deleteFileByUrl } from '../../../config/minio';
 
 interface InvoiceItemInput {
   masterProductId: string;
@@ -412,6 +413,12 @@ export class StockRequestApprovalService {
       }
     }
 
+    // Delete old payment proof from MinIO if exists (when re-uploading)
+    if (request.paymentProofUrl) {
+      console.log(`[StockRequest] Deleting old payment proof: ${request.paymentProofUrl}`);
+      await deleteFileByUrl(request.paymentProofUrl);
+    }
+
     // Update request and invoice with payment proof
     const result = await prisma.$transaction(async (tx) => {
       // Update request
@@ -602,6 +609,12 @@ export class StockRequestApprovalService {
 
     const request = await this.getRequestWithValidation(requestId, ['PAYMENT_UPLOADED']);
     const user = await this.validateManagerPermission(userId, request.branchId);
+
+    // Delete payment proof from MinIO before clearing the reference
+    if (request.paymentProofUrl) {
+      console.log(`[StockRequest] Deleting rejected payment proof: ${request.paymentProofUrl}`);
+      await deleteFileByUrl(request.paymentProofUrl);
+    }
 
     // Update request back to WAITING_PAYMENT
     const result = await prisma.$transaction(async (tx) => {

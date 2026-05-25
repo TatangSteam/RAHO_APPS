@@ -1,8 +1,9 @@
 'use client';
 
 import { createPortal } from 'react-dom';
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import styles from './PackageActionModal.module.css';
+import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 
 interface PackageRefundModalProps {
   show: boolean;
@@ -33,9 +34,13 @@ export default function PackageRefundModal({
   onProofChange,
   onSubmit,
 }: PackageRefundModalProps) {
+  const [compressing, setCompressing] = useState(false);
+  const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
+
   useEffect(() => {
     if (show) {
       document.body.style.overflow = 'hidden';
+      setCompressionInfo(null);
     } else {
       document.body.style.overflow = 'unset';
     }
@@ -43,6 +48,40 @@ export default function PackageRefundModal({
       document.body.style.overflow = 'unset';
     };
   }, [show]);
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file || !onProofChange) {
+      onProofChange?.({ file: null, preview: null });
+      setCompressionInfo(null);
+      return;
+    }
+
+    if (isImageFile(file)) {
+      setCompressing(true);
+      try {
+        const result = await compressImageWithPreset(file, 'paymentProof');
+        setCompressionInfo({
+          original: result.originalSize,
+          compressed: result.compressedSize
+        });
+        onProofChange({ file: result.file, preview: URL.createObjectURL(result.blob) });
+      } catch (error) {
+        console.error('Error compressing image:', error);
+        // Fallback to original file
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          onProofChange({ file, preview: reader.result as string });
+        };
+        reader.readAsDataURL(file);
+        setCompressionInfo(null);
+      } finally {
+        setCompressing(false);
+      }
+    } else {
+      onProofChange({ file: null, preview: null });
+    }
+  }, [onProofChange]);
 
   if (!show) return null;
 
@@ -96,27 +135,27 @@ export default function PackageRefundModal({
           {onProofChange && (
             <div className={styles.formGroup}>
               <label>Bukti Refund (Opsional)</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0] || null;
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      onProofChange({ file, preview: reader.result as string });
-                    };
-                    reader.readAsDataURL(file);
-                  } else {
-                    onProofChange({ file: null, preview: null });
-                  }
-                }}
-                className={styles.input}
-                disabled={submitting}
-              />
+              {compressing ? (
+                <div className={styles.input} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#3b82f6' }}>
+                  ⏳ Mengkompresi gambar...
+                </div>
+              ) : (
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className={styles.input}
+                  disabled={submitting}
+                />
+              )}
               {refundProof?.preview && (
                 <div className={styles.imagePreview}>
                   <img src={refundProof.preview} alt="Preview" style={{ maxWidth: '200px', marginTop: '8px', borderRadius: '4px' }} />
+                  {compressionInfo && (
+                    <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>
+                      ✓ Dikompresi: {formatFileSize(compressionInfo.original)} → {formatFileSize(compressionInfo.compressed)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -140,7 +179,7 @@ export default function PackageRefundModal({
           <button 
             onClick={onSubmit} 
             className={styles.btnDanger} 
-            disabled={submitting || !reason || reason.length < 8 || refundAmount <= 0}
+            disabled={submitting || compressing || !reason || reason.length < 8 || refundAmount <= 0}
           >
             {submitting ? 'Memproses...' : 'Refund Paket'}
           </button>
