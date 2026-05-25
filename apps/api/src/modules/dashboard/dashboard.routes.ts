@@ -17,4 +17,29 @@ router.get(
   controller.getBranchDashboard.bind(controller)
 );
 
+// Role-specific dashboards
+router.get(
+  '/doctor',
+  authorize([Role.DOCTOR]),
+  controller.getDoctorDashboard.bind(controller)
+);
+
+router.get(
+  '/nurse',
+  authorize([Role.NURSE]),
+  controller.getNurseDashboard.bind(controller)
+);
+
+router.get(
+  '/admin-layanan',
+  authorize([Role.ADMIN_LAYANAN]),
+  controller.getAdminLayananDashboard.bind(controller)
+);
+
+router.get(
+  '/member',
+  authorize([Role.MEMBER]),
+  controller.getMemberDashboard.bind(controller)
+);
+
 export { router as dashboardRouter };

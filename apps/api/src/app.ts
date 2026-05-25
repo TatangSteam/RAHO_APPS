@@ -31,7 +31,10 @@ export function createApp(): Application {
   const app = express();
 
   // ── Security Headers ───────────────────────────────────────
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+  }));
 
   // ── CORS ───────────────────────────────────────────────────
   const allowedOrigins = env.CORS_ORIGIN.split(',').map(o => o.trim());

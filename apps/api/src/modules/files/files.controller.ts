@@ -35,6 +35,14 @@ export class FilesController {
       res.setHeader('Content-Length', result.contentLength);
       res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
       res.setHeader('ETag', result.etag);
+      
+      // CORS headers for blob/stream responses (needed for cross-origin fetch with responseType: blob)
+      const origin = req.headers.origin;
+      if (origin) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
 
       // Stream the file
       result.stream.pipe(res);

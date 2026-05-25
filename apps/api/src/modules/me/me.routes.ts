@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
 import { authorize } from '@middleware/authorize';
-import { getMemberDashboard, getMemberSessions, getMemberDiagnoses, getMemberPackages,  getMemberProfile,
-  getMemberInvoices, } from './me.controller';
+import { getMemberDashboard, getMemberSessions, getMemberSessionDetail, getMemberDiagnoses, getMemberPackages,  getMemberProfile,
+  getMemberInvoices, getMemberInvoiceDetail, } from './me.controller';
 
 const router = Router();
 
@@ -28,6 +28,18 @@ router.get(
   authenticate,
   authorize(['MEMBER']),
   getMemberSessions,
+);
+
+/**
+ * @route  GET /me/sessions/:sessionId
+ * @desc   Detail sesi terapi member (read-only)
+ * @access Bearer (MEMBER only)
+ */
+router.get(
+  '/sessions/:sessionId',
+  authenticate,
+  authorize(['MEMBER']),
+  getMemberSessionDetail,
 );
 
 /**
@@ -63,4 +75,16 @@ router.get(
     authenticate, 
     authorize(['MEMBER']), 
     getMemberInvoices)
+
+/**
+ * @route  GET /me/invoices/:invoiceId
+ * @desc   Detail invoice member (full data for PDF)
+ * @access Bearer (MEMBER only)
+ */
+router.get(
+    '/invoices/:invoiceId',   
+    authenticate, 
+    authorize(['MEMBER']), 
+    getMemberInvoiceDetail)
+
 export { router as meRouter };

@@ -213,7 +213,7 @@ export default function VerifyPaymentModal({
                   </span>
                 </div>
               </label>
-            )}}
+            )}
 
             {error && <div className={styles.errorMessage}>{error}</div>}
           </div>

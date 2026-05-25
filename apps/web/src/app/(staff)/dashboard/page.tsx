@@ -33,9 +33,25 @@ export default function DashboardPage() {
       router.push('/admin/super-admin');
       return;
     }
+
+    // Redirect to role-specific dashboards
+    if (user.role === 'DOCTOR') {
+      router.push('/dashboard/doctor');
+      return;
+    }
+
+    if (user.role === 'NURSE') {
+      router.push('/dashboard/nurse');
+      return;
+    }
+
+    if (user.role === 'ADMIN_LAYANAN') {
+      router.push('/dashboard/admin-layanan');
+      return;
+    }
     
-    // Allow ADMIN_MANAGER, ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR, and NURSE to access dashboard
-    if (!['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(user.role)) {
+    // Allow ADMIN_MANAGER and ADMIN_CABANG to access main dashboard
+    if (!['ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role)) {
       showToast.error('Anda tidak memiliki akses ke dashboard ini');
       router.push('/members');
       return;

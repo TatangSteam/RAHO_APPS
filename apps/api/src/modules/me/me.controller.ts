@@ -2,10 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import {
   getMemberDashboardService,
   getMemberSessionsService,
+  getMemberSessionDetailService,
   getMemberDiagnosesService,
   getMemberPackagesService,
   getMemberProfileService,
   getMemberInvoicesService,
+  getMemberInvoiceDetailService,
 } from './me.service';
 import { sendSuccess, buildPaginationMeta } from '@utils/response';
 import { prisma } from '@lib/prisma';
@@ -61,6 +63,26 @@ export async function getMemberSessions(
     const meta = buildPaginationMeta(total, page, limit);
 
     sendSuccess(res, data, 200, meta);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
+// ── Member Session Detail (Read-Only) ──────────────────────────
+
+
+export async function getMemberSessionDetail(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const memberId = await getMemberIdFromUserId(req.user.userId);
+    const { sessionId } = req.params;
+
+    const data = await getMemberSessionDetailService(memberId, sessionId);
+    sendSuccess(res, data);
   } catch (err) {
     next(err);
   }
@@ -138,6 +160,26 @@ export async function getMemberInvoices(
     const meta = buildPaginationMeta(total, page, limit);
 
     sendSuccess(res, data, 200, meta);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
+// ── Member Invoice Detail ──────────────────────────────────────
+
+
+export async function getMemberInvoiceDetail(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const memberId = await getMemberIdFromUserId(req.user.userId);
+    const { invoiceId } = req.params;
+
+    const data = await getMemberInvoiceDetailService(memberId, invoiceId);
+    sendSuccess(res, data);
   } catch (err) {
     next(err);
   }

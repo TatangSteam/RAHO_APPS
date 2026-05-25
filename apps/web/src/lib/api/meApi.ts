@@ -1,4 +1,5 @@
 import { api } from '../api';
+import type { Invoice } from '@/types/invoice';
 
 export interface MemberDashboard {
   voucherSisa: number
@@ -22,6 +23,99 @@ export interface MemberSession {
   packageCode: string
   branchName: string
   branchCode: string
+}
+
+export interface MemberSessionDetail {
+  session: {
+    id: string
+    sessionCode: string
+    treatmentDate: string
+    infusKe: number
+    pelaksanaan: string
+    isCompleted: boolean
+    packageType: string
+    packageCode: string
+    branchName: string
+    branchCode: string
+  }
+  staff: {
+    adminLayanan: string | null
+    doctor: string | null
+    nurse: string | null
+  }
+  diagnosis: {
+    diagnosisCode: string
+    diagnosa: string
+    kategoriDiagnosa: string | null
+  } | null
+  therapyPlan: {
+    planCode: string
+    keterangan: string | null
+    ifa250: number | null
+    ifa500: number | null
+    hho: number | null
+    h2: number | null
+    no: number | null
+    gaso: number | null
+    o2: number | null
+    o3: number | null
+    edta: number | null
+    mb: number | null
+    h2s: number | null
+    kcl: number | null
+    jmlNb: number | null
+  } | null
+  vitalSignsBefore: {
+    sistol: number | null
+    diastol: number | null
+    hr: number | null
+    saturasi: number | null
+    pi: number | null
+  } | null
+  vitalSignsAfter: {
+    sistol: number | null
+    diastol: number | null
+    hr: number | null
+    saturasi: number | null
+    pi: number | null
+  } | null
+  infusion: {
+    ifa250: number | null
+    ifa500: number | null
+    hho: number | null
+    h2: number | null
+    no: number | null
+    gaso: number | null
+    o2: number | null
+    o3: number | null
+    edta: number | null
+    mb: number | null
+    h2s: number | null
+    kcl: number | null
+    jmlNb: number | null
+    deviationNotes: string | null
+    bottleType: string | null
+    jenisCairan: string | null
+    volumeCarrier: number | null
+    jumlahJarum: number | null
+  } | null
+  materials: {
+    productName: string
+    quantity: number
+    unit: string
+  }[]
+  photo: {
+    photoUrl: string
+    fileName: string
+  } | null
+  evaluation: {
+    evaluationCode: string
+    subjective: string | null
+    objective: string | null
+    assessment: string | null
+    plan: string | null
+    generalNotes: string | null
+  } | null
 }
 
 export interface MemberPackage {
@@ -77,6 +171,11 @@ export interface MemberInvoice {
   createdAt: string
   branchName: string
   branchCode: string
+  memberName: string
+  memberNo: string
+  memberPhone: string
+  paymentProofUrl: string | null
+  paymentProofFileName: string | null
   items: { description: string; quantity: number; pricePerUnit: number; totalAmount: number }[]
 }
 
@@ -103,6 +202,11 @@ export const meApi = {
     return { data: res.data.data, meta: res.data.meta }
   },
 
+  getSessionDetail: async (sessionId: string): Promise<MemberSessionDetail> => {
+    const res = await api.get(`/me/sessions/${sessionId}`)
+    return res.data.data
+  },
+
   getDiagnoses: async (): Promise<MemberDiagnosis[]> => {
     const res = await api.get('/me/diagnoses')
     return res.data.data
@@ -124,6 +228,11 @@ export const meApi = {
   ): Promise<{ data: MemberInvoice[]; meta: PaginatedMeta }> => {
     const res = await api.get('/me/invoices', { params: { page, limit } })
     return { data: res.data.data, meta: res.data.meta }
+  },
+
+  getInvoiceDetail: async (invoiceId: string): Promise<Invoice> => {
+    const res = await api.get(`/me/invoices/${invoiceId}`)
+    return res.data.data
   },
 
   uploadAvatar: async (file: File): Promise<{ avatarUrl: string }> => {

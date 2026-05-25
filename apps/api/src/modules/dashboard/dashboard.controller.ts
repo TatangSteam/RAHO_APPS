@@ -1,9 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { DashboardService } from './dashboard.service';
+import { RoleDashboardService } from './role-dashboard.service';
 import { sendSuccess } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
 
 const dashboardService = new DashboardService();
+const roleDashboardService = new RoleDashboardService();
 
 export class DashboardController {
   /**
@@ -66,6 +68,113 @@ export class DashboardController {
       return sendSuccess(res, stats);
     } catch (error) {
       console.error('❌ Dashboard error:', error);
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/dashboard/doctor
+   * Get doctor-specific dashboard
+   */
+  async getDoctorDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      const branchId = req.user?.branchId;
+      const userRole = req.user?.role;
+
+      if (!userId || !branchId) {
+        throw { status: 400, code: 'INVALID_REQUEST', message: 'User or branch information missing' };
+      }
+
+      if (userRole !== 'DOCTOR') {
+        throw { status: 403, code: 'FORBIDDEN', message: 'Only doctors can access this dashboard' };
+      }
+
+      const data = await roleDashboardService.getDoctorDashboard(userId, branchId);
+      return sendSuccess(res, data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/dashboard/nurse
+   * Get nurse-specific dashboard
+   */
+  async getNurseDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const branchId = req.user?.branchId;
+      const userRole = req.user?.role;
+
+      if (!branchId) {
+        throw { status: 400, code: 'INVALID_REQUEST', message: 'Branch information missing' };
+      }
+
+      if (userRole !== 'NURSE') {
+        throw { status: 403, code: 'FORBIDDEN', message: 'Only nurses can access this dashboard' };
+      }
+
+      const data = await roleDashboardService.getNurseDashboard(branchId);
+      return sendSuccess(res, data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/dashboard/admin-layanan
+   * Get admin layanan-specific dashboard
+   */
+  async getAdminLayananDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const branchId = req.user?.branchId;
+      const userRole = req.user?.role;
+
+      if (!branchId) {
+        throw { status: 400, code: 'INVALID_REQUEST', message: 'Branch information missing' };
+      }
+
+      if (userRole !== 'ADMIN_LAYANAN') {
+        throw { status: 403, code: 'FORBIDDEN', message: 'Only Admin Layanan can access this dashboard' };
+      }
+
+      const data = await roleDashboardService.getAdminLayananDashboard(branchId);
+      return sendSuccess(res, data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/v1/dashboard/member
+   * Get enhanced member dashboard
+   */
+  async getMemberDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        throw { status: 400, code: 'INVALID_REQUEST', message: 'User information missing' };
+      }
+
+      if (userRole !== 'MEMBER') {
+        throw { status: 403, code: 'FORBIDDEN', message: 'Only members can access this dashboard' };
+      }
+
+      // Get member ID from user
+      const member = await prisma.member.findUnique({
+        where: { userId },
+        select: { id: true },
+      });
+
+      if (!member) {
+        throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member not found' };
+      }
+
+      const data = await roleDashboardService.getMemberDashboardEnhanced(member.id);
+      return sendSuccess(res, data);
+    } catch (error) {
       next(error);
     }
   }
