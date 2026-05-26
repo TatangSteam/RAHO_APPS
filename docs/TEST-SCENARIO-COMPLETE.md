@@ -30,7 +30,7 @@
 ### Super Admin & Manager (Cross-Branch)
 | No | Email | Role | Nama Lengkap | Password | Cabang Primary |
 |----|-------|------|--------------|----------|----------------|
-| 1 | superadmin@raho.id | SUPER_ADMIN | Super Administrator | Sup3r4dM1n@123 | - (Semua) |
+| 1 | superadmin@raho.id | SUPER_ADMIN | Super Administrator | Sup3r4dM1n | - (Semua) |
 | 2 | manager1@raho.id | ADMIN_MANAGER | Admin Manager Regional 1 | Manager@123 | PST (Jakarta) |
 | 3 | manager2@raho.id | ADMIN_MANAGER | Admin Manager Regional 2 | Manager@123 | SBY (Surabaya) |
 

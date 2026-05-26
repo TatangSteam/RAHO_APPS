@@ -6,6 +6,7 @@ import axios, {
 
 // We import the store getter directly to avoid React hook rules outside components
 import { useAuthStore } from '@/stores/authStore';
+import { devLog } from '@/lib/logger';
 
 // ── Base Instance ─────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ let throttleTimeout: NodeJS.Timeout | null = null;
 // Activity detection
 function updateLastActivity(): void {
   lastActivityTime = Date.now();
-  console.log('[Activity] User activity detected, last activity updated');
+  devLog('[Activity] User activity detected, last activity updated');
 }
 
 // Throttled activity update (max once per second)
@@ -49,7 +50,7 @@ function attachActivityListeners(): void {
   });
   
   activityListenersAttached = true;
-  console.log('[Activity] Activity listeners attached');
+  devLog('[Activity] Activity listeners attached');
 }
 
 function detachActivityListeners(): void {
@@ -67,7 +68,7 @@ function detachActivityListeners(): void {
   }
   
   activityListenersAttached = false;
-  console.log('[Activity] Activity listeners detached');
+  devLog('[Activity] Activity listeners detached');
 }
 
 export function startTokenExpiryCheck(): void {

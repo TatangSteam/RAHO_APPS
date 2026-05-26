@@ -37,7 +37,7 @@
   ```
 - [ ] If not exists, run: `npm run seed:essential`
 - [ ] Verify Super Admin created successfully
-- [ ] **Credentials:** superadmin@raho.id / Sup3r4dM1n@123
+- [ ] **Credentials:** superadmin@raho.id / Sup3r4dM1n
 
 ### 3. Backend Deployment
 - [ ] Build backend: `npm run build`
@@ -67,7 +67,7 @@
 
 ### Test 1: Super Admin Login
 - [ ] Navigate to production login page
-- [ ] Login with: superadmin@raho.id / Sup3r4dM1n@123
+- [ ] Login with: superadmin@raho.id / Sup3r4dM1n
 - [ ] ✅ Login successful
 - [ ] ✅ Redirected to Super Admin dashboard
 - [ ] ✅ "Admin Managers" tab visible

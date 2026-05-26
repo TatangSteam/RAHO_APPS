@@ -6,6 +6,7 @@ import { adminManagersApi } from '@/lib/api/adminManagersApi';
 import { useAuthStore } from '@/stores/authStore';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { UserCog } from 'lucide-react';
 import styles from './ImpersonateButton.module.css';
 
@@ -54,7 +55,7 @@ export const ImpersonateButton: React.FC<ImpersonateButtonProps> = ({
       window.location.replace(targetUrl);
       
     } catch (error: any) {
-      console.error('Error impersonating user:', error);
+      devError('Error impersonating user:', error);
       const message = error.response?.data?.message || 'Gagal melakukan impersonation';
       showToast.error(message);
       setLoading(false);

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import type { TherapyPlan, CreateTherapyPlanInput } from '@/types/session';
+import { devError } from '@/lib/logger';
 import styles from './Step2TherapyPlan.module.css';
 
 interface Step2TherapyPlanProps {
@@ -96,7 +97,7 @@ export default function Step2TherapyPlan({
       await sessionApi.createTherapyPlan(sessionId, formData);
       onComplete();
     } catch (err: any) {
-      console.error('Failed to create therapy plan:', err);
+      devError('Failed to create therapy plan:', err);
       setError(err.response?.data?.error?.message || 'Gagal menyimpan terapi plan');
     } finally {
       setLoading(false);

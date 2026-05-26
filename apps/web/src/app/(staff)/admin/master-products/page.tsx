@@ -10,6 +10,7 @@ import {
   Building2, Pill, Stethoscope, Droplets, AlertCircle,
   Zap, Link2, Clock, Info, Save, Loader2, Box,
 } from 'lucide-react';
+import { devError } from '@/lib/logger';
 import styles from './page.module.css';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -190,7 +191,7 @@ export default function MasterProductsPage() {
       const result = await response.json();
       setProducts(result.data.products || []);
     } catch (error: any) {
-      console.error('Error loading products:', error);
+      devError('Error loading products:', error);
       showToast.error(error.message || 'Gagal memuat produk');
     } finally {
       setLoading(false);
@@ -288,7 +289,7 @@ export default function MasterProductsPage() {
       const result = await response.json();
       setAllBranches(result.data || []);
     } catch (error: any) {
-      console.error('Error loading branches:', error);
+      devError('Error loading branches:', error);
     }
   };
 

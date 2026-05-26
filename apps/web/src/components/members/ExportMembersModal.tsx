@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
+import { devError } from '@/lib/logger';
 
 // ============================================================
 // TYPES
@@ -192,7 +193,7 @@ export default function ExportMembersModal({
       const data = Array.isArray(response.data.data) ? response.data.data : [];
       setBranches(data.map((b: any) => ({ id: b.id, branchCode: b.branchCode, name: b.name })));
     } catch (error) {
-      console.error('Failed to load branches:', error);
+      devError('Failed to load branches:', error);
     }
   };
 
@@ -209,7 +210,7 @@ export default function ExportMembersModal({
         setPreviewCount(data.data.count);
       }
     } catch (error) {
-      console.error('Failed to load preview:', error);
+      devError('Failed to load preview:', error);
     } finally {
       setLoadingPreview(false);
     }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import type { TherapyPlan, InfusionExecution, CreateInfusionInput } from '@/types/session';
+import { devError } from '@/lib/logger';
 
 interface Step5InfusionProps {
   sessionId: string;
@@ -137,7 +138,7 @@ export default function Step5Infusion({
         setShouldNavigateNext(false);
       }
     } catch (err: any) {
-      console.error('Failed to create infusion:', err);
+      devError('Failed to create infusion:', err);
       setError(err.response?.data?.error?.message || 'Gagal menyimpan infus aktual');
       setShouldNavigateNext(false);
     } finally {

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { Building2, ArrowLeft, Save } from 'lucide-react';
 
 export default function CreateBranchPage() {
@@ -29,7 +30,7 @@ export default function CreateBranchPage() {
       showToast.success('Cabang berhasil dibuat');
       router.push('/branches');
     } catch (error: any) {
-      console.error('Error creating branch:', error);
+      devError('Error creating branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal membuat cabang');
     } finally {
       setLoading(false);

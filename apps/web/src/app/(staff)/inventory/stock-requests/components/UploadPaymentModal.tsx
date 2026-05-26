@@ -7,6 +7,7 @@ import { StockRequest } from '../types';
 import { showToast } from '@/lib/toast';
 import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
+import { devError } from '@/lib/logger';
 
 interface UploadPaymentModalProps {
   request: StockRequest;
@@ -71,7 +72,7 @@ export default function UploadPaymentModal({
           compressed: result.compressedSize
         });
       } catch (error) {
-        console.error('Error compressing image:', error);
+        devError('Error compressing image:', error);
         // Fallback to original file
         setFile(selectedFile);
         const reader = new FileReader();
@@ -154,7 +155,7 @@ export default function UploadPaymentModal({
       await generateStockRequestInvoicePDF(invoiceWithItems);
       showToast.success('Invoice PDF berhasil didownload');
     } catch (error) {
-      console.error('Error generating invoice PDF:', error);
+      devError('Error generating invoice PDF:', error);
       showToast.error('Gagal membuat PDF invoice');
     } finally {
       setDownloadingPdf(false);

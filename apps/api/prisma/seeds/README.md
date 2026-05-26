@@ -84,7 +84,7 @@ npm run db:seed:testing
 ```
 
 **Admin Accounts:**
-- `superadmin@raho.id` → `Sup3r4dM1n@123` [SUPER_ADMIN] *(from essential seed)*
+- `superadmin@raho.id` → `Sup3r4dM1n` [SUPER_ADMIN] *(from essential seed)*
 - `manager@raho.id` → `Manager@123` [ADMIN_MANAGER] *(from testing seed)*
 
 **Test Accounts Created:**
@@ -312,7 +312,7 @@ npm run db:migrate:prod
 npm run db:seed:essential
 
 # 3. Configure via admin panel
-# - Login as superadmin@raho.id (password: Sup3r4dM1n@123)
+# - Login as superadmin@raho.id (password: Sup3r4dM1n)
 # - Create your first branch
 # - Create Admin Manager users
 # - Configure package pricing per branch
@@ -586,7 +586,7 @@ Potential improvements:
 
 | Email | Password | Role | Access |
 |-------|----------|------|--------|
-| superadmin@raho.id | Sup3r4dM1n@123 | SUPER_ADMIN | All branches, all features, impersonation |
+| superadmin@raho.id | Sup3r4dM1n | SUPER_ADMIN | All branches, all features, impersonation |
 
 ### Testing Seed Accounts
 

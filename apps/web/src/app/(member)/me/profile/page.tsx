@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
 import { User, MapPin, Phone, Mail, Calendar, CreditCard, Building2, Camera, Loader2, Check } from 'lucide-react'
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor'
+import { devLog, devError } from '@/lib/logger'
 
 export default function MemberProfilePage() {
   const { updateUserAvatar } = useAuthStore()
@@ -48,7 +49,7 @@ export default function MemberProfilePage() {
       const blobUrl = URL.createObjectURL(response.data)
       setAvatarBlobUrl(blobUrl)
     } catch (error) {
-      console.error('Failed to load avatar:', error)
+      devError('Failed to load avatar:', error)
       setAvatarBlobUrl(null)
     } finally {
       setAvatarLoading(false)
@@ -104,9 +105,9 @@ export default function MemberProfilePage() {
         try {
           const result = await compressImageWithPreset(file, 'profilePhoto')
           fileToUpload = result.file
-          console.log(`[MemberProfile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
+          devLog(`[MemberProfile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
         } catch (error) {
-          console.error('Error compressing avatar:', error)
+          devError('Error compressing avatar:', error)
           // Continue with original file
         } finally {
           setCompressing(false)
@@ -129,7 +130,7 @@ export default function MemberProfilePage() {
       setUploadSuccess(true)
       setTimeout(() => setUploadSuccess(false), 2000)
     } catch (error) {
-      console.error('Error uploading avatar:', error)
+      devError('Error uploading avatar:', error)
       alert('Gagal mengupload foto profil')
     } finally {
       setUploading(false)

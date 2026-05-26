@@ -6,6 +6,7 @@ import { X, Plus, Check, RefreshCw, Trash2, Package, Search, Filter, AlertTriang
 import { MasterProduct, RequestItem } from '../types';
 import { inventoryApi, OverstockPreviewItem } from '@/lib/api/inventoryApi';
 import { useAuthStore } from '@/stores/authStore';
+import { devError } from '@/lib/logger';
 
 interface PendingInfo {
   hasPendingShipments: boolean;
@@ -101,7 +102,7 @@ export default function CreateRequestModal({
           pendingRequests,
         });
       } catch (error) {
-        console.error('Failed to fetch pending info:', error);
+        devError('Failed to fetch pending info:', error);
         setPendingInfo(null);
       } finally {
         setLoadingPendingInfo(false);
@@ -152,7 +153,7 @@ export default function CreateRequestModal({
           setOverstockPreview(response.data.data);
         }
       } catch (error) {
-        console.error('Failed to fetch overstock preview:', error);
+        devError('Failed to fetch overstock preview:', error);
         setOverstockPreview([]);
       } finally {
         setLoadingOverstock(false);

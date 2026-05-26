@@ -5,6 +5,7 @@ import { X, Building2, Loader2, Plus, Trash2, Stethoscope, Heart, Star, ArrowUpC
 import { showToast, confirm } from '@/lib/toast';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { InfoAlert } from '@/components/ui/Alert';
+import { devError } from '@/lib/logger';
 
 interface AssignedBranch {
   staffBranchId: string;
@@ -78,7 +79,7 @@ export default function ManageStaffBranchesModal({
       setStaffData(branchesRes.data.data);
       setAvailableBranches(availableRes.data.data || []);
     } catch (error: any) {
-      console.error('Error loading staff branches:', error);
+      devError('Error loading staff branches:', error);
       showToast.error('Gagal memuat data cabang staff');
     } finally {
       setLoading(false);
@@ -99,7 +100,7 @@ export default function ManageStaffBranchesModal({
       await loadData();
       onSuccess();
     } catch (error: any) {
-      console.error('Error assigning branch:', error);
+      devError('Error assigning branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menambahkan cabang');
     } finally {
       setAssigning(false);
@@ -120,7 +121,7 @@ export default function ManageStaffBranchesModal({
       await loadData();
       onSuccess();
     } catch (error: any) {
-      console.error('Error removing branch:', error);
+      devError('Error removing branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menghapus dari cabang');
     } finally {
       setRemoving(null);
@@ -142,7 +143,7 @@ export default function ManageStaffBranchesModal({
       await loadData();
       onSuccess();
     } catch (error: any) {
-      console.error('Error setting primary branch:', error);
+      devError('Error setting primary branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah cabang utama');
     } finally {
       setSettingPrimary(null);

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useEffect, useState, useCallback } from 'react';
 import styles from './PackageActionModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
+import { devError } from '@/lib/logger';
 
 interface PackageRefundModalProps {
   show: boolean;
@@ -67,7 +68,7 @@ export default function PackageRefundModal({
         });
         onProofChange({ file: result.file, preview: URL.createObjectURL(result.blob) });
       } catch (error) {
-        console.error('Error compressing image:', error);
+        devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
         reader.onloadend = () => {

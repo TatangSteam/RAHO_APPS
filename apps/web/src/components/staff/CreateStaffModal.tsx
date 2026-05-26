@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import styles from './CreateStaffModal.module.css';
 
 interface Props {
@@ -60,7 +61,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
       const result = await response.json();
       setBranches(result.data || []);
     } catch (error) {
-      console.error('Error loading branches:', error);
+      devError('Error loading branches:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoadingBranches(false);
@@ -177,7 +178,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Error creating staff:', error);
+      devError('Error creating staff:', error);
       showToast.error(error.message || 'Gagal membuat user');
     } finally {
       setLoading(false);

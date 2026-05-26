@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import { compressImageWithPreset, isImageFile, formatFileSize } from '@/lib/imageCompressor';
+import { devError } from '@/lib/logger';
 
 interface DocumentUploadSectionProps {
   pspFile: File | null;
@@ -56,7 +57,7 @@ export default function DocumentUploadSection({
         } as React.ChangeEvent<HTMLInputElement>;
         onPspChange(fakeEvent);
       } catch (error) {
-        console.error('Error compressing PSP image:', error);
+        devError('Error compressing PSP image:', error);
         // Fallback to original file
         const reader = new FileReader();
         reader.onloadend = () => setPspPreview(reader.result as string);
@@ -93,7 +94,7 @@ export default function DocumentUploadSection({
       } as React.ChangeEvent<HTMLInputElement>;
       onPhotoChange(fakeEvent);
     } catch (error) {
-      console.error('Error compressing photo:', error);
+      devError('Error compressing photo:', error);
       // Fallback to original file
       onPhotoChange(e);
     } finally {

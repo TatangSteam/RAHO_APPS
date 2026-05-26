@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { adminManagersApi, AdminManager } from '@/lib/api/adminManagersApi';
 import { CreateAdminManagerModal } from './CreateAdminManagerModal';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 import { Search, Filter, ChevronLeft, ChevronRight, Users, Building2, Eye } from 'lucide-react';
 import styles from './AdminManagersTab.module.css';
 
@@ -33,22 +34,22 @@ export const AdminManagersTab: React.FC = () => {
       if (search) params.search = search;
       if (statusFilter !== 'all') params.isActive = statusFilter === 'active';
 
-      console.log('🔍 Calling getAdminManagers with params:', params);
+      devLog('🔍 Calling getAdminManagers with params:', params);
       const response = await adminManagersApi.getAdminManagers(params);
-      console.log('✅ Response received:', response);
+      devLog('✅ Response received:', response);
       
       // Handle different response structures
       if (response && response.data) {
         setManagers(Array.isArray(response.data) ? response.data : []);
         setTotal(response.meta?.total || 0);
       } else {
-        console.warn('⚠️ Unexpected response structure:', response);
+        devLog('⚠️ Unexpected response structure:', response);
         setManagers([]);
         setTotal(0);
       }
     } catch (error: any) {
-      console.error('❌ Error loading admin managers:', error);
-      console.error('Error details:', error.response?.data);
+      devError('❌ Error loading admin managers:', error);
+      devError('Error details:', error.response?.data);
       showToast.error(error.response?.data?.message || 'Gagal memuat data Admin Manager');
       setManagers([]);
       setTotal(0);

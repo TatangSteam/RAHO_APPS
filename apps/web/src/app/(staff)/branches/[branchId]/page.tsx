@@ -23,6 +23,7 @@ import AssignMedicalStaffModal from '@/components/branches/AssignMedicalStaffMod
 import ManageStaffBranchesModal from '@/components/branches/ManageStaffBranchesModal';
 import StaffCredentialsModal from '@/components/branches/StaffCredentialsModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
+import { devError } from '@/lib/logger';
 
 // Import Tailwind Tables
 import StaffTable from '@/components/branches/StaffTable';
@@ -273,7 +274,7 @@ export default function BranchDetailPage() {
       const response = await branchesApi.getBranch(branchId);
       setBranch(response.data.data);
     } catch (error: any) {
-      console.error('Error loading branch:', error);
+      devError('Error loading branch:', error);
       showToast.error('Gagal memuat data cabang');
       router.push('/branches');
     } finally {
@@ -307,7 +308,7 @@ export default function BranchDetailPage() {
         setManagers(Array.isArray(managersData) ? managersData : []);
       }
     } catch (error: any) {
-      console.error(`Error loading ${activeTab} data:`, error);
+      devError(`Error loading ${activeTab} data:`, error);
       showToast.error(`Gagal memuat data ${activeTab}`);
       if (activeTab === 'members') setMembers([]);
       else if (activeTab === 'inventory') setInventory([]);
@@ -329,7 +330,7 @@ export default function BranchDetailPage() {
       showToast.success('Cabang berhasil dihapus');
       router.push('/branches');
     } catch (error: any) {
-      console.error('Error deleting branch:', error);
+      devError('Error deleting branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
     }
   };
@@ -376,7 +377,7 @@ export default function BranchDetailPage() {
       }
       handleCrudSuccess();
     } catch (error: any) {
-      console.error(`Error deleting ${type}:`, error);
+      devError(`Error deleting ${type}:`, error);
       showToast.error(error.response?.data?.message || `Gagal menghapus ${type}`);
     }
   };

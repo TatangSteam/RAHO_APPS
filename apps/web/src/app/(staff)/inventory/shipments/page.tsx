@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { inventoryApi, Shipment, ReceiveShipmentInput, ShipShipmentInput } from '@/lib/api/inventoryApi';
 import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
 import { ShipModal, ReceiveModal, DetailModal } from './components';
@@ -53,7 +54,7 @@ export default function ShipmentsPage() {
       
       setShipments(shipmentsData);
     } catch (error: any) {
-      console.error('Shipments fetch error:', error);
+      devError('Shipments fetch error:', error);
       showToast.error('Gagal memuat pengiriman');
       setShipments([]);
     } finally {

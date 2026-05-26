@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { User, Phone, Mail, Building2, Camera, Loader2, Check, Shield, Briefcase, Calendar } from 'lucide-react'
 import Image from 'next/image'
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor'
+import { devLog, devError } from '@/lib/logger'
 
 interface StaffProfile {
   id: string
@@ -62,7 +63,7 @@ export default function StaffProfilePage() {
       const res = await api.get('/auth/me')
       setProfile(res.data.data)
     } catch (error) {
-      console.error('Error fetching profile:', error)
+      devError('Error fetching profile:', error)
     } finally {
       setLoading(false)
     }
@@ -97,9 +98,9 @@ export default function StaffProfilePage() {
         try {
           const result = await compressImageWithPreset(file, 'profilePhoto')
           fileToUpload = result.file
-          console.log(`[Profile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
+          devLog(`[Profile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
         } catch (error) {
-          console.error('Error compressing avatar:', error)
+          devError('Error compressing avatar:', error)
           // Continue with original file
         } finally {
           setCompressing(false)
@@ -127,7 +128,7 @@ export default function StaffProfilePage() {
       setUploadSuccess(true)
       setTimeout(() => setUploadSuccess(false), 2000)
     } catch (error) {
-      console.error('Error uploading avatar:', error)
+      devError('Error uploading avatar:', error)
       alert('Gagal mengupload foto profil')
     } finally {
       setUploading(false)

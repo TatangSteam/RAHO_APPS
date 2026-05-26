@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { devLog, devError } from '@/lib/logger';
 import styles from './PaymentProofModal.module.css';
 
 interface Props {
@@ -35,7 +36,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
       
       setImageUrls(prev => new Map(prev).set(paymentId, blobUrl));
     } catch (error) {
-      console.error('Failed to load payment proof image:', error);
+      devError('Failed to load payment proof image:', error);
     } finally {
       setLoadingImages(prev => {
         const newSet = new Set(prev);
@@ -75,7 +76,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
     }
   };
 
-  console.log('🔍 PaymentProofModal Debug:', {
+  devLog('🔍 PaymentProofModal Debug:', {
     invoiceNumber: invoice.invoiceNumber,
     totalPayments: invoice.payments.length,
     paymentsWithProof: paymentsWithProof.length,
@@ -88,7 +89,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
     }))
   });
 
-  console.log('🖼️ Current Payment Proof:', {
+  devLog('🖼️ Current Payment Proof:', {
     proofFileUrl: currentPayment.proofFileUrl,
     proofFileName: currentPayment.proofFileName,
     proofMimeType: currentPayment.proofMimeType,
@@ -203,7 +204,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
                     className={styles.proofImage}
                     onError={(e) => {
                       const target = e.target as HTMLImageElement;
-                      console.error('Failed to load image:', target.src);
+                      devError('Failed to load image:', target.src);
                       target.style.display = 'none';
                       const parent = target.parentNode as HTMLElement;
                       if (parent && !parent.querySelector(`.${styles.errorMessage}`)) {

@@ -12,6 +12,7 @@ import { Footer } from '@/components/layout/Footer'
 import { useThemeStore } from '@/stores/themeStore'
 import { api } from '@/lib/api'
 import { meApi } from '@/lib/api/meApi'
+import { devError } from '@/lib/logger'
 
 const NAV_ITEMS = [
   { href: '/me/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -58,7 +59,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
       const blobUrl = URL.createObjectURL(response.data)
       setAvatarBlobUrl(blobUrl)
     } catch (error) {
-      console.error('Failed to load avatar:', error)
+      devError('Failed to load avatar:', error)
       setAvatarBlobUrl(null)
     }
   }, [])
@@ -76,7 +77,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
         loadAvatar(profile.avatarUrl)
       }
     } catch (error) {
-      console.error('Failed to fetch profile for avatar:', error)
+      devError('Failed to fetch profile for avatar:', error)
     }
   }, [loadAvatar, updateUserAvatar])
 
@@ -111,7 +112,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
         await logoutApi(refreshToken)
       }
     } catch (error) {
-      console.error('Logout API error:', error)
+      devError('Logout API error:', error)
     } finally {
       clearAuth()
       document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'

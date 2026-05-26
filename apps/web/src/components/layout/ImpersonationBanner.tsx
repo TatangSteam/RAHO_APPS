@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { showToast } from '@/lib/toast';
 import styles from './ImpersonationBanner.module.css';
+import { devError } from '@/lib/logger';
 
 export const ImpersonationBanner: React.FC = () => {
   const { isImpersonating, impersonationChain, stopImpersonation, loading, error, clearError } = useImpersonation();
@@ -60,7 +61,7 @@ export const ImpersonationBanner: React.FC = () => {
     try {
       await stopImpersonation();
     } catch (error) {
-      console.error('Failed to stop impersonation:', error);
+      devError('Failed to stop impersonation:', error);
       // Error is handled in context, just log here
     }
   };

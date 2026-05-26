@@ -5,6 +5,7 @@ import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { getReferralIncentivesApi } from '@/lib/membersApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 
 interface MemberProfileTabProps {
   member: MemberDetail;
@@ -50,7 +51,7 @@ export default function MemberProfileTab({
       const data = await getReferralIncentivesApi(member.memberId);
       setIncentiveData(data);
     } catch (error: any) {
-      console.error('Failed to load incentives:', error);
+      devError('Failed to load incentives:', error);
       showToast.error('Gagal memuat data insentif');
     } finally {
       setLoadingIncentives(false);

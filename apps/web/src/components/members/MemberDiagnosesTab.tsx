@@ -10,6 +10,7 @@ import type { StaffMember } from '@/lib/usersApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import ICDSearchInput from '@/components/ui/ICDSearchInput';
+import { devError } from '@/lib/logger';
 
 interface MemberDiagnosesTabProps {
   memberId: string;
@@ -83,7 +84,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
       const data = await diagnosisApi.getMemberDiagnoses(memberId);
       setDiagnoses(data);
     } catch (error) {
-      console.error('Failed to load diagnoses:', error);
+      devError('Failed to load diagnoses:', error);
       showToast.error('Gagal memuat data diagnosa');
     } finally {
       setLoading(false);
@@ -96,7 +97,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
       const data = await usersApi.getDoctors(branchIdToUse);
       setDoctors(data);
     } catch (error) {
-      console.error('Failed to load doctors:', error);
+      devError('Failed to load doctors:', error);
     }
   };
 

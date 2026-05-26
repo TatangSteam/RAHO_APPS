@@ -5,6 +5,7 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { inventoryApi, type InventoryItemWithStock } from '@/lib/inventoryApi';
 import { materialsApi } from '@/lib/materialsApi';
+import { devError } from '@/lib/logger';
 
 interface MaterialUsage {
   id: string;
@@ -140,7 +141,7 @@ export default function Step6Materials({
       // API returns { success: true, data: items }, so we need response.data.data
       setInventoryItems(response.data?.data || response.data || []);
     } catch (error) {
-      console.error('Error loading inventory:', error);
+      devError('Error loading inventory:', error);
       showToast.error('Gagal memuat data inventory');
     } finally {
       setLoadingInventory(false);
@@ -169,7 +170,7 @@ export default function Step6Materials({
       setSearchTerm('');
       onComplete();
     } catch (error: any) {
-      console.error('Error adding material:', error);
+      devError('Error adding material:', error);
       showToast.error(error.message || 'Gagal menambah material');
     } finally {
       setLoading(false);

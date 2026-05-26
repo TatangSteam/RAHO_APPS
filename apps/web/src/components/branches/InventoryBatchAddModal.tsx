@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Package, Search, Loader2, Check, CheckSquare, Square, Layers, Save } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
+import { devError } from '@/lib/logger';
 import styles from '@/styles/crud-modal.module.css';
 
 interface InventoryBatchAddModalProps {
@@ -97,7 +98,7 @@ export default function InventoryBatchAddModal({
       
       setMasterProducts(Array.isArray(products) ? products : []);
     } catch (error: any) {
-      console.error('Error loading master products:', error);
+      devError('Error loading master products:', error);
       showToast.error('Gagal memuat daftar produk');
     } finally {
       setLoadingProducts(false);
@@ -251,7 +252,7 @@ export default function InventoryBatchAddModal({
       
       onSuccess();
     } catch (error: any) {
-      console.error('Error batch adding inventory items:', error);
+      devError('Error batch adding inventory items:', error);
       const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal menambahkan item inventori';
       showToast.error(errorMsg);
     } finally {

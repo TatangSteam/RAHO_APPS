@@ -6,6 +6,7 @@ import { sessionApi } from '@/lib/sessionApi';
 import CreateSessionModal from '@/components/sessions/CreateSessionModal';
 import SessionCountDisplay from '@/components/members/SessionCountDisplay';
 import type { SessionDetail } from '@/types/session';
+import { devError } from '@/lib/logger';
 
 interface MemberSessionsTabProps {
   memberId: string;
@@ -29,7 +30,7 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
       const data = await sessionApi.getMemberSessions(memberId);
       setSessions(data || []);
     } catch (error) {
-      console.error('Failed to load sessions:', error);
+      devError('Failed to load sessions:', error);
     } finally {
       setLoading(false);
     }

@@ -22,6 +22,7 @@ import {
   ImageOff,
   RefreshCw,
 } from 'lucide-react'
+import { devError } from '@/lib/logger'
 
 // ── Helper Components ──────────────────────────────────────────
 
@@ -131,7 +132,7 @@ export default function MemberSessionDetailPage() {
       const data = await meApi.getSessionDetail(sessionId)
       setDetail(data)
     } catch (e: any) {
-      console.error(e)
+      devError(e)
       setError(e.response?.data?.message || 'Gagal memuat detail sesi')
     } finally {
       setLoading(false)
@@ -168,7 +169,7 @@ export default function MemberSessionDetailPage() {
       const blobUrl = URL.createObjectURL(response.data)
       setPhotoUrls(prev => ({ ...prev, [photoId]: blobUrl }))
     } catch (e: any) {
-      console.error('Failed to load photo:', e)
+      devError('Failed to load photo:', e)
       setPhotoErrors(prev => ({ ...prev, [photoId]: true }))
     } finally {
       setPhotoLoading(prev => ({ ...prev, [photoId]: false }))

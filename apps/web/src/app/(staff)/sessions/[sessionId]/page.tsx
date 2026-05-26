@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import type { SessionDetail } from '@/types/session';
 import Step1Diagnosis from '@/components/sessions/Step1Diagnosis';
 import Step2TherapyPlan from '@/components/sessions/Step2TherapyPlan';
@@ -48,7 +49,7 @@ export default function SessionDetailPage() {
         else if (!data.steps.step8_evaluation) setActiveStep(8);
       }
     } catch (error: any) {
-      console.error('Error loading session detail:', error);
+      devError('Error loading session detail:', error);
       const errorMessage = error.response?.data?.error?.message || 'Gagal memuat detail sesi';
       showToast.error(errorMessage);
       router.back();
@@ -102,7 +103,7 @@ export default function SessionDetailPage() {
       showToast.success(result.message);
       router.push(`/members/${session.session.member.memberId}`);
     } catch (error: any) {
-      console.error('Error completing session:', error);
+      devError('Error completing session:', error);
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyelesaikan sesi';
       showToast.error(errorMessage);
     } finally {

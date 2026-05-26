@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { adminManagersApi, Branch, CreateAdminManagerData } from '@/lib/api/adminManagersApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { X, Eye, EyeOff, Building2 } from 'lucide-react';
 import styles from './CreateAdminManagerModal.module.css';
 
@@ -46,7 +47,7 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
       const response = await adminManagersApi.getBranches();
       setBranches(response.data.filter(b => b.isActive));
     } catch (error: any) {
-      console.error('Error loading branches:', error);
+      devError('Error loading branches:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoadingBranches(false);
@@ -132,7 +133,7 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
       onSuccess();
       handleClose();
     } catch (error: any) {
-      console.error('Error creating admin manager:', error);
+      devError('Error creating admin manager:', error);
       const message = error.response?.data?.message || 'Gagal membuat Admin Manager';
       showToast.error(message);
     } finally {

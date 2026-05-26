@@ -5,6 +5,7 @@ import { X, User, Mail, Phone, MapPin, Calendar, Save, Loader2, Tag } from 'luci
 import { showToast } from '@/lib/toast';
 import { createMemberApi, updateMemberApi } from '@/lib/membersApi';
 import { getActiveReferrals } from '@/lib/api/referralsApi';
+import { devLog, devError } from '@/lib/logger';
 import styles from '@/styles/crud-modal.module.css';
 
 interface MemberCrudModalProps {
@@ -79,7 +80,7 @@ export default function MemberCrudModal({
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
-        console.error('Error fetching referral codes:', error);
+        devError('Error fetching referral codes:', error);
       }
     };
 
@@ -123,7 +124,7 @@ export default function MemberCrudModal({
 
   useEffect(() => {
     if (action === 'edit' && memberData) {
-      console.log('🔍 [MemberCrudModal] Setting form data from memberData:', memberData);
+      devLog('🔍 [MemberCrudModal] Setting form data from memberData:', memberData);
       setFormData({
         fullName: memberData.fullName || '',
         memberEmail: memberData.email || '', // Email is at top level
@@ -144,7 +145,7 @@ export default function MemberCrudModal({
         nextIncentiveType: memberData.nextIncentiveType || '',
         nextIncentiveValue: memberData.nextIncentiveValue || 0
       });
-      console.log('🔍 [MemberCrudModal] Form data set successfully');
+      devLog('🔍 [MemberCrudModal] Form data set successfully');
     } else if (action === 'create') {
       // Reset form for create action
       setReferralSearch('');
@@ -184,11 +185,11 @@ export default function MemberCrudModal({
     e.preventDefault();
     setLoading(true);
 
-    console.log('🔍 [MemberCrudModal] Submit attempt:', { action, formData, branchId });
+    devLog('🔍 [MemberCrudModal] Submit attempt:', { action, formData, branchId });
 
     try {
       if (action === 'create') {
-        console.log('🔍 [MemberCrudModal] Creating member with data:', formData);
+        devLog('🔍 [MemberCrudModal] Creating member with data:', formData);
         
         // Prepare data - explicitly build the object to avoid spreading unwanted fields
         const createData: any = {
@@ -220,7 +221,7 @@ export default function MemberCrudModal({
           createData.nextIncentiveValue = formData.nextIncentiveValue || 0;
         }
         
-        console.log('🔍 [MemberCrudModal] Final createData:', createData);
+        devLog('🔍 [MemberCrudModal] Final createData:', createData);
         
         await createMemberApi(createData, {});
         showToast.success('Member berhasil ditambahkan');
@@ -239,16 +240,16 @@ export default function MemberCrudModal({
           nextIncentiveType: formData.nextIncentiveType || undefined,
           nextIncentiveValue: formData.nextIncentiveType ? formData.nextIncentiveValue : undefined,
         };
-        console.log('🔍 [MemberCrudModal] Updating member:', memberData.memberId, 'with data:', updateData);
+        devLog('🔍 [MemberCrudModal] Updating member:', memberData.memberId, 'with data:', updateData);
         await updateMemberApi(memberData.memberId, updateData);
         showToast.success('Member berhasil diperbarui');
       }
       
       onSuccess();
     } catch (error: any) {
-      console.error('❌ [MemberCrudModal] Error saving member:', error);
-      console.error('❌ [MemberCrudModal] Error response:', error.response?.data);
-      console.error('❌ [MemberCrudModal] Error status:', error.response?.status);
+      devError('❌ [MemberCrudModal] Error saving member:', error);
+      devError('❌ [MemberCrudModal] Error response:', error.response?.data);
+      devError('❌ [MemberCrudModal] Error status:', error.response?.status);
       showToast.error(error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} member`);
     } finally {
       setLoading(false);

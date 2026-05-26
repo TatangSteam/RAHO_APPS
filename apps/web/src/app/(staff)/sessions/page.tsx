@@ -9,6 +9,7 @@ import { branchesApi } from '@/lib/api/branchesApi';
 import { api } from '@/lib/api';
 import type { SessionDetail } from '@/types/session';
 import styles from './page.module.css';
+import { devError } from '@/lib/logger';
 
 // Types for filter options
 interface Branch {
@@ -367,7 +368,7 @@ export default function SessionsPage() {
           role: u.role,
         })));
       } catch (error) {
-        console.error('Error loading filter options:', error);
+        devError('Error loading filter options:', error);
       }
     };
 
@@ -398,7 +399,7 @@ export default function SessionsPage() {
         setTotalPages(page + 1);
       }
     } catch (error: any) {
-      console.error('Error loading sessions:', error);
+      devError('Error loading sessions:', error);
       showToast.error('Gagal memuat data sesi terapi');
     } finally {
       setLoading(false);
@@ -458,7 +459,7 @@ export default function SessionsPage() {
       showToast.success('Export berhasil!');
       setShowExportModal(false);
     } catch (error: any) {
-      console.error('Export error:', error);
+      devError('Export error:', error);
       showToast.error('Gagal mengexport data');
     } finally {
       setExporting(false);

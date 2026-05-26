@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { usersApi, StaffSessionHistoryResponse, StaffSessionHistoryItem } from '@/lib/usersApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import {
   Activity, ChevronLeft, ChevronRight, Building2, Loader2, Calendar,
   Stethoscope, Heart, UserCog, ArrowLeft, User, Mail, Phone,
@@ -126,7 +127,7 @@ export default function StaffPerformanceDetailPage() {
       });
       setData(result);
     } catch (error: any) {
-      console.error('Error fetching history:', error);
+      devError('Error fetching history:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat data riwayat');
     } finally {
       setLoading(false);

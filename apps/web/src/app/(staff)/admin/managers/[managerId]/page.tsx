@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
 import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
 import styles from './page.module.css';
@@ -108,7 +109,7 @@ export default function AdminManagerDetailPage() {
         }
       }
     } catch (error: any) {
-      console.error('Error loading manager detail:', error);
+      devError('Error loading manager detail:', error);
       showToast.error('Gagal memuat detail Admin Manager');
     } finally {
       setLoading(false);
@@ -139,7 +140,7 @@ export default function AdminManagerDetailPage() {
         setBranchStaff(prev => ({ ...prev, [branchId]: transformedStaff }));
       }
     } catch (error) {
-      console.error(`Error loading staff for branch ${branchId}:`, error);
+      devError(`Error loading staff for branch ${branchId}:`, error);
     }
   };
 
@@ -157,7 +158,7 @@ export default function AdminManagerDetailPage() {
         setBranchMembers(prev => ({ ...prev, [branchId]: result.data?.members || [] }));
       }
     } catch (error) {
-      console.error(`Error loading members for branch ${branchId}:`, error);
+      devError(`Error loading members for branch ${branchId}:`, error);
     }
   };
 
@@ -167,7 +168,7 @@ export default function AdminManagerDetailPage() {
       const response = await adminManagersApi.getAvailableBranchesForManager(managerId);
       setAvailableBranches(response.data || []);
     } catch (error: any) {
-      console.error('Error loading available branches:', error);
+      devError('Error loading available branches:', error);
       showToast.error('Gagal memuat daftar cabang');
     } finally {
       setLoadingAvailableBranches(false);
@@ -187,7 +188,7 @@ export default function AdminManagerDetailPage() {
       setShowAddBranchModal(false);
       await loadManagerDetail();
     } catch (error: any) {
-      console.error('Error assigning branch:', error);
+      devError('Error assigning branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menambahkan cabang');
     } finally {
       setAssigningBranch(null);
@@ -205,7 +206,7 @@ export default function AdminManagerDetailPage() {
       showToast.success('Cabang berhasil dihapus');
       await loadManagerDetail();
     } catch (error: any) {
-      console.error('Error removing branch:', error);
+      devError('Error removing branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
     } finally {
       setRemovingBranch(null);
@@ -265,7 +266,7 @@ export default function AdminManagerDetailPage() {
       setShowEditModal(false);
       await loadManagerDetail();
     } catch (error: any) {
-      console.error('Error updating manager:', error);
+      devError('Error updating manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal memperbarui Admin Manager');
     } finally {
       setSavingEdit(false);
@@ -287,7 +288,7 @@ export default function AdminManagerDetailPage() {
       showToast.success('Admin Manager berhasil dihapus');
       router.push('/admin/managers');
     } catch (error: any) {
-      console.error('Error deleting manager:', error);
+      devError('Error deleting manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus Admin Manager');
     } finally {
       setDeleting(false);
@@ -307,7 +308,7 @@ export default function AdminManagerDetailPage() {
       showToast.success('Admin Manager berhasil diaktifkan');
       await loadManagerDetail();
     } catch (error: any) {
-      console.error('Error activating manager:', error);
+      devError('Error activating manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal mengaktifkan Admin Manager');
     } finally {
       setActivating(false);

@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
+import { devLog, devError } from '@/lib/logger';
 import styles from '@/styles/crud-modal.module.css';
 
 interface InventoryCrudModalProps {
@@ -152,16 +153,16 @@ export default function InventoryCrudModal({
         params: { limit: 1000, isActive: 'true' }
       });
       
-      console.log('🔍 [InventoryModal] Master products response:', response.data);
+      devLog('🔍 [InventoryModal] Master products response:', response.data);
       
       const data = response.data.data;
       const products = data?.products || data || [];
       
-      console.log('🔍 [InventoryModal] Products loaded:', products.length);
+      devLog('🔍 [InventoryModal] Products loaded:', products.length);
       
       setMasterProducts(Array.isArray(products) ? products : []);
     } catch (error: any) {
-      console.error('Error loading master products:', error);
+      devError('Error loading master products:', error);
       showToast.error('Gagal memuat daftar produk');
     } finally {
       setLoadingProducts(false);
@@ -313,7 +314,7 @@ export default function InventoryCrudModal({
       
       onSuccess();
     } catch (error: any) {
-      console.error('Error saving inventory item:', error);
+      devError('Error saving inventory item:', error);
       const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} item inventori`;
       showToast.error(errorMsg);
     } finally {

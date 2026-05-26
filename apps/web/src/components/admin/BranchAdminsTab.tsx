@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { branchAdminsApi, BranchAdmin } from '@/lib/api/branchAdminsApi';
 import { ImpersonateButton } from './ImpersonateButton';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { Search, Filter, ChevronLeft, ChevronRight, Users, Building2 } from 'lucide-react';
 import styles from './BranchAdminsTab.module.css';
 
@@ -42,7 +43,7 @@ export const BranchAdminsTab: React.FC = () => {
       setBranchAdmins(response.data || []);
       setTotal(response.meta?.total || 0);
     } catch (error: any) {
-      console.error('Error loading branch admins:', error);
+      devError('Error loading branch admins:', error);
       showToast.error(error.response?.data?.message || 'Gagal memuat data Admin Cabang');
       setBranchAdmins([]);
     } finally {

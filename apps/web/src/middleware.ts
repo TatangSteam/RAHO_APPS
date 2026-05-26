@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
+// Development-only logging for middleware
+const isDev = process.env.NODE_ENV === 'development';
+const middlewareLog = (...args: unknown[]) => {
+  if (isDev) console.log(...args);
+};
+
 // Routes that don't require authentication
 const PUBLIC_ROUTES = ['/login'];
 
@@ -13,7 +19,7 @@ const STAFF_ROUTES = ['/dashboard', '/members', '/sessions', '/inventory', '/adm
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
-  console.log('[Middleware] Path:', pathname);
+  middlewareLog('[Middleware] Path:', pathname);
 
   // Read auth state from cookie (set by authStore persist)
   // We store a minimal token cookie for SSR-compatible auth check
@@ -23,7 +29,7 @@ export function middleware(request: NextRequest): NextResponse {
   const isMemberRoute = MEMBER_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'));
   const isStaffRoute = STAFF_ROUTES.some((r) => pathname === r || pathname.startsWith(r + '/'));
 
-  console.log('[Middleware] isStaffRoute:', isStaffRoute, 'authCookie:', !!authCookie);
+  middlewareLog('[Middleware] isStaffRoute:', isStaffRoute, 'authCookie:', !!authCookie);
 
   // Not authenticated
   if (!authCookie) {
@@ -41,10 +47,10 @@ export function middleware(request: NextRequest): NextResponse {
   try {
     const payload = JSON.parse(Buffer.from(authCookie, 'base64').toString());
     role = payload?.role ?? null;
-    console.log('[Middleware] Decoded role:', role);
+    middlewareLog('[Middleware] Decoded role:', role);
   } catch {
     // Invalid cookie — clear and redirect
-    console.log('[Middleware] Invalid cookie, redirecting to login');
+    middlewareLog('[Middleware] Invalid cookie, redirecting to login');
     const response = NextResponse.redirect(new URL('/login', request.url));
     response.cookies.delete('raho-auth-token');
     return response;
@@ -52,24 +58,24 @@ export function middleware(request: NextRequest): NextResponse {
 
   // Already logged in → redirect away from login page
   if (isPublicRoute) {
-    console.log('[Middleware] Public route, redirecting logged-in user');
+    middlewareLog('[Middleware] Public route, redirecting logged-in user');
     if (role === 'MEMBER') return NextResponse.redirect(new URL('/me/dashboard', request.url));
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
   // MEMBER trying to access staff routes
   if (role === 'MEMBER' && isStaffRoute) {
-    console.log('[Middleware] MEMBER trying to access staff route, redirecting');
+    middlewareLog('[Middleware] MEMBER trying to access staff route, redirecting');
     return NextResponse.redirect(new URL('/me/dashboard', request.url));
   }
 
   // Staff trying to access member-only routes
   if (role !== 'MEMBER' && isMemberRoute) {
-    console.log('[Middleware] Staff trying to access member route, redirecting');
+    middlewareLog('[Middleware] Staff trying to access member route, redirecting');
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  console.log('[Middleware] Allowing access to:', pathname);
+  middlewareLog('[Middleware] Allowing access to:', pathname);
   return NextResponse.next();
 }
 

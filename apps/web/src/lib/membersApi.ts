@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { devLog } from '@/lib/logger';
 import type {
   Member,
   MemberDetail,
@@ -43,7 +44,7 @@ export async function createMemberApi(
 ): Promise<{ memberId: string; memberNo: string; message: string }> {
   const formData = new FormData();
 
-  console.log('🔍 [membersApi] createMemberApi called with:', memberData);
+  devLog('🔍 [membersApi] createMemberApi called with:', memberData);
 
   // Append member data - only non-empty values
   // IMPORTANT: Exclude 'psp' and 'photo' as they should be File objects, not strings
@@ -53,21 +54,21 @@ export async function createMemberApi(
     }
     // Skip undefined, null, and empty string values
     if (value === undefined || value === null || value === '') {
-      console.log(`🔍 [membersApi] Skipping ${key}: ${value}`);
+      devLog(`🔍 [membersApi] Skipping ${key}: ${value}`);
       return;
     }
     if (typeof value === 'object' && !Array.isArray(value)) {
       // For nested objects like therapyPlans, stringify them
       formData.append(key, JSON.stringify(value));
-      console.log(`🔍 [membersApi] Appending ${key} (object):`, JSON.stringify(value));
+      devLog(`🔍 [membersApi] Appending ${key} (object):`, JSON.stringify(value));
     } else if (Array.isArray(value)) {
       // For arrays like therapyPlans, stringify them
       formData.append(key, JSON.stringify(value));
-      console.log(`🔍 [membersApi] Appending ${key} (array):`, JSON.stringify(value));
+      devLog(`🔍 [membersApi] Appending ${key} (array):`, JSON.stringify(value));
     } else {
       const stringValue = typeof value === 'boolean' ? String(value) : String(value);
       formData.append(key, stringValue);
-      console.log(`🔍 [membersApi] Appending ${key}:`, stringValue);
+      devLog(`🔍 [membersApi] Appending ${key}:`, stringValue);
     }
   });
 

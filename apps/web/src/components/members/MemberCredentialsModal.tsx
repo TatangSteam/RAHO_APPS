@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Key, Mail, Building2, Copy, Check, RefreshCw } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
+import { devError } from '@/lib/logger';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -113,7 +114,7 @@ export default function MemberCredentialsModal({
       setCredentials(response.data.data);
       setNewEmail(response.data.data.email);
     } catch (error: any) {
-      console.error('Error loading credentials:', error);
+      devError('Error loading credentials:', error);
       showToast.error('Gagal memuat data kredensial');
       onClose();
     } finally {
@@ -141,7 +142,7 @@ export default function MemberCredentialsModal({
       await loadCredentials();
       onSuccess?.();
     } catch (error: any) {
-      console.error('Error updating email:', error);
+      devError('Error updating email:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah email');
     } finally {
       setSavingEmail(false);
@@ -166,7 +167,7 @@ export default function MemberCredentialsModal({
       setShowPasswordReset(false);
       setNewPassword('');
     } catch (error: any) {
-      console.error('Error resetting password:', error);
+      devError('Error resetting password:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal reset password');
     } finally {
       setSavingPassword(false);

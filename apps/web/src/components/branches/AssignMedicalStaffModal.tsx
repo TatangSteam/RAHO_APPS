@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, UserPlus, Search, Loader2, Stethoscope, Heart, Building2, Check } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { branchesApi } from '@/lib/api/branchesApi';
+import { devError } from '@/lib/logger';
 
 interface MedicalStaff {
   id: string;
@@ -57,7 +58,7 @@ export default function AssignMedicalStaffModal({
       const response = await branchesApi.getMedicalStaffNotInBranch(branchId);
       setStaff(response.data.data || []);
     } catch (error: any) {
-      console.error('Error loading medical staff:', error);
+      devError('Error loading medical staff:', error);
       showToast.error('Gagal memuat data staff medis');
     } finally {
       setLoading(false);
@@ -74,7 +75,7 @@ export default function AssignMedicalStaffModal({
       setStaff(prev => prev.filter(s => s.id !== staffMember.id));
       onSuccess();
     } catch (error: any) {
-      console.error('Error assigning staff:', error);
+      devError('Error assigning staff:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal assign staff');
     } finally {
       setAssigning(null);

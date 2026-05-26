@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import styles from './page.module.css';
 
 interface ServiceStats {
@@ -54,7 +55,7 @@ export default function ServiceDashboardPage() {
       
       setStats(mockStats);
     } catch (error: any) {
-      console.error('Failed to load service stats:', error);
+      devError('Failed to load service stats:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
       setLoading(false);

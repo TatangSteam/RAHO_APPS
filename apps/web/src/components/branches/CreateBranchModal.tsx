@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createBranch, type CreateBranchInput } from '@/lib/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import styles from './BranchModal.module.css';
 
 interface Props {
@@ -102,7 +103,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       showToast.success(`Cabang ${formData.name} berhasil dibuat`);
       onSuccess();
     } catch (error: any) {
-      console.error('Error creating branch:', error);
+      devError('Error creating branch:', error);
       showToast.error(error.message || 'Gagal membuat cabang');
     } finally {
       setLoading(false);

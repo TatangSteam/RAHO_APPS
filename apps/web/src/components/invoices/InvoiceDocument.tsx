@@ -3,6 +3,7 @@
 import React from 'react';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
+import { devLog } from '@/lib/logger';
 import styles from './InvoiceDocument.module.css';
 
 interface Props {
@@ -10,9 +11,9 @@ interface Props {
 }
 
 export default function InvoiceDocument({ invoice }: Props) {
-  // Debug log untuk melihat data invoice
+  // Debug log untuk melihat data invoice (only in development)
   React.useEffect(() => {
-    console.log('🔍 Invoice data received:', {
+    devLog('🔍 Invoice data received:', {
       subtotal: invoice.subtotal,
       discountAmount: invoice.discountAmount,
       discountPercent: invoice.discountPercent,

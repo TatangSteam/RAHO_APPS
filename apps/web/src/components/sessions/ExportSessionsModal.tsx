@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { usersApi } from '@/lib/usersApi';
+import { devError } from '@/lib/logger';
 
 interface ExportSessionsModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ export default function ExportSessionsModal({
       const doctorsList = await usersApi.getDoctors(user?.branchId || undefined);
       setDoctors(doctorsList);
     } catch (error) {
-      console.error('Failed to load doctors:', error);
+      devError('Failed to load doctors:', error);
     }
   };
 
@@ -122,7 +123,7 @@ export default function ExportSessionsModal({
       showToast.success('Data berhasil di-export');
       onClose();
     } catch (error: any) {
-      console.error('Export error:', error);
+      devError('Export error:', error);
       showToast.error(error.message || 'Gagal export data');
     } finally {
       setLoading(false);

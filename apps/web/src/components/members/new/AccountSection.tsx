@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getActiveReferrals } from '@/lib/api/referralsApi';
 import type { CreateMemberData } from '@/types/member';
+import { devError } from '@/lib/logger';
 
 interface AccountSectionProps {
   formData: CreateMemberData;
@@ -28,7 +29,7 @@ export default function AccountSection({ formData, onChange, referralError, onRe
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
-        console.error('Error fetching referral codes:', error);
+        devError('Error fetching referral codes:', error);
       }
     };
 

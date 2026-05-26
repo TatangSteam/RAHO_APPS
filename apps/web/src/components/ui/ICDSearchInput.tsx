@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { icdApi, type ICDCode } from '@/lib/icdApi';
+import { devError } from '@/lib/logger';
 
 interface ICDSearchInputProps {
   value: string;
@@ -52,7 +53,7 @@ export default function ICDSearchInput({
         const codes = await icdApi.searchICD(query);
         setResults(codes);
       } catch (error) {
-        console.error('Failed to search ICD codes:', error);
+        devError('Failed to search ICD codes:', error);
       } finally {
         setLoading(false);
       }
@@ -67,7 +68,7 @@ export default function ICDSearchInput({
       const codes = await icdApi.getCommonICDCodes();
       setResults(codes.slice(0, 20));
     } catch (error) {
-      console.error('Failed to load common ICD codes:', error);
+      devError('Failed to load common ICD codes:', error);
     }
   };
 

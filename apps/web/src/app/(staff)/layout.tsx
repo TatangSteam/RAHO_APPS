@@ -7,6 +7,7 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ImpersonationProvider } from '@/contexts/ImpersonationContext';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
+import { devLog } from '@/lib/logger';
 import { clsx } from 'clsx';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
@@ -15,9 +16,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Debug log
+  // Debug log (only in development)
   useEffect(() => {
-    console.log('🔍 Staff Layout Debug:', {
+    devLog('🔍 Staff Layout Debug:', {
       pathname,
       willRenderSidebar: true
     });

@@ -8,6 +8,7 @@ import type { Member } from '@/types/member';
 import { useAuthStore } from '@/stores/authStore';
 import { LookupMemberModal } from '@/components/members/LookupMemberModal';
 import ExportMembersModal from '@/components/members/ExportMembersModal';
+import { devLog, devError } from '@/lib/logger';
 
 export default function MembersPage() {
   const router = useRouter();
@@ -50,31 +51,31 @@ export default function MembersPage() {
 
   const loadBranches = async () => {
     try {
-      console.log('🔄 Loading branches for role:', user?.role);
+      devLog('🔄 Loading branches for role:', user?.role);
       const { branchesApi } = await import('@/lib/api/branchesApi');
       const response = await branchesApi.getAllBranches();
-      console.log('📊 Full API response:', response);
-      console.log('📊 Response data:', response.data);
+      devLog('📊 Full API response:', response);
+      devLog('📊 Response data:', response.data);
       
       // getAllBranches returns array directly in response.data.data
       const branchesData = Array.isArray(response.data.data) ? response.data.data : [];
-      console.log('📋 Branches data (array):', branchesData);
-      console.log('📋 Branches count:', branchesData.length);
+      devLog('📋 Branches data (array):', branchesData);
+      devLog('📋 Branches count:', branchesData.length);
       
       if (branchesData.length === 0) {
-        console.warn('⚠️ No branches returned from API');
+        devLog('⚠️ No branches returned from API');
       }
       
       const mappedBranches = branchesData.map((b: any) => {
-        console.log('  - Branch:', b.branchCode, b.name);
+        devLog('  - Branch:', b.branchCode, b.name);
         return { branchCode: b.branchCode, name: b.name };
       });
       
       setBranches(mappedBranches);
-      console.log('✅ Branches state updated:', mappedBranches.length, 'branches');
+      devLog('✅ Branches state updated:', mappedBranches.length, 'branches');
     } catch (error: any) {
-      console.error('❌ Failed to load branches:', error);
-      console.error('❌ Error details:', error.response?.data || error.message);
+      devError('❌ Failed to load branches:', error);
+      devError('❌ Error details:', error.response?.data || error.message);
     }
   };
 
@@ -104,7 +105,7 @@ export default function MembersPage() {
               const blobUrl = await createAuthenticatedObjectUrl(member.photoUrl);
               return [member.memberId, blobUrl] as const;
             } catch (error) {
-              console.error('Failed to load member photo:', member.memberId, error);
+              devError('Failed to load member photo:', member.memberId, error);
               return [member.memberId, ''] as const;
             }
           }),
@@ -150,13 +151,13 @@ export default function MembersPage() {
         page,
         limit: 20,
       });
-      console.log('Members data:', result.members);
-      console.log('First member photoUrl:', result.members[0]?.photoUrl);
+      devLog('Members data:', result.members);
+      devLog('First member photoUrl:', result.members[0]?.photoUrl);
       setMembers(result.members);
       setTotalPages(result.pagination.totalPages);
       setTotal(result.pagination.total);
     } catch (error) {
-      console.error('Failed to load members:', error);
+      devError('Failed to load members:', error);
     } finally {
       setLoading(false);
     }
@@ -268,11 +269,11 @@ export default function MembersPage() {
           </div>
           {(isSuperAdmin || isAdminManager) && (
             <>
-              {console.log('🎨 Rendering dropdown - branches:', branches.length, 'isSuperAdmin:', isSuperAdmin, 'isAdminManager:', isAdminManager)}
+              {devLog('🎨 Rendering dropdown - branches:', branches.length, 'isSuperAdmin:', isSuperAdmin, 'isAdminManager:', isAdminManager)}
               <select
                 value={branchFilter}
                 onChange={(e) => {
-                  console.log('🔄 Branch filter changed to:', e.target.value);
+                  devLog('🔄 Branch filter changed to:', e.target.value);
                   setBranchFilter(e.target.value);
                   setPage(1);
                 }}

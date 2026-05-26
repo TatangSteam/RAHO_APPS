@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { Building2, Users, Package, MapPin, Phone, Clock, Calendar } from 'lucide-react';
 
 interface BranchInfo {
@@ -56,7 +57,7 @@ export default function CabangPage() {
         totalStaff: 4
       });
     } catch (error: any) {
-      console.error('Failed to load branch data:', error);
+      devError('Failed to load branch data:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoading(false);

@@ -6,6 +6,7 @@ import * as referralsApi from '@/lib/api/referralsApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast, confirm } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { 
   FileText, Plus, Search, Eye, Trash2, X, 
   Download, FileSpreadsheet, Users, Phone, Mail, Building2, 
@@ -57,7 +58,7 @@ export default function ReferralsPage() {
       setReferrals(response.data.data.referrals);
       setTotal(response.data.data.total);
     } catch (error) {
-      console.error('Error fetching referrals:', error);
+      devError('Error fetching referrals:', error);
     } finally {
       setLoading(false);
     }
@@ -68,7 +69,7 @@ export default function ReferralsPage() {
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data);
     } catch (error) {
-      console.error('Error fetching branches:', error);
+      devError('Error fetching branches:', error);
     }
   };
 
@@ -80,7 +81,7 @@ export default function ReferralsPage() {
       showToast.success('Kode referral berhasil dihapus');
       fetchReferrals();
     } catch (error) {
-      console.error('Error deleting referral:', error);
+      devError('Error deleting referral:', error);
       showToast.error('Gagal menghapus kode referral');
     }
   };
@@ -100,7 +101,7 @@ export default function ReferralsPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting to Excel:', error);
+      devError('Error exporting to Excel:', error);
       alert('Gagal export ke Excel');
     }
   };
@@ -120,7 +121,7 @@ export default function ReferralsPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting to PDF:', error);
+      devError('Error exporting to PDF:', error);
       alert('Gagal export ke PDF');
     }
   };
@@ -140,7 +141,7 @@ export default function ReferralsPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting summary:', error);
+      devError('Error exporting summary:', error);
       alert('Gagal export ringkasan');
     }
   };

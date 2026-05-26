@@ -6,6 +6,7 @@ import { diagnosisApi } from '@/lib/diagnosisApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import ICDSearchInput from '@/components/ui/ICDSearchInput';
+import { devLog, devError } from '@/lib/logger';
 import styles from './Step1Diagnosis.module.css';
 
 interface Step1DiagnosisProps {
@@ -58,20 +59,20 @@ export default function Step1Diagnosis({
   // Load member's previous diagnoses
   useEffect(() => {
     const loadDiagnoses = async () => {
-      console.log('🔍 Step1Diagnosis - memberId received:', memberId);
+      devLog('🔍 Step1Diagnosis - memberId received:', memberId);
       
       if (!memberId) {
-        console.error('❌ Step1Diagnosis - memberId is undefined or empty!');
+        devError('❌ Step1Diagnosis - memberId is undefined or empty!');
         setMemberDiagnoses([]);
         return;
       }
       
       try {
         const data = await diagnosisApi.getMemberDiagnoses(memberId);
-        console.log('📋 Loaded diagnoses for member:', memberId, 'count:', data?.length, data);
+        devLog('📋 Loaded diagnoses for member:', memberId, 'count:', data?.length, data);
         setMemberDiagnoses(data || []);
       } catch (err) {
-        console.error('Failed to load member diagnoses:', err);
+        devError('Failed to load member diagnoses:', err);
         setMemberDiagnoses([]);
       }
     };
@@ -79,7 +80,7 @@ export default function Step1Diagnosis({
     if (memberId) {
       loadDiagnoses();
     } else {
-      console.warn('⚠️ Step1Diagnosis - memberId is falsy, skipping diagnosis load');
+      devLog('⚠️ Step1Diagnosis - memberId is falsy, skipping diagnosis load');
     }
   }, [memberId]);
 
@@ -95,7 +96,7 @@ export default function Step1Diagnosis({
     // Validate doktorPemeriksa is a valid CUID
     if (!formData.doktorPemeriksa || formData.doktorPemeriksa.length < 20) {
       setError('Dokter pemeriksa tidak valid. Silakan pilih diagnosa lagi.');
-      console.error('❌ Invalid doktorPemeriksa:', formData.doktorPemeriksa);
+      devError('❌ Invalid doktorPemeriksa:', formData.doktorPemeriksa);
       return;
     }
 
@@ -120,14 +121,14 @@ export default function Step1Diagnosis({
         // Don't include pemeriksaanTambahan when using existing diagnosis
       };
 
-      console.log('📤 Submitting diagnosis with data:', data);
-      console.log('📤 doktorPemeriksa being sent:', data.doktorPemeriksa);
+      devLog('📤 Submitting diagnosis with data:', data);
+      devLog('📤 doktorPemeriksa being sent:', data.doktorPemeriksa);
 
       await sessionApi.createDiagnosis(encounterId, data);
       setIsEditing(false);
       onComplete();
     } catch (err: any) {
-      console.error('Failed to create diagnosis:', err);
+      devError('Failed to create diagnosis:', err);
       // Show more detailed error message
       const errorDetails = err.response?.data?.error?.details;
       if (errorDetails && Array.isArray(errorDetails)) {
@@ -142,8 +143,8 @@ export default function Step1Diagnosis({
   };
 
   const handleSelectExistingDiagnosis = (selectedDiagnosis: any) => {
-    console.log('📋 Selected diagnosis:', selectedDiagnosis);
-    console.log('📋 doktorPemeriksa from diagnosis:', selectedDiagnosis.doktorPemeriksa);
+    devLog('📋 Selected diagnosis:', selectedDiagnosis);
+    devLog('📋 doktorPemeriksa from diagnosis:', selectedDiagnosis.doktorPemeriksa);
     
     setFormData({
       doktorPemeriksa: selectedDiagnosis.doktorPemeriksa || user?.userId || '', // Use original doctor from diagnosis

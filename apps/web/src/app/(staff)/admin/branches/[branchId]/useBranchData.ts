@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 import { BranchDetail, User, BranchMember } from './types';
 
 export function useBranchData(branchId: string, accessToken: string) {
@@ -22,7 +23,7 @@ export function useBranchData(branchId: string, accessToken: string) {
       const result = await response.json();
       setBranch(result.data);
     } catch (error: any) {
-      console.error('Error loading branch detail:', error);
+      devError('Error loading branch detail:', error);
       showToast.error(error.message || 'Gagal memuat detail cabang');
       throw error;
     } finally {
@@ -46,16 +47,16 @@ export function useBranchData(branchId: string, accessToken: string) {
       const result = await response.json();
       setUsers(result.data || []);
     } catch (error: any) {
-      console.error('Error loading users:', error);
+      devError('Error loading users:', error);
       showToast.error(error.message || 'Gagal memuat data user');
     }
   }, [branchId, accessToken]);
 
   const loadBranchMembers = useCallback(async () => {
     try {
-      console.log('🔍 Loading members for branch:', branchId);
+      devLog('🔍 Loading members for branch:', branchId);
       const url = `${process.env.NEXT_PUBLIC_API_URL}/branches/${branchId}/members?limit=100`;
-      console.log('📡 Fetching from:', url);
+      devLog('📡 Fetching from:', url);
       
       const response = await fetch(url, {
         headers: {
@@ -63,28 +64,28 @@ export function useBranchData(branchId: string, accessToken: string) {
         },
       });
 
-      console.log('📥 Response status:', response.status);
+      devLog('📥 Response status:', response.status);
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('❌ Response error:', errorText);
+        devError('❌ Response error:', errorText);
         throw new Error('Gagal memuat data member');
       }
 
       const result = await response.json();
-      console.log('✅ Full response:', JSON.stringify(result, null, 2));
+      devLog('✅ Full response:', JSON.stringify(result, null, 2));
       
       const membersData = result.data?.members || [];
-      console.log('👥 Members array:', membersData);
-      console.log('📊 Members count:', membersData.length);
+      devLog('👥 Members array:', membersData);
+      devLog('📊 Members count:', membersData.length);
       
       if (membersData.length > 0) {
-        console.log('📋 First member sample:', membersData[0]);
+        devLog('📋 First member sample:', membersData[0]);
       }
       
       setMembers(membersData);
     } catch (error: any) {
-      console.error('❌ Error loading members:', error);
+      devError('❌ Error loading members:', error);
       showToast.error(error.message || 'Gagal memuat data member');
     }
   }, [branchId, accessToken]);
@@ -106,7 +107,7 @@ export function useBranchData(branchId: string, accessToken: string) {
       await loadBranchUsers();
       await loadBranchDetail();
     } catch (error: any) {
-      console.error('Error toggling user status:', error);
+      devError('Error toggling user status:', error);
       showToast.error(error.message || 'Gagal mengubah status user');
     }
   }, [accessToken, loadBranchUsers, loadBranchDetail]);

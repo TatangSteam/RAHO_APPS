@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { Building2, ArrowLeft, Save } from 'lucide-react';
 
 interface Branch {
@@ -57,7 +58,7 @@ export default function EditBranchPage() {
         isActive: branch.isActive,
       });
     } catch (error: any) {
-      console.error('Error loading branch:', error);
+      devError('Error loading branch:', error);
       showToast.error('Gagal memuat data cabang');
       router.push('/branches');
     } finally {
@@ -74,7 +75,7 @@ export default function EditBranchPage() {
       showToast.success('Cabang berhasil diperbarui');
       router.push(`/branches/${branchId}`);
     } catch (error: any) {
-      console.error('Error updating branch:', error);
+      devError('Error updating branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal memperbarui cabang');
     } finally {
       setSaving(false);

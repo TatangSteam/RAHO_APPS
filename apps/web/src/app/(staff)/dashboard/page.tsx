@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { dashboardApi, type DashboardStats } from '@/lib/dashboardApi';
 import { formatCurrency, formatNumberWithDots } from '@/lib/formatNumber';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 
 import RevenueChart from '@/components/dashboard/RevenueChart';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
@@ -91,7 +92,7 @@ export default function DashboardPage() {
       
       setStats(data);
     } catch (error: any) {
-      console.error('Dashboard error:', error);
+      devError('Dashboard error:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
       setLoading(false);

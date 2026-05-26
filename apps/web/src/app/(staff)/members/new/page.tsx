@@ -7,6 +7,7 @@ import type { CreateMemberData } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
+import { devError } from '@/lib/logger';
 import NewMemberHeader from '@/components/members/new/NewMemberHeader';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
@@ -84,7 +85,7 @@ export default function NewMemberPage() {
           }
         })
         .catch((err) => {
-          console.error('Failed to fetch branches:', err);
+          devError('Failed to fetch branches:', err);
           showToast.error('Gagal memuat daftar cabang');
         })
         .finally(() => {

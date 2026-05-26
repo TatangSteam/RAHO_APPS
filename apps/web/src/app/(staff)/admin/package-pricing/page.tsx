@@ -11,6 +11,7 @@ import {
   Building2, Globe, Zap, Droplets, Cigarette, Settings, 
   ChevronDown, Check, AlertCircle
 } from 'lucide-react';
+import { devError } from '@/lib/logger';
 
 interface PackagePricing {
   id: string;
@@ -194,7 +195,7 @@ export default function PackagePricingPage() {
         setBranches(result.data || []);
       }
     } catch (error) {
-      console.error('Failed to load branches:', error);
+      devError('Failed to load branches:', error);
     }
   };
 

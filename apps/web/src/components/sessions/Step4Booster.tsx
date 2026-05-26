@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { sessionApi } from '@/lib/sessionApi';
+import { devError } from '@/lib/logger';
 
 interface StockAvailability {
   HHO: { available: boolean; stock: number; minThreshold: number; isLowStock: boolean; unit: string };
@@ -44,7 +45,7 @@ export default function Step4Booster({
       const stock = await sessionApi.getBoosterStockAvailability(sessionId);
       setStockAvailability(stock);
     } catch (error: any) {
-      console.error('Error fetching stock availability:', error);
+      devError('Error fetching stock availability:', error);
       showToast.error('Gagal memuat ketersediaan stok');
     } finally {
       setLoadingStock(false);
@@ -82,7 +83,7 @@ export default function Step4Booster({
       // Refresh stock after save
       await fetchStockAvailability();
     } catch (error: any) {
-      console.error('Error saving booster type:', error);
+      devError('Error saving booster type:', error);
       showToast.error(error.message || 'Gagal menyimpan jenis booster');
     } finally {
       setSaving(false);

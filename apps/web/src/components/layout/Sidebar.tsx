@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
 import { clsx } from 'clsx';
 import { useState } from 'react';
+import { devError } from '@/lib/logger';
 
 // ── Menu Item Type ────────────────────────────────────────────
 
@@ -219,7 +220,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         await logoutApi(refreshToken);
       }
     } catch (error) {
-      console.error('Logout API error:', error);
+      devError('Logout API error:', error);
     } finally {
       clearAuth();
       document.cookie = 'raho-auth-token=; path=/; max-age=0';

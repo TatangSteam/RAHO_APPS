@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info } from 'lucide-react';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 import { api } from '@/lib/api';
 
 interface StaffCrudModalProps {
@@ -83,7 +84,7 @@ export default function StaffCrudModal({
 
   useEffect(() => {
     if (action === 'edit' && staffData) {
-      console.log('🔍 [StaffCrudModal] Setting form data from staffData:', staffData);
+      devLog('🔍 [StaffCrudModal] Setting form data from staffData:', staffData);
       setFormData({
         email: staffData.email || '',
         role: staffData.role || 'ADMIN_LAYANAN',
@@ -91,7 +92,7 @@ export default function StaffCrudModal({
         phone: staffData.profile?.phone || '',
         isActive: staffData.isActive ?? true
       });
-      console.log('🔍 [StaffCrudModal] Form data set successfully');
+      devLog('🔍 [StaffCrudModal] Form data set successfully');
     } else if (action === 'create') {
       // Reset form for create
       setFormData({
@@ -119,7 +120,7 @@ export default function StaffCrudModal({
     setLoading(true);
     setError('');
 
-    console.log('🔍 [StaffCrudModal] Submit attempt:', { action, formData, staffData });
+    devLog('🔍 [StaffCrudModal] Submit attempt:', { action, formData, staffData });
 
     try {
       if (action === 'create') {
@@ -132,7 +133,7 @@ export default function StaffCrudModal({
           branchId: branchId
         };
         
-        console.log('🔍 [StaffCrudModal] Creating staff with data:', createData);
+        devLog('🔍 [StaffCrudModal] Creating staff with data:', createData);
         await api.post('/users', createData);
         showToast.success('Staff berhasil ditambahkan');
       } else if (action === 'edit') {
@@ -143,14 +144,14 @@ export default function StaffCrudModal({
           isActive: formData.isActive
         };
         
-        console.log('🔍 [StaffCrudModal] Updating staff:', staffData.id, 'with data:', updateData);
+        devLog('🔍 [StaffCrudModal] Updating staff:', staffData.id, 'with data:', updateData);
         await api.patch(`/users/${staffData.id}`, updateData);
         showToast.success('Staff berhasil diperbarui');
       }
       
       onSuccess();
     } catch (error: any) {
-      console.error('❌ [StaffCrudModal] Error saving staff:', error);
+      devError('❌ [StaffCrudModal] Error saving staff:', error);
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} staff`;
       setError(errorMessage);
       showToast.error(errorMessage);

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { getConsentDocumentsApi } from '@/lib/membersApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 import styles from './ConsentDocumentsSection.module.css';
 
 interface ConsentDocument {
@@ -53,13 +54,12 @@ export default function ConsentDocumentsSection({
     try {
       setInternalLoading(true);
       setInternalError(null);
-      console.log('🔍 [ConsentDocumentsSection] Loading documents for memberId:', memberId);
+      devLog('🔍 [ConsentDocumentsSection] Loading documents for memberId:', memberId);
       const data = await getConsentDocumentsApi(memberId);
-      console.log('✅ [ConsentDocumentsSection] Received data:', data);
-      console.log('📄 [ConsentDocumentsSection] Documents count:', data.documents?.length || 0);
+      devLog('✅ [ConsentDocumentsSection] Documents count:', data.documents?.length || 0);
       setInternalDocuments(data.documents);
     } catch (err: any) {
-      console.error('❌ [ConsentDocumentsSection] Error loading documents:', err);
+      devError('❌ [ConsentDocumentsSection] Error loading documents:', err);
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
       
@@ -85,7 +85,7 @@ export default function ConsentDocumentsSection({
           setInternalError(errorMessage || 'Gagal memuat dokumen');
       }
       
-      console.error('Failed to load consent documents:', err);
+      devError('Failed to load consent documents:', err);
     } finally {
       setInternalLoading(false);
     }

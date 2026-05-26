@@ -7,6 +7,7 @@ import {
   FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, 
   Download, Image as ImageIcon, X, RefreshCw, ImageOff, Loader2 
 } from 'lucide-react'
+import { devError } from '@/lib/logger'
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }> = {
   PAID:           { bg: 'rgba(16,185,129,0.15)', color: '#34d399', label: 'Lunas' },
@@ -72,7 +73,7 @@ export default function MemberInvoicesPage() {
       const blobUrl = URL.createObjectURL(response.data)
       setProofImageUrl(blobUrl)
     } catch (e) {
-      console.error('Failed to load payment proof:', e)
+      devError('Failed to load payment proof:', e)
       setProofError(true)
     } finally {
       setProofLoading(false)
@@ -100,7 +101,7 @@ export default function MemberInvoicesPage() {
       // Generate PDF using the same function as admin
       await generateInvoicePDF(fullInvoice)
     } catch (error) {
-      console.error('Failed to generate PDF:', error)
+      devError('Failed to generate PDF:', error)
       alert('Gagal membuat PDF. Silakan coba lagi.')
     } finally {
       setPdfLoading(null)

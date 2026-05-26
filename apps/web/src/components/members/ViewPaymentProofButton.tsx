@@ -4,6 +4,7 @@ import { useState } from 'react';
 import PaymentProofModal from '../invoices/PaymentProofModal';
 import { invoiceApi } from '@/lib/invoiceApi';
 import { useAuthStore } from '@/stores/authStore';
+import { devLog, devError } from '@/lib/logger';
 import type { Invoice } from '@/types/invoice';
 
 interface Props {
@@ -40,10 +41,10 @@ export default function ViewPaymentProofButton({
       setLoading(true);
       setError(null);
 
-      console.log('🔍 Fetching invoice for package:', packageId);
+      devLog('🔍 Fetching invoice for package:', packageId);
       const data = await invoiceApi.getInvoiceByPackageId(packageId);
       
-      console.log('🔍 ViewPaymentProofButton - Invoice Data:', {
+      devLog('🔍 ViewPaymentProofButton - Invoice Data:', {
         invoiceNumber: data.invoiceNumber,
         paymentsCount: data.payments?.length || 0,
         payments: data.payments?.map(p => ({
@@ -67,8 +68,8 @@ export default function ViewPaymentProofButton({
       setInvoice(data);
       setShowModal(true);
     } catch (err: any) {
-      console.error('Error fetching invoice:', err);
-      console.error('Error response:', err.response);
+      devError('Error fetching invoice:', err);
+      devError('Error response:', err.response);
       
       // Show more specific error message
       if (err.response?.status === 401) {

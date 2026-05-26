@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { api } from '@/lib/api';
 import { 
@@ -99,7 +100,7 @@ export default function InventoryPage() {
         setSelectedBranchId(branchesData[0].id);
       }
     } catch (error) {
-      console.error('Failed to fetch branches:', error);
+      devError('Failed to fetch branches:', error);
     } finally {
       setLoadingBranches(false);
     }
@@ -147,7 +148,7 @@ export default function InventoryPage() {
       setItems(response.data.data || []);
     } catch (error) {
       showToast.error('Gagal memuat data inventori');
-      console.error('Inventory fetch error:', error);
+      devError('Inventory fetch error:', error);
     } finally {
       setLoading(false);
     }
@@ -194,7 +195,7 @@ export default function InventoryPage() {
       showToast.success(`File ${format.toUpperCase()} berhasil diunduh!`);
     } catch (error) {
       showToast.error(`Gagal mengunduh file ${format.toUpperCase()}`);
-      console.error('Export error:', error);
+      devError('Export error:', error);
     }
   };
 
@@ -256,7 +257,7 @@ export default function InventoryPage() {
     } catch (error: any) {
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyesuaikan stok';
       showToast.error(errorMessage);
-      console.error('Adjust stock error:', error);
+      devError('Adjust stock error:', error);
     } finally {
       setAdjusting(false);
     }

@@ -6,6 +6,7 @@ import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
+import { devError } from '@/lib/logger';
 import { 
   Building2, Plus, Search, Filter, Edit, Trash2, Users, 
   MapPin, Phone, ChevronLeft, ChevronRight, RefreshCw, Eye, AlertTriangle
@@ -78,7 +79,7 @@ export default function BranchesPage() {
         setTotal(response.data.meta?.total || 0);
       }
     } catch (error: any) {
-      console.error('Error loading branches:', error);
+      devError('Error loading branches:', error);
       if (error.response?.status === 401) {
         showToast.error('Sesi Anda telah berakhir, silakan login kembali');
         router.push('/login');
@@ -103,7 +104,7 @@ export default function BranchesPage() {
       showToast.success('Cabang berhasil dihapus');
       loadBranches();
     } catch (error: any) {
-      console.error('Error deleting branch:', error);
+      devError('Error deleting branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
     }
   };

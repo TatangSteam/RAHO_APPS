@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import styles from './page.module.css';
 
 interface AuditLog {
@@ -91,7 +92,7 @@ export default function AuditLogsPage() {
       setLogs(result.data.logs);
       setTotalPages(result.data.pagination.totalPages);
     } catch (error: any) {
-      console.error('Error loading audit logs:', error);
+      devError('Error loading audit logs:', error);
       showToast.error(error.message || 'Gagal memuat audit logs');
     } finally {
       setLoading(false);

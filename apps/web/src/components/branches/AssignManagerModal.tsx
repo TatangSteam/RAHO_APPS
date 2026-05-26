@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Shield, Search, UserPlus, Loader2, Check } from 'lucide-react';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 
 interface AvailableManager {
   id: string;
@@ -47,7 +48,7 @@ export default function AssignManagerModal({
       const response = await branchesApi.getAvailableManagers(branchId);
       setManagers(response.data.data || []);
     } catch (error: any) {
-      console.error('Error loading available managers:', error);
+      devError('Error loading available managers:', error);
       showToast.error('Gagal memuat daftar Admin Manager');
     } finally {
       setLoading(false);
@@ -66,7 +67,7 @@ export default function AssignManagerModal({
       onSuccess();
       onClose();
     } catch (error: any) {
-      console.error('Error assigning manager:', error);
+      devError('Error assigning manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal assign Admin Manager');
     } finally {
       setSubmitting(false);

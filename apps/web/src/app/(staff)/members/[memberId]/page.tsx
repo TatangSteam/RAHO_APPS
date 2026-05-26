@@ -8,6 +8,7 @@ import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 
 // Components
 import MemberHeader from '@/components/members/MemberHeader';
@@ -132,8 +133,8 @@ export default function MemberDetailPage() {
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
 
   useEffect(() => {
-    console.log('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
-    console.log('👤 [Member Detail] Current user:', user?.email, 'role:', user?.role);
+    devLog('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
+    devLog('👤 [Member Detail] Current user:', user?.email, 'role:', user?.role);
     loadMemberDetail();
     loadPackages();
   }, [memberId]);
@@ -148,47 +149,45 @@ export default function MemberDetailPage() {
   const loadMemberDetail = async () => {
     try {
       setLoading(true);
-      console.log('📥 [Member Detail] Loading member detail for:', memberId);
+      devLog('📥 [Member Detail] Loading member detail for:', memberId);
       const startTime = performance.now();
       
       const data = await getMemberDetailApi(memberId);
       
       const endTime = performance.now();
-      console.log(`⏱️ [Member Detail] loadMemberDetail: ${(endTime - startTime).toFixed(2)}ms`);
-      console.log('✅ [Member Detail] Member data loaded:', data.memberNo, data.profile.fullName);
+      devLog(`⏱️ [Member Detail] loadMemberDetail: ${(endTime - startTime).toFixed(2)}ms`);
+      devLog('✅ [Member Detail] Member data loaded:', data.memberNo, data.profile.fullName);
       setMember(data);
     } catch (error: any) {
-      console.error('❌ [Member Detail] Failed to load member detail:', error);
-      console.error('❌ [Member Detail] Error response:', error.response?.data);
-      console.error('❌ [Member Detail] Error status:', error.response?.status);
+      devError('❌ [Member Detail] Failed to load member detail:', error);
+      devError('❌ [Member Detail] Error response:', error.response?.data);
+      devError('❌ [Member Detail] Error status:', error.response?.status);
       alert('Gagal memuat detail member: ' + (error.response?.data?.error?.message || error.message));
       router.back();
     } finally {
       setLoading(false);
-      console.log('🏁 [Member Detail] Loading finished');
+      devLog('🏁 [Member Detail] Loading finished');
     }
   };
 
   const loadPackages = async () => {
     try {
       setLoadingPackages(true);
-      console.log('📦 [Member Detail] Loading packages for member:', memberId);
+      devLog('📦 [Member Detail] Loading packages for member:', memberId);
       const startTime = performance.now();
       
       const data = await packagesApi.getMemberPackages(memberId);
       
       const endTime = performance.now();
-      console.log(`⏱️ [Member Detail] loadPackages: ${(endTime - startTime).toFixed(2)}ms`);
-      console.log('📥 [Member Detail] Raw API response:', JSON.stringify(data, null, 2));
-      console.log('✅ [Member Detail] Packages loaded:', data.packages?.length || 0, 'packages');
+      devLog(`⏱️ [Member Detail] loadPackages: ${(endTime - startTime).toFixed(2)}ms`);
+      devLog('✅ [Member Detail] Packages loaded:', data.packages?.length || 0, 'packages');
       setPackages(data.packages || []);
     } catch (error: any) {
-      console.error('❌ [Member Detail] Failed to load packages:', error);
-      console.error('❌ [Member Detail] Error response:', error.response?.data);
+      devError('❌ [Member Detail] Failed to load packages:', error);
       showToast.error('Gagal memuat data paket: ' + (error.response?.data?.error?.message || error.message));
     } finally {
       setLoadingPackages(false);
-      console.log('🏁 [Member Detail] Package loading finished');
+      devLog('🏁 [Member Detail] Package loading finished');
     }
   };
 
@@ -196,10 +195,10 @@ export default function MemberDetailPage() {
     try {
       // Fetch actual pricing from backend
       const data = await packagesApi.getPackagePricings();
-      console.log('Loaded pricings:', data);
+      devLog('Loaded pricings:', data);
       setPricings(Array.isArray(data) ? data : []);
     } catch (error) {
-      console.error('Failed to load pricings:', error);
+      devError('Failed to load pricings:', error);
       showToast.error('Gagal memuat harga paket');
       // Set empty array as fallback
       setPricings([]);
@@ -207,12 +206,9 @@ export default function MemberDetailPage() {
   };
 
   const handleAssignPackage = async () => {
-    console.log('=== handleAssignPackage called ===');
-    console.log('assignData:', JSON.stringify(assignData, null, 2));
-    console.log('selectedPackages:', assignData.selectedPackages);
-    assignData.selectedPackages.forEach((pkg, idx) => {
-      console.log(`  Package ${idx}: pricingId=${pkg.pricingId}, quantity=${pkg.quantity}`);
-    });
+    devLog('=== handleAssignPackage called ===');
+    devLog('assignData:', assignData);
+    devLog('selectedPackages:', assignData.selectedPackages);
     
     if (assignData.selectedPackages.length === 0 && assignData.selectedAddOns.length === 0) {
       showToast.error('Pilih minimal 1 paket atau add-on');
@@ -221,7 +217,7 @@ export default function MemberDetailPage() {
 
     // Prevent double submission
     if (submitting) {
-      console.log('Already submitting, ignoring duplicate request');
+      devLog('Already submitting, ignoring duplicate request');
       return;
     }
 
@@ -242,7 +238,7 @@ export default function MemberDetailPage() {
         payload.addOns = assignData.selectedAddOns;
       }
       
-      console.log('Sending payload:', JSON.stringify(payload, null, 2));
+      devLog('Sending payload:', payload);
       
       await packagesApi.assignPackage(memberId, payload);
       showToast.success('Paket berhasil diassign');
@@ -257,8 +253,7 @@ export default function MemberDetailPage() {
       });
       await loadPackages();
     } catch (error: any) {
-      console.error('Assign package error:', error);
-      console.error('Error response:', error.response?.data);
+      devError('Assign package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal assign paket');
     } finally {
       setSubmitting(false);
@@ -294,7 +289,7 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       loadPackages();
     } catch (error: any) {
-      console.error('Verify payment error:', error);
+      devError('Verify payment error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal verifikasi pembayaran');
     } finally {
       setSubmitting(false);
@@ -349,7 +344,7 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       await loadPackages();
     } catch (error: any) {
-      console.error('Refund package error:', error);
+      devError('Refund package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal refund paket');
     } finally {
       setSubmitting(false);
@@ -373,7 +368,7 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       await loadPackages();
     } catch (error: any) {
-      console.error('Cancel package error:', error);
+      devError('Cancel package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal batalkan pembelian');
     } finally {
       setSubmitting(false);
@@ -408,10 +403,9 @@ export default function MemberDetailPage() {
         payload.addOns = editData.selectedAddOns;
       }
       
-      console.log('=== EDIT PACKAGE DEBUG ===');
-      console.log('editingPackageId:', editingPackageId);
-      console.log('payload:', JSON.stringify(payload, null, 2));
-      console.log('editData.selectedPackages:', editData.selectedPackages);
+      devLog('=== EDIT PACKAGE DEBUG ===');
+      devLog('editingPackageId:', editingPackageId);
+      devLog('payload:', payload);
       
       await packagesApi.editPackage(editingPackageId, payload);
       showToast.success('Paket berhasil diupdate');
@@ -427,8 +421,7 @@ export default function MemberDetailPage() {
       setEditingPackageId('');
       await loadPackages();
     } catch (error: any) {
-      console.error('Edit package error:', error);
-      console.error('Error response:', error.response?.data);
+      devError('Edit package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal edit paket');
     } finally {
       setSubmitting(false);

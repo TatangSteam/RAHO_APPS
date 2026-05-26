@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { devLog, devError } from '@/lib/logger';
 
 interface InventoryItem {
   id: string;
@@ -30,7 +31,7 @@ export default function EditStockModal({ isOpen, item, onClose, onSave }: EditSt
   const [conversionFactor, setConversionFactor] = useState('');
   const [saving, setSaving] = useState(false);
 
-  console.log('EditStockModal render:', { isOpen, hasItem: !!item, itemName: item?.masterProduct?.name });
+  devLog('EditStockModal render:', { isOpen, hasItem: !!item, itemName: item?.masterProduct?.name });
 
   useEffect(() => {
     if (item) {
@@ -39,11 +40,11 @@ export default function EditStockModal({ isOpen, item, onClose, onSave }: EditSt
   }, [item]);
 
   if (!isOpen || !item) {
-    console.log('Modal not rendering because:', { isOpen, hasItem: !!item });
+    devLog('Modal not rendering because:', { isOpen, hasItem: !!item });
     return null;
   }
 
-  console.log('Modal SHOULD be visible now!');
+  devLog('Modal SHOULD be visible now!');
 
   const handleSave = async () => {
     const adjustmentNum = parseFloat(adjustment);
@@ -70,7 +71,7 @@ export default function EditStockModal({ isOpen, item, onClose, onSave }: EditSt
       setReason('');
       onClose();
     } catch (error) {
-      console.error('Save error:', error);
+      devError('Save error:', error);
     } finally {
       setSaving(false);
     }

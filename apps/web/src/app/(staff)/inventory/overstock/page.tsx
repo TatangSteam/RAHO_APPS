@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { inventoryApi, OverstockSummary } from '@/lib/api/inventoryApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { 
@@ -49,7 +50,7 @@ export default function OverstockPage() {
         }
       }
     } catch (error) {
-      console.error('Failed to fetch branches:', error);
+      devError('Failed to fetch branches:', error);
     }
   }, [isManager, selectedBranchId]);
 
@@ -64,7 +65,7 @@ export default function OverstockPage() {
         setOverstockSummary(response.data.data);
       }
     } catch (error: any) {
-      console.error('Overstock fetch error:', error);
+      devError('Overstock fetch error:', error);
       showToast.error('Gagal memuat data overstock');
       setOverstockSummary([]);
     } finally {

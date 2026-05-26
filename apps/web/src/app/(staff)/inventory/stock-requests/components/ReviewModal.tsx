@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { X, Package, FileText, CreditCard, Check, AlertCircle, Download, RefreshCw, Clock, Building2, MessageSquare } from 'lucide-react';
 import { StockRequest, InvoiceItemInput, STATUS_LABELS, STATUS_ICONS } from '../types';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -97,7 +98,7 @@ export default function ReviewModal({
         setPaymentProofBlobUrl(blobUrl);
       }
     } catch (error) {
-      console.error('Error fetching payment proof:', error);
+      devError('Error fetching payment proof:', error);
     } finally {
       setLoadingImage(false);
     }
@@ -211,7 +212,7 @@ export default function ReviewModal({
       await generateStockRequestInvoicePDF(invoiceWithItems);
       showToast.success('Invoice PDF berhasil didownload');
     } catch (error) {
-      console.error('Error generating invoice PDF:', error);
+      devError('Error generating invoice PDF:', error);
       showToast.error('Gagal membuat PDF invoice');
     } finally {
       setDownloadingPdf(false);

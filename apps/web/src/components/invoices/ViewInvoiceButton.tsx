@@ -4,6 +4,7 @@ import { useState } from 'react';
 import InvoiceModal from './InvoiceModal';
 import { invoiceApi } from '@/lib/invoiceApi';
 import type { Invoice } from '@/types/invoice';
+import { devError } from '@/lib/logger';
 
 interface Props {
   packageId: string;
@@ -28,7 +29,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status }: Pr
       setInvoice(data);
       setShowModal(true);
     } catch (error: any) {
-      console.error('Failed to load invoice:', error);
+      devError('Failed to load invoice:', error);
       
       // Check if it's a 404 error (invoice not found)
       if (error?.response?.status === 404 || error?.message?.includes('not found')) {

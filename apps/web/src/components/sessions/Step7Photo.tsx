@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { photoApi, type SessionPhoto } from '@/lib/photoApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
+import { devError } from '@/lib/logger';
 
 interface Step7PhotoProps {
   sessionId: string;
@@ -48,7 +49,7 @@ export default function Step7Photo({
           setPreview(objectUrl);
         }
       } catch (error) {
-        console.error('Failed to load session photo URL:', error);
+        devError('Failed to load session photo URL:', error);
         if (!cancelled) {
           setPreview(null);
         }
@@ -99,7 +100,7 @@ export default function Step7Photo({
         // Upload the compressed file
         await uploadPhoto(result.file);
       } catch (error) {
-        console.error('Error compressing image:', error);
+        devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
         reader.onloadend = () => {
@@ -122,7 +123,7 @@ export default function Step7Photo({
       showToast.success('Foto berhasil diupload');
       onComplete();
     } catch (error: any) {
-      console.error('Error uploading photo:', error);
+      devError('Error uploading photo:', error);
       showToast.error(error.message || 'Gagal upload foto');
       setPreview(null);
     } finally {
@@ -142,7 +143,7 @@ export default function Step7Photo({
       setCompressionInfo(null);
       onComplete();
     } catch (error: any) {
-      console.error('Error deleting photo:', error);
+      devError('Error deleting photo:', error);
       showToast.error(error.message || 'Gagal menghapus foto');
     }
   };

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
 import type { VitalSign, VitalType } from '@/types/session';
+import { devError } from '@/lib/logger';
 
 interface Step3VitalBeforeProps {
   sessionId: string;
@@ -115,7 +116,7 @@ export default function Step3VitalBefore({
 
       setSaved((prev) => ({ ...prev, [type]: true }));
     } catch (err: any) {
-      console.error('Failed to save vital sign:', err);
+      devError('Failed to save vital sign:', err);
     } finally {
       setSaving((prev) => ({ ...prev, [type]: false }));
     }
@@ -155,7 +156,7 @@ export default function Step3VitalBefore({
       // Call onComplete after all saved
       onComplete();
     } catch (err: any) {
-      console.error('Failed to save vital signs:', err);
+      devError('Failed to save vital signs:', err);
     } finally {
       setSavingAll(false);
     }

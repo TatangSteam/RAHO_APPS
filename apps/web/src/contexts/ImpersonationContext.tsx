@@ -102,7 +102,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
             impersonationChain: data.chain || [],
           }));
         } catch (e) {
-          console.error('Failed to parse impersonation data:', e);
+          // Silent fail - impersonation data was corrupted
           localStorage.removeItem('impersonation');
         }
       }

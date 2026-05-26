@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import Link from 'next/link';
 import { Activity, Users, Package, FileText } from 'lucide-react';
 import { AdminManagersTab } from '@/components/admin/AdminManagersTab';
@@ -85,7 +86,7 @@ export default function SuperAdminPage() {
       const result = await response.json();
       setStats(result.data);
     } catch (error: any) {
-      console.error('Error loading system stats:', error);
+      devError('Error loading system stats:', error);
       showToast.error(error.message || 'Gagal memuat statistik sistem');
     } finally {
       setLoading(false);

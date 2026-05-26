@@ -6,6 +6,7 @@ import { usersApi, StaffPerformance, StaffPerformanceSummaryResponse } from '@/l
 import { branchesApi } from '@/lib/api/branchesApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import {
   Activity, Search, Eye, Building2, ChevronLeft, ChevronRight,
   Users, Calendar, Stethoscope, Heart, UserCog,
@@ -100,7 +101,7 @@ export default function StaffPerformancePage() {
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data);
     } catch (error) {
-      console.error('Error fetching branches:', error);
+      devError('Error fetching branches:', error);
     }
   };
 
@@ -116,7 +117,7 @@ export default function StaffPerformancePage() {
       });
       setData(result);
     } catch (error: any) {
-      console.error('Error fetching performance:', error);
+      devError('Error fetching performance:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat data kinerja');
     } finally {
       setLoading(false);

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { Key } from 'lucide-react';
+import { devError } from '@/lib/logger';
 
 interface MemberHeaderProps {
   member: MemberDetail;
@@ -34,7 +35,7 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
           setProfilePhotoUrl(url);
         }
       } catch (error) {
-        console.error('Failed to load member profile photo:', error);
+        devError('Failed to load member profile photo:', error);
         if (!cancelled) {
           setProfilePhotoUrl(null);
         }

@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNumberWithDots } from './formatNumber';
+import { devLog, devError } from '@/lib/logger';
 import type { StockRequest, StockRequestInvoice } from '@/app/(staff)/inventory/stock-requests/types';
 
 const COMPANY_NAME = 'REVERSE AGING & HOMEOSTASIS CLUB';
@@ -19,7 +20,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     throw new Error('Invoice tidak ditemukan');
   }
 
-  console.log('📥 Starting PDF generation for stock request invoice:', invoice.invoiceNumber);
+  devLog('📥 Starting PDF generation for stock request invoice:', invoice.invoiceNumber);
 
   try {
     const doc = new jsPDF();
@@ -279,13 +280,13 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
 
     // Save PDF
     const fileName = `Invoice-${invoice.invoiceNumber}.pdf`;
-    console.log('💾 Saving PDF:', fileName);
+    devLog('💾 Saving PDF:', fileName);
     doc.save(fileName);
 
-    console.log('✅ PDF generated successfully');
+    devLog('✅ PDF generated successfully');
     return true;
   } catch (error) {
-    console.error('❌ Error generating PDF:', error);
+    devError('❌ Error generating PDF:', error);
     throw new Error('Gagal membuat PDF. Silakan coba lagi.');
   }
 }

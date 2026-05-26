@@ -6,6 +6,7 @@ import InvoiceDocument from './InvoiceDocument';
 import { generateInvoicePDF } from '@/lib/pdfGenerator';
 import type { Invoice } from '@/types/invoice';
 import styles from './InvoiceModal.module.css';
+import { devError } from '@/lib/logger';
 
 interface Props {
   show: boolean;
@@ -40,7 +41,7 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
       setExporting(true);
       await generateInvoicePDF(invoice);
     } catch (error) {
-      console.error('Failed to export PDF:', error);
+      devError('Failed to export PDF:', error);
       alert('Gagal export PDF. Silakan coba lagi.');
     } finally {
       setExporting(false);

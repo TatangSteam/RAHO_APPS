@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { evaluationApi } from '@/lib/evaluationApi';
+import { devError } from '@/lib/logger';
 
 interface Evaluation {
   id: string;
@@ -60,7 +61,7 @@ export default function Step9Evaluation({
       showToast.success('Evaluasi dokter berhasil disimpan');
       onComplete();
     } catch (error: any) {
-      console.error('Error saving evaluation:', error);
+      devError('Error saving evaluation:', error);
       showToast.error(error.message || 'Gagal menyimpan evaluasi');
     } finally {
       setLoading(false);

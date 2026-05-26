@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { meApi, MemberSession } from '@/lib/api/meApi'
-import { Syringe, ChevronLeft, ChevronRight, CheckCircle, Clock, Eye, MapPin, Package, Droplets, Calendar } from 'lucide-react'
+import { Syringe, ChevronLeft, ChevronRight, CheckCircle, Clock, Eye, MapPin, Package, Calendar } from 'lucide-react'
+import { devError } from '@/lib/logger'
 
 export default function MemberSessionsPage() {
   const router = useRouter()
@@ -23,7 +24,7 @@ export default function MemberSessionsPage() {
       setSessions(data)
       setTotalPages(meta.totalPages)
     } catch (e) {
-      console.error(e)
+      devError(e)
     } finally {
       setLoading(false)
     }

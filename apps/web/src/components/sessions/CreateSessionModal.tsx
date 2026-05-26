@@ -13,6 +13,7 @@ import { useAuthStore } from '@/stores/authStore';
 import type { CreateSessionInput, SessionType, Diagnosis } from '@/types/session';
 import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
+import { devLog, devError } from '@/lib/logger';
 
 interface CreateSessionModalProps {
   isOpen: boolean;
@@ -114,7 +115,7 @@ export default function CreateSessionModal({
     const branchId = targetBranchId || user?.branchId;
     
     if (!branchId) {
-      console.log('No branchId available for infus set stock check');
+      devLog('No branchId available for infus set stock check');
       // For Admin Manager without direct branchId, we'll check when member is selected
       setInfusSetStock(null);
       return;
@@ -122,12 +123,12 @@ export default function CreateSessionModal({
     
     try {
       setLoadingInfusSetStock(true);
-      console.log('Loading infus set stock for branch:', branchId);
+      devLog('Loading infus set stock for branch:', branchId);
       const response = await inventoryApi.getAvailableItems(branchId);
       
       // Debug: log the full response structure
-      console.log('Full API response:', response);
-      console.log('response.data:', response.data);
+      devLog('Full API response:', response);
+      devLog('response.data:', response.data);
       
       // API returns axios response: { data: { success: true, data: items } }
       // So we need response.data.data to get the items array
@@ -140,29 +141,29 @@ export default function CreateSessionModal({
         items = response.data.data;
       }
       
-      console.log('Inventory items received:', items?.length || 0);
-      console.log('All items SKUs:', items.map((item: any) => item.masterProduct?.sku || item.sku));
+      devLog('Inventory items received:', items?.length || 0);
+      devLog('All items SKUs:', items.map((item: any) => item.masterProduct?.sku || item.sku));
       
       // Find Infus Set + Pelengkap (PRD-INF-SET-002) - this is the required product for therapy sessions
       // The API returns items with masterProduct nested object
       let infusSetItem = items.find((item: any) => {
         const sku = item.masterProduct?.sku || item.sku;
-        console.log('Checking item:', item.masterProduct?.name, 'SKU:', sku);
+        devLog('Checking item:', item.masterProduct?.name, 'SKU:', sku);
         return sku === 'PRD-INF-SET-002'; // Only check for "Infus Set + Pelengkap"
       });
       
       // Fallback: search by name if SKU not found
       if (!infusSetItem) {
-        console.log('SKU not found, searching by name...');
+        devLog('SKU not found, searching by name...');
         infusSetItem = items.find((item: any) => {
           const name = (item.masterProduct?.name || item.name || '').toLowerCase();
           return name.includes('infus set') && name.includes('pelengkap');
         });
       }
       
-      console.log('Infus Set + Pelengkap item found:', infusSetItem ? 'yes' : 'no');
+      devLog('Infus Set + Pelengkap item found:', infusSetItem ? 'yes' : 'no');
       if (infusSetItem) {
-        console.log('Found item details:', {
+        devLog('Found item details:', {
           name: infusSetItem.masterProduct?.name,
           sku: infusSetItem.masterProduct?.sku,
           stock: infusSetItem.stock,
@@ -176,11 +177,11 @@ export default function CreateSessionModal({
                       Number(infusSetItem.stock) ?? 
                       infusSetItem.quantity ?? 0;
         const name = infusSetItem.masterProduct?.name || infusSetItem.name || 'Infus Set + Pelengkap';
-        console.log('Infus set stock:', stock, 'name:', name);
+        devLog('Infus set stock:', stock, 'name:', name);
         setInfusSetStock(Math.floor(stock));
         setInfusSetProductName(name);
       } else {
-        console.log('No infus set item found in inventory - setting stock to 0');
+        devLog('No infus set item found in inventory - setting stock to 0');
         // Item not found in inventory - this could mean:
         // 1. The product doesn't exist in this branch's inventory
         // 2. The SKU doesn't match
@@ -189,7 +190,7 @@ export default function CreateSessionModal({
         setInfusSetStock(null); // null means "unknown" - don't show warning
       }
     } catch (err) {
-      console.error('Failed to load infus set stock:', err);
+      devError('Failed to load infus set stock:', err);
       // On error, set to null (unknown) instead of 0 (out of stock)
       // This prevents false "out of stock" warnings
       setInfusSetStock(null);
@@ -207,17 +208,17 @@ export default function CreateSessionModal({
       // Load infus set stock based on member's registration branch
       // This is important for Admin Manager who doesn't have direct branchId
       const memberBranchId = memberDetail.registrationBranch?.id;
-      console.log('Member detail loaded:', {
+      devLog('Member detail loaded:', {
         memberNo: memberDetail.memberNo,
         registrationBranch: memberDetail.registrationBranch,
         memberBranchId
       });
       
       if (memberBranchId) {
-        console.log('Loading infus set stock for member branch:', memberBranchId);
+        devLog('Loading infus set stock for member branch:', memberBranchId);
         await loadInfusSetStock(memberBranchId);
       } else {
-        console.log('No registrationBranch.id found for member, using user branchId');
+        devLog('No registrationBranch.id found for member, using user branchId');
         // Fallback to user's branchId if member doesn't have registrationBranch
         if (user?.branchId) {
           await loadInfusSetStock(user.branchId);
@@ -270,7 +271,7 @@ export default function CreateSessionModal({
         setSelectedPackageId(basicPackage.packageId);
       }
     } catch (err: any) {
-      console.error('Failed to load member data:', err);
+      devError('Failed to load member data:', err);
       setError(err.response?.data?.error?.message || 'Gagal memuat data member');
     }
   };
@@ -317,7 +318,7 @@ export default function CreateSessionModal({
         setSelectedTherapyPlanId(availablePlans[0].id);
       }
     } catch (err: any) {
-      console.error('Failed to load therapy plans:', err);
+      devError('Failed to load therapy plans:', err);
       showToast.error('Gagal memuat therapy plans');
     } finally {
       setLoadingTherapyPlans(false);
@@ -331,7 +332,7 @@ export default function CreateSessionModal({
       setDiagnoses(memberDiagnoses);
       setHasDiagnosis(memberDiagnoses.length > 0);
     } catch (err: any) {
-      console.error('Failed to load diagnoses:', err);
+      devError('Failed to load diagnoses:', err);
       setDiagnoses([]);
       setHasDiagnosis(false);
     } finally {
@@ -376,7 +377,7 @@ export default function CreateSessionModal({
         setNurses(nursesList);
       }
     } catch (err) {
-      console.error('Failed to load staff:', err);
+      devError('Failed to load staff:', err);
       setError('Gagal memuat data staff');
     }
   };

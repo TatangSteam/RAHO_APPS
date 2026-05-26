@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import { formatCurrency, formatNumberWithDots } from '@/lib/formatNumber';
 import { dashboardApi, type AdminManagerDashboardData } from '@/lib/dashboardApi';
 
@@ -57,7 +58,7 @@ export default function AdminManagerDashboardPage() {
       );
       setData(result);
     } catch (error: any) {
-      console.error('Dashboard error:', error);
+      devError('Dashboard error:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
       setLoading(false);

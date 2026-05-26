@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { updateBranch, type Branch, type UpdateBranchInput } from '@/lib/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import styles from './BranchModal.module.css';
 
 interface Props {
@@ -85,7 +86,7 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
       showToast.success(`Cabang ${formData.name} berhasil diupdate`);
       onSuccess();
     } catch (error: any) {
-      console.error('Error updating branch:', error);
+      devError('Error updating branch:', error);
       showToast.error(error.message || 'Gagal mengupdate cabang');
     } finally {
       setLoading(false);

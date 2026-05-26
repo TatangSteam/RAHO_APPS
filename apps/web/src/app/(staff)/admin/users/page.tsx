@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import CreateStaffModal from '@/components/staff/CreateStaffModal';
 import styles from './page.module.css';
 
@@ -93,7 +94,7 @@ export default function StaffManagementPage() {
       const data = await response.json();
       setStaff(data.data || []);
     } catch (error: any) {
-      console.error('Error fetching staff:', error);
+      devError('Error fetching staff:', error);
       showToast.error(error.message || 'Gagal memuat data user');
     } finally {
       setLoading(false);
@@ -116,7 +117,7 @@ export default function StaffManagementPage() {
       const data = await response.json();
       setActivities(data.data || []);
     } catch (error: any) {
-      console.error('Error fetching activities:', error);
+      devError('Error fetching activities:', error);
       showToast.error(error.message || 'Gagal memuat aktivitas');
     }
   };
@@ -139,7 +140,7 @@ export default function StaffManagementPage() {
       showToast.success(`User berhasil ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}`);
       fetchStaff();
     } catch (error: any) {
-      console.error('Error toggling staff status:', error);
+      devError('Error toggling staff status:', error);
       showToast.error(error.message || 'Gagal mengubah status user');
     }
   };

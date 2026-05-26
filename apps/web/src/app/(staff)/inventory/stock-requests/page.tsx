@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { inventoryApi } from '@/lib/api/inventoryApi';
+import { devLog, devError } from '@/lib/logger';
 import { 
   ClipboardList, 
   Plus, 
@@ -79,7 +80,7 @@ export default function StockRequestsPage() {
       
       setRequests(requestsData);
     } catch (error: any) {
-      console.error('Failed to fetch requests:', error);
+      devError('Failed to fetch requests:', error);
       showToast.error('Gagal memuat data request stok');
       setRequests([]);
     } finally {
@@ -105,7 +106,7 @@ export default function StockRequestsPage() {
       
       setMasterProducts(productsData);
     } catch (error: any) {
-      console.error('Failed to fetch master products:', error);
+      devError('Failed to fetch master products:', error);
       setMasterProducts([]);
     }
   }, [accessToken]);
@@ -151,9 +152,9 @@ export default function StockRequestsPage() {
     };
 
     // Debug logging
-    console.log('=== CREATE STOCK REQUEST DEBUG ===');
-    console.log('User:', { userId: user?.userId, role: user?.role, branchId: user?.branchId });
-    console.log('Request data:', JSON.stringify(requestData, null, 2));
+    devLog('=== CREATE STOCK REQUEST DEBUG ===');
+    devLog('User:', { userId: user?.userId, role: user?.role, branchId: user?.branchId });
+    devLog('Request data:', JSON.stringify(requestData, null, 2));
 
     try {
       setCreateLoading(true);
@@ -163,10 +164,10 @@ export default function StockRequestsPage() {
       setShowCreateModal(false);
       fetchRequests();
     } catch (error: any) {
-      console.error('=== CREATE REQUEST ERROR ===');
-      console.error('Error:', error);
-      console.error('Response status:', error.response?.status);
-      console.error('Response data:', JSON.stringify(error.response?.data, null, 2));
+      devError('=== CREATE REQUEST ERROR ===');
+      devError('Error:', error);
+      devError('Response status:', error.response?.status);
+      devError('Response data:', JSON.stringify(error.response?.data, null, 2));
       
       // Extract error message from response
       const errorData = error.response?.data;
@@ -299,7 +300,7 @@ export default function StockRequestsPage() {
       setSelectedRequest(fullRequest);
       setShowModal(true);
     } catch (error) {
-      console.error('Failed to fetch request details:', error);
+      devError('Failed to fetch request details:', error);
       setSelectedRequest(request);
       setShowModal(true);
     }

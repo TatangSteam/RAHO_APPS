@@ -40,7 +40,7 @@ async function main(): Promise<void> {
     // ══════════════════════════════════════════════════════════
     console.log('👤 Creating Super Admin user...');
     
-    const hashedPassword = await bcrypt.hash('Sup3r4dM1n@123', 10);
+    const hashedPassword = await bcrypt.hash('Sup3r4dM1n', 10);
     
     const superAdmin = await prisma.user.upsert({
       where: { email: 'superadmin@raho.id' },
@@ -91,7 +91,7 @@ async function main(): Promise<void> {
     console.log('\n🎉 Essential data seeding completed successfully!\n');
     console.log('──────────────────────────────────────────');
     console.log('📧 Super Admin Account:');
-    console.log('  superadmin@raho.id → Sup3r4dM1n@123 [SUPER_ADMIN]');
+    console.log('  superadmin@raho.id → Sup3r4dM1n [SUPER_ADMIN]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');
     console.log(`  • 1 Super Admin user`);

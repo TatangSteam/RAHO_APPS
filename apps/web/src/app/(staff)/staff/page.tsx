@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
+import { devLog, devError } from '@/lib/logger';
 import { 
   UserCog, Plus, Edit, Trash2, Search, 
   Mail, Phone, Shield, RefreshCw
@@ -91,15 +92,15 @@ export default function StaffManagementPage() {
         },
       });
       
-      console.log('🔍 [StaffPage] API response:', response.data);
+      devLog('🔍 [StaffPage] API response:', response.data);
       
       // API returns { success: true, data: [...users], meta: {...} }
       const staffData = response.data.data || [];
-      console.log('🔍 [StaffPage] Staff data:', staffData);
+      devLog('🔍 [StaffPage] Staff data:', staffData);
       
       setStaff(Array.isArray(staffData) ? staffData : []);
     } catch (error: any) {
-      console.error('Error loading staff:', error);
+      devError('Error loading staff:', error);
       showToast.error('Gagal memuat data staff');
     } finally {
       setLoading(false);
@@ -140,7 +141,7 @@ export default function StaffManagementPage() {
       showToast.success('Staff berhasil dinonaktifkan');
       loadStaff();
     } catch (error: any) {
-      console.error('Error deleting staff:', error);
+      devError('Error deleting staff:', error);
       showToast.error(error.response?.data?.message || 'Gagal menonaktifkan staff');
     }
   };

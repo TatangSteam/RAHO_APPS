@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import * as referralsApi from '@/lib/api/referralsApi';
+import { devError } from '@/lib/logger';
 import styles from '@/styles/referral-detail.module.css';
 
 export default function ReferralDetailPage() {
@@ -30,7 +31,7 @@ export default function ReferralDetailPage() {
       const response = await referralsApi.getReferralById(referralId);
       setReferral(response.data.data);
     } catch (error) {
-      console.error('Error fetching referral:', error);
+      devError('Error fetching referral:', error);
       alert('Gagal memuat data referral');
       router.push('/referrals');
     } finally {
@@ -45,7 +46,7 @@ export default function ReferralDetailPage() {
       setIncentives(response.data.data.records);
       setTotal(response.data.data.total);
     } catch (error) {
-      console.error('Error fetching incentives:', error);
+      devError('Error fetching incentives:', error);
     } finally {
       setIncentivesLoading(false);
     }
@@ -89,7 +90,7 @@ export default function ReferralDetailPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting to Excel:', error);
+      devError('Error exporting to Excel:', error);
       alert('Gagal export ke Excel');
     }
   };
@@ -110,7 +111,7 @@ export default function ReferralDetailPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting to PDF:', error);
+      devError('Error exporting to PDF:', error);
       alert('Gagal export ke PDF');
     }
   };
@@ -317,7 +318,7 @@ function EditReferralModal({
       await referralsApi.updateReferral(referral.id, formData);
       onSuccess();
     } catch (error) {
-      console.error('Error updating referral:', error);
+      devError('Error updating referral:', error);
       alert('Gagal mengupdate kode referral');
     } finally {
       setLoading(false);

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './VerifyPaymentModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
+import { devError } from '@/lib/logger';
 
 interface PaymentProof {
   file: File | null;
@@ -96,7 +97,7 @@ export default function VerifyPaymentModal({
         });
         onProofChange(proof);
       } catch (error) {
-        console.error('Error compressing image:', error);
+        devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
         reader.onloadend = () => {

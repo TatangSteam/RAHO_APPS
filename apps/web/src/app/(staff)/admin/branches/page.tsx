@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { getAllBranches, deleteBranch, type Branch } from '@/lib/branchesApi';
 import { showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 import CreateBranchModal from '@/components/branches/CreateBranchModal';
 import EditBranchModal from '@/components/branches/EditBranchModal';
 import styles from './page.module.css';
@@ -47,7 +48,7 @@ export default function BranchesPage() {
       const response = await getAllBranches();
       setBranches(response.data || []);
     } catch (error: any) {
-      console.error('Error loading branches:', error);
+      devError('Error loading branches:', error);
       showToast.error(error.message || 'Gagal memuat data cabang');
     } finally {
       setLoading(false);
@@ -64,7 +65,7 @@ export default function BranchesPage() {
       showToast.success('Cabang berhasil dinonaktifkan');
       loadBranches();
     } catch (error: any) {
-      console.error('Error deleting branch:', error);
+      devError('Error deleting branch:', error);
       showToast.error(error.message || 'Gagal menonaktifkan cabang');
     }
   };

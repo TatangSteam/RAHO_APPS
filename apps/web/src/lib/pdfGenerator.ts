@@ -2,6 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from './formatNumber';
+import { devLog, devError } from '@/lib/logger';
 
 const COMPANY_NAME = 'REVERSE AGING & HOMEOSTASIS CLUB';
 const COMPANY_LEGAL = 'CV DUNIA SEHAT SENTOSA INDONESIA';
@@ -14,7 +15,7 @@ const BANK_ACCOUNT = '1306-9938-88';
 const BANK_HOLDER = 'CV DUNIA SEHAT SENTOSA';
 
 export async function generateInvoicePDF(invoice: Invoice) {
-  console.log('📥 Starting PDF generation for invoice:', invoice.invoiceNumber);
+  devLog('📥 Starting PDF generation for invoice:', invoice.invoiceNumber);
   
   try {
     const doc = new jsPDF();
@@ -369,13 +370,13 @@ export async function generateInvoicePDF(invoice: Invoice) {
     
     // Save PDF
     const fileName = `Invoice-${invoice.invoiceNumber}.pdf`;
-    console.log('💾 Saving PDF:', fileName);
+    devLog('💾 Saving PDF:', fileName);
     doc.save(fileName);
     
-    console.log('✅ PDF generated successfully');
+    devLog('✅ PDF generated successfully');
     return true;
   } catch (error) {
-    console.error('❌ Error generating PDF:', error);
+    devError('❌ Error generating PDF:', error);
     throw new Error('Gagal membuat PDF. Silakan coba lagi.');
   }
 }

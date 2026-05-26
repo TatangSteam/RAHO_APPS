@@ -3,6 +3,8 @@
  * Compresses images before uploading to reduce bandwidth and server load
  */
 
+import { devLog } from '@/lib/logger';
+
 export interface CompressionOptions {
   maxWidth: number;
   maxHeight: number;
@@ -183,7 +185,7 @@ export async function compressImage(
 
   const compressionRatio = ((file.size - blob.size) / file.size) * 100;
 
-  console.log(
+  devLog(
     `[ImageCompressor] Compressed: ${(file.size / 1024).toFixed(1)}KB → ${(blob.size / 1024).toFixed(1)}KB (${compressionRatio.toFixed(1)}% reduction)`
   );
 
