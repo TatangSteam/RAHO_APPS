@@ -19,6 +19,7 @@ export { seedInventoryItems } from './inventory-items.seed';
 export { seedOfficialInventoryItems } from './inventory-items-official.seed';
 export { seedConsolidatedInventoryItems } from './inventory-items-consolidated.seed';
 export { seedInfusionMaterialUsage } from './infusion-material-usage.seed';
+export { seedInfusSetStock } from './infus-set-stock.seed';
 // DEPRECATED: seedMaterials creates products with wrong names (e.g., "EDTA 100ml", "GASO 100ml")
 // Use seedProducts + seedConsolidatedInventoryItems instead which follow List Barang RAHO exactly
 // export { seedMaterials } from './materials.seed';

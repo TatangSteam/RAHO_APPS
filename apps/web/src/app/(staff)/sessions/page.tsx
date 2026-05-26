@@ -335,21 +335,33 @@ export default function SessionsPage() {
 
   // Load filter options
   useEffect(() => {
+    // Skip if user is not loaded yet
+    if (!user) return;
+    
     const loadFilterOptions = async () => {
       try {
-        // Load branches using branchesApi
-        const branchesRes = await branchesApi.listBranches();
-        setBranches(branchesRes.data?.data || []);
+        // Load branches only for SUPER_ADMIN and ADMIN_MANAGER
+        if (canSeeAllBranches) {
+          const branchesRes = await branchesApi.listBranches();
+          setBranches(branchesRes.data?.data || []);
+        }
 
-        // Load staff (doctors and nurses) using api instance
-        const usersRes = await api.get('/users', { params: { roles: 'DOCTOR,NURSE' } });
-        const users = usersRes.data?.data || [];
-        setDoctors(users.filter((u: any) => u.role === 'DOCTOR').map((u: any) => ({
+        // Load staff (doctors and nurses) using role-specific endpoint
+        // This endpoint is accessible by all staff roles
+        const [doctorsRes, nursesRes] = await Promise.all([
+          api.get('/users/staff/DOCTOR'),
+          api.get('/users/staff/NURSE'),
+        ]);
+        
+        const doctorsList = doctorsRes.data?.data || [];
+        const nursesList = nursesRes.data?.data || [];
+        
+        setDoctors(doctorsList.map((u: any) => ({
           id: u.id,
           fullName: u.profile?.fullName || u.email,
           role: u.role,
         })));
-        setNurses(users.filter((u: any) => u.role === 'NURSE').map((u: any) => ({
+        setNurses(nursesList.map((u: any) => ({
           id: u.id,
           fullName: u.profile?.fullName || u.email,
           role: u.role,
@@ -360,7 +372,7 @@ export default function SessionsPage() {
     };
 
     loadFilterOptions();
-  }, []);
+  }, [user, canSeeAllBranches]);
 
   const loadSessions = useCallback(async () => {
     try {

@@ -293,25 +293,22 @@ export class MemberMedicalRecordsService {
 
     const branchCode = user.branch.branchCode;
 
-    // Calculate total therapy count (global across all branches)
+    // Calculate total therapy plan count (global across all branches)
+    // Count ALL therapy plans, not just used ones, to avoid duplicate planCode
     const totalTherapyCount = await prisma.therapyPlan.count({
       where: {
         memberId,
-        treatmentSessionId: { not: null }, // Only count used therapy plans
       },
     });
     const totalSequence = totalTherapyCount + 1;
 
-    // Calculate branch-specific therapy count
+    // Calculate branch-specific therapy plan count
+    // Count plans created by users from this branch (via createdAt timestamp correlation with sessions)
+    // Since therapy plans don't have direct branchId, we count all plans for this member
+    // and use a unique timestamp-based suffix to ensure uniqueness
     const branchTherapyCount = await prisma.therapyPlan.count({
       where: {
         memberId,
-        treatmentSessionId: { not: null },
-        session: {
-          is: {
-            branchId: user.branchId,
-          },
-        },
       },
     });
     const branchSequence = branchTherapyCount + 1;
@@ -319,9 +316,20 @@ export class MemberMedicalRecordsService {
     // Extract member number (remove 'M' prefix if exists)
     const memberNoStr = member.memberNo.replace(/^M/, '');
 
-    // Generate therapy plan code
+    // Generate therapy plan code with timestamp suffix for uniqueness
     // Format: TP-MBR-{BranchCode}-{MemberNo}-{BranchSeq}-{TotalSeq}
-    const planCode = `TP-MBR-${branchCode}-${memberNoStr.padStart(4, '0')}-${String(branchSequence).padStart(5, '0')}-${String(totalSequence).padStart(5, '0')}`;
+    let planCode = `TP-MBR-${branchCode}-${memberNoStr.padStart(4, '0')}-${String(branchSequence).padStart(5, '0')}-${String(totalSequence).padStart(5, '0')}`;
+
+    // Check if planCode already exists and add timestamp suffix if needed
+    const existingPlan = await prisma.therapyPlan.findUnique({
+      where: { planCode },
+    });
+
+    if (existingPlan) {
+      // Add timestamp suffix to make it unique
+      const timestamp = Date.now().toString(36).toUpperCase();
+      planCode = `${planCode}-${timestamp}`;
+    }
 
     const therapyPlan = await prisma.therapyPlan.create({
       data: {

@@ -118,6 +118,39 @@ export interface AdminLayananDashboardData {
 }
 
 
+export interface AdminManagerDashboardData {
+  summary: {
+    totalBranches: number;
+    totalMembers: number;
+    activeMembers: number;
+    totalRevenue: number;
+    monthlyRevenue: number;
+    revenueGrowth: number;
+    totalSessions: number;
+    completedSessions: number;
+    pendingPayments: number;
+    totalAdminCabang: number;
+  };
+  branches: Array<{
+    id: string;
+    branchCode: string;
+    name: string;
+    city: string | null;
+    type: 'PUSAT' | 'CABANG';
+    stats: {
+      totalMembers: number;
+      activeMembers: number;
+      newMembersThisMonth: number;
+      totalSessions: number;
+      completedSessions: number;
+      monthlyRevenue: number;
+      pendingPayments: number;
+      totalStaff: number;
+    };
+    growth: number;
+  }>;
+}
+
 export interface MemberDashboardDataEnhanced {
   greeting: string;
   stats: {
@@ -410,6 +443,258 @@ export class RoleDashboardService {
         unit: item.masterProduct.unit,
         isLow: item.stock.toNumber() <= item.minThreshold.toNumber(),
       })),
+    };
+  }
+
+
+  // ────────────────────────────────────────────────────────────
+  // ADMIN MANAGER DASHBOARD
+  // ────────────────────────────────────────────────────────────
+  
+  async getAdminManagerDashboard(userId: string, startDate?: Date, endDate?: Date): Promise<AdminManagerDashboardData> {
+    const start = startDate || new Date(new Date().setDate(1)); // First day of current month
+    const end = endDate || new Date();
+    
+    // Get previous period for growth calculation
+    const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+    const prevStart = new Date(start);
+    prevStart.setDate(prevStart.getDate() - periodDays);
+    const prevEnd = new Date(start);
+
+    // Get branches assigned to this manager
+    const managerBranches = await prisma.managerBranch.findMany({
+      where: { userId },
+      include: {
+        branch: true,
+      },
+    });
+
+    const branchIds = managerBranches.map(mb => mb.branch.id);
+
+    if (branchIds.length === 0) {
+      return {
+        summary: {
+          totalBranches: 0,
+          totalMembers: 0,
+          activeMembers: 0,
+          totalRevenue: 0,
+          monthlyRevenue: 0,
+          revenueGrowth: 0,
+          totalSessions: 0,
+          completedSessions: 0,
+          pendingPayments: 0,
+          totalAdminCabang: 0,
+        },
+        branches: [],
+      };
+    }
+
+    // Get aggregated stats for all branches
+    const [
+      totalMembers,
+      activeMembers,
+      totalSessions,
+      completedSessions,
+      pendingPayments,
+      totalAdminCabang,
+      currentRevenue,
+      previousRevenue,
+    ] = await Promise.all([
+      // Total members across all branches
+      prisma.member.count({
+        where: { registrationBranchId: { in: branchIds } },
+      }),
+      // Active members
+      prisma.member.count({
+        where: {
+          registrationBranchId: { in: branchIds },
+          memberPackages: { some: { status: 'ACTIVE' } },
+        },
+      }),
+      // Total sessions in period
+      prisma.treatmentSession.count({
+        where: {
+          branchId: { in: branchIds },
+          treatmentDate: { gte: start, lte: end },
+        },
+      }),
+      // Completed sessions in period
+      prisma.treatmentSession.count({
+        where: {
+          branchId: { in: branchIds },
+          treatmentDate: { gte: start, lte: end },
+          isCompleted: true,
+        },
+      }),
+      // Pending payments
+      prisma.memberPackage.count({
+        where: {
+          branchId: { in: branchIds },
+          status: 'PENDING_PAYMENT',
+        },
+      }),
+      // Total Admin Cabang
+      prisma.user.count({
+        where: {
+          branchId: { in: branchIds },
+          role: 'ADMIN_CABANG',
+          isActive: true,
+        },
+      }),
+      // Current period revenue
+      prisma.invoice.aggregate({
+        where: {
+          branchId: { in: branchIds },
+          status: 'PAID',
+          paidAt: { gte: start, lte: end },
+        },
+        _sum: { totalAmount: true },
+      }),
+      // Previous period revenue
+      prisma.invoice.aggregate({
+        where: {
+          branchId: { in: branchIds },
+          status: 'PAID',
+          paidAt: { gte: prevStart, lte: prevEnd },
+        },
+        _sum: { totalAmount: true },
+      }),
+    ]);
+
+    // Total revenue (all time)
+    const totalRevenueResult = await prisma.invoice.aggregate({
+      where: {
+        branchId: { in: branchIds },
+        status: 'PAID',
+      },
+      _sum: { totalAmount: true },
+    });
+
+    const monthlyRevenue = Number(currentRevenue._sum.totalAmount || 0);
+    const prevMonthlyRevenue = Number(previousRevenue._sum.totalAmount || 0);
+    const revenueGrowth = prevMonthlyRevenue > 0 
+      ? ((monthlyRevenue - prevMonthlyRevenue) / prevMonthlyRevenue) * 100 
+      : 0;
+
+    // Get per-branch stats
+    const branchStats = await Promise.all(
+      managerBranches.map(async (mb) => {
+        const branch = mb.branch;
+        
+        const [
+          branchTotalMembers,
+          branchActiveMembers,
+          branchNewMembers,
+          branchTotalSessions,
+          branchCompletedSessions,
+          branchRevenue,
+          branchPrevRevenue,
+          branchPendingPayments,
+          branchStaff,
+        ] = await Promise.all([
+          prisma.member.count({
+            where: { registrationBranchId: branch.id },
+          }),
+          prisma.member.count({
+            where: {
+              registrationBranchId: branch.id,
+              memberPackages: { some: { status: 'ACTIVE' } },
+            },
+          }),
+          prisma.member.count({
+            where: {
+              registrationBranchId: branch.id,
+              createdAt: { gte: start },
+            },
+          }),
+          prisma.treatmentSession.count({
+            where: {
+              branchId: branch.id,
+              treatmentDate: { gte: start, lte: end },
+            },
+          }),
+          prisma.treatmentSession.count({
+            where: {
+              branchId: branch.id,
+              treatmentDate: { gte: start, lte: end },
+              isCompleted: true,
+            },
+          }),
+          prisma.invoice.aggregate({
+            where: {
+              branchId: branch.id,
+              status: 'PAID',
+              paidAt: { gte: start, lte: end },
+            },
+            _sum: { totalAmount: true },
+          }),
+          prisma.invoice.aggregate({
+            where: {
+              branchId: branch.id,
+              status: 'PAID',
+              paidAt: { gte: prevStart, lte: prevEnd },
+            },
+            _sum: { totalAmount: true },
+          }),
+          prisma.memberPackage.count({
+            where: {
+              branchId: branch.id,
+              status: 'PENDING_PAYMENT',
+            },
+          }),
+          prisma.user.count({
+            where: {
+              branchId: branch.id,
+              isActive: true,
+              role: { in: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'] },
+            },
+          }),
+        ]);
+
+        const branchMonthlyRevenue = Number(branchRevenue._sum.totalAmount || 0);
+        const branchPrevMonthlyRevenue = Number(branchPrevRevenue._sum.totalAmount || 0);
+        const branchGrowth = branchPrevMonthlyRevenue > 0
+          ? ((branchMonthlyRevenue - branchPrevMonthlyRevenue) / branchPrevMonthlyRevenue) * 100
+          : 0;
+
+        return {
+          id: branch.id,
+          branchCode: branch.branchCode,
+          name: branch.name,
+          city: branch.city,
+          type: branch.type as 'PUSAT' | 'CABANG',
+          stats: {
+            totalMembers: branchTotalMembers,
+            activeMembers: branchActiveMembers,
+            newMembersThisMonth: branchNewMembers,
+            totalSessions: branchTotalSessions,
+            completedSessions: branchCompletedSessions,
+            monthlyRevenue: branchMonthlyRevenue,
+            pendingPayments: branchPendingPayments,
+            totalStaff: branchStaff,
+          },
+          growth: Math.round(branchGrowth * 10) / 10,
+        };
+      })
+    );
+
+    // Sort branches by revenue (highest first)
+    branchStats.sort((a, b) => b.stats.monthlyRevenue - a.stats.monthlyRevenue);
+
+    return {
+      summary: {
+        totalBranches: branchIds.length,
+        totalMembers,
+        activeMembers,
+        totalRevenue: Number(totalRevenueResult._sum.totalAmount || 0),
+        monthlyRevenue,
+        revenueGrowth: Math.round(revenueGrowth * 10) / 10,
+        totalSessions,
+        completedSessions,
+        pendingPayments,
+        totalAdminCabang,
+      },
+      branches: branchStats,
     };
   }
 

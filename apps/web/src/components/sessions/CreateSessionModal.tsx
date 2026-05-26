@@ -92,7 +92,15 @@ export default function CreateSessionModal({
   useEffect(() => {
     if (isOpen) {
       loadStaff();
-      loadInfusSetStock();
+      // Don't load infus set stock here - wait for member to be selected
+      // This prevents showing wrong stock for Admin Manager who doesn't have direct branchId
+      // Stock will be loaded when member is selected in loadMemberData
+      if (user?.branchId) {
+        loadInfusSetStock(user.branchId);
+      } else {
+        // For Admin Manager without direct branchId, set to null (unknown)
+        setInfusSetStock(null);
+      }
       const now = new Date();
       const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
         .toISOString()
@@ -101,27 +109,89 @@ export default function CreateSessionModal({
     }
   }, [isOpen]);
 
-  const loadInfusSetStock = async () => {
-    if (!user?.branchId) return;
+  const loadInfusSetStock = async (targetBranchId?: string) => {
+    // Use targetBranchId if provided, otherwise use user's branchId
+    const branchId = targetBranchId || user?.branchId;
+    
+    if (!branchId) {
+      console.log('No branchId available for infus set stock check');
+      // For Admin Manager without direct branchId, we'll check when member is selected
+      setInfusSetStock(null);
+      return;
+    }
     
     try {
       setLoadingInfusSetStock(true);
-      const response = await inventoryApi.getAvailableItems(user.branchId);
-      const items = response.data || response;
+      console.log('Loading infus set stock for branch:', branchId);
+      const response = await inventoryApi.getAvailableItems(branchId);
       
-      // Find Infus Set + Pelengkap (PRD-INF-SET-002) or Infus Set (PRD-INF-SET-001)
-      const infusSetItem = Array.isArray(items) ? items.find((item: any) => 
-        item.sku === 'PRD-INF-SET-002' || item.sku === 'PRD-INF-SET-001'
-      ) : null;
+      // Debug: log the full response structure
+      console.log('Full API response:', response);
+      console.log('response.data:', response.data);
+      
+      // API returns axios response: { data: { success: true, data: items } }
+      // So we need response.data.data to get the items array
+      let items: any[] = [];
+      if (response.data?.data && Array.isArray(response.data.data)) {
+        items = response.data.data;
+      } else if (Array.isArray(response.data)) {
+        items = response.data;
+      } else if (response.data?.success && response.data?.data) {
+        items = response.data.data;
+      }
+      
+      console.log('Inventory items received:', items?.length || 0);
+      console.log('All items SKUs:', items.map((item: any) => item.masterProduct?.sku || item.sku));
+      
+      // Find Infus Set + Pelengkap (PRD-INF-SET-002) - this is the required product for therapy sessions
+      // The API returns items with masterProduct nested object
+      let infusSetItem = items.find((item: any) => {
+        const sku = item.masterProduct?.sku || item.sku;
+        console.log('Checking item:', item.masterProduct?.name, 'SKU:', sku);
+        return sku === 'PRD-INF-SET-002'; // Only check for "Infus Set + Pelengkap"
+      });
+      
+      // Fallback: search by name if SKU not found
+      if (!infusSetItem) {
+        console.log('SKU not found, searching by name...');
+        infusSetItem = items.find((item: any) => {
+          const name = (item.masterProduct?.name || item.name || '').toLowerCase();
+          return name.includes('infus set') && name.includes('pelengkap');
+        });
+      }
+      
+      console.log('Infus Set + Pelengkap item found:', infusSetItem ? 'yes' : 'no');
+      if (infusSetItem) {
+        console.log('Found item details:', {
+          name: infusSetItem.masterProduct?.name,
+          sku: infusSetItem.masterProduct?.sku,
+          stock: infusSetItem.stock,
+          stockInfo: infusSetItem.stockInfo
+        });
+      }
       
       if (infusSetItem) {
-        setInfusSetStock(infusSetItem.quantity || 0);
-        setInfusSetProductName(infusSetItem.name || 'Infus Set + Pelengkap');
+        // Stock can be in stockInfo.baseStock, stock, or quantity field
+        const stock = infusSetItem.stockInfo?.baseStock ?? 
+                      Number(infusSetItem.stock) ?? 
+                      infusSetItem.quantity ?? 0;
+        const name = infusSetItem.masterProduct?.name || infusSetItem.name || 'Infus Set + Pelengkap';
+        console.log('Infus set stock:', stock, 'name:', name);
+        setInfusSetStock(Math.floor(stock));
+        setInfusSetProductName(name);
       } else {
-        setInfusSetStock(0);
+        console.log('No infus set item found in inventory - setting stock to 0');
+        // Item not found in inventory - this could mean:
+        // 1. The product doesn't exist in this branch's inventory
+        // 2. The SKU doesn't match
+        // Let's not block session creation if we can't find the item
+        // Backend will do the final validation
+        setInfusSetStock(null); // null means "unknown" - don't show warning
       }
     } catch (err) {
       console.error('Failed to load infus set stock:', err);
+      // On error, set to null (unknown) instead of 0 (out of stock)
+      // This prevents false "out of stock" warnings
       setInfusSetStock(null);
     } finally {
       setLoadingInfusSetStock(false);
@@ -133,6 +203,26 @@ export default function CreateSessionModal({
       const memberDetail = await memberApi.getMemberById(id);
       setMemberNo(memberDetail.memberNo);
       setMemberName(memberDetail.profile?.fullName || '');
+
+      // Load infus set stock based on member's registration branch
+      // This is important for Admin Manager who doesn't have direct branchId
+      const memberBranchId = memberDetail.registrationBranch?.id;
+      console.log('Member detail loaded:', {
+        memberNo: memberDetail.memberNo,
+        registrationBranch: memberDetail.registrationBranch,
+        memberBranchId
+      });
+      
+      if (memberBranchId) {
+        console.log('Loading infus set stock for member branch:', memberBranchId);
+        await loadInfusSetStock(memberBranchId);
+      } else {
+        console.log('No registrationBranch.id found for member, using user branchId');
+        // Fallback to user's branchId if member doesn't have registrationBranch
+        if (user?.branchId) {
+          await loadInfusSetStock(user.branchId);
+        }
+      }
 
       const pkgs = await memberApi.getMemberPackages(id);
       const flatPackages: MemberPackage[] = [];
@@ -299,11 +389,8 @@ export default function CreateSessionModal({
     if (!memberId) { setError('Member harus dipilih'); return; }
     if (!hasDiagnosis) { setError('Member belum memiliki diagnosa. Silakan buat diagnosa terlebih dahulu.'); return; }
     
-    // Validasi Infus Set Stock - WAJIB tersedia
-    if (infusSetStock !== null && infusSetStock < 1) {
-      setError(`Stok ${infusSetProductName} habis. Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`);
-      return;
-    }
+    // Note: Infus Set validation is done on backend - frontend only shows warning
+    // Backend will reject if stock is not available
     
     if (!selectedPackageId) { setError('Paket Basic harus dipilih'); return; }
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }

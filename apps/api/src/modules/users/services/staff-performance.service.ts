@@ -29,11 +29,13 @@ interface StaffSessionHistoryQuery {
  * Returns list of staff with their therapy counts by position
  * 
  * SUPER_ADMIN can pass branchId='all' to see all branches combined
+ * ADMIN_MANAGER can only see branches they manage via ManagerBranch
  */
 export async function getStaffPerformanceSummaryService(
   query: StaffPerformanceQuery,
   callerRole: Role,
   callerBranchId: string | null,
+  callerUserId?: string,
 ) {
   const { branchId, startDate, endDate, page = 1, limit = 50 } = query;
   const skip = (page - 1) * limit;
@@ -41,10 +43,30 @@ export async function getStaffPerformanceSummaryService(
   // Determine which branch to query
   let targetBranchId: string | undefined = branchId;
   let isAllBranches = false;
+  let allowedBranchIds: string[] | undefined;
 
   if (callerRole === Role.ADMIN_CABANG) {
     // ADMIN_CABANG can only see their own branch
     targetBranchId = callerBranchId || undefined;
+  } else if (callerRole === Role.ADMIN_MANAGER && callerUserId) {
+    // ADMIN_MANAGER can only see branches they manage
+    const managerBranches = await prisma.managerBranch.findMany({
+      where: { userId: callerUserId },
+      select: { branchId: true },
+    });
+    allowedBranchIds = managerBranches.map(mb => mb.branchId);
+    
+    // If branchId is provided, verify it's in allowed branches
+    if (branchId && !allowedBranchIds.includes(branchId)) {
+      throw errors.forbidden('Anda tidak memiliki akses ke cabang ini');
+    }
+    
+    // If no branchId provided, require selection
+    if (!branchId) {
+      throw errors.badRequest('BRANCH_REQUIRED', 'Silakan pilih cabang terlebih dahulu');
+    }
+    
+    targetBranchId = branchId;
   } else if (callerRole === Role.SUPER_ADMIN && branchId === 'all') {
     // SUPER_ADMIN can see all branches
     isAllBranches = true;

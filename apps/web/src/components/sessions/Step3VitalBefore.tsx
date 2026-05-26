@@ -10,6 +10,7 @@ interface Step3VitalBeforeProps {
   vitalSigns: VitalSign[];
   isLocked: boolean;
   onComplete: () => void;
+  onNext?: () => void; // Optional callback to navigate to next step
 }
 
 const VITAL_FIELDS: Array<{ type: VitalType; label: string; unit: string; placeholder: string }> = [
@@ -25,6 +26,7 @@ export default function Step3VitalBefore({
   vitalSigns,
   isLocked,
   onComplete,
+  onNext,
 }: Step3VitalBeforeProps) {
   const { user } = useAuthStore();
   const [values, setValues] = useState<Record<VitalType, string>>({
@@ -325,29 +327,43 @@ export default function Step3VitalBefore({
           <span style={{ fontSize: '14px', color: '#f59e0b', fontWeight: '600' }}>
             ✓ Semua field sudah terisi - siap disimpan
           </span>
-          <button
-            onClick={handleSaveAll}
-            disabled={savingAll}
-            className="btn btn-warning btn-sm"
-            style={{
-              background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-              border: 'none',
-              color: 'white',
-              fontWeight: '600',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-          >
-            {savingAll ? (
-              <>
-                <div className="spinner" style={{ width: '14px', height: '14px' }} />
-                Menyimpan...
-              </>
-            ) : (
-              <>💾 Simpan</>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleSaveAll}
+              disabled={savingAll}
+              className="btn btn-secondary btn-sm"
+            >
+              {savingAll ? (
+                <>
+                  <div className="spinner" style={{ width: '14px', height: '14px' }} />
+                  Menyimpan...
+                </>
+              ) : (
+                <>💾 Simpan</>
+              )}
+            </button>
+            {onNext && (
+              <button
+                onClick={async () => {
+                  await handleSaveAll();
+                  onNext();
+                }}
+                disabled={savingAll}
+                className="btn btn-success btn-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+                  border: 'none',
+                  color: 'white',
+                  fontWeight: '600',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                {savingAll ? 'Menyimpan...' : 'Simpan & Lanjut →'}
+              </button>
             )}
-          </button>
+          </div>
         </div>
       )}
 
@@ -368,12 +384,30 @@ export default function Step3VitalBefore({
           <span style={{ fontSize: '14px', color: 'var(--color-success)', fontWeight: '600' }}>
             ✓ Semua tanda vital SEBELUM telah tersimpan
           </span>
-          <button
-            onClick={onComplete}
-            className="btn btn-success btn-sm"
-          >
-            💾 Simpan
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={onComplete}
+              className="btn btn-secondary btn-sm"
+            >
+              💾 Simpan
+            </button>
+            {onNext && (
+              <button
+                onClick={() => {
+                  onComplete();
+                  onNext();
+                }}
+                className="btn btn-success btn-sm"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                Lanjut ke Step 4 →
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -278,8 +278,25 @@ export default function StaffPerformancePage() {
         </div>
       )}
 
+      {/* No Branches Available for Admin Manager */}
+      {user?.role === 'ADMIN_MANAGER' && branches.length === 0 && !loading && (
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
+              <Building2 className="h-8 w-8 text-red-600 dark:text-red-400" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-neutral-900 dark:text-white">Tidak Ada Cabang</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                Anda belum di-assign ke cabang manapun. Hubungi Super Admin untuk mendapatkan akses ke cabang.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* No Branch Selected */}
-      {!branchFilter && canSelectBranch && !loading && !isSuperAdmin && (
+      {!branchFilter && canSelectBranch && !loading && !isSuperAdmin && branches.length > 0 && (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-12 text-center">
           <div className="flex flex-col items-center gap-4">
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">

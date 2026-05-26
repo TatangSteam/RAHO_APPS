@@ -111,13 +111,31 @@ async function autoAddProductsToBranchInventory(branchId: string) {
     },
   });
 
-  if (autoAddProducts.length === 0) {
+  // Also ensure Infus Set + Pelengkap is always added (even if not flagged)
+  const infusSetProduct = await prisma.masterProduct.findFirst({
+    where: {
+      OR: [
+        { sku: 'PRD-INF-SET-002' },
+        { sku: 'PRD-INF-SET-001' },
+      ],
+      isActive: true,
+    },
+    orderBy: { sku: 'desc' }, // PRD-INF-SET-002 first
+  });
+
+  // Combine products, ensuring no duplicates
+  const productsToAdd = [...autoAddProducts];
+  if (infusSetProduct && !productsToAdd.some(p => p.id === infusSetProduct.id)) {
+    productsToAdd.push(infusSetProduct);
+  }
+
+  if (productsToAdd.length === 0) {
     console.log(`  ℹ️ No products configured for auto-add to branch`);
     return { productsAdded: 0 };
   }
 
   let addedCount = 0;
-  for (const product of autoAddProducts) {
+  for (const product of productsToAdd) {
     // Check if inventory item already exists
     const existing = await prisma.inventoryItem.findUnique({
       where: {
@@ -129,15 +147,19 @@ async function autoAddProductsToBranchInventory(branchId: string) {
     });
 
     if (!existing) {
+      // Use defaultInitialStock or 100 for Infus Set
+      const initialStock = product.defaultInitialStock || 
+        (product.sku?.startsWith('PRD-INF-SET') ? 100 : 0);
+      
       await prisma.inventoryItem.create({
         data: {
           masterProductId: product.id,
           branchId,
-          stock: product.defaultInitialStock || 0,
+          stock: initialStock,
           minThreshold: 10, // Default minimum threshold
         },
       });
-      console.log(`  ✅ Added ${product.name} with stock: ${product.defaultInitialStock || 0} ${product.baseUnit}`);
+      console.log(`  ✅ Added ${product.name} with stock: ${initialStock} ${product.baseUnit}`);
       addedCount++;
     } else {
       console.log(`  ℹ️ ${product.name} already exists in branch inventory`);

@@ -50,6 +50,13 @@ export interface MemberDetail {
   voucherCount: number;
   profile?: {
     fullName: string;
+    phone?: string;
+    avatarUrl?: string;
+  };
+  registrationBranch?: {
+    id: string;
+    name: string;
+    branchCode: string;
   };
 }
 

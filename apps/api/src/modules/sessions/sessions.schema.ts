@@ -48,16 +48,17 @@ export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 export const createDiagnosisSchema = z.object({
   doktorPemeriksa: z.string().cuid(),
   diagnosa: z.string().min(3, 'Diagnosa minimal 3 karakter'),
-  kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional(),
-  icdPrimer: z.string().optional(),
-  icdSekunder: z.string().optional(),
-  icdTersier: z.string().optional(),
-  keluhanRiwayatSekarang: z.string().optional(),
-  riwayatPenyakitTerdahulu: z.string().optional(),
-  riwayatSosialKebiasaan: z.string().optional(),
-  riwayatPengobatan: z.string().optional(),
-  pemeriksaanFisik: z.string().optional(),
-  pemeriksaanTambahan: z.record(z.string()).optional(),
+  kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional().nullable(),
+  // Allow empty strings and convert to undefined for optional string fields
+  icdPrimer: z.string().optional().nullable().transform(val => val || undefined),
+  icdSekunder: z.string().optional().nullable().transform(val => val || undefined),
+  icdTersier: z.string().optional().nullable().transform(val => val || undefined),
+  keluhanRiwayatSekarang: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatPenyakitTerdahulu: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatSosialKebiasaan: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatPengobatan: z.string().optional().nullable().transform(val => val || undefined),
+  pemeriksaanFisik: z.string().optional().nullable().transform(val => val || undefined),
+  pemeriksaanTambahan: z.record(z.string()).optional().nullable(),
 });
 
 export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;

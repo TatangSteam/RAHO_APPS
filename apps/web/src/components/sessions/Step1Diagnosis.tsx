@@ -92,12 +92,32 @@ export default function Step1Diagnosis({
       return;
     }
 
+    // Validate doktorPemeriksa is a valid CUID
+    if (!formData.doktorPemeriksa || formData.doktorPemeriksa.length < 20) {
+      setError('Dokter pemeriksa tidak valid. Silakan pilih diagnosa lagi.');
+      console.error('❌ Invalid doktorPemeriksa:', formData.doktorPemeriksa);
+      return;
+    }
+
     setLoading(true);
 
     try {
+      // Clean up the data - remove null values and convert to undefined for optional fields
       const data: CreateDiagnosisInput = {
-        ...formData,
-        pemeriksaanTambahan: undefined, // Not needed when using existing diagnosis
+        doktorPemeriksa: formData.doktorPemeriksa,
+        diagnosa: formData.diagnosa,
+        // Only include kategoriDiagnosa if it has a valid value
+        ...(formData.kategoriDiagnosa ? { kategoriDiagnosa: formData.kategoriDiagnosa } : {}),
+        // Only include optional string fields if they have content
+        ...(formData.icdPrimer ? { icdPrimer: formData.icdPrimer } : {}),
+        ...(formData.icdSekunder ? { icdSekunder: formData.icdSekunder } : {}),
+        ...(formData.icdTersier ? { icdTersier: formData.icdTersier } : {}),
+        ...(formData.keluhanRiwayatSekarang ? { keluhanRiwayatSekarang: formData.keluhanRiwayatSekarang } : {}),
+        ...(formData.riwayatPenyakitTerdahulu ? { riwayatPenyakitTerdahulu: formData.riwayatPenyakitTerdahulu } : {}),
+        ...(formData.riwayatSosialKebiasaan ? { riwayatSosialKebiasaan: formData.riwayatSosialKebiasaan } : {}),
+        ...(formData.riwayatPengobatan ? { riwayatPengobatan: formData.riwayatPengobatan } : {}),
+        ...(formData.pemeriksaanFisik ? { pemeriksaanFisik: formData.pemeriksaanFisik } : {}),
+        // Don't include pemeriksaanTambahan when using existing diagnosis
       };
 
       console.log('📤 Submitting diagnosis with data:', data);
@@ -108,7 +128,14 @@ export default function Step1Diagnosis({
       onComplete();
     } catch (err: any) {
       console.error('Failed to create diagnosis:', err);
-      setError(err.response?.data?.error?.message || 'Gagal menyimpan diagnosa');
+      // Show more detailed error message
+      const errorDetails = err.response?.data?.error?.details;
+      if (errorDetails && Array.isArray(errorDetails)) {
+        const messages = errorDetails.map((d: any) => `${d.path?.join('.')}: ${d.message}`).join(', ');
+        setError(`Validasi gagal: ${messages}`);
+      } else {
+        setError(err.response?.data?.error?.message || 'Gagal menyimpan diagnosa');
+      }
     } finally {
       setLoading(false);
     }
@@ -121,7 +148,8 @@ export default function Step1Diagnosis({
     setFormData({
       doktorPemeriksa: selectedDiagnosis.doktorPemeriksa || user?.userId || '', // Use original doctor from diagnosis
       diagnosa: selectedDiagnosis.diagnosa,
-      kategoriDiagnosa: selectedDiagnosis.kategoriDiagnosa,
+      // Convert null to undefined for optional enum fields (Zod expects undefined, not null)
+      kategoriDiagnosa: selectedDiagnosis.kategoriDiagnosa || undefined,
       icdPrimer: selectedDiagnosis.icdPrimer || '',
       icdSekunder: selectedDiagnosis.icdSekunder || '',
       icdTersier: selectedDiagnosis.icdTersier || '',

@@ -10,6 +10,7 @@ interface Step5InfusionProps {
   infusion: InfusionExecution | null;
   isLocked: boolean;
   onComplete: () => void;
+  onNext?: () => void; // Optional callback to navigate to next step
 }
 
 // IFA fields handled separately with radio selection
@@ -40,6 +41,7 @@ export default function Step5Infusion({
   infusion,
   isLocked,
   onComplete,
+  onNext,
 }: Step5InfusionProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +115,8 @@ export default function Step5Infusion({
     setHasDeviation(ifaDeviation || otherDeviations);
   }, [formData, therapyPlan]);
 
+  const [shouldNavigateNext, setShouldNavigateNext] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -127,9 +131,15 @@ export default function Step5Infusion({
     try {
       await sessionApi.createInfusion(sessionId, formData);
       onComplete();
+      // Navigate to next step if user clicked "Simpan & Lanjut"
+      if (shouldNavigateNext && onNext) {
+        onNext();
+        setShouldNavigateNext(false);
+      }
     } catch (err: any) {
       console.error('Failed to create infusion:', err);
       setError(err.response?.data?.error?.message || 'Gagal menyimpan infus aktual');
+      setShouldNavigateNext(false);
     } finally {
       setLoading(false);
     }
@@ -537,83 +547,125 @@ export default function Step5Infusion({
         </div>
 
         {/* Deviation Notes */}
-        {hasDeviation && (
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '13px',
-              fontWeight: '700',
-              color: '#cbd5e1',
-              marginBottom: '8px'
-            }}>
-              Catatan Deviasi (jika ada perbedaan dengan rencana) <span style={{ color: '#ef4444' }}>*</span>
-            </label>
-            <textarea
-              value={formData.deviationNotes}
-              onChange={(e) => setFormData({ ...formData, deviationNotes: e.target.value })}
-              rows={3}
-              style={{
-                width: '100%',
-                padding: '12px',
-                background: 'rgba(15,23,42,0.5)',
-                border: '1px solid rgba(148,163,184,0.3)',
-                borderRadius: 'var(--radius-md)',
-                color: '#f1f5f9',
-                fontSize: '14px',
-                outline: 'none',
-                resize: 'vertical',
-                transition: 'all 0.2s'
-              }}
-              placeholder="Jelaskan alasan perbedaan dosis..."
-              disabled={loading}
-              onFocus={(e) => {
-                e.target.style.borderColor = '#60a5fa';
-                e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'rgba(148,163,184,0.3)';
-                e.target.style.boxShadow = 'none';
-              }}
-            />
-          </div>
-        )}
+        <div style={{ marginBottom: '24px' }}>
+          <label style={{
+            display: 'block',
+            fontSize: '13px',
+            fontWeight: '700',
+            color: '#cbd5e1',
+            marginBottom: '8px'
+          }}>
+            Catatan Deviasi (jika ada perbedaan dengan rencana) <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <textarea
+            value={formData.deviationNotes || ''}
+            onChange={(e) => setFormData({ ...formData, deviationNotes: e.target.value })}
+            rows={3}
+            style={{
+              width: '100%',
+              padding: '12px',
+              background: 'rgba(15,23,42,0.5)',
+              border: hasDeviation && !formData.deviationNotes 
+                ? '2px solid #ef4444' 
+                : '1px solid rgba(148,163,184,0.3)',
+              borderRadius: 'var(--radius-md)',
+              color: '#f1f5f9',
+              fontSize: '14px',
+              outline: 'none',
+              resize: 'vertical',
+              transition: 'all 0.2s'
+            }}
+            placeholder="Jelaskan alasan perbedaan dosis..."
+            disabled={loading}
+            onFocus={(e) => {
+              e.target.style.borderColor = '#60a5fa';
+              e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.1)';
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = hasDeviation && !formData.deviationNotes 
+                ? '#ef4444' 
+                : 'rgba(148,163,184,0.3)';
+              e.target.style.boxShadow = 'none';
+            }}
+          />
+          
+          {/* Warning when deviation exists but notes are empty */}
+          {hasDeviation && !formData.deviationNotes && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3">
+              <svg className="h-5 w-5 flex-shrink-0 text-amber-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <div>
+                <p className="text-sm font-semibold text-amber-400">
+                  Catatan Deviasi Wajib Diisi
+                </p>
+                <p className="mt-1 text-xs text-amber-300/80">
+                  Terdapat perbedaan antara dosis rencana dan aktual. Silakan isi catatan deviasi untuk menjelaskan alasan perbedaan tersebut sebelum menyimpan.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Submit Button */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
           <button
             type="submit"
             disabled={loading || (hasDeviation && !formData.deviationNotes)}
             style={{
-              padding: '12px 32px',
-              background: loading || (hasDeviation && !formData.deviationNotes) 
-                ? 'rgba(59,130,246,0.3)' 
-                : 'linear-gradient(135deg, #3b82f6, #2563eb)',
-              border: 'none',
+              padding: '12px 24px',
+              background: 'rgba(148,163,184,0.2)',
+              border: '1px solid rgba(148,163,184,0.3)',
               borderRadius: 'var(--radius-md)',
-              color: 'white',
+              color: 'var(--text-primary)',
               fontSize: '15px',
               fontWeight: '600',
               cursor: loading || (hasDeviation && !formData.deviationNotes) ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
-              boxShadow: loading || (hasDeviation && !formData.deviationNotes) 
-                ? 'none' 
-                : '0 4px 12px rgba(59,130,246,0.3)'
-            }}
-            onMouseEnter={(e) => {
-              if (!loading && !(hasDeviation && !formData.deviationNotes)) {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = '0 6px 16px rgba(59,130,246,0.4)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = loading || (hasDeviation && !formData.deviationNotes) 
-                ? 'none' 
-                : '0 4px 12px rgba(59,130,246,0.3)';
             }}
           >
-            {loading ? '⏳ Menyimpan...' : '💾 Simpan Infus'}
+            {loading ? '⏳ Menyimpan...' : '💾 Simpan'}
           </button>
+          {onNext && (
+            <button
+              type="submit"
+              disabled={loading || (hasDeviation && !formData.deviationNotes)}
+              onClick={() => setShouldNavigateNext(true)}
+              style={{
+                padding: '12px 32px',
+                background: loading || (hasDeviation && !formData.deviationNotes) 
+                  ? 'rgba(34,197,94,0.3)' 
+                  : 'linear-gradient(135deg, #22c55e, #16a34a)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                color: 'white',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: loading || (hasDeviation && !formData.deviationNotes) ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: loading || (hasDeviation && !formData.deviationNotes) 
+                  ? 'none' 
+                  : '0 4px 12px rgba(34,197,94,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => {
+                if (!loading && !(hasDeviation && !formData.deviationNotes)) {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 6px 16px rgba(34,197,94,0.4)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = loading || (hasDeviation && !formData.deviationNotes) 
+                  ? 'none' 
+                  : '0 4px 12px rgba(34,197,94,0.3)';
+              }}
+            >
+              {loading ? '⏳ Menyimpan...' : 'Simpan & Lanjut →'}
+            </button>
+          )}
         </div>
       </form>
     </div>

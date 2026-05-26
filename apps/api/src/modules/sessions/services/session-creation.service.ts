@@ -392,20 +392,14 @@ export class SessionCreationService {
 
   /**
    * Validate infus set stock availability
-   * IMPORTANT: "Infus Set + Pelengkap" is mandatory for every therapy session
+   * IMPORTANT: "Infus Set + Pelengkap" (PRD-INF-SET-002) is mandatory for every therapy session
    * Session cannot be created if stock is not available
    */
   private async validateInfusSetStock(branchId: string) {
-    // Find the "Infus Set + Pelengkap" product (SKU: PRD-INF-SET-002) or fallback to "Infus Set" (SKU: PRD-INF-SET-001)
+    // Find the "Infus Set + Pelengkap" product (SKU: PRD-INF-SET-002)
     const infusSetProduct = await prisma.masterProduct.findFirst({
       where: {
-        OR: [
-          { sku: 'PRD-INF-SET-002' }, // Infus Set + Pelengkap (preferred)
-          { sku: 'PRD-INF-SET-001' }, // Infus Set (fallback)
-        ],
-      },
-      orderBy: {
-        sku: 'desc', // PRD-INF-SET-002 comes first
+        sku: 'PRD-INF-SET-002', // Only "Infus Set + Pelengkap"
       },
     });
 
@@ -413,7 +407,7 @@ export class SessionCreationService {
       throw {
         status: 422,
         code: 'INFUS_SET_NOT_CONFIGURED',
-        message: 'Produk Infus Set + Pelengkap belum dikonfigurasi di sistem. Hubungi administrator.',
+        message: 'Produk "Infus Set + Pelengkap" (PRD-INF-SET-002) belum dikonfigurasi di sistem. Hubungi administrator.',
       };
     }
 
@@ -433,15 +427,16 @@ export class SessionCreationService {
       };
     }
 
-    if (inventoryItem.quantity < 1) {
+    const currentStock = Number(inventoryItem.stock);
+    if (currentStock < 1) {
       throw {
         status: 422,
         code: 'INFUS_SET_OUT_OF_STOCK',
-        message: `Stok "${infusSetProduct.name}" habis (tersisa: ${inventoryItem.quantity}). Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`,
+        message: `Stok "${infusSetProduct.name}" habis (tersisa: ${currentStock}). Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`,
       };
     }
 
-    console.log(`✅ [INFUS SET] Stock available: ${inventoryItem.quantity} ${infusSetProduct.unit || 'piece'} of "${infusSetProduct.name}"`);
+    console.log(`✅ [INFUS SET] Stock available: ${currentStock} ${infusSetProduct.unit || 'piece'} of "${infusSetProduct.name}"`);
     
     return { infusSetProduct, inventoryItem };
   }

@@ -171,6 +171,39 @@ export interface AdminLayananDashboardData {
   };
 }
 
+export interface AdminManagerDashboardData {
+  summary: {
+    totalBranches: number;
+    totalMembers: number;
+    activeMembers: number;
+    totalRevenue: number;
+    monthlyRevenue: number;
+    revenueGrowth: number;
+    totalSessions: number;
+    completedSessions: number;
+    pendingPayments: number;
+    totalAdminCabang: number;
+  };
+  branches: Array<{
+    id: string;
+    branchCode: string;
+    name: string;
+    city: string | null;
+    type: 'PUSAT' | 'CABANG';
+    stats: {
+      totalMembers: number;
+      activeMembers: number;
+      newMembersThisMonth: number;
+      totalSessions: number;
+      completedSessions: number;
+      monthlyRevenue: number;
+      pendingPayments: number;
+      totalStaff: number;
+    };
+    growth: number;
+  }>;
+}
+
 export interface MemberDashboardEnhanced {
   greeting: string;
   stats: {
@@ -243,6 +276,15 @@ export const dashboardApi = {
 
   getAdminLayananDashboard: async (): Promise<AdminLayananDashboardData> => {
     const response = await api.get('/dashboard/admin-layanan');
+    return response.data.data;
+  },
+
+  getAdminManagerDashboard: async (startDate?: string, endDate?: string): Promise<AdminManagerDashboardData> => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    
+    const response = await api.get(`/dashboard/admin-manager?${params.toString()}`);
     return response.data.data;
   },
 

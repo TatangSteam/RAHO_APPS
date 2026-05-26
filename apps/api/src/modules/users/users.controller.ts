@@ -426,6 +426,7 @@ export async function getStaffPerformanceSummary(req: Request, res: Response, ne
       },
       req.user.role as Role,
       req.user.branchId,
+      req.user.userId, // Pass userId for ADMIN_MANAGER branch validation
     );
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));

@@ -206,7 +206,10 @@ export const inventoryApi = {
    * Get available inventory items for a branch with stock info in both units
    */
   getAvailableItems: (branchId: string) => {
-    return api.get(`/inventory/available/${branchId}`);
+    // Add timestamp to prevent caching issues
+    return api.get(`/inventory/available/${branchId}`, {
+      params: { _t: Date.now() }
+    });
   },
 
   /**

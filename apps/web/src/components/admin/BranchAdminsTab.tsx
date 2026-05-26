@@ -19,9 +19,9 @@ export const BranchAdminsTab: React.FC = () => {
   const limit = 10;
 
   // Get unique branches for filter dropdown
-  const uniqueBranches = Array.from(
-    new Map(branchAdmins.map(admin => [admin.branch.id, admin.branch])).values()
-  );
+  const uniqueBranches = branchAdmins?.length > 0
+    ? Array.from(new Map(branchAdmins.map(admin => [admin.branch.id, admin.branch])).values())
+    : [];
 
   // Load branch admins
   useEffect(() => {
@@ -39,8 +39,8 @@ export const BranchAdminsTab: React.FC = () => {
 
       const response = await branchAdminsApi.getBranchAdmins(params);
       
-      setBranchAdmins(response.data);
-      setTotal(response.meta.total);
+      setBranchAdmins(response.data || []);
+      setTotal(response.meta?.total || 0);
     } catch (error: any) {
       console.error('Error loading branch admins:', error);
       showToast.error(error.response?.data?.message || 'Gagal memuat data Admin Cabang');
@@ -72,7 +72,7 @@ export const BranchAdminsTab: React.FC = () => {
   const canGoNext = page < totalPages;
 
   // Stats
-  const activeCount = branchAdmins.filter(admin => admin.isActive).length;
+  const activeCount = branchAdmins?.filter(admin => admin.isActive).length || 0;
   const branchCount = uniqueBranches.length;
 
   // Format date
@@ -180,7 +180,7 @@ export const BranchAdminsTab: React.FC = () => {
             <div className={styles.loadingSpinner}>⏳</div>
             <p>Memuat data Admin Cabang...</p>
           </div>
-        ) : branchAdmins.length === 0 ? (
+        ) : !branchAdmins || branchAdmins.length === 0 ? (
           <div className={styles.emptyState}>
             <Users size={48} />
             <h3>Belum Ada Admin Cabang</h3>

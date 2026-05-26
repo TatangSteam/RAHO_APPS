@@ -137,7 +137,8 @@ export default function Step6Materials({
         return;
       }
       const response = await inventoryApi.getAvailableItems(branchId);
-      setInventoryItems(response.data);
+      // API returns { success: true, data: items }, so we need response.data.data
+      setInventoryItems(response.data?.data || response.data || []);
     } catch (error) {
       console.error('Error loading inventory:', error);
       showToast.error('Gagal memuat data inventory');

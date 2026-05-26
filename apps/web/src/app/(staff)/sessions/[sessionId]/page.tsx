@@ -170,16 +170,6 @@ export default function SessionDetailPage() {
             </p>
           </div>
           
-          {allRequiredStepsComplete && !sessionInfo.isCompleted && (
-            <button
-              onClick={handleCompleteSession}
-              disabled={completing}
-              className="btn btn-success"
-            >
-              {completing ? 'Menyelesaikan...' : '✓ Selesaikan Sesi'}
-            </button>
-          )}
-          
           {sessionInfo.isCompleted && (
             <span className="badge badge-success" style={{ fontSize: '14px', padding: '8px 16px' }}>
               ✓ Sesi Selesai
@@ -486,9 +476,10 @@ export default function SessionDetailPage() {
         {activeStep === 3 && (
           <Step3VitalBefore 
             sessionId={sessionId}
-            vitalSigns={session.vitalSigns}
+            vitalSigns={session.vitalSigns.filter(v => v.waktuCatat === 'SEBELUM')}
             isLocked={!canAccessStep(3)}
             onComplete={handleStepComplete}
+            onNext={() => setActiveStep(4)}
           />
         )}
         
@@ -499,6 +490,7 @@ export default function SessionDetailPage() {
             infusion={session.infusion}
             isLocked={!canAccessStep(4)}
             onComplete={handleStepComplete}
+            onNext={() => setActiveStep(5)}
           />
         )}
         
@@ -538,6 +530,126 @@ export default function SessionDetailPage() {
           />
         )}
       </div>
+
+      {/* Session Completed Banner */}
+      {sessionInfo.isCompleted && (
+        <div style={{
+          marginTop: '32px',
+          padding: '32px',
+          background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.15) 0%, rgba(22, 163, 74, 0.15) 100%)',
+          border: '2px solid rgba(34, 197, 94, 0.4)',
+          borderRadius: '16px',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: '80px',
+            height: '80px',
+            margin: '0 auto 20px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '40px',
+            boxShadow: '0 8px 32px rgba(34, 197, 94, 0.4)',
+          }}>
+            ✓
+          </div>
+          <h3 style={{
+            fontSize: '24px',
+            fontWeight: '700',
+            color: '#22c55e',
+            marginBottom: '8px',
+          }}>
+            ✅ Sesi Terapi Telah Selesai
+          </h3>
+          <p style={{
+            fontSize: '15px',
+            color: 'var(--text-secondary)',
+            marginBottom: '20px',
+          }}>
+            Sesi terapi ini telah diselesaikan dan tercatat dalam sistem.
+          </p>
+          <button
+            onClick={() => router.push(`/members/${session.session.member.memberId}`)}
+            className="btn btn-secondary"
+            style={{ padding: '12px 24px' }}
+          >
+            ← Kembali ke Profil Member
+          </button>
+        </div>
+      )}
+
+      {/* Floating Sticky Button - Always visible when scrolling */}
+      {!sessionInfo.isCompleted && allRequiredStepsComplete && (
+        <div style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          zIndex: 1000,
+        }}>
+          <button
+            onClick={handleCompleteSession}
+            disabled={completing}
+            style={{
+              padding: '18px 32px',
+              fontSize: '16px',
+              fontWeight: '700',
+              color: 'white',
+              background: completing 
+                ? 'rgba(34, 197, 94, 0.5)'
+                : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
+              border: 'none',
+              borderRadius: '16px',
+              cursor: completing ? 'not-allowed' : 'pointer',
+              boxShadow: completing 
+                ? 'none'
+                : '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              animation: 'floatingButtonPulse 2s infinite',
+            }}
+            onMouseEnter={(e) => {
+              if (!completing) {
+                e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                e.currentTarget.style.boxShadow = '0 12px 40px rgba(34, 197, 94, 0.6), 0 6px 16px rgba(0, 0, 0, 0.4)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!completing) {
+                e.currentTarget.style.transform = 'translateY(0) scale(1)';
+                e.currentTarget.style.boxShadow = '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)';
+              }
+            }}
+          >
+            {completing ? (
+              <>
+                <span className="spinner" style={{ width: '20px', height: '20px' }}></span>
+                <span>Memproses...</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: '24px' }}>✅</span>
+                <span>SELESAIKAN SESI</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* CSS Animation for floating button */}
+      <style jsx>{`
+        @keyframes floatingButtonPulse {
+          0%, 100% {
+            box-shadow: 0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3);
+          }
+          50% {
+            box-shadow: 0 8px 40px rgba(34, 197, 94, 0.7), 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 10px rgba(34, 197, 94, 0.2);
+          }
+        }
+      `}</style>
     </div>
   );
 }

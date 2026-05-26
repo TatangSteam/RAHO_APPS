@@ -37,6 +37,12 @@ router.get(
 );
 
 router.get(
+  '/admin-manager',
+  authorize([Role.ADMIN_MANAGER]),
+  controller.getAdminManagerDashboard.bind(controller)
+);
+
+router.get(
   '/member',
   authorize([Role.MEMBER]),
   controller.getMemberDashboard.bind(controller)

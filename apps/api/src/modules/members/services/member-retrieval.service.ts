@@ -600,7 +600,10 @@ export class MemberRetrievalService {
    * Format member detail data for response
    */
   private formatMemberDetailData(member: any) {
+    // Get profile photo - check both memberDocuments and user.profile.avatarUrl
+    // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
     const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+    const avatarUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
     
     return {
       memberId: member.id,
@@ -612,7 +615,7 @@ export class MemberRetrievalService {
       profile: {
         fullName: member.user.profile?.fullName || '',
         phone: member.user.profile?.phone || '',
-        avatarUrl: profilePhoto?.fileUrl,
+        avatarUrl,
       },
       registrationBranch: {
         id: member.registrationBranch.id,
@@ -672,8 +675,10 @@ export class MemberRetrievalService {
       0
     ) || 0;
 
-    // Get profile photo
+    // Get profile photo - check both memberDocuments and user.profile.avatarUrl
+    // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
     const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+    const photoUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
 
     // Check if member has cross-branch access
     const isLintas = member.branchAccesses && member.branchAccesses.length > 0;
@@ -689,7 +694,7 @@ export class MemberRetrievalService {
       isActive: member.isActive,
       isLintas,
       registrationBranch: member.registrationBranch?.name || 'N/A',
-      photoUrl: profilePhoto?.fileUrl,
+      photoUrl,
       createdAt: member.createdAt?.toISOString(),
     };
   }

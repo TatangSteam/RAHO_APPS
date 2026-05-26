@@ -122,6 +122,34 @@ export class DashboardController {
   }
 
   /**
+   * GET /api/v1/dashboard/admin-manager
+   * Get admin manager-specific dashboard (multi-branch overview)
+   */
+  async getAdminManagerDashboard(req: Request, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user?.userId;
+      const userRole = req.user?.role;
+
+      if (!userId) {
+        throw { status: 400, code: 'INVALID_REQUEST', message: 'User information missing' };
+      }
+
+      if (userRole !== 'ADMIN_MANAGER') {
+        throw { status: 403, code: 'FORBIDDEN', message: 'Only Admin Manager can access this dashboard' };
+      }
+
+      // Parse date range from query params
+      const startDate = req.query.startDate ? new Date(req.query.startDate as string) : undefined;
+      const endDate = req.query.endDate ? new Date(req.query.endDate as string) : undefined;
+
+      const data = await roleDashboardService.getAdminManagerDashboard(userId, startDate, endDate);
+      return sendSuccess(res, data);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/v1/dashboard/admin-layanan
    * Get admin layanan-specific dashboard
    */
