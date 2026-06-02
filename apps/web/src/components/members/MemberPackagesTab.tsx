@@ -8,7 +8,7 @@ import styles from './MemberPackagesTab.module.css';
 interface Props {
   packages: PackageDisplay[];
   loading: boolean;
-  onVerifyPayment: (packageId: string) => void;
+  onVerifyPayment: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;

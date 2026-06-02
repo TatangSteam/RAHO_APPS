@@ -125,12 +125,14 @@ export interface MemberPackage {
   totalSessions: number
   usedSessions: number
   sisaSessions: number
-  status: 'PENDINGPAYMENT' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED'
+  status: 'PENDINGPAYMENT' | 'WAITING_VERIFICATION' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED'
   activatedAt: string | null
   expiredAt: string | null
   finalPrice: number
   branchName: string
   branchCode: string
+  paymentProofUrl?: string | null
+  paymentProofFileName?: string | null
 }
 
 export interface MemberDiagnosis {
@@ -239,6 +241,15 @@ export const meApi = {
     const formData = new FormData()
     formData.append('avatar', file)
     const res = await api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+    return res.data.data
+  },
+
+  uploadPaymentProof: async (packageId: string, file: File): Promise<{ message: string }> => {
+    const formData = new FormData()
+    formData.append('paymentProof', file)
+    const res = await api.post(`/me/packages/${packageId}/upload-payment-proof`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     return res.data.data

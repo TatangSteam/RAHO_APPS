@@ -72,6 +72,7 @@ export default function MemberDetailPage() {
   const [verifyNotes, setVerifyNotes] = useState('');
   const [paymentProof, setPaymentProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [submitting, setSubmitting] = useState(false);
+  const [selectedPackageProof, setSelectedPackageProof] = useState<{ url: string | null; fileName: string | null; status: string }>({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
 
   // Refund modal state
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -261,8 +262,11 @@ export default function MemberDetailPage() {
   };
 
   const handleVerifyPayment = async () => {
-    // Validate payment proof
-    if (!paymentProof.file) {
+    // For WAITING_VERIFICATION, we already have proof, don't need to upload
+    // For PENDING_PAYMENT, we need proof to be uploaded
+    const hasExistingProof = selectedPackageProof.status === 'WAITING_VERIFICATION' && selectedPackageProof.url;
+    
+    if (!hasExistingProof && !paymentProof.file) {
       showToast.error('Bukti pembayaran wajib diupload');
       return;
     }
@@ -270,29 +274,60 @@ export default function MemberDetailPage() {
     try {
       setSubmitting(true);
       
-      // Upload file to MinIO first
-      const uploadResult = await packagesApi.uploadPaymentProof(paymentProof.file);
+      let proofData;
+      if (hasExistingProof) {
+        // Use existing proof from member upload
+        proofData = {
+          notes: verifyNotes || undefined,
+          proofFileUrl: selectedPackageProof.url!,
+          proofFileName: selectedPackageProof.fileName || 'payment-proof.jpg',
+          proofFileSize: 0, // Not available for existing
+          proofMimeType: 'image/jpeg', // Assume JPEG
+        };
+      } else {
+        // Upload new file to MinIO first
+        const uploadResult = await packagesApi.uploadPaymentProof(paymentProof.file!);
+        proofData = {
+          notes: verifyNotes || undefined,
+          proofFileUrl: uploadResult.url,
+          proofFileName: uploadResult.fileName,
+          proofFileSize: uploadResult.fileSize,
+          proofMimeType: uploadResult.mimeType,
+        };
+      }
       
-      // Then verify payment with the uploaded file URL
-      await packagesApi.verifyPayment(selectedPackageId, {
-        notes: verifyNotes || undefined,
-        proofFileUrl: uploadResult.url,
-        proofFileName: uploadResult.fileName,
-        proofFileSize: uploadResult.fileSize,
-        proofMimeType: uploadResult.mimeType,
-      });
+      // Then verify payment
+      await packagesApi.verifyPayment(selectedPackageId, proofData);
       
       showToast.success('Pembayaran berhasil diverifikasi');
       setShowVerifyModal(false);
       setVerifyNotes('');
       setPaymentProof({ file: null, preview: null });
       setSelectedPackageId('');
+      setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
       loadPackages();
     } catch (error: any) {
       devError('Verify payment error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal verifikasi pembayaran');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRejectPayment = async (reason: string) => {
+    try {
+      await packagesApi.rejectPayment(selectedPackageId, { reason });
+      showToast.success('Pembayaran berhasil ditolak');
+      setShowVerifyModal(false);
+      setVerifyNotes('');
+      setPaymentProof({ file: null, preview: null });
+      setSelectedPackageId('');
+      setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
+      loadPackages();
+    } catch (error: any) {
+      devError('Reject payment error:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal menolak pembayaran');
+      throw error; // Re-throw to let modal handle it
     }
   };
 
@@ -506,8 +541,13 @@ export default function MemberDetailPage() {
               <MemberPackagesTab
                 packages={packages}
                 loading={loadingPackages}
-                onVerifyPayment={(packageId: string) => {
+                onVerifyPayment={(packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
                   setSelectedPackageId(packageId);
+                  setSelectedPackageProof({
+                    url: proofUrl || null,
+                    fileName: proofFileName || null,
+                    status: packageStatus
+                  });
                   // Reset state before opening modal
                   setVerifyNotes('');
                   setPaymentProof({ file: null, preview: null });
@@ -629,10 +669,15 @@ export default function MemberDetailPage() {
           setVerifyNotes('');
           setPaymentProof({ file: null, preview: null });
           setSelectedPackageId('');
+          setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
         }}
         onNotesChange={setVerifyNotes}
         onProofChange={setPaymentProof}
         onSubmit={handleVerifyPayment}
+        onReject={handleRejectPayment}
+        existingProofUrl={selectedPackageProof.url}
+        existingProofFileName={selectedPackageProof.fileName}
+        packageStatus={selectedPackageProof.status}
       />
 
       <PackageRefundModal

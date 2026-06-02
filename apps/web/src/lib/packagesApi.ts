@@ -58,6 +58,12 @@ export const packagesApi = {
     return response.data.data || response.data;
   },
 
+  // Reject payment
+  rejectPayment: async (packageId: string, data: { reason: string }) => {
+    const response = await api.patch(`/packages/${packageId}/reject`, data);
+    return response.data.data || response.data;
+  },
+
   // Get member packages
   getMemberPackages: async (memberId: string) => {
     // Add timestamp to prevent caching

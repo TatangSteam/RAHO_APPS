@@ -9,7 +9,7 @@ import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
   pkg: PackageDisplay;
-  onVerifyPayment: (packageId: string) => void;
+  onVerifyPayment: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
@@ -111,6 +111,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, string> = {
       PENDING_PAYMENT: 'pending',
+      WAITING_VERIFICATION: 'waiting',
       ACTIVE: 'active',
       EXPIRED: 'expired',
       CANCELLED: 'cancelled'
@@ -118,6 +119,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     
     const statusText: Record<string, string> = {
       PENDING_PAYMENT: 'Pending Payment',
+      WAITING_VERIFICATION: 'Waiting Verification',
       ACTIVE: 'Active',
       EXPIRED: 'Expired',
       CANCELLED: 'Cancelled'
@@ -230,11 +232,11 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
               )}
             </div>
 
-            {addon.status === 'PENDING_PAYMENT' && (
+            {(addon.status === 'PENDING_PAYMENT' || addon.status === 'WAITING_VERIFICATION') && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onVerifyPayment(addon.addOnId);
+                  onVerifyPayment(addon.addOnId, addon.status, addon.paymentProofUrl, addon.paymentProofFileName);
                 }}
                 className={styles.verifyButton}
               >
@@ -268,7 +270,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     const boosters = pkg.boosters || (pkg.booster ? [pkg.booster] : []);
     const groupAddOns = pkg.addOns || [];
     const groupStatus = basics[0]?.status || boosters[0]?.status || groupAddOns[0]?.status;
-    const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT') || boosters.some(p => p?.status === 'PENDING_PAYMENT') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT');
+    const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
     
     // Calculate total prices for all packages and add-ons
@@ -499,7 +501,13 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    onVerifyPayment(basics[0]?.packageId || boosters[0]?.packageId || '');
+                    const firstPkg = basics[0] || boosters[0];
+                    onVerifyPayment(
+                      firstPkg?.packageId || '',
+                      firstPkg?.status || 'PENDING_PAYMENT',
+                      firstPkg?.paymentProofUrl,
+                      firstPkg?.paymentProofFileName
+                    );
                   }}
                   className={styles.verifyButton}
                 >
@@ -691,12 +699,12 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
           </div>
 
           {/* Actions */}
-          {memberPkg.status === 'PENDING_PAYMENT' && (
+          {(memberPkg.status === 'PENDING_PAYMENT' || memberPkg.status === 'WAITING_VERIFICATION') && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onVerifyPayment(memberPkg.packageId);
+                  onVerifyPayment(memberPkg.packageId, memberPkg.status, memberPkg.paymentProofUrl, memberPkg.paymentProofFileName);
                 }}
                 className={styles.verifyButton}
               >

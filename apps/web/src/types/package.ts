@@ -1,5 +1,5 @@
 export type PackageType = 'BASIC' | 'BOOSTER';
-export type PackageStatus = 'PENDING_PAYMENT' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
+export type PackageStatus = 'PENDING_PAYMENT' | 'WAITING_VERIFICATION' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED';
 export type BoosterType = 'HHO' | 'NO2';
 
 // Extended booster types from official pricing
