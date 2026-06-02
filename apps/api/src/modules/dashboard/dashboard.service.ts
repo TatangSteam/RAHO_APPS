@@ -167,11 +167,11 @@ export class DashboardService {
       },
     });
 
-    // Pending payment packages
+    // Pending payment packages (include WAITING_VERIFICATION)
     const pendingPayment = await prisma.memberPackage.count({
       where: {
         branchId,
-        status: 'PENDING_PAYMENT',
+        status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] },
       },
     });
 

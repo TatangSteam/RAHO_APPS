@@ -526,11 +526,11 @@ export class RoleDashboardService {
           isCompleted: true,
         },
       }),
-      // Pending payments
+      // Pending payments (include WAITING_VERIFICATION)
       prisma.memberPackage.count({
         where: {
           branchId: { in: branchIds },
-          status: 'PENDING_PAYMENT',
+          status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] },
         },
       }),
       // Total Admin Cabang
@@ -639,7 +639,7 @@ export class RoleDashboardService {
           prisma.memberPackage.count({
             where: {
               branchId: branch.id,
-              status: 'PENDING_PAYMENT',
+              status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] },
             },
           }),
           prisma.user.count({
@@ -721,8 +721,12 @@ export class RoleDashboardService {
       prisma.treatmentSession.count({
         where: { branchId, treatmentDate: { gte: today, lt: tomorrow }, isCompleted: true },
       }),
+      // Count packages that are awaiting payment OR awaiting verification
       prisma.memberPackage.count({
-        where: { branchId, status: 'PENDING_PAYMENT' },
+        where: { 
+          branchId, 
+          status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] }
+        },
       }),
       // Count unique members with ACTIVE packages at this branch
       prisma.memberPackage.findMany({
