@@ -198,6 +198,9 @@ enum AuditAction {
   VERIFY
   LOGIN
   LOGOUT
+  FAILED_LOGIN
+  PASSWORD_CHANGE
+  PASSWORD_RESET
 }
 
 enum OverstockStatus {
