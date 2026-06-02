@@ -64,15 +64,23 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     
     const user = await createUserService(input, req.user.role as Role, req.user.branchId);
 
-    await logAudit({
+    // Create audit log for user creation (fire-and-forget)
+    logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
       action: 'CREATE',
       resource: 'User',
       resourceId: user.id,
-      meta: { email: user.email, role: user.role },
+      meta: { 
+        email: user.email, 
+        role: user.role,
+        createdUserEmail: user.email,
+        createdUserRole: user.role,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create user CREATE audit log:', error);
     });
 
     console.log('✅ [UsersController] User created successfully:', user.id);
@@ -93,15 +101,21 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
     
     const user = await updateUserService(req.params.userId, input);
 
-    await logAudit({
+    // Create audit log for user update (fire-and-forget)
+    logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
       action: 'UPDATE',
       resource: 'User',
       resourceId: user.id,
-      meta: { changes: input },
+      meta: { 
+        changes: input,
+        updatedUserEmail: user.email,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create user UPDATE audit log:', error);
     });
 
     console.log('✅ [UsersController] User updated successfully:', user.id);
@@ -134,15 +148,22 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
     
     const user = await updateUserService(req.params.userId, { isActive: false });
     
-    await logAudit({
+    // Create audit log for user deactivation (fire-and-forget)
+    logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
       action: 'DELETE',
       resource: 'User',
       resourceId: user.id,
-      meta: { action: 'deactivate' },
+      meta: { 
+        action: 'deactivate',
+        deactivatedUserEmail: user.email,
+        deactivatedUserRole: user.role,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create user DELETE audit log:', error);
     });
     
     console.log('✅ [UsersController] User deactivated successfully:', user.id);
@@ -157,6 +178,24 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
   try {
     const input = changePasswordSchema.parse(req.body);
     await changePasswordService(req.user.userId, input);
+    
+    // Create audit log for PASSWORD_CHANGE (fire-and-forget)
+    logAudit({
+      userId: req.user.userId,
+      branchId: req.user.branchId,
+      action: 'PASSWORD_CHANGE',
+      resource: 'User',
+      resourceId: req.user.userId,
+      meta: { 
+        action: 'self_password_change',
+        email: req.user.email,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create PASSWORD_CHANGE audit log:', error);
+    });
+    
     sendSuccess(res, { message: 'Password berhasil diubah.' });
   } catch (err) { next(err); }
 }
@@ -165,16 +204,25 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
   try {
     const input = resetPasswordSchema.parse(req.body);
     await resetPasswordService(req.params.userId, input);
-    await logAudit({
+    
+    // Create audit log for PASSWORD_RESET (fire-and-forget)
+    logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
-      action: 'UPDATE',
+      action: 'PASSWORD_RESET',
       resource: 'User',
       resourceId: req.params.userId,
-      meta: { action: 'password_reset' },
+      meta: { 
+        action: 'admin_password_reset',
+        resetByUserId: req.user.userId,
+        resetByEmail: req.user.email,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create PASSWORD_RESET audit log:', error);
     });
+    
     sendSuccess(res, { message: 'Password berhasil di-reset.' });
   } catch (err) { next(err); }
 }
@@ -502,17 +550,30 @@ export async function updateUserEmail(req: Request, res: Response, next: NextFun
       return;
     }
 
+    // Get old email before update for audit log
+    const oldUser = await getUserService(userId);
+    const oldEmail = oldUser.email;
+
     const result = await updateUserEmailService(userId, email);
 
-    await logAudit({
+    // Create audit log for email change (fire-and-forget)
+    logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
       action: 'UPDATE',
       resource: 'User',
       resourceId: userId,
-      meta: { action: 'email_change', newEmail: email },
+      meta: { 
+        action: 'email_change', 
+        oldEmail,
+        newEmail: email,
+        changedByUserId: req.user.userId,
+        changedByEmail: req.user.email,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
+    }).catch((error) => {
+      console.error('❌ Failed to create email change audit log:', error);
     });
 
     sendSuccess(res, result);

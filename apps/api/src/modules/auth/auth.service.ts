@@ -26,11 +26,51 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
   });
 
   if (!user || !user.isActive) {
+    // Create audit log for FAILED_LOGIN (user not found or inactive) - fire-and-forget
+    if (user) {
+      prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
+          action: 'FAILED_LOGIN',
+          resource: 'Auth',
+          resourceId: user.id,
+          meta: {
+            email: input.email,
+            reason: !user.isActive ? 'Account inactive' : 'User not found',
+          },
+          ipAddress: ipAddress || 'unknown',
+          userAgent: userAgent || 'unknown',
+        },
+      }).catch((error) => {
+        console.error('❌ Failed to create FAILED_LOGIN audit log:', error);
+      });
+    }
+    
     throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
   }
 
   const isPasswordValid = await bcrypt.compare(input.password, user.password);
   if (!isPasswordValid) {
+    // Create audit log for FAILED_LOGIN (fire-and-forget)
+    prisma.auditLog.create({
+      data: {
+        userId: user.id,
+        branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
+        action: 'FAILED_LOGIN',
+        resource: 'Auth',
+        resourceId: user.id,
+        meta: {
+          email: input.email,
+          reason: 'Invalid password',
+        },
+        ipAddress: ipAddress || 'unknown',
+        userAgent: userAgent || 'unknown',
+      },
+    }).catch((error) => {
+      console.error('❌ Failed to create FAILED_LOGIN audit log:', error);
+    });
+
     throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
   }
 
