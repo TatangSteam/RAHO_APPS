@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
 import { authorize } from '@middleware/authorize';
+import { upload } from '@middleware/upload';
 import { getMemberDashboard, getMemberSessions, getMemberSessionDetail, getMemberDiagnoses, getMemberPackages,  getMemberProfile,
-  getMemberInvoices, getMemberInvoiceDetail, } from './me.controller';
+  getMemberInvoices, getMemberInvoiceDetail, uploadPaymentProof } from './me.controller';
 
 const router = Router();
 
@@ -86,5 +87,18 @@ router.get(
     authenticate, 
     authorize(['MEMBER']), 
     getMemberInvoiceDetail)
+
+/**
+ * @route  POST /me/packages/:packageId/upload-payment-proof
+ * @desc   Upload bukti pembayaran untuk paket
+ * @access Bearer (MEMBER only)
+ */
+router.post(
+    '/packages/:packageId/upload-payment-proof',
+    authenticate,
+    authorize(['MEMBER']),
+    upload.single('paymentProof'),
+    uploadPaymentProof
+);
 
 export { router as meRouter };

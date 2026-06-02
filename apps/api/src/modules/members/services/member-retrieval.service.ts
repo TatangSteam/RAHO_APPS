@@ -183,7 +183,11 @@ export class MemberRetrievalService {
 
     // Status filter
     if (status) {
-      where.status = status;
+      if (status === 'active') {
+        where.isActive = true;
+      } else if (status === 'inactive') {
+        where.isActive = false;
+      }
     }
 
     // Get total count

@@ -64,6 +64,34 @@ export class PackagesController {
     }
   }
 
+  // Reject payment for package
+  async rejectPayment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { packageId } = req.params;
+      const { rejectionReason } = req.body;
+      
+      if (!rejectionReason || typeof rejectionReason !== 'string' || rejectionReason.trim().length === 0) {
+        throw { 
+          status: 400, 
+          code: 'REJECTION_REASON_REQUIRED', 
+          message: 'Alasan penolakan wajib diisi' 
+        };
+      }
+
+      const userId = req.user?.userId;
+      const branchId = req.user?.branchId;
+
+      if (!userId) {
+        throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
+      }
+
+      const result = await packagesService.rejectPayment(packageId, rejectionReason.trim(), branchId, userId);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Get member packages
   async getMemberPackages(req: Request, res: Response, next: NextFunction) {
     try {

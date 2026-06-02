@@ -52,6 +52,14 @@ router.patch(
   controller.verifyPayment.bind(controller)
 );
 
+// Package payment rejection
+router.patch(
+  '/packages/:packageId/reject',
+  authenticate,
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  controller.rejectPayment.bind(controller)
+);
+
 // Package pricing management (ADMIN_MANAGER+)
 router.get(
   '/package-pricings',

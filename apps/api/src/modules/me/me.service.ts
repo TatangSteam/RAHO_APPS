@@ -1,4 +1,5 @@
 import { prisma } from '@lib/prisma';
+import { uploadFile } from '@config/minio';
 
 
 interface MemberDashboardData {
@@ -957,5 +958,87 @@ export async function getMemberSessionDetailService(
           generalNotes: session.evaluation.generalNotes,
         }
       : null,
+  };
+}
+
+
+// ── Upload Payment Proof ──────────────────────────────────────
+
+
+export async function uploadPaymentProofService(
+  memberId: string, 
+  packageId: string, 
+  file: Express.Multer.File
+): Promise<{ message: string; packageCode: string; status: string }> {
+  
+  // 1. Validate package belongs to member and is in correct status
+  const memberPackage = await prisma.memberPackage.findFirst({
+    where: {
+      id: packageId,
+      memberId,
+      status: 'PENDING_PAYMENT'
+    },
+    select: {
+      id: true,
+      packageCode: true,
+      packageType: true,
+      finalPrice: true,
+      member: {
+        select: {
+          id: true,
+          user: {
+            select: {
+              profile: { select: { fullName: true } }
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!memberPackage) {
+    throw {
+      status: 404,
+      code: 'PACKAGE_NOT_FOUND',
+      message: 'Paket tidak ditemukan atau tidak dalam status pending payment'
+    };
+  }
+
+  // 2. Upload file to MinIO
+  const timestamp = Date.now();
+  const fileExtension = file.originalname.split('.').pop();
+  const key = `uploads/payment-proofs/${memberPackage.member.id}/${timestamp}.${fileExtension}`;
+
+  let fileUrl: string;
+  try {
+    const uploadResult = await uploadFile(file.buffer, key, file.mimetype);
+    fileUrl = uploadResult.url;
+  } catch (error) {
+    throw {
+      status: 500,
+      code: 'FILE_UPLOAD_FAILED',
+      message: 'Gagal mengupload file bukti pembayaran'
+    };
+  }
+
+  // 3. Update package status to WAITING_VERIFICATION and save file info
+  await prisma.memberPackage.update({
+    where: { id: packageId },
+    data: {
+      status: 'WAITING_VERIFICATION',
+      paymentProofUrl: fileUrl,
+      paymentProofFileName: file.originalname,
+      paymentProofFileSize: file.size,
+      paymentProofMimeType: file.mimetype,
+    }
+  });
+
+  // NOTE: Invoice status stays PENDING_PAYMENT until admin verifies/rejects
+  // Invoice will be updated when admin calls verify or reject endpoint
+
+  return {
+    message: 'Bukti pembayaran berhasil diupload. Menunggu verifikasi admin.',
+    packageCode: memberPackage.packageCode,
+    status: 'WAITING_VERIFICATION'
   };
 }

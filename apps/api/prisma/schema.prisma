@@ -63,6 +63,7 @@ enum PackageType {
 
 enum PackageStatus {
   PENDING_PAYMENT
+  WAITING_VERIFICATION
   ACTIVE
   EXPIRED
   CANCELLED
@@ -283,9 +284,11 @@ model User {
 
   packagesAssigned   MemberPackage[]            @relation("PackageAssignedBy")
   packagesVerified   MemberPackage[]            @relation("PackageVerifiedBy")
+  packagesRejected   MemberPackage[]            @relation("PackageRejectedBy")
   packagesRefunded   MemberPackage[]            @relation("PackageRefundedBy")
   addOnsAssigned     MemberAddOn[]              @relation("AddOnAssignedBy")
   addOnsVerified     MemberAddOn[]              @relation("AddOnVerifiedBy")
+  addOnsRejected     MemberAddOn[]              @relation("AddOnRejectedBy")
   nonTherapyAssigned MemberNonTherapyPurchase[] @relation("NonTherapyAssignedBy")
   nonTherapyVerified MemberNonTherapyPurchase[] @relation("NonTherapyVerifiedBy")
   invoicesCreated    Invoice[]                  @relation("InvoiceCreatedBy")
@@ -595,8 +598,11 @@ model MemberPackage {
 
   assignedBy  String
   verifiedBy  String?
+  rejectedBy  String?
   paidAt      DateTime?
   verifiedAt  DateTime?
+  rejectedAt  DateTime?
+  rejectionReason String?
   activatedAt DateTime?
   expiredAt   DateTime?
   createdAt   DateTime  @default(now())
@@ -607,6 +613,7 @@ model MemberPackage {
   packagePricing   PackagePricing?           @relation(fields: [packagePricingId], references: [id])
   assignedByUser   User                      @relation("PackageAssignedBy", fields: [assignedBy], references: [id])
   verifiedByUser   User?                     @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  rejectedByUser   User?                     @relation("PackageRejectedBy", fields: [rejectedBy], references: [id])
   refundedByUser   User?                     @relation("PackageRefundedBy", fields: [refundedBy], references: [id])
   upgradedFrom     MemberPackage?            @relation("PackageUpgrade", fields: [upgradedFromId], references: [id], onDelete: SetNull)
   upgrades         MemberPackage[]           @relation("PackageUpgrade")
@@ -647,8 +654,11 @@ model MemberAddOn {
 
   assignedBy String
   verifiedBy String?
+  rejectedBy String?
   paidAt     DateTime?
   verifiedAt DateTime?
+  rejectedAt DateTime?
+  rejectionReason String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -657,6 +667,7 @@ model MemberAddOn {
   package        MemberPackage? @relation(fields: [packageId], references: [id])
   assignedByUser User           @relation("AddOnAssignedBy", fields: [assignedBy], references: [id])
   verifiedByUser User?          @relation("AddOnVerifiedBy", fields: [verifiedBy], references: [id])
+  rejectedByUser User?          @relation("AddOnRejectedBy", fields: [rejectedBy], references: [id])
 
   @@index([memberId, status])
   @@index([branchId, status])

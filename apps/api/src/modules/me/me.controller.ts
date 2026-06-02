@@ -8,6 +8,7 @@ import {
   getMemberProfileService,
   getMemberInvoicesService,
   getMemberInvoiceDetailService,
+  uploadPaymentProofService,
 } from './me.service';
 import { sendSuccess, buildPaginationMeta } from '@utils/response';
 import { prisma } from '@lib/prisma';
@@ -179,6 +180,31 @@ export async function getMemberInvoiceDetail(
     const { invoiceId } = req.params;
 
     const data = await getMemberInvoiceDetailService(memberId, invoiceId);
+    sendSuccess(res, data);
+  } catch (err) {
+    next(err);
+  }
+}
+
+
+// ── Upload Payment Proof ───────────────────────────────────────
+
+
+export async function uploadPaymentProof(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const memberId = await getMemberIdFromUserId(req.user.userId);
+    const { packageId } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      throw { status: 400, code: 'FILE_REQUIRED', message: 'File bukti pembayaran diperlukan' };
+    }
+
+    const data = await uploadPaymentProofService(memberId, packageId, file);
     sendSuccess(res, data);
   } catch (err) {
     next(err);

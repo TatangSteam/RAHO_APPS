@@ -66,6 +66,13 @@ export class PackagesService {
     return await this.verificationService.verifyPayment(packageId, data, branchId, userId);
   }
 
+  /**
+   * Reject payment for package or add-on
+   */
+  async rejectPayment(packageId: string, rejectionReason: string, branchId: string | undefined, userId: string) {
+    return await this.verificationService.rejectPayment(packageId, rejectionReason, branchId, userId);
+  }
+
   // ============================================================
   // PACKAGE RETRIEVAL
   // ============================================================
