@@ -94,7 +94,7 @@ export async function exportIncentivesToExcel(
 
   // Create workbook
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'RAHO Klinik';
+  workbook.creator = 'RAHO ERP';
   workbook.created = new Date();
 
   // Add worksheet

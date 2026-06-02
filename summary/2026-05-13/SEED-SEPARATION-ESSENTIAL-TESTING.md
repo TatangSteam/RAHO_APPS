@@ -88,7 +88,7 @@ Memisahkan database seeding menjadi dua kategori berbeda:
 - ⚠️ Audit log entries
 
 **Admin Accounts:**
-- `superadmin@raho.id` → `Sup3r4dM1n@123` [SUPER_ADMIN] *(from essential seed)*
+- `superadmin@raho.id` → `Sup3r4dM1n` [SUPER_ADMIN] *(from essential seed)*
 - `manager@raho.id` → `Manager@123` [ADMIN_MANAGER] *(from testing seed)*
 
 **Test Accounts:**
@@ -170,7 +170,7 @@ npm run db:migrate:prod
 npm run db:seed:essential
 
 # 3. Login and configure
-# - Login as superadmin@raho.id (password: Sup3r4dM1n@123)
+# - Login as superadmin@raho.id (password: Sup3r4dM1n)
 # - Create branches via admin panel
 # - Create Admin Manager users
 # - Create branch-specific staff

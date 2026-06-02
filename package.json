@@ -2,7 +2,7 @@
   "name": "raho-system",
   "version": "1.0.0",
   "private": true,
-  "description": "RAHO Klinik — Monorepo (Backend + Frontend)",
+  "description": "RAHO — Monorepo (Backend + Frontend)",
   "scripts": {
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
@@ -25,7 +25,6 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0",
-    "docx": "^9.7.0"
+    "@types/node": "^25.6.0"
   }
 }

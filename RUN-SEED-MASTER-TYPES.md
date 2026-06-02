@@ -82,7 +82,7 @@ Setelah seed selesai, refresh halaman web browser Anda.
 7. 🌀 O3 - Ozone
 
 ### Tab Tipe Layanan akan menampilkan:
-1. PM - Premiere
+1. PM - Premier
 2. PS - Partnership
 3. PTY - Partnership Attiya
 4. PDA - Partnership Dr. Abhi

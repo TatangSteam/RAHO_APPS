@@ -1,7 +1,7 @@
 {
     "name": "@raho/api",
     "version": "1.0.0",
-    "description": "RAHO Klinik — REST API Server (Express.js)",
+    "description": "RAHO ERP — REST API Server (Express.js)",
     "main": "dist/server.js",
     "scripts": {
         "dev": "tsx watch src/server.ts",
@@ -44,7 +44,6 @@
         "multer": "^1.4.5-lts.1",
         "nanoid": "^5.1.7",
         "pdfkit": "^0.18.0",
-        "sharp": "^0.34.5",
         "uuid": "^10.0.0",
         "winston": "^3.13.0",
         "zod": "^3.23.8"

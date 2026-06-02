@@ -54,8 +54,8 @@ export async function seedInfusionMaterialUsage(prisma: PrismaClient) {
     // Sesuai List Barang RAHO Official
     const materials = [
       // IFA - Satuan BOTOL
-      { field: 'ifa250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA A + MG 250ml', qty: infusion.ifa250 },
-      { field: 'ifa500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA A + MG 500ml', qty: infusion.ifa500 },
+      { field: 'ifa250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA + NO 2,5ml', qty: infusion.ifa250 },
+      { field: 'ifa500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA 500ml', qty: infusion.ifa500 },
       // Cairan Terapi - Satuan ML
       { field: 'hho', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', qty: infusion.hho },
       { field: 'h2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', qty: infusion.h2 },

@@ -15,7 +15,7 @@
 
    {
      "email": "superadmin@raho.id",
-     "password": "Sup3r4dM1n@123"
+     "password": "Sup3r4dM1n"
    }
    ```
 
@@ -570,7 +570,7 @@ You can import this collection into Postman for easier testing:
         "header": [{"key": "Content-Type", "value": "application/json"}],
         "body": {
           "mode": "raw",
-          "raw": "{\"email\":\"superadmin@raho.id\",\"password\":\"Sup3r4dM1n@123\"}"
+          "raw": "{\"email\":\"superadmin@raho.id\",\"password\":\"Sup3r4dM1n\"}"
         },
         "url": "{{baseUrl}}/api/v1/auth/login"
       }
