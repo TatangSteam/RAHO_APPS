@@ -46,7 +46,7 @@ export class MemberBranchAccessService {
     }
 
     // Grant access
-    await prisma.memberBranchAccess.create({
+    await prisma.branchMemberAccess.create({
       data: {
         memberId: member.id,
         branchId,
@@ -70,7 +70,7 @@ export class MemberBranchAccessService {
       userId,
       branchId, // Use the branch being granted access to
       action: AuditAction.CREATE,
-      resource: 'MemberBranchAccess',
+      resource: 'BranchMemberAccess',
       resourceId: member.id,
       meta: { memberNo, branchName: branch.name },
     });
