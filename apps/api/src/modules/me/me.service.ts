@@ -58,6 +58,7 @@ interface MemberProfile {
   nik: string | null;
   dateOfBirth: Date | null;
   jenisKelamin: string | null;
+  agama: string | null;
   address: string | null;
   voucherCount: number;
   isActive: boolean;
@@ -315,6 +316,7 @@ export async function getMemberProfileService(userId: string): Promise<MemberPro
           nik: true,
           dateOfBirth: true,
           jenisKelamin: true,
+          agama: true,
           address: true,
           voucherCount: true,
           isActive: true,
@@ -340,6 +342,7 @@ export async function getMemberProfileService(userId: string): Promise<MemberPro
     nik: user.member.nik,
     dateOfBirth: user.member.dateOfBirth,
     jenisKelamin: user.member.jenisKelamin,
+    agama: user.member.agama,
     address: user.member.address,
     voucherCount: user.member.voucherCount,
     isActive: user.member.isActive,

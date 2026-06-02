@@ -4,7 +4,9 @@ import { useState } from 'react';
 
 export interface TherapyPlanData {
   infusKe: number;
-  ifa?: number;
+  keterangan?: string;
+  ifa250?: number; // IFA + NO 2,5ml (satuan: Botol)
+  ifa500?: number; // IFA 500ml (satuan: Botol)
   hho?: number;
   h2?: number;
   no?: number;
@@ -16,13 +18,31 @@ export interface TherapyPlanData {
   h2s?: number;
   kcl?: number;
   jmlNb?: number;
-  notes?: string;
 }
 
 interface TherapyPlanSectionProps {
   therapyPlans: TherapyPlanData[];
   onChange: (plans: TherapyPlanData[]) => void;
 }
+
+// AUTO-FILL fields (digunakan di infus aktual): NO, GASO (GT), MB, KCL, H2S, O3, O2, EDTA
+const AUTO_FILL_FIELDS = [
+  { key: 'no', label: 'NO', unit: 'ml', product: 'NB NO' },
+  { key: 'gaso', label: 'GASO', unit: 'ml', product: 'GT' },
+  { key: 'mb', label: 'MB', unit: 'ml', product: 'Methylene Blue' },
+  { key: 'kcl', label: 'KCL', unit: 'ml', product: 'KCL' },
+  { key: 'h2s', label: 'H2S', unit: 'ml', product: 'Cairan H2S' },
+  { key: 'o3', label: 'O3', unit: 'ml', product: 'Ozone' },
+  { key: 'o2', label: 'O2', unit: 'ml', product: 'Oxygen' },
+  { key: 'edta', label: 'EDTA', unit: 'ml', product: 'EDTA' },
+];
+
+// MANUAL fields (tidak ada di infus aktual): HHO, H2, JML NB
+const MANUAL_FIELDS = [
+  { key: 'hho', label: 'HHO', unit: 'ml', product: 'NB-HHO' },
+  { key: 'h2', label: 'H2', unit: 'ml', product: 'Hydrogen' },
+  { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', product: '' },
+];
 
 export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPlanSectionProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(therapyPlans.length > 0 ? 0 : null);
@@ -34,7 +54,9 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
     
     const newPlan: TherapyPlanData = {
       infusKe: nextInfusKe,
-      ifa: undefined,
+      keterangan: '',
+      ifa250: 1, // Default 1 botol IFA + NO 2,5ml
+      ifa500: undefined,
       hho: undefined,
       h2: undefined,
       no: undefined,
@@ -61,7 +83,7 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
     }
   };
 
-  const handleFieldChange = (index: number, field: keyof TherapyPlanData, value: number | string) => {
+  const handleFieldChange = (index: number, field: keyof TherapyPlanData, value: number | string | undefined) => {
     const newPlans = [...therapyPlans];
     newPlans[index] = { ...newPlans[index], [field]: value };
     onChange(newPlans);
@@ -69,7 +91,17 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
 
   const handleNumberChange = (index: number, field: keyof TherapyPlanData, value: string) => {
     const numValue = value === '' ? undefined : parseFloat(value);
-    handleFieldChange(index, field, numValue as number);
+    handleFieldChange(index, field, numValue);
+  };
+
+  const handleIfaTypeChange = (index: number, type: 'ifa250' | 'ifa500') => {
+    const newPlans = [...therapyPlans];
+    if (type === 'ifa250') {
+      newPlans[index] = { ...newPlans[index], ifa250: 1, ifa500: undefined };
+    } else {
+      newPlans[index] = { ...newPlans[index], ifa250: undefined, ifa500: 1 };
+    }
+    onChange(newPlans);
   };
 
   return (
@@ -192,37 +224,202 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
               {/* Content */}
               {expandedIndex === index && (
                 <div style={{ padding: '24px' }}>
-                  {/* Dosis Infus */}
-                  <div>
-                    <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      💉 Dosis Infus
-                    </h4>
+                  {/* Keterangan */}
+                  <div style={{ marginBottom: '20px' }}>
+                    <label className="form-label" style={{ fontSize: '13px', color: '#94a3b8', fontWeight: '700' }}>
+                      📝 Keterangan (Opsional)
+                    </label>
+                    <textarea
+                      value={plan.keterangan || ''}
+                      onChange={(e) => handleFieldChange(index, 'keterangan', e.target.value)}
+                      className="form-input"
+                      placeholder="Contoh: Therapy plan untuk sesi pertama, dosis standar..."
+                      rows={2}
+                      style={{ resize: 'vertical', minHeight: '60px' }}
+                    />
+                  </div>
+
+                  {/* IFA Selection - Mutually Exclusive */}
+                  <div style={{ 
+                    marginBottom: '20px',
+                    padding: '16px',
+                    background: 'rgba(34,197,94,0.1)',
+                    borderRadius: '8px',
+                    border: '2px solid rgba(34,197,94,0.3)'
+                  }}>
+                    <p style={{ 
+                      margin: '0 0 12px 0', 
+                      fontSize: '13px', 
+                      color: '#4ade80',
+                      fontWeight: '700'
+                    }}>
+                      🧪 IFA (Infus) - Pilih salah satu <span style={{ color: '#ef4444' }}>*</span>
+                    </p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {/* IFA 250ml Option */}
+                      <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '12px',
+                        padding: '12px 16px',
+                        background: plan.ifa250 && plan.ifa250 > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
+                        borderRadius: '8px',
+                        border: plan.ifa250 && plan.ifa250 > 0 ? '2px solid #4ade80' : '1px solid rgba(148,163,184,0.3)',
+                        cursor: 'pointer'
+                      }}>
+                        <input
+                          type="radio"
+                          name={`ifaType-${index}`}
+                          checked={plan.ifa250 !== undefined && plan.ifa250 > 0}
+                          onChange={() => handleIfaTypeChange(index, 'ifa250')}
+                          style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#4ade80' }}>
+                            IFA + NO 2,5ml ⭐
+                          </span>
+                          <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                            Default - Wajib 1 botol per terapi
+                          </span>
+                        </div>
+                        {plan.ifa250 && plan.ifa250 > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="number"
+                              min="1"
+                              value={plan.ifa250}
+                              onChange={(e) => handleFieldChange(index, 'ifa250', parseInt(e.target.value) || 1)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="form-input"
+                              style={{ width: '70px', textAlign: 'center', padding: '8px' }}
+                            />
+                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                          </div>
+                        )}
+                      </label>
+
+                      {/* IFA 500ml Option */}
+                      <label style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '12px',
+                        padding: '12px 16px',
+                        background: plan.ifa500 && plan.ifa500 > 0 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)',
+                        borderRadius: '8px',
+                        border: plan.ifa500 && plan.ifa500 > 0 ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
+                        cursor: 'pointer'
+                      }}>
+                        <input
+                          type="radio"
+                          name={`ifaType-${index}`}
+                          checked={plan.ifa500 !== undefined && plan.ifa500 > 0}
+                          onChange={() => handleIfaTypeChange(index, 'ifa500')}
+                          style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <span style={{ fontSize: '14px', fontWeight: '600', color: '#fbbf24' }}>
+                            IFA 500ml (Alternatif)
+                          </span>
+                          <span style={{ display: 'block', fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+                            Special case - Pengganti IFA + NO 2,5ml
+                          </span>
+                        </div>
+                        {plan.ifa500 && plan.ifa500 > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="number"
+                              min="1"
+                              value={plan.ifa500}
+                              onChange={(e) => handleFieldChange(index, 'ifa500', parseInt(e.target.value) || 1)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="form-input"
+                              style={{ width: '70px', textAlign: 'center', padding: '8px' }}
+                            />
+                            <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: '600' }}>Botol</span>
+                          </div>
+                        )}
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* AUTO-FILL FIELDS - Ada Booster Package */}
+                  <div style={{ 
+                    marginBottom: '20px',
+                    padding: '16px',
+                    background: 'rgba(59,130,246,0.08)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(59,130,246,0.2)'
+                  }}>
+                    <p style={{ 
+                      margin: '0 0 12px 0', 
+                      fontSize: '13px', 
+                      color: '#60a5fa',
+                      fontWeight: '700'
+                    }}>
+                      🔄 Auto-Fill (Digunakan di Infus Aktual)
+                    </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-                      {[
-                        { key: 'ifa', label: 'IFA' },
-                        { key: 'hho', label: 'HHO' },
-                        { key: 'h2', label: 'H2' },
-                        { key: 'no', label: 'NO' },
-                        { key: 'gaso', label: 'GASO' },
-                        { key: 'o2', label: 'O2' },
-                        { key: 'o3', label: 'O3' },
-                        { key: 'edta', label: 'EDTA' },
-                        { key: 'mb', label: 'MB' },
-                        { key: 'h2s', label: 'H2S' },
-                        { key: 'kcl', label: 'KCL' },
-                        { key: 'jmlNb', label: 'Jml. NB' },
-                      ].map(({ key, label }) => (
+                      {AUTO_FILL_FIELDS.map(({ key, label, product }) => (
                         <div key={key}>
-                          <label className="form-label" style={{ fontSize: '13px' }}>{label}</label>
+                          <label className="form-label" style={{ fontSize: '13px', color: '#60a5fa' }}>
+                            {label} <span style={{ fontSize: '10px', color: '#94a3b8' }}>({product})</span>
+                          </label>
                           <div style={{ position: 'relative' }}>
                             <input
                               type="number"
-                              step="0.1"
+                              step="0.01"
                               min="0"
                               value={plan[key as keyof TherapyPlanData] as number || ''}
                               onChange={(e) => handleNumberChange(index, key as keyof TherapyPlanData, e.target.value)}
                               className="form-input"
-                              placeholder="0.0"
+                              placeholder="0.00"
+                              style={{ paddingRight: '45px', borderColor: 'rgba(59,130,246,0.3)' }}
+                            />
+                            <span style={{
+                              position: 'absolute',
+                              right: '12px',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              fontSize: '13px',
+                              color: 'var(--text-muted)',
+                              fontWeight: '500'
+                            }}>ml</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* MANUAL FIELDS - Tidak Ada Booster Package */}
+                  <div style={{ 
+                    padding: '16px',
+                    background: 'rgba(148,163,184,0.08)',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(148,163,184,0.2)'
+                  }}>
+                    <p style={{ 
+                      margin: '0 0 12px 0', 
+                      fontSize: '13px', 
+                      color: '#94a3b8',
+                      fontWeight: '700'
+                    }}>
+                      ✏️ Manual Input
+                    </p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+                      {MANUAL_FIELDS.map(({ key, label, product }) => (
+                        <div key={key}>
+                          <label className="form-label" style={{ fontSize: '13px', color: '#94a3b8' }}>
+                            {label} {product && <span style={{ fontSize: '10px', color: '#64748b' }}>({product})</span>}
+                          </label>
+                          <div style={{ position: 'relative' }}>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={plan[key as keyof TherapyPlanData] as number || ''}
+                              onChange={(e) => handleNumberChange(index, key as keyof TherapyPlanData, e.target.value)}
+                              className="form-input"
+                              placeholder="0.00"
                               style={{ paddingRight: '45px' }}
                             />
                             <span style={{

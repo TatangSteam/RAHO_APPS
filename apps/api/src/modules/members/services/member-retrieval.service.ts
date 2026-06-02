@@ -652,6 +652,7 @@ export class MemberRetrievalService {
       tempatLahir: member.tempatLahir,
       dateOfBirth: member.dateOfBirth?.toISOString(),
       jenisKelamin: member.jenisKelamin,
+      agama: member.agama,
       address: member.address,
       pekerjaan: member.pekerjaan,
       statusNikah: member.statusNikah,

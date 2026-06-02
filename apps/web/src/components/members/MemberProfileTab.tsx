@@ -117,6 +117,10 @@ export default function MemberProfileTab({
             </p>
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Agama</p>
+            <p style={{ fontWeight: '600' }}>🙏 {member.agama || '-'}</p>
+          </div>
+          <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Telepon</p>
             <p style={{ fontWeight: '600' }}>📞 {member.profile.phone}</p>
           </div>

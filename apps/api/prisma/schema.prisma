@@ -369,6 +369,7 @@ model Member {
   tempatLahir      String?
   dateOfBirth      DateTime?
   jenisKelamin     Gender?
+  agama            String?   // Religion field
   address          String?
   pekerjaan        String?
   statusNikah      String?

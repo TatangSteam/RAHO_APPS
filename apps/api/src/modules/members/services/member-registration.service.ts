@@ -20,6 +20,7 @@ export class MemberRegistrationService {
       birthPlace?: string;
       birthDate?: string;
       gender?: string;
+      religion?: string;
       phone: string;
       email?: string;
       address?: string;
@@ -192,6 +193,7 @@ export class MemberRegistrationService {
           tempatLahir: data.birthPlace || null,
           dateOfBirth: data.birthDate ? new Date(data.birthDate) : null,
           jenisKelamin: data.gender as any || null,
+          agama: data.religion || null,
           address: data.address || null,
           pekerjaan: data.occupation || null,
           statusNikah: data.maritalStatus || null,

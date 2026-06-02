@@ -129,8 +129,28 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           </select>
         </div>
 
-        {/* Email Pribadi - 6 cols (OPTIONAL) */}
-        <div className="form-col-6">
+        {/* Agama - 4 cols on desktop */}
+        <div className="form-col-4">
+          <label className="form-label">Agama</label>
+          <select
+            name="religion"
+            value={formData.religion || ''}
+            onChange={onChange}
+            className="form-input"
+          >
+            <option value="">Pilih agama</option>
+            <option value="Islam">Islam</option>
+            <option value="Kristen">Kristen</option>
+            <option value="Katolik">Katolik</option>
+            <option value="Hindu">Hindu</option>
+            <option value="Buddha">Buddha</option>
+            <option value="Konghucu">Konghucu</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+
+        {/* Email Pribadi - 4 cols (OPTIONAL) */}
+        <div className="form-col-4">
           <label className="form-label">Email Pribadi</label>
           <input
             type="email"

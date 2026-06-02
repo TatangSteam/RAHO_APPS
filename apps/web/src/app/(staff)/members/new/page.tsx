@@ -45,6 +45,7 @@ export default function NewMemberPage() {
     birthPlace: '',
     birthDate: '',
     gender: undefined,
+    religion: '',
     phone: '',
     email: '',
     address: '',

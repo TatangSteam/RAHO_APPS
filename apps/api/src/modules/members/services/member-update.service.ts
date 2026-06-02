@@ -20,6 +20,7 @@ export class MemberUpdateService {
       fullName?: string;
       birthDate?: string;
       gender?: string;
+      religion?: string;
       phone?: string;
       email?: string;
       address?: string;
@@ -104,6 +105,7 @@ export class MemberUpdateService {
       const memberUpdateData: any = {};
       if (data.birthDate) memberUpdateData.dateOfBirth = new Date(data.birthDate);
       if (data.gender) memberUpdateData.jenisKelamin = data.gender;
+      if (data.religion !== undefined) memberUpdateData.agama = data.religion || null;
       if (data.address) memberUpdateData.address = data.address;
       if (data.emergencyContactName) memberUpdateData.emergencyContact = data.emergencyContactName;
 

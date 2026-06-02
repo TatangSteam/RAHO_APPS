@@ -16,6 +16,7 @@ export const createMemberSchema = z.object({
   birthPlace: z.string().optional(),
   birthDate: z.string().optional(), // ISO date string
   gender: GenderEnum.optional(),
+  religion: z.string().optional(), // Agama
   phone: z.string().min(10, 'Nomor telepon minimal 10 digit'),
   email: z.string().email('Format email tidak valid').optional(),
   address: z.string().optional(),
@@ -76,6 +77,7 @@ export const updateMemberSchema = z.object({
   birthPlace: z.string().optional(),
   birthDate: z.string().optional(),
   gender: GenderEnum.optional(),
+  religion: z.string().optional(), // Agama
   phone: z.string().min(10).optional(),
   email: z.string().email().optional(),
   address: z.string().optional(),

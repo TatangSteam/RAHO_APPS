@@ -60,6 +60,7 @@ export interface MemberDetail {
   tempatLahir?: string;
   dateOfBirth?: string;
   jenisKelamin?: 'L' | 'P';
+  agama?: string;
   address?: string;
   pekerjaan?: string;
   statusNikah?: string;
@@ -95,6 +96,7 @@ export interface CreateMemberData {
   birthPlace?: string;
   birthDate?: string;
   gender?: 'L' | 'P'; // L = Laki-laki, P = Perempuan
+  religion?: string; // Agama
   phone: string;
   email?: string;
   address?: string;
@@ -121,6 +123,7 @@ export interface CreateMemberData {
   // Section D - Therapy Plans (Optional)
   therapyPlans?: Array<{
     infusKe: number;
+    keterangan?: string;
     ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
     ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
     hho?: number;

@@ -712,7 +712,9 @@ export class RoleDashboardService {
     weekAgo.setDate(weekAgo.getDate() - 7);
 
     // Today's stats
-    const [sessionsToday, completedToday, pendingPaymentsCount, activeMembers] = await Promise.all([
+    // Active Members: count unique members who have ACTIVE packages at THIS branch
+    // (not based on registration branch, but based on where their active packages are)
+    const [sessionsToday, completedToday, pendingPaymentsCount, activeMembersResult] = await Promise.all([
       prisma.treatmentSession.count({
         where: { branchId, treatmentDate: { gte: today, lt: tomorrow } },
       }),
@@ -722,13 +724,18 @@ export class RoleDashboardService {
       prisma.memberPackage.count({
         where: { branchId, status: 'PENDING_PAYMENT' },
       }),
-      prisma.member.count({
-        where: {
-          registrationBranchId: branchId,
-          memberPackages: { some: { status: 'ACTIVE' } },
+      // Count unique members with ACTIVE packages at this branch
+      prisma.memberPackage.findMany({
+        where: { 
+          branchId, 
+          status: 'ACTIVE' 
         },
+        select: { memberId: true },
+        distinct: ['memberId'],
       }),
     ]);
+    
+    const activeMembers = activeMembersResult.length;
 
     // Session schedule
     const sessionSchedule = await prisma.treatmentSession.findMany({
