@@ -272,6 +272,7 @@ api.interceptors.response.use(
     const errCode = (error.response?.data as { error?: { code?: string } })?.error?.code;
     const is401 = error.response?.status === 401;
     const is401Expired = is401 && errCode === 'AUTH_TOKEN_EXPIRED';
+    const isAuthTokenError = is401 && ['AUTH_TOKEN_INVALID', 'AUTH_TOKEN_MISSING'].includes(errCode ?? '');
 
     // Skip unauthorized handling for auth endpoints (login, register, etc.)
     // These endpoints return 401 for invalid credentials, not for expired tokens
@@ -326,7 +327,11 @@ api.interceptors.response.use(
         }
       } else {
         // Any other 401 error (invalid token, unauthorized, etc.) → logout immediately
-        handleUnauthorizedLogout('Akses tidak diizinkan. Silakan login kembali.');
+        if (!isAuthTokenError) {
+          return Promise.reject(error);
+        }
+
+        handleUnauthorizedLogout('Sesi Anda tidak valid. Silakan login kembali.');
         return Promise.reject(error);
       }
     }

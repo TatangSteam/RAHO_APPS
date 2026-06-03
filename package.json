@@ -15,7 +15,10 @@
     "docker:up": "docker compose -f docker-compose.dev.yml up -d",
     "docker:down": "docker compose -f docker-compose.dev.yml down",
     "docker:logs": "docker compose -f docker-compose.dev.yml logs -f",
-    "type-check": "npm run type-check --prefix apps/api"
+    "type-check": "npm run type-check:api",
+    "type-check:api": "npm run type-check --prefix apps/api",
+    "type-check:web": "npm run type-check --prefix apps/web",
+    "type-check:all": "npm run type-check:api && npm run type-check:web"
   },
   "workspaces": [
     "apps/api",

@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
-import { inventoryApi, type InventoryItemWithStock } from '@/lib/inventoryApi';
+import { inventoryApi, type InventoryItemWithStock } from '@/lib/api/inventoryApi';
 import { materialsApi } from '@/lib/materialsApi';
 import { devError } from '@/lib/logger';
 

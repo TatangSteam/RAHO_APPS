@@ -147,7 +147,9 @@ export function ConfirmDialog() {
   useEffect(() => {
     setMounted(true);
     const unsubscribe = confirmStore.subscribe(setState);
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleConfirm = useCallback(async () => {

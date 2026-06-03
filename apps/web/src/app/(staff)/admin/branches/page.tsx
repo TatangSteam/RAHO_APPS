@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
-import { getAllBranches, deleteBranch, type Branch } from '@/lib/branchesApi';
+import { branchesApi, type Branch } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import CreateBranchModal from '@/components/branches/CreateBranchModal';
@@ -45,8 +45,8 @@ export default function BranchesPage() {
   const loadBranches = async () => {
     try {
       setLoading(true);
-      const response = await getAllBranches();
-      setBranches(response.data || []);
+      const response = await branchesApi.getAllBranches();
+      setBranches(response.data.data || []);
     } catch (error: any) {
       devError('Error loading branches:', error);
       showToast.error(error.message || 'Gagal memuat data cabang');
@@ -61,7 +61,7 @@ export default function BranchesPage() {
     }
 
     try {
-      await deleteBranch(branchId);
+      await branchesApi.deleteBranch(branchId);
       showToast.success('Cabang berhasil dinonaktifkan');
       loadBranches();
     } catch (error: any) {

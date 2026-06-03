@@ -10,6 +10,26 @@ export interface BranchListParams {
   sortOrder?: 'asc' | 'desc';
 }
 
+export interface Branch {
+  id: string;
+  branchCode: string;
+  name: string;
+  address: string;
+  city: string;
+  phone: string;
+  type: 'PUSAT' | 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
+  operatingHours?: string;
+  isActive: boolean;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  stats?: {
+    activeUsers: number;
+    totalMembers: number;
+    activePackages: number;
+  };
+}
+
 export interface CreateBranchData {
   branchCode: string;
   name: string;

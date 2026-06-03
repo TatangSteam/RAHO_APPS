@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { updateBranch, type Branch, type UpdateBranchInput } from '@/lib/branchesApi';
+import { branchesApi, type Branch, type UpdateBranchData } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './BranchModal.module.css';
@@ -17,7 +17,7 @@ interface Props {
 export default function EditBranchModal({ show, branch, onClose, onSuccess }: Props) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<UpdateBranchInput>({
+  const [formData, setFormData] = useState<UpdateBranchData>({
     name: branch.name,
     address: branch.address,
     city: branch.city,
@@ -82,7 +82,7 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
 
     try {
       setLoading(true);
-      await updateBranch(branch.id, formData);
+      await branchesApi.updateBranch(branch.id, formData);
       showToast.success(`Cabang ${formData.name} berhasil diupdate`);
       onSuccess();
     } catch (error: any) {

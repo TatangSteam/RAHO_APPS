@@ -67,6 +67,35 @@ export interface OverstockPreviewItem {
   }>;
 }
 
+export interface InventoryItemWithStock {
+  id: string;
+  masterProductId: string;
+  branchId: string;
+  stock: number;
+  minThreshold: number;
+  storageLocation: string | null;
+  masterProduct: {
+    id: string;
+    name: string;
+    category: string;
+    baseUnit: string;
+    usageUnit: string;
+    conversionFactor: number;
+    description: string | null;
+  };
+  stockInfo: {
+    baseStock: number;
+    baseUnit: string;
+    usageStock: number;
+    usageUnit: string;
+    minThresholdBase: number;
+    minThresholdUsage: number;
+    isLowStock: boolean;
+    displayText: string;
+    displayShort: string;
+  };
+}
+
 export interface BranchOverstock {
   id: string;
   branchId: string;

@@ -26,6 +26,7 @@ interface ImpersonationChainItem {
   userId: string;
   email: string;
   role: string;
+  fullName?: string;
 }
 
 interface ImpersonationState {
@@ -141,6 +142,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
           userId: current.id,
           email: current.email,
           role: current.role,
+          fullName: current.fullName,
         });
       }
       

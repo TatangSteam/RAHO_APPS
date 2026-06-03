@@ -24,6 +24,13 @@ interface ToastItemProps {
   onDismiss: (id: string) => void;
 }
 
+const TOAST_DURATION_MS: Record<Exclude<ToastType, 'loading'>, number> = {
+  success: 6000,
+  error: 9000,
+  warning: 9000,
+  info: 6000,
+};
+
 // ═══════════════════════════════════════════════════════════════
 // TOAST STORE (Simple state management)
 // ═══════════════════════════════════════════════════════════════
@@ -48,7 +55,7 @@ class ToastStore {
     const newToast: ToastData = {
       id,
       dismissible: true,
-      duration: toast.type === 'error' ? 5000 : toast.type === 'loading' ? 0 : 4000,
+      duration: toast.type === 'loading' ? 0 : TOAST_DURATION_MS[toast.type],
       ...toast,
     };
     this.toasts = [...this.toasts, newToast];
@@ -118,12 +125,12 @@ export const showToast = {
     const id = showToast.loading(messages.loading);
     try {
       const result = await promise;
-      toastStore.update(id, { type: 'success', message: messages.success, duration: 3000, dismissible: true });
-      setTimeout(() => toastStore.dismiss(id), 3000);
+      toastStore.update(id, { type: 'success', message: messages.success, duration: TOAST_DURATION_MS.success, dismissible: true });
+      setTimeout(() => toastStore.dismiss(id), TOAST_DURATION_MS.success);
       return result;
     } catch (error) {
-      toastStore.update(id, { type: 'error', message: messages.error, duration: 5000, dismissible: true });
-      setTimeout(() => toastStore.dismiss(id), 5000);
+      toastStore.update(id, { type: 'error', message: messages.error, duration: TOAST_DURATION_MS.error, dismissible: true });
+      setTimeout(() => toastStore.dismiss(id), TOAST_DURATION_MS.error);
       throw error;
     }
   },
@@ -252,7 +259,9 @@ export function ToastContainer() {
   useEffect(() => {
     setMounted(true);
     const unsubscribe = toastStore.subscribe(setToasts);
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   if (!mounted) return null;

@@ -3,6 +3,7 @@ import { prisma } from '@lib/prisma';
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
 import { LoginInput } from './auth.schema';
+import { AuditAction } from '@prisma/client';
 
 export interface AuthUser {
   userId: string;
@@ -32,7 +33,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
         data: {
           userId: user.id,
           branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
-          action: 'FAILED_LOGIN',
+          action: 'FAILED_LOGIN' as AuditAction,
           resource: 'Auth',
           resourceId: user.id,
           meta: {
@@ -57,7 +58,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
       data: {
         userId: user.id,
         branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
-        action: 'FAILED_LOGIN',
+        action: 'FAILED_LOGIN' as AuditAction,
         resource: 'Auth',
         resourceId: user.id,
         meta: {

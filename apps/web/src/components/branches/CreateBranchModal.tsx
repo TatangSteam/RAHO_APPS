@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { createBranch, type CreateBranchInput } from '@/lib/branchesApi';
+import { branchesApi, type CreateBranchData } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './BranchModal.module.css';
@@ -16,7 +16,7 @@ interface Props {
 export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<CreateBranchInput>({
+  const [formData, setFormData] = useState<CreateBranchData>({
     branchCode: '',
     name: '',
     address: '',
@@ -99,7 +99,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
 
     try {
       setLoading(true);
-      await createBranch(formData);
+      await branchesApi.createBranch(formData);
       showToast.success(`Cabang ${formData.name} berhasil dibuat`);
       onSuccess();
     } catch (error: any) {

@@ -102,7 +102,7 @@ export default function MembersPage() {
           .filter((member) => Boolean(member.photoUrl))
           .map(async (member) => {
             try {
-              const blobUrl = await createAuthenticatedObjectUrl(member.photoUrl);
+              const blobUrl = await createAuthenticatedObjectUrl(member.photoUrl!);
               return [member.memberId, blobUrl] as const;
             } catch (error) {
               devError('Failed to load member photo:', member.memberId, error);

@@ -145,7 +145,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
               onViewRefundDetail({
                 packageCode: pkg.packageCode,
                 refundAmount: pkg.refundAmount || 0,
-                refundReason: pkg.refundReason,
+                refundReason: pkg.refundReason || '-',
                 refundedBy: pkg.refundedBy,
                 refundedAt: pkg.refundedAt,
                 refundProofUrl: pkg.refundProofUrl,

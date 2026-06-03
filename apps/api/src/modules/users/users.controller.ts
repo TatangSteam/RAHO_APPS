@@ -31,7 +31,7 @@ import {
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
-import { Role } from '@prisma/client';
+import { AuditAction, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 
 export async function listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -183,7 +183,7 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
     logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
-      action: 'PASSWORD_CHANGE',
+      action: 'PASSWORD_CHANGE' as AuditAction,
       resource: 'User',
       resourceId: req.user.userId,
       meta: { 
@@ -209,7 +209,7 @@ export async function resetPassword(req: Request, res: Response, next: NextFunct
     logAudit({
       userId: req.user.userId,
       branchId: req.user.branchId,
-      action: 'PASSWORD_RESET',
+      action: 'PASSWORD_RESET' as AuditAction,
       resource: 'User',
       resourceId: req.params.userId,
       meta: { 
