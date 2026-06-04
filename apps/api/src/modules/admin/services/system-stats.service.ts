@@ -54,10 +54,10 @@ export class SystemStatsService {
         prisma.masterProduct.count({ where: { isActive: true } }).catch(() => 0),
         
         // Total therapy sessions
-        prisma.therapySession.count().catch(() => 0),
+        prisma.treatmentSession.count().catch(() => 0),
         
         // Monthly therapy sessions
-        prisma.therapySession.count({
+        prisma.treatmentSession.count({
           where: {
             createdAt: { gte: firstDayOfMonth },
           },
@@ -81,7 +81,7 @@ export class SystemStatsService {
         // Users by role
         prisma.user.groupBy({
           by: ['role'],
-          _count: { role: true },
+          _count: true,
           where: { isActive: true },
         }).catch(() => []),
         
@@ -119,7 +119,7 @@ export class SystemStatsService {
         monthlySessions,
         usersByRole: usersByRole.map(item => ({
           role: item.role,
-          count: item._count.role,
+          count: item._count,
         })),
         recentActivities: recentActivities.map(activity => ({
           id: activity.id,

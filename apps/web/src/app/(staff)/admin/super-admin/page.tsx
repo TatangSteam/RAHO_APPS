@@ -10,7 +10,7 @@ import {
   Activity, Users, Package, FileText, Building2,
   UsersRound, DollarSign, Stethoscope, Shield,
   BarChart3, RefreshCw, Plus, Loader2, Clock,
-  CheckCircle2, AlertCircle, ArrowRight, LogIn, LogOut,
+  CheckCircle2, ArrowRight, LogIn, LogOut,
   UserPlus, Edit, Trash2, Eye
 } from 'lucide-react';
 import { AdminManagersTab } from '@/components/admin/AdminManagersTab';
@@ -44,11 +44,14 @@ interface SystemStats {
   }[];
 }
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+
 export default function SuperAdminPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
@@ -77,22 +80,48 @@ export default function SuperAdminPage() {
   const loadSystemStats = async () => {
     try {
       setLoading(true);
+      setError(null);
+      
+      console.log('📊 Loading system stats...');
+      console.log('API URL:', API_URL);
+      console.log('Access Token:', accessToken ? 'Present' : 'Missing');
+      
       const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/system-stats`,
+        `${API_URL}/admin/system-stats`,
         {
+          method: 'GET',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
           },
         }
       );
 
-      if (!response.ok) throw new Error('Gagal memuat statistik sistem');
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Error response:', errorData);
+        throw new Error(errorData.message || 'Gagal memuat statistik sistem');
+      }
 
       const result = await response.json();
-      setStats(result.data);
+      console.log('✅ System stats loaded:', result);
+      
+      if (result.success && result.data) {
+        setStats(result.data);
+        console.log('Stats set successfully');
+      } else {
+        console.error('Invalid data format:', result);
+        throw new Error('Format data tidak valid');
+      }
     } catch (error: any) {
+      console.error('❌ Error loading system stats:', error);
       devError('Error loading system stats:', error);
-      showToast.error(error.message || 'Gagal memuat statistik sistem');
+      const errorMessage = error.message || 'Gagal memuat statistik sistem';
+      setError(errorMessage);
+      showToast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -103,17 +132,22 @@ export default function SuperAdminPage() {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('id-ID', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    try {
+      return new Date(dateString).toLocaleString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      return dateString;
+    }
   };
 
   const getRoleLabel = (role: string) => {
@@ -165,6 +199,49 @@ export default function SuperAdminPage() {
     );
   }
 
+  if (error || !stats) {
+    return (
+      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center gap-3 mb-8">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30">
+              <Shield className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+                Super Admin Panel
+              </h1>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                Kontrol penuh sistem RAHO
+              </p>
+            </div>
+          </div>
+
+          {/* Error State */}
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 text-center">
+            <div className="w-16 h-16 bg-red-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Activity className="h-8 w-8 text-red-500" />
+            </div>
+            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+              Gagal Memuat Data
+            </h2>
+            <p className="text-neutral-500 dark:text-neutral-400 mb-6">
+              {error || 'Terjadi kesalahan saat memuat statistik sistem'}
+            </p>
+            <button 
+              onClick={loadSystemStats}
+              className="px-6 py-3 bg-violet-500 text-white rounded-xl font-medium hover:bg-violet-600 transition-colors inline-flex items-center gap-2"
+            >
+              <RefreshCw className="h-5 w-5" />
+              Coba Lagi
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -188,43 +265,43 @@ export default function SuperAdminPage() {
           <StatCard 
             icon={<Building2 className="h-5 w-5" />}
             label="Total Cabang"
-            value={stats?.totalBranches || 0}
-            subtitle={`${stats?.activeBranches || 0} aktif`}
+            value={stats.totalBranches}
+            subtitle={`${stats.activeBranches} aktif`}
             color="blue"
           />
           <StatCard 
             icon={<Users className="h-5 w-5" />}
             label="Total Staff"
-            value={stats?.totalUsers || 0}
-            subtitle={`${stats?.activeUsers || 0} aktif`}
+            value={stats.totalUsers}
+            subtitle={`${stats.activeUsers} aktif`}
             color="emerald"
           />
           <StatCard 
             icon={<UsersRound className="h-5 w-5" />}
             label="Total Member"
-            value={stats?.totalMembers || 0}
-            subtitle={`${stats?.activeMembers || 0} aktif`}
+            value={stats.totalMembers}
+            subtitle={`${stats.activeMembers} aktif`}
             color="cyan"
           />
           <StatCard 
             icon={<Package className="h-5 w-5" />}
             label="Master Produk"
-            value={stats?.totalProducts || 0}
-            subtitle={`${stats?.activeProducts || 0} aktif`}
+            value={stats.totalProducts}
+            subtitle={`${stats.activeProducts} aktif`}
             color="purple"
           />
           <StatCard 
             icon={<DollarSign className="h-5 w-5" />}
             label="Total Pendapatan"
-            value={formatCurrency(stats?.totalRevenue || 0)}
-            subtitle={`${formatCurrency(stats?.monthlyRevenue || 0)} bulan ini`}
+            value={formatCurrency(stats.totalRevenue)}
+            subtitle={`${formatCurrency(stats.monthlyRevenue)} bulan ini`}
             color="amber"
           />
           <StatCard 
             icon={<Stethoscope className="h-5 w-5" />}
             label="Total Sesi Terapi"
-            value={stats?.totalSessions || 0}
-            subtitle={`${stats?.monthlySessions || 0} bulan ini`}
+            value={stats.totalSessions}
+            subtitle={`${stats.monthlySessions} bulan ini`}
             color="pink"
           />
         </div>
@@ -317,19 +394,25 @@ export default function SuperAdminPage() {
                         Distribusi Role
                       </h4>
                       <div className="space-y-2">
-                        {stats?.usersByRole.map((roleData) => (
-                          <div 
-                            key={roleData.role} 
-                            className="flex items-center justify-between text-sm"
-                          >
-                            <span className="text-neutral-600 dark:text-neutral-400">
-                              {getRoleLabel(roleData.role)}
-                            </span>
-                            <span className="font-semibold text-neutral-900 dark:text-white">
-                              {roleData.count}
-                            </span>
+                        {stats.usersByRole && stats.usersByRole.length > 0 ? (
+                          stats.usersByRole.map((roleData) => (
+                            <div 
+                              key={roleData.role} 
+                              className="flex items-center justify-between text-sm"
+                            >
+                              <span className="text-neutral-600 dark:text-neutral-400">
+                                {getRoleLabel(roleData.role)}
+                              </span>
+                              <span className="font-semibold text-neutral-900 dark:text-white">
+                                {roleData.count}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-4 text-neutral-500 text-xs">
+                            Tidak ada data
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
                   </div>
@@ -373,7 +456,7 @@ export default function SuperAdminPage() {
                       </p>
                     </div>
                     <div className="space-y-2 max-h-[400px] overflow-y-auto">
-                      {stats?.recentActivities && stats.recentActivities.length > 0 ? (
+                      {stats.recentActivities && stats.recentActivities.length > 0 ? (
                         stats.recentActivities.map((activity) => (
                           <div 
                             key={activity.id} 
