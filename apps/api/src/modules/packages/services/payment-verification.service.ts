@@ -37,7 +37,11 @@ export class PaymentVerificationService {
       return await this.verifyAddOnPayment(packageId, data, branchId, userId);
     }
 
-    if (pkg.status !== PackageStatus.WAITING_VERIFICATION) {
+    // Allow verification from PENDING_PAYMENT if staff provides payment proof
+    if (pkg.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
+      // Staff is uploading proof and verifying in one step
+      // This is valid - proceed with verification
+    } else if (pkg.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {
         status: 422,
         code: 'PACKAGE_NOT_WAITING_VERIFICATION',

@@ -6,9 +6,14 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import Link from 'next/link';
-import { Activity, Users, Package, FileText } from 'lucide-react';
+import { 
+  Activity, Users, Package, FileText, Building2,
+  UsersRound, DollarSign, Stethoscope, Shield,
+  BarChart3, RefreshCw, Plus, Loader2, Clock,
+  CheckCircle2, AlertCircle, ArrowRight, LogIn, LogOut,
+  UserPlus, Edit, Trash2, Eye
+} from 'lucide-react';
 import { AdminManagersTab } from '@/components/admin/AdminManagersTab';
-import styles from './page.module.css';
 
 type TabType = 'overview' | 'admin-managers' | 'master-products' | 'audit-logs';
 
@@ -123,351 +128,498 @@ export default function SuperAdminPage() {
     return roleMap[role] || role;
   };
 
+  const getActivityIcon = (action: string) => {
+    const iconMap: Record<string, React.ReactNode> = {
+      LOGIN: <LogIn className="h-4 w-4" />,
+      LOGOUT: <LogOut className="h-4 w-4" />,
+      CREATE: <Plus className="h-4 w-4" />,
+      UPDATE: <Edit className="h-4 w-4" />,
+      DELETE: <Trash2 className="h-4 w-4" />,
+      VERIFY: <CheckCircle2 className="h-4 w-4" />,
+    };
+    return iconMap[action] || <Activity className="h-4 w-4" />;
+  };
+
+  const getActivityColor = (action: string) => {
+    const colorMap: Record<string, string> = {
+      LOGIN: 'text-emerald-500 bg-emerald-500/10',
+      LOGOUT: 'text-neutral-500 bg-neutral-500/10',
+      CREATE: 'text-blue-500 bg-blue-500/10',
+      UPDATE: 'text-amber-500 bg-amber-500/10',
+      DELETE: 'text-red-500 bg-red-500/10',
+      VERIFY: 'text-green-500 bg-green-500/10',
+    };
+    return colorMap[action] || 'text-neutral-500 bg-neutral-500/10';
+  };
+
   if (!mounted) return null;
 
   if (loading) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.loadingSpinner}>⏳</div>
-          <p>Memuat data sistem...</p>
+      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
+          <p className="text-neutral-500 dark:text-neutral-400">Memuat data sistem...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className={styles.container}>
-      {/* Header */}
-      <div className={styles.header}>
-        <div>
-          <h1>🛡️ Super Admin Panel</h1>
-          <p className={styles.subtitle}>
-            Selamat datang, {user?.fullName} - Kontrol penuh sistem RAHO
-          </p>
-        </div>
-      </div>
-
-      {/* Quick Stats Grid */}
-      <div className={styles.statsGrid}>
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>🏢</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>{stats?.totalBranches || 0}</div>
-            <div className={styles.statLabel}>Total Cabang</div>
-            <div className={styles.statSubtext}>
-              {stats?.activeBranches || 0} aktif
-            </div>
+    <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-8">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg shadow-violet-500/30">
+            <Shield className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
+              Super Admin Panel
+            </h1>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              Selamat datang, {user?.fullName} - Kontrol penuh sistem RAHO
+            </p>
           </div>
         </div>
 
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>👥</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>{stats?.totalUsers || 0}</div>
-            <div className={styles.statLabel}>Total Staff</div>
-            <div className={styles.statSubtext}>
-              {stats?.activeUsers || 0} aktif
-            </div>
+        {/* Quick Stats Grid */}
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+          <StatCard 
+            icon={<Building2 className="h-5 w-5" />}
+            label="Total Cabang"
+            value={stats?.totalBranches || 0}
+            subtitle={`${stats?.activeBranches || 0} aktif`}
+            color="blue"
+          />
+          <StatCard 
+            icon={<Users className="h-5 w-5" />}
+            label="Total Staff"
+            value={stats?.totalUsers || 0}
+            subtitle={`${stats?.activeUsers || 0} aktif`}
+            color="emerald"
+          />
+          <StatCard 
+            icon={<UsersRound className="h-5 w-5" />}
+            label="Total Member"
+            value={stats?.totalMembers || 0}
+            subtitle={`${stats?.activeMembers || 0} aktif`}
+            color="cyan"
+          />
+          <StatCard 
+            icon={<Package className="h-5 w-5" />}
+            label="Master Produk"
+            value={stats?.totalProducts || 0}
+            subtitle={`${stats?.activeProducts || 0} aktif`}
+            color="purple"
+          />
+          <StatCard 
+            icon={<DollarSign className="h-5 w-5" />}
+            label="Total Pendapatan"
+            value={formatCurrency(stats?.totalRevenue || 0)}
+            subtitle={`${formatCurrency(stats?.monthlyRevenue || 0)} bulan ini`}
+            color="amber"
+          />
+          <StatCard 
+            icon={<Stethoscope className="h-5 w-5" />}
+            label="Total Sesi Terapi"
+            value={stats?.totalSessions || 0}
+            subtitle={`${stats?.monthlySessions || 0} bulan ini`}
+            color="pink"
+          />
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+          {/* Tabs Nav */}
+          <div className="flex gap-2 p-1 border-b border-neutral-200 dark:border-neutral-800">
+            <TabButton
+              icon={<Activity size={18} />}
+              label="Overview"
+              active={activeTab === 'overview'}
+              onClick={() => setActiveTab('overview')}
+            />
+            <TabButton
+              icon={<Users size={18} />}
+              label="Admin Managers"
+              active={activeTab === 'admin-managers'}
+              onClick={() => setActiveTab('admin-managers')}
+            />
+            <TabButton
+              icon={<Package size={18} />}
+              label="Master Products"
+              active={activeTab === 'master-products'}
+              onClick={() => setActiveTab('master-products')}
+            />
+            <TabButton
+              icon={<FileText size={18} />}
+              label="Audit Logs"
+              active={activeTab === 'audit-logs'}
+              onClick={() => setActiveTab('audit-logs')}
+            />
           </div>
-        </div>
 
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>🧑‍🤝‍🧑</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>{stats?.totalMembers || 0}</div>
-            <div className={styles.statLabel}>Total Member</div>
-            <div className={styles.statSubtext}>
-              {stats?.activeMembers || 0} aktif
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>📦</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>{stats?.totalProducts || 0}</div>
-            <div className={styles.statLabel}>Master Produk</div>
-            <div className={styles.statSubtext}>
-              {stats?.activeProducts || 0} aktif
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>💰</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>
-              {formatCurrency(stats?.totalRevenue || 0)}
-            </div>
-            <div className={styles.statLabel}>Total Pendapatan</div>
-            <div className={styles.statSubtext}>
-              {formatCurrency(stats?.monthlyRevenue || 0)} bulan ini
-            </div>
-          </div>
-        </div>
-
-        <div className={styles.statCard}>
-          <div className={styles.statIcon}>💉</div>
-          <div className={styles.statContent}>
-            <div className={styles.statValue}>{stats?.totalSessions || 0}</div>
-            <div className={styles.statLabel}>Total Sesi Terapi</div>
-            <div className={styles.statSubtext}>
-              {stats?.monthlySessions || 0} bulan ini
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className={styles.tabsContainer}>
-        <div className={styles.tabsNav}>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'overview' ? styles.active : ''}`}
-            onClick={() => setActiveTab('overview')}
-          >
-            <Activity size={18} />
-            <span>Overview</span>
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'admin-managers' ? styles.active : ''}`}
-            onClick={() => setActiveTab('admin-managers')}
-          >
-            <Users size={18} />
-            <span>Admin Managers</span>
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'master-products' ? styles.active : ''}`}
-            onClick={() => setActiveTab('master-products')}
-          >
-            <Package size={18} />
-            <span>Master Products</span>
-          </button>
-          <button
-            className={`${styles.tabButton} ${activeTab === 'audit-logs' ? styles.active : ''}`}
-            onClick={() => setActiveTab('audit-logs')}
-          >
-            <FileText size={18} />
-            <span>Audit Logs</span>
-          </button>
-        </div>
-
-        {/* Tab Content */}
-        <div className={styles.tabContent}>
-          {activeTab === 'overview' && (
-            <div className={styles.overviewContent}>
-              {/* Management Sections */}
-              <div className={styles.sectionsGrid}>
-                {/* Master Data Management */}
-                <div className={styles.section}>
-                  <div className={styles.sectionHeader}>
-                    <h2>📋 Master Data</h2>
-                    <p>Kelola data master sistem</p>
-                  </div>
-                  <div className={styles.sectionContent}>
-                    <Link href="/admin/master-products" className={styles.actionCard}>
-                      <div className={styles.actionIcon}>📦</div>
-                      <div className={styles.actionContent}>
-                        <h3>Master Produk</h3>
-                        <p>Kelola produk untuk semua cabang</p>
-                      </div>
-                      <div className={styles.actionArrow}>→</div>
-                    </Link>
-
-                    <Link href="/branches" className={styles.actionCard}>
-                      <div className={styles.actionIcon}>🏢</div>
-                      <div className={styles.actionContent}>
-                        <h3>Manajemen Cabang</h3>
-                        <p>Kelola semua cabang RAHO</p>
-                      </div>
-                      <div className={styles.actionArrow}>→</div>
-                    </Link>
-                  </div>
-                </div>
-
-                {/* User Management */}
-                <div className={styles.section}>
-                  <div className={styles.sectionHeader}>
-                    <h2>👥 Manajemen User</h2>
-                    <p>Kelola akses dan role user</p>
-                  </div>
-                  <div className={styles.sectionContent}>
-                    <Link href="/admin/users" className={styles.actionCard}>
-                      <div className={styles.actionIcon}>👤</div>
-                      <div className={styles.actionContent}>
-                        <h3>Kelola User</h3>
-                        <p>Tambah, edit, hapus user sistem</p>
-                      </div>
-                      <div className={styles.actionArrow}>→</div>
-                    </Link>
-
-                    <div className={styles.userRoleStats}>
-                      <h4>Distribusi Role</h4>
-                      {stats?.usersByRole.map((roleData) => (
-                        <div key={roleData.role} className={styles.roleItem}>
-                          <span className={styles.roleName}>
-                            {getRoleLabel(roleData.role)}
-                          </span>
-                          <span className={styles.roleCount}>{roleData.count}</span>
-                        </div>
-                      ))}
+          {/* Tab Content */}
+          <div className="p-6">
+            {activeTab === 'overview' && (
+              <div className="space-y-6">
+                {/* Management Sections Grid */}
+                <div className="grid md:grid-cols-2 gap-6">
+                  {/* Master Data Management */}
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                        <Package className="h-5 w-5 text-violet-500" />
+                        Master Data
+                      </h2>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                        Kelola data master sistem
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <ActionLink
+                        href="/admin/master-products"
+                        icon={<Package className="h-5 w-5" />}
+                        title="Master Produk"
+                        description="Kelola produk untuk semua cabang"
+                      />
+                      <ActionLink
+                        href="/branches"
+                        icon={<Building2 className="h-5 w-5" />}
+                        title="Manajemen Cabang"
+                        description="Kelola semua cabang RAHO"
+                      />
                     </div>
                   </div>
-                </div>
 
-                {/* System Monitoring */}
-                <div className={styles.section}>
-                  <div className={styles.sectionHeader}>
-                    <h2>📊 Monitoring Sistem</h2>
-                    <p>Pantau aktivitas dan performa</p>
-                  </div>
-                  <div className={styles.sectionContent}>
-                    <Link href="/admin/audit-logs" className={styles.actionCard}>
-                      <div className={styles.actionIcon}>📜</div>
-                      <div className={styles.actionContent}>
-                        <h3>Audit Logs</h3>
-                        <p>Riwayat aktivitas semua user</p>
+                  {/* User Management */}
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                        <Users className="h-5 w-5 text-blue-500" />
+                        Manajemen User
+                      </h2>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                        Kelola akses dan role user
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <ActionLink
+                        href="/admin/users"
+                        icon={<UserPlus className="h-5 w-5" />}
+                        title="Kelola User"
+                        description="Tambah, edit, hapus user sistem"
+                      />
+                    </div>
+                    {/* User Role Stats */}
+                    <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-xl p-4 border border-neutral-200 dark:border-neutral-700">
+                      <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">
+                        Distribusi Role
+                      </h4>
+                      <div className="space-y-2">
+                        {stats?.usersByRole.map((roleData) => (
+                          <div 
+                            key={roleData.role} 
+                            className="flex items-center justify-between text-sm"
+                          >
+                            <span className="text-neutral-600 dark:text-neutral-400">
+                              {getRoleLabel(roleData.role)}
+                            </span>
+                            <span className="font-semibold text-neutral-900 dark:text-white">
+                              {roleData.count}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                      <div className={styles.actionArrow}>→</div>
-                    </Link>
-
-                    <Link href="/admin/branch-performance" className={styles.actionCard}>
-                      <div className={styles.actionIcon}>📈</div>
-                      <div className={styles.actionContent}>
-                        <h3>Performa Cabang</h3>
-                        <p>Analisis performa setiap cabang</p>
-                      </div>
-                      <div className={styles.actionArrow}>→</div>
-                    </Link>
+                    </div>
                   </div>
-                </div>
 
-                {/* Recent Activities */}
-                <div className={styles.section}>
-                  <div className={styles.sectionHeader}>
-                    <h2>🕐 Aktivitas Terbaru</h2>
-                    <p>10 aktivitas terakhir sistem</p>
+                  {/* System Monitoring */}
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 text-emerald-500" />
+                        Monitoring Sistem
+                      </h2>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                        Pantau aktivitas dan performa
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <ActionLink
+                        href="/admin/audit-logs"
+                        icon={<FileText className="h-5 w-5" />}
+                        title="Audit Logs"
+                        description="Riwayat aktivitas semua user"
+                      />
+                      <ActionLink
+                        href="/admin/branch-performance"
+                        icon={<BarChart3 className="h-5 w-5" />}
+                        title="Performa Cabang"
+                        description="Analisis performa setiap cabang"
+                      />
+                    </div>
                   </div>
-                  <div className={styles.sectionContent}>
-                    <div className={styles.activityList}>
+
+                  {/* Recent Activities */}
+                  <div className="space-y-4">
+                    <div>
+                      <h2 className="text-lg font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
+                        <Clock className="h-5 w-5 text-amber-500" />
+                        Aktivitas Terbaru
+                      </h2>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                        10 aktivitas terakhir sistem
+                      </p>
+                    </div>
+                    <div className="space-y-2 max-h-[400px] overflow-y-auto">
                       {stats?.recentActivities && stats.recentActivities.length > 0 ? (
                         stats.recentActivities.map((activity) => (
-                          <div key={activity.id} className={styles.activityItem}>
-                            <div className={styles.activityIcon}>
-                              {activity.action === 'LOGIN' && '🔓'}
-                              {activity.action === 'LOGOUT' && '🔒'}
-                              {activity.action === 'CREATE' && '➕'}
-                              {activity.action === 'UPDATE' && '✏️'}
-                              {activity.action === 'DELETE' && '🗑️'}
-                              {activity.action === 'VERIFY' && '✅'}
+                          <div 
+                            key={activity.id} 
+                            className="flex items-start gap-3 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700"
+                          >
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${getActivityColor(activity.action)}`}>
+                              {getActivityIcon(activity.action)}
                             </div>
-                            <div className={styles.activityContent}>
-                              <div className={styles.activityAction}>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-neutral-900 dark:text-white">
                                 {activity.action}
                               </div>
-                              <div className={styles.activityUser}>
+                              <div className="text-xs text-neutral-600 dark:text-neutral-400">
                                 {activity.userName} ({activity.userEmail})
                               </div>
                               {activity.branchName && (
-                                <div className={styles.activityBranch}>
-                                  📍 {activity.branchName}
+                                <div className="text-xs text-neutral-500 flex items-center gap-1 mt-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {activity.branchName}
                                 </div>
                               )}
                             </div>
-                            <div className={styles.activityTime}>
+                            <div className="text-xs text-neutral-500 whitespace-nowrap">
                               {formatDate(activity.createdAt)}
                             </div>
                           </div>
                         ))
                       ) : (
-                        <div className={styles.emptyState}>
+                        <div className="text-center py-8 text-neutral-500 dark:text-neutral-400 text-sm">
                           Belum ada aktivitas terbaru
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Quick Actions */}
-              <div className={styles.quickActions}>
-                <h2>⚡ Aksi Cepat</h2>
-                <div className={styles.quickActionsGrid}>
-                  <button
-                    onClick={() => router.push('/admin/master-products')}
-                    className={styles.quickActionBtn}
-                  >
-                    <span className={styles.quickActionIcon}>📦</span>
-                    <span>Tambah Produk</span>
-                  </button>
-
-                  <button
-                    onClick={() => router.push('/branches')}
-                    className={styles.quickActionBtn}
-                  >
-                    <span className={styles.quickActionIcon}>🏢</span>
-                    <span>Tambah Cabang</span>
-                  </button>
-
-                  <button
-                    onClick={() => router.push('/admin/users')}
-                    className={styles.quickActionBtn}
-                  >
-                    <span className={styles.quickActionIcon}>👤</span>
-                    <span>Tambah User</span>
-                  </button>
-
-                  <button
-                    onClick={() => router.push('/admin/audit-logs')}
-                    className={styles.quickActionBtn}
-                  >
-                    <span className={styles.quickActionIcon}>📜</span>
-                    <span>Lihat Audit Log</span>
-                  </button>
-
-                  <button
-                    onClick={loadSystemStats}
-                    className={styles.quickActionBtn}
-                  >
-                    <span className={styles.quickActionIcon}>🔄</span>
-                    <span>Refresh Data</span>
-                  </button>
+                {/* Quick Actions */}
+                <div className="bg-gradient-to-br from-violet-500/10 to-purple-500/5 dark:from-violet-500/20 dark:to-purple-500/10 rounded-2xl border border-violet-500/20 p-6">
+                  <h2 className="text-lg font-semibold text-neutral-900 dark:text-white mb-4 flex items-center gap-2">
+                    <RefreshCw className="h-5 w-5 text-violet-500" />
+                    Aksi Cepat
+                  </h2>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                    <QuickActionButton
+                      icon={<Package className="h-5 w-5" />}
+                      label="Tambah Produk"
+                      onClick={() => router.push('/admin/master-products')}
+                    />
+                    <QuickActionButton
+                      icon={<Building2 className="h-5 w-5" />}
+                      label="Tambah Cabang"
+                      onClick={() => router.push('/branches')}
+                    />
+                    <QuickActionButton
+                      icon={<UserPlus className="h-5 w-5" />}
+                      label="Tambah User"
+                      onClick={() => router.push('/admin/users')}
+                    />
+                    <QuickActionButton
+                      icon={<Eye className="h-5 w-5" />}
+                      label="Lihat Audit Log"
+                      onClick={() => router.push('/admin/audit-logs')}
+                    />
+                    <QuickActionButton
+                      icon={<RefreshCw className="h-5 w-5" />}
+                      label="Refresh Data"
+                      onClick={loadSystemStats}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {activeTab === 'admin-managers' && (
-            <AdminManagersTab />
-          )}
+            {activeTab === 'admin-managers' && (
+              <AdminManagersTab />
+            )}
 
-          {activeTab === 'master-products' && (
-            <div className={styles.tabPlaceholder}>
-              <h2>Master Products</h2>
-              <p>Redirecting to Master Products page...</p>
-              <button
-                onClick={() => router.push('/admin/master-products')}
-                className={styles.redirectBtn}
-              >
-                Go to Master Products
-              </button>
-            </div>
-          )}
+            {activeTab === 'master-products' && (
+              <div className="text-center py-12">
+                <Package className="h-16 w-16 text-neutral-300 dark:text-neutral-700 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+                  Master Products
+                </h2>
+                <p className="text-neutral-500 dark:text-neutral-400 mb-6">
+                  Redirecting to Master Products page...
+                </p>
+                <button
+                  onClick={() => router.push('/admin/master-products')}
+                  className="px-6 py-3 bg-violet-500 text-white rounded-xl font-medium hover:bg-violet-600 transition-colors inline-flex items-center gap-2"
+                >
+                  <Package className="h-5 w-5" />
+                  Go to Master Products
+                </button>
+              </div>
+            )}
 
-          {activeTab === 'audit-logs' && (
-            <div className={styles.tabPlaceholder}>
-              <h2>Audit Logs</h2>
-              <p>Redirecting to Audit Logs page...</p>
-              <button
-                onClick={() => router.push('/admin/audit-logs')}
-                className={styles.redirectBtn}
-              >
-                Go to Audit Logs
-              </button>
-            </div>
-          )}
+            {activeTab === 'audit-logs' && (
+              <div className="text-center py-12">
+                <FileText className="h-16 w-16 text-neutral-300 dark:text-neutral-700 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-2">
+                  Audit Logs
+                </h2>
+                <p className="text-neutral-500 dark:text-neutral-400 mb-6">
+                  Redirecting to Audit Logs page...
+                </p>
+                <button
+                  onClick={() => router.push('/admin/audit-logs')}
+                  className="px-6 py-3 bg-violet-500 text-white rounded-xl font-medium hover:bg-violet-600 transition-colors inline-flex items-center gap-2"
+                >
+                  <FileText className="h-5 w-5" />
+                  Go to Audit Logs
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Stat Card Component
+function StatCard({ 
+  icon, 
+  label, 
+  value, 
+  subtitle,
+  color 
+}: { 
+  icon: React.ReactNode; 
+  label: string; 
+  value: string | number;
+  subtitle?: string;
+  color: 'blue' | 'emerald' | 'amber' | 'purple' | 'pink' | 'cyan';
+}) {
+  const colors = {
+    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 text-blue-500',
+    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 text-emerald-500',
+    amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 text-amber-500',
+    purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 text-purple-500',
+    pink: 'from-pink-500/10 to-pink-500/5 border-pink-500/20 text-pink-500',
+    cyan: 'from-cyan-500/10 to-cyan-500/5 border-cyan-500/20 text-cyan-500',
+  };
+
+  const bgColors = {
+    blue: 'bg-blue-500/20',
+    emerald: 'bg-emerald-500/20',
+    amber: 'bg-amber-500/20',
+    purple: 'bg-purple-500/20',
+    pink: 'bg-pink-500/20',
+    cyan: 'bg-cyan-500/20',
+  };
+
+  return (
+    <div className={`bg-gradient-to-br ${colors[color]} rounded-2xl p-5 border`}>
+      <div className={`w-10 h-10 ${bgColors[color]} rounded-xl flex items-center justify-center mb-3`}>
+        {icon}
+      </div>
+      <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-white mb-1">
+        {value}
+      </div>
+      <div className="text-sm text-neutral-600 dark:text-neutral-400">{label}</div>
+      {subtitle && <div className="text-xs text-neutral-500 mt-1">{subtitle}</div>}
+    </div>
+  );
+}
+
+// Tab Button Component
+function TabButton({
+  icon,
+  label,
+  active,
+  onClick
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-3 rounded-xl font-medium transition-all ${
+        active
+          ? 'text-violet-500 bg-violet-50 dark:bg-violet-950/30'
+          : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800'
+      }`}
+    >
+      {icon}
+      <span className="text-sm">{label}</span>
+    </button>
+  );
+}
+
+// Action Link Component
+function ActionLink({
+  href,
+  icon,
+  title,
+  description
+}: {
+  href: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="flex items-center gap-3 p-3 bg-white dark:bg-neutral-900/50 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:border-violet-500 dark:hover:border-violet-500 transition-colors group"
+    >
+      <div className="text-neutral-600 dark:text-neutral-400 group-hover:text-violet-500 transition-colors">
+        {icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm font-semibold text-neutral-900 dark:text-white group-hover:text-violet-500 transition-colors">
+          {title}
+        </h3>
+        <p className="text-xs text-neutral-600 dark:text-neutral-400">{description}</p>
+      </div>
+      <ArrowRight className="h-4 w-4 text-neutral-400 group-hover:text-violet-500 transition-colors" />
+    </Link>
+  );
+}
+
+// Quick Action Button Component
+function QuickActionButton({
+  icon,
+  label,
+  onClick
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-2 p-4 bg-white dark:bg-neutral-800 rounded-xl hover:bg-neutral-50 dark:hover:bg-neutral-700 transition-colors group border border-neutral-200 dark:border-neutral-700"
+    >
+      <div className="w-10 h-10 bg-violet-500/10 dark:bg-violet-500/20 rounded-xl flex items-center justify-center text-violet-500 group-hover:bg-violet-500 group-hover:text-white transition-all">
+        {icon}
+      </div>
+      <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300 text-center">
+        {label}
+      </span>
+    </button>
   );
 }
