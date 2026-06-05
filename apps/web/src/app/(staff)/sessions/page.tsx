@@ -721,9 +721,17 @@ export default function SessionsPage() {
                     </span>
                   </div>
                   <div className={styles.metaItem}>
-                    <span className={styles.metaLabel}>Infus Ke</span>
-                    <span className={styles.metaValue}>#{sessionDetail.session.infusKe}</span>
+                    <span className={styles.metaLabel}>Sesi Global</span>
+                    <span className={styles.metaValue} style={{ fontWeight: '600', color: 'var(--color-primary)' }}>
+                      #{sessionDetail.session.infusKe}
+                    </span>
                   </div>
+                  {sessionDetail.session.branchInfusKe && sessionDetail.session.branchInfusKe !== sessionDetail.session.infusKe && (
+                    <div className={styles.metaItem}>
+                      <span className={styles.metaLabel}>Sesi Cabang</span>
+                      <span className={styles.metaValue}>#{sessionDetail.session.branchInfusKe}</span>
+                    </div>
+                  )}
                   <div className={styles.metaItem}>
                     <span className={styles.metaLabel}>Tipe</span>
                     <span className={styles.metaValue}>

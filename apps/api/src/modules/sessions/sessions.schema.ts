@@ -31,12 +31,25 @@ export const createSessionSchema = z.object({
   additionalNurseIds: z.array(z.string().cuid()).optional().default([]), // Additional nurses
   treatmentDate: z.string().datetime(),
   pelaksanaan: z.nativeEnum(SessionType),
+  // Manual session numbering (optional - if not provided, auto-calculate)
+  manualInfusKe: z.number().int().positive().optional(), // Global session number
+  manualBranchInfusKe: z.number().int().positive().optional(), // Branch-specific session number
+  useManualNumbering: z.boolean().optional().default(false),
 }).refine(
   (data) => {
     // At least doctorId or nurseId must be provided (the other will be auto-filled)
     return data.doctorId || data.nurseId;
   },
   { message: 'Minimal doctorId atau nurseId harus diisi' }
+).refine(
+  (data) => {
+    // If manual numbering is enabled, both manualInfusKe and manualBranchInfusKe must be provided
+    if (data.useManualNumbering && (!data.manualInfusKe || !data.manualBranchInfusKe)) {
+      return false;
+    }
+    return true;
+  },
+  { message: 'Nomor sesi global dan cabang harus diisi jika mode manual diaktifkan' }
 );
 
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;

@@ -52,8 +52,29 @@ export class SessionCreationService {
       throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
     }
 
-    // 11. Calculate infusKe (global and branch-specific)
-    const { globalInfusKe, branchInfusKe } = await this.calculateInfusKe(sessionData.memberId, branchId);
+    // 11. Calculate infusKe (global and branch-specific) - either manual or automatic
+    let globalInfusKe: number;
+    let branchInfusKe: number;
+    
+    if (sessionData.useManualNumbering && sessionData.manualInfusKe && sessionData.manualBranchInfusKe) {
+      // MANUAL MODE: Use user-provided infusKe for both global and branch
+      globalInfusKe = sessionData.manualInfusKe;
+      branchInfusKe = sessionData.manualBranchInfusKe;
+      console.log(
+        `✍️ [SESSION-NUMBER] Manual mode - User set Global: ${globalInfusKe}, Branch: ${branchInfusKe}`
+      );
+      
+      // Validate that this global infusKe is not already used for this member
+      await this.validateManualInfusKe(sessionData.memberId, globalInfusKe);
+    } else {
+      // AUTOMATIC MODE: Calculate based on existing sessions
+      const calculated = await this.calculateInfusKe(sessionData.memberId, branchId);
+      globalInfusKe = calculated.globalInfusKe;
+      branchInfusKe = calculated.branchInfusKe;
+      console.log(
+        `🤖 [SESSION-NUMBER] Auto mode - Calculated infusKe - Global: ${globalInfusKe}, Branch: ${branchInfusKe}`
+      );
+    }
 
     // 12. Create session in transaction
     const result = await this.createSessionTransaction(
@@ -439,6 +460,30 @@ export class SessionCreationService {
     console.log(`✅ [INFUS SET] Stock available: ${currentStock} ${infusSetProduct.unit || 'piece'} of "${infusSetProduct.name}"`);
     
     return { infusSetProduct, inventoryItem };
+  }
+
+  /**
+   * Validate manual infusKe - ensure it's not already used
+   */
+  private async validateManualInfusKe(memberId: string, infusKe: number) {
+    const existingSession = await prisma.treatmentSession.findFirst({
+      where: {
+        encounter: { memberId },
+        infusKe: infusKe,
+      },
+      select: {
+        sessionCode: true,
+        treatmentDate: true,
+      },
+    });
+
+    if (existingSession) {
+      throw {
+        status: 422,
+        code: 'INFUS_KE_ALREADY_USED',
+        message: `Nomor sesi ${infusKe} sudah digunakan untuk sesi ${existingSession.sessionCode} pada ${new Date(existingSession.treatmentDate).toLocaleDateString('id-ID')}. Silakan pilih nomor lain.`,
+      };
+    }
   }
 
   /**

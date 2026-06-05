@@ -162,7 +162,13 @@ export default function SessionDetailPage() {
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
               {sessionInfo.member.fullName} ({sessionInfo.member.memberNo}) • 
-              Infus ke-{sessionInfo.infusKe} • 
+              <span className="font-semibold" style={{ color: 'var(--color-primary)' }}>
+                Sesi Global #{sessionInfo.infusKe}
+              </span>
+              {sessionInfo.branchInfusKe && sessionInfo.branchInfusKe !== sessionInfo.infusKe && (
+                <> • Sesi Cabang #{sessionInfo.branchInfusKe}</>
+              )}
+              {' • '}
               {new Date(sessionInfo.treatmentDate).toLocaleDateString('id-ID', {
                 day: '2-digit',
                 month: 'long',

@@ -33,6 +33,10 @@ export interface CreateSessionInput {
   additionalNurseIds?: string[];
   treatmentDate: string;
   pelaksanaan: SessionType;
+  // Manual session numbering (optional)
+  useManualNumbering?: boolean;
+  manualInfusKe?: number; // Global session number
+  manualBranchInfusKe?: number; // Branch-specific session number
 }
 
 export interface CreateSessionResponse {

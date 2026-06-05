@@ -63,6 +63,13 @@ export default function CreateSessionModal({
   const [pelaksanaan, setPelaksanaan] = useState<SessionType>('ON_SITE');
   const [activeTab, setActiveTab] = useState<'form' | 'therapyPlan'>('form');
 
+  // Manual session numbering
+  const [useManualNumbering, setUseManualNumbering] = useState(false);
+  const [manualInfusKe, setManualInfusKe] = useState<number | ''>(''); // Global
+  const [manualBranchInfusKe, setManualBranchInfusKe] = useState<number | ''>(''); // Branch
+  const [calculatedGlobalInfusKe, setCalculatedGlobalInfusKe] = useState<number | null>(null);
+  const [calculatedBranchInfusKe, setCalculatedBranchInfusKe] = useState<number | null>(null);
+
   // Infus Set stock validation
   const [infusSetStock, setInfusSetStock] = useState<number | null>(null);
   const [loadingInfusSetStock, setLoadingInfusSetStock] = useState(false);
@@ -87,6 +94,7 @@ export default function CreateSessionModal({
       loadMemberData(memberId);
       loadTherapyPlans(memberId);
       loadDiagnoses(memberId);
+      loadSuggestedSessionNumbers(memberId);
     }
   }, [memberId]);
 
@@ -340,6 +348,32 @@ export default function CreateSessionModal({
     }
   };
 
+  const loadSuggestedSessionNumbers = async (id: string) => {
+    try {
+      // Load member's existing sessions to calculate suggested next numbers
+      const sessions = await sessionApi.getMemberSessions(id);
+      if (sessions && sessions.length > 0) {
+        // Find the highest infusKe for global
+        const maxGlobal = Math.max(...sessions.map((s: any) => s.infusKe || 0));
+        setCalculatedGlobalInfusKe(maxGlobal + 1);
+
+        // Find the highest infusKe for current branch
+        const branchSessions = sessions.filter((s: any) => s.branch?.id === user?.branchId);
+        const maxBranch = branchSessions.length > 0 
+          ? Math.max(...branchSessions.map((s: any) => s.infusKe || 0))
+          : 0;
+        setCalculatedBranchInfusKe(maxBranch + 1);
+      } else {
+        setCalculatedGlobalInfusKe(1);
+        setCalculatedBranchInfusKe(1);
+      }
+    } catch (err: any) {
+      devError('Failed to load suggested session numbers:', err);
+      setCalculatedGlobalInfusKe(1);
+      setCalculatedBranchInfusKe(1);
+    }
+  };
+
   const loadStaff = async () => {
     try {
       const userRole = user?.role;
@@ -427,6 +461,18 @@ export default function CreateSessionModal({
 
     if (!treatmentDate) { setError('Tanggal & waktu terapi harus diisi'); return; }
 
+    // Validate manual numbering if enabled
+    if (useManualNumbering) {
+      if (!manualInfusKe || manualInfusKe < 1) {
+        setError('Nomor sesi global harus diisi dan lebih besar dari 0');
+        return;
+      }
+      if (!manualBranchInfusKe || manualBranchInfusKe < 1) {
+        setError('Nomor sesi cabang harus diisi dan lebih besar dari 0');
+        return;
+      }
+    }
+
     const selectedPkg = packages.find(p => p.packageId === selectedPackageId);
     if (!selectedPkg || selectedPkg.remainingSessions <= 0) {
       setError('Paket yang dipilih tidak memiliki sesi tersisa'); return;
@@ -448,6 +494,9 @@ export default function CreateSessionModal({
         therapyPlanId: selectedTherapyPlanId,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
+        useManualNumbering,
+        manualInfusKe: useManualNumbering && manualInfusKe ? Number(manualInfusKe) : undefined,
+        manualBranchInfusKe: useManualNumbering && manualBranchInfusKe ? Number(manualBranchInfusKe) : undefined,
       };
 
       let data: CreateSessionInput;
@@ -493,6 +542,11 @@ export default function CreateSessionModal({
       setSelectedDoctorId('');
       setSelectedNurseId('');
       setSelectedAdminLayananId('');
+      setUseManualNumbering(false);
+      setManualInfusKe('');
+      setManualBranchInfusKe('');
+      setCalculatedGlobalInfusKe(null);
+      setCalculatedBranchInfusKe(null);
       onClose();
     }
   };
@@ -971,9 +1025,109 @@ export default function CreateSessionModal({
                         className="w-4 h-4 text-amber-600 border-neutral-300 focus:ring-amber-500"
                         disabled={loading}
                       />
-                      <span className="text-sm text-neutral-700 dark:text-neutral-300">Home Care</span>
+                      <span className="text-sm text-neutral-700 dark:text-neutral-300">Home Visit</span>
                     </label>
                   </div>
+                </div>
+
+                {/* Manual Session Numbering */}
+                <div className="space-y-3 p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      Nomor Sesi Terapi
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={useManualNumbering}
+                        onChange={(e) => {
+                          setUseManualNumbering(e.target.checked);
+                          if (!e.target.checked) {
+                            setManualInfusKe('');
+                            setManualBranchInfusKe('');
+                          }
+                        }}
+                        className="w-4 h-4 text-amber-600 border-neutral-300 rounded focus:ring-amber-500"
+                        disabled={loading}
+                      />
+                      <span className="text-xs text-neutral-600 dark:text-neutral-400">Input Manual</span>
+                    </label>
+                  </div>
+
+                  {!useManualNumbering && calculatedGlobalInfusKe !== null && (
+                    <div className="flex items-center gap-3 p-3 rounded-lg bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-600">
+                      <Info className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                      <div className="text-sm">
+                        <p className="font-medium text-neutral-900 dark:text-white">
+                          Sesi berikutnya (otomatis): <span className="text-amber-600 dark:text-amber-400">#{calculatedGlobalInfusKe}</span>
+                        </p>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                          Sesi ke-{calculatedBranchInfusKe} di cabang ini
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {useManualNumbering && (
+                    <div className="space-y-3">
+                      {/* Global Session Number */}
+                      <div>
+                        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1 block">
+                          Nomor Sesi Global <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={manualInfusKe}
+                          onChange={(e) => setManualInfusKe(e.target.value ? parseInt(e.target.value) : '')}
+                          placeholder={calculatedGlobalInfusKe ? `Saran: ${calculatedGlobalInfusKe}` : "Masukkan nomor sesi global"}
+                          className="w-full px-4 py-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+                          disabled={loading}
+                          required={useManualNumbering}
+                        />
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                          Total sesi member di semua cabang
+                        </p>
+                        {calculatedGlobalInfusKe && calculatedGlobalInfusKe !== manualInfusKe && (
+                          <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mt-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              Saran otomatis: <strong>#{calculatedGlobalInfusKe}</strong>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Branch Session Number */}
+                      <div>
+                        <label className="text-xs font-medium text-neutral-600 dark:text-neutral-400 mb-1 block">
+                          Nomor Sesi di Cabang Ini <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={manualBranchInfusKe}
+                          onChange={(e) => setManualBranchInfusKe(e.target.value ? parseInt(e.target.value) : '')}
+                          placeholder={calculatedBranchInfusKe ? `Saran: ${calculatedBranchInfusKe}` : "Masukkan nomor sesi cabang"}
+                          className="w-full px-4 py-2.5 text-sm rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+                          disabled={loading}
+                          required={useManualNumbering}
+                        />
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-1">
+                          Sesi member khusus di cabang saat ini
+                        </p>
+                        {calculatedBranchInfusKe && calculatedBranchInfusKe !== manualBranchInfusKe && (
+                          <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 mt-2">
+                            <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              Saran otomatis: <strong>#{calculatedBranchInfusKe}</strong>
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </form>
             ) : (
