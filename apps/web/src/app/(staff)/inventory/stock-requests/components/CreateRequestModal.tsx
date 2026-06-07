@@ -51,6 +51,13 @@ export default function CreateRequestModal({
     return () => setMounted(false);
   }, []);
 
+  // Reset form when modal is opened
+  useEffect(() => {
+    if (isOpen) {
+      resetForm();
+    }
+  }, [isOpen]);
+
   // Fetch pending shipments and requests when modal opens
   useEffect(() => {
     const fetchPendingInfo = async () => {
