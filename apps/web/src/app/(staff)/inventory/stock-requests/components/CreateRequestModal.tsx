@@ -210,9 +210,22 @@ export default function CreateRequestModal({
     setRequestItems(prev => prev.map(item => {
       if (item.masterProductId === masterProductId) {
         if (field === 'requestedQty') {
-          return { ...item, [field]: Math.max(1, Number(value)) };
+          // Allow empty string or any number during typing
+          const numValue = value === '' ? '' : Number(value);
+          return { ...item, [field]: numValue };
         }
         return { ...item, [field]: value };
+      }
+      return item;
+    }));
+  };
+
+  const validateRequestItemQty = (masterProductId: string) => {
+    setRequestItems(prev => prev.map(item => {
+      if (item.masterProductId === masterProductId) {
+        // Ensure minimum value of 1 when user leaves the input
+        const qty = item.requestedQty === '' || item.requestedQty < 1 ? 1 : item.requestedQty;
+        return { ...item, requestedQty: qty };
       }
       return item;
     }));
@@ -542,6 +555,7 @@ export default function CreateRequestModal({
                               min="1"
                               value={item.requestedQty}
                               onChange={(e) => updateRequestItem(item.masterProductId, 'requestedQty', e.target.value)}
+                              onBlur={() => validateRequestItemQty(item.masterProductId)}
                               className="w-24 px-3 py-1.5 text-sm font-medium rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
                             />
                             <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{item.unit}</span>
