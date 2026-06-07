@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { InventoryExportService } from './services/inventory-export.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
-import { BranchType } from '@prisma/client';
+import { BranchType, StockMutationType } from '@prisma/client';
 
 const inventoryService = new InventoryService();
 const exportService = new InventoryExportService(prisma);
@@ -452,6 +452,63 @@ export class InventoryController {
 
       const result = await inventoryService.batchCreateInventoryItems(items, targetBranchId, userId);
       return sendSuccess(res, result, 201);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get stock mutations with filters
+   * GET /api/v1/inventory/stock-mutations
+   */
+  async getStockMutations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { 
+        inventoryItemId, 
+        type, 
+        startDate, 
+        endDate,
+        branchId,
+        page, 
+        limit 
+      } = req.query;
+
+      const result = await inventoryService.getStockMutations({
+        inventoryItemId: inventoryItemId as string,
+        type: type as StockMutationType,
+        startDate: startDate as string,
+        endDate: endDate as string,
+        branchId: branchId as string,
+        page: page ? parseInt(page as string) : undefined,
+        limit: limit ? parseInt(limit as string) : undefined,
+      });
+
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Export stock mutations to Excel
+   * GET /api/v1/inventory/stock-mutations/export
+   */
+  async exportStockMutations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const filters = req.query;
+      const workbook = await inventoryService.exportStockMutations(filters);
+
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=stock-mutations-${Date.now()}.xlsx`
+      );
+
+      await workbook.xlsx.write(res);
+      res.end();
     } catch (err: any) {
       next(err);
     }

@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2,
-  UserCog, Truck, BarChart3,
+  UserCog, Truck, BarChart3, History,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -75,6 +75,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/inventory',
         icon: <Boxes size={20} />,
         roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+      },
+      {
+        label: 'Mutasi Stok',
+        href: '/inventory/stock-mutations',
+        icon: <History size={20} />,
+        roles: ALL_STAFF,
       },
       {
         label: 'Request Stok',

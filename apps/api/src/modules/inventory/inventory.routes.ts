@@ -143,6 +143,26 @@ router.get(
 );
 
 // ============================================================
+// STOCK MUTATIONS
+// ============================================================
+
+// Get stock mutations with filters
+router.get(
+  '/stock-mutations',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getStockMutations.bind(inventoryController)
+);
+
+// Export stock mutations to Excel
+router.get(
+  '/stock-mutations/export',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.exportStockMutations.bind(inventoryController)
+);
+
+// ============================================================
 // STOCK REQUESTS
 // ============================================================
 

@@ -464,4 +464,37 @@ export const inventoryApi = {
   getAvailableOverstock: (branchId: string, masterProductId: string) => {
     return api.get(`/inventory/overstock/available/${branchId}/${masterProductId}`);
   },
+
+  // ============================================================
+  // STOCK MUTATIONS
+  // ============================================================
+
+  /**
+   * Get stock mutations with filters
+   */
+  getStockMutations: (filters: {
+    inventoryItemId?: string;
+    type?: string;
+    startDate?: string;
+    endDate?: string;
+    branchId?: string;
+    page?: number;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams();
+    Object.keys(filters).forEach(key => {
+      if (filters[key as keyof typeof filters]) {
+        params.append(key, String(filters[key as keyof typeof filters]));
+      }
+    });
+    
+    return api.get(`/inventory/stock-mutations?${params}`);
+  },
+
+  /**
+   * Get inventory item by ID
+   */
+  getItem: (itemId: string) => {
+    return api.get(`/inventory/items/${itemId}`);
+  },
 };
