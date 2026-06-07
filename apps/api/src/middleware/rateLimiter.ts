@@ -3,17 +3,19 @@ import { Request } from 'express';
 
 /**
  * Rate limiter for login endpoint
- * Limits: 10000 attempts per 15 minutes per IP address
+ * Limits: 5 attempts per 15 minutes per IP address
  * 
  * This prevents brute force attacks on the login endpoint
  */
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10000, // Limit each IP to 10000 requests per windowMs
+  max: 5, // Limit each IP to 5 login attempts per 15 minutes
   message: {
     success: false,
-    code: 'RATE_LIMIT_EXCEEDED',
-    message: 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.',
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Terlalu banyak percobaan login. Silakan coba lagi setelah 15 menit.',
+    },
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
@@ -48,8 +50,10 @@ export const apiRateLimiter = rateLimit({
   max: 10000, // Limit each IP to 10000 requests per windowMs
   message: {
     success: false,
-    code: 'RATE_LIMIT_EXCEEDED',
-    message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
+    error: {
+      code: 'RATE_LIMIT_EXCEEDED',
+      message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
+    },
   },
   standardHeaders: true,
   legacyHeaders: false,

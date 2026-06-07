@@ -14,12 +14,19 @@ interface Step3VitalBeforeProps {
   onNext?: () => void; // Optional callback to navigate to next step
 }
 
-const VITAL_FIELDS: Array<{ type: VitalType; label: string; unit: string; placeholder: string }> = [
-  { type: 'SISTOL', label: 'Sistol', unit: 'mmHg', placeholder: '120' },
-  { type: 'DIASTOL', label: 'Diastol', unit: 'mmHg', placeholder: '80' },
-  { type: 'HR', label: 'Heart Rate', unit: 'bpm', placeholder: '75' },
-  { type: 'SATURASI', label: 'Saturasi O2', unit: '%', placeholder: '98' },
-  { type: 'PI', label: 'Perfusion Index', unit: '%', placeholder: '5' },
+const VITAL_FIELDS: Array<{
+  type: VitalType;
+  label: string;
+  unit: string;
+  placeholder: string;
+  min: number;
+  max: number;
+}> = [
+  { type: 'SISTOL', label: 'Sistol', unit: 'mmHg', placeholder: '120', min: 80, max: 200 },
+  { type: 'DIASTOL', label: 'Diastol', unit: 'mmHg', placeholder: '80', min: 40, max: 130 },
+  { type: 'HR', label: 'Heart Rate', unit: 'bpm', placeholder: '75', min: 40, max: 150 },
+  { type: 'SATURASI', label: 'Saturasi O2', unit: '%', placeholder: '98', min: 70, max: 100 },
+  { type: 'PI', label: 'Perfusion Index', unit: '%', placeholder: '5', min: 0.1, max: 20 },
 ];
 
 export default function Step3VitalBefore({
@@ -50,6 +57,13 @@ export default function Step3VitalBefore({
     HR: false,
     SATURASI: false,
     PI: false,
+  });
+  const [errors, setErrors] = useState<Record<VitalType, string>>({
+    SISTOL: '',
+    DIASTOL: '',
+    HR: '',
+    SATURASI: '',
+    PI: '',
   });
   const [savingAll, setSavingAll] = useState(false);
 
@@ -85,9 +99,24 @@ export default function Step3VitalBefore({
       const value = values[field.type];
       if (!value || value === '') return false;
       const numValue = Number(value);
-      return !isNaN(numValue) && numValue > 0;
+      if (isNaN(numValue) || numValue <= 0) return false;
+      // Check range
+      if (numValue < field.min || numValue > field.max) return false;
+      return true;
     });
   }, [values]);
+
+  // Validate a single field's range
+  const validateField = (field: typeof VITAL_FIELDS[0], value: string): string => {
+    if (!value || value === '') return '';
+    const numValue = Number(value);
+    if (isNaN(numValue)) return 'Harus berupa angka';
+    if (numValue <= 0) return 'Harus lebih besar dari 0';
+    if (numValue < field.min || numValue > field.max) {
+      return `Harus antara ${field.min}-${field.max} ${field.unit}`;
+    }
+    return '';
+  };
 
   // Check if all fields are saved to database
   const allFieldsSaved = VITAL_FIELDS.every((field) => saved[field.type]);
@@ -99,13 +128,24 @@ export default function Step3VitalBefore({
     const numValue = Number(value);
     if (isNaN(numValue) || numValue <= 0) return;
 
+    // Validate range
+    const field = VITAL_FIELDS.find((f) => f.type === type);
+    if (field) {
+      const error = validateField(field, value);
+      if (error) {
+        setErrors((prev) => ({ ...prev, [type]: error }));
+        return;
+      }
+      // Clear error if validation passes
+      setErrors((prev) => ({ ...prev, [type]: '' }));
+    }
+
     // Skip if already saved with same value
     if (saved[type]) return;
 
     setSaving((prev) => ({ ...prev, [type]: true }));
 
     try {
-      const field = VITAL_FIELDS.find((f) => f.type === type);
       await sessionApi.upsertVitalSign(sessionId, {
         pencatatan: type,
         waktuCatat: 'SEBELUM',
@@ -115,8 +155,12 @@ export default function Step3VitalBefore({
       });
 
       setSaved((prev) => ({ ...prev, [type]: true }));
+      setErrors((prev) => ({ ...prev, [type]: '' }));
     } catch (err: any) {
       devError('Failed to save vital sign:', err);
+      // Show backend error message
+      const errorMessage = err?.response?.data?.error?.message || 'Gagal menyimpan';
+      setErrors((prev) => ({ ...prev, [type]: errorMessage }));
     } finally {
       setSaving((prev) => ({ ...prev, [type]: false }));
     }
@@ -125,6 +169,15 @@ export default function Step3VitalBefore({
   const handleChange = (type: VitalType, value: string) => {
     setValues((prev) => ({ ...prev, [type]: value }));
     setSaved((prev) => ({ ...prev, [type]: false }));
+    
+    // Real-time validation
+    const field = VITAL_FIELDS.find((f) => f.type === type);
+    if (field && value) {
+      const error = validateField(field, value);
+      setErrors((prev) => ({ ...prev, [type]: error }));
+    } else {
+      setErrors((prev) => ({ ...prev, [type]: '' }));
+    }
   };
 
   // Save all unsaved fields at once
@@ -142,6 +195,13 @@ export default function Step3VitalBefore({
         const numValue = Number(value);
         if (isNaN(numValue) || numValue <= 0) continue;
 
+        // Validate range before saving
+        const error = validateField(field, value);
+        if (error) {
+          setErrors((prev) => ({ ...prev, [field.type]: error }));
+          continue; // Skip this field
+        }
+
         await sessionApi.upsertVitalSign(sessionId, {
           pencatatan: field.type,
           waktuCatat: 'SEBELUM',
@@ -151,12 +211,20 @@ export default function Step3VitalBefore({
         });
 
         setSaved((prev) => ({ ...prev, [field.type]: true }));
+        setErrors((prev) => ({ ...prev, [field.type]: '' }));
       }
 
       // Call onComplete after all saved
       onComplete();
     } catch (err: any) {
       devError('Failed to save vital signs:', err);
+      // Show general error if any field fails
+      const errorMessage = err?.response?.data?.error?.message || 'Gagal menyimpan beberapa data';
+      // Set error for the first unsaved field
+      const firstUnsaved = VITAL_FIELDS.find((f) => !saved[f.type]);
+      if (firstUnsaved) {
+        setErrors((prev) => ({ ...prev, [firstUnsaved.type]: errorMessage }));
+      }
     } finally {
       setSavingAll(false);
     }
@@ -272,6 +340,9 @@ export default function Step3VitalBefore({
               <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '4px' }}>
                 ({field.unit})
               </span>
+              <span style={{ color: '#64748b', fontSize: '11px', marginLeft: '6px', fontWeight: 'normal' }}>
+                [{field.min}-{field.max}]
+              </span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
@@ -285,6 +356,7 @@ export default function Step3VitalBefore({
                 style={{
                   width: '100%',
                   paddingRight: '40px',
+                  borderColor: errors[field.type] ? '#ef4444' : undefined,
                 }}
               />
               <div style={{
@@ -296,7 +368,7 @@ export default function Step3VitalBefore({
                 {saving[field.type] && (
                   <div className="spinner" style={{ width: '16px', height: '16px' }} />
                 )}
-                {!saving[field.type] && saved[field.type] && (
+                {!saving[field.type] && saved[field.type] && !errors[field.type] && (
                   <svg style={{ width: '20px', height: '20px', color: '#22c55e' }} fill="currentColor" viewBox="0 0 20 20">
                     <path
                       fillRule="evenodd"
@@ -305,8 +377,36 @@ export default function Step3VitalBefore({
                     />
                   </svg>
                 )}
+                {!saving[field.type] && errors[field.type] && (
+                  <svg style={{ width: '20px', height: '20px', color: '#ef4444' }} fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fillRule="evenodd"
+                      d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                )}
               </div>
             </div>
+            {errors[field.type] && (
+              <p style={{
+                marginTop: '6px',
+                fontSize: '12px',
+                color: '#ef4444',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}>
+                <svg style={{ width: '14px', height: '14px', flexShrink: 0 }} fill="currentColor" viewBox="0 0 20 20">
+                  <path
+                    fillRule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+                {errors[field.type]}
+              </p>
+            )}
           </div>
         ))}
       </div>

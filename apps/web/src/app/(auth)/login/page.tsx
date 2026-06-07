@@ -72,10 +72,15 @@ export default function LoginPage() {
       // Redirect based on role
       router.push(getDefaultRoute(result.user.role));
       router.refresh();
-    } catch (err) {
+    } catch (err: any) {
       const code = getApiErrorCode(err);
-      if (code === 'AUTH_RATE_LIMIT_EXCEEDED') {
-        setServerError('Terlalu banyak percobaan login. Tunggu 1 menit.');
+      if (code === 'RATE_LIMIT_EXCEEDED') {
+        // Get retry-after time from response headers
+        const retryAfter = err.response?.headers['retry-after'];
+        const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : 900; // Default 15 minutes
+        const retryMinutes = Math.ceil(retrySeconds / 60);
+        
+        setServerError(`Terlalu banyak percobaan login. Silakan coba lagi dalam ${retryMinutes} menit.`);
       } else {
         setServerError(getApiErrorMessage(err));
       }
