@@ -231,7 +231,7 @@ export class SessionCreationService {
     }
 
     const remainingSessions = memberPackage.totalSessions - memberPackage.usedSessions;
-    if (remainingSessions <= 0) {
+    if (remainingSessions < 1) {
       throw {
         status: 422,
         code: 'PACKAGE_SESSIONS_EXHAUSTED',
@@ -628,10 +628,21 @@ export class SessionCreationService {
       });
 
       // Update member package used sessions
-      await tx.memberPackage.update({
+      const updatedPackage = await tx.memberPackage.update({
         where: { id: data.memberPackageId },
         data: { usedSessions: { increment: 1 } },
       });
+
+      // Check if all sessions are used - auto expire package
+      if (updatedPackage.usedSessions >= updatedPackage.totalSessions) {
+        await tx.memberPackage.update({
+          where: { id: data.memberPackageId },
+          data: { 
+            status: 'EXPIRED',
+            expiredAt: new Date(),
+          },
+        });
+      }
 
       // Update member voucher count
       await tx.member.update({
@@ -641,10 +652,21 @@ export class SessionCreationService {
 
       // Update booster package if provided
       if (data.boosterPackageId) {
-        await tx.memberPackage.update({
+        const updatedBooster = await tx.memberPackage.update({
           where: { id: data.boosterPackageId },
           data: { usedSessions: { increment: 1 } },
         });
+
+        // Check if all booster sessions are used - auto expire booster package
+        if (updatedBooster.usedSessions >= updatedBooster.totalSessions) {
+          await tx.memberPackage.update({
+            where: { id: data.boosterPackageId },
+            data: { 
+              status: 'EXPIRED',
+              expiredAt: new Date(),
+            },
+          });
+        }
       }
 
       return { session, encounter };
