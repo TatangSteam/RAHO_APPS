@@ -288,7 +288,10 @@ export default function AccountSection({ formData, onChange, referralError, onRe
                 }}
                 onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(59, 130, 246, 0.1)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-                onClick={() => handleReferralSelect('', '')}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleReferralSelect('', '');
+                }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-secondary)' }}>-</span>
@@ -327,7 +330,10 @@ export default function AccountSection({ formData, onChange, referralError, onRe
                         e.currentTarget.style.background = 'transparent';
                       }
                     }}
-                    onClick={() => handleReferralSelect(ref.id, ref.code)}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      handleReferralSelect(ref.id, ref.code);
+                    }}
                   >
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <span style={{ fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>{ref.code}</span>
