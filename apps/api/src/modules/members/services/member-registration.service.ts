@@ -48,19 +48,6 @@ export class MemberRegistrationService {
     branchId: string,
     userId: string
   ) {
-    // Check if phone number already exists
-    const existingPhone = await prisma.userProfile.findFirst({
-      where: { phone: data.phone },
-    });
-
-    if (existingPhone) {
-      throw {
-        status: 409,
-        code: 'PHONE_EXISTS',
-        message: 'Nomor telepon sudah terdaftar',
-      };
-    }
-
     // Check if email already exists (if provided)
     if (data.memberEmail) {
       const existingEmail = await prisma.user.findUnique({
