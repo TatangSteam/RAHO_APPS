@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
-import { Key } from 'lucide-react';
+import { Key, Upload } from 'lucide-react';
 import { devError } from '@/lib/logger';
 
 interface MemberHeaderProps {
@@ -12,10 +12,23 @@ interface MemberHeaderProps {
   onSendNotification: () => void;
   onEdit: () => void;
   onManageCredentials?: () => void;
+  onUploadDocuments?: () => void;
   isSuperAdmin: boolean;
+  canUploadDocuments?: boolean;
+  hasDocuments?: boolean; // Indicates if member has any documents (PSP or Photo)
 }
 
-export default function MemberHeader({ member, onBack, onSendNotification, onEdit, onManageCredentials, isSuperAdmin }: MemberHeaderProps) {
+export default function MemberHeader({ 
+  member, 
+  onBack, 
+  onSendNotification, 
+  onEdit, 
+  onManageCredentials, 
+  onUploadDocuments,
+  isSuperAdmin,
+  canUploadDocuments = false,
+  hasDocuments = false
+}: MemberHeaderProps) {
   // Get profile photo from documents
   const profilePhoto = member.documents?.find(doc => doc.documentType === 'FOTO_PROFIL');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
@@ -121,6 +134,23 @@ export default function MemberHeader({ member, onBack, onSendNotification, onEdi
           <button onClick={onSendNotification} className="btn btn-secondary">
             📧 Kirim Notifikasi
           </button>
+          {canUploadDocuments && onUploadDocuments && (
+            <button 
+              onClick={onUploadDocuments} 
+              className="btn btn-secondary"
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '6px',
+                background: 'linear-gradient(135deg, #10b98120, #06b6d420)',
+                borderColor: '#10b98150',
+                color: '#10b981'
+              }}
+            >
+              <Upload size={16} />
+              {hasDocuments ? 'Ganti Dokumen' : 'Upload Dokumen'}
+            </button>
+          )}
           {isSuperAdmin && onManageCredentials && (
             <button 
               onClick={onManageCredentials} 

@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { Role } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
+import { logAudit } from '../../utils/auditLog';
 import { MemberRetrievalService, type MemberFilters } from './services/member-retrieval.service';
 import { MemberRegistrationService } from './services/member-registration.service';
 import { MemberUpdateService } from './services/member-update.service';
@@ -232,6 +234,106 @@ export class MembersService {
    */
   async resetMemberPassword(memberId: string, newPassword: string, adminUserId: string) {
     return await this.updateService.resetMemberPassword(memberId, newPassword, adminUserId);
+  }
+
+  // ============================================================
+  // DOCUMENT UPLOAD (After Registration)
+  // ============================================================
+
+  /**
+   * Upload member document (PSP or Profile Photo) after registration
+   */
+  async uploadMemberDocument(
+    memberId: string,
+    file: Express.Multer.File,
+    documentType: string,
+    userId: string
+  ) {
+    const { uploadFile } = await import('../../config/minio');
+    const { processFile } = await import('../../utils/imageProcessor');
+    const { DocumentType } = await import('@prisma/client');
+
+    try {
+      // Check if member exists
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+      });
+
+      if (!member) {
+        throw {
+          status: 404,
+          code: 'MEMBER_NOT_FOUND',
+          message: 'Member tidak ditemukan',
+        };
+      }
+
+      // Process file based on type
+      const processType = documentType === 'FOTO_PROFIL' ? 'profilePhoto' : 'document';
+      const processed = await processFile(file.buffer, file.mimetype, processType);
+      
+      const fileExt = processed.mimeType === 'image/jpeg' ? 'jpg' : 
+                      processed.mimeType === 'image/webp' ? 'webp' :
+                      processed.mimeType === 'application/pdf' ? 'pdf' :
+                      file.mimetype.split('/')[1];
+      
+      const prefix = documentType === 'FOTO_PROFIL' ? 'profile' : 'psp';
+      const fileKey = `uploads/members/${memberId}/documents/${prefix}-${Date.now()}.${fileExt}`;
+      
+      const uploadResult = await uploadFile(processed.buffer, fileKey, processed.mimeType);
+
+      // Check if document already exists (for replacement)
+      const existingDoc = await prisma.memberDocument.findFirst({
+        where: {
+          memberId,
+          documentType: documentType as any,
+        },
+      });
+
+      if (existingDoc) {
+        // Update existing document
+        await prisma.memberDocument.update({
+          where: { id: existingDoc.id },
+          data: {
+            fileUrl: uploadResult.url,
+            fileName: file.originalname,
+            fileSize: processed.buffer.length,
+            mimeType: processed.mimeType,
+            uploadedBy: userId,
+          },
+        });
+      } else {
+        // Create new document
+        await prisma.memberDocument.create({
+          data: {
+            memberId,
+            documentType: documentType as any,
+            fileUrl: uploadResult.url,
+            fileName: file.originalname,
+            fileSize: processed.buffer.length,
+            mimeType: processed.mimeType,
+            uploadedBy: userId,
+          },
+        });
+      }
+
+      // Audit log
+      await logAudit({
+        userId,
+        branchId: null,
+        action: 'UPDATE',
+        resource: 'MemberDocument',
+        resourceId: memberId,
+        meta: { documentType },
+      });
+
+      return {
+        message: 'Document uploaded successfully',
+        fileUrl: uploadResult.url,
+      };
+    } catch (error) {
+      console.error('Failed to upload member document:', error);
+      throw error;
+    }
   }
 }
 

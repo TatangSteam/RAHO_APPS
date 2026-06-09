@@ -26,6 +26,7 @@ import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
+import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 
 export default function MemberDetailPage() {
   const router = useRouter();
@@ -125,6 +126,9 @@ export default function MemberDetailPage() {
   // Credentials modal state (Super Admin only)
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
 
+  // Upload documents modal state
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
     setAssignData(data);
@@ -132,6 +136,15 @@ export default function MemberDetailPage() {
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
+  const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
+  
+  // Check if member has any documents (PSP or Profile Photo)
+  const hasDocuments = member ? (
+    member.documents?.some(doc => 
+      doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN' || 
+      doc.documentType === 'FOTO_PROFIL'
+    ) || false
+  ) : false;
 
   useEffect(() => {
     devLog('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
@@ -484,7 +497,10 @@ export default function MemberDetailPage() {
         onSendNotification={() => setShowNotifModal(true)}
         onEdit={() => router.push(`/members/${memberId}/edit`)}
         onManageCredentials={() => setShowCredentialsModal(true)}
+        onUploadDocuments={() => setShowUploadModal(true)}
         isSuperAdmin={isSuperAdmin}
+        canUploadDocuments={canUploadDocuments}
+        hasDocuments={hasDocuments}
       />
 
       <MemberStatusCards member={member} packages={packages} />
@@ -754,6 +770,16 @@ export default function MemberDetailPage() {
         memberId={memberId}
         memberName={member.profile.fullName}
         onSuccess={() => loadMemberDetail()}
+      />
+
+      {/* Upload Documents Modal */}
+      <UploadDocumentsModal
+        isOpen={showUploadModal}
+        onClose={() => setShowUploadModal(false)}
+        memberId={memberId}
+        memberName={member.profile.fullName}
+        onSuccess={() => loadMemberDetail()}
+        hasDocuments={hasDocuments}
       />
     </>
   );

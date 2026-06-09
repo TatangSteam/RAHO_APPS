@@ -178,7 +178,7 @@ export class MemberRegistrationService {
           isConsentToPhoto: data.isConsentToPhoto ?? true,
           nik: data.nik || null,
           tempatLahir: data.birthPlace || null,
-          dateOfBirth: data.birthDate ? new Date(data.birthDate) : null,
+          dateOfBirth: data.birthDate ? this.parseValidDate(data.birthDate) : null,
           jenisKelamin: data.gender as any || null,
           agama: data.religion || null,
           address: data.address || null,
@@ -318,6 +318,35 @@ export class MemberRegistrationService {
       memberNo: memberNo,
       message: 'Member berhasil didaftarkan',
     };
+  }
+
+  /**
+   * Parse and validate date string
+   */
+  private parseValidDate(dateString: string): Date | null {
+    try {
+      const date = new Date(dateString);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date format:', dateString);
+        return null;
+      }
+      
+      // Check if year is reasonable (between 1900 and current year + 1)
+      const year = date.getFullYear();
+      const currentYear = new Date().getFullYear();
+      
+      if (year < 1900 || year > currentYear + 1) {
+        console.warn('Invalid date year:', year, 'from date:', dateString);
+        return null;
+      }
+      
+      return date;
+    } catch (error) {
+      console.error('Error parsing date:', dateString, error);
+      return null;
+    }
   }
 
   /**

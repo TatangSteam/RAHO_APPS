@@ -508,4 +508,46 @@ export class MembersController {
       next(error);
     }
   }
+
+  // ============================================================
+  // DOCUMENT UPLOAD METHODS (After Registration)
+  // ============================================================
+
+  /**
+   * Upload member documents (PSP or Profile Photo)
+   * POST /api/v1/members/:memberId/documents
+   */
+  async uploadMemberDocuments(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const { documentType } = req.body;
+      const userId = req.user!.userId;
+      const file = req.file;
+
+      if (!file) {
+        throw { status: 400, code: 'FILE_REQUIRED', message: 'File is required' };
+      }
+
+      if (!documentType) {
+        throw { status: 400, code: 'DOCUMENT_TYPE_REQUIRED', message: 'Document type is required' };
+      }
+
+      // Validate document type
+      const validTypes = ['PERSETUJUAN_SETELAH_PENJELASAN', 'FOTO_PROFIL'];
+      if (!validTypes.includes(documentType)) {
+        throw { status: 400, code: 'INVALID_DOCUMENT_TYPE', message: 'Invalid document type' };
+      }
+
+      const result = await membersService.uploadMemberDocument(
+        memberId,
+        file,
+        documentType,
+        userId
+      );
+
+      sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
 }

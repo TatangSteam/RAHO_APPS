@@ -248,4 +248,18 @@ router.post(
   controller.resetMemberPassword.bind(controller)
 );
 
+// ============================================================
+// DOCUMENT UPLOAD ROUTES (After Registration)
+// ============================================================
+
+// POST /api/v1/members/:memberId/documents - Upload member documents (PSP or Profile Photo)
+// Accessible by ADMIN_LAYANAN, ADMIN_CABANG, ADMIN_MANAGER, SUPER_ADMIN
+router.post(
+  '/:memberId/documents',
+  authenticate,
+  authorize([Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  uploadMemberDocuments.single('file'),
+  controller.uploadMemberDocuments.bind(controller)
+);
+
 export default router;
