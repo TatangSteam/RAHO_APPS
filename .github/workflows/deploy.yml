@@ -1,0 +1,90 @@
+name: Deploy RAHO_APPS
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy.yml'
+      - 'docker-compose.prod.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'apps/api/Dockerfile'
+      - 'apps/api/entrypoint.sh'
+      - 'apps/api/package.json'
+      - 'apps/api/package-lock.json'
+      - 'apps/api/prisma/**'
+      - 'apps/api/scripts/**'
+      - 'apps/api/src/**'
+      - 'apps/api/tsconfig*.json'
+      - 'apps/api/jest*.js'
+      - 'apps/web/Dockerfile'
+      - 'apps/web/entrypoint.sh'
+      - 'apps/web/package.json'
+      - 'apps/web/package-lock.json'
+      - 'apps/web/public/**'
+      - 'apps/web/src/**'
+      - 'apps/web/next.config.mjs'
+      - 'apps/web/postcss.config.js'
+      - 'apps/web/tailwind.config.ts'
+      - 'apps/web/tsconfig.json'
+      - 'apps/web/jest*.js'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-raho-apps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Refresh lockfiles
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "${GITHUB_WORKSPACE}"
+          refresh_lockfiles=false
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            refresh_lockfiles=true
+          else
+            changed_files="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")"
+            if printf '%s\n' "$changed_files" | grep -Eq '(^|/)(package\.json|package-lock\.json|package-lock\.yaml)$'; then
+              refresh_lockfiles=true
+            fi
+          fi
+
+          if [[ "$refresh_lockfiles" == true ]]; then
+            (cd apps/api && npm install --package-lock-only --no-workspaces)
+            (cd apps/web && npm install --package-lock-only --no-workspaces)
+          fi
+
+      - name: Build and deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "${GITHUB_WORKSPACE}"
+          docker system prune -a -f
+          if ! docker compose -f docker-compose.prod.yml build --pull api web; then
+            echo "Primary Docker Compose build failed, retrying with --no-cache..."
+            docker compose -f docker-compose.prod.yml build --pull --no-cache api web
+          fi
+          docker compose -f docker-compose.prod.yml up -d api web
