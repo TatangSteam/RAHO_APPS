@@ -35,8 +35,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-raho-apps-${{ github.ref }}
-  cancel-in-progress: true
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -54,6 +54,23 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
+      - name: Sync secret files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd "${GITHUB_WORKSPACE}"
+          src="/home/runneradmin/RAHO_APPS/secrets"
+          dst="${GITHUB_WORKSPACE}/secrets"
+
+          if [[ ! -d "$src" ]]; then
+            echo "Missing local secrets directory: $src" >&2
+            exit 1
+          fi
+
+          mkdir -p "$dst"
+          cp -a "$src/." "$dst/"
 
       - name: Refresh lockfiles
         shell: bash
@@ -82,6 +99,10 @@ jobs:
           set -euo pipefail
 
           cd "${GITHUB_WORKSPACE}"
+          exec 9>/tmp/raho-deploy.lock
+          flock -x 9
+          trap 'flock -u 9 || true' EXIT
+
           docker system prune -a -f
           if ! docker compose -f docker-compose.prod.yml build --pull api web; then
             echo "Primary Docker Compose build failed, retrying with --no-cache..."
