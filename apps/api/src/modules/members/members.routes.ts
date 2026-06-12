@@ -3,7 +3,7 @@ import { MembersController } from './members.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
-import { uploadMemberDocuments } from '../../middleware/upload';
+import { uploadMemberDocuments, uploadLabResult } from '../../middleware/upload';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -154,6 +154,15 @@ router.post(
   controller.createMemberDiagnosis.bind(controller)
 );
 
+// PUT /api/v1/members/:memberId/diagnoses/:diagnosisId - Update diagnosis
+router.put(
+  '/:memberId/diagnoses/:diagnosisId',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.updateMemberDiagnosis.bind(controller)
+);
+
 // ============================================================
 // MEMBER CRUD (must be after specific routes)
 // ============================================================
@@ -260,6 +269,38 @@ router.post(
   authorize([Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
   uploadMemberDocuments.single('file'),
   controller.uploadMemberDocuments.bind(controller)
+);
+
+// ============================================================
+// LAB RESULTS ROUTES
+// ============================================================
+
+// GET /api/v1/members/:memberId/lab-results - Get member lab results
+router.get(
+  '/:memberId/lab-results',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getMemberLabResults.bind(controller)
+);
+
+// POST /api/v1/members/:memberId/lab-results - Upload lab result
+router.post(
+  '/:memberId/lab-results',
+  authenticate,
+  authorize(ALLSTAFF), // All staff can upload
+  assertBranchAccess,
+  uploadLabResult.single('file'),
+  controller.uploadLabResult.bind(controller)
+);
+
+// DELETE /api/v1/members/:memberId/lab-results/:labResultId - Delete lab result
+router.delete(
+  '/:memberId/lab-results/:labResultId',
+  authenticate,
+  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  assertBranchAccess,
+  controller.deleteLabResult.bind(controller)
 );
 
 export default router;

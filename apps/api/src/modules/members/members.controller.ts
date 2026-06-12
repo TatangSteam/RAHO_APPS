@@ -9,11 +9,13 @@ import {
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
 import { MemberExportService } from './services/member-export.service';
+import { MemberLabResultsService } from './services/member-lab-results.service';
 import { logAudit } from '../../utils/auditLog';
 import { prisma } from '../../lib/prisma';
 
 const membersService = new MembersService();
 const exportService = new MemberExportService();
+const labResultsService = new MemberLabResultsService();
 
 export class MembersController {
   async getMembers(req: Request, res: Response, next: NextFunction) {
@@ -251,6 +253,19 @@ export class MembersController {
       const result = await membersService.createMemberDiagnosis(memberId, req.body, userId);
 
       sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateMemberDiagnosis(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, diagnosisId } = req.params;
+      const { userId } = req.user!;
+
+      const result = await membersService.updateMemberDiagnosis(memberId, diagnosisId, req.body, userId);
+
+      sendSuccess(res, result);
     } catch (error) {
       next(error);
     }
@@ -548,6 +563,55 @@ export class MembersController {
       sendSuccess(res, result);
     } catch (err: any) {
       next(err);
+    }
+  }
+
+  // ============================================================
+  // LAB RESULTS METHODS
+  // ============================================================
+
+  async getMemberLabResults(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const result = await labResultsService.getMemberLabResults(memberId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async uploadLabResult(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const { userId } = req.user!;
+      const file = req.file;
+
+      if (!file) {
+        throw { status: 400, code: 'FILE_REQUIRED', message: 'File wajib diupload' };
+      }
+
+      const result = await labResultsService.uploadLabResult(
+        memberId,
+        file,
+        req.body,
+        userId
+      );
+
+      sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteLabResult(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, labResultId } = req.params;
+      const { userId } = req.user!;
+
+      const result = await labResultsService.deleteLabResult(memberId, labResultId, userId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
     }
   }
 }

@@ -52,6 +52,11 @@ export const sessionApi = {
     }
   },
 
+  updateDiagnosis: async (encounterId: string, data: Partial<CreateDiagnosisInput>): Promise<Diagnosis> => {
+    const response = await api.patch(`/treatment-sessions/encounters/${encounterId}/diagnoses`, data);
+    return response.data.data;
+  },
+
   // ============================================================
   // STEP 2: THERAPY PLAN
   // ============================================================

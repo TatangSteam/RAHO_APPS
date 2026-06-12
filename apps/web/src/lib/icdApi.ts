@@ -1,10 +1,8 @@
 import axios from 'axios';
 
-// ICD-11 API Configuration
-// Note: For production, you should register at https://icd.who.int/icdapi
-// and get your own CLIENT_ID and CLIENT_SECRET
-const ICD_API_BASE = 'https://id.who.int/icd';
-const ICD_ENTITY_BASE = 'https://id.who.int/icd/entity';
+// Clinicaltables.nlm.nih.gov ICD-10-CM API
+// FREE API with 70,000+ ICD-10 codes, no authentication required
+const CLINICAL_TABLES_API = 'https://clinicaltables.nlm.nih.gov/api/icd10cm/v3/search';
 
 export interface ICDCode {
   code: string;
@@ -12,6 +10,10 @@ export interface ICDCode {
   definition?: string;
   parent?: string;
 }
+
+// Cache for API results to improve performance
+const searchCache = new Map<string, { data: ICDCode[]; timestamp: number }>();
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
 
 // Simple ICD-10 codes for common conditions (fallback)
 const COMMON_ICD_CODES: ICDCode[] = [
@@ -139,40 +141,185 @@ const COMMON_ICD_CODES: ICDCode[] = [
   { code: 'T14', title: 'Injury of unspecified body region - Cedera tidak spesifik' },
 ];
 
+// Indonesian translations for common ICD codes
+const INDONESIAN_TRANSLATIONS: Record<string, string> = {
+  // Cardiovascular
+  'I10': 'Hipertensi esensial',
+  'I11': 'Penyakit jantung hipertensi',
+  'I20': 'Angina pektoris',
+  'I21': 'Infark miokard akut',
+  'I25': 'Penyakit jantung iskemik kronis',
+  'I50': 'Gagal jantung',
+  'I63': 'Infark serebral (Stroke iskemik)',
+  'I64': 'Stroke, tidak spesifik',
+  
+  // Diabetes
+  'E10': 'Diabetes melitus tipe 1',
+  'E11': 'Diabetes melitus tipe 2',
+  'E14': 'Diabetes melitus tidak spesifik',
+  
+  // Neurological
+  'G40': 'Epilepsi',
+  'G43': 'Migrain',
+  'G44': 'Sindrom sakit kepala lainnya',
+  'G45': 'Serangan iskemik serebral transien',
+  'G47': 'Gangguan tidur',
+  'G50': 'Gangguan saraf trigeminal',
+  'G51': 'Gangguan saraf wajah (Bell\'s palsy)',
+  'G56': 'Mononeuropati ekstremitas atas',
+  'G62': 'Polineuropati lainnya',
+  
+  // Musculoskeletal
+  'M15': 'Poliartrosis',
+  'M16': 'Osteoartritis panggul',
+  'M17': 'Osteoartritis lutut',
+  'M19': 'Artrosis lainnya',
+  'M25': 'Gangguan sendi lainnya',
+  'M47': 'Spondilosis',
+  'M50': 'Gangguan diskus serviks',
+  'M51': 'Gangguan diskus intervertebralis lainnya',
+  'M54': 'Dorsalgia (nyeri punggung)',
+  'M79': 'Gangguan jaringan lunak lainnya',
+  
+  // Respiratory
+  'J18': 'Pneumonia',
+  'J44': 'PPOK (Penyakit Paru Obstruktif Kronis)',
+  'J45': 'Asma',
+  
+  // Digestive
+  'K21': 'GERD (Gastroesophageal Reflux Disease)',
+  'K29': 'Gastritis dan duodenitis',
+  'K30': 'Dispepsia fungsional',
+  
+  // Genitourinary
+  'N18': 'Penyakit ginjal kronis',
+  'N19': 'Gagal ginjal tidak spesifik',
+  
+  // Hematological
+  'D50': 'Anemia defisiensi besi',
+  'D64': 'Anemia lainnya',
+  
+  // Symptoms
+  'R51': 'Sakit kepala',
+  'R52': 'Nyeri',
+  'R53': 'Malaise dan kelelahan',
+};
+
+// Add Indonesian translation to title if available
+function addIndonesianTranslation(code: string, title: string): string {
+  const translation = INDONESIAN_TRANSLATIONS[code];
+  if (translation && !title.toLowerCase().includes(translation.toLowerCase())) {
+    return `${title} - ${translation}`;
+  }
+  return title;
+}
+
 export const icdApi = {
-  // Search ICD codes
+  // Search ICD codes using Clinicaltables API (70,000+ codes)
   searchICD: async (query: string): Promise<ICDCode[]> => {
+    // If query is empty or too short, return common codes
     if (!query || query.length < 2) {
       return COMMON_ICD_CODES.slice(0, 20);
     }
 
-    // Filter common codes based on query
-    const filtered = COMMON_ICD_CODES.filter(
-      (icd) =>
-        icd.code.toLowerCase().includes(query.toLowerCase()) ||
-        icd.title.toLowerCase().includes(query.toLowerCase())
-    );
+    // Check cache first
+    const cacheKey = query.toLowerCase().trim();
+    const cached = searchCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      return cached.data;
+    }
 
-    return filtered.slice(0, 50);
+    try {
+      // Call Clinicaltables API
+      // API returns: [total_count, [[code1, name1], [code2, name2], ...], ...]
+      const response = await axios.get(CLINICAL_TABLES_API, {
+        params: {
+          sf: 'code,name', // Search fields
+          terms: query,
+          maxList: 50, // Limit results
+        },
+        timeout: 5000, // 5 second timeout
+      });
+
+      // Parse response
+      const [totalCount, results] = response.data;
+      
+      if (!results || !Array.isArray(results)) {
+        throw new Error('Invalid API response format');
+      }
+
+      // Transform to ICDCode format
+      const codes: ICDCode[] = results.map(([code, title]: [string, string]) => ({
+        code,
+        title: addIndonesianTranslation(code, title),
+      }));
+
+      // Cache the results
+      searchCache.set(cacheKey, { data: codes, timestamp: Date.now() });
+
+      return codes;
+    } catch (error) {
+      console.error('Failed to fetch from Clinicaltables API:', error);
+      
+      // Fallback to local common codes
+      const filtered = COMMON_ICD_CODES.filter(
+        (icd) =>
+          icd.code.toLowerCase().includes(query.toLowerCase()) ||
+          icd.title.toLowerCase().includes(query.toLowerCase())
+      );
+
+      return filtered.slice(0, 50);
+    }
   },
 
-  // Get all common ICD codes
+  // Get all common ICD codes (from local database)
   getCommonICDCodes: async (): Promise<ICDCode[]> => {
     return COMMON_ICD_CODES;
   },
 
-  // Get ICD codes by category
+  // Get ICD codes by category using Clinicaltables API
   getICDByCategory: async (category: string): Promise<ICDCode[]> => {
-    const categoryMap: Record<string, string[]> = {
-      HIPERTENSI: ['I10', 'I11', 'I12', 'I13', 'I15'],
-      DIABETES: ['E10', 'E11', 'E13', 'E14'],
-      NEUROLOGI: ['G40', 'G43', 'G44', 'G45', 'G47', 'G50', 'G51', 'G56', 'G62'],
-      KARDIOVASKULAR: ['I10', 'I11', 'I20', 'I21', 'I25', 'I50'],
-      ORTOPEDI: ['M15', 'M16', 'M17', 'M19', 'M25', 'M47', 'M48', 'M50', 'M51', 'M54', 'M79'],
-      HEMATOLOGI: ['D50', 'D51', 'D52', 'D64', 'D68', 'D69'],
+    // Map category to search terms
+    const categorySearchTerms: Record<string, string> = {
+      HIPERTENSI: 'hypertension',
+      DIABETES: 'diabetes',
+      NEUROLOGI: 'neurological nerve brain',
+      KARDIOVASKULAR: 'cardiovascular heart cardiac',
+      ORTOPEDI: 'musculoskeletal arthritis joint bone',
+      HEMATOLOGI: 'anemia blood hematological',
+      IMUNOLOGI: 'immune immunological',
+      LAINNYA: '',
     };
 
-    const codes = categoryMap[category] || [];
-    return COMMON_ICD_CODES.filter((icd) => codes.includes(icd.code));
+    const searchTerm = categorySearchTerms[category] || '';
+    
+    if (!searchTerm) {
+      return COMMON_ICD_CODES.slice(0, 20);
+    }
+
+    try {
+      // Use the main search function
+      return await icdApi.searchICD(searchTerm);
+    } catch (error) {
+      console.error('Failed to fetch ICD by category:', error);
+      
+      // Fallback to local codes
+      const categoryMap: Record<string, string[]> = {
+        HIPERTENSI: ['I10', 'I11', 'I12', 'I13', 'I15'],
+        DIABETES: ['E10', 'E11', 'E13', 'E14'],
+        NEUROLOGI: ['G40', 'G43', 'G44', 'G45', 'G47', 'G50', 'G51', 'G56', 'G62'],
+        KARDIOVASKULAR: ['I10', 'I11', 'I20', 'I21', 'I25', 'I50'],
+        ORTOPEDI: ['M15', 'M16', 'M17', 'M19', 'M25', 'M47', 'M48', 'M50', 'M51', 'M54', 'M79'],
+        HEMATOLOGI: ['D50', 'D51', 'D52', 'D64', 'D68', 'D69'],
+      };
+
+      const codes = categoryMap[category] || [];
+      return COMMON_ICD_CODES.filter((icd) => codes.includes(icd.code));
+    }
+  },
+
+  // Clear cache (useful for testing or when needed)
+  clearCache: () => {
+    searchCache.clear();
   },
 };

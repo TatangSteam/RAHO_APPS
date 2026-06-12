@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { getActiveReferrals } from '@/lib/api/referralsApi';
 import type { CreateMemberData } from '@/types/member';
 import { devError } from '@/lib/logger';
@@ -19,6 +20,7 @@ export default function AccountSection({ formData, onChange, referralError, onRe
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Fetch referral codes on mount or when branchId changes
   useEffect(() => {
@@ -230,17 +232,51 @@ export default function AccountSection({ formData, onChange, referralError, onRe
           <label className="form-label">
             Password <span style={{ color: '#ef4444' }}>*</span>
           </label>
-          <input
-            type="password"
-            name="memberPassword"
-            value={formData.memberPassword}
-            onChange={onChange}
-            required
-            minLength={8}
-            className="form-input"
-            placeholder="Minimal 8 karakter"
-            autoComplete="new-password"
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              type={showPassword ? 'text' : 'password'}
+              name="memberPassword"
+              value={formData.memberPassword}
+              onChange={onChange}
+              required
+              minLength={8}
+              className="form-input"
+              placeholder="Minimal 8 karakter"
+              autoComplete="new-password"
+              style={{ paddingRight: '45px' }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-secondary)',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '6px',
+                transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(148, 163, 184, 0.1)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }}
+              title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
           <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Minimal 8 karakter</p>
         </div>
 

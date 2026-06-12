@@ -27,6 +27,7 @@ import EditPackageModal from '@/components/members/EditPackageModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
+import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 
 export default function MemberDetailPage() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function MemberDetailPage() {
 
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan'>('profil');
+  const [activeTab, setActiveTab] = useState<'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results'>('profil');
   
   // Notification modal state
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -137,6 +138,7 @@ export default function MemberDetailPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
+  const canEditDiagnosis = ['DOCTOR', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   
   // Check if member has any documents (PSP or Profile Photo)
   const hasDocuments = member ? (
@@ -508,7 +510,7 @@ export default function MemberDetailPage() {
       {/* Tabs */}
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ borderBottom: '1px solid var(--surface-border)', display: 'flex', overflowX: 'auto' }}>
-          {(['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan'] as const).map((tab) => (
+          {(['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan', 'lab-results'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -530,6 +532,7 @@ export default function MemberDetailPage() {
               {tab === 'sesi' && '🩺 Sesi Terapi'}
               {tab === 'diagnosa' && '📋 Diagnosa'}
               {tab === 'therapy-plan' && '💊 Therapy Plan'}
+              {tab === 'lab-results' && '🔬 Hasil Lab'}
             </button>
           ))}
         </div>
@@ -648,9 +651,11 @@ export default function MemberDetailPage() {
             />
           )}
 
-          {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} />}
+          {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canEditDiagnosis} />}
           
           {activeTab === 'therapy-plan' && <MemberTherapyPlansTab memberId={memberId} />}
+          
+          {activeTab === 'lab-results' && <MemberLabResultsTab memberId={memberId} />}
         </div>
       </div>
 

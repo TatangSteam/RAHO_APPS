@@ -14,6 +14,7 @@ import {
   uploadAvatar,
   getStaffByRole,
   getMedicalStaffNotInBranch,
+  getAllMedicalStaff,
   getUserBranches,
   assignUserToBranch,
   removeUserFromBranch,
@@ -23,6 +24,13 @@ import {
   getStaffSessionHistory,
   getUserCredentials,
   updateUserEmail,
+  getDoctorsByBranch,
+  assignDoctorToBranch,
+  removeDoctorFromBranch,
+  getManagedBranches,
+  addManagedBranch,
+  removeManagedBranch,
+  getAllDoctors,
 } from './users.controller';
 
 export const usersRouter = Router();
@@ -41,6 +49,14 @@ usersRouter.get(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   getMedicalStaffNotInBranch,
+);
+
+// ── Get All Medical Staff (for assign modal - shows all) ─────
+usersRouter.get(
+  '/medical-staff/all',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  getAllMedicalStaff,
 );
 
 // ══════════════════════════════════════════════════════════════
@@ -188,4 +204,32 @@ usersRouter.patch(
   authenticate,
   authorize([Role.SUPER_ADMIN]),
   updateUserEmail,
+);
+
+// ══════════════════════════════════════════════════════════════
+// DOCTOR BRANCH MANAGEMENT (Admin Manager & Super Admin)
+// ══════════════════════════════════════════════════════════════
+
+// ── Get Doctors by Branch ─────────────────────────────────────
+usersRouter.get(
+  '/doctors',
+  authenticate,
+  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  getDoctorsByBranch,
+);
+
+// ── Assign Doctor to Branch ───────────────────────────────────
+usersRouter.post(
+  '/doctors/:doctorId/branches',
+  authenticate,
+  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  assignDoctorToBranch,
+);
+
+// ── Remove Doctor from Branch ─────────────────────────────────
+usersRouter.delete(
+  '/doctors/:doctorId/branches/:branchId',
+  authenticate,
+  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  removeDoctorFromBranch,
 );

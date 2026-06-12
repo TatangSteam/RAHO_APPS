@@ -14,6 +14,7 @@ import { authRouter } from '@modules/auth/auth.routes';
 import { dashboardRouter } from '@modules/dashboard/dashboard.routes';
 import { meRouter } from '@modules/me/me.routes';
 import { usersRouter } from '@modules/users/users.routes';
+import { adminManagerRouter } from '@modules/users/admin-manager.routes';
 import { branchesRouter } from '@modules/branches/branches.routes';
 import membersRouter from './modules/members/members.routes';
 import packagesRouter from './modules/packages/packages.routes';
@@ -130,6 +131,9 @@ export function createApp(): Application {
 
   // Users module
   app.use(`${prefix}/users`, usersRouter);
+
+  // Admin Manager module
+  app.use(`${prefix}/admin-manager`, adminManagerRouter);
 
   // Branches module
   app.use(`${prefix}/branches`, branchesRouter);

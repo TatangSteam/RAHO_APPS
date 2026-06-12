@@ -23,12 +23,16 @@ interface AuthState {
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
+  activeBranchId: string | null; // Currently active branch for multi-branch users
+  assignedBranches: string[]; // All branch IDs user has access to
 }
 
 interface AuthActions {
   setAuth: (user: AuthUser, tokens: TokenPair) => void;
   setAccessToken: (accessToken: string, refreshToken: string) => void;
   updateUserAvatar: (avatarUrl: string | null) => void;
+  setActiveBranch: (branchId: string) => void;
+  setAssignedBranches: (branchIds: string[]) => void;
   clearAuth: () => void;
 }
 
@@ -41,6 +45,8 @@ const initialState: AuthState = {
   accessToken: null,
   refreshToken: null,
   isAuthenticated: false,
+  activeBranchId: null,
+  assignedBranches: [],
 };
 
 // ── Store ─────────────────────────────────────────────────────
@@ -56,6 +62,8 @@ export const useAuthStore = create<AuthStore>()(
           accessToken: tokens.accessToken,
           refreshToken: tokens.refreshToken,
           isAuthenticated: true,
+          activeBranchId: user.branchId, // Initialize with primary branch
+          assignedBranches: user.branchId ? [user.branchId] : [],
         });
         
         // Start token expiry check when user logs in
@@ -72,8 +80,25 @@ export const useAuthStore = create<AuthStore>()(
           user: state.user ? { ...state.user, avatarUrl } : null,
         })),
 
+      setActiveBranch: (branchId) => {
+        set({ activeBranchId: branchId });
+        // Persist active branch selection
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('activeBranchId', branchId);
+        }
+      },
+
+      setAssignedBranches: (branchIds) => {
+        set({ assignedBranches: branchIds });
+      },
+
       clearAuth: () => {
         set(initialState);
+        
+        // Clear active branch from localStorage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('activeBranchId');
+        }
         
         // Stop token expiry check when user logs out
         if (stopTokenExpiryCheck) {
@@ -84,12 +109,14 @@ export const useAuthStore = create<AuthStore>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => localStorage),
-      // Only persist tokens; user can be re-fetched on restore
+      // Persist everything including active branch
       partialize: (state) => ({
         user: state.user,
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
+        activeBranchId: state.activeBranchId,
+        assignedBranches: state.assignedBranches,
       }),
       // Start token check when store is rehydrated (page refresh)
       onRehydrateStorage: () => (state) => {
@@ -107,3 +134,5 @@ export const selectUser = (s: AuthStore) => s.user;
 export const selectAccessToken = (s: AuthStore) => s.accessToken;
 export const selectRefreshToken = (s: AuthStore) => s.refreshToken;
 export const selectIsAuthenticated = (s: AuthStore) => s.isAuthenticated;
+export const selectActiveBranchId = (s: AuthStore) => s.activeBranchId;
+export const selectAssignedBranches = (s: AuthStore) => s.assignedBranches;

@@ -19,6 +19,7 @@ export interface JwtPayload {
   branchCode: string | null;
   fullName: string;
   staffCode: string | null;
+  branches?: string[]; // Multi-branch assignment for staff
   impersonating?: ImpersonationData;
 }
 

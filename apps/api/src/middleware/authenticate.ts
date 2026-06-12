@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { verifyAccessToken, JwtPayload } from '@lib/jwt';
 import { sendError } from '@utils/response';
+import { prisma } from '@lib/prisma';
 
 // Extend Express Request with authenticated user
 declare global {
@@ -70,7 +71,7 @@ function extractDeepestImpersonation(payload: JwtPayload): {
  * Sets req.originalUser to the ROOT user (the one who started impersonation)
  * Sets req.impersonationChain to the full chain of emails
  */
-export function authenticate(req: Request, res: Response, next: NextFunction): void {
+export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
   console.log('🔐 AUTHENTICATE MIDDLEWARE');
@@ -113,6 +114,19 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
         fullName: payload.fullName,
       };
       
+      // Load assigned branches for staff
+      let assignedBranchIds: string[] = [];
+      if (deepest.role !== 'MEMBER' && deepest.branchId) {
+        const staffBranches = await prisma.staffBranch.findMany({
+          where: { userId: deepest.userId },
+          select: { branchId: true },
+        });
+        assignedBranchIds = [
+          deepest.branchId,
+          ...staffBranches.map(sb => sb.branchId)
+        ].filter((v, i, a) => a.indexOf(v) === i); // unique
+      }
+      
       // Set current user as the deepest impersonated user
       // This is CRITICAL: All authorization checks must use req.user
       req.user = {
@@ -124,16 +138,30 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
         branchCode: null, // Will be fetched if needed
         fullName: payload.fullName, // Keep original for display purposes
         staffCode: null,
-        branches: deepest.branches, // For Admin Manager (multiple branches)
+        branches: deepest.branches || assignedBranchIds, // For Admin Manager (multiple branches) + staff multi-branch
       };
       
       req.isImpersonating = true;
       req.impersonationChain = chain;
     } else {
+      // Load assigned branches for staff (normal authentication)
+      let assignedBranchIds: string[] = [];
+      if (payload.role !== 'MEMBER' && payload.branchId) {
+        const staffBranches = await prisma.staffBranch.findMany({
+          where: { userId: payload.userId },
+          select: { branchId: true },
+        });
+        assignedBranchIds = [
+          payload.branchId,
+          ...staffBranches.map(sb => sb.branchId)
+        ].filter((v, i, a) => a.indexOf(v) === i); // unique
+      }
+      
       // Normal authentication (no impersonation)
       req.user = {
         ...payload,
         id: payload.userId,
+        branches: payload.branches || assignedBranchIds, // Include assigned branches
       };
       req.isImpersonating = false;
     }

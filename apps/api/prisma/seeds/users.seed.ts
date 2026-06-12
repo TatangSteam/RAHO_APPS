@@ -239,13 +239,23 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
 
   let assignmentCount = 0;
 
-  // Assign each doctor to ALL branches
-  for (const doctor of doctors) {
-    for (const branch of branches) {
+  // Assign doctors to SELECTED branches (more realistic for testing multi-branch assignment)
+  // Dr. Ahmad Fauzi → Jakarta + Surabaya
+  // Dr. Budi Santoso → Jakarta only (primary)
+  // Dr. Citra Wijaya → Surabaya + Bandung
+  
+  const doctorBranchMapping = [
+    { doctor: doctors[0], branches: [branches[0], branches[1]] }, // Ahmad Fauzi → Jakarta, Surabaya
+    { doctor: doctors[1], branches: [branches[0]] },               // Budi Santoso → Jakarta only
+    { doctor: doctors[2], branches: [branches[1], branches[2]] },  // Citra Wijaya → Surabaya, Bandung
+  ];
+
+  for (const mapping of doctorBranchMapping) {
+    for (const branch of mapping.branches) {
       const existing = await prisma.staffBranch.findUnique({
         where: {
           userId_branchId: {
-            userId: doctor.id,
+            userId: mapping.doctor.id,
             branchId: branch.id
           }
         }
@@ -254,7 +264,7 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
       if (!existing) {
         await prisma.staffBranch.create({
           data: {
-            userId: doctor.id,
+            userId: mapping.doctor.id,
             branchId: branch.id
           }
         });
@@ -263,13 +273,23 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
     }
   }
 
-  // Assign each nurse to ALL branches
-  for (const nurse of nurses) {
-    for (const branch of branches) {
+  // Assign nurses to SELECTED branches
+  // Dewi Lestari → Jakarta + Bandung
+  // Eko Prasetyo → Surabaya only
+  // Siti Rahayu → Jakarta + Surabaya
+  
+  const nurseBranchMapping = [
+    { nurse: nurses[0], branches: [branches[0], branches[2]] }, // Dewi Lestari → Jakarta, Bandung
+    { nurse: nurses[1], branches: [branches[1]] },              // Eko Prasetyo → Surabaya only
+    { nurse: nurses[2], branches: [branches[0], branches[1]] }, // Siti Rahayu → Jakarta, Surabaya
+  ];
+
+  for (const mapping of nurseBranchMapping) {
+    for (const branch of mapping.branches) {
       const existing = await prisma.staffBranch.findUnique({
         where: {
           userId_branchId: {
-            userId: nurse.id,
+            userId: mapping.nurse.id,
             branchId: branch.id
           }
         }
@@ -278,7 +298,7 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
       if (!existing) {
         await prisma.staffBranch.create({
           data: {
-            userId: nurse.id,
+            userId: mapping.nurse.id,
             branchId: branch.id
           }
         });
@@ -287,7 +307,7 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
     }
   }
 
-  console.log(`✅ Assigned ${doctors.length} doctors and ${nurses.length} nurses to ${branches.length} branches`);
+  console.log(`✅ Assigned ${doctors.length} doctors and ${nurses.length} nurses to branches (realistic multi-branch setup)`);
   console.log(`   Total assignments: ${assignmentCount}`);
 }
 

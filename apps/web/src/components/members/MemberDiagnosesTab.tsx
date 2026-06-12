@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Stethoscope, User, FileText, Info, AlertTriangle, Loader2, ChevronDown, Check } from 'lucide-react';
+import { X, Plus, Trash2, Stethoscope, User, FileText, Info, AlertTriangle, Loader2, ChevronDown, Check, Edit } from 'lucide-react';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { usersApi } from '@/lib/usersApi';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
@@ -15,6 +15,7 @@ import { devError } from '@/lib/logger';
 interface MemberDiagnosesTabProps {
   memberId: string;
   memberBranchId?: string;
+  canEdit?: boolean;
 }
 
 const CATEGORY_OPTIONS: { value: DiagnosisCategory; label: string; description: string }[] = [
@@ -28,11 +29,15 @@ const CATEGORY_OPTIONS: { value: DiagnosisCategory; label: string; description: 
   { value: 'LAINNYA', label: 'Lainnya', description: 'Kategori lainnya' },
 ];
 
-export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberDiagnosesTabProps) {
+export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit = true }: MemberDiagnosesTabProps) {
   const { user } = useAuthStore();
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
+  
+  // Check if current user can edit diagnosis based on their role
+  const canEditDiagnosis = user?.role && ['DOCTOR', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingDiagnosis, setEditingDiagnosis] = useState<Diagnosis | null>(null);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -148,7 +153,6 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
       });
 
       // Use first selected category for API (backend only supports single category)
-      // Store all categories in diagnosa field as prefix if multiple
       const primaryCategory = selectedCategories.length > 0 ? selectedCategories[0] : undefined;
       
       const payload: CreateDiagnosisInput = {
@@ -157,13 +161,22 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
         pemeriksaanTambahan: Object.keys(pemeriksaanTambahan).length > 0 ? pemeriksaanTambahan : undefined
       };
 
-      await diagnosisApi.createDiagnosis(memberId, payload);
-      showToast.success('Diagnosa berhasil dibuat');
+      if (editingDiagnosis) {
+        // Update existing diagnosis
+        await diagnosisApi.updateDiagnosis(memberId, editingDiagnosis.id, payload);
+        showToast.success('Diagnosa berhasil diperbarui');
+      } else {
+        // Create new diagnosis
+        await diagnosisApi.createDiagnosis(memberId, payload);
+        showToast.success('Diagnosa berhasil dibuat');
+      }
+      
       setShowCreateModal(false);
+      setEditingDiagnosis(null);
       resetForm();
       loadDiagnoses();
     } catch (error: any) {
-      setError(error.response?.data?.error?.message || 'Gagal membuat diagnosa');
+      setError(error.response?.data?.error?.message || `Gagal ${editingDiagnosis ? 'memperbarui' : 'membuat'} diagnosa`);
     } finally {
       setSubmitting(false);
     }
@@ -191,12 +204,53 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
 
   const handleOpenModal = () => {
     resetForm();
+    setEditingDiagnosis(null);
+    setShowCreateModal(true);
+  };
+
+  const handleEditDiagnosis = (diagnosis: Diagnosis) => {
+    // Pre-fill form with diagnosis data
+    setFormData({
+      doktorPemeriksa: diagnosis.doktorPemeriksa,
+      diagnosa: diagnosis.diagnosa,
+      kategoriDiagnosa: diagnosis.kategoriDiagnosa || undefined,
+      icdPrimer: diagnosis.icdPrimer || '',
+      icdSekunder: diagnosis.icdSekunder || '',
+      icdTersier: diagnosis.icdTersier || '',
+      keluhanRiwayatSekarang: diagnosis.keluhanRiwayatSekarang || '',
+      riwayatPenyakitTerdahulu: diagnosis.riwayatPenyakitTerdahulu || '',
+      riwayatSosialKebiasaan: diagnosis.riwayatSosialKebiasaan || '',
+      riwayatPengobatan: diagnosis.riwayatPengobatan || '',
+      pemeriksaanFisik: diagnosis.pemeriksaanFisik || '',
+      pemeriksaanTambahan: diagnosis.pemeriksaanTambahan || {}
+    });
+
+    // Set selected categories
+    if (diagnosis.kategoriDiagnosa) {
+      setSelectedCategories([diagnosis.kategoriDiagnosa]);
+    } else {
+      setSelectedCategories([]);
+    }
+
+    // Set additional exams
+    if (diagnosis.pemeriksaanTambahan && typeof diagnosis.pemeriksaanTambahan === 'object') {
+      const exams = Object.entries(diagnosis.pemeriksaanTambahan).map(([key, value]) => ({
+        key,
+        value: String(value)
+      }));
+      setAdditionalExams(exams);
+    } else {
+      setAdditionalExams([]);
+    }
+
+    setEditingDiagnosis(diagnosis);
     setShowCreateModal(true);
   };
 
   const handleCloseModal = () => {
     if (!submitting) {
       setShowCreateModal(false);
+      setEditingDiagnosis(null);
       resetForm();
     }
   };
@@ -229,8 +283,12 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
                 <Stethoscope className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Buat Diagnosa Baru</h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400">Isi data diagnosa untuk member</p>
+                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
+                  {editingDiagnosis ? 'Edit Diagnosa' : 'Buat Diagnosa Baru'}
+                </h2>
+                <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                  {editingDiagnosis ? 'Perbarui data diagnosa member' : 'Isi data diagnosa untuk member'}
+                </p>
               </div>
             </div>
             <button
@@ -512,12 +570,12 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
               {submitting ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Menyimpan...
+                  {editingDiagnosis ? 'Memperbarui...' : 'Menyimpan...'}
                 </>
               ) : (
                 <>
                   <Plus className="h-4 w-4" />
-                  Simpan Diagnosa
+                  {editingDiagnosis ? 'Update Diagnosa' : 'Simpan Diagnosa'}
                 </>
               )}
             </button>
@@ -535,13 +593,15 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
             <Stethoscope className="h-5 w-5 text-amber-500" />
             Diagnosa Member
           </h3>
-          <button
-            onClick={handleOpenModal}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
-          >
-            <Plus className="h-4 w-4" />
-            Buat Diagnosa
-          </button>
+          {canEditDiagnosis && (
+            <button
+              onClick={handleOpenModal}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+            >
+              <Plus className="h-4 w-4" />
+              Buat Diagnosa
+            </button>
+          )}
         </div>
 
         {diagnoses.length === 0 ? (
@@ -555,13 +615,15 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">
               Diagnosa wajib dibuat sebelum memulai sesi terapi
             </p>
-            <button
-              onClick={handleOpenModal}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              Buat Diagnosa Pertama
-            </button>
+            {canEditDiagnosis && (
+              <button
+                onClick={handleOpenModal}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                Buat Diagnosa Pertama
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
@@ -576,11 +638,22 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId }: MemberD
                       {new Date(diagnosis.createdAt).toLocaleString('id-ID')}
                     </p>
                   </div>
-                  {diagnosis.kategoriDiagnosa && (
-                    <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
-                      {diagnosis.kategoriDiagnosa}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {diagnosis.kategoriDiagnosa && (
+                      <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
+                        {diagnosis.kategoriDiagnosa}
+                      </span>
+                    )}
+                    {canEditDiagnosis && (
+                      <button
+                        onClick={() => handleEditDiagnosis(diagnosis)}
+                        className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+                        title="Edit Diagnosa"
+                      >
+                        <Edit size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mb-4">

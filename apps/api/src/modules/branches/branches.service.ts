@@ -229,9 +229,13 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
     branches.map(async (branch) => {
       const [memberCount, staffCount] = await Promise.all([
         prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
+        // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
         prisma.user.count({
           where: { 
-            branchId: branch.id, 
+            OR: [
+              { branchId: branch.id }, // Primary branch
+              { staffBranches: { some: { branchId: branch.id } } }, // Multi-branch assignment
+            ],
             isActive: true, 
             NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
           },
@@ -262,10 +266,14 @@ export async function getBranchWithStatsService(branchId: string) {
 
   // Get stats
   // Note: activeUsers excludes MEMBER and ADMIN_MANAGER (Admin Managers are shown in separate tab)
+  // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
   const [activeUsers, totalMembers, activePackages] = await Promise.all([
     prisma.user.count({
       where: { 
-        branchId, 
+        OR: [
+          { branchId }, // Primary branch
+          { staffBranches: { some: { branchId } } }, // Multi-branch assignment
+        ],
         isActive: true, 
         NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
       },
@@ -332,10 +340,14 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
   // Get stats for each branch
   const branchesWithStats = await Promise.all(
     branches.map(async (branch) => {
+      // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
       const [activeUsers, totalMembers, activePackages] = await Promise.all([
         prisma.user.count({
           where: { 
-            branchId: branch.id, 
+            OR: [
+              { branchId: branch.id }, // Primary branch
+              { staffBranches: { some: { branchId: branch.id } } }, // Multi-branch assignment
+            ],
             isActive: true, 
             NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
           },
@@ -664,5 +676,111 @@ export async function deleteBranchService(branchId: string) {
       members: totalMembers,
       inventoryItems,
     },
+  };
+}
+
+// ── Get Branch Sessions ────────────────────────────────────────
+export async function getBranchSessionsService(
+  branchId: string,
+  params: { page?: number; limit?: number; status?: string }
+) {
+  // Verify branch exists
+  const branch = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: { id: true, branchCode: true, name: true },
+  });
+
+  if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
+
+  const { page = 1, limit = 50, status } = params;
+  const skip = (page - 1) * limit;
+
+  const where: Prisma.TherapySessionWhereInput = {
+    branchId,
+    ...(status ? { status } : {}),
+  };
+
+  const [total, sessions] = await Promise.all([
+    prisma.therapySession.count({ where }),
+    prisma.therapySession.findMany({
+      where,
+      select: {
+        id: true,
+        sessionCode: true,
+        sessionDate: true,
+        status: true,
+        member: {
+          select: {
+            id: true,
+            memberNo: true,
+            profile: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+        doctor: {
+          select: {
+            profile: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+        nurse: {
+          select: {
+            profile: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+        memberPackage: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      skip,
+      take: limit,
+      orderBy: { sessionDate: 'desc' },
+    }),
+  ]);
+
+  // Transform data
+  const sessionsFormatted = sessions.map((s) => ({
+    id: s.id,
+    sessionCode: s.sessionCode,
+    date: s.sessionDate,
+    status: s.status,
+    member: {
+      id: s.member.id,
+      fullName: s.member.profile?.fullName || 'N/A',
+      memberNo: s.member.memberNo,
+    },
+    doctor: {
+      fullName: s.doctor.profile?.fullName || 'N/A',
+    },
+    nurse: {
+      fullName: s.nurse.profile?.fullName || 'N/A',
+    },
+    package: {
+      name: s.memberPackage.name,
+    },
+  }));
+
+  return {
+    branch: {
+      id: branch.id,
+      branchCode: branch.branchCode,
+      name: branch.name,
+    },
+    sessions: sessionsFormatted,
+    total,
+    page,
+    limit,
   };
 }

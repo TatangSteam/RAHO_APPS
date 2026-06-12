@@ -191,6 +191,13 @@ export class MembersService {
   }
 
   /**
+   * Update member diagnosis
+   */
+  async updateMemberDiagnosis(memberId: string, diagnosisId: string, data: any, userId: string) {
+    return await this.medicalRecordsService.updateMemberDiagnosis(memberId, diagnosisId, data, userId);
+  }
+
+  /**
    * Get member therapy plans
    */
   async getMemberTherapyPlans(memberId: string) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus, Activity, Key } from 'lucide-react';
+import { Stethoscope, Heart, Building2, Edit, Trash2, UserCog, Plus, Activity, Key, UserMinus } from 'lucide-react';
 import DataTable, { 
   Column, 
   AvatarCell, 
@@ -38,7 +38,8 @@ interface StaffTableProps {
   data: Staff[];
   loading?: boolean;
   onEdit: (staff: Staff) => void;
-  onDelete: (staff: Staff) => void;
+  onUnassignFromBranch: (staff: Staff) => void;
+  onDeleteStaff: (staff: Staff) => void;
   onManageBranches: (staff: Staff) => void;
   onManageCredentials?: (staff: Staff) => void;
   onAddStaff: () => void;
@@ -74,7 +75,8 @@ export default function StaffTable({
   data,
   loading = false,
   onEdit,
-  onDelete,
+  onUnassignFromBranch,
+  onDeleteStaff,
   onManageBranches,
   onManageCredentials,
   onAddStaff,
@@ -217,7 +219,7 @@ export default function StaffTable({
     {
       key: 'actions',
       header: 'Aksi',
-      width: '180px',
+      width: '220px',
       align: 'right',
       render: (staff) => (
         <ActionButtons>
@@ -244,7 +246,13 @@ export default function StaffTable({
             variant="edit"
           />
           <ActionButton
-            onClick={() => onDelete(staff)}
+            onClick={() => onUnassignFromBranch(staff)}
+            icon={<UserMinus size={14} />}
+            title="Unassign dari Cabang"
+            variant="warning"
+          />
+          <ActionButton
+            onClick={() => onDeleteStaff(staff)}
             icon={<Trash2 size={14} />}
             title="Hapus Staff"
             variant="delete"

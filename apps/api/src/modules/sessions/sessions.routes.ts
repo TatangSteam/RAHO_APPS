@@ -71,6 +71,13 @@ router.get(
   controller.getDiagnosisByEncounter.bind(controller)
 );
 
+router.patch(
+  '/encounters/:encounterId/diagnoses',
+  authenticate,
+  authorize([Role.DOCTOR]),
+  controller.updateDiagnosis.bind(controller)
+);
+
 // ============================================================
 // STEP 2: THERAPY PLAN
 // ============================================================

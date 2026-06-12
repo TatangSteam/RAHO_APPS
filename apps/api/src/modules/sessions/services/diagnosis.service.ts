@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
 import type { CreateDiagnosisInput } from '../sessions.schema';
+import type { UpdateDiagnosisInput } from '../sessions.schema';
 import { Role, AuditAction } from '@prisma/client';
 
 export class DiagnosisService {
@@ -115,5 +116,76 @@ export class DiagnosisService {
     });
 
     return diagnosis;
+  }
+
+  /**
+   * Update an existing diagnosis linked to an encounter.
+   * Only allows updating certain fields, doktorPemeriksa cannot be changed.
+   * Only doctors can update diagnoses.
+   */
+  async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
+    // Check if diagnosis exists for this encounter
+    const existingDiagnosis = await prisma.diagnosis.findUnique({
+      where: { encounterId },
+      include: { encounter: { include: { branch: true } } },
+    });
+
+    if (!existingDiagnosis) {
+      throw {
+        status: 404,
+        code: 'DIAGNOSIS_NOT_FOUND',
+        message: 'Diagnosa untuk encounter ini tidak ditemukan',
+      };
+    }
+
+    // Verify that the user is a doctor
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user || user.role !== Role.DOCTOR) {
+      throw {
+        status: 403,
+        code: 'FORBIDDEN',
+        message: 'Hanya dokter yang dapat mengedit diagnosa',
+      };
+    }
+
+    // Build update data - only include fields that are provided
+    const updateData: any = {};
+    if (data.diagnosa !== undefined) updateData.diagnosa = data.diagnosa;
+    if (data.kategoriDiagnosa !== undefined) updateData.kategoriDiagnosa = data.kategoriDiagnosa;
+    if (data.icdPrimer !== undefined) updateData.icdPrimer = data.icdPrimer;
+    if (data.icdSekunder !== undefined) updateData.icdSekunder = data.icdSekunder;
+    if (data.icdTersier !== undefined) updateData.icdTersier = data.icdTersier;
+    if (data.keluhanRiwayatSekarang !== undefined) updateData.keluhanRiwayatSekarang = data.keluhanRiwayatSekarang;
+    if (data.riwayatPenyakitTerdahulu !== undefined) updateData.riwayatPenyakitTerdahulu = data.riwayatPenyakitTerdahulu;
+    if (data.riwayatSosialKebiasaan !== undefined) updateData.riwayatSosialKebiasaan = data.riwayatSosialKebiasaan;
+    if (data.riwayatPengobatan !== undefined) updateData.riwayatPengobatan = data.riwayatPengobatan;
+    if (data.pemeriksaanFisik !== undefined) updateData.pemeriksaanFisik = data.pemeriksaanFisik;
+    if (data.pemeriksaanTambahan !== undefined) updateData.pemeriksaanTambahan = data.pemeriksaanTambahan;
+
+    // Update timestamp
+    updateData.updatedAt = new Date();
+
+    const updatedDiagnosis = await prisma.diagnosis.update({
+      where: { id: existingDiagnosis.id },
+      data: updateData,
+    });
+
+    await logAudit({
+      userId,
+      action: AuditAction.UPDATE,
+      resource: 'Diagnosis',
+      resourceId: updatedDiagnosis.id,
+      meta: {
+        diagnosisCode: updatedDiagnosis.diagnosisCode,
+        encounterId,
+        action: 'DIAGNOSIS_EDITED',
+        changedFields: Object.keys(updateData),
+      },
+    });
+
+    return updatedDiagnosis;
   }
 }

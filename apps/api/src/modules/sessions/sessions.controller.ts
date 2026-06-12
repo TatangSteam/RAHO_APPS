@@ -3,6 +3,7 @@ import { SessionsService } from './sessions.service';
 import {
   createSessionSchema,
   createDiagnosisSchema,
+  updateDiagnosisSchema,
   createTherapyPlanSchema,
   createVitalSignSchema,
   createInfusionSchema,
@@ -141,6 +142,29 @@ export class SessionsController {
       const { encounterId } = req.params;
       const diagnosis = await sessionsService.getDiagnosisByEncounter(encounterId);
       return sendSuccess(res, diagnosis);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  // ============================================================
+  // UPDATE DIAGNOSIS
+  // ============================================================
+
+  async updateDiagnosis(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { encounterId } = req.params;
+      const validation = updateDiagnosisSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
+      }
+
+      const result = await sessionsService.updateDiagnosis(encounterId, validation.data, req.user!.userId);
+      return sendSuccess(res, result);
     } catch (err: any) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);

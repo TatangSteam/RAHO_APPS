@@ -16,6 +16,7 @@ import {
   updateAvatarService,
   getStaffByRoleService,
   getMedicalStaffNotInBranchService,
+  getAllMedicalStaffService,
   getUserBranchesService,
   assignUserToBranchService,
   removeUserFromBranchService,
@@ -23,16 +24,20 @@ import {
   setPrimaryBranchService,
   getUserCredentialsService,
   updateUserEmailService,
+  softDeleteUserService,
 } from './users.service';
 import {
   getStaffPerformanceSummaryService,
   getStaffSessionHistoryService,
 } from './services/staff-performance.service';
+import { StaffBranchAssignmentService } from './services/staff-branch-assignment.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
 import { AuditAction, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+
+const staffBranchService = new StaffBranchAssignmentService();
 
 export async function listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -146,7 +151,8 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
       return;
     }
     
-    const user = await updateUserService(req.params.userId, { isActive: false });
+    // Use soft delete service with session validation
+    const result = await softDeleteUserService(req.params.userId);
     
     // Create audit log for user deactivation (fire-and-forget)
     logAudit({
@@ -154,11 +160,12 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
       branchId: req.user.branchId,
       action: 'DELETE',
       resource: 'User',
-      resourceId: user.id,
+      resourceId: req.params.userId,
       meta: { 
-        action: 'deactivate',
-        deactivatedUserEmail: user.email,
-        deactivatedUserRole: user.role,
+        action: 'soft_delete',
+        deactivatedUserEmail: result.email,
+        historicalSessions: result.historicalSessions,
+        hasHistoricalData: result.hasHistoricalData,
       },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
@@ -166,8 +173,8 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
       console.error('❌ Failed to create user DELETE audit log:', error);
     });
     
-    console.log('✅ [UsersController] User deactivated successfully:', user.id);
-    sendNoContent(res);
+    console.log('✅ [UsersController] User deactivated successfully:', req.params.userId);
+    sendSuccess(res, result);
   } catch (err) { 
     console.error('❌ [UsersController] Error deactivating user:', err);
     next(err); 
@@ -336,6 +343,17 @@ export async function getMedicalStaffNotInBranch(req: Request, res: Response, ne
     }
 
     const staff = await getMedicalStaffNotInBranchService(excludeBranchId);
+    sendSuccess(res, staff);
+  } catch (err) { next(err); }
+}
+
+/**
+ * Get ALL medical staff (DOCTOR + NURSE) - no filtering by branch
+ * GET /api/v1/users/medical-staff/all
+ */
+export async function getAllMedicalStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const staff = await getAllMedicalStaffService();
     sendSuccess(res, staff);
   } catch (err) { next(err); }
 }
@@ -578,4 +596,169 @@ export async function updateUserEmail(req: Request, res: Response, next: NextFun
 
     sendSuccess(res, result);
   } catch (err) { next(err); }
+}
+
+// ============================================================
+// DOCTOR BRANCH MANAGEMENT CONTROLLERS
+// ============================================================
+
+import { DoctorBranchManagementService } from './services/doctor-branch-management.service';
+
+const doctorBranchService = new DoctorBranchManagementService();
+
+/**
+ * Get doctors by branch (Admin Manager or Super Admin)
+ * GET /api/users/doctors
+ */
+export async function getDoctorsByBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, status, page, limit } = req.query;
+
+    const options = {
+      branchId: branchId as string | undefined,
+      status: status === 'true' ? true : status === 'false' ? false : undefined,
+      page: page ? parseInt(page as string, 10) : 1,
+      limit: limit ? parseInt(limit as string, 10) : 20,
+    };
+
+    const result = await doctorBranchService.getDoctorsByBranch(
+      options,
+      req.user.userId,
+      req.user.role
+    );
+
+    sendSuccess(res, result.doctors, 200, result.pagination);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Assign doctor to branch (Admin Manager or Super Admin)
+ * POST /api/users/doctors/:doctorId/branches
+ */
+export async function assignDoctorToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { doctorId } = req.params;
+    const { branchId } = req.body;
+
+    if (!branchId) {
+      return next(new Error('branchId is required'));
+    }
+
+    const result = await doctorBranchService.assignDoctorToBranch(
+      doctorId,
+      branchId,
+      req.user.userId,
+      req.user.role
+    );
+
+    sendCreated(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Remove doctor from branch (Admin Manager or Super Admin)
+ * DELETE /api/users/doctors/:doctorId/branches/:branchId
+ */
+export async function removeDoctorFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { doctorId, branchId } = req.params;
+
+    const result = await doctorBranchService.removeDoctorFromBranch(
+      doctorId,
+      branchId,
+      req.user.userId,
+      req.user.role
+    );
+
+    sendSuccess(res, { message: result.message });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get managed branches for Admin Manager
+ * GET /api/admin-manager/branches
+ */
+export async function getManagedBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { includeStats } = req.query;
+
+    const result = await doctorBranchService.getManagedBranches(
+      req.user.userId,
+      includeStats === 'true'
+    );
+
+    sendSuccess(res, result.branches);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Add branch to Admin Manager's managed list
+ * POST /api/admin-manager/branches
+ */
+export async function addManagedBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId } = req.body;
+
+    if (!branchId) {
+      return next(new Error('branchId is required'));
+    }
+
+    const result = await doctorBranchService.addManagedBranch(req.user.userId, branchId);
+
+    sendCreated(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Remove branch from Admin Manager's managed list
+ * DELETE /api/admin-manager/branches/:branchId
+ */
+export async function removeManagedBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId } = req.params;
+
+    const result = await doctorBranchService.removeManagedBranch(req.user.userId, branchId);
+
+    sendSuccess(res, { message: result.message });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Get all doctors (Super Admin only)
+ * GET /api/admin/doctors
+ */
+export async function getAllDoctors(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, managerId, status, page, limit } = req.query;
+
+    const options = {
+      branchId: branchId as string | undefined,
+      status: status === 'true' ? true : status === 'false' ? false : undefined,
+      page: page ? parseInt(page as string, 10) : 1,
+      limit: limit ? parseInt(limit as string, 10) : 20,
+    };
+
+    // Use the same service but force SUPER_ADMIN role
+    const result = await doctorBranchService.getDoctorsByBranch(
+      options,
+      req.user.userId,
+      'SUPER_ADMIN' // Force super admin access
+    );
+
+    sendSuccess(res, result.doctors, 200, result.pagination);
+  } catch (err) {
+    next(err);
+  }
 }

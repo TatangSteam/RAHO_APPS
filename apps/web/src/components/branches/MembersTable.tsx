@@ -1,6 +1,7 @@
 'use client';
 
-import { Users, Edit, Trash2, Plus, Key } from 'lucide-react';
+import { Users, Edit, Trash2, Plus, Key, Eye } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import DataTable, { 
   Column, 
   AvatarCell, 
@@ -53,6 +54,8 @@ export default function MembersTable({
   showCredentialsButton = false,
   onManageCredentials,
 }: MembersTableProps) {
+  
+  const router = useRouter();
   
   const columns: Column<Member>[] = [
     {
@@ -138,10 +141,16 @@ export default function MembersTable({
     {
       key: 'actions',
       header: 'Aksi',
-      width: '140px',
+      width: '180px',
       align: 'right',
       render: (member) => (
         <ActionButtons>
+          <ActionButton
+            onClick={() => router.push(`/members/${member.memberId}`)}
+            icon={<Eye size={14} />}
+            title="Lihat Detail Member"
+            variant="view"
+          />
           {showCredentialsButton && onManageCredentials && (
             <ActionButton
               onClick={() => onManageCredentials(member)}

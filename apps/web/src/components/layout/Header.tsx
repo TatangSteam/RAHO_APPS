@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 import { Bell, Menu, Sun, Moon } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { BranchSwitcher } from './BranchSwitcher';
 import { Role } from '@/types/auth';
 import { api } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -74,6 +75,9 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
 
       {/* Right */}
       <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+        {/* Branch Switcher (for doctors/nurses with multi-branch) */}
+        <BranchSwitcher />
+        
         {/* Theme Toggle */}
         <button 
           className={clsx(

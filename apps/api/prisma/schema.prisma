@@ -297,6 +297,7 @@ model User {
   invoicesCreated    Invoice[]                  @relation("InvoiceCreatedBy")
   invoicesVerified   Invoice[]                  @relation("InvoiceVerifiedBy")
   paymentsReceived   InvoicePayment[]           @relation("PaymentReceivedBy")
+  uploadedLabResults LabResult[]
 
   @@index([email])
   @@index([role])
@@ -400,6 +401,7 @@ model Member {
   therapyPlans        TherapyPlan[] // Therapy plans for preparation
   chatRoom            ChatRoom?
   incentiveRecords    ReferralIncentiveRecord[]
+  labResults          LabResult[]
 
   @@index([memberNo])
   @@index([registrationBranchId, isActive])
@@ -1619,4 +1621,32 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ============================================================
+// LAB RESULTS DOMAIN
+// ============================================================
+
+model LabResult {
+  id          String   @id @default(cuid())
+  memberId    String
+  member      Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  
+  fileName    String   // Original filename
+  fileUrl     String   // MinIO URL
+  fileType    String   // MIME type: application/pdf, image/jpeg, image/png
+  fileSize    Int      // File size in bytes
+  
+  description String?  @db.Text // Keterangan hasil lab
+  labDate     DateTime? // Tanggal hasil lab (optional)
+  
+  uploadedBy  String   // User ID yang upload
+  uploadedByUser User  @relation(fields: [uploadedBy], references: [id])
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([memberId])
+  @@index([uploadedBy])
+  @@map("lab_results")
 }

@@ -43,6 +43,7 @@ import {
   startImpersonation,
   stopImpersonation,
 } from './admin.controller';
+import { getAllDoctors } from '../users/users.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery, validateParams } from '../../middleware/validate';
@@ -183,6 +184,12 @@ router.delete('/non-therapy-products/:productId',
 );
 
 // ── User Management ────────────────────────────────────────
+
+// Get all doctors (Super Admin only)
+router.get('/doctors',
+  authorize(['SUPER_ADMIN']),
+  getAllDoctors
+);
 
 // Create Admin Manager
 router.post('/users/admin-manager',

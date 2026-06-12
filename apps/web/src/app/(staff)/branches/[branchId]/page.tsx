@@ -25,11 +25,14 @@ import StaffCredentialsModal from '@/components/branches/StaffCredentialsModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import { devError } from '@/lib/logger';
 
+import DeleteStaffModal from '@/components/branches/DeleteStaffModal';
+
 // Import Tailwind Tables
 import StaffTable from '@/components/branches/StaffTable';
 import MembersTable from '@/components/branches/MembersTable';
 import InventoryTable from '@/components/branches/InventoryTable';
 import ManagersTable from '@/components/branches/ManagersTable';
+import SessionsTable from '@/components/branches/SessionsTable';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -112,7 +115,28 @@ interface Manager {
   assignedAt: string;
 }
 
-type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing';
+interface Session {
+  id: string;
+  sessionCode: string;
+  date: string;
+  status: string;
+  member: {
+    id: string;
+    fullName: string;
+    memberNo: string;
+  };
+  doctor: {
+    fullName: string;
+  };
+  nurse: {
+    fullName: string;
+  };
+  package: {
+    name: string;
+  };
+}
+
+type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing' | 'sessions';
 type CrudModalType = 'member' | 'staff' | 'inventory' | null;
 type CrudAction = 'create' | 'edit' | 'delete';
 
@@ -198,6 +222,7 @@ export default function BranchDetailPage() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [tabLoading, setTabLoading] = useState(false);
 
   // Member filter state
@@ -225,6 +250,7 @@ export default function BranchDetailPage() {
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
   const [showBatchAddModal, setShowBatchAddModal] = useState(false);
   const [showAssignMedicalStaffModal, setShowAssignMedicalStaffModal] = useState(false);
+  const [staffListVersion, setStaffListVersion] = useState(0); // Track changes to trigger modal refresh
   const [manageStaffBranchesModal, setManageStaffBranchesModal] = useState<{
     isOpen: boolean;
     userId: string;
@@ -245,6 +271,12 @@ export default function BranchDetailPage() {
     memberId: string;
     memberName: string;
   }>({ isOpen: false, memberId: '', memberName: '' });
+
+  // Delete Staff Modal state
+  const [deleteStaffModal, setDeleteStaffModal] = useState<{
+    isOpen: boolean;
+    staff: Staff | null;
+  }>({ isOpen: false, staff: null });
 
 
   // Check authorization
@@ -306,6 +338,10 @@ export default function BranchDetailPage() {
         const response = await branchesApi.getBranchManagers(branchId);
         const managersData = response.data.data?.managers || [];
         setManagers(Array.isArray(managersData) ? managersData : []);
+      } else if (activeTab === 'sessions') {
+        const response = await branchesApi.getBranchSessions(branchId, { page: 1, limit: 100 });
+        const sessionsData = response.data.data?.sessions || [];
+        setSessions(Array.isArray(sessionsData) ? sessionsData : []);
       }
     } catch (error: any) {
       devError(`Error loading ${activeTab} data:`, error);
@@ -314,6 +350,7 @@ export default function BranchDetailPage() {
       else if (activeTab === 'inventory') setInventory([]);
       else if (activeTab === 'staff') setStaff([]);
       else if (activeTab === 'managers') setManagers([]);
+      else if (activeTab === 'sessions') setSessions([]);
     } finally {
       setTabLoading(false);
     }
@@ -379,6 +416,74 @@ export default function BranchDetailPage() {
     } catch (error: any) {
       devError(`Error deleting ${type}:`, error);
       showToast.error(error.response?.data?.message || `Gagal menghapus ${type}`);
+    }
+  };
+
+  // Handle unassign staff from branch
+  const handleUnassignFromBranch = async (staffUser: Staff) => {
+    // Only DOCTOR and NURSE can be unassigned from branches
+    if (staffUser.role !== 'DOCTOR' && staffUser.role !== 'NURSE') {
+      showToast.error('Hanya DOCTOR dan NURSE yang dapat di-unassign dari cabang');
+      return;
+    }
+
+    const confirmed = await confirm.warning(
+      'Unassign Staff dari Cabang',
+      `Apakah Anda yakin ingin meng-unassign ${staffUser.profile?.fullName || staffUser.email} dari cabang ini?`
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.delete(`/users/${staffUser.id}/branches/${branchId}`);
+      showToast.success('Staff berhasil di-unassign dari cabang');
+      
+      // Increment staff list version to force modal refresh
+      setStaffListVersion(prev => prev + 1);
+      
+      // Reload staff list
+      loadTabData();
+      if (branch) loadBranch();
+    } catch (error: any) {
+      devError('Error unassigning staff from branch:', error);
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal unassign staff dari cabang';
+      showToast.error(errorMessage);
+    }
+  };
+
+  // Handle delete staff (soft delete)
+  const handleDeleteStaff = async (staffUser: Staff) => {
+    setDeleteStaffModal({
+      isOpen: true,
+      staff: staffUser,
+    });
+  };
+
+  const confirmDeleteStaff = async () => {
+    if (!deleteStaffModal.staff) return;
+
+    try {
+      const response = await api.delete(`/users/${deleteStaffModal.staff.id}`);
+      const result = response.data.data;
+      
+      if (result.hasHistoricalData) {
+        showToast.success(
+          `${deleteStaffModal.staff.profile?.fullName} berhasil dihapus. Riwayat ${result.historicalSessions} sesi terapi tetap tersimpan.`
+        );
+      } else {
+        showToast.success(`${deleteStaffModal.staff.profile?.fullName} berhasil dihapus.`);
+      }
+
+      // Increment staff list version to force modal refresh
+      setStaffListVersion(prev => prev + 1);
+      
+      // Close modal and reload data
+      setDeleteStaffModal({ isOpen: false, staff: null });
+      loadTabData();
+      if (branch) loadBranch();
+    } catch (error: any) {
+      devError('Error deleting staff:', error);
+      const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal menghapus staff';
+      showToast.error(errorMessage);
     }
   };
 
@@ -508,6 +613,7 @@ export default function BranchDetailPage() {
           <div className="flex overflow-x-auto bg-neutral-50 dark:bg-neutral-900/80 border-b border-neutral-200 dark:border-neutral-800">
             <TabButton active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} icon={<Activity size={18} />} label="Overview" />
             <TabButton active={activeTab === 'members'} onClick={() => setActiveTab('members')} icon={<Users size={18} />} label="Members" badge={branch.stats?.totalMembers} />
+            <TabButton active={activeTab === 'sessions'} onClick={() => setActiveTab('sessions')} icon={<Stethoscope size={18} />} label="Sesi Terapi" />
             <TabButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Package size={18} />} label="Stok" />
             <TabButton active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<UserCog size={18} />} label="Staff" badge={branch.stats?.activeUsers} />
             <TabButton active={activeTab === 'managers'} onClick={() => setActiveTab('managers')} icon={<Shield size={18} />} label="Managers" />
@@ -680,7 +786,8 @@ export default function BranchDetailPage() {
                   loading={tabLoading}
                   showCredentialsButton={user?.role === 'SUPER_ADMIN'}
                   onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
-                  onDelete={(staffUser) => handleDeleteItem('staff', staffUser.id, staffUser.profile?.fullName || staffUser.email)}
+                  onUnassignFromBranch={handleUnassignFromBranch}
+                  onDeleteStaff={handleDeleteStaff}
                   onManageBranches={(staffUser) => setManageStaffBranchesModal({
                     isOpen: true,
                     userId: staffUser.id,
@@ -736,6 +843,32 @@ export default function BranchDetailPage() {
                     }
                   }}
                   onAssignManager={() => setShowAssignManagerModal(true)}
+                />
+              </div>
+            )}
+
+            {/* Sessions Tab */}
+            {activeTab === 'sessions' && (
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
+                  <div>
+                    <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Sesi Terapi</h2>
+                    <p className="text-neutral-500 dark:text-neutral-400 text-sm mt-1">
+                      Daftar sesi terapi yang dilakukan di {branch.name}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => router.push('/sessions')}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-emerald-500/20"
+                  >
+                    <Plus size={18} />
+                    <span>Buat Sesi Baru</span>
+                  </button>
+                </div>
+
+                <SessionsTable
+                  data={sessions}
+                  loading={tabLoading}
                 />
               </div>
             )}
@@ -846,11 +979,14 @@ export default function BranchDetailPage() {
 
       {showAssignMedicalStaffModal && branch && (
         <AssignMedicalStaffModal
+          key={`assign-staff-${staffListVersion}`} // Force remount when staff list changes
           isOpen={showAssignMedicalStaffModal}
           onClose={() => setShowAssignMedicalStaffModal(false)}
           onSuccess={() => {
             setShowAssignMedicalStaffModal(false);
-            loadTabData();
+            loadTabData(); // Reload staff list
+            loadBranch(); // Reload branch stats (updates badge counter)
+            setStaffListVersion(prev => prev + 1); // Increment version after successful assign
           }}
           branchId={branchId}
           branchName={branch.name}
@@ -861,7 +997,10 @@ export default function BranchDetailPage() {
         <ManageStaffBranchesModal
           isOpen={manageStaffBranchesModal.isOpen}
           onClose={() => setManageStaffBranchesModal({ isOpen: false, userId: '', staffName: '', staffRole: 'DOCTOR' })}
-          onSuccess={() => loadTabData()}
+          onSuccess={() => {
+            loadTabData();
+            setStaffListVersion(prev => prev + 1); // Increment version to trigger AssignMedicalStaffModal refresh
+          }}
           userId={manageStaffBranchesModal.userId}
           staffName={manageStaffBranchesModal.staffName}
           staffRole={manageStaffBranchesModal.staffRole}
@@ -887,6 +1026,21 @@ export default function BranchDetailPage() {
           memberId={memberCredentialsModal.memberId}
           memberName={memberCredentialsModal.memberName}
           onSuccess={() => loadTabData()}
+        />
+      )}
+
+      {/* Delete Staff Modal */}
+      {deleteStaffModal.isOpen && deleteStaffModal.staff && (
+        <DeleteStaffModal
+          isOpen={deleteStaffModal.isOpen}
+          onClose={() => setDeleteStaffModal({ isOpen: false, staff: null })}
+          onConfirm={confirmDeleteStaff}
+          staff={{
+            id: deleteStaffModal.staff.id,
+            fullName: deleteStaffModal.staff.profile?.fullName || deleteStaffModal.staff.email,
+            role: deleteStaffModal.staff.role,
+            email: deleteStaffModal.staff.email,
+          }}
         />
       )}
     </div>

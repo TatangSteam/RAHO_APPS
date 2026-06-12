@@ -76,6 +76,23 @@ export const createDiagnosisSchema = z.object({
 
 export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;
 
+// Update diagnosis schema (for editing existing diagnosis)
+export const updateDiagnosisSchema = z.object({
+  diagnosa: z.string().min(3, 'Diagnosa minimal 3 karakter').optional(),
+  kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional().nullable(),
+  icdPrimer: z.string().optional().nullable().transform(val => val || undefined),
+  icdSekunder: z.string().optional().nullable().transform(val => val || undefined),
+  icdTersier: z.string().optional().nullable().transform(val => val || undefined),
+  keluhanRiwayatSekarang: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatPenyakitTerdahulu: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatSosialKebiasaan: z.string().optional().nullable().transform(val => val || undefined),
+  riwayatPengobatan: z.string().optional().nullable().transform(val => val || undefined),
+  pemeriksaanFisik: z.string().optional().nullable().transform(val => val || undefined),
+  pemeriksaanTambahan: z.record(z.any()).optional().nullable().transform(val => val || undefined),
+});
+
+export type UpdateDiagnosisInput = z.infer<typeof updateDiagnosisSchema>;
+
 // ============================================================
 // STEP 2: THERAPY PLAN
 // ============================================================

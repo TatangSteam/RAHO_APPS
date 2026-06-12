@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './CreateStaffModal.module.css';
@@ -362,8 +363,9 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
                     className={styles.passwordToggle}
                     onClick={() => setShowPassword(!showPassword)}
                     disabled={loading}
+                    title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
                   >
-                    {showPassword ? '👁️' : '👁️‍🗨️'}
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
                 {errors.password && <span className={styles.errorText}>{errors.password}</span>}
@@ -388,8 +390,9 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
                     className={styles.passwordToggle}
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     disabled={loading}
+                    title={showConfirmPassword ? 'Sembunyikan password' : 'Lihat password'}
                   >
-                    {showConfirmPassword ? '👁️' : '👁️‍🗨️'}
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
                 {errors.confirmPassword && <span className={styles.errorText}>{errors.confirmPassword}</span>}

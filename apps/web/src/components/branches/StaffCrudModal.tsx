@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info } from 'lucide-react';
+import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info, Eye, EyeOff } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
 import { api } from '@/lib/api';
@@ -57,6 +57,7 @@ export default function StaffCrudModal({
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState<StaffFormData>({
     email: '',
     password: '',
@@ -251,15 +252,23 @@ export default function StaffCrudModal({
                 <div className="relative">
                   <Shield className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
                     required
                     placeholder="Minimal 8 karakter"
                     minLength={8}
-                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                    className="w-full pl-11 pr-11 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+                    title={showPassword ? 'Sembunyikan password' : 'Lihat password'}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
             )}

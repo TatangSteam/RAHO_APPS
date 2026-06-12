@@ -5,7 +5,9 @@ import { AppError } from './errorHandler';
 const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const;
 const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp', 'application/pdf'] as const; // For PSP documents (images + PDF) and profile photos
 const PAYMENT_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // Accept all common image formats
+const LAB_RESULT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'] as const; // PDF and images for lab results
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_LAB_RESULT_SIZE = 10 * 1024 * 1024; // 10 MB for lab results
 
 function fileFilter(
   _req: Request,
@@ -44,6 +46,18 @@ function paymentProofFileFilter(
   cb(null, true);
 }
 
+function labResultFileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  if (!LAB_RESULT_MIME_TYPES.includes(file.mimetype as (typeof LAB_RESULT_MIME_TYPES)[number])) {
+    cb(new AppError(400, 'FILE_INVALID_TYPE', 'Hasil lab hanya menerima format PDF, JPG, atau PNG.'));
+    return;
+  }
+  cb(null, true);
+}
+
 /**
  * Multer instance — stores files in memory (as Buffer).
  * Enforces: max 5 MB, only image/jpeg | image/png | image/webp.
@@ -72,6 +86,16 @@ export const uploadPaymentProof = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: paymentProofFileFilter,
+});
+
+/**
+ * Multer instance for lab results — stores files in memory (as Buffer).
+ * Enforces: max 10 MB, accepts PDF, JPG, PNG.
+ */
+export const uploadLabResult = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_LAB_RESULT_SIZE },
+  fileFilter: labResultFileFilter,
 });
 
 /**

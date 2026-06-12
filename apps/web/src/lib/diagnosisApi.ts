@@ -20,6 +20,12 @@ export const diagnosisApi = {
     return data.data;
   },
 
+  // Update diagnosis for a member
+  updateDiagnosis: async (memberId: string, diagnosisId: string, input: CreateDiagnosisInput): Promise<Diagnosis> => {
+    const { data } = await api.put<{ data: Diagnosis }>(`/members/${memberId}/diagnoses/${diagnosisId}`, input);
+    return data.data;
+  },
+
   // Get diagnosis categories
   getCategories: async (): Promise<DiagnosisCategory[]> => {
     const { data } = await api.get<{ data: DiagnosisCategory[] }>('/diagnosis/categories');

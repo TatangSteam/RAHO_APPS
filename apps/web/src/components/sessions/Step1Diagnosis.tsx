@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { useAuthStore } from '@/stores/authStore';
-import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
-import ICDSearchInput from '@/components/ui/ICDSearchInput';
+import type { Diagnosis, CreateDiagnosisInput } from '@/types/session';
 import { devLog, devError } from '@/lib/logger';
 import styles from './Step1Diagnosis.module.css';
 
@@ -17,17 +16,6 @@ interface Step1DiagnosisProps {
   onComplete: () => void;
 }
 
-const DIAGNOSIS_CATEGORIES: { value: DiagnosisCategory; label: string }[] = [
-  { value: 'HIPERTENSI', label: 'Hipertensi' },
-  { value: 'NEUROLOGI', label: 'Neurologi' },
-  { value: 'DIABETES', label: 'Diabetes' },
-  { value: 'KARDIOVASKULAR', label: 'Kardiovaskular' },
-  { value: 'ORTOPEDI', label: 'Ortopedi' },
-  { value: 'IMUNOLOGI', label: 'Imunologi' },
-  { value: 'HEMATOLOGI', label: 'Hematologi' },
-  { value: 'LAINNYA', label: 'Lainnya' },
-];
-
 export default function Step1Diagnosis({
   encounterId,
   memberId,
@@ -36,7 +24,6 @@ export default function Step1Diagnosis({
   onComplete,
 }: Step1DiagnosisProps) {
   const { user } = useAuthStore();
-  const [isEditing, setIsEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberDiagnoses, setMemberDiagnoses] = useState<any[]>([]);
@@ -103,13 +90,10 @@ export default function Step1Diagnosis({
     setLoading(true);
 
     try {
-      // Clean up the data - remove null values and convert to undefined for optional fields
       const data: CreateDiagnosisInput = {
         doktorPemeriksa: formData.doktorPemeriksa,
         diagnosa: formData.diagnosa,
-        // Only include kategoriDiagnosa if it has a valid value
         ...(formData.kategoriDiagnosa ? { kategoriDiagnosa: formData.kategoriDiagnosa } : {}),
-        // Only include optional string fields if they have content
         ...(formData.icdPrimer ? { icdPrimer: formData.icdPrimer } : {}),
         ...(formData.icdSekunder ? { icdSekunder: formData.icdSekunder } : {}),
         ...(formData.icdTersier ? { icdTersier: formData.icdTersier } : {}),
@@ -118,18 +102,15 @@ export default function Step1Diagnosis({
         ...(formData.riwayatSosialKebiasaan ? { riwayatSosialKebiasaan: formData.riwayatSosialKebiasaan } : {}),
         ...(formData.riwayatPengobatan ? { riwayatPengobatan: formData.riwayatPengobatan } : {}),
         ...(formData.pemeriksaanFisik ? { pemeriksaanFisik: formData.pemeriksaanFisik } : {}),
-        // Don't include pemeriksaanTambahan when using existing diagnosis
       };
 
       devLog('📤 Submitting diagnosis with data:', data);
       devLog('📤 doktorPemeriksa being sent:', data.doktorPemeriksa);
 
       await sessionApi.createDiagnosis(encounterId, data);
-      setIsEditing(false);
       onComplete();
     } catch (err: any) {
-      devError('Failed to create diagnosis:', err);
-      // Show more detailed error message
+      devError('Failed to save diagnosis:', err);
       const errorDetails = err.response?.data?.error?.details;
       if (errorDetails && Array.isArray(errorDetails)) {
         const messages = errorDetails.map((d: any) => `${d.path?.join('.')}: ${d.message}`).join(', ');
@@ -177,7 +158,8 @@ export default function Step1Diagnosis({
     );
   }
 
-  if (diagnosis && !isEditing) {
+  if (diagnosis) {
+    // READ-ONLY COMPLETED VIEW - No edit functionality
     return (
       <div className={`${styles.container} ${styles.completed}`}>
         <div className={styles.header}>
@@ -216,6 +198,7 @@ export default function Step1Diagnosis({
     );
   }
 
+  // CREATE MODE - Select existing diagnosis
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -233,7 +216,6 @@ export default function Step1Diagnosis({
         </div>
       )}
 
-      {/* Show message if no diagnoses available */}
       {memberDiagnoses.length === 0 && (
         <div className={styles.warningAlert}>
           <span className={styles.warningIcon}>ℹ️</span>
@@ -245,7 +227,6 @@ export default function Step1Diagnosis({
       )}
 
       <form onSubmit={handleSubmit} className={styles.form}>
-        {/* Select existing diagnosis - ONLY OPTION */}
         {memberDiagnoses.length > 0 && (
           <>
             <div className={styles.formGroup}>

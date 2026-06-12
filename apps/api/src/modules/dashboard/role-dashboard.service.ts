@@ -256,7 +256,8 @@ export class RoleDashboardService {
       ? Math.round((monthlyCompleted / monthlySessions.length) * 100) 
       : 0;
 
-    // Recent patients - get unique members from recent sessions
+    // Recent patients - get unique members from recent sessions for this doctor
+    // If doctor has no sessions yet, show all active members in the branch
     const recentSessions = await prisma.treatmentSession.findMany({
       where: {
         doctorId,
@@ -301,6 +302,48 @@ export class RoleDashboardService {
         });
       }
       if (memberMap.size >= 5) break;
+    }
+
+    // If no patients found from sessions, get active members from branch
+    if (memberMap.size === 0) {
+      const activeMembers = await prisma.member.findMany({
+        where: {
+          registrationBranchId: branchId,
+          memberPackages: {
+            some: {
+              status: 'ACTIVE',
+              branchId: branchId,
+            },
+          },
+        },
+        include: {
+          user: { include: { profile: true } },
+          memberPackages: {
+            where: {
+              status: 'ACTIVE',
+              branchId: branchId,
+            },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      });
+
+      for (const member of activeMembers) {
+        const pkg = member.memberPackages[0];
+        if (pkg) {
+          memberMap.set(member.id, {
+            memberId: member.id,
+            memberNo: member.memberNo,
+            memberName: member.user.profile?.fullName || 'Unknown',
+            packageType: pkg.packageType,
+            progress: `${pkg.usedSessions}/${pkg.totalSessions}`,
+            lastSession: null,
+          });
+        }
+      }
     }
 
     return {

@@ -2,285 +2,335 @@
 
 import { useState, useEffect } from 'react';
 import { inventoryApi } from '@/lib/api/inventoryApi';
+import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
-import styles from './page.module.css';
+import { Package, ArrowRight, Calendar, Building2, TrendingUp, Download, Filter as FilterIcon } from 'lucide-react';
 
-interface StockMutation {
+interface Shipment {
   id: string;
-  type: string;
-  quantity: string;
-  stockBefore: string;
-  stockAfter: string;
-  notes: string | null;
+  shipmentCode: string;
+  status: 'PENDING' | 'SHIPPED' | 'RECEIVED';
+  shippedAt: string | null;
+  receivedAt: string | null;
   createdAt: string;
-  inventoryItem: {
+  branchFrom: {
     id: string;
+    name: string;
+    branchCode: string;
+  };
+  branchTo: {
+    id: string;
+    name: string;
+    branchCode: string;
+  };
+  items: Array<{
+    id: string;
+    quantity: number;
     masterProduct: {
       name: string;
       sku: string;
-      category: string;
     };
-    branch: {
-      name: string;
+  }>;
+  createdBy: {
+    profile: {
+      fullName: string;
     };
   };
-  referenceInfo: {
-    type: 'session' | 'shipment';
-    id: string;
-    sessionCode?: string;
-    memberName?: string;
-    treatmentDate?: string;
-    shipmentCode?: string;
-    from?: string;
-    to?: string;
-  } | null;
-  createdByName: string;
 }
 
-const MUTATION_TYPES = [
-  { value: '', label: 'Semua Tipe' },
-  { value: 'USED', label: 'Digunakan' },
-  { value: 'RECEIVED', label: 'Diterima' },
-  { value: 'ADJUSTED', label: 'Penyesuaian' },
-  { value: 'RETURNED', label: 'Dikembalikan' },
-];
+interface ManagedBranch {
+  branchId: string;
+  branchName: string;
+  branchCode: string;
+}
 
-const TYPE_LABELS: Record<string, string> = {
-  USED: 'Digunakan',
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: 'Menunggu',
+  SHIPPED: 'Dikirim',
   RECEIVED: 'Diterima',
-  ADJUSTED: 'Penyesuaian',
-  RETURNED: 'Dikembalikan',
 };
 
-const TYPE_COLORS: Record<string, string> = {
-  USED: 'red',
-  RECEIVED: 'green',
-  ADJUSTED: 'blue',
-  RETURNED: 'orange',
+const STATUS_COLORS: Record<string, string> = {
+  PENDING: 'bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-500/30',
+  SHIPPED: 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-500/30',
+  RECEIVED: 'bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 border-green-200 dark:border-green-500/30',
 };
 
-export default function StockMutationsPage() {
+export default function BranchTransfersPage() {
   const { user } = useAuthStore();
-  const [mutations, setMutations] = useState<StockMutation[]>([]);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [branches, setBranches] = useState<ManagedBranch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    type: '',
-    startDate: '',
-    endDate: '',
-    page: 1,
-    limit: 50,
-  });
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    limit: 50,
-    totalPages: 0,
-  });
+  const [branchFilter, setBranchFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
-  // Load mutations
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
+
+  // Load managed branches for Admin Manager
   useEffect(() => {
-    loadMutations();
-  }, [filters]);
+    if (isAdminManager) {
+      fetchBranches();
+    }
+  }, [isAdminManager]);
 
-  const loadMutations = async () => {
+  // Load shipments
+  useEffect(() => {
+    fetchShipments();
+  }, [branchFilter, statusFilter, startDate, endDate]);
+
+  const fetchBranches = async () => {
+    try {
+      const response = await doctorBranchApi.getManagedBranches(false);
+      const wrappedResponse = response as any;
+      const branchesArray = wrappedResponse.data || [];
+      setBranches(Array.isArray(branchesArray) ? branchesArray : []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+      setBranches([]);
+    }
+  };
+
+  const fetchShipments = async () => {
     setLoading(true);
     try {
-      const response = await inventoryApi.getStockMutations(filters);
-      setMutations(response.data.data);
-      setPagination(response.data.pagination);
+      const params: any = {};
+      if (branchFilter) params.branchId = branchFilter;
+      if (statusFilter) params.status = statusFilter;
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+
+      const response = await inventoryApi.getShipments(params);
+      const wrappedData = (response.data as any).data || response.data;
+      const shipmentsArray = wrappedData.shipments || wrappedData || [];
+      
+      setShipments(Array.isArray(shipmentsArray) ? shipmentsArray : []);
     } catch (err) {
-      console.error('Failed to load mutations:', err);
+      console.error('Failed to load shipments:', err);
+      setShipments([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleExport = () => {
-    const params = new URLSearchParams();
-    Object.keys(filters).forEach(key => {
-      if (filters[key as keyof typeof filters]) {
-        params.append(key, String(filters[key as keyof typeof filters]));
-      }
-    });
-    
-    window.open(`${process.env.NEXT_PUBLIC_API_URL}/inventory/stock-mutations/export?${params}`, '_blank');
-  };
-
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('id-ID', {
+    return new Date(dateString).toLocaleDateString('id-ID', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
     });
   };
 
-  const formatQuantity = (type: string, quantity: string) => {
-    const num = Number(quantity);
-    if (type === 'USED') {
-      return `-${num}`;
-    } else {
-      return `+${num}`;
-    }
+  const getTotalItems = (shipment: Shipment) => {
+    return shipment.items.reduce((sum, item) => sum + item.quantity, 0);
   };
 
+  // Filter shipments by managed branches
+  const filteredShipments = isAdminManager
+    ? shipments.filter(s => 
+        branches.some(b => b.branchId === s.branchFrom.id || b.branchId === s.branchTo.id)
+      )
+    : shipments;
+
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>📊 Riwayat Mutasi Stok</h1>
-          <p className={styles.subtitle}>
-            Lihat semua pergerakan stok material
-          </p>
+    <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-6">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/30">
+            <Package className="h-7 w-7 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Transfer Barang Antar Cabang</h1>
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
+              {isAdminManager ? 'Lihat transfer barang di cabang yang Anda kelola' : 'Lihat semua transfer barang antar cabang'}
+            </p>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Branch Filter - Admin Manager only */}
+            {isAdminManager && branches.length > 0 && (
+              <div className="relative min-w-[200px]">
+                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+                <select
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  className="w-full pl-10 pr-8 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="">Semua Cabang</option>
+                  {branches.map((branch) => (
+                    <option key={branch.branchId} value={branch.branchId}>
+                      {branch.branchName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Status Filter */}
+            <div className="relative min-w-[180px]">
+              <FilterIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full pl-10 pr-8 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all appearance-none cursor-pointer"
+              >
+                <option value="">Semua Status</option>
+                <option value="PENDING">Menunggu</option>
+                <option value="SHIPPED">Dikirim</option>
+                <option value="RECEIVED">Diterima</option>
+              </select>
+            </div>
+
+            {/* Date Range */}
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+                />
+              </div>
+              <span className="text-neutral-400 text-sm">—</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className={styles.filters}>
-        <div className={styles.filterGroup}>
-          <label>Tipe:</label>
-          <select
-            value={filters.type}
-            onChange={(e) => setFilters({ ...filters, type: e.target.value, page: 1 })}
-            className={styles.select}
-          >
-            {MUTATION_TYPES.map(type => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label>Dari Tanggal:</label>
-          <input
-            type="date"
-            value={filters.startDate}
-            onChange={(e) => setFilters({ ...filters, startDate: e.target.value, page: 1 })}
-            className={styles.input}
-          />
-        </div>
-
-        <div className={styles.filterGroup}>
-          <label>Sampai Tanggal:</label>
-          <input
-            type="date"
-            value={filters.endDate}
-            onChange={(e) => setFilters({ ...filters, endDate: e.target.value, page: 1 })}
-            className={styles.input}
-          />
-        </div>
-
-        <button onClick={handleExport} className={styles.exportButton}>
-          📥 Export Excel
-        </button>
-      </div>
-
-      {/* Table */}
+      {/* Content */}
       {loading ? (
-        <div className={styles.loading}>Memuat data...</div>
-      ) : mutations.length === 0 ? (
-        <div className={styles.empty}>
-          <p>Tidak ada data mutasi stok</p>
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-20 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="relative">
+              <div className="h-12 w-12 rounded-full border-4 border-neutral-200 dark:border-neutral-700"></div>
+              <div className="absolute inset-0 h-12 w-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin"></div>
+            </div>
+            <span className="text-sm text-neutral-500 dark:text-neutral-400">Memuat data transfer...</span>
+          </div>
+        </div>
+      ) : filteredShipments.length === 0 ? (
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-20 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800">
+              <Package className="h-8 w-8 text-neutral-400" />
+            </div>
+            <div>
+              <p className="text-neutral-900 dark:text-white font-semibold">Tidak ada data transfer</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                Belum ada transfer barang yang sesuai dengan filter
+              </p>
+            </div>
+          </div>
         </div>
       ) : (
-        <>
-          <div className={styles.tableContainer}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>Tanggal</th>
-                  <th>Item</th>
-                  <th>Cabang</th>
-                  <th>Tipe</th>
-                  <th>Jumlah</th>
-                  <th>Stok Sebelum → Sesudah</th>
-                  <th>Referensi</th>
-                  <th>User</th>
-                </tr>
-              </thead>
-              <tbody>
-                {mutations.map((mutation) => (
-                  <tr key={mutation.id}>
-                    <td>{formatDate(mutation.createdAt)}</td>
-                    <td>
-                      <div className={styles.itemInfo}>
-                        <div className={styles.itemName}>
-                          {mutation.inventoryItem.masterProduct.name}
-                        </div>
-                        <div className={styles.itemSku}>
-                          {mutation.inventoryItem.masterProduct.sku}
-                        </div>
-                      </div>
-                    </td>
-                    <td>{mutation.inventoryItem.branch.name}</td>
-                    <td>
-                      <span className={`${styles.badge} ${styles[`badge${TYPE_COLORS[mutation.type]}`]}`}>
-                        {TYPE_LABELS[mutation.type]}
-                      </span>
-                    </td>
-                    <td className={mutation.type === 'USED' ? styles.negative : styles.positive}>
-                      {formatQuantity(mutation.type, mutation.quantity)}
-                    </td>
-                    <td>
-                      {Number(mutation.stockBefore).toFixed(0)} → {Number(mutation.stockAfter).toFixed(0)}
-                    </td>
-                    <td>
-                      {mutation.referenceInfo ? (
-                        mutation.referenceInfo.type === 'session' ? (
-                          <a
-                            href={`/sessions/${mutation.referenceInfo.id}`}
-                            className={styles.link}
-                          >
-                            {mutation.referenceInfo.sessionCode}
-                            <br />
-                            <small>{mutation.referenceInfo.memberName}</small>
-                          </a>
-                        ) : (
-                          <div className={styles.shipmentRef}>
-                            {mutation.referenceInfo.shipmentCode}
-                            <br />
-                            <small>
-                              {mutation.referenceInfo.from} → {mutation.referenceInfo.to}
-                            </small>
-                          </div>
-                        )
-                      ) : (
-                        <span className={styles.noRef}>-</span>
-                      )}
-                    </td>
-                    <td>{mutation.createdByName}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="grid gap-4">
+          {filteredShipments.map((shipment) => (
+            <div
+              key={shipment.id}
+              className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-6 hover:shadow-lg hover:shadow-blue-500/5 transition-all duration-300"
+            >
+              {/* Header */}
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-500/20 dark:to-blue-600/20">
+                    <Package className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-neutral-900 dark:text-white">{shipment.shipmentCode}</h3>
+                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                      Dibuat: {formatDate(shipment.createdAt)} • {shipment.createdBy.profile.fullName}
+                    </p>
+                  </div>
+                </div>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${STATUS_COLORS[shipment.status]}`}>
+                  {STATUS_LABELS[shipment.status]}
+                </span>
+              </div>
 
-          {/* Pagination */}
-          <div className={styles.pagination}>
-            <button
-              onClick={() => setFilters({ ...filters, page: filters.page - 1 })}
-              disabled={filters.page === 1}
-              className={styles.pageButton}
-            >
-              ← Sebelumnya
-            </button>
-            <span className={styles.pageInfo}>
-              Halaman {pagination.page} dari {pagination.totalPages} 
-              ({pagination.total} total mutasi)
-            </span>
-            <button
-              onClick={() => setFilters({ ...filters, page: filters.page + 1 })}
-              disabled={filters.page >= pagination.totalPages}
-              className={styles.pageButton}
-            >
-              Selanjutnya →
-            </button>
-          </div>
-        </>
+              {/* Branch Transfer */}
+              <div className="flex items-center gap-4 mb-4 p-4 rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Building2 className="h-4 w-4 text-neutral-400" />
+                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Dari</span>
+                  </div>
+                  <p className="font-semibold text-neutral-900 dark:text-white">{shipment.branchFrom.name}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">{shipment.branchFrom.branchCode}</p>
+                </div>
+                
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-500/20">
+                  <ArrowRight className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                
+                <div className="flex-1 text-right">
+                  <div className="flex items-center justify-end gap-2 mb-1">
+                    <span className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Ke</span>
+                    <Building2 className="h-4 w-4 text-neutral-400" />
+                  </div>
+                  <p className="font-semibold text-neutral-900 dark:text-white">{shipment.branchTo.name}</p>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">{shipment.branchTo.branchCode}</p>
+                </div>
+              </div>
+
+              {/* Items */}
+              <div className="space-y-2 mb-4">
+                <div className="flex items-center gap-2 text-xs font-medium text-neutral-500 dark:text-neutral-400 mb-2">
+                  <TrendingUp className="h-4 w-4" />
+                  <span>Item yang Ditransfer ({shipment.items.length} item)</span>
+                </div>
+                {shipment.items.slice(0, 3).map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-neutral-900 dark:text-white">{item.masterProduct.name}</p>
+                      <p className="text-xs text-neutral-500 dark:text-neutral-400">{item.masterProduct.sku}</p>
+                    </div>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">
+                      {item.quantity} unit
+                    </span>
+                  </div>
+                ))}
+                {shipment.items.length > 3 && (
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-2">
+                    + {shipment.items.length - 3} item lainnya
+                  </p>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-between pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-2 text-sm text-neutral-500 dark:text-neutral-400">
+                  <Package className="h-4 w-4" />
+                  <span>Total: <strong className="text-neutral-900 dark:text-white">{getTotalItems(shipment)}</strong> unit</span>
+                </div>
+                {shipment.shippedAt && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Dikirim: {formatDate(shipment.shippedAt)}
+                  </p>
+                )}
+                {shipment.receivedAt && (
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                    Diterima: {formatDate(shipment.receivedAt)}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

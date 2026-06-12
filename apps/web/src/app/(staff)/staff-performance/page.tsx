@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { usersApi, StaffPerformance, StaffPerformanceSummaryResponse } from '@/lib/usersApi';
 import { branchesApi } from '@/lib/api/branchesApi';
+import { doctorBranchApi, ManagedBranch } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
@@ -72,6 +73,7 @@ export default function StaffPerformancePage() {
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   useEffect(() => {
@@ -87,7 +89,11 @@ export default function StaffPerformancePage() {
     if (isSuperAdmin && !branchFilter) {
       setBranchFilter('all');
     }
-  }, [isAdminCabang, isSuperAdmin, user?.branchId]);
+    // For ADMIN_MANAGER, auto-select first managed branch if available
+    if (isAdminManager && branches.length > 0 && !branchFilter) {
+      setBranchFilter(branches[0].id);
+    }
+  }, [isAdminCabang, isSuperAdmin, isAdminManager, user?.branchId, branches]);
 
   useEffect(() => {
     // Only fetch if we have a branch selected (required) or Super Admin with 'all'
@@ -98,15 +104,51 @@ export default function StaffPerformancePage() {
 
   const fetchBranches = async () => {
     try {
-      const response = await branchesApi.getAllBranches();
-      setBranches(response.data.data);
-    } catch (error) {
+      console.log('🔍 fetchBranches - isAdminManager:', isAdminManager);
+      
+      // Admin Manager uses dedicated managed branches API
+      if (isAdminManager) {
+        console.log('📞 Calling doctorBranchApi.getManagedBranches...');
+        const response = await doctorBranchApi.getManagedBranches(false);
+        console.log('✅ API response:', response);
+        
+        // Backend returns: { success: true, data: [...branches...] }
+        // Axios returns it as: response.data = { success: true, data: [...branches...] }
+        // So we need: response.data.data to get the array
+        const wrappedResponse = response as any;
+        const branchesArray = wrappedResponse.data || [];
+        console.log('� Extracted branches array:', branchesArray);
+        
+        setBranches(Array.isArray(branchesArray) ? branchesArray.map((b: ManagedBranch) => ({
+          id: b.branchId,
+          name: b.branchName,
+          branchCode: b.branchCode,
+        })) : []);
+        
+        console.log('✅ Branches set successfully:', branchesArray.length, 'branches');
+      } else {
+        // Super Admin and Admin Cabang use general branches API
+        console.log('📞 Calling branchesApi.getAllBranches...');
+        const response = await branchesApi.getAllBranches();
+        console.log('✅ Response from getAllBranches:', response);
+        
+        const branchList = response?.data?.data || [];
+        setBranches(Array.isArray(branchList) ? branchList : []);
+      }
+    } catch (error: any) {
+      console.error('❌ Error fetching branches:', error);
       devError('Error fetching branches:', error);
+      setBranches([]);
+      // Don't show error if Admin Manager has no branches yet (empty is valid)
+      if (!isAdminManager || error?.response?.status !== 404) {
+        showToast.error('Gagal memuat daftar cabang');
+      }
     }
   };
 
   const fetchPerformance = async () => {
     try {
+      console.log('🔍 fetchPerformance - branchFilter:', branchFilter);
       setLoading(true);
       const result = await usersApi.getStaffPerformanceSummary({
         branchId: branchFilter || undefined,
@@ -115,8 +157,10 @@ export default function StaffPerformancePage() {
         page,
         limit,
       });
+      console.log('✅ Performance result:', result);
       setData(result);
     } catch (error: any) {
+      console.error('❌ Error fetching performance:', error);
       devError('Error fetching performance:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat data kinerja');
     } finally {
@@ -280,16 +324,16 @@ export default function StaffPerformancePage() {
       )}
 
       {/* No Branches Available for Admin Manager */}
-      {user?.role === 'ADMIN_MANAGER' && branches.length === 0 && !loading && (
+      {isAdminManager && branches.length === 0 && !loading && (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-12 text-center">
           <div className="flex flex-col items-center gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-500/20">
-              <Building2 className="h-8 w-8 text-red-600 dark:text-red-400" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
+              <Building2 className="h-8 w-8 text-amber-600 dark:text-amber-400" />
             </div>
             <div>
-              <p className="text-lg font-semibold text-neutral-900 dark:text-white">Tidak Ada Cabang</p>
+              <p className="text-lg font-semibold text-neutral-900 dark:text-white">Tidak Ada Cabang yang Dikelola</p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                Anda belum di-assign ke cabang manapun. Hubungi Super Admin untuk mendapatkan akses ke cabang.
+                Anda belum mengelola cabang manapun. Silakan tambahkan cabang melalui halaman <span className="font-semibold">Kelola Cabang</span>.
               </p>
             </div>
           </div>

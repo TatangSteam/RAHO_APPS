@@ -608,20 +608,33 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 </div>
                 <div style={{ 
                   textAlign: 'right',
-                  fontSize: '13px',
-                  color: '#cbd5e1'
+                  padding: '8px 12px',
+                  background: 'rgba(59,130,246,0.15)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(59,130,246,0.3)'
                 }}>
-                  <div style={{ fontWeight: '600' }}>
+                  <div style={{ 
+                    fontSize: '11px', 
+                    color: '#94a3b8',
+                    marginBottom: '4px',
+                    textTransform: 'uppercase',
+                    fontWeight: '600',
+                    letterSpacing: '0.5px'
+                  }}>
+                    Dibuat
+                  </div>
+                  <div style={{ fontWeight: '700', fontSize: '14px', color: '#60a5fa' }}>
                     📅 {new Date(plan.createdAt).toLocaleDateString('id-ID', {
                       day: '2-digit',
                       month: 'short',
                       year: 'numeric',
                     })}
                   </div>
-                  <div style={{ fontSize: '12px', marginTop: '4px', color: '#94a3b8' }}>
-                    {new Date(plan.createdAt).toLocaleTimeString('id-ID', {
+                  <div style={{ fontSize: '13px', marginTop: '2px', color: '#93c5fd', fontWeight: '600' }}>
+                    ⏰ {new Date(plan.createdAt).toLocaleTimeString('id-ID', {
                       hour: '2-digit',
-                      minute: '2-digit'
+                      minute: '2-digit',
+                      second: '2-digit'
                     })}
                   </div>
                 </div>
@@ -630,22 +643,32 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               {plan.keterangan && (
                 <div style={{ 
                   marginBottom: '16px', 
-                  padding: '12px 16px',
-                  background: 'rgba(148,163,184,0.15)',
+                  padding: '14px 18px',
+                  background: 'rgba(168,85,247,0.12)',
                   borderRadius: 'var(--radius-md)',
-                  borderLeft: '4px solid #3b82f6'
+                  border: '2px solid rgba(168,85,247,0.3)',
+                  borderLeft: '5px solid #a855f7'
                 }}>
                   <div style={{ 
-                    fontSize: '11px', 
+                    fontSize: '12px', 
                     fontWeight: '700', 
-                    color: 'var(--text-muted)', 
-                    marginBottom: '4px',
+                    color: '#c084fc', 
+                    marginBottom: '8px',
                     textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
+                    letterSpacing: '0.8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
                   }}>
-                    📝 Keterangan
+                    📝 Keterangan / Catatan
                   </div>
-                  <div style={{ fontSize: '14px', color: '#e2e8f0', lineHeight: '1.5' }}>
+                  <div style={{ 
+                    fontSize: '14px', 
+                    color: '#f1f5f9', 
+                    lineHeight: '1.6',
+                    fontWeight: '500',
+                    whiteSpace: 'pre-wrap'
+                  }}>
                     {plan.keterangan}
                   </div>
                 </div>

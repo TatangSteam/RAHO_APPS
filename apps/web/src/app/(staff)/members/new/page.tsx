@@ -13,7 +13,6 @@ import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
 import IncentiveSection from '@/components/members/new/IncentiveSection';
 import DocumentUploadSection from '@/components/members/new/DocumentUploadSection';
-import TherapyPlanSection, { type TherapyPlanData } from '@/components/members/new/TherapyPlanSection';
 
 interface Branch {
   id: string;
@@ -70,7 +69,48 @@ export default function NewMemberPage() {
     nextIncentiveValue: undefined,
   });
 
-  const [therapyPlan, setTherapyPlan] = useState<TherapyPlanData[]>([]);
+  // Form persistence - Save to localStorage
+  const FORM_STORAGE_KEY = 'newMemberFormData';
+  
+  // Load saved form data on mount
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem(FORM_STORAGE_KEY);
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        setFormData(parsed.formData || formData);
+        // Note: Files cannot be saved to localStorage, user will need to re-upload
+      }
+    } catch (error) {
+      devError('Error loading saved form data:', error);
+    }
+  }, []);
+
+  // Auto-save form data on change (debounced)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        const dataToSave = {
+          formData,
+          savedAt: new Date().toISOString(),
+        };
+        localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(dataToSave));
+      } catch (error) {
+        devError('Error saving form data:', error);
+      }
+    }, 1000); // Save after 1 second of inactivity
+
+    return () => clearTimeout(timeoutId);
+  }, [formData]);
+
+  // Clear saved form data after successful submission
+  const clearSavedFormData = () => {
+    try {
+      localStorage.removeItem(FORM_STORAGE_KEY);
+    } catch (error) {
+      devError('Error clearing saved form data:', error);
+    }
+  };
 
   // Fetch branches for ADMIN_MANAGER
   useEffect(() => {
@@ -108,10 +148,6 @@ export default function NewMemberPage() {
     } else {
       setFormData((prev) => ({ ...prev, [name]: value }));
     }
-  };
-
-  const handleTherapyPlanChange = (plans: TherapyPlanData[]) => {
-    setTherapyPlan(plans);
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,12 +245,11 @@ export default function NewMemberPage() {
     try {
       setLoading(true);
       
-      // Prepare data with therapy plans if any exist
+      // Prepare data without therapy plans
       const dataToSubmit = {
         ...formData,
         // Only include branchId for ADMIN_MANAGER
         branchId: isAdminManager ? formData.branchId : undefined,
-        therapyPlans: therapyPlan.length > 0 ? therapyPlan : undefined,
       };
 
       const result = await createMemberApi(dataToSubmit, {
@@ -223,6 +258,10 @@ export default function NewMemberPage() {
       });
 
       showToast.success(`Member berhasil didaftarkan! No. Member: ${result.memberNo}`);
+      
+      // Clear saved form data after successful submission
+      clearSavedFormData();
+      
       router.push(`/members/${result.memberId}`);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error?.message || 'Gagal mendaftarkan member';
@@ -240,9 +279,106 @@ export default function NewMemberPage() {
     }
   };
 
+  const handleClearDraft = () => {
+    if (confirm('Hapus semua data yang tersimpan? Data yang sudah diisi akan hilang.')) {
+      clearSavedFormData();
+      // Reset form to initial state
+      setFormData({
+        branchId: '',
+        fullName: '',
+        nik: '',
+        birthPlace: '',
+        birthDate: '',
+        gender: undefined,
+        religion: '',
+        phone: '',
+        email: '',
+        address: '',
+        occupation: '',
+        maritalStatus: '',
+        emergencyContact: '',
+        emergencyContactPhone: '',
+        infoSource: '',
+        postalCode: '',
+        memberEmail: '',
+        memberPassword: '',
+        referralCode: '',
+        referralCodeId: '',
+        isConsentToPhoto: true,
+        firstIncentiveType: undefined,
+        firstIncentiveValue: undefined,
+        nextIncentiveType: undefined,
+        nextIncentiveValue: undefined,
+      });
+      setPspFile(null);
+      setPhotoFile(null);
+      setPhotoPreview(null);
+      showToast.success('Draft berhasil dihapus');
+    }
+  };
+
+  // Check if there's saved data
+  const [hasSavedData, setHasSavedData] = useState(false);
+  useEffect(() => {
+    const savedData = localStorage.getItem(FORM_STORAGE_KEY);
+    setHasSavedData(!!savedData);
+  }, [formData]);
+
   return (
     <>
       <NewMemberHeader onBack={() => router.back()} />
+
+      {hasSavedData && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1))',
+          border: '1px solid rgba(59, 130, 246, 0.3)',
+          borderRadius: '12px',
+          padding: '16px 20px',
+          marginBottom: '20px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>💾</span>
+            <div>
+              <p style={{ fontWeight: '600', marginBottom: '4px', color: 'var(--text-primary)' }}>
+                Data tersimpan otomatis
+              </p>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Form Anda disimpan otomatis. Anda bisa keluar dan melanjutkan nanti.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleClearDraft}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '8px',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              background: 'rgba(239, 68, 68, 0.1)',
+              color: '#ef4444',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+            }}
+          >
+            🗑️ Hapus Draft
+          </button>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {/* Branch Selection for ADMIN_MANAGER */}
@@ -319,11 +455,6 @@ export default function NewMemberPage() {
           photoPreview={photoPreview}
           onPspChange={handlePspChange}
           onPhotoChange={handlePhotoChange}
-        />
-
-        <TherapyPlanSection
-          therapyPlans={therapyPlan}
-          onChange={handleTherapyPlanChange}
         />
 
         {/* Submit Buttons */}

@@ -97,6 +97,13 @@ export const branchesApi = {
   },
 
   /**
+   * Get branch sessions (therapy sessions)
+   */
+  getBranchSessions: (branchId: string, params?: { page?: number; limit?: number; status?: string }) => {
+    return api.get(`/branches/${branchId}/sessions`, { params });
+  },
+
+  /**
    * Get available managers for branch (not yet assigned)
    */
   getAvailableManagers: (branchId: string) => {
@@ -186,6 +193,13 @@ export const branchesApi = {
    */
   getMedicalStaffNotInBranch: (excludeBranchId: string) => {
     return api.get('/users/medical-staff', { params: { excludeBranchId } });
+  },
+
+  /**
+   * Get all medical staff (DOCTOR/NURSE) - shows all regardless of assignment
+   */
+  getAllMedicalStaff: () => {
+    return api.get('/users/medical-staff/all');
   },
 
   /**

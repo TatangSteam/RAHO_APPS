@@ -12,6 +12,7 @@ import {
   updateBranchService,
   deleteBranchService,
   getBranchManagersService,
+  getBranchSessionsService,
   assignManagerToBranchService,
   unassignManagerFromBranchService,
   getAvailableManagersForBranchService,
@@ -138,6 +139,21 @@ export async function deleteBranch(req: Request, res: Response, next: NextFuncti
 export async function getBranchManagers(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const result = await getBranchManagersService(req.params.branchId);
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Get Branch Sessions ───────────────────────────────────────
+export async function getBranchSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { page = '1', limit = '50', status } = req.query;
+    const result = await getBranchSessionsService(req.params.branchId, {
+      page: parseInt(page as string),
+      limit: parseInt(limit as string),
+      status: status as string,
+    });
     sendSuccess(res, result);
   } catch (err) {
     next(err);

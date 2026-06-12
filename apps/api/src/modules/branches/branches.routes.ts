@@ -10,6 +10,7 @@ import {
   updateBranch,
   deleteBranch,
   getBranchManagers,
+  getBranchSessions,
   assignManagerToBranch,
   unassignManagerFromBranch,
   getAvailableManagersForBranch,
@@ -123,6 +124,14 @@ branchesRouter.get(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   getBranchManagers,
+);
+
+// ── Get Branch Sessions (Therapy Sessions in branch) ──────────
+branchesRouter.get(
+  '/:branchId/sessions',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  getBranchSessions,
 );
 
 // ── Assign Manager to Branch ──────────────────────────────────

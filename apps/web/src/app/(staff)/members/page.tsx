@@ -475,8 +475,16 @@ export default function MembersPage() {
                                 router.push(`/members/${member.memberId}`);
                               }}
                               className="btn btn-sm btn-primary"
+                              style={{ 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '6px',
+                                padding: '8px 16px',
+                                fontWeight: '600'
+                              }}
+                              title="Lihat detail member"
                           >
-                            👁️ Detail
+                            👁️ Lihat Detail
                           </button>
                         </td>
                       </tr>

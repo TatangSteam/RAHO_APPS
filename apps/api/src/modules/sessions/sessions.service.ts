@@ -2,6 +2,7 @@
 import type {
   CreateSessionInput,
   CreateDiagnosisInput,
+  UpdateDiagnosisInput,
   CreateTherapyPlanInput,
   CreateVitalSignInput,
   CreateInfusionInput,
@@ -106,6 +107,10 @@ export class SessionsService {
 
   async getDiagnosisByEncounter(encounterId: string) {
     return this.diagnosisService.getDiagnosisByEncounter(encounterId);
+  }
+
+  async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
+    return this.diagnosisService.updateDiagnosis(encounterId, data, userId);
   }
 
   // ============================================================

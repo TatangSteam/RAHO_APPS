@@ -47,7 +47,15 @@ export async function listUsersService(
       ? { branchId: callerBranchId }
       : {}),
     // Filter by branchId query param (manager/SA only)
-    ...(branchId && callerRole !== Role.ADMIN_CABANG ? { branchId } : {}),
+    // IMPORTANT: Include both primary branch AND staff assigned via StaffBranch
+    ...(branchId && callerRole !== Role.ADMIN_CABANG
+      ? {
+          OR: [
+            { branchId }, // Primary branch
+            { staffBranches: { some: { branchId } } }, // Multi-branch assignment
+          ],
+        }
+      : {}),
     ...(role ? { role } : {}),
     ...(search
       ? {
@@ -363,6 +371,82 @@ export async function updateAvatarService(userId: string, avatarUrl: string) {
   });
 }
 
+// ══════════════════════════════════════════════════════════════
+// SOFT DELETE (Deactivation)
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * Soft delete (deactivate) a staff member
+ * - Sets isActive = false (staff cannot login but data is preserved)
+ * - Checks for active sessions to prevent deletion
+ * - Returns warnings if historical sessions exist
+ */
+export async function softDeleteUserService(userId: string) {
+  // Validate user exists
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { 
+      id: true, 
+      email: true,
+      role: true, 
+      isActive: true,
+      profile: { select: { fullName: true } } 
+    },
+  });
+
+  if (!user) throw errors.notFound('User tidak ditemukan.');
+
+  // Check if already deactivated
+  if (!user.isActive) {
+    throw errors.badRequest('USER_ALREADY_INACTIVE', 'User sudah dinonaktifkan sebelumnya.');
+  }
+
+  // Check for active sessions (ONGOING encounters)
+  const activeSessions = await prisma.treatmentSession.count({
+    where: {
+      OR: [
+        { doctorId: userId },
+        { nurseId: userId },
+        { adminLayananId: userId },
+      ],
+      isCompleted: false,
+    },
+  });
+
+  if (activeSessions > 0) {
+    throw errors.badRequest(
+      'HAS_ACTIVE_SESSIONS', 
+      `Tidak dapat menghapus staff. ${user.profile?.fullName || 'User'} memiliki ${activeSessions} sesi terapi yang sedang berlangsung. Selesaikan sesi terlebih dahulu.`
+    );
+  }
+
+  // Count historical sessions for warning
+  const historicalSessions = await prisma.treatmentSession.count({
+    where: {
+      OR: [
+        { doctorId: userId },
+        { nurseId: userId },
+        { adminLayananId: userId },
+      ],
+      isCompleted: true,
+    },
+  });
+
+  // Deactivate user (soft delete)
+  await prisma.user.update({
+    where: { id: userId },
+    data: { isActive: false },
+  });
+
+  return {
+    success: true,
+    message: `${user.profile?.fullName || 'Staff'} berhasil dinonaktifkan.`,
+    email: user.email,
+    historicalSessions,
+    hasHistoricalData: historicalSessions > 0,
+  };
+}
+
 // ── Get Staff by Role (for dropdowns) ────────────────────────
 
 /**
@@ -550,6 +634,66 @@ export async function getMedicalStaffNotInBranchService(excludeBranchId: string)
           },
         },
       },
+    },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      staffCode: true,
+      branchId: true,
+      profile: {
+        select: {
+          fullName: true,
+          phone: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+      staffBranches: {
+        select: {
+          branch: {
+            select: {
+              id: true,
+              branchCode: true,
+              name: true,
+            },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { role: 'asc' },
+      { profile: { fullName: 'asc' } },
+    ],
+  });
+
+  return staff.map((s) => ({
+    id: s.id,
+    email: s.email,
+    role: s.role,
+    staffCode: s.staffCode,
+    fullName: s.profile?.fullName || '',
+    phone: s.profile?.phone || '',
+    primaryBranch: s.branch,
+    assignedBranches: s.staffBranches.map((sb) => sb.branch),
+  }));
+}
+
+/**
+ * Get ALL medical staff (DOCTOR + NURSE) - no filtering
+ * Used for "Assign Staff" modal that shows all staff
+ */
+export async function getAllMedicalStaffService() {
+  // Get ALL DOCTOR and NURSE users
+  const staff = await prisma.user.findMany({
+    where: {
+      role: { in: [Role.DOCTOR, Role.NURSE] },
+      isActive: true,
     },
     select: {
       id: true,

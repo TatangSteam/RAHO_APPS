@@ -144,6 +144,64 @@ export class MemberMedicalRecordsService {
   }
 
   /**
+   * Update member diagnosis
+   */
+  async updateMemberDiagnosis(memberId: string, diagnosisId: string, data: any, userId: string) {
+    // Verify diagnosis exists and belongs to this member
+    const existingDiagnosis = await prisma.diagnosis.findFirst({
+      where: {
+        id: diagnosisId,
+        memberId,
+      },
+    });
+
+    if (!existingDiagnosis) {
+      throw { status: 404, code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnosis tidak ditemukan' };
+    }
+
+    // If doktorPemeriksa is being updated, verify the new doctor
+    if (data.doktorPemeriksa && data.doktorPemeriksa !== existingDiagnosis.doktorPemeriksa) {
+      const doctor = await prisma.user.findUnique({
+        where: { id: data.doktorPemeriksa },
+      });
+
+      if (!doctor || doctor.role !== Role.DOCTOR || !doctor.isActive) {
+        throw { status: 403, code: 'INVALID_DOCTOR', message: 'Dokter tidak valid atau tidak aktif' };
+      }
+    }
+
+    // Update diagnosis
+    const updatedDiagnosis = await prisma.diagnosis.update({
+      where: { id: diagnosisId },
+      data: {
+        doktorPemeriksa: data.doktorPemeriksa,
+        diagnosa: data.diagnosa,
+        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        icdPrimer: data.icdPrimer || null,
+        icdSekunder: data.icdSekunder || null,
+        icdTersier: data.icdTersier || null,
+        keluhanRiwayatSekarang: data.keluhanRiwayatSekarang || null,
+        riwayatPenyakitTerdahulu: data.riwayatPenyakitTerdahulu || null,
+        riwayatSosialKebiasaan: data.riwayatSosialKebiasaan || null,
+        riwayatPengobatan: data.riwayatPengobatan || null,
+        pemeriksaanFisik: data.pemeriksaanFisik || null,
+        pemeriksaanTambahan: data.pemeriksaanTambahan || null,
+      },
+    });
+
+    // Log audit
+    await logAudit({
+      userId,
+      action: AuditAction.UPDATE,
+      resource: 'Diagnosis',
+      resourceId: diagnosisId,
+      meta: { memberId, diagnosisCode: existingDiagnosis.diagnosisCode },
+    });
+
+    return updatedDiagnosis;
+  }
+
+  /**
    * Get member therapy plans
    * Returns therapy plans with usage information and session counts
    */
