@@ -78,9 +78,9 @@ export default function BulkTherapyPlanModal({
       console.log('📦 Package Summary Response:', summary);
       console.log('📊 Can Create:', summary.therapyPlans.canCreate);
       console.log('📈 Existing:', summary.therapyPlans.existing);
-      console.log('🎫 Vouchers Total:', summary.package.vouchersTotal);
-      console.log('✅ Vouchers Used:', summary.package.vouchersUsed);
-      console.log('🔥 Vouchers Remaining:', summary.package.vouchersRemaining);
+      console.log('🎫 Vouchers Total:', summary.package?.vouchersTotal);
+      console.log('✅ Vouchers Used:', summary.package?.vouchersUsed);
+      console.log('🔥 Vouchers Remaining:', summary.package?.vouchersRemaining);
       setPackageSummary(summary);
     } catch (err: any) {
       console.error('❌ Error loading package summary:', err);
