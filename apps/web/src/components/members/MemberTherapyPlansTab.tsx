@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { therapyPlanApi, TherapyPlan, CreateTherapyPlanInput } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
+import BulkTherapyPlanModal from './BulkTherapyPlanModal';
+import EditTherapyPlanModal from './EditTherapyPlanModal';
 
 interface MemberTherapyPlansTabProps {
   memberId: string;
@@ -14,6 +16,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [therapyPlans, setTherapyPlans] = useState<TherapyPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<TherapyPlan | null>(null);
   const [formData, setFormData] = useState<CreateTherapyPlanInput>({
     keterangan: '',
     ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
@@ -46,6 +50,11 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleBulkSuccess = () => {
+    showToast.success('Therapy plans berhasil dibuat!');
+    loadTherapyPlans();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,14 +141,45 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     <div style={{ padding: 0 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>💊 Therapy Plans</h3>
-        <button 
-          className="btn btn-primary" 
-          onClick={() => setShowForm(!showForm)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          {showForm ? '✕ Tutup Form' : '➕ Buat Therapy Plan'}
-        </button>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button 
+            className="btn btn-secondary" 
+            onClick={() => setShowBulkModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            📋 Buat Bulk
+          </button>
+          <button 
+            className="btn btn-primary" 
+            onClick={() => setShowForm(!showForm)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            {showForm ? '✕ Tutup Form' : '➕ Buat Therapy Plan'}
+          </button>
+        </div>
       </div>
+
+      {/* Bulk Creation Modal */}
+      {showBulkModal && (
+        <BulkTherapyPlanModal
+          memberId={memberId}
+          onClose={() => setShowBulkModal(false)}
+          onSuccess={handleBulkSuccess}
+        />
+      )}
+
+      {/* Edit Therapy Plan Modal */}
+      {editingPlan && (
+        <EditTherapyPlanModal
+          therapyPlan={editingPlan}
+          memberId={memberId}
+          onClose={() => setEditingPlan(null)}
+          onSuccess={() => {
+            setEditingPlan(null);
+            loadTherapyPlans();
+          }}
+        />
+      )}
 
       {showForm && (
         <div className="card" style={{ 
@@ -555,21 +595,37 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {therapyPlans.map((plan) => (
-            <div 
+          {therapyPlans.map((plan) => {
+            // Determine card style based on status
+            const isSuperseded = !!plan.supersededById;
+            const isUsed = plan.isUsed;
+            
+            let cardBackground, cardBorder;
+            if (isSuperseded) {
+              // Grey for superseded (old version)
+              cardBackground = 'linear-gradient(135deg, rgba(148,163,184,0.05), rgba(100,116,139,0.05))';
+              cardBorder = '2px solid rgba(148,163,184,0.3)';
+            } else if (isUsed) {
+              // Green for used
+              cardBackground = 'linear-gradient(135deg, rgba(34,197,94,0.05), rgba(16,185,129,0.05))';
+              cardBorder = '2px solid rgba(34,197,94,0.2)';
+            } else {
+              // Yellow/amber for available
+              cardBackground = 'linear-gradient(135deg, rgba(251,191,36,0.05), rgba(245,158,11,0.05))';
+              cardBorder = '2px solid rgba(251,191,36,0.2)';
+            }
+
+            return <div 
               key={plan.id} 
               className="card" 
               style={{ 
                 padding: '24px',
-                background: plan.isUsed 
-                  ? 'linear-gradient(135deg, rgba(34,197,94,0.05), rgba(16,185,129,0.05))'
-                  : 'linear-gradient(135deg, rgba(251,191,36,0.05), rgba(245,158,11,0.05))',
-                border: plan.isUsed 
-                  ? '2px solid rgba(34,197,94,0.2)' 
-                  : '2px solid rgba(251,191,36,0.2)',
+                background: cardBackground,
+                border: cardBorder,
                 borderRadius: 'var(--radius-lg)',
                 transition: 'all 0.2s ease',
-                cursor: 'default'
+                cursor: 'default',
+                opacity: isSuperseded ? 0.7 : 1
               }}
             >
               <div style={{ 
@@ -578,7 +634,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 alignItems: 'flex-start', 
                 marginBottom: '16px' 
               }}>
-                <div>
+                <div style={{ flex: 1 }}>
                   <h4 style={{ 
                     margin: '0 0 8px 0', 
                     fontSize: '18px', 
@@ -587,24 +643,73 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     color: 'var(--text-primary)'
                   }}>
                     📋 {plan.planCode}
+                    {plan.version && plan.version > 1 && (
+                      <span style={{
+                        marginLeft: '8px',
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        background: 'rgba(59,130,246,0.2)',
+                        border: '1px solid rgba(59,130,246,0.4)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: '#60a5fa',
+                        fontWeight: '600'
+                      }}>
+                        v{plan.version}
+                      </span>
+                    )}
+                    {plan.supersededById && (
+                      <span style={{
+                        marginLeft: '8px',
+                        fontSize: '12px',
+                        padding: '2px 8px',
+                        background: 'rgba(239,68,68,0.2)',
+                        border: '1px solid rgba(239,68,68,0.4)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: '#ef4444',
+                        fontWeight: '600'
+                      }}>
+                        ⚠️ Superseded
+                      </span>
+                    )}
                   </h4>
-                  <span 
-                    className="badge" 
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '6px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      fontSize: '12px',
-                      fontWeight: '700',
-                      background: plan.isUsed ? 'rgba(34,197,94,0.25)' : 'rgba(251,191,36,0.25)',
-                      color: plan.isUsed ? '#4ade80' : '#fbbf24',
-                      border: plan.isUsed ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(251,191,36,0.5)'
-                    }}
-                  >
-                    {plan.isUsed ? '✅ Sudah Digunakan' : '🟡 Belum Digunakan'}
-                  </span>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    <span 
+                      className="badge" 
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        fontSize: '12px',
+                        fontWeight: '700',
+                        background: plan.isUsed ? 'rgba(34,197,94,0.25)' : 'rgba(251,191,36,0.25)',
+                        color: plan.isUsed ? '#4ade80' : '#fbbf24',
+                        border: plan.isUsed ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(251,191,36,0.5)'
+                      }}
+                    >
+                      {plan.isUsed ? '✅ Sudah Digunakan' : '🟡 Belum Digunakan'}
+                    </span>
+                    {!plan.isUsed && !plan.supersededById && (
+                      <button
+                        onClick={() => setEditingPlan(plan)}
+                        className="btn btn-sm"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          background: 'rgba(59,130,246,0.2)',
+                          border: '1px solid rgba(59,130,246,0.4)',
+                          color: '#60a5fa',
+                          fontWeight: '600',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                      >
+                        ✏️ Edit
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div style={{ 
                   textAlign: 'right',
@@ -1010,8 +1115,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   </button>
                 </div>
               )}
-            </div>
-          ))}
+            </div>;
+          })}
         </div>
       )}
 

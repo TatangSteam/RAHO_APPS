@@ -4,6 +4,8 @@ import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
 import { uploadMemberDocuments, uploadLabResult } from '../../middleware/upload';
+import { validate } from '../../middleware/validate';
+import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema } from './members.schema';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -198,6 +200,25 @@ router.delete(
 // THERAPY PLAN ROUTES
 // ============================================================
 
+// GET /api/v1/members/:memberId/therapy-plans/package-summary - Get package summary for bulk creation
+router.get(
+  '/:memberId/therapy-plans/package-summary',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getMemberPackageSummary.bind(controller)
+);
+
+// POST /api/v1/members/:memberId/therapy-plans/bulk - Bulk create therapy plans
+router.post(
+  '/:memberId/therapy-plans/bulk',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  validate(bulkCreateTherapyPlansSchema),
+  controller.bulkCreateTherapyPlans.bind(controller)
+);
+
 // GET /api/v1/members/:memberId/therapy-plans - Get member therapy plans
 router.get(
   '/:memberId/therapy-plans',
@@ -214,6 +235,25 @@ router.post(
   authorize(ALLSTAFF),
   assertBranchAccess,
   controller.createMemberTherapyPlan.bind(controller)
+);
+
+// PUT /api/v1/members/:memberId/therapy-plans/:therapyPlanId - Edit therapy plan (creates new version)
+router.put(
+  '/:memberId/therapy-plans/:therapyPlanId',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  validate(editTherapyPlanSchema),
+  controller.editTherapyPlan.bind(controller)
+);
+
+// GET /api/v1/members/:memberId/therapy-plans/:therapyPlanId/history - Get therapy plan history
+router.get(
+  '/:memberId/therapy-plans/:therapyPlanId/history',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getTherapyPlanHistory.bind(controller)
 );
 
 // ============================================================

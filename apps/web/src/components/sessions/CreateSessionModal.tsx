@@ -320,7 +320,8 @@ export default function CreateSessionModal({
     try {
       setLoadingTherapyPlans(true);
       const plans = await therapyPlanApi.getMemberTherapyPlans(id);
-      const availablePlans = plans.filter(p => !p.isUsed);
+      // Filter: only show plans that are NOT used AND NOT superseded (current version only)
+      const availablePlans = plans.filter(p => !p.isUsed && !p.supersededById);
       setTherapyPlans(availablePlans);
       if (availablePlans.length > 0) {
         setSelectedTherapyPlanId(availablePlans[0].id);

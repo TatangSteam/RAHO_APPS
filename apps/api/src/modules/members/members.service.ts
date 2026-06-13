@@ -7,6 +7,8 @@ import { MemberRegistrationService } from './services/member-registration.servic
 import { MemberUpdateService } from './services/member-update.service';
 import { MemberBranchAccessService } from './services/member-branch-access.service';
 import { MemberMedicalRecordsService } from './services/member-medical-records.service';
+import { MemberTherapyPlanBulkService } from './services/member-therapy-plan-bulk.service';
+import { MemberTherapyPlanEditService } from './services/member-therapy-plan-edit.service';
 
 /**
  * Main Members Service - Orchestrates all member-related operations
@@ -17,6 +19,8 @@ import { MemberMedicalRecordsService } from './services/member-medical-records.s
  * - MemberUpdateService: Handles member updates and deletion
  * - MemberBranchAccessService: Handles branch access management
  * - MemberMedicalRecordsService: Handles medical records (diagnoses, therapy plans, infusions)
+ * - MemberTherapyPlanBulkService: Handles bulk therapy plan creation
+ * - MemberTherapyPlanEditService: Handles therapy plan editing with versioning
  */
 export class MembersService {
   private retrievalService: MemberRetrievalService;
@@ -24,6 +28,8 @@ export class MembersService {
   private updateService: MemberUpdateService;
   private branchAccessService: MemberBranchAccessService;
   private medicalRecordsService: MemberMedicalRecordsService;
+  private therapyPlanBulkService: MemberTherapyPlanBulkService;
+  private therapyPlanEditService: MemberTherapyPlanEditService;
 
   constructor() {
     this.retrievalService = new MemberRetrievalService();
@@ -31,6 +37,8 @@ export class MembersService {
     this.updateService = new MemberUpdateService();
     this.branchAccessService = new MemberBranchAccessService();
     this.medicalRecordsService = new MemberMedicalRecordsService();
+    this.therapyPlanBulkService = new MemberTherapyPlanBulkService();
+    this.therapyPlanEditService = new MemberTherapyPlanEditService();
   }
 
   // ============================================================
@@ -216,6 +224,38 @@ export class MembersService {
    */
   async getMemberInfusions(memberId: string) {
     return await this.medicalRecordsService.getMemberInfusions(memberId);
+  }
+
+  // ============================================================
+  // BULK THERAPY PLAN CREATION
+  // ============================================================
+
+  /**
+   * Get member package summary for bulk therapy plan creation
+   */
+  async getMemberPackageSummary(memberId: string) {
+    return await this.therapyPlanBulkService.getMemberPackageSummary(memberId);
+  }
+
+  /**
+   * Bulk create therapy plans
+   */
+  async bulkCreateTherapyPlans(memberId: string, data: any, userId: string) {
+    return await this.therapyPlanBulkService.bulkCreateTherapyPlans(memberId, data);
+  }
+
+  /**
+   * Edit therapy plan (creates new version, marks old as superseded)
+   */
+  async editTherapyPlan(therapyPlanId: string, data: any, userId: string) {
+    return await this.therapyPlanEditService.editTherapyPlan(therapyPlanId, data);
+  }
+
+  /**
+   * Get therapy plan history (all versions)
+   */
+  async getTherapyPlanHistory(therapyPlanId: string) {
+    return await this.therapyPlanEditService.getTherapyPlanHistory(therapyPlanId);
   }
 
   // ============================================================

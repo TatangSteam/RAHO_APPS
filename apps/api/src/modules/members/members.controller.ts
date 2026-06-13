@@ -296,6 +296,80 @@ export class MembersController {
     }
   }
 
+  // Bulk Therapy Plan Methods
+  async getMemberPackageSummary(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const summary = await membersService.getMemberPackageSummary(memberId);
+      return sendSuccess(res, summary);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async bulkCreateTherapyPlans(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const userId = req.user!.userId;
+      const result = await membersService.bulkCreateTherapyPlans(memberId, req.body, userId);
+
+      // Audit log
+      await logAudit({
+        userId,
+        action: 'CREATE',
+        resource: 'TherapyPlan',
+        resourceId: memberId,
+        meta: { 
+          type: 'bulk_creation',
+          count: result.data.created,
+          details: `Bulk created ${result.data.created} therapy plans`
+        },
+      });
+
+      return sendSuccess(res, result, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Edit Therapy Plan (creates new version)
+  async editTherapyPlan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, therapyPlanId } = req.params;
+      const userId = req.user!.userId;
+      const result = await membersService.editTherapyPlan(therapyPlanId, req.body, userId);
+
+      // Audit log
+      await logAudit({
+        userId,
+        action: 'UPDATE',
+        resource: 'TherapyPlan',
+        resourceId: therapyPlanId,
+        meta: {
+          type: 'therapy_plan_edit',
+          memberId,
+          newVersion: result.data.version,
+          details: `Edited therapy plan (created version ${result.data.version})`
+        },
+      });
+
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Get Therapy Plan History (all versions)
+  async getTherapyPlanHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { therapyPlanId } = req.params;
+      const result = await membersService.getTherapyPlanHistory(therapyPlanId);
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ============================================================
   // INFUSION METHODS
   // ============================================================

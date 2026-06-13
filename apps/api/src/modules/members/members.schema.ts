@@ -6,6 +6,83 @@ const GenderEnum = z.enum(['L', 'P']);
 // Incentive type enum
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
 
+// ============================================================
+// THERAPY PLAN SCHEMAS
+// ============================================================
+
+// Single therapy plan schema (reusable)
+export const therapyPlanDataSchema = z.object({
+  keterangan: z.string().optional().default(''),
+  ifa250: z.number().int().min(0).nullable().optional(),
+  ifa500: z.number().int().min(0).nullable().optional(),
+  hho: z.number().min(0).nullable().optional(),
+  h2: z.number().min(0).nullable().optional(),
+  no: z.number().min(0).nullable().optional(),
+  gaso: z.number().min(0).nullable().optional(),
+  o2: z.number().min(0).nullable().optional(),
+  o3: z.number().min(0).nullable().optional(),
+  edta: z.number().min(0).nullable().optional(),
+  mb: z.number().min(0).nullable().optional(),
+  h2s: z.number().min(0).nullable().optional(),
+  kcl: z.number().min(0).nullable().optional(),
+  jmlNb: z.number().min(0).nullable().optional(),
+}).refine(
+  (data) => {
+    // At least one dose field must be filled
+    return !!(
+      data.ifa250 ||
+      data.ifa500 ||
+      data.hho ||
+      data.h2 ||
+      data.no ||
+      data.gaso ||
+      data.o2 ||
+      data.o3 ||
+      data.edta ||
+      data.mb ||
+      data.h2s ||
+      data.kcl ||
+      data.jmlNb
+    );
+  },
+  { message: 'Minimal satu field dosis harus diisi' }
+).refine(
+  (data) => {
+    // IFA 250 and IFA 500 are mutually exclusive
+    return !(data.ifa250 && data.ifa500);
+  },
+  { message: 'IFA 250ml dan IFA 500ml tidak boleh diisi bersamaan' }
+);
+
+// Bulk create therapy plans schema
+export const bulkCreateTherapyPlansSchema = z.object({
+  therapyPlans: z.array(therapyPlanDataSchema)
+    .min(1, 'Minimal 1 therapy plan harus dibuat')
+    .max(50, 'Maksimal 50 therapy plans dapat dibuat sekaligus'),
+});
+
+// Edit therapy plan schema (allows partial updates)
+export const editTherapyPlanSchema = z.object({
+  keterangan: z.string().optional(),
+  ifa250: z.number().int().min(0).nullable().optional(),
+  ifa500: z.number().int().min(0).nullable().optional(),
+  hho: z.number().min(0).nullable().optional(),
+  h2: z.number().min(0).nullable().optional(),
+  no: z.number().min(0).nullable().optional(),
+  gaso: z.number().min(0).nullable().optional(),
+  o2: z.number().min(0).nullable().optional(),
+  o3: z.number().min(0).nullable().optional(),
+  edta: z.number().min(0).nullable().optional(),
+  mb: z.number().min(0).nullable().optional(),
+  h2s: z.number().min(0).nullable().optional(),
+  kcl: z.number().min(0).nullable().optional(),
+  jmlNb: z.number().min(0).nullable().optional(),
+});
+
+// ============================================================
+// MEMBER SCHEMAS
+// ============================================================
+
 export const createMemberSchema = z.object({
   // Branch selection (for ADMIN_MANAGER)
   branchId: z.string().optional(),

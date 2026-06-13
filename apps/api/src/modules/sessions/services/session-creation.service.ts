@@ -368,6 +368,16 @@ export class SessionCreationService {
       };
     }
 
+    // CRITICAL: Therapy plan must not be superseded (must be current version)
+    // Only the latest version can be used
+    if (therapyPlan.supersededById) {
+      throw {
+        status: 422,
+        code: 'THERAPY_PLAN_SUPERSEDED',
+        message: 'Therapy plan ini adalah versi lama yang sudah di-supersede. Hanya versi terbaru yang dapat digunakan untuk sesi terapi. Silakan pilih therapy plan versi terbaru.',
+      };
+    }
+
     return therapyPlan;
   }
 

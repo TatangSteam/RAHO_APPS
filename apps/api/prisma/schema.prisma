@@ -1053,13 +1053,20 @@ model TherapyPlan {
   h2s                Decimal? @db.Decimal(10, 2)
   kcl                Decimal? @db.Decimal(10, 2)
   jmlNb              Decimal? @db.Decimal(10, 2)
+  // Versioning fields
+  version            Int      @default(1) // Version number (1, 2, 3, ...)
+  supersededById     String?  // ID of the therapy plan that supersedes this one
+  supersededAt       DateTime? // When was this version superseded
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  member  Member?           @relation(fields: [memberId], references: [id])
-  session TreatmentSession? @relation(fields: [treatmentSessionId], references: [id])
+  member         Member?           @relation(fields: [memberId], references: [id])
+  session        TreatmentSession? @relation(fields: [treatmentSessionId], references: [id])
+  supersededBy   TherapyPlan?      @relation("TherapyPlanVersioning", fields: [supersededById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supersedes     TherapyPlan[]     @relation("TherapyPlanVersioning")
 
   @@index([memberId])
+  @@index([supersededById])
   @@map("therapy_plans")
 }
 
