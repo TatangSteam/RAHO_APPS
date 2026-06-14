@@ -498,8 +498,136 @@ tbody tr:hover { background: var(--bg-hover); }
 .fade-in { animation: fadeIn var(--transition-normal) both; }
 
 /* ── Responsive ───────────────────────────────────────────── */
+/* Mobile First Breakpoints:
+   xs: 0-639px (phones)
+   sm: 640px+ (large phones, small tablets)
+   md: 768px+ (tablets)
+   lg: 1024px+ (desktops)
+   xl: 1280px+ (large desktops) */
+
 @media (max-width: 1024px) {
-  .app-main { margin-left: 0; }
+  .app-main { 
+    margin-left: 0; 
+  }
+  
+  .app-content {
+    padding: 16px;
+  }
+}
+
+/* ── Mobile Responsive (< 640px) ───────────────────────── */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+  
+  .app-content {
+    padding: 12px;
+  }
+  
+  .card {
+    padding: 16px;
+    border-radius: var(--radius-md);
+  }
+  
+  .card-sm { padding: 12px; }
+  .card-lg { padding: 20px; }
+  
+  /* ── Mobile Typography ──────────────────────────────── */
+  h1, .h1 { font-size: 1.75rem; }
+  h2, .h2 { font-size: 1.5rem; }
+  h3, .h3 { font-size: 1.25rem; }
+  h4, .h4 { font-size: 1.125rem; }
+  h5, .h5 { font-size: 1rem; }
+  
+  /* ── Mobile Buttons ─────────────────────────────────── */
+  .btn {
+    padding: 10px 14px;
+    font-size: 13px;
+    gap: 6px;
+  }
+  
+  .btn-sm { padding: 6px 10px; font-size: 12px; }
+  .btn-lg { padding: 12px 18px; font-size: 14px; }
+  
+  /* ── Mobile Forms ───────────────────────────────────── */
+  .form-input {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  
+  .form-label {
+    font-size: 12px;
+  }
+  
+  /* ── Mobile Tables ──────────────────────────────────── */
+  th {
+    padding: 10px 12px;
+    font-size: 11px;
+  }
+  
+  td {
+    padding: 12px;
+    font-size: 13px;
+  }
+  
+  /* ── Utility Classes ────────────────────────────────── */
+  .hidden-mobile {
+    display: none !important;
+  }
+  
+  .show-mobile {
+    display: block !important;
+  }
+  
+  .mobile-full {
+    width: 100% !important;
+  }
+  
+  .mobile-stack {
+    flex-direction: column !important;
+  }
+  
+  .mobile-center {
+    text-align: center !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+  
+  .mobile-compact {
+    padding: 8px !important;
+  }
+  
+  .mobile-no-margin {
+    margin: 0 !important;
+  }
+  
+  /* ── Toast Positioning ──────────────────────────────── */
+  [data-sonner-toaster] {
+    top: 60px !important;
+    right: 12px !important;
+    left: 12px !important;
+  }
+}
+
+/* ── iPhone Specific (< 390px) ─────────────────────────── */
+@media (max-width: 390px) {
+  html {
+    font-size: 13px;
+  }
+  
+  .app-content {
+    padding: 10px;
+  }
+  
+  .card {
+    padding: 12px;
+  }
+  
+  .btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
 }
 
 /* ── Dashboard Grid ────────────────────────────────────────── */

@@ -54,40 +54,41 @@ export default function MemberVouchersPage() {
   const others  = packages.filter(p => p.status !== 'ACTIVE')
 
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-          <Package size={24} color="var(--color-primary-400)" />
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+    <div className="px-3 sm:px-4 md:px-6 py-4 sm:py-6">
+      {/* Header */}
+      <div className="mb-4 sm:mb-6">
+        <div className="flex items-center gap-2 sm:gap-3 mb-1 sm:mb-2">
+          <Package size={20} className="sm:w-6 sm:h-6 text-amber-400 flex-shrink-0" />
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-neutral-900 dark:text-white">
             Paket & Voucher
           </h1>
         </div>
-        <p style={{ color: 'var(--text-secondary)', margin: 0, fontSize: 14 }}>
+        <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
           Daftar paket terapi yang Anda miliki
         </p>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-secondary)' }}>Memuat paket...</div>
+        <div className="text-center py-12 text-neutral-600 dark:text-neutral-400 text-sm">
+          Memuat paket...
+        </div>
       ) : packages.length === 0 ? (
-        <div style={{
-          textAlign: 'center', padding: 48,
-          background: 'var(--surface-card)', border: '1px solid var(--surface-border)',
-          borderRadius: 'var(--radius-lg)', color: 'var(--text-secondary)',
-        }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>📦</div>
-          <p style={{ fontWeight: 600, fontSize: 16 }}>Belum ada paket</p>
-          <p style={{ fontSize: 14 }}>Hubungi klinik untuk mendapatkan paket terapi</p>
+        <div className="text-center py-8 sm:py-12 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-lg sm:rounded-xl px-4">
+          <div className="text-4xl sm:text-5xl mb-2">📦</div>
+          <p className="font-semibold text-sm sm:text-base mb-1 text-neutral-900 dark:text-white">Belum ada paket</p>
+          <p className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">
+            Hubungi klinik untuk mendapatkan paket terapi
+          </p>
         </div>
       ) : (
         <div>
           {/* Paket Aktif */}
           {active.length > 0 && (
-            <div style={{ marginBottom: 32 }}>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 16 }}>
+            <div className="mb-6 sm:mb-8">
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-neutral-900 dark:text-white mb-3 sm:mb-4">
                 🟢 Paket Aktif ({active.length})
               </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {active.map(pkg => <PackageCard key={pkg.id} pkg={pkg} onUploadProof={setUploadModal} />)}
               </div>
             </div>
@@ -96,10 +97,10 @@ export default function MemberVouchersPage() {
           {/* Paket Lainnya */}
           {others.length > 0 && (
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 16 }}>
+              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-neutral-600 dark:text-neutral-400 mb-3 sm:mb-4">
                 Riwayat Paket ({others.length})
               </h2>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 {others.map(pkg => <PackageCard key={pkg.id} pkg={pkg} onUploadProof={setUploadModal} />)}
               </div>
             </div>
@@ -127,56 +128,59 @@ function PackageCard({ pkg, onUploadProof }: { pkg: MemberPackage; onUploadProof
     : 0
 
   return (
-    <div style={{
-      background: 'var(--surface-card)', border: '1px solid var(--surface-border)',
-      borderRadius: 'var(--radius-lg)', padding: 20,
-      borderTop: `3px solid ${st.color}`,
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+    <div 
+      className="bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-xl p-4 sm:p-5"
+      style={{ borderTop: `3px solid ${st.color}` }}
+    >
+      {/* Header */}
+      <div className="flex justify-between items-start mb-3">
         <div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 font-mono mb-1">
             {pkg.packageCode}
           </div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+          <div className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white">
             {pkg.packageType === 'BASIC' ? '💧 Nano Bubble' : `⚡ Booster`}
           </div>
         </div>
-        <span style={{
-          fontSize: 11, fontWeight: 600, padding: '3px 10px',
-          borderRadius: 99, background: st.bg, color: st.color,
-        }}>
+        <span 
+          className="text-xs font-semibold px-2.5 py-1 rounded-full"
+          style={{ background: st.bg, color: st.color }}
+        >
           {st.label}
         </span>
       </div>
 
       {/* Progress Sesi */}
       {pkg.status === 'ACTIVE' && (
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sesi Terpakai</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+        <div className="mb-3">
+          <div className="flex justify-between mb-1.5">
+            <span className="text-xs sm:text-sm text-neutral-600 dark:text-neutral-400">Sesi Terpakai</span>
+            <span className="text-xs sm:text-sm font-semibold text-neutral-900 dark:text-white">
               {pkg.usedSessions} / {pkg.totalSessions}
             </span>
           </div>
-          <div style={{ height: 6, background: 'var(--surface-border)', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{
-              width: `${progressPct}%`, height: '100%', borderRadius: 99,
-              background: `linear-gradient(90deg, var(--color-primary-500), var(--color-primary-400))`,
-            }} />
+          <div className="h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div 
+              className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-400"
+              style={{ width: `${progressPct}%` }}
+            />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}>
-            <Ticket size={14} color="#34d399" />
-            <span style={{ fontSize: 13, fontWeight: 600, color: '#34d399' }}>
+          <div className="flex items-center gap-1.5 mt-2">
+            <Ticket size={14} className="text-green-400" />
+            <span className="text-xs sm:text-sm font-semibold text-green-400">
               {pkg.sisaSessions} sesi tersisa
             </span>
           </div>
         </div>
       )}
 
-      <div style={{ borderTop: '1px solid var(--surface-border)', paddingTop: 10 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{pkg.branchName}</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+      {/* Footer */}
+      <div className="border-t border-neutral-200 dark:border-neutral-800 pt-3">
+        <div className="flex justify-between items-center mb-2.5">
+          <span className="text-xs text-neutral-500 dark:text-neutral-400 truncate max-w-[60%]">
+            {pkg.branchName}
+          </span>
+          <span className="text-sm font-bold text-neutral-900 dark:text-white">
             {pkg.finalPrice > 0 ? `Rp ${pkg.finalPrice.toLocaleString('id-ID')}` : '—'}
           </span>
         </div>
@@ -185,24 +189,7 @@ function PackageCard({ pkg, onUploadProof }: { pkg: MemberPackage; onUploadProof
         {pkg.status === 'PENDINGPAYMENT' && (
           <button
             onClick={() => onUploadProof({ show: true, pkg })}
-            style={{
-              width: '100%',
-              padding: '8px 16px',
-              background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-primary-400))',
-              color: 'white',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 13,
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              transition: 'all 0.2s ease',
-            }}
-            onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
-            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
+            className="w-full px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 text-white border-none rounded-lg text-sm font-semibold cursor-pointer flex items-center justify-center gap-2 transition-all hover:opacity-90"
           >
             📤 Upload Bukti Pembayaran
           </button>
@@ -210,16 +197,7 @@ function PackageCard({ pkg, onUploadProof }: { pkg: MemberPackage; onUploadProof
 
         {/* Waiting Verification Badge */}
         {pkg.status === 'WAITING_VERIFICATION' && (
-          <div style={{
-            padding: '8px 12px',
-            background: 'rgba(59,130,246,0.15)',
-            border: '1px solid rgba(59,130,246,0.3)',
-            borderRadius: 'var(--radius-md)',
-            textAlign: 'center',
-            fontSize: 12,
-            color: '#60a5fa',
-            fontWeight: 600,
-          }}>
+          <div className="px-3 py-2 bg-blue-500/15 border border-blue-500/30 rounded-lg text-center text-xs sm:text-sm text-blue-400 font-semibold">
             ⏳ Menunggu verifikasi admin...
           </div>
         )}
@@ -228,27 +206,7 @@ function PackageCard({ pkg, onUploadProof }: { pkg: MemberPackage; onUploadProof
         {pkg.paymentProofUrl && pkg.status === 'WAITING_VERIFICATION' && (
           <button
             onClick={() => window.open(pkg.paymentProofUrl!, '_blank')}
-            style={{
-              width: '100%',
-              padding: '6px 12px',
-              marginTop: 8,
-              background: 'transparent',
-              color: 'var(--color-primary-400)',
-              border: '1px solid var(--color-primary-400)',
-              borderRadius: 'var(--radius-md)',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = 'var(--color-primary-400)'
-              e.currentTarget.style.color = 'white'
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = 'transparent'
-              e.currentTarget.style.color = 'var(--color-primary-400)'
-            }}
+            className="w-full px-3 py-1.5 mt-2 bg-transparent text-amber-400 border border-amber-400 rounded-lg text-xs sm:text-sm font-semibold cursor-pointer transition-all hover:bg-amber-400 hover:text-white"
           >
             👁️ Lihat Bukti Pembayaran
           </button>
