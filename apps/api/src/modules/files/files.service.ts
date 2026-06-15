@@ -136,6 +136,11 @@ export class FilesService {
       return;
     }
 
+    if (key.startsWith('lab-results/')) {
+      await this.authorizeLabResultAccess(key, user);
+      return;
+    }
+
     throw {
       status: 403,
       code: 'FILE_ACCESS_DENIED',
@@ -463,5 +468,72 @@ export class FilesService {
     }
 
     throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+  }
+
+  private async authorizeLabResultAccess(key: string, user: AuthUser): Promise<void> {
+    // Lab results are stored as: lab-results/{memberId}/{timestamp}-{filename}
+    // Extract memberId from the path
+    const match = key.match(/lab-results\/([^/]+)\//);
+    if (!match) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    const memberId = match[1];
+
+    // Find lab result by memberId and verify the file URL matches
+    const labResult = await prisma.labResult.findFirst({
+      where: {
+        memberId,
+        OR: [
+          { fileUrl: key },
+          { fileUrl: `${env.API_PREFIX}/files/${key}` },
+          { fileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
+          { fileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
+          { fileUrl: { endsWith: key } },
+        ],
+      },
+      select: {
+        fileUrl: true,
+        member: {
+          select: {
+            userId: true,
+            registrationBranchId: true,
+            branchAccesses: {
+              select: {
+                branchId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!labResult) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    // Members can only access their own lab results
+    if (user.role === 'MEMBER') {
+      if (labResult.member.userId !== user.userId) {
+        throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+      }
+      return;
+    }
+
+    // Staff can access lab results of members in their accessible branches
+    const accessibleBranchIds = await this.getAccessibleBranchIds(user);
+    if (!accessibleBranchIds) {
+      return; // Privileged role has access to all
+    }
+
+    const memberBranchIds = [
+      labResult.member.registrationBranchId,
+      ...labResult.member.branchAccesses.map((access) => access.branchId),
+    ];
+
+    const hasAccess = memberBranchIds.some((branchId) => accessibleBranchIds.includes(branchId));
+    if (!hasAccess) {
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
   }
 }
