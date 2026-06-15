@@ -51,7 +51,7 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 20
 
@@ -108,4 +108,5 @@ jobs:
             echo "Primary Docker Compose build failed, retrying with --no-cache..."
             docker compose -f docker-compose.prod.yml build --pull --no-cache api web
           fi
+          docker compose -f docker-compose.prod.yml run --rm migrate
           docker compose -f docker-compose.prod.yml up -d api web
