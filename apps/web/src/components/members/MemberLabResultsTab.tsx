@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Upload, Download, Trash2, Calendar, User, Loader2, AlertCircle, X } from 'lucide-react';
 import { labResultsApi } from '@/lib/labResultsApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -33,6 +34,7 @@ export default function MemberLabResultsTab({ memberId }: MemberLabResultsTabPro
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   
   const [file, setFile] = useState<File | null>(null);
   const [description, setDescription] = useState('');
@@ -122,6 +124,27 @@ export default function MemberLabResultsTab({ memberId }: MemberLabResultsTabPro
     }
   };
 
+  const handleDownload = async (result: LabResult) => {
+    try {
+      setDownloadingId(result.id);
+
+      const blobUrl = await createAuthenticatedObjectUrl(result.fileUrl);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = result.fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    } catch (error) {
+      console.error('Download failed:', error);
+      showToast.error('Gagal mengunduh file');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const resetForm = () => {
     setFile(null);
     setDescription('');
@@ -199,15 +222,18 @@ export default function MemberLabResultsTab({ memberId }: MemberLabResultsTabPro
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <a
-                    href={result.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => handleDownload(result)}
+                    disabled={downloadingId === result.id}
                     className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
                     title="Download/View"
                   >
-                    <Download size={14} />
-                  </a>
+                    {downloadingId === result.id ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Download size={14} />
+                    )}
+                  </button>
                   {canDelete && (
                     <button
                       onClick={() => handleDelete(result.id)}

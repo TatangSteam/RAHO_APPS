@@ -1,7 +1,8 @@
 import { prisma } from '../../../lib/prisma';
-import { uploadFile, deleteFile } from '../../../config/minio';
+import { uploadFile, deleteFileByUrl, extractKeyFromUrl } from '../../../config/minio';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
+import { env } from '../../../config/env';
 
 export class MemberLabResultsService {
   async getMemberLabResults(memberId: string) {
@@ -31,7 +32,12 @@ export class MemberLabResultsService {
       },
     });
 
-    return labResults;
+    return labResults.map((result) => ({
+      ...result,
+      fileUrl: result.fileUrl
+        ? `${env.API_PREFIX}/files/${extractKeyFromUrl(result.fileUrl)}`
+        : result.fileUrl,
+    }));
   }
 
   async uploadLabResult(memberId: string, file: Express.Multer.File, data: any, userId: string) {
@@ -52,7 +58,7 @@ export class MemberLabResultsService {
       data: {
         memberId,
         fileName: file.originalname,
-        fileUrl: uploadResult.url,
+        fileUrl: `${env.API_PREFIX}/files/${uploadResult.key}`,
         fileType: file.mimetype,
         fileSize: file.size,
         description: data.description || null,
@@ -98,7 +104,7 @@ export class MemberLabResultsService {
 
     // Delete file from MinIO
     try {
-      await deleteFile(labResult.fileUrl);
+      await deleteFileByUrl(labResult.fileUrl);
     } catch (error) {
       console.error('Failed to delete file from MinIO:', error);
       // Continue with database deletion even if MinIO deletion fails
