@@ -42,14 +42,13 @@ export class InvoiceRetrievalService {
   }
 
   /**
-   * Get invoice by package ID
+   * Get invoice by package/add-on ID
    */
   async getInvoiceByPackageId(packageId: string) {
     const invoice = await (prisma as any).invoice.findFirst({
       where: {
         items: {
           some: {
-            itemType: 'PACKAGE',
             itemId: packageId,
           },
         },

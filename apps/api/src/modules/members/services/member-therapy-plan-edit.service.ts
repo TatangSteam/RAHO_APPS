@@ -4,6 +4,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { normalizeIfaSubstances, type TherapyPlanSubstance } from '@/utils/therapyPlanSubstances';
 
 interface EditTherapyPlanInput {
   keterangan?: string;
@@ -20,6 +21,8 @@ interface EditTherapyPlanInput {
   h2s?: number | null;
   kcl?: number | null;
   jmlNb?: number | null;
+  ifaSubstances?: TherapyPlanSubstance[] | null;
+  ifaSubstanceTotalMl?: number | null;
 }
 
 export class MemberTherapyPlanEditService {
@@ -61,12 +64,12 @@ export class MemberTherapyPlanEditService {
       };
     }
 
-    // Cannot edit if already superseded
+    // Cannot edit if this version has already been replaced by a newer version
     if (originalPlan.supersededById) {
       throw {
         status: 400,
-        code: 'THERAPY_PLAN_ALREADY_SUPERSEDED',
-        message: 'Therapy plan ini sudah di-supersede oleh versi yang lebih baru',
+        code: 'THERAPY_PLAN_EDIT_HISTORY',
+        message: 'Therapy plan ini merupakan history edit, tidak dapat diedit lagi',
       };
     }
 
@@ -107,14 +110,22 @@ export class MemberTherapyPlanEditService {
     const result = await prisma.$transaction(async (tx) => {
       // Generate new plan code with incremented version
       const newVersion = originalPlan.version + 1;
-      const timestamp = Date.now();
-      const newPlanCode = `TPL-${originalPlan.member?.registrationBranch.branchCode}-${timestamp}-V${newVersion}`;
+      const basePlanCode = originalPlan.planCode.replace(/-V\d+$/i, '');
+      const newPlanCode = `${basePlanCode}-V${newVersion}`;
+
+      const ifaSubstanceData: any =
+        input.ifaSubstances !== undefined
+          ? normalizeIfaSubstances(input.ifaSubstances, false)
+          : {
+              ifaSubstances: originalPlan.ifaSubstances,
+              ifaSubstanceTotalMl: originalPlan.ifaSubstanceTotalMl,
+            };
 
       // Create new therapy plan (new version)
       const newPlan = await tx.therapyPlan.create({
         data: {
           planCode: newPlanCode,
-          memberId: originalPlan.memberId,
+          member: originalPlan.memberId ? { connect: { id: originalPlan.memberId } } : undefined,
           keterangan: input.keterangan ?? originalPlan.keterangan,
           ifa250: input.ifa250 !== undefined ? input.ifa250 : originalPlan.ifa250,
           ifa500: input.ifa500 !== undefined ? input.ifa500 : originalPlan.ifa500,
@@ -129,6 +140,7 @@ export class MemberTherapyPlanEditService {
           h2s: input.h2s !== undefined ? input.h2s : originalPlan.h2s,
           kcl: input.kcl !== undefined ? input.kcl : originalPlan.kcl,
           jmlNb: input.jmlNb !== undefined ? input.jmlNb : originalPlan.jmlNb,
+          ...ifaSubstanceData,
           version: newVersion,
         },
       });
@@ -160,6 +172,8 @@ export class MemberTherapyPlanEditService {
         planCode: result.planCode,
         version: result.version,
         keterangan: result.keterangan,
+        ifaSubstances: result.ifaSubstances,
+        ifaSubstanceTotalMl: result.ifaSubstanceTotalMl ? Number(result.ifaSubstanceTotalMl) : null,
         originalPlanId: therapyPlanId,
         originalVersion: originalPlan.version,
         createdAt: result.createdAt.toISOString(),

@@ -23,6 +23,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { devError } from '@/lib/logger'
+import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable'
 
 // ── Helper Components ──────────────────────────────────────────
 
@@ -397,7 +398,7 @@ export default function MemberSessionDetailPage() {
                   {therapyPlan.keterangan}
                 </p>
               )}
-              <IFAGrid data={therapyPlan} title="IFA" />
+              <TherapyPlanDoseTable plan={therapyPlan} compact />
             </div>
           ) : (
             <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Tidak ada rencana terapi</p>

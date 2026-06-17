@@ -6,6 +6,14 @@ const GenderEnum = z.enum(['L', 'P']);
 // Incentive type enum
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
 
+const ifaSubstanceSchema = z.object({
+  name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
+  amount: z.number().min(0, 'Jumlah zat tidak boleh negatif'),
+  unit: z.string().trim().max(20).optional().default('ml'),
+  keterangan: z.string().trim().max(500).optional(),
+  isDefault: z.boolean().optional(),
+});
+
 // ============================================================
 // THERAPY PLAN SCHEMAS
 // ============================================================
@@ -26,6 +34,8 @@ export const therapyPlanDataSchema = z.object({
   h2s: z.number().min(0).nullable().optional(),
   kcl: z.number().min(0).nullable().optional(),
   jmlNb: z.number().min(0).nullable().optional(),
+  ifaSubstances: z.array(ifaSubstanceSchema).nullable().optional(),
+  ifaSubstanceTotalMl: z.number().min(0).nullable().optional(),
 }).refine(
   (data) => {
     // At least one dose field must be filled
@@ -77,6 +87,8 @@ export const editTherapyPlanSchema = z.object({
   h2s: z.number().min(0).nullable().optional(),
   kcl: z.number().min(0).nullable().optional(),
   jmlNb: z.number().min(0).nullable().optional(),
+  ifaSubstances: z.array(ifaSubstanceSchema).nullable().optional(),
+  ifaSubstanceTotalMl: z.number().min(0).nullable().optional(),
 });
 
 // ============================================================
@@ -186,4 +198,3 @@ export type CreateMemberInput = z.infer<typeof createMemberSchema>;
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 export type GrantAccessInput = z.infer<typeof grantAccessSchema>;
 export type SendNotificationInput = z.infer<typeof sendNotificationSchema>;
-

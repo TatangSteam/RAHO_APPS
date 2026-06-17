@@ -4,6 +4,13 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { therapyPlanApi, TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
+import TherapyPlanSubstancesEditor from '@/components/therapy-plan/TherapyPlanSubstancesEditor';
+import {
+  calculateIfaSubstanceTotalMl,
+  createDefaultIfaSubstances,
+  prepareIfaSubstancePayload,
+  type TherapyPlanSubstance,
+} from '@/lib/therapyPlanSubstances';
 
 interface EditTherapyPlanModalProps {
   therapyPlan: TherapyPlan;
@@ -27,7 +34,25 @@ interface EditFormData {
   h2s?: number | null;
   kcl?: number | null;
   jmlNb?: number | null;
+  ifaSubstances?: TherapyPlanSubstance[] | null;
+  ifaSubstanceTotalMl?: number | null;
 }
+
+const DOSE_KEYS: Array<keyof EditFormData> = [
+  'ifa250',
+  'ifa500',
+  'hho',
+  'h2',
+  'no',
+  'gaso',
+  'o2',
+  'o3',
+  'edta',
+  'mb',
+  'h2s',
+  'kcl',
+  'jmlNb',
+];
 
 export default function EditTherapyPlanModal({
   therapyPlan,
@@ -50,6 +75,12 @@ export default function EditTherapyPlanModal({
     h2s: therapyPlan.h2s ? Number(therapyPlan.h2s) : null,
     kcl: therapyPlan.kcl ? Number(therapyPlan.kcl) : null,
     jmlNb: therapyPlan.jmlNb ? Number(therapyPlan.jmlNb) : null,
+    ifaSubstances: therapyPlan.ifaSubstances?.length
+      ? therapyPlan.ifaSubstances
+      : therapyPlan.ifa250
+        ? createDefaultIfaSubstances()
+        : [],
+    ifaSubstanceTotalMl: therapyPlan.ifaSubstanceTotalMl ?? (therapyPlan.ifa250 ? 2.5 : 0),
   });
   const [ifaType, setIfaType] = useState<'250' | '500' | null>(
     therapyPlan.ifa250 ? '250' : therapyPlan.ifa500 ? '500' : null
@@ -83,9 +114,23 @@ export default function EditTherapyPlanModal({
       // Select and clear the other
       setIfaType(type);
       if (type === '250') {
-        setFormData({ ...formData, ifa250: 1, ifa500: null });
+        setFormData({
+          ...formData,
+          ifa250: 1,
+          ifa500: null,
+          ifaSubstances: formData.ifaSubstances?.length ? formData.ifaSubstances : createDefaultIfaSubstances(),
+          ifaSubstanceTotalMl: formData.ifaSubstances?.length
+            ? calculateIfaSubstanceTotalMl(formData.ifaSubstances)
+            : 2.5,
+        });
       } else {
-        setFormData({ ...formData, ifa250: null, ifa500: 1 });
+        setFormData({
+          ...formData,
+          ifa250: null,
+          ifa500: 1,
+          ifaSubstances: [],
+          ifaSubstanceTotalMl: 0,
+        });
       }
     }
   };
@@ -94,9 +139,10 @@ export default function EditTherapyPlanModal({
     e.preventDefault();
 
     // Validate at least one dose field
-    const hasDose = Object.entries(formData).some(
-      ([key, value]) => key !== 'keterangan' && value && value > 0
-    );
+    const hasDose = DOSE_KEYS.some((key) => {
+      const value = formData[key];
+      return typeof value === 'number' && value > 0;
+    });
 
     if (!hasDose) {
       showToast.error('Minimal satu field dosis harus diisi');
@@ -105,7 +151,10 @@ export default function EditTherapyPlanModal({
 
     try {
       setSubmitting(true);
-      const result = await therapyPlanApi.editTherapyPlan(memberId, therapyPlan.id, formData);
+      const result = await therapyPlanApi.editTherapyPlan(memberId, therapyPlan.id, {
+        ...formData,
+        ...prepareIfaSubstancePayload(formData.ifaSubstances),
+      });
       showToast.success(result.message || 'Therapy plan berhasil diedit!');
       onSuccess();
       onClose();
@@ -145,14 +194,14 @@ export default function EditTherapyPlanModal({
       >
         <div
           style={{
-            background: 'var(--card-background)',
+            background: '#0f1117',
             borderRadius: 'var(--radius-lg)',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            boxShadow: '0 28px 70px rgba(0, 0, 0, 0.85)',
             width: '100%',
             maxWidth: '900px',
             maxHeight: '90vh',
             overflow: 'auto',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.16)',
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -161,7 +210,7 @@ export default function EditTherapyPlanModal({
             style={{
               padding: '24px',
               borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-              background: 'linear-gradient(135deg, rgba(59,130,246,0.1), rgba(168,85,247,0.1))',
+              background: 'linear-gradient(135deg, #111827, #21143f)',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -194,7 +243,7 @@ export default function EditTherapyPlanModal({
 
           {/* Body */}
           <form onSubmit={handleSubmit}>
-            <div style={{ padding: '24px' }}>
+            <div style={{ padding: '24px', background: '#0f1117' }}>
               {/* Original Plan Info */}
               <div
                 style={{
@@ -240,7 +289,7 @@ export default function EditTherapyPlanModal({
                       padding: '16px',
                       borderRadius: 'var(--radius-md)',
                       border: `2px solid ${ifaType === '250' ? 'var(--color-primary-500)' : 'rgba(148,163,184,0.2)'}`,
-                      background: ifaType === '250' ? 'rgba(59,130,246,0.1)' : 'transparent',
+                      background: ifaType === '250' ? 'rgba(59,130,246,0.16)' : '#0b0d12',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                     }}
@@ -274,7 +323,7 @@ export default function EditTherapyPlanModal({
                       padding: '16px',
                       borderRadius: 'var(--radius-md)',
                       border: `2px solid ${ifaType === '500' ? 'var(--color-primary-500)' : 'rgba(148,163,184,0.2)'}`,
-                      background: ifaType === '500' ? 'rgba(59,130,246,0.1)' : 'transparent',
+                      background: ifaType === '500' ? 'rgba(59,130,246,0.16)' : '#0b0d12',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
                     }}
@@ -303,6 +352,18 @@ export default function EditTherapyPlanModal({
                   </div>
                 </div>
               </div>
+
+              <TherapyPlanSubstancesEditor
+                value={formData.ifaSubstances}
+                disabled={submitting}
+                onChange={(ifaSubstances) =>
+                  setFormData({
+                    ...formData,
+                    ifaSubstances,
+                    ifaSubstanceTotalMl: calculateIfaSubstanceTotalMl(ifaSubstances),
+                  })
+                }
+              />
 
               {/* Other Doses */}
               <div style={{ marginBottom: '24px' }}>
@@ -347,6 +408,7 @@ export default function EditTherapyPlanModal({
               style={{
                 padding: '24px',
                 borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                background: '#0f1117',
                 display: 'flex',
                 gap: '12px',
                 justifyContent: 'flex-end',

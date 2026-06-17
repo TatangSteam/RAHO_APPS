@@ -24,7 +24,7 @@ export const BOOSTER_TYPE_LABELS: Record<ExtendedBoosterType, string> = {
   MB: 'MB',
   KCL: 'KCL',
   H2S: 'H2S',
-  HK: 'H2S Konsentrat',
+  HK: 'H2s Konsentrat',
   O3: 'O3',
   HHO: 'HHO (Legacy)',
   NO2: 'NO2 (Legacy)',

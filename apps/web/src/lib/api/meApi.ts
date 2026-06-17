@@ -1,5 +1,6 @@
 import { api } from '../api';
 import type { Invoice } from '@/types/invoice';
+import type { TherapyPlanSubstance } from '@/lib/therapyPlanSubstances';
 
 export interface MemberDashboard {
   voucherSisa: number
@@ -64,6 +65,8 @@ export interface MemberSessionDetail {
     h2s: number | null
     kcl: number | null
     jmlNb: number | null
+    ifaSubstances?: TherapyPlanSubstance[] | null
+    ifaSubstanceTotalMl?: number | null
   } | null
   vitalSignsBefore: {
     sistol: number | null

@@ -25,15 +25,28 @@ export default function SendNotificationModal({
     <div style={{
       position: 'fixed',
       inset: 0,
-      background: 'rgba(0,0,0,0.7)',
+      background: 'rgba(0,0,0,0.86)',
+      backdropFilter: 'blur(6px)',
+      WebkitBackdropFilter: 'blur(6px)',
       display: 'flex',
       alignItems: 'flex-start',
       justifyContent: 'center',
-      zIndex: 1000,
+      zIndex: 9999,
       padding: '80px 24px 24px',
       overflowY: 'auto'
     }}>
-      <div className="card" style={{ width: '100%', maxWidth: '500px', animation: 'fadeIn 0.2s' }}>
+      <div
+        className="card"
+        style={{
+          width: '100%',
+          maxWidth: '500px',
+          animation: 'fadeIn 0.2s',
+          background: 'var(--surface-card)',
+          border: '1px solid rgba(148,163,184,0.28)',
+          boxShadow: '0 24px 80px rgba(0,0,0,0.72)',
+          color: 'var(--text-primary)',
+        }}
+      >
         <h3 style={{ fontSize: '20px', fontWeight: '700', marginBottom: '20px' }}>📧 Kirim Notifikasi</h3>
         <div className="form-group" style={{ marginBottom: '16px' }}>
           <label className="form-label">Judul</label>

@@ -17,6 +17,14 @@ export type DiagnosisCategory =
   | 'HEMATOLOGI'
   | 'LAINNYA';
 
+export interface TherapyPlanSubstance {
+  name: string;
+  amount: number;
+  unit: string;
+  keterangan?: string;
+  isDefault?: boolean;
+}
+
 // ============================================================
 // CREATE SESSION
 // ============================================================
@@ -133,6 +141,8 @@ export interface TherapyPlan {
   h2s: number | null;
   kcl: number | null;
   jmlNb: number | null;
+  ifaSubstances: TherapyPlanSubstance[] | null;
+  ifaSubstanceTotalMl: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -254,6 +264,8 @@ export interface CreateTherapyPlanInput {
   h2s?: number;
   kcl?: number;
   jmlNb?: number;
+  ifaSubstances?: TherapyPlanSubstance[];
+  ifaSubstanceTotalMl?: number;
 }
 
 // ============================================================

@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateTherapyPlanCode } from '../../../utils/codeGenerator';
+import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import type { CreateTherapyPlanInput } from '../sessions.schema';
 import { AuditAction } from '@prisma/client';
 
@@ -57,11 +58,18 @@ export class TherapyPlanService {
     
     const planCode = generateTherapyPlanCode(branchCode, sequence);
 
+    const { ifaSubstances, ifaSubstanceTotalMl, ...therapyPlanData } = data as any;
+    const normalizedIfaSubstances = normalizeIfaSubstances(
+      ifaSubstances,
+      Boolean(data.ifa250 && data.ifa250 > 0)
+    );
+
     const therapyPlan = await prisma.therapyPlan.create({
       data: {
         planCode,
         treatmentSessionId: sessionId,
-        ...data,
+        ...therapyPlanData,
+        ...normalizedIfaSubstances,
       },
     });
 

@@ -2,9 +2,17 @@
 
 > Dokumentasi lengkap cara penggunaan aplikasi untuk semua role pengguna
 
-**Versi**: 2.1.0  
-**Terakhir Diperbarui**: 29 Mei 2026  
+**Versi**: 2.2.0  
+**Terakhir Diperbarui**: 15 Juni 2026  
 **Author**: [Jovan Prabowo Kuncoro](https://github.com/Etherlyvan)
+
+> **Apa yang baru di v2.2.0 (15 Juni 2026)**
+> - Penambahan panduan **Bulk Therapy Plan** (buat banyak therapy plan sekaligus) — lihat [8.4.4](#844-buat-banyak-therapy-plan-bulk-create)
+> - Penambahan panduan **Edit Therapy Plan dengan Versioning** — lihat [8.4.5](#845-edit-therapy-plan-dengan-versioning)
+> - Penjelasan aturan **Therapy Plan Superseded** (versi lama tidak bisa dipakai untuk sesi) — lihat [11.6](#116-versioning-therapy-plan)
+> - Tambahan FAQ dan glossary terkait versioning therapy plan
+
+
 
 ---
 
@@ -916,7 +924,87 @@ Tabel pasien yang baru ditangani:
 5. Klik **"Simpan Evaluasi"**
 6. Sesi selesai dengan status **COMPLETED**
 
-### 8.4.4 Lihat Riwayat Medis Member
+### 8.4.4 Buat Banyak Therapy Plan (Bulk Create)
+
+> 🆕 **Fitur Baru (13 Juni 2026)**: Buat banyak therapy plan sekaligus untuk satu paket member, sehingga tidak perlu membuat satu per satu. Tersedia untuk Dokter, Perawat, dan seluruh role staff.
+
+Fitur ini berguna ketika member memiliki paket dengan banyak sesi (misal 10 sesi) dan dokter ingin menyiapkan therapy plan untuk seluruh sesi sekaligus. Waktu pembuatan turun dari 10+ menit menjadi di bawah 2 menit.
+
+**Langkah-langkah:**
+1. Buka menu **Member**, cari dan klik member dengan paket **ACTIVE**
+2. Buka tab **"Therapy Plans"** (💊)
+3. Klik tombol **"📋 Buat Bulk"**
+4. Sistem menampilkan **Ringkasan Paket**:
+   - Nama member dan paket
+   - Total voucher, voucher terpakai, dan voucher tersisa
+   - Jumlah therapy plan yang sudah ada
+5. Tentukan **Jumlah Therapy Plan** yang ingin dibuat (maksimal sebesar voucher tersisa)
+   - Centang **"Buat untuk semua voucher tersisa"** untuk mengisi otomatis
+6. Sistem akan menampilkan tabel dengan baris sebanyak jumlah yang dipilih. Kolom **Keterangan** terisi otomatis (contoh: "Rencana Terapi ke-6 dari 10 sesi")
+7. Isi dosis pada setiap baris:
+
+| Kolom | Keterangan |
+|-------|------------|
+| IFA 250 / IFA 500 | Pilih salah satu (tidak boleh keduanya) |
+| HHO, H2, NO, GASO, O2, O3 | Dosis material sesuai kebutuhan |
+| EDTA, MB, H2S, KCL | Dosis material tambahan |
+| JML NB | Total volume (jika perlu) |
+
+8. Gunakan **Aksi Cepat** untuk mempercepat input:
+   - **➕ Dosis Standard**: Isi semua baris dengan dosis standar (IFA 250 = 1, NO = 2.5)
+   - **🗑️ Hapus Semua Dosis**: Kosongkan semua dosis (keterangan tetap)
+   - **📋 Copy ke Bawah**: Salin dosis baris ini ke baris di bawahnya
+   - **⬇ Copy ke Semua di Bawah**: Salin dosis baris ini ke semua baris di bawahnya
+9. Periksa kembali isian di tabel
+10. Klik **"Buat X Therapy Plan"**
+11. Sistem membuat semua therapy plan dalam satu proses. Daftar therapy plan akan otomatis diperbarui
+
+> ⚠️ **Aturan Penting**:
+> - Minimal satu field dosis harus diisi di setiap baris
+> - IFA 250ml dan IFA 500ml tidak boleh diisi bersamaan
+> - Jumlah therapy plan yang dibuat tidak boleh melebihi voucher tersisa
+> - Maksimal 50 therapy plan per sekali pembuatan
+> - Pembuatan bersifat "semua atau tidak sama sekali": jika ada satu baris gagal, seluruhnya dibatalkan
+
+### 8.4.5 Edit Therapy Plan dengan Versioning
+
+> 🆕 **Fitur Baru (13 Juni 2026)**: Therapy plan dapat diedit tanpa menghapus data lama. Setiap edit membuat **versi baru**, dan versi lama disimpan sebagai riwayat (history).
+
+**Konsep Versioning:**
+- Setiap therapy plan dimulai dari **versi 1 (v1)**
+- Saat diedit, sistem membuat **versi baru** (v2, v3, dst.) dengan data terbaru
+- Versi lama ditandai sebagai **"Superseded"** (digantikan) dan tidak dihapus
+- Hanya **versi terbaru** yang bisa digunakan untuk sesi terapi
+
+**Langkah Edit Therapy Plan:**
+1. Buka detail member → tab **"Therapy Plans"**
+2. Cari therapy plan yang **belum digunakan** dan **bukan versi lama**
+3. Klik tombol **"✏️ Edit"** pada kartu therapy plan
+4. Modal edit terbuka menampilkan:
+   - Kode therapy plan dan progres versi (contoh: "Versi sekarang: 2 → Versi baru: 3")
+   - Semua nilai dosis saat ini (sudah terisi otomatis)
+5. Ubah dosis yang diperlukan (contoh: IFA 250 dari 1 menjadi 2)
+6. Klik **"Simpan Perubahan"**
+7. Sistem membuat versi baru, versi lama otomatis ditandai **"⚠️ Superseded"**
+8. Daftar therapy plan diperbarui:
+   - Versi baru: badge versi terbaru + tombol "✏️ Edit"
+   - Versi lama: badge "⚠️ Superseded" (tanpa tombol edit)
+
+**Indikator Visual Kartu Therapy Plan:**
+
+| Warna Kartu | Status | Keterangan |
+|-------------|--------|------------|
+| 🟡 Kuning/Amber | Belum Digunakan (versi terbaru) | Bisa dipakai untuk sesi & bisa diedit |
+| 🟢 Hijau | Sudah Digunakan | Sudah dipakai di sesi, tidak bisa diedit |
+| ⚪ Abu-abu (pudar) | Superseded | Versi lama, tidak bisa dipakai/diedit |
+
+> ⚠️ **Therapy plan TIDAK BISA diedit jika:**
+> - Sudah digunakan dalam sesi treatment
+> - Sudah digantikan oleh versi yang lebih baru (superseded)
+
+> ⚠️ **Catatan untuk Pembuatan Sesi**: Saat membuat sesi terapi, hanya therapy plan versi terbaru yang muncul di dropdown pilihan. Versi lama (superseded) tidak akan muncul dan tidak dapat digunakan. Lihat [11.6 Versioning Therapy Plan](#116-versioning-therapy-plan).
+
+### 8.4.6 Lihat Riwayat Medis Member
 
 **Langkah-langkah:**
 1. Buka menu **Member**
@@ -927,9 +1015,10 @@ Tabel pasien yang baru ditangani:
    - **Therapy Plan**: Riwayat rencana terapi
    - **Sesi**: Riwayat semua sesi
 
-### 8.4.5 Lihat Stok Material
+### 8.4.7 Lihat Stok Material
 
 **Langkah-langkah:**
+
 1. Buka menu **Stok** (`/inventory`)
 2. Lihat ketersediaan material untuk therapy plan
 3. Jika stok rendah, informasikan ke Admin Cabang
@@ -1396,11 +1485,51 @@ Informasi kontak cabang:
 | NURSE | ✅ | Bisa bekerja di multiple cabang |
 | MEMBER | ✅ | Jika diberi akses tambahan |
 
+## 11.6 Versioning Therapy Plan
+
+> 🆕 **Diperkenalkan 13 Juni 2026**
+
+Therapy plan menggunakan sistem **versioning** sehingga setiap perubahan terlacak tanpa kehilangan data lama. Lihat juga panduan operasionalnya di [8.4.5 Edit Therapy Plan dengan Versioning](#845-edit-therapy-plan-dengan-versioning).
+
+### 11.6.1 Cara Kerja Versi
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              SIKLUS VERSI THERAPY PLAN                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│   v1 (Superseded) ──▶ v2 (Superseded) ──▶ v3 (Current) ✅    │
+│                                                              │
+│   - v1 & v2: versi lama, disimpan sebagai riwayat            │
+│   - v3: versi aktif, satu-satunya yang bisa dipakai sesi     │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- Therapy plan dibuat pada **versi 1**
+- Setiap kali diedit, sistem membuat versi baru (v2, v3, ...) dan menandai versi sebelumnya sebagai **Superseded**
+- Versi lama tidak dihapus agar riwayat tetap utuh dan dapat diaudit
+
+### 11.6.2 Status Therapy Plan
+
+| Status | Penanda | Bisa Dipakai Sesi? | Bisa Diedit? |
+|--------|---------|--------------------|--------------|
+| Versi Terbaru (Current) | 🟡 Belum Digunakan | ✅ Ya | ✅ Ya |
+| Sudah Digunakan | 🟢 Sudah Digunakan | ❌ Tidak (sudah terpakai) | ❌ Tidak |
+| Superseded | ⚪ ⚠️ Superseded | ❌ Tidak | ❌ Tidak |
+
+### 11.6.3 Aturan Penggunaan untuk Sesi
+
+- Saat membuat sesi terapi, dropdown therapy plan **hanya menampilkan versi terbaru** yang belum digunakan
+- Therapy plan superseded (versi lama) **tidak akan muncul** dan **tidak dapat dipilih**
+- Jika versi lama tetap dipaksa dipakai (misal lewat API langsung), sistem menolak dengan pesan: *"Therapy plan ini adalah versi lama yang sudah di-supersede. Hanya versi terbaru yang dapat digunakan."*
+
 ---
 
 # BAB 12: FAQ & TROUBLESHOOTING
 
 ## 12.1 Masalah Login
+
 
 ### Q: Tidak bisa login, muncul "Invalid credentials"
 **A:** 
@@ -1492,7 +1621,27 @@ Informasi kontak cabang:
 - Cek apakah ada field wajib yang kosong
 - Refresh dan coba lagi
 
+### Q: Therapy plan tidak muncul saat membuat sesi
+**A:** 
+- Pastikan therapy plan adalah **versi terbaru** (bukan superseded/versi lama)
+- Pastikan therapy plan belum pernah digunakan di sesi lain
+- Therapy plan yang sudah diedit akan tergantikan versi baru; pilih versi terbaru
+- Buat therapy plan baru jika belum ada
+
+### Q: Tidak bisa edit therapy plan
+**A:** 
+- Therapy plan yang sudah digunakan di sesi tidak bisa diedit
+- Therapy plan versi lama (superseded) tidak bisa diedit
+- Hanya versi terbaru yang belum digunakan yang memiliki tombol "✏️ Edit"
+
+### Q: Apa itu badge "Superseded" pada therapy plan?
+**A:** 
+- Artinya therapy plan tersebut adalah versi lama yang sudah digantikan versi lebih baru
+- Versi lama tetap disimpan sebagai riwayat, tetapi tidak bisa dipakai/diedit
+- Lihat [11.6 Versioning Therapy Plan](#116-versioning-therapy-plan)
+
 ## 12.5 Masalah Inventory
+
 
 ### Q: Stock request tidak diapprove
 **A:** 
@@ -1815,10 +1964,14 @@ Jika mengalami masalah yang tidak tercantum di FAQ:
 | **Infusion/Infus** | Proses pemberian cairan/obat melalui infus |
 | **Vital Signs** | Tanda-tanda vital (tekanan darah, nadi, dll) |
 | **Therapy Plan** | Rencana terapi yang dibuat dokter |
+| **Bulk Therapy Plan** | Pembuatan banyak therapy plan sekaligus dalam satu proses |
+| **Versioning** | Sistem pencatatan versi: setiap edit therapy plan membuat versi baru |
+| **Superseded** | Status versi therapy plan lama yang sudah digantikan versi terbaru |
 | **SOAP** | Format evaluasi medis (Subjective, Objective, Assessment, Plan) |
 | **ICD-10** | Kode diagnosis internasional |
 | **ON_SITE** | Pelaksanaan treatment di klinik |
 | **HOME_CARE** | Pelaksanaan treatment di rumah pasien |
+
 
 ## D.4 Istilah Inventory
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Rocket } from 'lucide-react';
-import { PackagePricing, ExtendedBoosterType, ServiceType } from '@/types/package';
+import { PackagePricing, ExtendedBoosterType, ServiceType, BOOSTER_TYPE_LABELS } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
 
 interface BoosterPackageSectionProps {
@@ -84,7 +84,7 @@ export default function BoosterPackageSection({
 
   const uniqueBoosters = Array.from(boosterMap.entries()).map(([boosterType, pricings]) => ({
     boosterType,
-    label: boosterType,
+    label: BOOSTER_TYPE_LABELS[boosterType as ExtendedBoosterType] || boosterType,
     pricings,
   }));
 

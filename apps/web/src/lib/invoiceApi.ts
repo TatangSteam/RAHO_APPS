@@ -18,7 +18,7 @@ export const invoiceApi = {
     return response.data.data;
   },
 
-  // Get invoice by package ID (for paid packages)
+  // Get invoice/receipt by package or add-on ID
   getInvoiceByPackageId: async (packageId: string) => {
     const response = await api.get<{ data: Invoice }>(
       `/invoices/package/${packageId}`

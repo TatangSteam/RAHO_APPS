@@ -187,7 +187,7 @@ export default function VerifyPaymentModal({
             <div className={styles.warningText}>
               {hasExistingProof 
                 ? 'Member telah mengupload bukti pembayaran. Verifikasi atau tolak pembayaran.'
-                : 'Pastikan pembayaran telah diterima sebelum melakukan verifikasi. Paket akan langsung aktif setelah diverifikasi dan invoice akan otomatis dibuat.'}
+                : 'Pastikan pembayaran telah diterima sebelum melakukan verifikasi. Paket akan langsung aktif setelah diverifikasi dan invoice akan menjadi kwitansi lunas.'}
             </div>
           </div>
 

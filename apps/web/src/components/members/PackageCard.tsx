@@ -193,11 +193,18 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
               </div>
             </div>
           </div>
-          <div className={styles.compactRight}>
-            <div className={styles.compactPrice}>{formatCurrency(addon.totalPrice)}</div>
-            {getStatusBadge(addon.status)}
-            <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
-          </div>
+        <div className={styles.compactRight}>
+          <div className={styles.compactPrice}>{formatCurrency(addon.totalPrice)}</div>
+          {getStatusBadge(addon.status)}
+          {['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(addon.status) && (
+            <ViewInvoiceButton
+              packageId={addon.addOnId}
+              packageCode={addon.addOnCode}
+              status={addon.status}
+            />
+          )}
+          <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
+        </div>
         </div>
 
         {/* Expanded Details */}
@@ -233,15 +240,23 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
             </div>
 
             {(addon.status === 'PENDING_PAYMENT' || addon.status === 'WAITING_VERIFICATION') && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onVerifyPayment(addon.addOnId, addon.status, addon.paymentProofUrl, addon.paymentProofFileName);
-                }}
-                className={styles.verifyButton}
-              >
-                ✅ Verify Payment
-              </button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px' }}>
+                <ViewInvoiceButton
+                  packageId={addon.addOnId}
+                  packageCode={addon.addOnCode}
+                  status={addon.status}
+                />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerifyPayment(addon.addOnId, addon.status, addon.paymentProofUrl, addon.paymentProofFileName);
+                  }}
+                  className={styles.verifyButton}
+                  style={{ marginTop: 0 }}
+                >
+                  ✅ Verify Payment
+                </button>
+              </div>
             )}
             
             {(addon.status === 'ACTIVE' || addon.status === 'EXPIRED') && (
@@ -309,6 +324,13 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
             <div className={styles.compactPrice}>{formatCurrency(totalFinalPrice)}</div>
             {getStatusBadge(groupStatus || 'ACTIVE')}
             {(basics[0] && getRefundBadge(basics[0])) || (boosters[0] && getRefundBadge(boosters[0]))}
+            {(anyPending || anyActive) && (
+              <ViewInvoiceButton
+                packageId={basics[0]?.packageId || boosters[0]?.packageId || groupAddOns[0]?.addOnId || ''}
+                packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
+                status={groupStatus || 'ACTIVE'}
+              />
+            )}
             <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
           </div>
         </div>
@@ -497,19 +519,25 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
 
             {/* Actions */}
             {anyPending && (
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px' }}>
+                <ViewInvoiceButton
+                  packageId={basics[0]?.packageId || boosters[0]?.packageId || groupAddOns[0]?.addOnId || ''}
+                  packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
+                  status={groupStatus || 'PENDING_PAYMENT'}
+                />
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const firstPkg = basics[0] || boosters[0];
+                    const firstItem: any = basics[0] || boosters[0] || groupAddOns[0];
                     onVerifyPayment(
-                      firstPkg?.packageId || '',
-                      firstPkg?.status || 'PENDING_PAYMENT',
-                      firstPkg?.paymentProofUrl,
-                      firstPkg?.paymentProofFileName
+                      firstItem?.packageId || firstItem?.addOnId || '',
+                      firstItem?.status || 'PENDING_PAYMENT',
+                      firstItem?.paymentProofUrl,
+                      firstItem?.paymentProofFileName
                     );
                   }}
                   className={styles.verifyButton}
+                  style={{ marginTop: 0 }}
                 >
                   ✅ Verify Payment (Bundle)
                 </button>
@@ -613,6 +641,13 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
           <div className={styles.compactPrice}>{formatCurrency(standaloneFinalPrice)}</div>
           {getStatusBadge(memberPkg.status)}
           {getRefundBadge(memberPkg)}
+          {['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(memberPkg.status) && (
+            <ViewInvoiceButton
+              packageId={memberPkg.packageId}
+              packageCode={memberPkg.packageCode}
+              status={memberPkg.status}
+            />
+          )}
           <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         </div>
       </div>
@@ -700,13 +735,19 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
 
           {/* Actions */}
           {(memberPkg.status === 'PENDING_PAYMENT' || memberPkg.status === 'WAITING_VERIFICATION') && (
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '16px' }}>
+              <ViewInvoiceButton
+                packageId={memberPkg.packageId}
+                packageCode={memberPkg.packageCode}
+                status={memberPkg.status}
+              />
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onVerifyPayment(memberPkg.packageId, memberPkg.status, memberPkg.paymentProofUrl, memberPkg.paymentProofFileName);
                 }}
                 className={styles.verifyButton}
+                style={{ marginTop: 0 }}
               >
                 ✅ Verify Payment
               </button>

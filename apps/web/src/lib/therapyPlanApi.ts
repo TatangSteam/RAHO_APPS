@@ -1,4 +1,5 @@
 import { api } from './api';
+import type { TherapyPlanSubstance } from './therapyPlanSubstances';
 
 export interface TherapyPlan {
   id: string;
@@ -17,9 +18,11 @@ export interface TherapyPlan {
   h2s?: number;
   kcl?: number;
   jmlNb?: number;
+  ifaSubstances?: TherapyPlanSubstance[] | null;
+  ifaSubstanceTotalMl?: number | null;
   version?: number; // Version number (1, 2, 3, ...)
-  supersededById?: string; // ID of newer version
-  supersededAt?: string; // When was this superseded
+  supersededById?: string | null; // ID of newer version
+  supersededAt?: string | null; // When was this superseded
   isUsed: boolean;
   usedInSession?: {
     id: string;
@@ -36,19 +39,21 @@ export interface TherapyPlan {
 
 export interface CreateTherapyPlanInput {
   keterangan?: string;
-  ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
-  ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
-  hho?: number;
-  h2?: number;
-  no?: number;
-  gaso?: number;
-  o2?: number;
-  o3?: number;
-  edta?: number;
-  mb?: number;
-  h2s?: number;
-  kcl?: number;
-  jmlNb?: number;
+  ifa250?: number | null; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
+  ifa500?: number | null; // IFA 500ml - Alternatif/special case (satuan: Botol)
+  hho?: number | null;
+  h2?: number | null;
+  no?: number | null;
+  gaso?: number | null;
+  o2?: number | null;
+  o3?: number | null;
+  edta?: number | null;
+  mb?: number | null;
+  h2s?: number | null;
+  kcl?: number | null;
+  jmlNb?: number | null;
+  ifaSubstances?: TherapyPlanSubstance[];
+  ifaSubstanceTotalMl?: number;
 }
 
 export interface PackageSummary {

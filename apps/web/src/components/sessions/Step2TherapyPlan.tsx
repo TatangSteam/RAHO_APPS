@@ -4,6 +4,13 @@ import { useState } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import type { TherapyPlan, CreateTherapyPlanInput } from '@/types/session';
 import { devError } from '@/lib/logger';
+import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
+import TherapyPlanSubstancesEditor from '@/components/therapy-plan/TherapyPlanSubstancesEditor';
+import {
+  calculateIfaSubstanceTotalMl,
+  createDefaultIfaSubstances,
+  prepareIfaSubstancePayload,
+} from '@/lib/therapyPlanSubstances';
 import styles from './Step2TherapyPlan.module.css';
 
 interface Step2TherapyPlanProps {
@@ -25,21 +32,13 @@ const AUTO_FILL_FIELDS = [
   { key: 'o3', label: 'O3', unit: 'ml', product: 'Ozone' },
   { key: 'o2', label: 'O2', unit: 'ml', product: 'Oxygen' },
   { key: 'edta', label: 'EDTA', unit: 'ml', product: 'EDTA' },
-];
+] as const;
 
 const MANUAL_FIELDS = [
   { key: 'hho', label: 'HHO', unit: 'ml', product: 'NB-HHO' },
   { key: 'h2', label: 'H2', unit: 'ml', product: 'Hydrogen' },
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', product: '' },
-];
-
-// For display purposes (completed view)
-const ALL_DOSE_FIELDS = [
-  { key: 'ifa250', label: 'IFA + NO 2,5ml', unit: 'Botol' },
-  { key: 'ifa500', label: 'IFA 500ml', unit: 'Botol' },
-  ...AUTO_FILL_FIELDS,
-  ...MANUAL_FIELDS,
-];
+] as const;
 
 export default function Step2TherapyPlan({
   sessionId,
@@ -65,6 +64,8 @@ export default function Step2TherapyPlan({
     h2s: undefined,
     kcl: undefined,
     jmlNb: undefined,
+    ifaSubstances: createDefaultIfaSubstances(),
+    ifaSubstanceTotalMl: 2.5,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -94,7 +95,10 @@ export default function Step2TherapyPlan({
     setLoading(true);
 
     try {
-      await sessionApi.createTherapyPlan(sessionId, formData);
+      await sessionApi.createTherapyPlan(sessionId, {
+        ...formData,
+        ...prepareIfaSubstancePayload(formData.ifaSubstances),
+      });
       onComplete();
     } catch (err: any) {
       devError('Failed to create therapy plan:', err);
@@ -135,21 +139,7 @@ export default function Step2TherapyPlan({
         </div>
 
         <div className={styles.completedContent}>
-          <div className={styles.doseGrid + ' ' + styles.completed}>
-            {ALL_DOSE_FIELDS.map((field) => {
-              const value = therapyPlan[field.key as keyof TherapyPlan];
-              if (!value) return null;
-              return (
-                <div key={field.key} className={styles.doseCard}>
-                  <p className={styles.doseCardLabel}>{field.label}</p>
-                  <p className={styles.doseCardValue}>
-                    {Number(value)}
-                    <span className={styles.doseCardUnit}> {field.unit}</span>
-                  </p>
-                </div>
-              );
-            })}
-          </div>
+          <TherapyPlanDoseTable plan={therapyPlan} />
 
           {therapyPlan.keterangan && (
             <div className={styles.keteranganSection}>
@@ -212,7 +202,15 @@ export default function Step2TherapyPlan({
                 type="radio"
                 name="ifaType"
                 checked={formData.ifa250 !== undefined && formData.ifa250 > 0}
-                onChange={() => setFormData({ ...formData, ifa250: 1, ifa500: undefined })}
+                onChange={() => setFormData({
+                  ...formData,
+                  ifa250: 1,
+                  ifa500: undefined,
+                  ifaSubstances: formData.ifaSubstances?.length ? formData.ifaSubstances : createDefaultIfaSubstances(),
+                  ifaSubstanceTotalMl: formData.ifaSubstances?.length
+                    ? calculateIfaSubstanceTotalMl(formData.ifaSubstances)
+                    : 2.5,
+                })}
                 style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
                 disabled={loading}
               />
@@ -256,7 +254,13 @@ export default function Step2TherapyPlan({
                 type="radio"
                 name="ifaType"
                 checked={formData.ifa500 !== undefined && formData.ifa500 > 0}
-                onChange={() => setFormData({ ...formData, ifa250: undefined, ifa500: 1 })}
+                onChange={() => setFormData({
+                  ...formData,
+                  ifa250: undefined,
+                  ifa500: 1,
+                  ifaSubstances: [],
+                  ifaSubstanceTotalMl: 0,
+                })}
                 style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
                 disabled={loading}
               />
@@ -274,7 +278,13 @@ export default function Step2TherapyPlan({
                     type="number"
                     min="1"
                     value={formData.ifa500}
-                    onChange={(e) => setFormData({ ...formData, ifa250: undefined, ifa500: parseInt(e.target.value) || 1 })}
+                    onChange={(e) => setFormData({
+                      ...formData,
+                      ifa250: undefined,
+                      ifa500: parseInt(e.target.value) || 1,
+                      ifaSubstances: [],
+                      ifaSubstanceTotalMl: 0,
+                    })}
                     onClick={(e) => e.stopPropagation()}
                     className={styles.doseInput}
                     style={{ width: '70px', textAlign: 'center' }}
@@ -286,6 +296,18 @@ export default function Step2TherapyPlan({
             </label>
           </div>
         </div>
+
+        <TherapyPlanSubstancesEditor
+          value={formData.ifaSubstances}
+          disabled={loading}
+          onChange={(ifaSubstances) =>
+            setFormData({
+              ...formData,
+              ifaSubstances,
+              ifaSubstanceTotalMl: calculateIfaSubstanceTotalMl(ifaSubstances),
+            })
+          }
+        />
 
         {/* AUTO-FILL FIELDS - Ada Booster Package */}
         <div style={{ 
@@ -312,7 +334,7 @@ export default function Step2TherapyPlan({
                 <input
                   type="number"
                   step="0.01"
-                  value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
+                  value={formData[field.key] || ''}
                   onChange={(e) => updateDose(field.key, e.target.value)}
                   className={styles.doseInput}
                   style={{ borderColor: 'rgba(59,130,246,0.3)' }}
@@ -349,7 +371,7 @@ export default function Step2TherapyPlan({
                 <input
                   type="number"
                   step="0.01"
-                  value={formData[field.key as keyof CreateTherapyPlanInput] || ''}
+                  value={formData[field.key] || ''}
                   onChange={(e) => updateDose(field.key, e.target.value)}
                   className={styles.doseInput}
                   placeholder="0"

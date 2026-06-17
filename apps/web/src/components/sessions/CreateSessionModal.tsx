@@ -14,6 +14,7 @@ import type { CreateSessionInput, SessionType, Diagnosis } from '@/types/session
 import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
+import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
 
 interface CreateSessionModalProps {
   isOpen: boolean;
@@ -1143,67 +1144,7 @@ export default function CreateSessionModal({
                       </p>
                     </div>
 
-                    {/* IFA Section */}
-                    <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
-                      <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-3">IFA (Infus)</h4>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <span className="text-blue-600 dark:text-blue-400/80">IFA 250ml:</span>
-                          <span className="ml-2 font-medium text-blue-800 dark:text-blue-300">{selectedPlan.ifa250 || 0} Botol</span>
-                        </div>
-                        <div>
-                          <span className="text-blue-600 dark:text-blue-400/80">IFA 500ml:</span>
-                          <span className="ml-2 font-medium text-blue-800 dark:text-blue-300">{selectedPlan.ifa500 || 0} Botol</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Booster Section */}
-                    <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
-                      <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-400 mb-3">Booster</h4>
-                      <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">HHO:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.hho || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">NO:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.no || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">O3:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.o3 || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">GASO:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.gaso || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">MB:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.mb || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">KCL:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.kcl || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">H2S:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.h2s || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">EDTA:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.edta || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">H2:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.h2 || '-'}</span>
-                        </div>
-                        <div>
-                          <span className="text-purple-600 dark:text-purple-400/80">O2:</span>
-                          <span className="ml-2 font-medium text-purple-800 dark:text-purple-300">{selectedPlan.o2 || '-'}</span>
-                        </div>
-                      </div>
-                    </div>
+                    <TherapyPlanDoseTable plan={selectedPlan} compact />
 
                     {/* Notes */}
                     {selectedPlan.keterangan && (

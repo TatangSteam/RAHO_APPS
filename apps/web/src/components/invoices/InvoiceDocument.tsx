@@ -57,6 +57,13 @@ export default function InvoiceDocument({ invoice }: Props) {
     });
   };
 
+  const isReceipt = invoice.status === 'PAID';
+  const documentTitle = isReceipt ? 'KWITANSI' : 'INVOICE';
+  const detailTitle = isReceipt ? 'DETAIL KWITANSI' : 'DETAIL INVOICE';
+  const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
+  const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
+  const numberLabel = isReceipt ? 'No. Kwitansi:' : 'No. Faktur:';
+
   // Group invoice items by code + description + pricePerUnit
   const groupedItems = React.useMemo(() => {
     if (!invoice.items || invoice.items.length === 0) return [];
@@ -101,7 +108,7 @@ export default function InvoiceDocument({ invoice }: Props) {
 
       {/* Invoice Title & Status */}
       <div className={styles.titleSection}>
-        <h2 className={styles.invoiceTitleText}>INVOICE</h2>
+        <h2 className={styles.invoiceTitleText}>{documentTitle}</h2>
         <span className={`${styles.statusBadge} ${getStatusClass(invoice.status)}`}>
           {getStatusText(invoice.status)}
         </span>
@@ -111,9 +118,9 @@ export default function InvoiceDocument({ invoice }: Props) {
       <div className={styles.invoiceInfo}>
         <div className={styles.infoLeft}>
           <div className={styles.infoGroup}>
-            <h3 className={styles.infoGroupTitle}>DETAIL INVOICE</h3>
+            <h3 className={styles.infoGroupTitle}>{detailTitle}</h3>
             <p className={styles.infoRow}>
-              <span className={styles.infoLabel}>No. Faktur:</span>
+              <span className={styles.infoLabel}>{numberLabel}</span>
               <span className={styles.infoValue}>{invoice.invoiceNumber}</span>
             </p>
             <p className={styles.infoRow}>
@@ -130,7 +137,7 @@ export default function InvoiceDocument({ invoice }: Props) {
         </div>
         <div className={styles.infoRight}>
           <div className={styles.infoGroup}>
-            <h3 className={styles.infoGroupTitle}>TAGIHAN UNTUK</h3>
+            <h3 className={styles.infoGroupTitle}>{billToTitle}</h3>
             <p className={styles.billToName}>{invoice.memberName || 'Member'}</p>
             <p className={styles.billToDetail}>Member No: {invoice.memberNo || '-'}</p>
             {invoice.branchName && (
@@ -204,7 +211,7 @@ export default function InvoiceDocument({ invoice }: Props) {
           )}
           
           <div className={`${styles.summaryRow} ${styles.summaryTotal}`}>
-            <span className={styles.summaryLabel}>TOTAL PEMBAYARAN</span>
+            <span className={styles.summaryLabel}>{totalLabel}</span>
             <span className={styles.summaryValue}>{formatCurrency(invoice.totalAmount)}</span>
           </div>
         </div>
@@ -294,7 +301,7 @@ export default function InvoiceDocument({ invoice }: Props) {
           Dokumen ini dicetak secara otomatis dan sah tanpa tanda tangan
         </p>
         <p className={styles.footerMeta}>
-          Generated: {new Date().toLocaleString('id-ID')} | Invoice #{invoice.invoiceNumber}
+          Generated: {new Date().toLocaleString('id-ID')} | {documentTitle} #{invoice.invoiceNumber}
         </p>
       </div>
     </div>

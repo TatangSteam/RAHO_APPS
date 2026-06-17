@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
+import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import { AuditAction, Role } from '@prisma/client';
 
 /**
@@ -203,7 +204,7 @@ export class MemberMedicalRecordsService {
 
   /**
    * Get member therapy plans
-   * Returns therapy plans with usage information and session counts
+   * Returns active and edit-history therapy plans with usage information and session counts
    */
   async getMemberTherapyPlans(memberId: string) {
     const member = await prisma.member.findUnique({
@@ -307,6 +308,11 @@ export class MemberMedicalRecordsService {
           h2s: plan.h2s ? Number(plan.h2s) : null,
           kcl: plan.kcl ? Number(plan.kcl) : null,
           jmlNb: plan.jmlNb ? Number(plan.jmlNb) : null,
+          ifaSubstances: plan.ifaSubstances || null,
+          ifaSubstanceTotalMl: plan.ifaSubstanceTotalMl ? Number(plan.ifaSubstanceTotalMl) : null,
+          version: plan.version,
+          supersededById: plan.supersededById,
+          supersededAt: plan.supersededAt?.toISOString() || null,
           isUsed: !!plan.treatmentSessionId,
           usedInSession: sessionInfo,
           createdAt: plan.createdAt.toISOString(),
@@ -389,6 +395,11 @@ export class MemberMedicalRecordsService {
       planCode = `${planCode}-${timestamp}`;
     }
 
+    const normalizedIfaSubstances = normalizeIfaSubstances(
+      data.ifaSubstances,
+      Boolean(data.ifa250 && data.ifa250 > 0)
+    );
+
     const therapyPlan = await prisma.therapyPlan.create({
       data: {
         planCode,
@@ -407,6 +418,7 @@ export class MemberMedicalRecordsService {
         h2s: data.h2s || null,
         kcl: data.kcl || null,
         jmlNb: data.jmlNb || null,
+        ...normalizedIfaSubstances,
       },
     });
 

@@ -4,11 +4,14 @@ import { logAudit } from '../../../utils/auditLog';
 import type { AssignPackageInput } from '../packages.schema';
 import { PackageType, PackageStatus, AuditAction } from '@prisma/client';
 import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
+import { InvoiceGenerationService } from './invoice-generation.service';
 
 /**
  * Service for handling package assignment to members
  */
 export class PackageAssignmentService {
+  private readonly invoiceService = new InvoiceGenerationService();
+
   // Service type pricing configuration
   private readonly SERVICE_TYPE_PRICING: Record<string, number> = {
     PM: 1_000_000,
@@ -178,6 +181,14 @@ export class PackageAssignmentService {
       addOnsCount: result.createdAddOns.length,
       purchaseGroupId: result.purchaseGroupId
     });
+
+    // Create invoice immediately for unpaid assigned packages/add-ons.
+    await this.invoiceService.generatePendingInvoiceForPackages(
+      result.createdPackages,
+      result.createdAddOns,
+      member,
+      userId
+    );
 
     // Audit logs
     await this.logPackageAssignment(result, branchId, userId);

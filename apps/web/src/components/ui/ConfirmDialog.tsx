@@ -224,14 +224,14 @@ export function ConfirmDialog() {
       onClick={handleCancel}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 dark:bg-black/70 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/80 dark:bg-black/90 backdrop-blur-md" />
       
       {/* Dialog */}
       <div 
         className={`
-          relative bg-white dark:bg-neutral-900 
-          border border-neutral-200 dark:border-neutral-800
-          rounded-2xl shadow-2xl
+          relative bg-white dark:bg-neutral-950
+          border border-neutral-200 dark:border-neutral-700
+          rounded-2xl shadow-[0_24px_80px_rgba(0,0,0,0.72)]
           w-full max-w-md
           transform transition-all duration-200
           ${isClosing ? 'scale-95 opacity-0' : 'scale-100 opacity-100'}

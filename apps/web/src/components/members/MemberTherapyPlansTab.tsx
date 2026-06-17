@@ -1,14 +1,144 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { therapyPlanApi, TherapyPlan, CreateTherapyPlanInput } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
+import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
+import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
+import TherapyPlanSubstancesEditor from '@/components/therapy-plan/TherapyPlanSubstancesEditor';
+import {
+  calculateIfaSubstanceTotalMl,
+  createDefaultIfaSubstances,
+  prepareIfaSubstancePayload,
+} from '@/lib/therapyPlanSubstances';
 import BulkTherapyPlanModal from './BulkTherapyPlanModal';
 import EditTherapyPlanModal from './EditTherapyPlanModal';
 
 interface MemberTherapyPlansTabProps {
   memberId: string;
+}
+
+type TherapyPlanStatusFilter = 'all' | 'available' | 'used' | 'superseded';
+
+interface TherapyPlanFilters {
+  search: string;
+  status: TherapyPlanStatusFilter;
+  dateFrom: string;
+  dateTo: string;
+  ifaOnly: boolean;
+}
+
+const DOSE_KEYS: Array<keyof CreateTherapyPlanInput> = [
+  'ifa250',
+  'ifa500',
+  'hho',
+  'h2',
+  'no',
+  'gaso',
+  'o2',
+  'o3',
+  'edta',
+  'mb',
+  'h2s',
+  'kcl',
+  'jmlNb',
+];
+
+const createInitialFormData = (): CreateTherapyPlanInput => ({
+  keterangan: '',
+  ifa250: 1,
+  ifa500: undefined,
+  hho: undefined,
+  h2: undefined,
+  no: undefined,
+  gaso: undefined,
+  o2: undefined,
+  o3: undefined,
+  edta: undefined,
+  mb: undefined,
+  h2s: undefined,
+  kcl: undefined,
+  jmlNb: undefined,
+  ifaSubstances: createDefaultIfaSubstances(),
+  ifaSubstanceTotalMl: 2.5,
+});
+
+const createInitialFilters = (): TherapyPlanFilters => ({
+  search: '',
+  status: 'all',
+  dateFrom: '',
+  dateTo: '',
+  ifaOnly: false,
+});
+
+function getPlanDate(plan: TherapyPlan): Date {
+  return new Date(plan.usedInSession?.treatmentDate || plan.createdAt);
+}
+
+function getPlanDateKey(plan: TherapyPlan): string {
+  const date = getPlanDate(plan);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function isTherapyPlanEditHistory(plan: TherapyPlan): boolean {
+  return Boolean(plan.supersededById || plan.supersededAt);
+}
+
+function getPlanStatusKey(plan: TherapyPlan): Exclude<TherapyPlanStatusFilter, 'all'> {
+  if (isTherapyPlanEditHistory(plan)) return 'superseded';
+  return plan.isUsed ? 'used' : 'available';
+}
+
+function planMatchesFilters(plan: TherapyPlan, filters: TherapyPlanFilters): boolean {
+  const search = filters.search.trim().toLowerCase();
+  const planDate = getPlanDateKey(plan);
+  const substancesText = (plan.ifaSubstances || [])
+    .map((substance) => `${substance.name} ${substance.keterangan || ''}`)
+    .join(' ');
+
+  const searchableText = [
+    plan.planCode,
+    plan.keterangan || '',
+    plan.usedInSession?.sessionCode || '',
+    substancesText,
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  if (search && !searchableText.includes(search)) return false;
+  if (filters.status !== 'all' && getPlanStatusKey(plan) !== filters.status) return false;
+  if (filters.dateFrom && planDate < filters.dateFrom) return false;
+  if (filters.dateTo && planDate > filters.dateTo) return false;
+  if (filters.ifaOnly && !(plan.ifaSubstances && plan.ifaSubstances.length > 0)) return false;
+
+  return true;
+}
+
+function getTherapyPlanRecommendation(plans: TherapyPlan[], filteredPlans: TherapyPlan[]): string {
+  const availableCount = plans.filter((plan) => getPlanStatusKey(plan) === 'available').length;
+  const supersededCount = plans.filter((plan) => getPlanStatusKey(plan) === 'superseded').length;
+  const ifaSubstanceCount = plans.filter((plan) => (plan.ifaSubstances || []).length > 0).length;
+
+  if (availableCount > 0) {
+    return `Ada ${availableCount} therapy plan belum digunakan. Prioritaskan filter "Belum Digunakan" saat memilih plan untuk sesi baru.`;
+  }
+
+  if (supersededCount > 0) {
+    return `Ada ${supersededCount} therapy plan history edit. Gunakan filter status untuk menyembunyikan history saat review dosis aktif.`;
+  }
+
+  if (ifaSubstanceCount > 0) {
+    return `Ada ${ifaSubstanceCount} plan dengan zat IFA tambahan. Di mode tabel, zat dengan nama sama otomatis digabung ke kolom zat utama.`;
+  }
+
+  if (filteredPlans.length === 0 && plans.length > 0) {
+    return 'Tidak ada data yang cocok dengan filter aktif. Reset filter untuk melihat semua therapy plan.';
+  }
+
+  return 'Mode tabel direkomendasikan untuk membandingkan dosis antar sesi; mode kartu tetap cocok untuk membaca catatan detail.';
 }
 
 export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTabProps) {
@@ -18,23 +148,10 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [showForm, setShowForm] = useState(false);
   const [showBulkModal, setShowBulkModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<TherapyPlan | null>(null);
-  const [formData, setFormData] = useState<CreateTherapyPlanInput>({
-    keterangan: '',
-    ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
-    ifa500: undefined,
-    hho: undefined,
-    h2: undefined,
-    no: undefined,
-    gaso: undefined,
-    o2: undefined,
-    o3: undefined,
-    edta: undefined,
-    mb: undefined,
-    h2s: undefined,
-    kcl: undefined,
-    jmlNb: undefined,
-  });
+  const [formData, setFormData] = useState<CreateTherapyPlanInput>(createInitialFormData);
   const [submitting, setSubmitting] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'card'>('table');
+  const [filters, setFilters] = useState<TherapyPlanFilters>(createInitialFilters);
 
   useEffect(() => {
     loadTherapyPlans();
@@ -61,9 +178,10 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     e.preventDefault();
 
     // Validate at least one dose field is filled
-    const hasDose = Object.entries(formData).some(
-      ([key, value]) => key !== 'keterangan' && value && value > 0
-    );
+    const hasDose = DOSE_KEYS.some((key) => {
+      const value = formData[key];
+      return typeof value === 'number' && value > 0;
+    });
 
     if (!hasDose) {
       showToast.error('Minimal satu field dosis harus diisi');
@@ -72,25 +190,13 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
 
     try {
       setSubmitting(true);
-      const result = await therapyPlanApi.createMemberTherapyPlan(memberId, formData);
+      const result = await therapyPlanApi.createMemberTherapyPlan(memberId, {
+        ...formData,
+        ...prepareIfaSubstancePayload(formData.ifaSubstances),
+      });
       showToast.success(result.message);
       setShowForm(false);
-      setFormData({
-        keterangan: '',
-        ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
-        ifa500: undefined,
-        hho: undefined,
-        h2: undefined,
-        no: undefined,
-        gaso: undefined,
-        o2: undefined,
-        o3: undefined,
-        edta: undefined,
-        mb: undefined,
-        h2s: undefined,
-        kcl: undefined,
-        jmlNb: undefined,
-      });
+      setFormData(createInitialFormData());
       loadTherapyPlans();
     } catch (error: any) {
       showToast.error(error.response?.data?.error?.message || 'Gagal membuat therapy plan');
@@ -106,6 +212,36 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
       const numValue = value === '' ? undefined : parseFloat(value);
       setFormData({ ...formData, [field]: numValue });
     }
+  };
+
+  const filteredTherapyPlans = useMemo(() => {
+    return therapyPlans.filter((plan) => planMatchesFilters(plan, filters));
+  }, [therapyPlans, filters]);
+
+  const recommendation = useMemo(() => {
+    return getTherapyPlanRecommendation(therapyPlans, filteredTherapyPlans);
+  }, [therapyPlans, filteredTherapyPlans]);
+
+  const hasActiveFilters = Boolean(
+    filters.search.trim() ||
+    filters.status !== 'all' ||
+    filters.dateFrom ||
+    filters.dateTo ||
+    filters.ifaOnly
+  );
+
+  const handleEditPlan = (plan: TherapyPlan) => {
+    if (isTherapyPlanEditHistory(plan)) {
+      showToast.error('Therapy plan history edit tidak bisa diedit');
+      return;
+    }
+
+    if (plan.isUsed) {
+      showToast.error('Therapy plan yang sudah digunakan tidak bisa diedit');
+      return;
+    }
+
+    setEditingPlan(plan);
   };
 
   if (loading) {
@@ -139,9 +275,44 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap', marginBottom: '24px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>💊 Therapy Plans</h3>
-        <div style={{ display: 'flex', gap: '12px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'inline-flex',
+              padding: '3px',
+              borderRadius: '8px',
+              border: '1px solid rgba(148,163,184,0.24)',
+              background: 'rgba(148,163,184,0.08)',
+            }}
+          >
+            {[
+              { value: 'table', label: 'Tabel' },
+              { value: 'card', label: 'Kartu' },
+            ].map((option) => {
+              const isActive = viewMode === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setViewMode(option.value as 'table' | 'card')}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '6px',
+                    border: 'none',
+                    background: isActive ? 'rgba(245,158,11,0.92)' : 'transparent',
+                    color: isActive ? '#111827' : 'var(--text-secondary)',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
           <button 
             className="btn btn-secondary" 
             onClick={() => setShowBulkModal(true)}
@@ -269,8 +440,16 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   <input
                     type="radio"
                     name="ifaType"
-                    checked={formData.ifa250 !== undefined && formData.ifa250 > 0}
-                    onChange={() => setFormData({ ...formData, ifa250: 1, ifa500: undefined })}
+                    checked={(formData.ifa250 ?? 0) > 0}
+                    onChange={() => setFormData({
+                      ...formData,
+                      ifa250: 1,
+                      ifa500: undefined,
+                      ifaSubstances: formData.ifaSubstances?.length ? formData.ifaSubstances : createDefaultIfaSubstances(),
+                      ifaSubstanceTotalMl: formData.ifaSubstances?.length
+                        ? calculateIfaSubstanceTotalMl(formData.ifaSubstances)
+                        : 2.5,
+                    })}
                     style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
                   />
                   <div style={{ flex: 1 }}>
@@ -316,8 +495,14 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   <input
                     type="radio"
                     name="ifaType"
-                    checked={formData.ifa500 !== undefined && formData.ifa500 > 0}
-                    onChange={() => setFormData({ ...formData, ifa250: undefined, ifa500: 1 })}
+                    checked={(formData.ifa500 ?? 0) > 0}
+                    onChange={() => setFormData({
+                      ...formData,
+                      ifa250: undefined,
+                      ifa500: 1,
+                      ifaSubstances: [],
+                      ifaSubstanceTotalMl: 0,
+                    })}
                     style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
                   />
                   <div style={{ flex: 1 }}>
@@ -338,7 +523,13 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         value={formData.ifa500}
                         onChange={(e) => {
                           const val = parseInt(e.target.value) || 1;
-                          setFormData({ ...formData, ifa250: undefined, ifa500: val });
+                          setFormData({
+                            ...formData,
+                            ifa250: undefined,
+                            ifa500: val,
+                            ifaSubstances: [],
+                            ifaSubstanceTotalMl: 0,
+                          });
                         }}
                         onClick={(e) => e.stopPropagation()}
                         style={{ fontSize: '14px', width: '70px', textAlign: 'center' }}
@@ -349,6 +540,18 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 </label>
               </div>
             </div>
+
+            <TherapyPlanSubstancesEditor
+              value={formData.ifaSubstances}
+              disabled={submitting}
+              onChange={(ifaSubstances) =>
+                setFormData({
+                  ...formData,
+                  ifaSubstances,
+                  ifaSubstanceTotalMl: calculateIfaSubstanceTotalMl(ifaSubstances),
+                })
+              }
+            />
 
             {/* AUTO-FILL FIELDS - Digunakan di Infus Aktual */}
             <div style={{ 
@@ -572,6 +775,153 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
         </div>
       )}
 
+      {therapyPlans.length > 0 && (
+        <div
+          style={{
+            marginBottom: '16px',
+            padding: '14px',
+            borderRadius: '8px',
+            border: '1px solid rgba(148,163,184,0.22)',
+            background: 'rgba(148,163,184,0.06)',
+          }}
+        >
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: '10px',
+              alignItems: 'end',
+            }}
+          >
+            <div>
+              <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>
+                Cari
+              </label>
+              <input
+                className="form-input"
+                value={filters.search}
+                onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value }))}
+                placeholder="Kode plan, keterangan, sesi, zat..."
+                style={{ fontSize: '13px' }}
+              />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>
+                Status
+              </label>
+              <select
+                className="form-input"
+                value={filters.status}
+                onChange={(event) =>
+                  setFilters((current) => ({
+                    ...current,
+                    status: event.target.value as TherapyPlanStatusFilter,
+                  }))
+                }
+                style={{ fontSize: '13px' }}
+              >
+                <option value="all">Semua</option>
+                <option value="available">Belum Digunakan</option>
+                <option value="used">Sudah Digunakan</option>
+                <option value="superseded">History Edit</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>
+                Dari
+              </label>
+              <input
+                className="form-input"
+                type="date"
+                value={filters.dateFrom}
+                onChange={(event) => setFilters((current) => ({ ...current, dateFrom: event.target.value }))}
+                style={{ fontSize: '13px' }}
+              />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>
+                Sampai
+              </label>
+              <input
+                className="form-input"
+                type="date"
+                value={filters.dateTo}
+                onChange={(event) => setFilters((current) => ({ ...current, dateTo: event.target.value }))}
+                style={{ fontSize: '13px' }}
+              />
+            </div>
+
+            <label
+              style={{
+                minHeight: '42px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '0 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(20,184,166,0.28)',
+                background: filters.ifaOnly ? 'rgba(20,184,166,0.14)' : 'rgba(20,184,166,0.06)',
+                color: filters.ifaOnly ? '#5eead4' : 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={filters.ifaOnly}
+                onChange={(event) => setFilters((current) => ({ ...current, ifaOnly: event.target.checked }))}
+              />
+              Zat IFA
+            </label>
+
+            <button
+              type="button"
+              onClick={() => setFilters(createInitialFilters())}
+              disabled={!hasActiveFilters}
+              style={{
+                minHeight: '42px',
+                padding: '0 12px',
+                borderRadius: '8px',
+                border: '1px solid rgba(148,163,184,0.24)',
+                background: 'rgba(148,163,184,0.08)',
+                color: 'var(--text-secondary)',
+                fontSize: '13px',
+                fontWeight: 700,
+                cursor: hasActiveFilters ? 'pointer' : 'not-allowed',
+                opacity: hasActiveFilters ? 1 : 0.55,
+              }}
+            >
+              Reset
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: '12px',
+              flexWrap: 'wrap',
+              marginTop: '12px',
+              paddingTop: '12px',
+              borderTop: '1px solid rgba(148,163,184,0.16)',
+            }}
+          >
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 700 }}>
+              Menampilkan {filteredTherapyPlans.length} dari {therapyPlans.length} therapy plan
+            </div>
+            <div style={{ fontSize: '12px', color: '#fbbf24', fontWeight: 700 }}>
+              Rekomendasi: {recommendation}
+            </div>
+          </div>
+        </div>
+      )}
+
       {therapyPlans.length === 0 ? (
         <div style={{ 
           textAlign: 'center', 
@@ -593,16 +943,44 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             Klik tombol "Buat Therapy Plan" untuk menambahkan therapy plan baru
           </p>
         </div>
+      ) : filteredTherapyPlans.length === 0 ? (
+        <div style={{
+          textAlign: 'center',
+          padding: '42px 24px',
+          background: 'rgba(148,163,184,0.05)',
+          borderRadius: '8px',
+          border: '1px dashed rgba(148,163,184,0.24)'
+        }}>
+          <p style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
+            Tidak ada therapy plan yang cocok
+          </p>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+            Ubah filter atau reset untuk melihat semua data.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFilters(createInitialFilters())}
+            className="btn btn-secondary"
+          >
+            Reset Filter
+          </button>
+        </div>
+      ) : viewMode === 'table' ? (
+        <TherapyPlanListTable
+          plans={filteredTherapyPlans}
+          onEdit={handleEditPlan}
+          onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+        />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {therapyPlans.map((plan) => {
+          {filteredTherapyPlans.map((plan) => {
             // Determine card style based on status
-            const isSuperseded = !!plan.supersededById;
+            const isHistoryEdit = isTherapyPlanEditHistory(plan);
             const isUsed = plan.isUsed;
             
             let cardBackground, cardBorder;
-            if (isSuperseded) {
-              // Grey for superseded (old version)
+            if (isHistoryEdit) {
+              // Grey for edit history
               cardBackground = 'linear-gradient(135deg, rgba(148,163,184,0.05), rgba(100,116,139,0.05))';
               cardBorder = '2px solid rgba(148,163,184,0.3)';
             } else if (isUsed) {
@@ -625,7 +1003,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 borderRadius: 'var(--radius-lg)',
                 transition: 'all 0.2s ease',
                 cursor: 'default',
-                opacity: isSuperseded ? 0.7 : 1
+                opacity: isHistoryEdit ? 0.7 : 1
               }}
             >
               <div style={{ 
@@ -657,18 +1035,18 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         v{plan.version}
                       </span>
                     )}
-                    {plan.supersededById && (
+                    {isHistoryEdit && (
                       <span style={{
                         marginLeft: '8px',
                         fontSize: '12px',
                         padding: '2px 8px',
-                        background: 'rgba(239,68,68,0.2)',
-                        border: '1px solid rgba(239,68,68,0.4)',
+                        background: 'rgba(148,163,184,0.16)',
+                        border: '1px solid rgba(148,163,184,0.32)',
                         borderRadius: 'var(--radius-sm)',
-                        color: '#ef4444',
+                        color: '#cbd5e1',
                         fontWeight: '600'
                       }}>
-                        ⚠️ Superseded
+                        History Edit
                       </span>
                     )}
                   </h4>
@@ -683,16 +1061,24 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         borderRadius: 'var(--radius-md)',
                         fontSize: '12px',
                         fontWeight: '700',
-                        background: plan.isUsed ? 'rgba(34,197,94,0.25)' : 'rgba(251,191,36,0.25)',
-                        color: plan.isUsed ? '#4ade80' : '#fbbf24',
-                        border: plan.isUsed ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(251,191,36,0.5)'
+                        background: isHistoryEdit
+                          ? 'rgba(148,163,184,0.18)'
+                          : plan.isUsed
+                            ? 'rgba(34,197,94,0.25)'
+                            : 'rgba(251,191,36,0.25)',
+                        color: isHistoryEdit ? '#cbd5e1' : plan.isUsed ? '#4ade80' : '#fbbf24',
+                        border: isHistoryEdit
+                          ? '1px solid rgba(148,163,184,0.4)'
+                          : plan.isUsed
+                            ? '1px solid rgba(34,197,94,0.5)'
+                            : '1px solid rgba(251,191,36,0.5)'
                       }}
                     >
-                      {plan.isUsed ? '✅ Sudah Digunakan' : '🟡 Belum Digunakan'}
+                      {isHistoryEdit ? 'History Edit' : plan.isUsed ? '✅ Sudah Digunakan' : '🟡 Belum Digunakan'}
                     </span>
-                    {!plan.isUsed && !plan.supersededById && (
+                    {!plan.isUsed && !isHistoryEdit && (
                       <button
-                        onClick={() => setEditingPlan(plan)}
+                        onClick={() => handleEditPlan(plan)}
                         className="btn btn-sm"
                         style={{
                           padding: '6px 12px',
@@ -779,6 +1165,12 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 </div>
               )}
 
+              <div style={{ marginBottom: '16px' }}>
+                <TherapyPlanDoseTable plan={plan} compact />
+              </div>
+
+              {false && (
+                <>
               <div style={{ 
                 marginBottom: '16px',
                 padding: '12px 16px',
@@ -1011,6 +1403,59 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   )}
                 </div>
               </div>
+
+              {(plan.ifaSubstances ?? []).length > 0 && (
+                <div style={{
+                  marginBottom: '16px',
+                  padding: '12px 16px',
+                  background: 'rgba(20,184,166,0.08)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(20,184,166,0.24)'
+                }}>
+                  <div style={{
+                    fontSize: '11px',
+                    fontWeight: '700',
+                    color: '#2dd4bf',
+                    marginBottom: '12px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.5px'
+                  }}>
+                    Zat Tambahan IFA - Total {plan.ifaSubstanceTotalMl ?? calculateIfaSubstanceTotalMl(plan.ifaSubstances ?? [])} ml
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                    gap: '10px'
+                  }}>
+                    {(plan.ifaSubstances ?? []).map((substance, index) => (
+                      <div
+                        key={`${substance.name}-${index}`}
+                        style={{
+                          padding: '10px 14px',
+                          background: 'rgba(20,184,166,0.12)',
+                          borderRadius: 'var(--radius-md)',
+                          border: '1px solid rgba(20,184,166,0.25)'
+                        }}
+                      >
+                        <div style={{ fontSize: '12px', fontWeight: '700', color: '#5eead4' }}>
+                          {substance.name}
+                        </div>
+                        <div style={{ fontSize: '15px', fontWeight: '700', color: '#ccfbf1', marginTop: '4px' }}>
+                          {substance.amount} {substance.unit}
+                        </div>
+                        {substance.keterangan && (
+                          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '6px', lineHeight: 1.4 }}>
+                            {substance.keterangan}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+                </>
+              )}
 
               {plan.isUsed && plan.usedInSession && (
                 <div style={{ 

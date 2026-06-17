@@ -15,6 +15,14 @@ const BoosterType = {
   NO2: 'NO2',
 } as const;
 
+const ifaSubstanceSchema = z.object({
+  name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
+  amount: z.number().min(0, 'Jumlah zat tidak boleh negatif'),
+  unit: z.string().trim().max(20).optional().default('ml'),
+  keterangan: z.string().trim().max(500).optional(),
+  isDefault: z.boolean().optional(),
+});
+
 // ============================================================
 // CREATE SESSION
 // ============================================================
@@ -112,6 +120,8 @@ export const createTherapyPlanSchema = z.object({
   h2s: z.number().optional(),
   kcl: z.number().optional(),
   jmlNb: z.number().optional(),
+  ifaSubstances: z.array(ifaSubstanceSchema).optional(),
+  ifaSubstanceTotalMl: z.number().min(0).optional(),
 }).refine(
   (data) => {
     // IFA is mutually exclusive - only one can be selected

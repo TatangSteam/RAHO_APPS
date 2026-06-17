@@ -1053,6 +1053,9 @@ model TherapyPlan {
   h2s                Decimal? @db.Decimal(10, 2)
   kcl                Decimal? @db.Decimal(10, 2)
   jmlNb              Decimal? @db.Decimal(10, 2)
+  noInIfa            Decimal? @default(2.5) @db.Decimal(10, 2) // Default NO di IFA 2,5ml
+  ifaSubstances      Json?    @map("ifa_substances") // Zat yang terkandung di IFA, hanya pencatatan therapy plan
+  ifaSubstanceTotalMl Decimal? @map("ifa_substance_total_ml") @db.Decimal(10, 2)
   // Versioning fields
   version            Int      @default(1) // Version number (1, 2, 3, ...)
   supersededById     String?  // ID of the therapy plan that supersedes this one

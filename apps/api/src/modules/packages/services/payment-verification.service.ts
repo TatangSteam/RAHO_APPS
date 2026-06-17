@@ -121,7 +121,9 @@ export class PaymentVerificationService {
       throw { status: 404, code: 'ITEM_NOT_FOUND', message: 'Paket atau add-on tidak ditemukan' };
     }
 
-    if (addon.status !== PackageStatus.WAITING_VERIFICATION) {
+    if (addon.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
+      // Staff is uploading proof and verifying in one step.
+    } else if (addon.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {
         status: 422,
         code: 'ITEM_NOT_WAITING_VERIFICATION',
@@ -163,6 +165,8 @@ export class PaymentVerificationService {
       resourceId: addOnId,
       meta: { action: 'VERIFY_PAYMENT', status: 'ACTIVE', proofFile: data.proofFileName },
     });
+
+    await this.invoiceService.markInvoicePaidForAddOns([updatedAddOn], addon.member, userId);
 
     return { addOn: updatedAddOn, message: 'Pembayaran add-on berhasil diverifikasi' };
   }
@@ -220,15 +224,20 @@ export class PaymentVerificationService {
       });
     }
 
-    // Refetch packages with updated payment proof data for invoice generation
+    // Refetch packages/add-ons with updated payment proof data for receipt generation.
     const updatedPackages = await prisma.memberPackage.findMany({
       where: { purchaseGroupId: pkg.purchaseGroupId },
     });
+    const updatedAddOns = await prisma.memberAddOn.findMany({
+      where: {
+        packageId: { in: packageIds },
+      },
+    });
 
-    // Auto-generate invoice for the group (this also creates payment record with proof)
-    await this.invoiceService.generateInvoiceForPackages(updatedPackages, pkg.member, userId);
+    // Mark the existing invoice as paid, or create a paid invoice if it is missing.
+    await this.invoiceService.markInvoicePaidForPackages(updatedPackages, updatedAddOns, pkg.member, userId);
 
-    // NOTE: Payment record is already created inside generateInvoiceForPackages
+    // NOTE: Payment record is already created inside the invoice service.
     // No need to create another one here
 
     const totalItems = groupPackages.length + groupAddOns.length;
@@ -303,10 +312,10 @@ export class PaymentVerificationService {
       },
     });
 
-    // Auto-generate invoice for single package (this also creates payment record with proof)
-    await this.invoiceService.generateInvoiceForPackages([updatedPackage], pkg.member, userId);
+    // Mark the existing invoice as paid, or create a paid invoice if it is missing.
+    await this.invoiceService.markInvoicePaidForPackages([updatedPackage], undefined, pkg.member, userId);
 
-    // NOTE: Payment record is already created inside generateInvoiceForPackages
+    // NOTE: Payment record is already created inside the invoice service.
     // No need to create another one here
 
     // Send notification to member

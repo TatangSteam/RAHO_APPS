@@ -36,6 +36,8 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
 
   if (!show || !invoice || !mounted) return null;
 
+  const documentTitle = invoice.status === 'PAID' ? 'Kwitansi' : 'Invoice';
+
   const handleExportPDF = async () => {
     try {
       setExporting(true);
@@ -60,7 +62,7 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
         {/* Header with Actions */}
         <div className={`${styles.modalHeader} no-print`}>
           <h3 className={styles.modalTitle}>
-            📄 Invoice {invoice.invoiceNumber}
+            📄 {documentTitle} {invoice.invoiceNumber}
           </h3>
           <div className={styles.modalActions}>
             <button

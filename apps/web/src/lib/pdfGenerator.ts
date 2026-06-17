@@ -23,6 +23,12 @@ export async function generateInvoicePDF(invoice: Invoice) {
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 15;
     const contentWidth = pageWidth - (margin * 2);
+    const isReceipt = invoice.status === 'PAID';
+    const documentTitle = isReceipt ? 'KWITANSI' : 'INVOICE';
+    const detailTitle = isReceipt ? 'DETAIL KWITANSI' : 'DETAIL INVOICE';
+    const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
+    const numberLabel = isReceipt ? 'No. Kwitansi' : 'No. Faktur';
+    const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
     
     let currentY = margin;
     
@@ -60,7 +66,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
-    doc.text('INVOICE', margin, currentY);
+    doc.text(documentTitle, margin, currentY);
     
     // Status badge
     const statusColors: Record<string, [number, number, number]> = {
@@ -91,11 +97,11 @@ export async function generateInvoicePDF(invoice: Invoice) {
     const rightX = pageWidth / 2 + 5;
     
     doc.setFont('helvetica', 'bold');
-    doc.text('DETAIL INVOICE', leftX, currentY);
+    doc.text(detailTitle, leftX, currentY);
     
     doc.setFont('helvetica', 'normal');
     currentY += 5;
-    doc.text(`No. Faktur: ${invoice.invoiceNumber}`, leftX, currentY);
+    doc.text(`${numberLabel}: ${invoice.invoiceNumber}`, leftX, currentY);
     
     currentY += 4;
     const createdDate = new Date(invoice.createdAt).toLocaleDateString('id-ID', {
@@ -118,7 +124,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // Right column - Bill to
     currentY -= 8;
     doc.setFont('helvetica', 'bold');
-    doc.text('TAGIHAN UNTUK', rightX, currentY);
+    doc.text(billToTitle, rightX, currentY);
     
     doc.setFont('helvetica', 'normal');
     currentY += 5;
@@ -260,7 +266,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
     doc.setTextColor(25, 118, 210);
-    doc.text('TOTAL PEMBAYARAN', summaryLabelX, currentY);
+    doc.text(totalLabel, summaryLabelX, currentY);
     doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, currentY, { align: 'right' });
     
     // ============================================================
@@ -366,10 +372,10 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);
     doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, margin, pageHeight - 5);
-    doc.text(`Invoice #${invoice.invoiceNumber}`, pageWidth - margin - 40, pageHeight - 5, { align: 'right' });
+    doc.text(`${documentTitle} #${invoice.invoiceNumber}`, pageWidth - margin - 40, pageHeight - 5, { align: 'right' });
     
     // Save PDF
-    const fileName = `Invoice-${invoice.invoiceNumber}.pdf`;
+    const fileName = `${isReceipt ? 'Kwitansi' : 'Invoice'}-${invoice.invoiceNumber}.pdf`;
     devLog('💾 Saving PDF:', fileName);
     doc.save(fileName);
     

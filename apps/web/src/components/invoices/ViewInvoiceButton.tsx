@@ -10,15 +10,19 @@ interface Props {
   packageId: string;
   packageCode: string;
   status: string;
+  documentLabel?: string;
 }
 
-export default function ViewInvoiceButton({ packageId, packageCode, status }: Props) {
+export default function ViewInvoiceButton({ packageId, packageCode, status, documentLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
 
-  // Only show button for PAID packages
-  if (status !== 'ACTIVE' && status !== 'EXPIRED') {
+  const canShowDocument = ['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(status);
+  const isReceipt = status === 'ACTIVE' || status === 'EXPIRED';
+  const label = documentLabel || (isReceipt ? 'Lihat Kwitansi' : 'Lihat Invoice');
+
+  if (!canShowDocument) {
     return null;
   }
 
@@ -33,7 +37,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status }: Pr
       
       // Check if it's a 404 error (invoice not found)
       if (error?.response?.status === 404 || error?.message?.includes('not found')) {
-        alert('Invoice belum tersedia untuk paket ini.\n\nInvoice dibuat otomatis saat verifikasi pembayaran.\nJika paket sudah diverifikasi tapi invoice belum ada, silakan hubungi admin untuk generate invoice.');
+        alert('Invoice belum tersedia untuk paket ini.\n\nInvoice dibuat otomatis saat paket diassign. Jika paket sudah diassign tapi invoice belum ada, silakan hubungi admin.');
       } else {
         alert('Gagal memuat invoice. Silakan coba lagi.');
       }
@@ -49,7 +53,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status }: Pr
         disabled={loading}
         style={{
           padding: '6px 12px',
-          background: '#3B82F6',
+          background: isReceipt ? '#16A34A' : '#3B82F6',
           color: 'white',
           border: 'none',
           borderRadius: '6px',
@@ -62,7 +66,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status }: Pr
           gap: '6px'
         }}
       >
-        {loading ? '⏳' : '📄'} {loading ? 'Loading...' : 'Lihat Invoice'}
+        {loading ? '⏳' : '📄'} {loading ? 'Loading...' : label}
       </button>
 
       <InvoiceModal

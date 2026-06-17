@@ -9,6 +9,10 @@ import {
   PackageSummary,
 } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
+import {
+  createDefaultIfaSubstances,
+  prepareIfaSubstancePayload,
+} from '@/lib/therapyPlanSubstances';
 
 interface BulkTherapyPlanModalProps {
   memberId: string;
@@ -128,6 +132,8 @@ export default function BulkTherapyPlanModal({
         h2s: undefined,
         kcl: undefined,
         jmlNb: undefined,
+        ifaSubstances: createDefaultIfaSubstances(),
+        ifaSubstanceTotalMl: 2.5,
       });
     }
 
@@ -169,6 +175,8 @@ export default function BulkTherapyPlanModal({
           h2s: undefined,
           kcl: undefined,
           jmlNb: undefined,
+          ifaSubstances: createDefaultIfaSubstances(),
+          ifaSubstanceTotalMl: 2.5,
         });
       }
       setTherapyPlans((prev) => [...prev, ...newRows]);
@@ -211,6 +219,8 @@ export default function BulkTherapyPlanModal({
       h2s: undefined,
       kcl: undefined,
       jmlNb: undefined,
+      ifaSubstances: createDefaultIfaSubstances(),
+      ifaSubstanceTotalMl: 2.5,
     };
 
     setTherapyPlans((prev) => {
@@ -263,6 +273,8 @@ export default function BulkTherapyPlanModal({
             ifaType,
             ifa250: ifaType === 'ifa250' ? 1 : undefined,
             ifa500: ifaType === 'ifa500' ? 1 : undefined,
+            ifaSubstances: ifaType === 'ifa250' ? createDefaultIfaSubstances() : [],
+            ifaSubstanceTotalMl: ifaType === 'ifa250' ? 2.5 : 0,
           };
         }
 
@@ -297,6 +309,8 @@ export default function BulkTherapyPlanModal({
               h2s: currentPlan.h2s,
               kcl: currentPlan.kcl,
               jmlNb: currentPlan.jmlNb,
+              ifaSubstances: currentPlan.ifaSubstances,
+              ifaSubstanceTotalMl: currentPlan.ifaSubstanceTotalMl,
             }
           : plan
       )
@@ -331,6 +345,8 @@ export default function BulkTherapyPlanModal({
           h2s: currentPlan.h2s,
           kcl: currentPlan.kcl,
           jmlNb: currentPlan.jmlNb,
+          ifaSubstances: currentPlan.ifaSubstances,
+          ifaSubstanceTotalMl: currentPlan.ifaSubstanceTotalMl,
         };
       })
     );
@@ -404,6 +420,7 @@ export default function BulkTherapyPlanModal({
         h2s: plan.h2s,
         kcl: plan.kcl,
         jmlNb: plan.jmlNb,
+        ...prepareIfaSubstancePayload(plan.ifaSubstances),
       }));
 
       const response = await therapyPlanApi.bulkCreateTherapyPlans(memberId, {
@@ -662,11 +679,11 @@ export default function BulkTherapyPlanModal({
                               type="number"
                               min={0}
                               step={0.1}
-                              value={plan[field.key as keyof CreateTherapyPlanInput] || ''}
+                              value={plan[field.key] || ''}
                               onChange={(e) =>
                                 updateTherapyPlan(
                                   plan.rowId,
-                                  field.key as keyof CreateTherapyPlanInput,
+                                  field.key,
                                   e.target.value ? parseFloat(e.target.value) : undefined
                                 )
                               }

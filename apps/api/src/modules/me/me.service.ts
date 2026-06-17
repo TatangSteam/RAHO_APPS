@@ -687,6 +687,14 @@ interface VitalSignData {
   pi: number | null;
 }
 
+interface TherapyPlanSubstanceData {
+  name: string;
+  amount: number;
+  unit: string;
+  keterangan?: string;
+  isDefault?: boolean;
+}
+
 interface TherapyPlanData {
   planCode: string;
   keterangan: string | null;
@@ -703,6 +711,8 @@ interface TherapyPlanData {
   h2s: number | null;
   kcl: number | null;
   jmlNb: number | null;
+  ifaSubstances: TherapyPlanSubstanceData[] | null;
+  ifaSubstanceTotalMl: number | null;
 }
 
 interface InfusionData {
@@ -911,6 +921,12 @@ export async function getMemberSessionDetailService(
           h2s: session.therapyPlan.h2s ? Number(session.therapyPlan.h2s) : null,
           kcl: session.therapyPlan.kcl ? Number(session.therapyPlan.kcl) : null,
           jmlNb: session.therapyPlan.jmlNb ? Number(session.therapyPlan.jmlNb) : null,
+          ifaSubstances: Array.isArray(session.therapyPlan.ifaSubstances)
+            ? (session.therapyPlan.ifaSubstances as unknown as TherapyPlanSubstanceData[])
+            : null,
+          ifaSubstanceTotalMl: session.therapyPlan.ifaSubstanceTotalMl != null
+            ? Number(session.therapyPlan.ifaSubstanceTotalMl)
+            : null,
         }
       : null,
     vitalSignsBefore: parseVitalSigns(session.vitalSigns, 'SEBELUM'),

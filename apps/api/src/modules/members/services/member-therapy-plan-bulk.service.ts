@@ -3,6 +3,7 @@
  */
 
 import { prisma } from '@/lib/prisma';
+import { normalizeIfaSubstances, type TherapyPlanSubstance } from '@/utils/therapyPlanSubstances';
 
 interface BulkTherapyPlanInput {
   keterangan: string;
@@ -19,6 +20,8 @@ interface BulkTherapyPlanInput {
   h2s?: number | null;
   kcl?: number | null;
   jmlNb?: number | null;
+  ifaSubstances?: TherapyPlanSubstance[] | null;
+  ifaSubstanceTotalMl?: number | null;
 }
 
 interface BulkCreateTherapyPlansInput {
@@ -341,7 +344,7 @@ export class MemberTherapyPlanBulkService {
         return prisma.therapyPlan.create({
           data: {
             planCode,
-            memberId,
+            member: { connect: { id: memberId } },
             keterangan: plan.keterangan,
             ifa250: plan.ifa250,
             ifa500: plan.ifa500,
@@ -356,6 +359,10 @@ export class MemberTherapyPlanBulkService {
             h2s: plan.h2s,
             kcl: plan.kcl,
             jmlNb: plan.jmlNb,
+            ...(normalizeIfaSubstances(
+              plan.ifaSubstances,
+              Boolean(plan.ifa250 && plan.ifa250 > 0)
+            ) as any),
           },
         });
       })
