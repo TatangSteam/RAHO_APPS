@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { useAuthStore } from '@/stores/authStore';
-import type { Diagnosis, CreateDiagnosisInput } from '@/types/session';
+import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import { devLog, devError } from '@/lib/logger';
 import styles from './Step1Diagnosis.module.css';
 
@@ -14,6 +14,29 @@ interface Step1DiagnosisProps {
   diagnosis: Diagnosis | null;
   isLocked: boolean;
   onComplete: () => void;
+}
+
+const CATEGORY_LABELS: Record<DiagnosisCategory, string> = {
+  HIPERTENSI: 'Hipertensi',
+  NEUROLOGI: 'Neurologi',
+  DIABETES: 'Diabetes',
+  KARDIOVASKULAR: 'Kardiovaskular',
+  ORTOPEDI: 'Ortopedi',
+  IMUNOLOGI: 'Imunologi',
+  HEMATOLOGI: 'Hematologi',
+  STROKE: 'Stroke',
+  JANTUNG_KARDIOVASKULAR: 'Jantung Kardiovascular',
+  SINDROM_METABOLIK: 'Sindrom Metabolik',
+  KANKER: 'Kanker',
+  DEGENERATIF: 'Degeneratif',
+  AUTO_IMUN: 'Auto Imun',
+  ONKOLOGI: 'Onkologi',
+  LAINNYA: 'Lainnya',
+};
+
+function getDiagnosisCategoryLabel(category: DiagnosisCategory | string | null | undefined): string {
+  if (!category) return 'Umum';
+  return CATEGORY_LABELS[category as DiagnosisCategory] || category;
 }
 
 export default function Step1Diagnosis({
@@ -178,7 +201,7 @@ export default function Step1Diagnosis({
           {diagnosis.kategoriDiagnosa && (
             <div className={styles.completedField}>
               <p className={styles.completedLabel}>Kategori:</p>
-              <p className={styles.completedValue}>{diagnosis.kategoriDiagnosa}</p>
+              <p className={styles.completedValue}>{getDiagnosisCategoryLabel(diagnosis.kategoriDiagnosa)}</p>
             </div>
           )}
           {diagnosis.keluhanRiwayatSekarang && (
@@ -247,7 +270,7 @@ export default function Step1Diagnosis({
                 <option value="">-- Pilih diagnosa --</option>
                 {memberDiagnoses.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.diagnosa} ({d.kategoriDiagnosa || 'Umum'}) - {new Date(d.createdAt).toLocaleDateString('id-ID')}
+                    {d.diagnosa} ({getDiagnosisCategoryLabel(d.kategoriDiagnosa)}) - {new Date(d.createdAt).toLocaleDateString('id-ID')}
                   </option>
                 ))}
               </select>
@@ -269,7 +292,7 @@ export default function Step1Diagnosis({
                 {formData.kategoriDiagnosa && (
                   <div className={styles.previewField}>
                     <p className={styles.previewLabel}>Kategori:</p>
-                    <p className={styles.previewValue}>{formData.kategoriDiagnosa}</p>
+                    <p className={styles.previewValue}>{getDiagnosisCategoryLabel(formData.kategoriDiagnosa)}</p>
                   </div>
                 )}
 

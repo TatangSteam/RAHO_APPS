@@ -92,6 +92,7 @@ export interface CreateMemberData {
   
   // Section A - Data Pribadi
   fullName: string;
+  identityType?: 'NIK' | 'PASSPORT' | 'KITAS' | 'VIP' | 'SPECIAL' | 'FOREIGN_AUTO' | 'NO_NIK';
   nik?: string;
   birthPlace?: string;
   birthDate?: string;
@@ -158,7 +159,7 @@ export interface MemberPackage {
   totalSessions: number;
   usedSessions: number;
   remainingSessions: number;
-  status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED';
+  status: 'PENDING_PAYMENT' | 'WAITING_VERIFICATION' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'INACTIVE';
   activatedAt: string | null;
   branchName: string;
   productCode?: string;

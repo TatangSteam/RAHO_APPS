@@ -8,6 +8,22 @@ interface PersonalDataSectionProps {
 }
 
 export default function PersonalDataSection({ formData, onChange }: PersonalDataSectionProps) {
+  const identityType = formData.identityType || 'NIK';
+  const autoIdentityTypes = ['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'];
+  const isAutoIdentity = autoIdentityTypes.includes(identityType);
+  const identityLabel =
+    identityType === 'PASSPORT'
+      ? 'Nomor Paspor'
+      : identityType === 'KITAS'
+        ? 'Nomor KITAS/KITAP'
+        : 'NIK';
+  const identityPlaceholder =
+    identityType === 'PASSPORT'
+      ? 'Masukkan nomor paspor'
+      : identityType === 'KITAS'
+        ? 'Masukkan nomor KITAS/KITAP'
+        : 'Nomor Induk Kependudukan';
+
   return (
     <div className="card">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px', paddingBottom: '16px', borderBottom: '2px solid var(--surface-border)' }}>
@@ -46,21 +62,51 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
-        {/* NIK - 6 cols on desktop, full on mobile */}
+        {/* Jenis Identitas - 6 cols on desktop, full on mobile */}
         <div className="form-col-6">
           <label className="form-label">
-            NIK <span style={{ color: '#ef4444' }}>*</span>
+            Jenis Identitas <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <select
+            name="identityType"
+            value={identityType}
+            onChange={onChange}
+            required
+            className="form-input"
+          >
+            <option value="NIK">NIK / KTP</option>
+            <option value="PASSPORT">Paspor - Manca Negara</option>
+            <option value="KITAS">KITAS / KITAP - Manca Negara</option>
+            <option value="VIP">Pelanggan VIP - Kode Otomatis</option>
+            <option value="SPECIAL">Pelanggan Spesial - Kode Otomatis</option>
+            <option value="FOREIGN_AUTO">Manca Negara Tanpa Nomor - Kode Otomatis</option>
+            <option value="NO_NIK">Tidak Memiliki NIK - Kode Otomatis</option>
+          </select>
+        </div>
+
+        {/* Nomor Identitas - 6 cols on desktop, full on mobile */}
+        <div className="form-col-6">
+          <label className="form-label">
+            {identityLabel} {!isAutoIdentity && <span style={{ color: '#ef4444' }}>*</span>}
           </label>
           <input
             type="text"
             name="nik"
             value={formData.nik || ''}
             onChange={onChange}
-            required
+            required={!isAutoIdentity}
+            disabled={isAutoIdentity}
             className="form-input"
-            placeholder="Nomor Induk Kependudukan"
-            maxLength={16}
+            placeholder={isAutoIdentity ? 'Akan dibuat otomatis saat member disimpan' : identityPlaceholder}
+            maxLength={identityType === 'NIK' ? 16 : 32}
           />
+          <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            {isAutoIdentity
+              ? 'Sistem akan mengisi kode unik otomatis di database, tidak memengaruhi nomor member.'
+              : identityType === 'NIK'
+                ? 'Isi 16 digit NIK. Untuk member tanpa NIK, pilih opsi kode otomatis.'
+                : 'Nomor identitas ini disimpan sebagai pengganti NIK.'}
+          </p>
         </div>
 
         {/* Nomor Telepon - 6 cols on desktop, full on mobile */}

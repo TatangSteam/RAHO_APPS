@@ -100,7 +100,7 @@ export default function MemberProfileTab({
         <h3 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '16px', color: 'var(--text-primary)' }}>📝 Data Pribadi</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>NIK</p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Identitas</p>
             <p style={{ fontWeight: '600', fontFamily: 'monospace' }}>{member.nik || '-'}</p>
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>

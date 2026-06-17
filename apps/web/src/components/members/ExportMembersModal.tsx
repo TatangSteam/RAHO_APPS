@@ -62,7 +62,7 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   // Data Dasar
   { key: 'memberNo', label: 'No. Member', category: 'basic' },
   { key: 'fullName', label: 'Nama Lengkap', category: 'basic' },
-  { key: 'nik', label: 'NIK', category: 'basic' },
+  { key: 'nik', label: 'Identitas', category: 'basic' },
   { key: 'birthPlace', label: 'Tempat Lahir', category: 'basic' },
   { key: 'birthDate', label: 'Tanggal Lahir', category: 'basic' },
   { key: 'gender', label: 'Jenis Kelamin', category: 'basic' },

@@ -1,0 +1,1 @@
+ALTER TYPE "DiagnosisCategory" ADD VALUE IF NOT EXISTS 'ONKOLOGI';

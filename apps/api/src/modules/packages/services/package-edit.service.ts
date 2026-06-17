@@ -111,6 +111,25 @@ export class PackageEditService {
     const purchaseGroupId = memberPackage.purchaseGroupId;
     const memberId = memberPackage.memberId;
 
+    const packagesInEditScope = await prisma.memberPackage.findMany({
+      where: purchaseGroupId
+        ? { purchaseGroupId, status: 'PENDING_PAYMENT' }
+        : { id: memberPackage.id },
+      select: {
+        packageCode: true,
+        usedSessions: true,
+      },
+    });
+
+    const usedPackages = packagesInEditScope.filter(pkg => pkg.usedSessions > 0);
+    if (usedPackages.length > 0) {
+      throw {
+        status: 422,
+        code: 'PACKAGE_ALREADY_USED',
+        message: `Paket ${usedPackages.map(pkg => pkg.packageCode).join(', ')} sudah dipakai untuk sesi utang dan tidak bisa diedit. Verifikasi pembayaran untuk melanjutkan.`,
+      };
+    }
+
     // 3. Delete existing packages and add-ons in the group
     if (purchaseGroupId) {
       // Get all package IDs in the group

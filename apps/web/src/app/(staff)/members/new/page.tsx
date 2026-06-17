@@ -40,6 +40,7 @@ export default function NewMemberPage() {
     
     // Section A - Data Pribadi
     fullName: '',
+    identityType: 'NIK',
     nik: '',
     birthPlace: '',
     birthDate: '',
@@ -141,6 +142,13 @@ export default function NewMemberPage() {
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       setFormData((prev) => ({ ...prev, [name]: checked }));
+    } else if (name === 'identityType') {
+      const autoIdentityTypes = ['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'];
+      setFormData((prev) => ({
+        ...prev,
+        identityType: value as CreateMemberData['identityType'],
+        nik: autoIdentityTypes.includes(value) ? '' : prev.nik,
+      }));
     } else if (name === 'firstIncentiveValue' || name === 'nextIncentiveValue') {
       // Convert to number for incentive values
       const numValue = value === '' ? undefined : parseFloat(value);
@@ -199,7 +207,15 @@ export default function NewMemberPage() {
       showToast.error('Nama lengkap minimal 3 karakter');
       return;
     }
-    if (!formData.nik || formData.nik.length < 16) {
+    const identityType = formData.identityType || 'NIK';
+    const autoIdentityTypes = ['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'];
+    const needsManualIdentity = !autoIdentityTypes.includes(identityType);
+
+    if (needsManualIdentity && !formData.nik?.trim()) {
+      showToast.error(identityType === 'NIK' ? 'NIK wajib diisi' : 'Nomor identitas wajib diisi');
+      return;
+    }
+    if (identityType === 'NIK' && !/^\d{16}$/.test(formData.nik || '')) {
       showToast.error('NIK harus 16 digit');
       return;
     }
@@ -286,6 +302,7 @@ export default function NewMemberPage() {
       setFormData({
         branchId: '',
         fullName: '',
+        identityType: 'NIK',
         nik: '',
         birthPlace: '',
         birthDate: '',

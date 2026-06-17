@@ -15,6 +15,13 @@ export type DiagnosisCategory =
   | 'ORTOPEDI'
   | 'IMUNOLOGI'
   | 'HEMATOLOGI'
+  | 'STROKE'
+  | 'JANTUNG_KARDIOVASKULAR'
+  | 'SINDROM_METABOLIK'
+  | 'KANKER'
+  | 'DEGENERATIF'
+  | 'AUTO_IMUN'
+  | 'ONKOLOGI'
   | 'LAINNYA';
 
 export interface TherapyPlanSubstance {

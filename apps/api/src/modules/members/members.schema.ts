@@ -5,6 +5,7 @@ const GenderEnum = z.enum(['L', 'P']);
 
 // Incentive type enum
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
+const IdentityTypeEnum = z.enum(['NIK', 'PASSPORT', 'KITAS', 'VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK']);
 
 const ifaSubstanceSchema = z.object({
   name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
@@ -101,6 +102,7 @@ export const createMemberSchema = z.object({
   
   // Section A - Data Pribadi
   fullName: z.string().min(3, 'Nama lengkap minimal 3 karakter'),
+  identityType: IdentityTypeEnum.optional().default('NIK'),
   nik: z.string().optional(),
   birthPlace: z.string().optional(),
   birthDate: z.string().optional(), // ISO date string

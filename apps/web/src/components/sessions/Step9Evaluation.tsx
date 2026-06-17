@@ -179,7 +179,7 @@ export default function Step9Evaluation({
               borderRadius: 'var(--radius-md)'
             }}>
               <p style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', marginBottom: '8px' }}>
-                ASSESSMENT (Penilaian)
+                ASSESSMENT (Diagnosa)
               </p>
               <p style={{ fontSize: '14px', color: '#f1f5f9', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                 {evaluation.assessment}
@@ -307,13 +307,13 @@ export default function Step9Evaluation({
 
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-            Assessment (Penilaian)
+            Assessment (Diagnosa)
           </label>
           <textarea
             value={formData.assessment}
             onChange={(e) => setFormData({ ...formData, assessment: e.target.value })}
             rows={3}
-            placeholder="Penilaian kondisi pasien dan diagnosis..."
+            placeholder="Diagnosa atau kesimpulan kondisi pasien..."
             style={{
               width: '100%',
               padding: '12px',

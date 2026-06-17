@@ -16,6 +16,7 @@ export class MemberRegistrationService {
   async createMember(
     data: {
       fullName: string;
+      identityType?: string;
       nik?: string;
       birthPlace?: string;
       birthDate?: string;
@@ -74,6 +75,21 @@ export class MemberRegistrationService {
 
     // Generate member number
     const memberNo = await this.generateMemberNumber(branch.branchCode);
+    const identityNumber = this.resolveIdentityNumber(data.identityType, data.nik, memberNo);
+
+    if (identityNumber) {
+      const existingIdentity = await prisma.member.findUnique({
+        where: { nik: identityNumber },
+      });
+
+      if (existingIdentity) {
+        throw {
+          status: 409,
+          code: 'IDENTITY_EXISTS',
+          message: 'Nomor identitas sudah terdaftar',
+        };
+      }
+    }
 
     // Validate referral code if provided and set incentive values
     let referralCodeId: string | null = null;
@@ -176,7 +192,7 @@ export class MemberRegistrationService {
           referralCodeId: referralCodeId,
           voucherCount: 0,
           isConsentToPhoto: data.isConsentToPhoto ?? true,
-          nik: data.nik || null,
+          nik: identityNumber,
           tempatLahir: data.birthPlace || null,
           dateOfBirth: data.birthDate ? this.parseValidDate(data.birthDate) : null,
           jenisKelamin: data.gender as any || null,
@@ -374,6 +390,40 @@ export class MemberRegistrationService {
     }
 
     return `${prefix}-${sequence.toString().padStart(4, '0')}`;
+  }
+
+  private resolveIdentityNumber(identityType: string | undefined, rawIdentity: string | undefined, memberNo: string): string | null {
+    const type = identityType || (rawIdentity ? 'NIK' : 'NO_NIK');
+    const identity = rawIdentity?.trim();
+
+    if (['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'].includes(type)) {
+      const prefixMap: Record<string, string> = {
+        VIP: 'VIP',
+        SPECIAL: 'SPC',
+        FOREIGN_AUTO: 'MNA',
+        NO_NIK: 'AUTO',
+      };
+
+      return `${prefixMap[type]}-${memberNo}`;
+    }
+
+    if (!identity) {
+      throw {
+        status: 400,
+        code: 'IDENTITY_REQUIRED',
+        message: type === 'NIK' ? 'NIK wajib diisi' : 'Nomor identitas wajib diisi',
+      };
+    }
+
+    if (type === 'NIK' && !/^\d{16}$/.test(identity)) {
+      throw {
+        status: 400,
+        code: 'INVALID_NIK',
+        message: 'NIK harus 16 digit',
+      };
+    }
+
+    return identity;
   }
 
   /**

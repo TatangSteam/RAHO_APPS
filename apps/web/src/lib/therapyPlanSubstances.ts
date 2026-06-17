@@ -36,6 +36,38 @@ export function calculateIfaSubstanceTotalMl(
   );
 }
 
+function normalizeSubstanceName(value: unknown): string {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isDefaultIfaSubstance(substance: TherapyPlanSubstance): boolean {
+  const amount = Number(substance.amount);
+  const unit = (substance.unit || 'ml').trim().toLowerCase();
+
+  return (
+    normalizeSubstanceName(substance.name) === 'no' &&
+    unit === 'ml' &&
+    Number.isFinite(amount) &&
+    Math.abs(amount - 2.5) < 0.001
+  );
+}
+
+export function hasAdditionalIfaSubstances(
+  substances?: TherapyPlanSubstance[] | null,
+  totalMl?: number | null
+): boolean {
+  const hasCustomSubstance = (substances || []).some((substance) => {
+    const amount = Number(substance.amount);
+    if (!normalizeSubstanceName(substance.name) || !Number.isFinite(amount) || amount <= 0) return false;
+    return !isDefaultIfaSubstance(substance);
+  });
+
+  if (hasCustomSubstance) return true;
+
+  const total = Number(totalMl);
+  return Number.isFinite(total) && total > 2.5;
+}
+
 export function prepareIfaSubstancePayload(
   substances?: TherapyPlanSubstance[] | null
 ): { ifaSubstances: TherapyPlanSubstance[]; ifaSubstanceTotalMl: number } {

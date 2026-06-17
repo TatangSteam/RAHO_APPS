@@ -281,6 +281,13 @@ export const icdApi = {
   getICDByCategory: async (category: string): Promise<ICDCode[]> => {
     // Map category to search terms
     const categorySearchTerms: Record<string, string> = {
+      STROKE: 'stroke cerebrovascular infarction',
+      JANTUNG_KARDIOVASKULAR: 'cardiovascular heart cardiac coronary',
+      SINDROM_METABOLIK: 'metabolic syndrome obesity insulin resistance dyslipidemia',
+      KANKER: 'cancer malignant neoplasm oncology tumor',
+      DEGENERATIF: 'degenerative disease osteoarthritis dementia degeneration',
+      AUTO_IMUN: 'autoimmune lupus rheumatoid immune',
+      ONKOLOGI: 'cancer malignant neoplasm oncology tumor',
       HIPERTENSI: 'hypertension',
       DIABETES: 'diabetes',
       NEUROLOGI: 'neurological nerve brain',
@@ -305,6 +312,13 @@ export const icdApi = {
       
       // Fallback to local codes
       const categoryMap: Record<string, string[]> = {
+        STROKE: ['I60', 'I61', 'I63', 'I64', 'G45'],
+        JANTUNG_KARDIOVASKULAR: ['I10', 'I11', 'I20', 'I21', 'I25', 'I50'],
+        SINDROM_METABOLIK: ['E66', 'E78', 'E88', 'I10', 'E11'],
+        KANKER: ['C50', 'C61', 'C18', 'C34', 'C16', 'C22'],
+        DEGENERATIF: ['M15', 'M17', 'M19', 'G30', 'G31', 'M47'],
+        AUTO_IMUN: ['M05', 'M06', 'M32', 'M35', 'K50', 'K51'],
+        ONKOLOGI: ['C50', 'C61', 'C18', 'C34', 'C16', 'C22'],
         HIPERTENSI: ['I10', 'I11', 'I12', 'I13', 'I15'],
         DIABETES: ['E10', 'E11', 'E13', 'E14'],
         NEUROLOGI: ['G40', 'G43', 'G44', 'G45', 'G47', 'G50', 'G51', 'G56', 'G62'],

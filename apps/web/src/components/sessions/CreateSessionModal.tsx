@@ -23,6 +23,31 @@ interface CreateSessionModalProps {
   preselectedMemberId?: string;
 }
 
+const DEBT_SESSION_LIMIT = 2;
+const DEBT_PACKAGE_STATUSES = ['PENDING_PAYMENT', 'WAITING_VERIFICATION'];
+
+const isDebtPackageStatus = (status: MemberPackage['status']) =>
+  DEBT_PACKAGE_STATUSES.includes(status);
+
+const getDebtRemainingSessions = (pkg: MemberPackage, outstandingDebtSessions: number) =>
+  Math.max(0, Math.min(pkg.remainingSessions, DEBT_SESSION_LIMIT - outstandingDebtSessions));
+
+const isDebtEligiblePackage = (pkg: MemberPackage, outstandingDebtSessions: number) =>
+  pkg.packageType === 'BASIC' &&
+  isDebtPackageStatus(pkg.status) &&
+  getDebtRemainingSessions(pkg, outstandingDebtSessions) > 0;
+
+const isPackageUsableForSession = (pkg: MemberPackage, outstandingDebtSessions: number) => {
+  if (pkg.packageType === 'BOOSTER') {
+    return pkg.status === 'ACTIVE' && pkg.remainingSessions > 0;
+  }
+
+  return (
+    (pkg.status === 'ACTIVE' && pkg.remainingSessions > 0) ||
+    isDebtEligiblePackage(pkg, outstandingDebtSessions)
+  );
+};
+
 export default function CreateSessionModal({
   isOpen,
   onClose,
@@ -39,6 +64,7 @@ export default function CreateSessionModal({
   const [memberNo, setMemberNo] = useState('');
   const [memberName, setMemberName] = useState('');
   const [voucherCount, setVoucherCount] = useState(0);
+  const [outstandingDebtSessions, setOutstandingDebtSessions] = useState(0);
   
   const [packages, setPackages] = useState<MemberPackage[]>([]);
   const [selectedPackageId, setSelectedPackageId] = useState('');
@@ -243,7 +269,7 @@ export default function CreateSessionModal({
               flatPackages.push({
                 ...basic,
                 packageType: basic.packageType as 'BASIC' | 'BOOSTER',
-                status: basic.status as 'ACTIVE' | 'INACTIVE' | 'EXPIRED',
+                status: basic.status as MemberPackage['status'],
               });
             });
           }
@@ -252,7 +278,7 @@ export default function CreateSessionModal({
               flatPackages.push({
                 ...booster,
                 packageType: booster.packageType as 'BASIC' | 'BOOSTER',
-                status: booster.status as 'ACTIVE' | 'INACTIVE' | 'EXPIRED',
+                status: booster.status as MemberPackage['status'],
               });
             });
           }
@@ -260,24 +286,39 @@ export default function CreateSessionModal({
           flatPackages.push({
             ...pkg,
             packageType: pkg.packageType as 'BASIC' | 'BOOSTER',
-            status: pkg.status as 'ACTIVE' | 'INACTIVE' | 'EXPIRED',
+            status: pkg.status as MemberPackage['status'],
           });
         }
       });
 
-      const activePackages = flatPackages.filter(
-        (p) => p.status === 'ACTIVE' && p.remainingSessions > 0
-      );
-      setPackages(activePackages);
+      const debtSessionsUsed = flatPackages
+        .filter((p) => p.packageType === 'BASIC' && isDebtPackageStatus(p.status))
+        .reduce((sum, p) => sum + p.usedSessions, 0);
+      setOutstandingDebtSessions(debtSessionsUsed);
 
-      const totalRemainingSessions = activePackages
-        .filter((p) => p.packageType === 'BASIC')
+      const usablePackages = flatPackages.filter((p) => isPackageUsableForSession(p, debtSessionsUsed));
+      setPackages(usablePackages);
+
+      const activeBasicRemaining = usablePackages
+        .filter((p) => p.packageType === 'BASIC' && p.status === 'ACTIVE')
         .reduce((sum, p) => sum + p.remainingSessions, 0);
-      setVoucherCount(totalRemainingSessions);
+      const pendingBasicRemaining = flatPackages
+        .filter((p) => p.packageType === 'BASIC' && isDebtPackageStatus(p.status))
+        .reduce((sum, p) => sum + p.remainingSessions, 0);
+      const debtUsableSessions = Math.max(
+        0,
+        Math.min(pendingBasicRemaining, DEBT_SESSION_LIMIT - debtSessionsUsed)
+      );
+      const totalUsableSessions = activeBasicRemaining + debtUsableSessions;
+      setVoucherCount(totalUsableSessions);
 
-      const basicPackage = activePackages.find((p) => p.packageType === 'BASIC');
+      const basicPackage =
+        usablePackages.find((p) => p.packageType === 'BASIC' && p.status === 'ACTIVE') ||
+        usablePackages.find((p) => p.packageType === 'BASIC');
       if (basicPackage) {
         setSelectedPackageId(basicPackage.packageId);
+      } else {
+        setSelectedPackageId('');
       }
     } catch (err: any) {
       devError('Failed to load member data:', err);
@@ -286,8 +327,12 @@ export default function CreateSessionModal({
   };
 
   const getPackageDisplayName = (pkg: MemberPackage) => {
+    const debtLabel = isDebtEligiblePackage(pkg, outstandingDebtSessions)
+      ? ` - Utang tersedia: ${getDebtRemainingSessions(pkg, outstandingDebtSessions)} sesi`
+      : '';
+
     if (pkg.packageCode && pkg.packageCode.startsWith('Booster ')) {
-      return `${pkg.packageCode} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})`;
+      return `${pkg.packageCode} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})${debtLabel}`;
     }
     const code = pkg.productCode || pkg.packageCode;
     if (pkg.packageType === 'BASIC') {
@@ -296,10 +341,10 @@ export default function CreateSessionModal({
         if (parts[0] === 'TNB' && parts.length >= 2) {
           const sessionMatch = parts[1].match(/P(\d+)/);
           const sessions = sessionMatch ? sessionMatch[1] : pkg.totalSessions;
-          return `NB${sessions} - ${sessions} sesi (sisa: ${pkg.remainingSessions})`;
+          return `NB${sessions} - ${sessions} sesi (sisa: ${pkg.remainingSessions})${debtLabel}`;
         }
       }
-      return `${code} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})`;
+      return `${code} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})${debtLabel}`;
     } else {
       if (pkg.productCode) {
         const parts = pkg.productCode.split('-');
@@ -310,10 +355,10 @@ export default function CreateSessionModal({
             'HK': 'H2S Konsentrat', 'O3': 'O3', 'HHO': 'HHO', 'PST': 'NO', 'NO2': 'NO'
           };
           const fullName = boosterNames[boosterType] || boosterType;
-          return `Booster ${fullName} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})`;
+          return `Booster ${fullName} - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})${debtLabel}`;
         }
       }
-      return `Booster - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})`;
+      return `Booster - ${pkg.totalSessions} sesi (sisa: ${pkg.remainingSessions})${debtLabel}`;
     }
   };
 
@@ -479,6 +524,10 @@ export default function CreateSessionModal({
     if (!selectedPkg || selectedPkg.remainingSessions <= 0) {
       setError('Paket yang dipilih tidak memiliki sesi tersisa'); return;
     }
+    if (selectedPkg.status !== 'ACTIVE' && !isDebtEligiblePackage(selectedPkg, outstandingDebtSessions)) {
+      setError('Paket belum dibayar dan jatah utang 2 sesi sudah habis. Verifikasi pembayaran untuk membuat sesi berikutnya.');
+      return;
+    }
 
     if (useBooster && selectedBoosterPackageId) {
       const selectedBooster = packages.find(p => p.packageId === selectedBoosterPackageId);
@@ -515,7 +564,7 @@ export default function CreateSessionModal({
       }
 
       const result = await sessionApi.createSession(data);
-      showToast.success('Sesi terapi berhasil dibuat');
+      showToast.success(result.message || 'Sesi terapi berhasil dibuat');
       onSuccess(result.sessionId);
     } catch (err: any) {
       const errorMessage = err.response?.data?.error?.message || err.message || 'Gagal membuat sesi';
@@ -533,6 +582,7 @@ export default function CreateSessionModal({
       setMemberNo('');
       setMemberName('');
       setVoucherCount(0);
+      setOutstandingDebtSessions(0);
       setPackages([]);
       setSelectedPackageId('');
       setUseBooster(false);
@@ -578,6 +628,7 @@ export default function CreateSessionModal({
   const boosterPackages = Array.from(boosterPackagesMap.values());
 
   const selectedPlan = therapyPlans.find(p => p.id === selectedTherapyPlanId);
+  const selectedPackage = basicPackages.find(p => p.packageId === selectedPackageId);
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
@@ -658,7 +709,7 @@ export default function CreateSessionModal({
                   {memberNo && (
                     <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
                       <p className="text-sm font-semibold text-neutral-900 dark:text-white">{memberNo} - {memberName}</p>
-                      <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Voucher tersisa: <span className="font-bold text-amber-600 dark:text-amber-400">{voucherCount}</span></p>
+                      <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">Voucher bisa digunakan: <span className="font-bold text-amber-600 dark:text-amber-400">{voucherCount}</span></p>
                     </div>
                   )}
                 </div>
@@ -715,12 +766,12 @@ export default function CreateSessionModal({
                 )}
 
                 {/* Package Selection */}
-                {packages.length === 0 && memberId ? (
+                {basicPackages.length === 0 && memberId ? (
                   <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
                     <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Tidak ada paket ACTIVE dengan sesi tersisa</p>
-                      <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Assign paket di halaman detail member.</p>
+                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Tidak ada paket yang bisa digunakan</p>
+                      <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Assign paket, verifikasi pembayaran, atau gunakan paket belum bayar yang masih memiliki jatah utang 2 sesi pertama.</p>
                     </div>
                   </div>
                 ) : basicPackages.length > 0 && (
@@ -739,6 +790,14 @@ export default function CreateSessionModal({
                         <option key={pkg.packageId} value={pkg.packageId}>{getPackageDisplayName(pkg)}</option>
                       ))}
                     </select>
+                    {selectedPackage && isDebtEligiblePackage(selectedPackage, outstandingDebtSessions) && (
+                      <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-sm text-amber-700 dark:text-amber-400">
+                          Paket ini belum dibayar. Sesi akan dicatat sebagai utang dan voucher otomatis berkurang saat sesi dibuat. Sisa utang tersedia: {getDebtRemainingSessions(selectedPackage, outstandingDebtSessions)} sesi.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 

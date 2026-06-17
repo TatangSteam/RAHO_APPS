@@ -10,6 +10,7 @@ import TherapyPlanSubstancesEditor from '@/components/therapy-plan/TherapyPlanSu
 import {
   calculateIfaSubstanceTotalMl,
   createDefaultIfaSubstances,
+  hasAdditionalIfaSubstances,
   prepareIfaSubstancePayload,
 } from '@/lib/therapyPlanSubstances';
 import BulkTherapyPlanModal from './BulkTherapyPlanModal';
@@ -112,7 +113,7 @@ function planMatchesFilters(plan: TherapyPlan, filters: TherapyPlanFilters): boo
   if (filters.status !== 'all' && getPlanStatusKey(plan) !== filters.status) return false;
   if (filters.dateFrom && planDate < filters.dateFrom) return false;
   if (filters.dateTo && planDate > filters.dateTo) return false;
-  if (filters.ifaOnly && !(plan.ifaSubstances && plan.ifaSubstances.length > 0)) return false;
+  if (filters.ifaOnly && !hasAdditionalIfaSubstances(plan.ifaSubstances, plan.ifaSubstanceTotalMl)) return false;
 
   return true;
 }
@@ -120,7 +121,9 @@ function planMatchesFilters(plan: TherapyPlan, filters: TherapyPlanFilters): boo
 function getTherapyPlanRecommendation(plans: TherapyPlan[], filteredPlans: TherapyPlan[]): string {
   const availableCount = plans.filter((plan) => getPlanStatusKey(plan) === 'available').length;
   const supersededCount = plans.filter((plan) => getPlanStatusKey(plan) === 'superseded').length;
-  const ifaSubstanceCount = plans.filter((plan) => (plan.ifaSubstances || []).length > 0).length;
+  const ifaSubstanceCount = plans.filter((plan) =>
+    hasAdditionalIfaSubstances(plan.ifaSubstances, plan.ifaSubstanceTotalMl)
+  ).length;
 
   if (availableCount > 0) {
     return `Ada ${availableCount} therapy plan belum digunakan. Prioritaskan filter "Belum Digunakan" saat memilih plan untuk sesi baru.`;
@@ -876,7 +879,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 checked={filters.ifaOnly}
                 onChange={(event) => setFilters((current) => ({ ...current, ifaOnly: event.target.checked }))}
               />
-              Zat IFA
+              Zat Tambahan IFA
             </label>
 
             <button

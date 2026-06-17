@@ -5,6 +5,9 @@ import { generateEncounterCode, generateSessionCode } from '../../../utils/codeG
 import type { CreateSessionInput } from '../sessions.schema';
 import { Role, AuditAction, PackageStatus, EncounterStatus } from '@prisma/client';
 
+const DEBT_SESSION_LIMIT = 2;
+const DEBT_PACKAGE_STATUSES = [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION];
+
 /**
  * Service for session creation
  */
@@ -21,7 +24,11 @@ export class SessionCreationService {
     await this.validateMemberAccess(sessionData.memberId, branchId);
 
     // 2. Validate member package
-    const memberPackage = await this.validateMemberPackage(sessionData.memberPackageId, branchId);
+    const memberPackage = await this.validateMemberPackage(
+      sessionData.memberPackageId,
+      sessionData.memberId,
+      branchId
+    );
 
     // 3. Validate doctor
     await this.validateDoctor(sessionData.doctorId);
@@ -99,6 +106,8 @@ export class SessionCreationService {
         branchInfusKe: branchInfusKe,
         branchName: branch.name,
         createdByRole: userRole,
+        packageStatusAtCreation: memberPackage.status,
+        isDebtSession: memberPackage.status !== PackageStatus.ACTIVE,
       },
     });
 
@@ -114,7 +123,10 @@ export class SessionCreationService {
         branchInfusKe === 1
           ? `Infus ke-${globalInfusKe} (Infus pertama di ${branch.name})`
           : `Infus ke-${globalInfusKe} (Infus ke-${branchInfusKe} di ${branch.name})`,
-      message: 'Sesi terapi berhasil dibuat',
+      message:
+        memberPackage.status === PackageStatus.ACTIVE
+          ? 'Sesi terapi berhasil dibuat'
+          : 'Sesi terapi berhasil dibuat sebagai utang',
     };
   }
 
@@ -195,7 +207,7 @@ export class SessionCreationService {
   /**
    * Validate member package
    */
-  private async validateMemberPackage(memberPackageId: string, branchId: string) {
+  private async validateMemberPackage(memberPackageId: string, memberId: string, branchId: string) {
     const memberPackage = await prisma.memberPackage.findUnique({
       where: { id: memberPackageId },
     });
@@ -212,11 +224,11 @@ export class SessionCreationService {
       };
     }
 
-    if (memberPackage.status !== PackageStatus.ACTIVE) {
+    if (memberPackage.memberId !== memberId) {
       throw {
-        status: 422,
-        code: 'PACKAGE_NOT_ACTIVE',
-        message: 'Paket tidak aktif',
+        status: 403,
+        code: 'PACKAGE_MEMBER_MISMATCH',
+        message: 'Paket tidak terdaftar untuk member ini',
       };
     }
 
@@ -239,7 +251,47 @@ export class SessionCreationService {
       };
     }
 
-    return memberPackage;
+    if (memberPackage.status === PackageStatus.ACTIVE) {
+      return memberPackage;
+    }
+
+    if (DEBT_PACKAGE_STATUSES.includes(memberPackage.status)) {
+      const outstandingDebtSessions = await this.countOutstandingDebtSessions(memberPackage.memberId);
+      const debtRemaining = Math.min(
+        remainingSessions,
+        DEBT_SESSION_LIMIT - outstandingDebtSessions
+      );
+
+      if (debtRemaining < 1) {
+        throw {
+          status: 422,
+          code: 'PACKAGE_DEBT_LIMIT_REACHED',
+          message:
+            'Paket belum dibayar. Sesi utang hanya bisa digunakan untuk 2 sesi pertama. Verifikasi pembayaran untuk membuat sesi berikutnya.',
+        };
+      }
+
+      return memberPackage;
+    }
+
+    throw {
+      status: 422,
+      code: 'PACKAGE_NOT_ACTIVE',
+      message: 'Paket tidak aktif atau belum dapat digunakan untuk sesi terapi',
+    };
+  }
+
+  private async countOutstandingDebtSessions(memberId: string) {
+    return prisma.treatmentSession.count({
+      where: {
+        encounter: {
+          memberId,
+          memberPackage: {
+            status: { in: DEBT_PACKAGE_STATUSES },
+          },
+        },
+      },
+    });
   }
 
   /**
@@ -643,8 +695,12 @@ export class SessionCreationService {
         data: { usedSessions: { increment: 1 } },
       });
 
-      // Check if all sessions are used - auto expire package
-      if (updatedPackage.usedSessions >= updatedPackage.totalSessions) {
+      // Check if all sessions are used - auto expire only packages that are already active.
+      // Pending packages can still be verified after debt sessions have been created.
+      if (
+        memberPackage.status === PackageStatus.ACTIVE &&
+        updatedPackage.usedSessions >= updatedPackage.totalSessions
+      ) {
         await tx.memberPackage.update({
           where: { id: data.memberPackageId },
           data: { 

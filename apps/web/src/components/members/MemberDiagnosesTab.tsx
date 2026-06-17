@@ -22,12 +22,31 @@ const CATEGORY_OPTIONS: { value: DiagnosisCategory; label: string; description: 
   { value: 'HIPERTENSI', label: 'Hipertensi', description: 'Penyakit tekanan darah tinggi' },
   { value: 'NEUROLOGI', label: 'Neurologi', description: 'Gangguan sistem saraf' },
   { value: 'DIABETES', label: 'Diabetes', description: 'Diabetes melitus' },
-  { value: 'KARDIOVASKULAR', label: 'Kardiovaskular', description: 'Penyakit jantung' },
-  { value: 'ORTOPEDI', label: 'Ortopedi', description: 'Gangguan muskuloskeletal' },
+  { value: 'KARDIOVASKULAR', label: 'Kardiovaskular', description: 'Penyakit jantung dan pembuluh darah' },
+  { value: 'ORTOPEDI', label: 'Ortopedi', description: 'Gangguan muskuloskeletal, tulang, dan sendi' },
   { value: 'IMUNOLOGI', label: 'Imunologi', description: 'Gangguan sistem imun' },
   { value: 'HEMATOLOGI', label: 'Hematologi', description: 'Gangguan darah' },
-  { value: 'LAINNYA', label: 'Lainnya', description: 'Kategori lainnya' },
+  { value: 'ONKOLOGI', label: 'Onkologi', description: 'Kondisi kanker, tumor, dan pendampingan terapi onkologi' },
+  { value: 'LAINNYA', label: 'Lainnya', description: 'Kategori diagnosa lainnya' },
 ];
+
+const LEGACY_CATEGORY_LABELS: Partial<Record<DiagnosisCategory, string>> = {
+  STROKE: 'Stroke',
+  JANTUNG_KARDIOVASKULAR: 'Jantung Kardiovascular',
+  SINDROM_METABOLIK: 'Sindrom Metabolik',
+  KANKER: 'Kanker',
+  DEGENERATIF: 'Degeneratif',
+  AUTO_IMUN: 'Auto Imun',
+};
+
+function getDiagnosisCategoryLabel(category: DiagnosisCategory | string | null | undefined): string {
+  if (!category) return 'Umum';
+  return (
+    CATEGORY_OPTIONS.find((option) => option.value === category)?.label ||
+    LEGACY_CATEGORY_LABELS[category as DiagnosisCategory] ||
+    category
+  );
+}
 
 export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit = true }: MemberDiagnosesTabProps) {
   const { user } = useAuthStore();
@@ -121,11 +140,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   };
 
   const toggleCategory = (category: DiagnosisCategory) => {
-    setSelectedCategories(prev => 
-      prev.includes(category) 
-        ? prev.filter(c => c !== category)
-        : [...prev, category]
-    );
+    setSelectedCategories((prev) => (prev.includes(category) ? [] : [category]));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -152,7 +167,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
         }
       });
 
-      // Use first selected category for API (backend only supports single category)
+      // Backend stores one diagnosis category
       const primaryCategory = selectedCategories.length > 0 ? selectedCategories[0] : undefined;
       
       const payload: CreateDiagnosisInput = {
@@ -345,7 +360,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
               />
             </div>
 
-            {/* Kategori Diagnosa - Multiple Select */}
+            {/* Kategori Diagnosa */}
             <div className="space-y-2">
               <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
                 Kategori Diagnosa
@@ -359,7 +374,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                   <span className={selectedCategories.length === 0 ? 'text-neutral-400' : ''}>
                     {selectedCategories.length === 0 
                       ? 'Pilih kategori...' 
-                      : selectedCategories.map(c => CATEGORY_OPTIONS.find(o => o.value === c)?.label).join(', ')}
+                      : selectedCategories.map(getDiagnosisCategoryLabel).join(', ')}
                   </span>
                   <ChevronDown className={`h-4 w-4 text-neutral-400 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
                 </button>
@@ -394,7 +409,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                       key={cat}
                       className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"
                     >
-                      {CATEGORY_OPTIONS.find(o => o.value === cat)?.label}
+                      {getDiagnosisCategoryLabel(cat)}
                       <button
                         type="button"
                         onClick={() => toggleCategory(cat)}
@@ -545,7 +560,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
               <div className="text-sm text-amber-700 dark:text-amber-300">
                 <p className="font-medium mb-1">Informasi</p>
                 <p className="text-amber-600 dark:text-amber-400">
-                  Diagnosa wajib dibuat sebelum memulai sesi terapi. Anda dapat memilih multiple kategori diagnosa.
+                  Diagnosa wajib dibuat sebelum memulai sesi terapi. Pilih satu kategori diagnosa yang paling sesuai.
                 </p>
               </div>
             </div>
@@ -641,7 +656,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                   <div className="flex items-center gap-2">
                     {diagnosis.kategoriDiagnosa && (
                       <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
-                        {diagnosis.kategoriDiagnosa}
+                        {getDiagnosisCategoryLabel(diagnosis.kategoriDiagnosa)}
                       </span>
                     )}
                     {canEditDiagnosis && (

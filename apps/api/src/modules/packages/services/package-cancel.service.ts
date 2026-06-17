@@ -73,7 +73,29 @@ export class PackageCancelService {
       });
       
       packagesToCancel = bundlePackages.map(p => p.id);
-      
+    }
+
+    const packagesToCancelData = await prisma.memberPackage.findMany({
+      where: {
+        id: { in: packagesToCancel }
+      },
+      select: {
+        id: true,
+        packageCode: true,
+        usedSessions: true
+      }
+    });
+
+    const usedPackages = packagesToCancelData.filter(pkg => pkg.usedSessions > 0);
+    if (usedPackages.length > 0) {
+      throw {
+        status: 422,
+        code: 'PACKAGE_ALREADY_USED',
+        message: `Paket ${usedPackages.map(pkg => pkg.packageCode).join(', ')} sudah dipakai untuk sesi utang dan tidak bisa dibatalkan. Verifikasi pembayaran untuk melanjutkan.`
+      };
+    }
+
+    if (purchaseGroupId) {
       // Also find add-ons in the same bundle
       const bundleAddOns = await prisma.memberAddOn.findMany({
         where: {

@@ -257,7 +257,7 @@ export default function MemberProfilePage() {
             <InfoRow icon={<Mail size={14} />} label="Email" value={profile.email} />
             <InfoRow icon={<Calendar size={14} />} label="Tanggal Lahir" value={formatDate(profile.dateOfBirth)} />
             <InfoRow icon={<User size={14} />} label="Jenis Kelamin" value={profile.jenisKelamin === 'L' ? 'Laki-laki' : profile.jenisKelamin === 'P' ? 'Perempuan' : '—'} />
-            <InfoRow icon={<CreditCard size={14} />} label="NIK" value={profile.nik ?? '—'} />
+            <InfoRow icon={<CreditCard size={14} />} label="Identitas" value={profile.nik ?? '—'} />
           </div>
         </div>
 
