@@ -504,9 +504,12 @@ export class RoleDashboardService {
     prevStart.setDate(prevStart.getDate() - periodDays);
     const prevEnd = new Date(start);
 
-    // Get branches assigned to this manager
+    // Get active branches assigned to this manager
     const managerBranches = await prisma.managerBranch.findMany({
-      where: { userId },
+      where: {
+        userId,
+        branch: { isActive: true },
+      },
       include: {
         branch: true,
       },

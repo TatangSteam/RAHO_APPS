@@ -63,16 +63,20 @@ export class SystemStatsService {
           },
         }).catch(() => 0),
         
-        // Total revenue (sum of all paid invoices)
-        prisma.invoice.aggregate({
-          where: { status: 'PAID' },
-          _sum: { totalAmount: true },
-        }).catch(() => ({ _sum: { totalAmount: null } })),
-        
-        // Monthly revenue (current month paid invoices)
+        // Total revenue from active branches only
         prisma.invoice.aggregate({
           where: {
             status: 'PAID',
+            branch: { isActive: true },
+          },
+          _sum: { totalAmount: true },
+        }).catch(() => ({ _sum: { totalAmount: null } })),
+        
+        // Monthly revenue from active branches only
+        prisma.invoice.aggregate({
+          where: {
+            status: 'PAID',
+            branch: { isActive: true },
             paidAt: { gte: firstDayOfMonth },
           },
           _sum: { totalAmount: true },

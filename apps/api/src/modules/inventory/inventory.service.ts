@@ -97,13 +97,14 @@ export class InventoryService {
 
   /**
    * Get stock mutations with filters
+   * Now supports filtering by multiple branches (for Admin Manager)
    */
   async getStockMutations(filters: {
     inventoryItemId?: string;
     type?: StockMutationType;
     startDate?: string;
     endDate?: string;
-    branchId?: string;
+    branchIds?: string[];
     page?: number;
     limit?: number;
   }) {
@@ -112,7 +113,7 @@ export class InventoryService {
       type, 
       startDate, 
       endDate, 
-      branchId,
+      branchIds,
       page = 1, 
       limit = 50 
     } = filters;
@@ -136,9 +137,19 @@ export class InventoryService {
       if (endDate) where.createdAt.lte = new Date(endDate);
     }
 
-    // Filter by branch (via inventoryItem)
-    if (branchId) {
-      where.inventoryItem = { branchId };
+    // Filter by branches (via inventoryItem)
+    // If branchIds is provided, filter by multiple branches
+    // If not provided (undefined), show all branches (for Super Admin)
+    if (branchIds && branchIds.length > 0) {
+      if (branchIds.length === 1) {
+        // Single branch - use simple filter
+        where.inventoryItem = { branchId: branchIds[0] };
+      } else {
+        // Multiple branches - use IN filter
+        where.inventoryItem = { 
+          branchId: { in: branchIds } 
+        };
+      }
     }
 
     // Get total count

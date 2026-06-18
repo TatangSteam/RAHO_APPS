@@ -460,6 +460,11 @@ export class InventoryController {
   /**
    * Get stock mutations with filters
    * GET /api/v1/inventory/stock-mutations
+   * 
+   * Role-based access:
+   * - SUPER_ADMIN: See all stock mutations
+   * - ADMIN_MANAGER: See mutations from branches they manage
+   * - ADMIN_CABANG: See mutations from their branch only
    */
   async getStockMutations(req: Request, res: Response, next: NextFunction) {
     try {
@@ -473,12 +478,47 @@ export class InventoryController {
         limit 
       } = req.query;
 
+      const userRole = req.user?.role;
+      const userId = req.user?.userId;
+      const userBranchId = req.user?.branchId;
+
+      // Determine which branches to query based on role
+      let targetBranchIds: string[] | undefined;
+
+      if (userRole === 'SUPER_ADMIN') {
+        // Super Admin sees all mutations (no branch filter)
+        targetBranchIds = branchId ? [branchId as string] : undefined;
+      } else if (userRole === 'ADMIN_MANAGER' && userId) {
+        // Admin Manager sees mutations from branches they manage
+        const managedBranches = await prisma.managerBranch.findMany({
+          where: { userId },
+          select: { branchId: true },
+        });
+
+        const managedBranchIds = managedBranches.map(mb => mb.branchId);
+
+        if (branchId) {
+          // If specific branch requested, check if manager has access
+          if (managedBranchIds.includes(branchId as string)) {
+            targetBranchIds = [branchId as string];
+          } else {
+            return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+          }
+        } else {
+          // Show all managed branches
+          targetBranchIds = managedBranchIds;
+        }
+      } else {
+        // Other roles (ADMIN_CABANG, ADMIN_LAYANAN) see only their branch
+        targetBranchIds = [branchId as string || userBranchId!];
+      }
+
       const result = await inventoryService.getStockMutations({
         inventoryItemId: inventoryItemId as string,
         type: type as StockMutationType,
         startDate: startDate as string,
         endDate: endDate as string,
-        branchId: branchId as string,
+        branchIds: targetBranchIds,
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
       });
