@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { InventoryExportService } from './services/inventory-export.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
-import { BranchType, StockMutationType } from '@prisma/client';
+import { BranchType, Role, StockMutationType } from '@prisma/client';
 
 const inventoryService = new InventoryService();
 const exportService = new InventoryExportService(prisma);
@@ -485,13 +485,16 @@ export class InventoryController {
       // Determine which branches to query based on role
       let targetBranchIds: string[] | undefined;
 
-      if (userRole === 'SUPER_ADMIN') {
+      if (userRole === Role.SUPER_ADMIN) {
         // Super Admin sees all mutations (no branch filter)
         targetBranchIds = branchId ? [branchId as string] : undefined;
-      } else if (userRole === 'ADMIN_MANAGER' && userId) {
+      } else if (userRole === Role.ADMIN_MANAGER && userId) {
         // Admin Manager sees mutations from branches they manage
         const managedBranches = await prisma.managerBranch.findMany({
-          where: { userId },
+          where: {
+            userId,
+            branch: { isActive: true },
+          },
           select: { branchId: true },
         });
 
@@ -508,9 +511,15 @@ export class InventoryController {
           // Show all managed branches
           targetBranchIds = managedBranchIds;
         }
-      } else {
+      } else if (userBranchId) {
         // Other roles (ADMIN_CABANG, ADMIN_LAYANAN) see only their branch
-        targetBranchIds = [branchId as string || userBranchId!];
+        if (branchId && branchId !== userBranchId) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+        }
+
+        targetBranchIds = [userBranchId];
+      } else {
+        return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
       }
 
       const result = await inventoryService.getStockMutations({

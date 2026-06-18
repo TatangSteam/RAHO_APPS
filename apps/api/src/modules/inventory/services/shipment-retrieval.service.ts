@@ -9,7 +9,15 @@ export class ShipmentRetrievalService {
   /**
    * Get shipments with filtering
    */
-  async getShipments(branchIds?: string[], status?: ShipmentStatus) {
+  async getShipments(
+    branchIds?: string[],
+    status?: ShipmentStatus,
+    dateRange?: { startDate?: string; endDate?: string }
+  ) {
+    if (branchIds && branchIds.length === 0) {
+      return [];
+    }
+
     const where: any = {};
 
     if (branchIds && branchIds.length > 0) {
@@ -21,6 +29,22 @@ export class ShipmentRetrievalService {
 
     if (status) {
       where.status = status;
+    }
+
+    if (dateRange?.startDate || dateRange?.endDate) {
+      where.createdAt = {};
+
+      if (dateRange.startDate) {
+        const start = new Date(dateRange.startDate);
+        start.setHours(0, 0, 0, 0);
+        where.createdAt.gte = start;
+      }
+
+      if (dateRange.endDate) {
+        const end = new Date(dateRange.endDate);
+        end.setHours(23, 59, 59, 999);
+        where.createdAt.lte = end;
+      }
     }
 
     const shipments = await prisma.shipment.findMany({
@@ -132,8 +156,10 @@ export class ShipmentRetrievalService {
       shipmentCode: shipment.shipmentCode,
       fromBranchId: shipment.fromBranchId,
       fromBranchName: shipment.fromBranch.name,
+      fromBranchCode: shipment.fromBranch.branchCode,
       toBranchId: shipment.toBranchId,
       toBranchName: shipment.toBranch.name,
+      toBranchCode: shipment.toBranch.branchCode,
       toBranchType: shipment.stockRequest?.branch?.type,
       status: shipment.status,
       notes: shipment.notes,

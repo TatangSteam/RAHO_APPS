@@ -64,8 +64,12 @@ export class ShipmentService {
   /**
    * Get shipments
    */
-  async getShipments(branchIds?: string[], status?: ShipmentStatus) {
-    return await this.retrievalService.getShipments(branchIds, status);
+  async getShipments(
+    branchIds?: string[],
+    status?: ShipmentStatus,
+    dateRange?: { startDate?: string; endDate?: string }
+  ) {
+    return await this.retrievalService.getShipments(branchIds, status, dateRange);
   }
 
   /**

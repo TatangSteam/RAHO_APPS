@@ -118,6 +118,18 @@ export class InventoryService {
       limit = 50 
     } = filters;
 
+    if (branchIds && branchIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        },
+      };
+    }
+
     const where: any = {};
 
     // Filter by item

@@ -118,7 +118,7 @@ export class ShipmentController {
    */
   async getShipments(req: Request, res: Response, next: NextFunction) {
     try {
-      const { branchId, status } = req.query;
+      const { branchId, status, startDate, endDate } = req.query;
       const userId = req.user?.userId;
       const userBranchId = req.user?.branchId;
       const userRole = req.user?.role;
@@ -126,32 +126,47 @@ export class ShipmentController {
       // Determine which branches to filter by
       let targetBranchIds: string[] | undefined;
       
-      if (branchId) {
-        // If specific branchId is provided in query, use it
-        targetBranchIds = [branchId as string];
-      } else if (userRole === 'SUPER_ADMIN') {
+      if (userRole === Role.SUPER_ADMIN) {
         // SUPER_ADMIN can see all shipments
-        targetBranchIds = undefined;
-      } else if (userRole === 'ADMIN_MANAGER') {
-        // ADMIN_MANAGER - get all managed branches (regardless of their own branchId)
+        targetBranchIds = branchId ? [branchId as string] : undefined;
+      } else if (userRole === Role.ADMIN_MANAGER && userId) {
+        // ADMIN_MANAGER can only see shipments for active branches they manage
         const managedBranches = await prisma.managerBranch.findMany({
-          where: { userId },
+          where: {
+            userId,
+            branch: { isActive: true },
+          },
           select: { branchId: true },
         });
         targetBranchIds = managedBranches.map(mb => mb.branchId);
-        
-        // If no managed branches found, return empty
-        if (targetBranchIds.length === 0) {
+
+        if (branchId) {
+          if (!targetBranchIds.includes(branchId as string)) {
+            return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+          }
+
+          targetBranchIds = [branchId as string];
+        } else if (targetBranchIds.length === 0) {
           return sendSuccess(res, []);
         }
       } else if (userBranchId) {
-        // Regular staff with assigned branch
+        // Regular branch staff can only see their own branch shipments
+        if (branchId && branchId !== userBranchId) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+        }
+
         targetBranchIds = [userBranchId];
+      } else {
+        return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
       }
 
       const result = await shipmentService.getShipments(
         targetBranchIds,
-        status as ShipmentStatus
+        status as ShipmentStatus,
+        {
+          startDate: startDate as string,
+          endDate: endDate as string,
+        }
       );
 
       return sendSuccess(res, result);

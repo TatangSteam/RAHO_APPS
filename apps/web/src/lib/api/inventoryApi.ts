@@ -376,7 +376,7 @@ export const inventoryApi = {
   /**
    * Get shipments
    */
-  getShipments: (params?: { branchId?: string; status?: string }) => {
+  getShipments: (params?: { branchId?: string; status?: string; startDate?: string; endDate?: string }) => {
     return api.get('/inventory/shipments', { params });
   },
 
