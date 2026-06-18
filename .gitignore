@@ -253,3 +253,6 @@ $null
 # Dockerfile
 # entrypoint.sh
 # *prod*
+
+backups/
+scripts/
