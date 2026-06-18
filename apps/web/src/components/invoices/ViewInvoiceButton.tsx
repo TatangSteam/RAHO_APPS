@@ -49,6 +49,8 @@ export default function ViewInvoiceButton({ packageId, packageCode, status, docu
   return (
     <>
       <button
+        type="button"
+        className="invoice-document-button"
         onClick={handleViewInvoice}
         disabled={loading}
         style={{
@@ -63,7 +65,8 @@ export default function ViewInvoiceButton({ packageId, packageCode, status, docu
           opacity: loading ? 0.6 : 1,
           display: 'inline-flex',
           alignItems: 'center',
-          gap: '6px'
+          gap: '6px',
+          maxWidth: '100%'
         }}
       >
         {loading ? '⏳' : '📄'} {loading ? 'Loading...' : label}

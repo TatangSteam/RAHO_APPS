@@ -53,6 +53,7 @@ export default function TherapyPlanSubstancesEditor({
 
   return (
     <div
+      className="therapy-substances-editor"
       style={{
         marginBottom: '20px',
         padding: '16px',
@@ -61,15 +62,7 @@ export default function TherapyPlanSubstancesEditor({
         border: '1px solid rgba(20,184,166,0.36)',
       }}
     >
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '12px',
-          marginBottom: '12px',
-        }}
-      >
+      <div className="therapy-substances-header">
         <div>
           <p
             style={{
@@ -87,6 +80,7 @@ export default function TherapyPlanSubstancesEditor({
         </div>
 
         <div
+          className="therapy-substances-total"
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
@@ -120,15 +114,10 @@ export default function TherapyPlanSubstancesEditor({
           substances.map((substance, index) => (
             <div
               key={`${substance.name}-${index}`}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'minmax(120px, 1fr) 90px 80px minmax(140px, 1.2fr) 36px',
-                gap: '8px',
-                alignItems: 'center',
-              }}
+              className="therapy-substance-row"
             >
               <input
-                className="form-input"
+                className="form-input therapy-substance-name"
                 value={substance.name}
                 onChange={(event) => updateSubstance(index, 'name', event.target.value)}
                 placeholder="Nama zat"
@@ -136,7 +125,7 @@ export default function TherapyPlanSubstancesEditor({
                 style={{ fontSize: '13px' }}
               />
               <input
-                className="form-input"
+                className="form-input therapy-substance-amount"
                 type="number"
                 min="0"
                 step="0.01"
@@ -147,7 +136,7 @@ export default function TherapyPlanSubstancesEditor({
                 style={{ fontSize: '13px' }}
               />
               <input
-                className="form-input"
+                className="form-input therapy-substance-unit"
                 value={substance.unit}
                 onChange={(event) => updateSubstance(index, 'unit', event.target.value)}
                 placeholder="ml"
@@ -155,7 +144,7 @@ export default function TherapyPlanSubstancesEditor({
                 style={{ fontSize: '13px' }}
               />
               <input
-                className="form-input"
+                className="form-input therapy-substance-note"
                 value={substance.keterangan || ''}
                 onChange={(event) => updateSubstance(index, 'keterangan', event.target.value)}
                 placeholder="Keterangan"
@@ -164,6 +153,7 @@ export default function TherapyPlanSubstancesEditor({
               />
               <button
                 type="button"
+                className="therapy-substance-remove"
                 onClick={() => removeSubstance(index)}
                 disabled={disabled}
                 title="Hapus zat"
@@ -190,6 +180,7 @@ export default function TherapyPlanSubstancesEditor({
 
       <button
         type="button"
+        className="therapy-substance-add"
         onClick={addSubstance}
         disabled={disabled}
         style={{

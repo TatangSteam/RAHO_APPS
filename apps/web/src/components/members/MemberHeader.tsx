@@ -75,10 +75,10 @@ export default function MemberHeader({
       <button onClick={onBack} className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}>
         ← Kembali
       </button>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
-            <div style={{
+      <div className="member-detail-header">
+        <div className="member-detail-profile-wrap">
+          <div className="member-detail-profile">
+            <div className="member-detail-avatar" style={{
               width: '80px',
               height: '80px',
               borderRadius: '50%',
@@ -122,7 +122,7 @@ export default function MemberHeader({
                 }}></span>
               )}
             </div>
-            <div>
+            <div className="member-detail-identity">
               <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>{member.profile?.fullName || 'Nama tidak tersedia'}</h1>
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                 <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span> • 🏢 {member.registrationBranch?.name || 'N/A'}
@@ -130,14 +130,14 @@ export default function MemberHeader({
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button onClick={onSendNotification} className="btn btn-secondary">
+        <div className="member-detail-actions">
+          <button onClick={onSendNotification} className="btn btn-secondary member-detail-action-button">
             📧 Kirim Notifikasi
           </button>
           {canUploadDocuments && onUploadDocuments && (
             <button 
               onClick={onUploadDocuments} 
-              className="btn btn-secondary"
+              className="btn btn-secondary member-detail-action-button"
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -154,7 +154,7 @@ export default function MemberHeader({
           {isSuperAdmin && onManageCredentials && (
             <button 
               onClick={onManageCredentials} 
-              className="btn btn-secondary"
+              className="btn btn-secondary member-detail-action-button"
               style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -169,7 +169,7 @@ export default function MemberHeader({
             </button>
           )}
           {isSuperAdmin && (
-            <button onClick={onEdit} className="btn btn-primary">
+            <button onClick={onEdit} className="btn btn-primary member-detail-action-button">
               ✏️ Edit
             </button>
           )}

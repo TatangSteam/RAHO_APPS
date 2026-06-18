@@ -48,7 +48,7 @@ function QuantityInput({
         }
       }}
       onFocus={(e) => e.target.select()}
-      className="w-28 px-3 py-2 text-sm rounded-lg border border-blue-300 dark:border-blue-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+      className="assign-package-qty-input w-28 px-3 py-2 text-sm rounded-lg border border-blue-300 dark:border-blue-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
       placeholder="1"
     />
   );
@@ -64,12 +64,12 @@ export default function BasicPackageSection({
   const basicPricings = pricingsList.filter(p => p.packageType === 'BASIC');
 
   return (
-    <div className="space-y-3">
+    <div className="assign-package-section space-y-3">
       <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
         <Package className="h-4 w-4" />
         PAKET BASIC
       </h4>
-      <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+      <div className="assign-package-section-box p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
         <div className="space-y-3">
           {basicPricings.map((pricing) => {
             const selection = getBasicSelection(pricing.id);
@@ -79,7 +79,7 @@ export default function BasicPackageSection({
             return (
               <div key={pricing.id} className="space-y-2">
                 <label 
-                  className={`flex items-center p-3 rounded-lg cursor-pointer transition-all ${
+                  className={`assign-package-option flex items-center p-3 rounded-lg cursor-pointer transition-all ${
                     isSelected 
                       ? 'bg-blue-100 dark:bg-blue-500/25 border border-blue-300 dark:border-blue-500/50' 
                       : 'hover:bg-blue-100/50 dark:hover:bg-blue-500/10 border border-transparent'
@@ -91,16 +91,16 @@ export default function BasicPackageSection({
                     onChange={() => toggleBasic(pricing.id)}
                     className="w-4 h-4 mr-3 rounded border-blue-400 dark:border-blue-500/50 text-blue-600 focus:ring-blue-500 bg-white dark:bg-neutral-800"
                   />
-                  <span className="flex-1 font-medium text-sm text-neutral-800 dark:text-neutral-200">
+                  <span className="assign-package-option-name flex-1 font-medium text-sm text-neutral-800 dark:text-neutral-200">
                     {pricing.name}
                   </span>
-                  <span className="font-bold text-sm text-blue-600 dark:text-blue-400">
+                  <span className="assign-package-option-price font-bold text-sm text-blue-600 dark:text-blue-400">
                     {formatCurrency(pricing.price)}
                   </span>
                 </label>
                 
                 {isSelected && (
-                  <div className="ml-10 p-3 rounded-lg bg-blue-100/50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
+                  <div className="assign-package-option-details ml-10 p-3 rounded-lg bg-blue-100/50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20">
                     <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-2">Jumlah Paket (Qty)</label>
                     <QuantityInput
                       pricingId={pricing.id}

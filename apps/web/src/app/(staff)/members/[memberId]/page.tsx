@@ -508,8 +508,8 @@ export default function MemberDetailPage() {
       <MemberStatusCards member={member} packages={packages} />
 
       {/* Tabs */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ borderBottom: '1px solid var(--surface-border)', display: 'flex', overflowX: 'auto' }}>
+      <div className="card member-detail-tabs-card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="member-detail-tab-list">
           {(['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan', 'lab-results'] as const).map((tab) => (
             <button
               key={tab}
@@ -537,7 +537,7 @@ export default function MemberDetailPage() {
           ))}
         </div>
 
-        <div style={{ padding: '24px' }}>
+        <div className="member-detail-tab-content">
           {activeTab === 'profil' && (
             <>
   
@@ -549,7 +549,7 @@ export default function MemberDetailPage() {
           
           {activeTab === 'paket' && (
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <div className="member-packages-header">
                 <h3 style={{ fontSize: '18px', fontWeight: '600' }}>📦 Paket Member</h3>
                 {canAssignPackage && (
                   <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">

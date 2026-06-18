@@ -388,7 +388,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               />
             </div>
 
-            <div style={{ 
+            <div style={{
               marginBottom: '16px',
               padding: '12px 16px',
               background: 'rgba(59,130,246,0.1)',
@@ -409,7 +409,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             </div>
 
             {/* IFA Section - Mutually Exclusive Selection */}
-            <div style={{ 
+            <div style={{
               marginBottom: '20px',
               padding: '16px',
               background: 'rgba(34,197,94,0.1)',
@@ -557,7 +557,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             />
 
             {/* AUTO-FILL FIELDS - Digunakan di Infus Aktual */}
-            <div style={{ 
+            <div className="therapy-plan-dose-panel therapy-plan-dose-panel-auto" style={{
               marginBottom: '20px',
               padding: '16px',
               background: 'rgba(59,130,246,0.08)',
@@ -575,8 +575,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               }}>
                 🔄 Auto-Fill (Digunakan di Infus Aktual)
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                <div>
+              <div className="therapy-plan-dose-grid therapy-plan-dose-grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     NO <span style={{ fontSize: '10px', color: '#94a3b8' }}>(NB NO)</span>
                   </label>
@@ -590,7 +590,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     GASO <span style={{ fontSize: '10px', color: '#94a3b8' }}>(GT)</span>
                   </label>
@@ -604,7 +604,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     MB <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Methylene Blue)</span>
                   </label>
@@ -618,7 +618,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     KCL
                   </label>
@@ -632,7 +632,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     H2S <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Cairan H2S)</span>
                   </label>
@@ -646,7 +646,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     O3 <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Ozone)</span>
                   </label>
@@ -660,7 +660,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     O2 <span style={{ fontSize: '10px', color: '#94a3b8' }}>(Oxygen)</span>
                   </label>
@@ -674,7 +674,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px', borderColor: 'rgba(59,130,246,0.3)' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#60a5fa' }}>
                     EDTA
                   </label>
@@ -692,7 +692,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             </div>
 
             {/* MANUAL FIELDS - Tidak Ada di Infus Aktual */}
-            <div style={{ 
+            <div className="therapy-plan-dose-panel therapy-plan-dose-panel-manual" style={{
               marginBottom: '24px',
               padding: '16px',
               background: 'rgba(148,163,184,0.08)',
@@ -710,8 +710,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               }}>
                 ✏️ Manual Input
               </p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-                <div>
+              <div className="therapy-plan-dose-grid therapy-plan-dose-grid-manual" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
                     HHO <span style={{ fontSize: '10px', color: '#64748b' }}>(NB-HHO)</span>
                   </label>
@@ -725,7 +725,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
                     H2 <span style={{ fontSize: '10px', color: '#64748b' }}>(Hydrogen)</span>
                   </label>
@@ -739,7 +739,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                     style={{ fontSize: '14px' }}
                   />
                 </div>
-                <div>
+                <div className="therapy-plan-dose-field">
                   <label className="form-label" style={{ fontSize: '12px', fontWeight: '600', color: '#94a3b8' }}>
                     JML NB
                   </label>
@@ -756,7 +756,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <div className="therapy-plan-form-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
               <button 
                 type="button" 
                 className="btn btn-secondary" 

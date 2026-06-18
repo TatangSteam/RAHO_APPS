@@ -91,6 +91,10 @@
   min-width: 0;
 }
 
+.compactLeft > div {
+  min-width: 0;
+}
+
 .compactTitle {
   font-size: 15px;
   font-weight: 600;
@@ -120,6 +124,8 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .expandIcon {
@@ -386,16 +392,22 @@
   font-weight: 700;
   color: var(--text-primary);
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .boosterPrice {
   font-size: 18px;
   color: #c084fc;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .addOnPrice {
   font-size: 18px;
   color: #fbbf24;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* Discount Info */
@@ -596,6 +608,8 @@
   font-weight: 700;
   color: var(--color-primary-500);
   letter-spacing: -0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 /* ============================================================
@@ -691,4 +705,105 @@
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .packagesGrid {
+    gap: 12px;
+    padding: 0;
+  }
+
+  .compactHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .compactLeft {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .compactTitle {
+    font-size: 14px;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .compactTitle span {
+    display: inline-block;
+    margin-left: 0 !important;
+    margin-right: 8px;
+  }
+
+  .compactSubtitle {
+    overflow-wrap: anywhere;
+  }
+
+  .compactRight {
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .compactPrice {
+    flex-basis: 100%;
+    font-size: 15px;
+  }
+
+  .compactRight :global(.invoice-document-button) {
+    flex: 1 1 138px;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .expandIcon {
+    margin-left: auto;
+  }
+
+  .expandedContent {
+    padding: 0 14px 14px;
+  }
+
+  .packageHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .packageTitle {
+    align-items: flex-start;
+    font-size: 14px;
+    overflow-wrap: anywhere;
+  }
+
+  .packageCode,
+  .metaItem {
+    overflow-wrap: anywhere;
+  }
+
+  .boosterSection,
+  .basicSection,
+  .addOnSection {
+    padding: 12px;
+  }
+
+  .bundleTotal {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bundleTotalPrice {
+    font-size: 20px;
+  }
+
+  .pagination {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 20px;
+  }
 }

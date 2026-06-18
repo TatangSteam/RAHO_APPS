@@ -26,13 +26,13 @@ export default function DiscountSection({
   onNotesChange,
 }: DiscountSectionProps) {
   return (
-    <div className="space-y-3">
+    <div className="assign-package-section space-y-3">
       <h4 className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
         <BadgePercent className="h-4 w-4" />
         DISKON
       </h4>
-      <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
-        <div className="grid grid-cols-2 gap-3 mb-3">
+      <div className="assign-package-section-box p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
+        <div className="assign-package-discount-grid grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Diskon (%)</label>
             <input

@@ -322,7 +322,587 @@ a { color: inherit; text-decoration: none; }
   color: var(--text-primary); 
 }
 
-/* ── Form ─────────────────────────────────────────────────── */
+/* Members page header actions */
+.members-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.members-page-title {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.members-page-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.members-page-actions > .btn,
+.members-register-action {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.members-register-action {
+  display: flex;
+}
+
+@media (max-width: 900px) {
+  .members-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .members-page-title {
+    flex: 0 1 auto;
+    width: 100%;
+  }
+
+  .members-page-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    justify-content: stretch;
+    gap: 10px;
+  }
+
+  .members-page-actions > .btn,
+  .members-register-action {
+    width: 100%;
+  }
+
+  .members-register-action {
+    grid-column: 1 / -1;
+  }
+
+  .members-page-actions .btn {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 520px) {
+  .members-page-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .members-register-action {
+    grid-column: auto;
+  }
+
+  .members-page-actions .btn {
+    min-height: 42px;
+  }
+}
+
+/* Member detail tabs */
+.member-detail-tab-list {
+  display: flex;
+  border-bottom: 1px solid var(--surface-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.member-detail-tab-content {
+  padding: 24px;
+  min-width: 0;
+}
+
+.member-packages-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+/* Member detail header */
+.member-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px 20px;
+  margin-bottom: 24px;
+}
+
+.member-detail-profile-wrap,
+.member-detail-profile,
+.member-detail-identity,
+.member-detail-actions {
+  min-width: 0;
+}
+
+.member-detail-profile-wrap {
+  flex: 1 1 260px;
+}
+
+.member-detail-profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.member-detail-avatar {
+  flex: 0 0 80px;
+}
+
+.member-detail-identity h1 {
+  overflow-wrap: anywhere;
+}
+
+.member-detail-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.member-detail-action-button {
+  min-width: 0;
+}
+
+/* Therapy plan substance editor */
+.therapy-substances-editor {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.therapy-substances-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.therapy-substances-header > div:first-child {
+  min-width: 0;
+}
+
+.therapy-substances-total {
+  flex: 0 0 auto;
+}
+
+.therapy-substance-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 90px 80px minmax(140px, 1.2fr) 36px;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+}
+
+.therapy-substance-row > * {
+  min-width: 0;
+}
+
+.therapy-plan-dose-panel,
+.therapy-plan-dose-grid,
+.therapy-plan-dose-field {
+  min-width: 0;
+}
+
+.therapy-plan-dose-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.therapy-plan-dose-field .form-label {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  min-height: 34px;
+  line-height: 1.25;
+}
+
+.therapy-plan-dose-field .form-input {
+  min-width: 0;
+  width: 100%;
+  text-align: center;
+}
+
+.therapy-plan-form-actions {
+  flex-wrap: wrap;
+}
+
+.invoice-document-button {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Assign package modal */
+.assign-package-modal-root,
+.assign-package-modal-panel,
+.assign-package-modal-body,
+.assign-package-section,
+.assign-package-section-box,
+.assign-package-option,
+.assign-package-booster-card,
+.assign-package-preview {
+  min-width: 0;
+}
+
+.assign-package-modal-root {
+  overflow-y: auto !important;
+}
+
+.assign-package-modal-panel {
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+.assign-package-modal-body {
+  min-height: 0;
+}
+
+.assign-package-option-name,
+.assign-package-preview-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.assign-package-option-price,
+.assign-package-preview-price {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.assign-package-option-count {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.assign-package-summary-row,
+.assign-package-preview-row {
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .member-detail-tab-content {
+    padding: 16px;
+  }
+
+  .member-packages-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .member-packages-header .btn {
+    width: 100%;
+  }
+
+  .member-detail-header {
+    flex-direction: column;
+  }
+
+  .member-detail-profile-wrap {
+    flex: 0 1 auto;
+    width: 100%;
+  }
+
+  .member-detail-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 10px;
+  }
+
+  .member-detail-action-button {
+    width: 100%;
+    justify-content: center;
+    padding-inline: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+@media (max-width: 640px) {
+  .member-detail-tab-list button {
+    padding: 12px 14px !important;
+    font-size: 13px !important;
+  }
+
+  .member-detail-tab-content {
+    padding: 12px;
+  }
+
+  .member-detail-profile {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .member-detail-avatar {
+    flex-basis: 64px;
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 24px !important;
+  }
+
+  .member-detail-identity h1 {
+    font-size: 24px !important;
+  }
+
+  .member-detail-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .therapy-substances-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .therapy-substances-total {
+    width: 100%;
+    text-align: center;
+  }
+
+  .therapy-substance-row {
+    grid-template-columns: minmax(0, 1fr) minmax(58px, 0.7fr) 40px;
+  }
+
+  .therapy-substance-name {
+    grid-column: 1 / -1;
+    order: 1;
+  }
+
+  .therapy-substance-amount {
+    order: 2;
+  }
+
+  .therapy-substance-unit {
+    order: 3;
+  }
+
+  .therapy-substance-remove {
+    order: 4;
+    width: 40px !important;
+  }
+
+  .therapy-substance-note {
+    grid-column: 1 / -1;
+    order: 5;
+  }
+
+  .therapy-substance-add {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .therapy-plan-dose-panel {
+    padding: 14px !important;
+  }
+
+  .therapy-plan-dose-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 14px 12px !important;
+  }
+
+  .therapy-plan-dose-field .form-label {
+    min-height: 36px;
+    font-size: 11px !important;
+  }
+
+  .therapy-plan-dose-field .form-label span {
+    display: block;
+    margin-top: 2px;
+    line-height: 1.2;
+  }
+
+  .therapy-plan-dose-field .form-input {
+    height: 40px;
+    padding: 8px 10px;
+  }
+
+  .therapy-plan-form-actions {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+    justify-content: stretch !important;
+  }
+
+  .therapy-plan-form-actions .btn {
+    width: 100%;
+    min-width: 0 !important;
+  }
+
+  .invoice-document-button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+
+  .assign-package-modal-viewport {
+    align-items: flex-start !important;
+    padding: 12px !important;
+  }
+
+  .assign-package-modal-panel {
+    max-width: calc(100vw - 24px) !important;
+    max-height: calc(100dvh - 24px);
+    margin: 0 !important;
+  }
+
+  .assign-package-modal-header,
+  .assign-package-modal-footer {
+    padding: 14px !important;
+  }
+
+  .assign-package-modal-body {
+    max-height: calc(100dvh - 172px) !important;
+    padding: 14px !important;
+  }
+
+  .assign-package-section-box,
+  .assign-package-preview {
+    padding: 12px !important;
+  }
+
+  .assign-package-option {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+  }
+
+  .assign-package-option-name {
+    flex-basis: calc(100% - 30px) !important;
+  }
+
+  .assign-package-option-price {
+    flex-basis: 100%;
+    padding-left: 28px;
+  }
+
+  .assign-package-option-details {
+    margin-left: 0 !important;
+  }
+
+  .assign-package-booster-option {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .assign-package-booster-option .assign-package-option-name {
+    flex: 1 1 calc(100% - 30px);
+  }
+
+  .assign-package-option-count {
+    flex-basis: 100%;
+    padding-left: 28px;
+  }
+
+  .assign-package-summary-row,
+  .assign-package-preview-row {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .assign-package-preview-price {
+    margin-left: 24px;
+  }
+}
+
+@media (max-width: 480px) {
+  .assign-package-modal-viewport {
+    padding: 8px !important;
+  }
+
+  .assign-package-modal-panel {
+    max-width: calc(100vw - 16px) !important;
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px !important;
+  }
+
+  .assign-package-modal-header {
+    align-items: flex-start !important;
+    gap: 10px;
+  }
+
+  .assign-package-modal-title-row {
+    gap: 10px !important;
+    min-width: 0;
+  }
+
+  .assign-package-modal-icon {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px;
+    border-radius: 10px !important;
+  }
+
+  .assign-package-modal-title-copy {
+    min-width: 0;
+  }
+
+  .assign-package-modal-title-copy h2 {
+    font-size: 16px !important;
+    line-height: 1.25;
+  }
+
+  .assign-package-modal-title-copy p {
+    font-size: 12px !important;
+  }
+
+  .assign-package-modal-close {
+    padding: 8px !important;
+  }
+
+  .assign-package-modal-body {
+    max-height: calc(100dvh - 164px) !important;
+    padding: 12px !important;
+  }
+
+  .assign-package-modal-footer {
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 8px !important;
+    padding: 12px !important;
+  }
+
+  .assign-package-modal-action {
+    width: 100%;
+    min-height: 42px;
+    flex: none !important;
+  }
+
+  .assign-package-discount-grid,
+  .assign-package-booster-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .assign-package-qty-input {
+    width: 100% !important;
+  }
+
+  .therapy-plan-dose-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+
+  .therapy-plan-dose-panel {
+    padding: 12px !important;
+  }
+
+  .therapy-plan-form-actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Form */
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 
 .form-label {

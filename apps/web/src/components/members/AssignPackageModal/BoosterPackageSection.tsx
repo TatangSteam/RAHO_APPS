@@ -58,7 +58,7 @@ function BoosterQuantityInput({
         }
       }}
       onFocus={(e) => e.target.select()}
-      className="w-full px-3 py-2 text-xs rounded-lg border border-purple-300 dark:border-purple-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+      className="assign-package-qty-input w-full px-3 py-2 text-xs rounded-lg border border-purple-300 dark:border-purple-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
       placeholder="1"
     />
   );
@@ -89,12 +89,12 @@ export default function BoosterPackageSection({
   }));
 
   return (
-    <div className="space-y-3">
+    <div className="assign-package-section space-y-3">
       <h4 className="text-sm font-semibold text-purple-400 flex items-center gap-2">
         <Rocket className="h-4 w-4" />
         PAKET BOOSTER
       </h4>
-      <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
+      <div className="assign-package-section-box p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
         {uniqueBoosters.length === 0 && (
           <p className="text-sm text-neutral-600 dark:text-neutral-500">Tidak ada paket booster tersedia.</p>
         )}
@@ -103,7 +103,7 @@ export default function BoosterPackageSection({
           Pilih tipe booster yang diinginkan. Harga akan disesuaikan dengan tipe layanan yang dipilih.
         </p>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="assign-package-booster-grid grid grid-cols-1 sm:grid-cols-2 gap-3">
           {uniqueBoosters.map(({ boosterType, label, pricings: typePricings }) => {
             const anchor = typePricings[0];
             if (!anchor) return null;
@@ -117,21 +117,21 @@ export default function BoosterPackageSection({
             return (
               <div
                 key={boosterType}
-                className={`p-3 rounded-xl border-2 transition-all ${
+                className={`assign-package-booster-card p-3 rounded-xl border-2 transition-all ${
                   selected 
                     ? 'border-purple-400 dark:border-purple-500 bg-purple-100 dark:bg-purple-500/15' 
                     : 'border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800/30 hover:border-purple-300 dark:hover:border-purple-500/50'
                 }`}
               >
-                <label className={`flex items-center gap-2 cursor-pointer ${selected ? 'mb-3' : ''}`}>
+                <label className={`assign-package-booster-option flex items-center gap-2 cursor-pointer ${selected ? 'mb-3' : ''}`}>
                   <input
                     type="checkbox"
                     checked={selected}
                     onChange={() => toggleBooster(anchor.id, boosterType as ExtendedBoosterType)}
                     className="w-4 h-4 rounded border-purple-400 dark:border-purple-500/50 text-purple-600 focus:ring-purple-500 bg-white dark:bg-neutral-800"
                   />
-                  <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">{label}</span>
-                  <span className="text-xs text-neutral-500 dark:text-neutral-500">({typePricings.length} layanan)</span>
+                  <span className="assign-package-option-name font-semibold text-sm text-neutral-800 dark:text-neutral-200">{label}</span>
+                  <span className="assign-package-option-count text-xs text-neutral-500 dark:text-neutral-500">({typePricings.length} layanan)</span>
                 </label>
 
                 {selected && (
@@ -166,15 +166,15 @@ export default function BoosterPackageSection({
                     </div>
 
                     <div className="text-xs text-neutral-600 dark:text-neutral-400 border-t border-purple-200 dark:border-purple-500/20 pt-2 space-y-1">
-                      <div className="flex justify-between">
+                      <div className="assign-package-summary-row flex justify-between">
                         <span>Harga per sesi:</span>
                         <span>{formatCurrency(pricePerSession)}</span>
                       </div>
-                      <div className="flex justify-between">
+                      <div className="assign-package-summary-row flex justify-between">
                         <span>Total sesi:</span>
                         <span>{selectedPricing.totalSessions * (sel?.quantity || 1)}</span>
                       </div>
-                      <div className="flex justify-between font-bold text-purple-600 dark:text-purple-400 text-sm pt-1">
+                      <div className="assign-package-summary-row flex justify-between font-bold text-purple-600 dark:text-purple-400 text-sm pt-1">
                         <span>Total Harga:</span>
                         <span>{formatCurrency(pricePerSession * selectedPricing.totalSessions * (sel?.quantity || 1))}</span>
                       </div>

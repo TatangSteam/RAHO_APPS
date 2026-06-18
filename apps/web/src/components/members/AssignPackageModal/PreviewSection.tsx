@@ -38,7 +38,7 @@ export default function PreviewSection({
   };
 
   return (
-    <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-600/50">
+    <div className="assign-package-preview p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border-2 border-neutral-300 dark:border-neutral-600/50">
       <h4 className="text-xs font-bold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider mb-4 flex items-center gap-2">
         <BarChart3 className="h-4 w-4" />
         PREVIEW
@@ -53,12 +53,12 @@ export default function PreviewSection({
           <>
             {items.map((item, index) => (
               <div key={index} className="space-y-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-2 text-neutral-800 dark:text-neutral-200">
+                <div className="assign-package-preview-row flex items-center justify-between">
+                  <span className="assign-package-preview-name flex items-center gap-2 text-neutral-800 dark:text-neutral-200">
                     {getIcon(item.type)}
                     {item.name}
                   </span>
-                  <span className="font-semibold text-neutral-800 dark:text-neutral-200">{formatCurrency(item.price)}</span>
+                  <span className="assign-package-preview-price font-semibold text-neutral-800 dark:text-neutral-200">{formatCurrency(item.price)}</span>
                 </div>
                 {(item.sessions || item.details) && (
                   <div className="text-xs text-neutral-500 dark:text-neutral-500 pl-6">
@@ -71,7 +71,7 @@ export default function PreviewSection({
             ))}
             
             {discount > 0 && (
-              <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold pt-2">
+              <div className="assign-package-preview-row flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold pt-2">
                 <span>
                   Diskon
                   {discountPercent > 0 && ` ${discountPercent}%`}
@@ -82,7 +82,7 @@ export default function PreviewSection({
               </div>
             )}
             
-            <div className="flex justify-between text-base font-bold text-amber-600 dark:text-amber-400 pt-3 mt-2 border-t-2 border-neutral-300 dark:border-neutral-600/50">
+            <div className="assign-package-preview-row flex justify-between text-base font-bold text-amber-600 dark:text-amber-400 pt-3 mt-2 border-t-2 border-neutral-300 dark:border-neutral-600/50">
               <span>TOTAL</span>
               <span>{formatCurrency(Math.round(total))}</span>
             </div>

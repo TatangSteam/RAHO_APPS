@@ -173,14 +173,14 @@ export default function MembersPage() {
     <>
       {/* Header */}
       <div style={{ marginBottom: '32px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-          <div>
+        <div className="members-page-header" style={{ marginBottom: '24px' }}>
+          <div className="members-page-title">
             <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', background: 'linear-gradient(135deg, #60a5fa, #3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
               Manajemen Member
             </h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Kelola data member dan akses lintas cabang</p>
           </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
+          <div className="members-page-actions">
             {/* Hide "Export Data" for DOCTOR and NURSE */}
             {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
               <button
@@ -202,13 +202,15 @@ export default function MembersPage() {
               </button>
             )}
             {canCreateMember && (
-              <button
-                onClick={() => router.push('/members/new')}
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                ➕ Daftarkan Member Baru
-              </button>
+              <div className="members-register-action">
+                <button
+                  onClick={() => router.push('/members/new')}
+                  className="btn btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  ➕ Daftarkan Member Baru
+                </button>
+              </div>
             )}
           </div>
         </div>

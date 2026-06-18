@@ -94,7 +94,7 @@ export default function AssignPackageModal({
   const preview = calculatePreview();
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] overflow-hidden">
+    <div className="assign-package-modal-root fixed inset-0 z-[9999] overflow-hidden">
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
@@ -103,20 +103,20 @@ export default function AssignPackageModal({
       />
 
       {/* Modal Container */}
-      <div className="flex min-h-full items-start justify-center p-4 pt-8 pb-8 overflow-y-auto">
+      <div className="assign-package-modal-viewport flex min-h-full items-start justify-center p-4 pt-8 pb-8 overflow-y-auto">
         <div
-          className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all flex flex-col my-auto"
+          className="assign-package-modal-panel relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all flex flex-col my-auto"
           role="dialog"
           aria-modal="true"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0 sticky top-0 bg-white dark:bg-neutral-900 rounded-t-2xl z-10">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30">
+          <div className="assign-package-modal-header flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0 sticky top-0 bg-white dark:bg-neutral-900 rounded-t-2xl z-10">
+            <div className="assign-package-modal-title-row flex items-center gap-4">
+              <div className="assign-package-modal-icon flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 shadow-lg shadow-amber-500/30">
                 <Package className="h-6 w-6 text-white" />
               </div>
-              <div>
+              <div className="assign-package-modal-title-copy">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
                   Assign Paket Terapi
                 </h2>
@@ -128,14 +128,14 @@ export default function AssignPackageModal({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
+              className="assign-package-modal-close rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5 max-h-[calc(100vh-220px)]">
+          <div className="assign-package-modal-body flex-1 overflow-y-auto p-6 space-y-5 max-h-[calc(100vh-220px)]">
             {/* PAKET BASIC */}
             <BasicPackageSection
               pricingsList={pricingsList}
@@ -187,17 +187,17 @@ export default function AssignPackageModal({
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800/50 flex-shrink-0 rounded-b-2xl">
+          <div className="assign-package-modal-footer flex items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-100 dark:bg-neutral-800/50 flex-shrink-0 rounded-b-2xl">
             <button
               onClick={onClose}
-              className="px-5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all flex-1"
+              className="assign-package-modal-action px-5 py-2.5 rounded-xl border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 font-semibold hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all flex-1"
             >
               Batal
             </button>
             <button
               onClick={onSubmit}
               disabled={submitting || preview.items.length === 0}
-              className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold hover:from-amber-600 hover:to-amber-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/30 flex items-center gap-2 flex-1 justify-center"
+              className="assign-package-modal-action px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold hover:from-amber-600 hover:to-amber-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/30 flex items-center gap-2 flex-1 justify-center"
             >
               {submitting ? (
                 <>
