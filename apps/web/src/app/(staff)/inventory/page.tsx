@@ -74,8 +74,9 @@ export default function InventoryPage() {
   // Check if user can access stock requests and shipments
   const canAccessStockRequests = user?.role && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role);
   
-  // Admin Cabang can edit stock in their own branch
-  const canEditStock = user?.role === 'ADMIN_CABANG';
+  // Super Admin, Admin Manager, and Admin Cabang can edit stock.
+  // Branch-level access is enforced by the API.
+  const canEditStock = user?.role && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role);
   
   // Check if user can select branches (Super Admin or Admin Manager)
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
@@ -90,7 +91,9 @@ export default function InventoryPage() {
     
     try {
       setLoadingBranches(true);
-      const response = await api.get('/branches');
+      const response = await api.get('/branches', {
+        params: { isActive: true, limit: 100 },
+      });
       const branchesData = response.data?.data || [];
       setBranches(branchesData);
       
@@ -241,14 +244,14 @@ export default function InventoryPage() {
       setAdjusting(true);
       
       if (hasConversionChange) {
-        await api.patch(`/master-products/${selectedItem.masterProductId}`, {
+        await api.patch(`/inventory/master-products/${selectedItem.masterProductId}`, {
           conversionFactor: conversionFactorNum,
         });
       }
       
       await inventoryApi.adjustStock(selectedItem.id, {
         adjustment: adjustmentNum,
-        reason: reason.trim(),
+        notes: reason.trim(),
       });
 
       showToast.success('Stok berhasil disesuaikan');

@@ -345,6 +345,7 @@ export class DoctorBranchManagementService {
     const managerBranches = await prisma.managerBranch.findMany({
       where: {
         userId: managerId,
+        branch: { isActive: true },
       },
       include: {
         branch: {

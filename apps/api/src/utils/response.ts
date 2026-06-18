@@ -7,6 +7,7 @@ export interface PaginationMeta {
   page: number;
   limit: number;
   totalPages: number;
+  [key: string]: unknown;
 }
 
 export function sendSuccess<T>(

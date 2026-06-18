@@ -31,6 +31,12 @@ interface Branch {
   };
 }
 
+interface BranchSummary {
+  total: number;
+  active: number;
+  inactive: number;
+}
+
 export default function BranchesPage() {
   const router = useRouter();
   const { user } = useAuthStore();
@@ -41,6 +47,7 @@ export default function BranchesPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [summary, setSummary] = useState<BranchSummary>({ total: 0, active: 0, inactive: 0 });
   const limit = 10;
 
   // Check authorization
@@ -77,8 +84,16 @@ export default function BranchesPage() {
       const response = await branchesApi.listBranches(params);
       
       if (response.data && response.data.data) {
-        setBranches(response.data.data);
-        setTotal(response.data.meta?.total || 0);
+        const branchesData = response.data.data;
+        const meta = response.data.meta;
+
+        setBranches(branchesData);
+        setTotal(meta?.total || 0);
+        setSummary(meta?.summary || {
+          total: meta?.total || branchesData.length,
+          active: branchesData.filter((branch: Branch) => branch.isActive).length,
+          inactive: branchesData.filter((branch: Branch) => !branch.isActive).length,
+        });
       }
     } catch (error: any) {
       devError('Error loading branches:', error);
@@ -92,6 +107,7 @@ export default function BranchesPage() {
         showToast.error('Gagal memuat data cabang');
       }
       setBranches([]);
+      setSummary({ total: 0, active: 0, inactive: 0 });
     } finally {
       setLoading(false);
     }
@@ -104,7 +120,11 @@ export default function BranchesPage() {
     try {
       await branchesApi.deleteBranch(branchId);
       showToast.success('Cabang berhasil dihapus');
-      loadBranches();
+      if (branches.length === 1 && page > 1) {
+        setPage((currentPage) => currentPage - 1);
+      } else {
+        loadBranches();
+      }
     } catch (error: any) {
       devError('Error deleting branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
@@ -130,7 +150,6 @@ export default function BranchesPage() {
   const totalPages = Math.ceil(total / limit);
 
   // Stats
-  const activeCount = branches.filter(b => b.isActive).length;
   const totalMembers = branches.reduce((sum, b) => sum + (b._count?.members || 0), 0);
   const totalStaff = branches.reduce((sum, b) => sum + (b._count?.staff || 0), 0);
 
@@ -201,7 +220,7 @@ export default function BranchesPage() {
               <Building2 className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{total}</p>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{summary.total}</p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">TOTAL CABANG</p>
             </div>
           </div>
@@ -213,7 +232,7 @@ export default function BranchesPage() {
               <Building2 className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{activeCount}</p>
+              <p className="text-2xl font-bold text-neutral-900 dark:text-white">{summary.active}</p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">CABANG AKTIF</p>
             </div>
           </div>
@@ -390,13 +409,15 @@ export default function BranchesPage() {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => handleDelete(branch.id, branch.name)}
-                              title="Hapus"
-                              className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {branch.isActive && (
+                              <button
+                                onClick={() => handleDelete(branch.id, branch.name)}
+                                title="Hapus"
+                                className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>

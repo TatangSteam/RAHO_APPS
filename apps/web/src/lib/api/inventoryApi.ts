@@ -265,7 +265,7 @@ export const inventoryApi = {
   /**
    * Adjust stock (Admin Cabang / Admin Manager / Super Admin)
    */
-  adjustStock: (itemId: string, data: { adjustment: number; reason: string }) => {
+  adjustStock: (itemId: string, data: { adjustment: number; notes: string }) => {
     return api.patch(`/inventory/items/${itemId}/adjust-stock`, data);
   },
 

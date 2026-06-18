@@ -185,7 +185,8 @@ export class InventoryController {
   async adjustStock(req: Request, res: Response, next: NextFunction) {
     try {
       const { itemId } = req.params;
-      const { adjustment, notes } = req.body;
+      const { adjustment } = req.body;
+      const notes = req.body.notes ?? req.body.reason;
       const userId = req.user!.userId;
       const userRole = req.user!.role;
       const userBranchId = req.user!.branchId;
@@ -198,11 +199,22 @@ export class InventoryController {
       // Verify the inventory item exists
       const inventoryItem = await prisma.inventoryItem.findUnique({
         where: { id: itemId },
-        select: { branchId: true },
+        select: {
+          branchId: true,
+          branch: {
+            select: {
+              isActive: true,
+            },
+          },
+        },
       });
 
       if (!inventoryItem) {
         return sendError(res, 404, 'ITEM_NOT_FOUND', 'Item inventori tidak ditemukan');
+      }
+
+      if (!inventoryItem.branch.isActive) {
+        return sendError(res, 422, 'BRANCH_INACTIVE', 'Stok tidak dapat diedit karena cabang sudah tidak aktif');
       }
 
       // Branch restriction only for ADMIN_CABANG
@@ -213,6 +225,26 @@ export class InventoryController {
           'BRANCH_MISMATCH',
           'Anda hanya dapat mengedit stok di cabang Anda sendiri'
         );
+      }
+
+      if (userRole === Role.ADMIN_MANAGER) {
+        const managedBranch = await prisma.managerBranch.findFirst({
+          where: {
+            userId,
+            branchId: inventoryItem.branchId,
+            branch: { isActive: true },
+          },
+          select: { branchId: true },
+        });
+
+        if (!managedBranch) {
+          return sendError(
+            res,
+            403,
+            'BRANCH_ACCESS_DENIED',
+            'Anda hanya dapat mengedit stok di cabang yang Anda kelola'
+          );
+        }
       }
 
       // Adjust stock

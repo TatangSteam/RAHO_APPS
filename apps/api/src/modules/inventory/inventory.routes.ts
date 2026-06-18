@@ -114,11 +114,11 @@ router.patch(
   inventoryController.adjustStock.bind(inventoryController)
 );
 
-// Update master product conversion factor (ADMIN_CABANG only)
+// Update master product conversion factor (stock editors)
 router.patch(
   '/master-products/:productId',
   authenticate,
-  authorize([Role.ADMIN_CABANG]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
   inventoryController.updateMasterProduct.bind(inventoryController)
 );
 

@@ -26,8 +26,11 @@ export async function listBranches(req: Request, res: Response, next: NextFuncti
     const query = listBranchesQuerySchema.parse(req.query);
     const userId = req.user?.userId;
     const userRole = req.user?.role;
-    const { branches, total, page, limit } = await listBranchesService(query, userId, userRole);
-    sendSuccess(res, branches, 200, buildPaginationMeta(total, page, limit));
+    const { branches, total, page, limit, summary } = await listBranchesService(query, userId, userRole);
+    sendSuccess(res, branches, 200, {
+      ...buildPaginationMeta(total, page, limit),
+      summary,
+    });
   } catch (err) {
     next(err);
   }

@@ -213,8 +213,13 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
     };
   }
 
-  const [total, branches] = await Promise.all([
+  const summaryWhere = { ...where } as Prisma.BranchWhereInput;
+  delete (summaryWhere as any).isActive;
+
+  const [total, activeTotal, inactiveTotal, branches] = await Promise.all([
     prisma.branch.count({ where }),
+    prisma.branch.count({ where: { ...summaryWhere, isActive: true } }),
+    prisma.branch.count({ where: { ...summaryWhere, isActive: false } }),
     prisma.branch.findMany({
       where,
       select: branchSelect,
@@ -252,7 +257,17 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
     })
   );
 
-  return { branches: branchesWithCounts, total, page, limit };
+  return {
+    branches: branchesWithCounts,
+    total,
+    page,
+    limit,
+    summary: {
+      total: activeTotal + inactiveTotal,
+      active: activeTotal,
+      inactive: inactiveTotal,
+    },
+  };
 }
 
 // ── Get Branch with Stats ─────────────────────────────────────
@@ -636,11 +651,35 @@ export async function deleteBranchService(branchId: string) {
   const existing = await prisma.branch.findUnique({ where: { id: branchId } });
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
-  // Check if branch has active users or members
-  const [activeUsers, totalMembers, inventoryItems] = await Promise.all([
+  if (!existing.isActive) {
+    return {
+      message: 'Cabang sudah tidak aktif',
+      deactivated: {
+        users: 0,
+        members: 0,
+        inventoryItems: 0,
+        staffAssignments: 0,
+        managerAssignments: 0,
+        memberAccesses: 0,
+      },
+    };
+  }
+
+  // Check related active records before soft delete
+  const [
+    activeUsers,
+    totalMembers,
+    inventoryItems,
+    staffAssignments,
+    managerAssignments,
+    memberAccesses,
+  ] = await Promise.all([
     prisma.user.count({ where: { branchId, isActive: true } }),
     prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
     prisma.inventoryItem.count({ where: { branchId } }),
+    prisma.staffBranch.count({ where: { branchId } }),
+    prisma.managerBranch.count({ where: { branchId } }),
+    prisma.branchMemberAccess.count({ where: { branchId } }),
   ]);
 
   // Soft delete branch (set isActive to false)
@@ -667,6 +706,10 @@ export async function deleteBranchService(branchId: string) {
         data: { isActive: false },
       });
     }
+
+    await tx.staffBranch.deleteMany({ where: { branchId } });
+    await tx.managerBranch.deleteMany({ where: { branchId } });
+    await tx.branchMemberAccess.deleteMany({ where: { branchId } });
   });
 
   return {
@@ -675,6 +718,9 @@ export async function deleteBranchService(branchId: string) {
       users: activeUsers,
       members: totalMembers,
       inventoryItems,
+      staffAssignments,
+      managerAssignments,
+      memberAccesses,
     },
   };
 }
