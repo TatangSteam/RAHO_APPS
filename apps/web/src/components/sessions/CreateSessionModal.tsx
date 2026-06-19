@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Package, Stethoscope, Calendar, MapPin, AlertTriangle, CheckCircle2, RefreshCw, FileText, Info, Users } from 'lucide-react';
+import { X, User, Package, Stethoscope, Calendar, MapPin, AlertTriangle, CheckCircle2, RefreshCw, FileText, Info, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { sessionApi } from '@/lib/sessionApi';
 import { memberApi } from '@/lib/memberApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
@@ -74,6 +74,7 @@ export default function CreateSessionModal({
   const [therapyPlans, setTherapyPlans] = useState<TherapyPlan[]>([]);
   const [selectedTherapyPlanId, setSelectedTherapyPlanId] = useState('');
   const [loadingTherapyPlans, setLoadingTherapyPlans] = useState(false);
+  const [expandedSets, setExpandedSets] = useState<Set<string>>(new Set());
 
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loadingDiagnoses, setLoadingDiagnoses] = useState(false);
@@ -126,6 +127,17 @@ export default function CreateSessionModal({
   }, [memberId]);
 
   useEffect(() => {
+    const targetInfusKe = useManualNumbering && manualInfusKe ? Number(manualInfusKe) : calculatedGlobalInfusKe;
+    if (!therapyPlans.length || !targetInfusKe) return;
+    const planForSessionNumber = therapyPlans.find((plan) => plan.planNumber === targetInfusKe);
+    if (planForSessionNumber) {
+      setSelectedTherapyPlanId(planForSessionNumber.id);
+    } else {
+      setSelectedTherapyPlanId('');
+    }
+  }, [therapyPlans, calculatedGlobalInfusKe, useManualNumbering, manualInfusKe]);
+
+  useEffect(() => {
     if (isOpen) {
       loadStaff();
       // Don't load infus set stock here - wait for member to be selected
@@ -143,7 +155,82 @@ export default function CreateSessionModal({
         .slice(0, 16);
       setTreatmentDate(localDateTime);
     }
-  }, [isOpen]);
+  }, [isOpen, user?.branchId]);
+
+  // Helper to get set key (matching MemberTherapyPlansTab logic)
+  const getPlanSetKey = (plan: TherapyPlan): string => {
+    return plan.therapyPlanSetId || `${plan.setName || 'legacy'}-${plan.setVersion || plan.version || 1}`;
+  };
+
+  // Group therapy plans by set (memoized to avoid recomputation)
+  const groupedTherapyPlans = useMemo(() => {
+    const grouped: Record<string, { setKey: string; displayName: string; plans: TherapyPlan[] }> = {};
+    
+    therapyPlans.forEach((plan) => {
+      const setKey = getPlanSetKey(plan);
+      
+      // Generate user-friendly display name (matching MemberTherapyPlansTab logic)
+      let displayName: string;
+      if (plan.setName && plan.setName.trim()) {
+        displayName = plan.setName;
+      } else if (plan.setCode) {
+        // Extract the last number from setCode (e.g., "TPS-PST-MBR-PST-0008-003" -> "003")
+        const match = plan.setCode.match(/(\d+)$/);
+        const date = new Date(plan.createdAt);
+        const dateStr = date.toLocaleDateString('id-ID', { 
+          day: '2-digit', 
+          month: 'short'
+        });
+        
+        if (match) {
+          const setNumber = parseInt(match[1], 10);
+          displayName = `Set #${setNumber} - ${dateStr}`;
+        } else {
+          // If no number found, use date + time
+          const timeStr = date.toLocaleTimeString('id-ID', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false
+          });
+          displayName = `Set ${dateStr} ${timeStr}`;
+        }
+      } else {
+        // Fallback for legacy data without setCode
+        const date = new Date(plan.createdAt);
+        const dateStr = date.toLocaleDateString('id-ID', { 
+          day: '2-digit', 
+          month: 'short'
+        });
+        const timeStr = date.toLocaleTimeString('id-ID', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: false
+        });
+        displayName = `Set ${dateStr} ${timeStr}`;
+      }
+      
+      if (!grouped[setKey]) {
+        grouped[setKey] = {
+          setKey,
+          displayName,
+          plans: []
+        };
+      }
+      grouped[setKey].plans.push(plan);
+    });
+    
+    return grouped;
+  }, [therapyPlans]);
+
+  // Auto-expand the first set when therapy plans load
+  useEffect(() => {
+    if (therapyPlans.length > 0 && expandedSets.size === 0) {
+      const setKeys = Object.keys(groupedTherapyPlans);
+      if (setKeys.length > 0) {
+        setExpandedSets(new Set([setKeys[0]]));
+      }
+    }
+  }, [therapyPlans, groupedTherapyPlans]);
 
   const loadInfusSetStock = async (targetBranchId?: string) => {
     // Use targetBranchId if provided, otherwise use user's branchId
@@ -366,8 +453,10 @@ export default function CreateSessionModal({
     try {
       setLoadingTherapyPlans(true);
       const plans = await therapyPlanApi.getMemberTherapyPlans(id);
-      // Filter: only show plans that are NOT used AND NOT superseded (current version only)
-      const availablePlans = plans.filter(p => !p.isUsed && !p.supersededById);
+      // Filter: only show plans that are NOT used and belong to active/current set.
+      const availablePlans = plans
+        .filter(p => !p.isUsed && !p.supersededById && p.setStatus !== 'SUPERSEDED')
+        .sort((a, b) => (a.planNumber || 9999) - (b.planNumber || 9999));
       setTherapyPlans(availablePlans);
       if (availablePlans.length > 0) {
         setSelectedTherapyPlanId(availablePlans[0].id);
@@ -476,15 +565,13 @@ export default function CreateSessionModal({
     
     if (!selectedPackageId) { setError('Paket Basic harus dipilih'); return; }
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }
-    if (!selectedTherapyPlanId) { setError('Therapy plan harus dipilih'); return; }
-
     // Validasi IFA - therapy plan harus memiliki IFA 250 atau IFA 500
     const selectedPlanForValidation = therapyPlans.find(p => p.id === selectedTherapyPlanId);
     if (selectedPlanForValidation) {
       const hasIfa = (selectedPlanForValidation.ifa250 && selectedPlanForValidation.ifa250 > 0) || 
                      (selectedPlanForValidation.ifa500 && selectedPlanForValidation.ifa500 > 0);
       if (!hasIfa) {
-        setError('Therapy plan harus memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau edit therapy plan untuk menambahkan IFA.');
+        setError('Therapy plan harus memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau buat ulang set therapy plan melalui bulk.');
         return;
       }
     }
@@ -542,7 +629,7 @@ export default function CreateSessionModal({
         memberId,
         memberPackageId: selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
-        therapyPlanId: selectedTherapyPlanId,
+        therapyPlanId: selectedTherapyPlanId || undefined,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
         useManualNumbering,
@@ -589,6 +676,7 @@ export default function CreateSessionModal({
       setSelectedBoosterPackageId('');
       setTherapyPlans([]);
       setSelectedTherapyPlanId('');
+      setExpandedSets(new Set());
       setDiagnoses([]);
       setHasDiagnosis(false);
       setSelectedDoctorId('');
@@ -629,6 +717,19 @@ export default function CreateSessionModal({
 
   const selectedPlan = therapyPlans.find(p => p.id === selectedTherapyPlanId);
   const selectedPackage = basicPackages.find(p => p.packageId === selectedPackageId);
+
+  // Toggle accordion
+  const toggleSet = (setKey: string) => {
+    setExpandedSets(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(setKey)) {
+        newSet.delete(setKey);
+      } else {
+        newSet.add(setKey);
+      }
+      return newSet;
+    });
+  };
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] overflow-hidden">
@@ -854,27 +955,134 @@ export default function CreateSessionModal({
                       <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                       <div>
                         <p className="text-sm font-semibold text-red-700 dark:text-red-400">Belum ada therapy plan tersedia</p>
-                        <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Buat therapy plan di tab Therapy Plan pada halaman detail member.</p>
+                        <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Buat set therapy plan secara bulk di tab Therapy Plan pada halaman detail member.</p>
                       </div>
                     </div>
                   ) : (
                     <>
+                      {/* Accordion/Collapsible Therapy Plan Selection */}
+                      <div className="space-y-2 mb-3">
+                        {Object.entries(groupedTherapyPlans).map(([setKey, setData]) => {
+                          const isExpanded = expandedSets.has(setKey);
+                          const plansCount = setData.plans.length;
+                          const selectedInThisSet = setData.plans.some((p: TherapyPlan) => p.id === selectedTherapyPlanId);
+                          
+                          return (
+                            <div key={setKey} className="rounded-xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+                              {/* Accordion Header */}
+                              <button
+                                type="button"
+                                onClick={() => toggleSet(setKey)}
+                                className={`w-full px-4 py-3 flex items-center justify-between transition-all ${
+                                  selectedInThisSet 
+                                    ? 'bg-amber-50 dark:bg-amber-500/10 hover:bg-amber-100 dark:hover:bg-amber-500/20' 
+                                    : 'bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700'
+                                }`}
+                                disabled={loading}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <FileText className={`h-4 w-4 ${selectedInThisSet ? 'text-amber-600 dark:text-amber-400' : 'text-neutral-500'}`} />
+                                  <div className="text-left">
+                                    <p className={`text-sm font-bold ${selectedInThisSet ? 'text-amber-700 dark:text-amber-400' : 'text-neutral-900 dark:text-white'}`}>
+                                      {setData.displayName}
+                                    </p>
+                                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                                      {plansCount} therapy plan{plansCount > 1 ? 's' : ''}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp className="h-5 w-5 text-neutral-500" />
+                                ) : (
+                                  <ChevronDown className="h-5 w-5 text-neutral-500" />
+                                )}
+                              </button>
+
+                              {/* Accordion Content */}
+                              {isExpanded && (
+                                <div className="border-t border-neutral-200 dark:border-neutral-700">
+                                  {setData.plans.map((plan: TherapyPlan, index: number) => {
+                                    const isSelected = selectedTherapyPlanId === plan.id;
+                                    const planNumber = plan.planNumber || index + 1;
+                                    
+                                    // Build substance display - only show non-zero quantities
+                                    const substances: string[] = [];
+                                    if (plan.ifa250 && plan.ifa250 > 0) substances.push(`IFA 250: ${plan.ifa250}`);
+                                    if (plan.ifa500 && plan.ifa500 > 0) substances.push(`IFA 500: ${plan.ifa500}`);
+                                    const substanceText = substances.length > 0 ? substances.join(' • ') : 'Tidak ada IFA';
+                                    
+                                    return (
+                                      <div
+                                        key={plan.id}
+                                        onClick={() => !loading && setSelectedTherapyPlanId(plan.id)}
+                                        className={`cursor-pointer px-4 py-3 flex items-start gap-3 transition-all border-b border-neutral-200 dark:border-neutral-700 last:border-b-0 ${
+                                          isSelected 
+                                            ? 'bg-amber-50 dark:bg-amber-500/10' 
+                                            : 'bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800/70'
+                                        }`}
+                                      >
+                                        <input
+                                          type="radio"
+                                          name="therapyPlanId"
+                                          checked={isSelected}
+                                          onChange={() => setSelectedTherapyPlanId(plan.id)}
+                                          disabled={loading}
+                                          className="mt-1 w-4 h-4 text-amber-600 border-neutral-300 focus:ring-amber-500"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-start justify-between gap-4">
+                                            <div className="flex-1">
+                                              <p className="text-sm font-bold text-neutral-900 dark:text-white">
+                                                Terapi #{planNumber}
+                                              </p>
+                                              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                                {substanceText}
+                                              </p>
+                                            </div>
+                                            <div className="flex gap-2 text-xs font-semibold text-neutral-600 dark:text-neutral-400 flex-shrink-0">
+                                              {plan.ifa250 && plan.ifa250 > 0 && (
+                                                <span className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800">
+                                                  {plan.ifa250}x250
+                                                </span>
+                                              )}
+                                              {plan.ifa500 && plan.ifa500 > 0 && (
+                                                <span className="px-2 py-1 rounded bg-neutral-100 dark:bg-neutral-800">
+                                                  {plan.ifa500}x500
+                                                </span>
+                                              )}
+                                            </div>
+                                          </div>
+                                          {plan.keterangan && (
+                                            <p className="text-xs text-neutral-600 dark:text-neutral-400 mt-2 line-clamp-2">
+                                              {plan.keterangan}
+                                            </p>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                       <select
+                        hidden
                         value={selectedTherapyPlanId}
                         onChange={(e) => setSelectedTherapyPlanId(e.target.value)}
                         className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                         disabled={loading}
-                        required
                       >
                         <option value="">Pilih therapy plan...</option>
                         {therapyPlans.map((plan) => {
                           const hasIfa = (plan.ifa250 && plan.ifa250 > 0) || (plan.ifa500 && plan.ifa500 > 0);
-                          const ifaInfo = hasIfa 
-                            ? `✓ IFA: ${plan.ifa250 || 0}x250ml, ${plan.ifa500 || 0}x500ml` 
-                            : '⚠ Tidak ada IFA';
+                          const ifaInfo = hasIfa
+                            ? `IFA: ${plan.ifa250 || 0}x250ml, ${plan.ifa500 || 0}x500ml`
+                            : 'Tidak ada IFA';
                           return (
                             <option key={plan.id} value={plan.id}>
-                              {plan.planCode} - {new Date(plan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ({ifaInfo})
+                              Terapi #{plan.planNumber || 1} - {new Date(plan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })} ({ifaInfo})
                             </option>
                           );
                         })}
@@ -887,7 +1095,7 @@ export default function CreateSessionModal({
                               <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
                               <div>
                                 <p className="text-sm font-semibold text-red-700 dark:text-red-400">Therapy plan tidak memiliki IFA</p>
-                                <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Setiap sesi terapi wajib memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau edit therapy plan ini.</p>
+                                <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Setiap sesi terapi wajib memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau buat ulang set therapy plan melalui bulk.</p>
                               </div>
                             </div>
                           )}
@@ -901,7 +1109,7 @@ export default function CreateSessionModal({
                                     Klik tab "Detail Therapy Plan" untuk melihat detail lengkap
                                   </p>
                                   <p className="text-xs text-blue-600 dark:text-blue-400/80 mt-1">
-                                    IFA 250: {selectedPlan.ifa250 || 0} Botol • IFA 500: {selectedPlan.ifa500 || 0} Botol • HHO: {selectedPlan.hho || '-'} • NO: {selectedPlan.no || '-'} ...
+                                    IFA 250: {selectedPlan.ifa250 || 0} Botol - IFA 500: {selectedPlan.ifa500 || 0} Botol - HHO: {selectedPlan.hho || '-'} - NO: {selectedPlan.no || '-'} ...
                                   </p>
                                 </div>
                               </div>
@@ -1197,9 +1405,11 @@ export default function CreateSessionModal({
                 {selectedPlan ? (
                   <>
                     <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
-                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2">{selectedPlan.planCode}</h3>
+                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2">
+                        Terapi #{selectedPlan.planNumber || '-'}
+                      </h3>
                       <p className="text-xs text-amber-600 dark:text-amber-400/80">
-                        Dibuat: {new Date(selectedPlan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                        {selectedPlan.setName || `Set v${selectedPlan.setVersion || selectedPlan.version || 1}`} - Dibuat: {new Date(selectedPlan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
                       </p>
                     </div>
 
@@ -1235,7 +1445,7 @@ export default function CreateSessionModal({
             <button
               type="submit"
               form="create-session-form"
-              disabled={loading || !memberId || !hasDiagnosis || !selectedPackageId || !selectedTherapyPlanId}
+              disabled={loading || !memberId || !hasDiagnosis || !selectedPackageId}
               className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loading ? (

@@ -79,7 +79,7 @@ router.patch(
 );
 
 // ============================================================
-// STEP 2: THERAPY PLAN
+// STEP 2: THERAPY PLAN (review only; creation is bulk from member therapy-plan set)
 // ============================================================
 
 router.post(
@@ -248,4 +248,3 @@ router.patch(
 );
 
 export default router;
-

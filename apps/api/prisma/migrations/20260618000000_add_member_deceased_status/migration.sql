@@ -1,0 +1,2 @@
+ALTER TABLE "members"
+  ADD COLUMN IF NOT EXISTS "isDeceased" BOOLEAN NOT NULL DEFAULT false;

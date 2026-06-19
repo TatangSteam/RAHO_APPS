@@ -140,6 +140,22 @@ export default function MemberProfilePage() {
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
 
+  const calculateAge = (d: string | null) => {
+    if (!d) return null
+    const birthDate = new Date(d)
+    if (isNaN(birthDate.getTime())) return null
+
+    const today = new Date()
+    let age = today.getFullYear() - birthDate.getFullYear()
+    const monthDelta = today.getMonth() - birthDate.getMonth()
+
+    if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
+      age -= 1
+    }
+
+    return age >= 0 ? age : null
+  }
+
   if (loading) return (
     <div className="flex items-center justify-center py-12">
       <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
@@ -151,6 +167,8 @@ export default function MemberProfilePage() {
       Gagal memuat profil.
     </div>
   )
+
+  const age = profile.age ?? calculateAge(profile.dateOfBirth)
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-6">
@@ -241,6 +259,13 @@ export default function MemberProfilePage() {
                 }`}>
                   {profile.isActive ? '✓ Aktif' : '✗ Tidak Aktif'}
                 </span>
+                <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
+                  profile.isDeceased
+                    ? 'bg-red-500/15 text-red-400'
+                    : 'bg-teal-500/15 text-teal-400'
+                }`}>
+                  {profile.isDeceased ? 'Meninggal' : 'Tidak Meninggal'}
+                </span>
               </div>
             </div>
           </div>
@@ -256,6 +281,7 @@ export default function MemberProfilePage() {
             <InfoRow icon={<Phone size={14} />} label="No. Telepon" value={profile.phone} />
             <InfoRow icon={<Mail size={14} />} label="Email" value={profile.email} />
             <InfoRow icon={<Calendar size={14} />} label="Tanggal Lahir" value={formatDate(profile.dateOfBirth)} />
+            <InfoRow icon={<Calendar size={14} />} label="Umur" value={age !== null ? `${age} tahun` : '--'} />
             <InfoRow icon={<User size={14} />} label="Jenis Kelamin" value={profile.jenisKelamin === 'L' ? 'Laki-laki' : profile.jenisKelamin === 'P' ? 'Perempuan' : '—'} />
             <InfoRow icon={<CreditCard size={14} />} label="Identitas" value={profile.nik ?? '—'} />
           </div>

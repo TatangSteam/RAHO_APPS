@@ -45,7 +45,7 @@ Custom hook yang berisi semua logic data fetching:
 Menampilkan header dengan:
 - Tombol kembali
 - Nama dan kode cabang
-- Badge tipe cabang (Klinik, Homecare, Premiere, Partnership)
+- Badge tipe cabang (Pusat, Premier, Partnership)
 - Badge status (Aktif/Nonaktif)
 
 ### StatsCards.tsx

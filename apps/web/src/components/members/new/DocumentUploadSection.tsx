@@ -151,7 +151,9 @@ export default function DocumentUploadSection({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 1fr)', gap: '24px' }}>
         {/* PSP Upload */}
         <div className="upload-col">
-          <label className="form-label">📋 Dokumen PSP</label>
+          <label className="form-label">
+            📋 PSP / Informed Consent <span style={{ color: 'var(--text-muted)', fontWeight: 500 }}>(opsional)</span>
+          </label>
           <div style={{
             border: '2px dashed var(--surface-border)',
             borderRadius: 'var(--radius-lg)',
@@ -232,6 +234,7 @@ export default function DocumentUploadSection({
                 <div>
                   <div style={{ fontSize: '48px', marginBottom: '12px' }}>📄</div>
                   <p style={{ fontWeight: '600', marginBottom: '4px' }}>Upload PSP / Informed Consent</p>
+                  <p style={{ fontSize: '12px', color: '#22c55e', marginBottom: '4px', fontWeight: 600 }}>Bisa menyusul setelah member dibuat</p>
                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Max 5MB • JPG, PNG, WebP, PDF</p>
                 </div>
               )}

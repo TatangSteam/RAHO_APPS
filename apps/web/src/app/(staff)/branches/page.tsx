@@ -136,14 +136,12 @@ export default function BranchesPage() {
       PUSAT: { bg: 'bg-amber-100 dark:bg-amber-500/20', text: 'text-amber-700 dark:text-amber-400', border: 'border-amber-200 dark:border-amber-500/30' },
       PREMIER: { bg: 'bg-yellow-100 dark:bg-yellow-500/20', text: 'text-yellow-700 dark:text-yellow-400', border: 'border-yellow-200 dark:border-yellow-500/30' },
       PARTNERSHIP: { bg: 'bg-blue-100 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-400', border: 'border-blue-200 dark:border-blue-500/30' },
-      KLINIK: { bg: 'bg-emerald-100 dark:bg-emerald-500/20', text: 'text-emerald-700 dark:text-emerald-400', border: 'border-emerald-200 dark:border-emerald-500/30' },
-      HOMECARE: { bg: 'bg-purple-100 dark:bg-purple-500/20', text: 'text-purple-700 dark:text-purple-400', border: 'border-purple-200 dark:border-purple-500/30' },
     };
     return styles[type] || { bg: 'bg-neutral-100 dark:bg-neutral-500/20', text: 'text-neutral-700 dark:text-neutral-400', border: 'border-neutral-200 dark:border-neutral-500/30' };
   };
 
   const getBranchTypeLabel = (type: string) => {
-    if (type === 'PREMIER') return 'Premier (Cabang)';
+    if (type === 'PREMIER') return 'Premier';
     return type.charAt(0) + type.slice(1).toLowerCase();
   };
 
@@ -199,7 +197,7 @@ export default function BranchesPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">Pengaturan Cabang</h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">Kelola semua cabang klinik dengan mudah dan efisien</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400">Kelola semua cabang dengan mudah dan efisien</p>
             </div>
           </div>
           <button 
@@ -288,10 +286,8 @@ export default function BranchesPage() {
             >
               <option value="all">Semua Tipe</option>
               <option value="PUSAT">Pusat</option>
-              <option value="PREMIER">Premier (Cabang)</option>
+              <option value="PREMIER">Premier</option>
               <option value="PARTNERSHIP">Partnership</option>
-              <option value="KLINIK">Klinik</option>
-              <option value="HOMECARE">Homecare</option>
             </select>
 
             <select 

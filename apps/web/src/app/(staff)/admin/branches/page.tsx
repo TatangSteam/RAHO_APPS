@@ -88,7 +88,7 @@ export default function BranchesPage() {
       <div className={styles.header}>
         <div>
           <h1>🏢 Manajemen Cabang</h1>
-          <p>Kelola semua cabang klinik</p>
+          <p>Kelola semua cabang</p>
         </div>
         <button className={styles.createBtn} onClick={() => setShowCreateModal(true)}>
           ➕ Tambah Cabang
@@ -119,9 +119,8 @@ export default function BranchesPage() {
                   </div>
                   <div className={styles.badges}>
                     <span className={`${styles.typeBadge} ${styles[branch.type.toLowerCase()]}`}>
-                      {branch.type === 'KLINIK' ? '🏥 Klinik' : 
-                       branch.type === 'HOMECARE' ? '🏠 Homecare' :
-                       branch.type === 'PREMIER' ? '⭐ Premier (Cabang)' : '🤝 Partnership'}
+                      {branch.type === 'PUSAT' ? 'Pusat' :
+                       branch.type === 'PREMIER' ? 'Premier' : 'Partnership'}
                     </span>
                     <span className={`${styles.statusBadge} ${branch.isActive ? styles.active : styles.inactive}`}>
                       {branch.isActive ? '✓ Aktif' : '✗ Nonaktif'}

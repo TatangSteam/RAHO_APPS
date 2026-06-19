@@ -158,10 +158,15 @@ export default function ManageStaffBranchesModal({
       case 'PUSAT': return 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400';
       case 'PREMIER': return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-400';
       case 'PARTNERSHIP': return 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400';
-      case 'KLINIK': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400';
-      case 'HOMECARE': return 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-400';
       default: return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700/50 dark:text-neutral-400';
     }
+  };
+
+  const getBranchTypeLabel = (type: string) => {
+    if (type === 'PUSAT') return 'Pusat';
+    if (type === 'PREMIER') return 'Premier';
+    if (type === 'PARTNERSHIP') return 'Partnership';
+    return type;
   };
 
   if (!isOpen) return null;
@@ -264,7 +269,7 @@ export default function ManageStaffBranchesModal({
                               )}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getBranchTypeStyles(branch.branchType)}`}>{branch.branchType === 'PREMIER' ? 'Premier (Cabang)' : branch.branchType}</span>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${getBranchTypeStyles(branch.branchType)}`}>{getBranchTypeLabel(branch.branchType)}</span>
                               <span>{branch.branchCode}</span>
                               <span>•</span>
                               <span>Sejak {new Date(branch.assignedAt).toLocaleDateString('id-ID')}</span>

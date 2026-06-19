@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useParams } from 'next/navigation';
-import { getMemberDetailApi, sendNotificationApi } from '@/lib/membersApi';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
+import { getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
 import { packagesApi } from '@/lib/packagesApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
@@ -29,15 +29,24 @@ import MemberCredentialsModal from '@/components/members/MemberCredentialsModal'
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 
+type MemberDetailTab = 'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
+
+const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan', 'lab-results'];
+
+function isMemberDetailTab(value: string | null): value is MemberDetailTab {
+  return Boolean(value && MEMBER_DETAIL_TABS.includes(value as MemberDetailTab));
+}
+
 export default function MemberDetailPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const memberId = params.memberId as string;
   const { user } = useAuthStore();
 
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results'>('profil');
+  const [activeTab, setActiveTab] = useState<MemberDetailTab>('profil');
   
   // Notification modal state
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -129,6 +138,7 @@ export default function MemberDetailPage() {
 
   // Upload documents modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [updatingLifeStatus, setUpdatingLifeStatus] = useState(false);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -138,6 +148,7 @@ export default function MemberDetailPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
+  const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditDiagnosis = ['DOCTOR', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   
   // Check if member has any documents (PSP or Profile Photo)
@@ -154,6 +165,13 @@ export default function MemberDetailPage() {
     loadMemberDetail();
     loadPackages();
   }, [memberId]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab');
+    if (isMemberDetailTab(requestedTab)) {
+      setActiveTab(requestedTab);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     // Only load pricings for roles that can assign packages
@@ -369,6 +387,28 @@ export default function MemberDetailPage() {
     }
   };
 
+  const handleToggleLifeStatus = async () => {
+    if (!member || updatingLifeStatus) return;
+
+    const nextIsDeceased = !member.isDeceased;
+    const nextLabel = nextIsDeceased ? 'meninggal' : 'masih hidup';
+
+    if (!confirm(`Ubah status member menjadi ${nextLabel}?`)) {
+      return;
+    }
+
+    try {
+      setUpdatingLifeStatus(true);
+      await updateMemberApi(memberId, { isDeceased: nextIsDeceased });
+      showToast.success(`Status member berhasil diubah menjadi ${nextLabel}`);
+      await loadMemberDetail();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.error?.message || 'Gagal mengubah status member');
+    } finally {
+      setUpdatingLifeStatus(false);
+    }
+  };
+
   const handleRefundPackage = async () => {
     if (!refundReason || refundReason.length < 8) {
       showToast.error('Alasan refund minimal 8 karakter');
@@ -510,7 +550,7 @@ export default function MemberDetailPage() {
       {/* Tabs */}
       <div className="card member-detail-tabs-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="member-detail-tab-list">
-          {(['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan', 'lab-results'] as const).map((tab) => (
+          {MEMBER_DETAIL_TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -543,6 +583,9 @@ export default function MemberDetailPage() {
   
               <MemberProfileTab 
                 member={member}
+                canEditLifeStatus={canEditLifeStatus}
+                updatingLifeStatus={updatingLifeStatus}
+                onToggleLifeStatus={handleToggleLifeStatus}
               />
             </>
           )}

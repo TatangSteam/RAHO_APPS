@@ -4,7 +4,6 @@ import {
   createSessionSchema,
   createDiagnosisSchema,
   updateDiagnosisSchema,
-  createTherapyPlanSchema,
   createVitalSignSchema,
   createInfusionSchema,
   createMaterialUsageSchema,
@@ -177,22 +176,13 @@ export class SessionsController {
   // STEP 2: CREATE THERAPY PLAN
   // ============================================================
 
-  async createTherapyPlan(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { sessionId } = req.params;
-      const validation = createTherapyPlanSchema.safeParse(req.body);
-      if (!validation.success) {
-        return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
-      }
-
-      const result = await sessionsService.createTherapyPlan(sessionId, validation.data, req.user!.userId);
-      return sendSuccess(res, result, 201);
-    } catch (err: any) {
-      if (err.status) {
-        return sendError(res, err.status, err.code, err.message);
-      }
-      next(err);
-    }
+  async createTherapyPlan(_req: Request, res: Response, _next: NextFunction) {
+    return sendError(
+      res,
+      410,
+      'THERAPY_PLAN_BULK_ONLY',
+      'Therapy plan sesi hanya sebagai acuan dari set bulk. Pilih therapy plan saat membuat sesi, bukan membuat therapy plan baru di dalam sesi.'
+    );
   }
 
   // ============================================================

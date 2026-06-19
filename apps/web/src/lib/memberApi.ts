@@ -27,6 +27,7 @@ export interface MemberDiagnosis {
   diagnosisCode: string;
   diagnosa: string;
   kategoriDiagnosa: string | null;
+  kategoriDiagnosaList?: string[] | null;
   createdAt: string;
   doctorName: string;
 }

@@ -1,13 +1,17 @@
 'use client';
 
-import { ExternalLink, Pencil } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import type { TherapyPlan } from '@/lib/therapyPlanApi';
 import type { TherapyPlanSubstance } from '@/lib/therapyPlanSubstances';
 
 interface TherapyPlanListTableProps {
   plans: TherapyPlan[];
-  onEdit: (plan: TherapyPlan) => void;
+  memberId?: string;
   onOpenSession: (sessionId: string) => void;
+  onEdit?: () => void;
+  hideInfusKe?: boolean;
+  hideStatus?: boolean;
+  hideAksi?: boolean;
 }
 
 type NumericTherapyPlanKey =
@@ -92,8 +96,20 @@ function getIfaSubstanceTotal(
   return (substances || []).reduce((total, substance) => {
     if (!normalizedAliases.has(normalizeName(substance.name))) return total;
     if ((substance.unit || 'ml').toLowerCase() !== 'ml') return total;
+    if (isDefaultNoInIfa(substance)) return total;
     return total + toNumber(substance.amount);
   }, 0);
+}
+
+function isDefaultNoInIfa(substance: TherapyPlanSubstance): boolean {
+  const amount = Number(substance.amount);
+
+  return (
+    normalizeName(substance.name) === 'no' &&
+    (substance.unit || 'ml').toLowerCase() === 'ml' &&
+    Number.isFinite(amount) &&
+    Math.abs(amount - 2.5) < 0.001
+  );
 }
 
 function getColumnValue(plan: TherapyPlan, column: DoseColumn): number {
@@ -135,7 +151,7 @@ function getExtraSubstanceValue(plan: TherapyPlan, column: ExtraSubstanceColumn)
 }
 
 function isTherapyPlanEditHistory(plan: TherapyPlan): boolean {
-  return Boolean(plan.supersededById || plan.supersededAt);
+  return Boolean(plan.supersededById || plan.supersededAt || plan.setStatus === 'SUPERSEDED');
 }
 
 function getPlanStatus(plan: TherapyPlan): { label: string; color: string; background: string; border: string } {
@@ -165,24 +181,54 @@ function getPlanStatus(plan: TherapyPlan): { label: string; color: string; backg
   };
 }
 
+function isColumnAllZeros(plans: TherapyPlan[], column: DoseColumn): boolean {
+  // Check if this column has all 0 values across all plans
+  return plans.every((plan) => getColumnValue(plan, column) === 0);
+}
+
+function isExtraColumnAllZeros(plans: TherapyPlan[], column: ExtraSubstanceColumn): boolean {
+  // Check if this extra column has all 0 values across all plans
+  return plans.every((plan) => getExtraSubstanceValue(plan, column) === 0);
+}
+
 export default function TherapyPlanListTable({
   plans,
-  onEdit,
+  memberId,
   onOpenSession,
+  onEdit,
+  hideInfusKe = false,
+  hideStatus = false,
+  hideAksi = false,
 }: TherapyPlanListTableProps) {
   const extraColumns = getExtraSubstanceColumns(plans);
-  const allDoseColumns = [...DOSE_COLUMNS, ...extraColumns];
+
+  // Filter out columns where all values are 0
+  const visibleDoseColumns = DOSE_COLUMNS.filter((column) => !isColumnAllZeros(plans, column));
+  const visibleExtraColumns = extraColumns.filter((column) => !isExtraColumnAllZeros(plans, column));
+  const allDoseColumns = [...visibleDoseColumns, ...visibleExtraColumns];
+
+  // Build headers array based on hide flags
+  const headers = [
+    'Plan',
+    'Tanggal',
+    'Keterangan',
+    ...allDoseColumns.map((column) => column.label),
+    ...(!hideInfusKe ? ['Infus Ke'] : []),
+    ...(!hideStatus ? ['Status'] : []),
+    ...(!hideAksi ? ['Aksi'] : []),
+  ];
 
   return (
-    <div
-      style={{
-        border: '1px solid rgba(148,163,184,0.22)',
-        borderRadius: '8px',
-        overflow: 'hidden',
-        background: 'var(--surface-card)',
-      }}
-    >
-      <div style={{ overflowX: 'auto' }}>
+    <>
+      <div
+        style={{
+          border: '1px solid rgba(148,163,184,0.22)',
+          borderRadius: '8px',
+          overflow: 'hidden',
+          background: 'var(--surface-card)',
+        }}
+      >
+        <div style={{ overflowX: 'auto' }}>
         <table
           style={{
             width: '100%',
@@ -193,13 +239,13 @@ export default function TherapyPlanListTable({
         >
           <thead>
             <tr style={{ background: 'rgba(148,163,184,0.08)' }}>
-              {['Kode Plan', 'Tanggal', 'Infus Ke', ...allDoseColumns.map((column) => column.label), 'Keterangan', 'Status', 'Aksi'].map((header, index) => (
+              {headers.map((header, index) => (
                 <th
                   key={`${header}-${index}`}
                   style={{
                     width:
-                      header === 'Kode Plan'
-                        ? '210px'
+                      header === 'Plan'
+                        ? '160px'
                         : header === 'Keterangan'
                           ? '220px'
                           : header === 'Status'
@@ -208,7 +254,7 @@ export default function TherapyPlanListTable({
                               ? '112px'
                               : '92px',
                     padding: '11px 12px',
-                    textAlign: allDoseColumns.some((column) => column.label === header) ? 'right' : 'left',
+                    textAlign: allDoseColumns.some((column) => column.label === header) || header === 'Infus Ke' ? 'right' : 'left',
                     borderBottom: '1px solid rgba(148,163,184,0.22)',
                     color: 'var(--text-secondary)',
                     fontSize: '12px',
@@ -226,6 +272,11 @@ export default function TherapyPlanListTable({
               const status = getPlanStatus(plan);
               const date = plan.usedInSession?.treatmentDate || plan.createdAt;
               const infusKe = plan.usedInSession?.totalSessionsCount ?? '-';
+              const planNumber = plan.planNumber || rowIndex + 1;
+
+              // Generate keterangan text: "Set X - Terapi ke-Y"
+              const setInfo = plan.setName || `Set v${plan.setVersion || plan.version || 1}`;
+              const keteranganText = `${setInfo} - Terapi ke-${planNumber}`;
 
               return (
                 <tr
@@ -235,8 +286,11 @@ export default function TherapyPlanListTable({
                   }}
                 >
                   <td style={cellStyle({ sticky: true })}>
-                    <div style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {plan.planCode}
+                    <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>
+                      Terapi #{planNumber}
+                    </div>
+                    <div style={{ marginTop: '3px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700 }}>
+                      {plan.setName || `Set v${plan.setVersion || plan.version || 1}`}
                     </div>
                     {plan.version && plan.version > 1 && (
                       <div style={{ marginTop: '3px', color: '#60a5fa', fontSize: '11px', fontWeight: 700 }}>
@@ -245,8 +299,19 @@ export default function TherapyPlanListTable({
                     )}
                   </td>
                   <td style={cellStyle()}>{formatDate(date)}</td>
-                  <td style={{ ...cellStyle(), textAlign: 'center' }}>{infusKe}</td>
-                  {DOSE_COLUMNS.map((column) => {
+                  <td style={cellStyle()}>
+                    <div
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={keteranganText}
+                    >
+                      {keteranganText}
+                    </div>
+                  </td>
+                  {visibleDoseColumns.map((column) => {
                     const value = getColumnValue(plan, column);
                     const ifaAddition = column.mergeIfaSubstances && column.aliases
                       ? getIfaSubstanceTotal(plan.ifaSubstances, column.aliases)
@@ -262,7 +327,7 @@ export default function TherapyPlanListTable({
                       </td>
                     );
                   })}
-                  {extraColumns.map((column) => (
+                  {visibleExtraColumns.map((column) => (
                     <td
                       key={column.id}
                       style={{ ...cellStyle(), textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
@@ -270,60 +335,48 @@ export default function TherapyPlanListTable({
                       {formatNumber(getExtraSubstanceValue(plan, column))}
                     </td>
                   ))}
-                  <td style={cellStyle()}>
-                    <div
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={plan.keterangan || undefined}
-                    >
-                      {plan.keterangan || '-'}
-                    </div>
-                  </td>
-                  <td style={cellStyle()}>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '5px 9px',
-                        borderRadius: '8px',
-                        background: status.background,
-                        border: `1px solid ${status.border}`,
-                        color: status.color,
-                        fontSize: '11px',
-                        fontWeight: 800,
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {status.label}
-                    </span>
-                  </td>
-                  <td style={cellStyle()}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {!plan.isUsed && !isTherapyPlanEditHistory(plan) && (
-                        <button
-                          type="button"
-                          onClick={() => onEdit(plan)}
-                          title="Edit therapy plan"
-                          style={iconButtonStyle('#60a5fa', 'rgba(59,130,246,0.12)', 'rgba(59,130,246,0.28)')}
-                        >
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                      {plan.usedInSession && (
-                        <button
-                          type="button"
-                          onClick={() => onOpenSession(plan.usedInSession!.id)}
-                          title="Lihat sesi"
-                          style={iconButtonStyle('#22c55e', 'rgba(34,197,94,0.12)', 'rgba(34,197,94,0.28)')}
-                        >
-                          <ExternalLink size={14} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
+                  {!hideInfusKe && (
+                    <td style={{ ...cellStyle(), textAlign: 'center' }}>{infusKe}</td>
+                  )}
+                  {!hideStatus && (
+                    <td style={cellStyle()}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          padding: '5px 9px',
+                          borderRadius: '8px',
+                          background: status.background,
+                          border: `1px solid ${status.border}`,
+                          color: status.color,
+                          fontSize: '11px',
+                          fontWeight: 800,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {status.label}
+                      </span>
+                    </td>
+                  )}
+                  {!hideAksi && (
+                    <td style={cellStyle()}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {plan.usedInSession && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenSession(plan.usedInSession!.id)}
+                            title="Lihat sesi"
+                            style={iconButtonStyle('#22c55e', 'rgba(34,197,94,0.12)', 'rgba(34,197,94,0.28)')}
+                          >
+                            <ExternalLink size={14} />
+                          </button>
+                        )}
+                        {!plan.usedInSession && (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>-</span>
+                        )}
+                      </div>
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -331,6 +384,7 @@ export default function TherapyPlanListTable({
         </table>
       </div>
     </div>
+  </>
   );
 }
 

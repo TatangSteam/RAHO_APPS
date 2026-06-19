@@ -370,9 +370,12 @@ export default function MemberSessionDetailPage() {
               <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-primary)', margin: '0 0 4px 0' }}>
                 {diagnosis.diagnosa}
               </p>
-              {diagnosis.kategoriDiagnosa && (
+              {(diagnosis.kategoriDiagnosaList?.length || diagnosis.kategoriDiagnosa) && (
                 <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>
-                  Kategori: {diagnosis.kategoriDiagnosa}
+                  Kategori: {(diagnosis.kategoriDiagnosaList?.length
+                    ? diagnosis.kategoriDiagnosaList
+                    : [diagnosis.kategoriDiagnosa]
+                  ).filter(Boolean).join(', ')}
                 </p>
               )}
             </div>
@@ -389,8 +392,8 @@ export default function MemberSessionDetailPage() {
                 display: 'inline-block', padding: '4px 10px', borderRadius: 'var(--radius-md)',
                 background: 'rgba(245,158,11,0.15)', marginBottom: 12
               }}>
-                <span style={{ fontSize: 12, fontFamily: 'monospace', color: 'var(--color-primary-400)' }}>
-                  {therapyPlan.planCode}
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--color-primary-400)' }}>
+                  Terapi #{therapyPlan.planNumber || '-'}
                 </span>
               </div>
               {therapyPlan.keterangan && (

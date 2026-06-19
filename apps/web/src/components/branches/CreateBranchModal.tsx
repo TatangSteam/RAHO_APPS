@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { branchesApi, type CreateBranchData } from '@/lib/api/branchesApi';
+import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './BranchModal.module.css';
@@ -17,14 +18,19 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<CreateBranchData>({
-    branchCode: '',
     name: '',
     address: '',
     city: '',
+    provinceCode: '',
+    regencyCode: '',
     phone: '',
     type: 'PREMIER',
     operatingHours: '',
   });
+  const [provinces, setProvinces] = useState<WilayahItem[]>([]);
+  const [regencies, setRegencies] = useState<WilayahItem[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingRegencies, setLoadingRegencies] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -37,15 +43,17 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       document.body.style.overflow = 'hidden';
       // Reset form
       setFormData({
-        branchCode: '',
         name: '',
         address: '',
         city: '',
+        provinceCode: '',
+        regencyCode: '',
         phone: '',
         type: 'PREMIER',
         operatingHours: '',
       });
       setErrors({});
+      loadProvinces();
     } else {
       document.body.style.overflow = '';
     }
@@ -54,16 +62,46 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     };
   }, [show]);
 
+  useEffect(() => {
+    if (!show || !formData.provinceCode) {
+      setRegencies([]);
+      return;
+    }
+
+    loadRegencies(formData.provinceCode);
+  }, [show, formData.provinceCode]);
+
   if (!show || !mounted) return null;
+
+  async function loadProvinces() {
+    try {
+      setLoadingProvinces(true);
+      const data = await wilayahApi.getProvinces();
+      setProvinces(data);
+    } catch (error) {
+      devError('Error loading provinces:', error);
+      showToast.error('Gagal memuat data provinsi');
+    } finally {
+      setLoadingProvinces(false);
+    }
+  }
+
+  async function loadRegencies(provinceCode: string) {
+    try {
+      setLoadingRegencies(true);
+      const data = await wilayahApi.getRegencies(provinceCode);
+      setRegencies(data);
+    } catch (error) {
+      devError('Error loading regencies:', error);
+      showToast.error('Gagal memuat data kota/kabupaten');
+      setRegencies([]);
+    } finally {
+      setLoadingRegencies(false);
+    }
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-
-    if (!formData.branchCode) {
-      newErrors.branchCode = 'Kode cabang harus diisi';
-    } else if (formData.branchCode.length < 2) {
-      newErrors.branchCode = 'Kode cabang minimal 2 karakter';
-    }
 
     if (!formData.name) {
       newErrors.name = 'Nama cabang harus diisi';
@@ -75,8 +113,12 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       newErrors.address = 'Alamat harus diisi';
     }
 
-    if (!formData.city) {
-      newErrors.city = 'Kota harus diisi';
+    if (!formData.provinceCode) {
+      newErrors.provinceCode = 'Provinsi harus dipilih';
+    }
+
+    if (!formData.regencyCode) {
+      newErrors.regencyCode = 'Kabupaten/kota harus dipilih';
     }
 
     if (!formData.phone) {
@@ -116,13 +158,35 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     }
   };
 
+  const handleProvinceChange = (provinceCode: string) => {
+    setFormData({
+      ...formData,
+      provinceCode,
+      regencyCode: '',
+      city: '',
+    });
+  };
+
+  const handleRegencyChange = (regencyCode: string) => {
+    const selectedRegency = regencies.find((regency) => regency.code === regencyCode);
+    setFormData({
+      ...formData,
+      regencyCode,
+      city: selectedRegency?.name || '',
+    });
+  };
+
+  const branchCodePreview = formData.regencyCode
+    ? `${formData.regencyCode.replace(/\D/g, '')}xx`
+    : 'Pilih kota';
+
   const modalContent = (
     <div className={styles.modalBackdrop} onClick={handleBackdropClick}>
       <div className={styles.modalContainer}>
         <div className={styles.modalHeader}>
           <div>
             <h3 className={styles.modalTitle}>🏢 Tambah Cabang Baru</h3>
-            <p className={styles.modalSubtitle}>Buat cabang klinik baru</p>
+            <p className={styles.modalSubtitle}>Buat cabang baru</p>
           </div>
           <button
             onClick={onClose}
@@ -136,19 +200,11 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
         <form onSubmit={handleSubmit} className={styles.modalBody}>
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
-              <label className={styles.label}>
-                Kode Cabang <span className={styles.required}>*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.branchCode}
-                onChange={(e) => setFormData({ ...formData, branchCode: e.target.value.toUpperCase() })}
-                className={`${styles.input} ${errors.branchCode ? styles.inputError : ''}`}
-                placeholder="Contoh: JKT01"
-                disabled={loading}
-                maxLength={10}
-              />
-              {errors.branchCode && <span className={styles.errorText}>{errors.branchCode}</span>}
+              <label className={styles.label}>Kode Cabang</label>
+              <div className={styles.autoCodeCard}>
+                <span className={styles.autoCodeValue}>{branchCodePreview}</span>
+                <span className={styles.hint}>Kode wilayah + nomor urut</span>
+              </div>
             </div>
 
             <div className={styles.formGroup}>
@@ -161,8 +217,9 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
                 className={styles.input}
                 disabled={loading}
               >
-                <option value="PREMIER">⭐ Premier (Cabang)</option>
-                <option value="PARTNERSHIP">🤝 Partnership</option>
+                <option value="PUSAT">Pusat</option>
+                <option value="PREMIER">Premier</option>
+                <option value="PARTNERSHIP">Partnership</option>
               </select>
             </div>
 
@@ -175,7 +232,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 className={`${styles.input} ${errors.name ? styles.inputError : ''}`}
-                placeholder="Contoh: Klinik Jakarta Pusat"
+                placeholder="Contoh: Raho Premier Jakarta Pusat"
                 disabled={loading}
               />
               {errors.name && <span className={styles.errorText}>{errors.name}</span>}
@@ -198,17 +255,44 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
 
             <div className={styles.formGroup}>
               <label className={styles.label}>
-                Kota <span className={styles.required}>*</span>
+                Provinsi <span className={styles.required}>*</span>
               </label>
-              <input
-                type="text"
-                value={formData.city}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className={`${styles.input} ${errors.city ? styles.inputError : ''}`}
-                placeholder="Contoh: Jakarta"
-                disabled={loading}
-              />
-              {errors.city && <span className={styles.errorText}>{errors.city}</span>}
+              <select
+                value={formData.provinceCode}
+                onChange={(e) => handleProvinceChange(e.target.value)}
+                className={`${styles.input} ${errors.provinceCode ? styles.inputError : ''}`}
+                disabled={loading || loadingProvinces}
+              >
+                <option value="">{loadingProvinces ? 'Memuat provinsi...' : 'Pilih provinsi'}</option>
+                {provinces.map((province) => (
+                  <option key={province.code} value={province.code}>
+                    {province.code} - {province.name}
+                  </option>
+                ))}
+              </select>
+              {errors.provinceCode && <span className={styles.errorText}>{errors.provinceCode}</span>}
+            </div>
+
+            <div className={styles.formGroup}>
+              <label className={styles.label}>
+                Kabupaten/Kota <span className={styles.required}>*</span>
+              </label>
+              <select
+                value={formData.regencyCode}
+                onChange={(e) => handleRegencyChange(e.target.value)}
+                className={`${styles.input} ${errors.regencyCode ? styles.inputError : ''}`}
+                disabled={loading || !formData.provinceCode || loadingRegencies}
+              >
+                <option value="">
+                  {loadingRegencies ? 'Memuat kota/kabupaten...' : 'Pilih kabupaten/kota'}
+                </option>
+                {regencies.map((regency) => (
+                  <option key={regency.code} value={regency.code}>
+                    {regency.code} - {regency.name}
+                  </option>
+                ))}
+              </select>
+              {errors.regencyCode && <span className={styles.errorText}>{errors.regencyCode}</span>}
             </div>
 
             <div className={styles.formGroup}>

@@ -365,7 +365,7 @@ export class StockRequestController {
         });
         return sendSuccess(res, result);
       } else {
-        // For other branch types (PUSAT, KLINIK, HOMECARE), use direct approval
+        // For other branch types (PUSAT), use direct approval
         const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
         return sendSuccess(res, result);
       }

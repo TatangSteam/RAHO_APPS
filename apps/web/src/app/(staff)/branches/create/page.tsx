@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
+import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { Building2, ArrowLeft, Save } from 'lucide-react';
@@ -11,15 +12,60 @@ export default function CreateBranchPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    branchCode: '',
     name: '',
-    type: 'KLINIK' as 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE',
+    type: 'PREMIER' as 'PUSAT' | 'PREMIER' | 'PARTNERSHIP',
     address: '',
     city: '',
+    provinceCode: '',
+    regencyCode: '',
     phone: '',
     operatingHours: '',
     isActive: true,
   });
+  const [provinces, setProvinces] = useState<WilayahItem[]>([]);
+  const [regencies, setRegencies] = useState<WilayahItem[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(true);
+  const [loadingRegencies, setLoadingRegencies] = useState(false);
+
+  useEffect(() => {
+    loadProvinces();
+  }, []);
+
+  useEffect(() => {
+    if (!formData.provinceCode) {
+      setRegencies([]);
+      return;
+    }
+
+    loadRegencies(formData.provinceCode);
+  }, [formData.provinceCode]);
+
+  const loadProvinces = async () => {
+    try {
+      setLoadingProvinces(true);
+      const data = await wilayahApi.getProvinces();
+      setProvinces(data);
+    } catch (error) {
+      devError('Error loading provinces:', error);
+      showToast.error('Gagal memuat data provinsi');
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const loadRegencies = async (provinceCode: string) => {
+    try {
+      setLoadingRegencies(true);
+      const data = await wilayahApi.getRegencies(provinceCode);
+      setRegencies(data);
+    } catch (error) {
+      devError('Error loading regencies:', error);
+      showToast.error('Gagal memuat data kota/kabupaten');
+      setRegencies([]);
+    } finally {
+      setLoadingRegencies(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,11 +85,35 @@ export default function CreateBranchPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    if (name === 'provinceCode') {
+      setFormData(prev => ({
+        ...prev,
+        provinceCode: value,
+        regencyCode: '',
+        city: '',
+      }));
+      return;
+    }
+
+    if (name === 'regencyCode') {
+      const selectedRegency = regencies.find((regency) => regency.code === value);
+      setFormData(prev => ({
+        ...prev,
+        regencyCode: value,
+        city: selectedRegency?.name || '',
+      }));
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? (e.target as HTMLInputElement).checked : value
     }));
   };
+
+  const branchCodePreview = formData.regencyCode
+    ? `${formData.regencyCode.replace(/\D/g, '')}xx`
+    : 'Pilih kota';
 
   return (
     <div className="create-branch-page">
@@ -56,7 +126,7 @@ export default function CreateBranchPage() {
           <Building2 size={32} color="var(--color-primary-500)" />
           <div>
             <h1>Tambah Cabang Baru</h1>
-            <p>Buat cabang klinik baru</p>
+            <p>Buat cabang baru</p>
           </div>
         </div>
       </div>
@@ -67,20 +137,11 @@ export default function CreateBranchPage() {
           
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="branchCode">
-                Kode Cabang <span className="required">*</span>
-              </label>
-              <input
-                type="text"
-                id="branchCode"
-                name="branchCode"
-                value={formData.branchCode}
-                onChange={handleChange}
-                placeholder="Contoh: JKT01"
-                required
-                className="form-input"
-              />
-              <span className="form-hint">Kode unik untuk cabang (huruf kapital dan angka)</span>
+              <label>Kode Cabang</label>
+              <div className="auto-code-card">
+                <span className="auto-code-value">{branchCodePreview}</span>
+                <span className="auto-code-note">Kode wilayah + nomor urut</span>
+              </div>
             </div>
 
             <div className="form-group">
@@ -96,10 +157,8 @@ export default function CreateBranchPage() {
                 className="form-input"
               >
                 <option value="PUSAT">Pusat</option>
-                <option value="PREMIER">Premier (Cabang)</option>
+                <option value="PREMIER">Premier</option>
                 <option value="PARTNERSHIP">Partnership</option>
-                <option value="KLINIK">Klinik</option>
-                <option value="HOMECARE">Homecare</option>
               </select>
             </div>
           </div>
@@ -142,21 +201,53 @@ export default function CreateBranchPage() {
 
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="city">
-                Kota <span className="required">*</span>
+              <label htmlFor="provinceCode">
+                Provinsi <span className="required">*</span>
               </label>
-              <input
-                type="text"
-                id="city"
-                name="city"
-                value={formData.city}
+              <select
+                id="provinceCode"
+                name="provinceCode"
+                value={formData.provinceCode}
                 onChange={handleChange}
-                placeholder="Contoh: Jakarta"
+                disabled={loadingProvinces}
                 required
                 className="form-input"
-              />
+              >
+                <option value="">{loadingProvinces ? 'Memuat provinsi...' : 'Pilih provinsi'}</option>
+                {provinces.map((province) => (
+                  <option key={province.code} value={province.code}>
+                    {province.code} - {province.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
+            <div className="form-group">
+              <label htmlFor="regencyCode">
+                Kabupaten/Kota <span className="required">*</span>
+              </label>
+              <select
+                id="regencyCode"
+                name="regencyCode"
+                value={formData.regencyCode}
+                onChange={handleChange}
+                disabled={!formData.provinceCode || loadingRegencies}
+                required
+                className="form-input"
+              >
+                <option value="">
+                  {loadingRegencies ? 'Memuat kota/kabupaten...' : 'Pilih kabupaten/kota'}
+                </option>
+                {regencies.map((regency) => (
+                  <option key={regency.code} value={regency.code}>
+                    {regency.code} - {regency.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-row">
             <div className="form-group">
               <label htmlFor="phone">
                 Telepon <span className="required">*</span>
@@ -334,6 +425,32 @@ export default function CreateBranchPage() {
         .form-hint {
           font-size: 12px;
           color: var(--text-muted);
+        }
+
+        .auto-code-card {
+          min-height: 46px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px 16px;
+          background: rgba(245, 158, 11, 0.08);
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          border-radius: var(--radius-md);
+        }
+
+        .auto-code-value {
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--color-primary-500);
+          text-transform: uppercase;
+          letter-spacing: 0;
+        }
+
+        .auto-code-note {
+          font-size: 12px;
+          color: var(--text-muted);
+          text-align: right;
         }
 
         .checkbox-label {

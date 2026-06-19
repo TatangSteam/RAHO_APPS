@@ -8,16 +8,30 @@ export class PackageRetrievalService {
   /**
    * Get member packages with grouping
    */
-  async getMemberPackages(memberId: string, branchId: string) {
+  async getMemberPackages(memberId: string, branchIds: string | string[]) {
     try {
+      const accessibleBranchIds = Array.isArray(branchIds)
+        ? Array.from(new Set(branchIds.filter(Boolean)))
+        : [branchIds].filter(Boolean);
+
       console.log('=== getMemberPackages called ===');
       console.log('memberId:', memberId);
-      console.log('branchId:', branchId);
+      console.log('branchIds:', accessibleBranchIds);
+
+      if (accessibleBranchIds.length === 0) {
+        console.log('No accessible branches provided, returning empty array');
+        return [];
+      }
+
+      const branchWhere =
+        accessibleBranchIds.length === 1
+          ? accessibleBranchIds[0]
+          : { in: accessibleBranchIds };
       
       // Query packages and add-ons in parallel
       const [packages, addOns] = await Promise.all([
         prisma.memberPackage.findMany({
-          where: { memberId, branchId },
+          where: { memberId, branchId: branchWhere },
           include: { 
             branch: true,
             packagePricing: true, // Include pricing for edit functionality
@@ -36,7 +50,7 @@ export class PackageRetrievalService {
           orderBy: { createdAt: 'desc' },
         }),
         prisma.memberAddOn.findMany({
-          where: { memberId, branchId },
+          where: { memberId, branchId: branchWhere },
           include: { branch: true },
           orderBy: { createdAt: 'desc' },
         }),

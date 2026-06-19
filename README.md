@@ -320,7 +320,7 @@ npm run start
 ```
 
 ### Akses Aplikasi
-- **Frontend**: http://localhost:3001
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:4000
 - **MinIO Console**: http://localhost:9001
 

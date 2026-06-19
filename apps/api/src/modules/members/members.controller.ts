@@ -285,15 +285,12 @@ export class MembersController {
     }
   }
 
-  async createMemberTherapyPlan(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { memberId } = req.params;
-      const userId = req.user!.userId;
-      const result = await membersService.createMemberTherapyPlan(memberId, req.body, userId);
-      return sendSuccess(res, result, 201);
-    } catch (error) {
-      next(error);
-    }
+  async createMemberTherapyPlan(_req: Request, _res: Response, next: NextFunction) {
+    next({
+      status: 410,
+      code: 'THERAPY_PLAN_BULK_ONLY',
+      message: 'Therapy plan hanya bisa dibuat melalui bulk sebagai satu set. Gunakan endpoint /members/:memberId/therapy-plans/bulk.',
+    });
   }
 
   // Bulk Therapy Plan Methods
@@ -322,7 +319,7 @@ export class MembersController {
         meta: { 
           type: 'bulk_creation',
           count: result.data.created,
-          details: `Bulk created ${result.data.created} therapy plans`
+          details: `Bulk created therapy plan set with ${result.data.created} rows`
         },
       });
 
@@ -332,24 +329,54 @@ export class MembersController {
     }
   }
 
-  // Edit Therapy Plan (creates new version)
+  // Edit Therapy Plan - creates a new version for the whole set
   async editTherapyPlan(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId, therapyPlanId } = req.params;
       const userId = req.user!.userId;
       const result = await membersService.editTherapyPlan(therapyPlanId, req.body, userId);
 
-      // Audit log
       await logAudit({
         userId,
         action: 'UPDATE',
-        resource: 'TherapyPlan',
-        resourceId: therapyPlanId,
+        resource: 'TherapyPlanSet',
+        resourceId: result.data.setId,
         meta: {
-          type: 'therapy_plan_edit',
+          type: 'therapy_plan_set_versioning',
           memberId,
-          newVersion: result.data.version,
-          details: `Edited therapy plan (created version ${result.data.version})`
+          therapyPlanId,
+          version: result.data.version,
+          copiedPlans: result.data.copiedPlans,
+          details: `Created therapy plan set version ${result.data.version}`,
+        },
+      });
+
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // Bulk Edit Therapy Plan Set (edit multiple plans at once, creates new set version)
+  async bulkEditTherapyPlanSet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, setId } = req.params;
+      const userId = req.user!.userId;
+      const result = await membersService.bulkEditTherapyPlanSet(setId, req.body, userId);
+
+      await logAudit({
+        userId,
+        action: 'UPDATE',
+        resource: 'TherapyPlanSet',
+        resourceId: result.data.setId,
+        meta: {
+          type: 'therapy_plan_set_bulk_edit',
+          memberId,
+          originalSetId: result.data.originalSetId,
+          version: result.data.version,
+          totalPlans: result.data.totalPlans,
+          editedPlans: result.data.editedPlans,
+          details: `Bulk edited therapy plan set, created version ${result.data.version}`,
         },
       });
 

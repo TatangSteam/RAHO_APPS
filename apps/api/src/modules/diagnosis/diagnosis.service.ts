@@ -2,14 +2,12 @@ import { DiagnosisCategory } from '@prisma/client';
 
 export class DiagnosisService {
   private readonly activeCategories: DiagnosisCategory[] = [
-    DiagnosisCategory.HIPERTENSI,
-    DiagnosisCategory.NEUROLOGI,
-    DiagnosisCategory.DIABETES,
-    DiagnosisCategory.KARDIOVASKULAR,
-    DiagnosisCategory.ORTOPEDI,
-    DiagnosisCategory.IMUNOLOGI,
-    DiagnosisCategory.HEMATOLOGI,
-    DiagnosisCategory.ONKOLOGI,
+    DiagnosisCategory.STROKE,
+    DiagnosisCategory.JANTUNG_KARDIOVASKULAR,
+    DiagnosisCategory.SINDROM_METABOLIK,
+    DiagnosisCategory.KANKER,
+    DiagnosisCategory.DEGENERATIF,
+    DiagnosisCategory.AUTO_IMUN,
     DiagnosisCategory.LAINNYA,
   ];
 

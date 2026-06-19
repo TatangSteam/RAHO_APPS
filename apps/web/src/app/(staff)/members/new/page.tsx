@@ -55,6 +55,7 @@ export default function NewMemberPage() {
     emergencyContactPhone: '',
     infoSource: '',
     postalCode: '',
+    isDeceased: false,
     
     // Section B - Akun Member
     memberEmail: '',
@@ -79,7 +80,11 @@ export default function NewMemberPage() {
       const savedData = localStorage.getItem(FORM_STORAGE_KEY);
       if (savedData) {
         const parsed = JSON.parse(savedData);
-        setFormData(parsed.formData || formData);
+        const savedFormData = parsed.formData || formData;
+        setFormData({
+          ...savedFormData,
+          isDeceased: savedFormData.isDeceased === true || savedFormData.isDeceased === 'true',
+        });
         // Note: Files cannot be saved to localStorage, user will need to re-upload
       }
     } catch (error) {
@@ -149,6 +154,8 @@ export default function NewMemberPage() {
         identityType: value as CreateMemberData['identityType'],
         nik: autoIdentityTypes.includes(value) ? '' : prev.nik,
       }));
+    } else if (name === 'isDeceased') {
+      setFormData((prev) => ({ ...prev, isDeceased: value === 'true' }));
     } else if (name === 'firstIncentiveValue' || name === 'nextIncentiveValue') {
       // Convert to number for incentive values
       const numValue = value === '' ? undefined : parseFloat(value);
@@ -235,10 +242,6 @@ export default function NewMemberPage() {
       showToast.error('Jenis kelamin wajib dipilih');
       return;
     }
-    if (!formData.occupation) {
-      showToast.error('Pekerjaan wajib diisi');
-      return;
-    }
     if (!formData.address) {
       showToast.error('Alamat wajib diisi');
       return;
@@ -317,6 +320,7 @@ export default function NewMemberPage() {
         emergencyContactPhone: '',
         infoSource: '',
         postalCode: '',
+        isDeceased: false,
         memberEmail: '',
         memberPassword: '',
         referralCode: '',

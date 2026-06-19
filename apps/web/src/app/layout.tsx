@@ -3,6 +3,7 @@ import './globals.css';
 import './components.css';
 import { ToastProvider } from '@/components/providers/ToastProvider';
 import { ThemeProvider } from '@/components/layout/ThemeProvider';
+import { PreventNumberInputWheel } from '@/components/providers/PreventNumberInputWheel';
 
 export const metadata: Metadata = {
   title: {
@@ -46,6 +47,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <ThemeProvider>
+          <PreventNumberInputWheel />
           {children}
         </ThemeProvider>
         <ToastProvider />

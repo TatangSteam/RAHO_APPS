@@ -144,7 +144,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Harga Paket',
         href: '/admin/package-pricing',
         icon: <Package size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_CABANG'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
     ],
   },

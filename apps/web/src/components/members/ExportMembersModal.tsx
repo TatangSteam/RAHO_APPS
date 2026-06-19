@@ -65,11 +65,13 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'nik', label: 'Identitas', category: 'basic' },
   { key: 'birthPlace', label: 'Tempat Lahir', category: 'basic' },
   { key: 'birthDate', label: 'Tanggal Lahir', category: 'basic' },
+  { key: 'age', label: 'Umur', category: 'basic' },
   { key: 'gender', label: 'Jenis Kelamin', category: 'basic' },
   { key: 'maritalStatus', label: 'Status Nikah', category: 'basic' },
   { key: 'occupation', label: 'Pekerjaan', category: 'basic' },
   { key: 'registrationBranch', label: 'Cabang Registrasi', category: 'basic' },
   { key: 'status', label: 'Status', category: 'basic' },
+  { key: 'lifeStatus', label: 'Status Meninggal', category: 'basic' },
   { key: 'registrationDate', label: 'Tanggal Registrasi', category: 'basic' },
   // Kontak
   { key: 'phone', label: 'Telepon', category: 'contact' },

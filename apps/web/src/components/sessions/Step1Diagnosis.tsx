@@ -39,6 +39,16 @@ function getDiagnosisCategoryLabel(category: DiagnosisCategory | string | null |
   return CATEGORY_LABELS[category as DiagnosisCategory] || category;
 }
 
+function getDiagnosisCategories(
+  diagnosis: { kategoriDiagnosa?: DiagnosisCategory | string | null; kategoriDiagnosaList?: (DiagnosisCategory | string)[] | null }
+): (DiagnosisCategory | string)[] {
+  if (Array.isArray(diagnosis.kategoriDiagnosaList) && diagnosis.kategoriDiagnosaList.length > 0) {
+    return diagnosis.kategoriDiagnosaList;
+  }
+
+  return diagnosis.kategoriDiagnosa ? [diagnosis.kategoriDiagnosa] : [];
+}
+
 export default function Step1Diagnosis({
   encounterId,
   memberId,
@@ -55,6 +65,7 @@ export default function Step1Diagnosis({
     doktorPemeriksa: user?.userId || '',
     diagnosa: '',
     kategoriDiagnosa: undefined,
+    kategoriDiagnosaList: [],
     icdPrimer: '',
     icdSekunder: '',
     icdTersier: '',
@@ -117,6 +128,7 @@ export default function Step1Diagnosis({
         doktorPemeriksa: formData.doktorPemeriksa,
         diagnosa: formData.diagnosa,
         ...(formData.kategoriDiagnosa ? { kategoriDiagnosa: formData.kategoriDiagnosa } : {}),
+        ...(formData.kategoriDiagnosaList?.length ? { kategoriDiagnosaList: formData.kategoriDiagnosaList } : {}),
         ...(formData.icdPrimer ? { icdPrimer: formData.icdPrimer } : {}),
         ...(formData.icdSekunder ? { icdSekunder: formData.icdSekunder } : {}),
         ...(formData.icdTersier ? { icdTersier: formData.icdTersier } : {}),
@@ -155,6 +167,7 @@ export default function Step1Diagnosis({
       diagnosa: selectedDiagnosis.diagnosa,
       // Convert null to undefined for optional enum fields (Zod expects undefined, not null)
       kategoriDiagnosa: selectedDiagnosis.kategoriDiagnosa || undefined,
+      kategoriDiagnosaList: getDiagnosisCategories(selectedDiagnosis) as DiagnosisCategory[],
       icdPrimer: selectedDiagnosis.icdPrimer || '',
       icdSekunder: selectedDiagnosis.icdSekunder || '',
       icdTersier: selectedDiagnosis.icdTersier || '',
@@ -198,10 +211,12 @@ export default function Step1Diagnosis({
             <p className={styles.completedLabel}>Diagnosa:</p>
             <p className={styles.completedValue}>{diagnosis.diagnosa}</p>
           </div>
-          {diagnosis.kategoriDiagnosa && (
+          {getDiagnosisCategories(diagnosis).length > 0 && (
             <div className={styles.completedField}>
               <p className={styles.completedLabel}>Kategori:</p>
-              <p className={styles.completedValue}>{getDiagnosisCategoryLabel(diagnosis.kategoriDiagnosa)}</p>
+              <p className={styles.completedValue}>
+                {getDiagnosisCategories(diagnosis).map(getDiagnosisCategoryLabel).join(', ')}
+              </p>
             </div>
           )}
           {diagnosis.keluhanRiwayatSekarang && (
@@ -270,7 +285,7 @@ export default function Step1Diagnosis({
                 <option value="">-- Pilih diagnosa --</option>
                 {memberDiagnoses.map((d) => (
                   <option key={d.id} value={d.id}>
-                    {d.diagnosa} ({getDiagnosisCategoryLabel(d.kategoriDiagnosa)}) - {new Date(d.createdAt).toLocaleDateString('id-ID')}
+                    {d.diagnosa} ({getDiagnosisCategories(d).map(getDiagnosisCategoryLabel).join(', ') || 'Umum'}) - {new Date(d.createdAt).toLocaleDateString('id-ID')}
                   </option>
                 ))}
               </select>
@@ -289,10 +304,12 @@ export default function Step1Diagnosis({
                   <p className={styles.previewValue}>{formData.diagnosa}</p>
                 </div>
 
-                {formData.kategoriDiagnosa && (
+                {getDiagnosisCategories(formData).length > 0 && (
                   <div className={styles.previewField}>
                     <p className={styles.previewLabel}>Kategori:</p>
-                    <p className={styles.previewValue}>{getDiagnosisCategoryLabel(formData.kategoriDiagnosa)}</p>
+                    <p className={styles.previewValue}>
+                      {getDiagnosisCategories(formData).map(getDiagnosisCategoryLabel).join(', ')}
+                    </p>
                   </div>
                 )}
 

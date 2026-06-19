@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
+import { normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
 import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
 import { Role, AuditAction } from '@prisma/client';
@@ -71,6 +72,7 @@ export class DiagnosisService {
       : 1;
     
     const diagnosisCode = generateDiagnosisCode(branchCode, sequence, 'DXS');
+    const diagnosisCategories = normalizeDiagnosisCategories(data);
 
     // Always create a new diagnosis record for this session
     // This is a "session copy" of the original diagnosis
@@ -81,7 +83,8 @@ export class DiagnosisService {
         encounterId, // Link to this specific encounter/session
         doktorPemeriksa: data.doktorPemeriksa,
         diagnosa: data.diagnosa,
-        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        kategoriDiagnosa: diagnosisCategories.primaryCategory,
+        kategoriDiagnosaList: diagnosisCategories.categoryList,
         icdPrimer: data.icdPrimer || null,
         icdSekunder: data.icdSekunder || null,
         icdTersier: data.icdTersier || null,
@@ -154,7 +157,19 @@ export class DiagnosisService {
     // Build update data - only include fields that are provided
     const updateData: any = {};
     if (data.diagnosa !== undefined) updateData.diagnosa = data.diagnosa;
-    if (data.kategoriDiagnosa !== undefined) updateData.kategoriDiagnosa = data.kategoriDiagnosa;
+    if (data.kategoriDiagnosa !== undefined || data.kategoriDiagnosaList !== undefined) {
+      const diagnosisCategories = normalizeDiagnosisCategories({
+        kategoriDiagnosa:
+          data.kategoriDiagnosa !== undefined ? data.kategoriDiagnosa : existingDiagnosis.kategoriDiagnosa,
+        kategoriDiagnosaList:
+          data.kategoriDiagnosaList !== undefined
+            ? data.kategoriDiagnosaList
+            : (existingDiagnosis.kategoriDiagnosaList as any),
+      });
+
+      updateData.kategoriDiagnosa = diagnosisCategories.primaryCategory;
+      updateData.kategoriDiagnosaList = diagnosisCategories.categoryList;
+    }
     if (data.icdPrimer !== undefined) updateData.icdPrimer = data.icdPrimer;
     if (data.icdSekunder !== undefined) updateData.icdSekunder = data.icdSekunder;
     if (data.icdTersier !== undefined) updateData.icdTersier = data.icdTersier;

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Copy, CopyPlus, Plus, Package, Trash2 } from 'lucide-react';
+import { X, Copy, CopyPlus, Plus, Package, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import {
   therapyPlanApi,
   CreateTherapyPlanInput,
@@ -24,6 +24,14 @@ interface TherapyPlanRow extends CreateTherapyPlanInput {
   rowId: string;
   therapyNumber: number;
   ifaType: 'ifa250' | 'ifa500';
+  groupId: string; // ID of the group this plan belongs to
+}
+
+interface TherapyGroup {
+  id: string;
+  name: string;
+  therapyNumber: number;
+  collapsed: boolean;
 }
 
 interface ValidationError {
@@ -44,8 +52,10 @@ export default function BulkTherapyPlanModal({
   const [error, setError] = useState<string | null>(null);
 
   const [therapyPlans, setTherapyPlans] = useState<TherapyPlanRow[]>([]);
+  const [therapyGroups, setTherapyGroups] = useState<TherapyGroup[]>([]);
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
-  const [numRowsInput, setNumRowsInput] = useState<string>('1');
+  const [numGroupsInput, setNumGroupsInput] = useState<string>('1');
+  const [rowsPerGroupInput, setRowsPerGroupInput] = useState<string>('3');
 
   useEffect(() => {
     setMounted(true);
@@ -70,7 +80,8 @@ export default function BulkTherapyPlanModal({
   useEffect(() => {
     if (packageSummary) {
       initializeTherapyPlans();
-      setNumRowsInput('1'); // Initialize input to match starting row count
+      setNumGroupsInput('1');
+      setRowsPerGroupInput('3');
     }
   }, [packageSummary]);
 
@@ -97,70 +108,41 @@ export default function BulkTherapyPlanModal({
   const initializeTherapyPlans = () => {
     if (!packageSummary) return;
 
-    // Start with 1 empty row by default
-    const numPlans = 1;
+    // Start with 1 group of 3 rows by default
+    const numGroups = 1;
+    const rowsPerGroup = 3;
     
     // Calculate the starting therapy number
     const sessionsCompleted = packageSummary.package?.vouchersUsed || 0;
     const unusedPlans = packageSummary.therapyPlans.existing;
     const startNumber = sessionsCompleted + unusedPlans + 1;
     
+    const groups: TherapyGroup[] = [];
     const plans: TherapyPlanRow[] = [];
 
     console.log('🎯 Initializing therapy plans:');
     console.log('  Sessions completed:', sessionsCompleted);
     console.log('  Unused plans:', unusedPlans);
     console.log('  Start number:', startNumber);
-    console.log('  Creating:', numPlans, 'plan(s) - user can add more');
+    console.log('  Creating:', numGroups, 'group(s) with', rowsPerGroup, 'row(s) each');
 
-    for (let i = 0; i < numPlans; i++) {
-      plans.push({
-        rowId: `row-${Date.now()}-${i}`,
-        therapyNumber: startNumber + i,
-        keterangan: `Terapi ke-${startNumber + i}`,
-        ifaType: 'ifa250',
-        ifa250: 1,
-        ifa500: undefined,
-        hho: undefined,
-        h2: undefined,
-        no: undefined,
-        gaso: undefined,
-        o2: undefined,
-        o3: undefined,
-        edta: undefined,
-        mb: undefined,
-        h2s: undefined,
-        kcl: undefined,
-        jmlNb: undefined,
-        ifaSubstances: createDefaultIfaSubstances(),
-        ifaSubstanceTotalMl: 2.5,
-      });
-    }
-
-    setTherapyPlans(plans);
-    setValidationErrors([]);
-  };
-
-  const setRowsToNumber = (num: number) => {
-    if (!packageSummary) return;
-    
-    const currentCount = therapyPlans.length;
-    
-    if (num === currentCount) return; // No change needed
-    
-    if (num > currentCount) {
-      // Add rows
-      const rowsToAdd = num - currentCount;
-      const sessionsCompleted = packageSummary.package?.vouchersUsed || 0;
-      const unusedPlans = packageSummary.therapyPlans.existing;
+    for (let g = 0; g < numGroups; g++) {
+      const groupId = `group-${Date.now()}-${g}`;
+      const therapyNum = startNumber + g;
       
-      const newRows: TherapyPlanRow[] = [];
-      for (let i = 0; i < rowsToAdd; i++) {
-        const nextNumber = sessionsCompleted + unusedPlans + currentCount + i + 1;
-        newRows.push({
-          rowId: `row-${Date.now()}-${i}`,
-          therapyNumber: nextNumber,
-          keterangan: `Terapi ke-${nextNumber}`,
+      groups.push({
+        id: groupId,
+        name: `Terapi #${therapyNum}`,
+        therapyNumber: therapyNum,
+        collapsed: false,
+      });
+
+      for (let i = 0; i < rowsPerGroup; i++) {
+        plans.push({
+          rowId: `row-${Date.now()}-${g}-${i}`,
+          groupId: groupId,
+          therapyNumber: therapyNum,
+          keterangan: `Terapi ke-${therapyNum} - Set ${i + 1}`,
           ifaType: 'ifa250',
           ifa250: 1,
           ifa500: undefined,
@@ -179,32 +161,104 @@ export default function BulkTherapyPlanModal({
           ifaSubstanceTotalMl: 2.5,
         });
       }
-      setTherapyPlans((prev) => [...prev, ...newRows]);
-    } else {
-      // Remove rows
-      setTherapyPlans((prev) => prev.slice(0, num));
     }
+
+    setTherapyGroups(groups);
+    setTherapyPlans(plans);
+    setValidationErrors([]);
   };
 
-  const handleNumRowsChange = (value: string) => {
-    setNumRowsInput(value);
-    const num = parseInt(value);
-    if (!isNaN(num) && num >= 1 && num <= 50) {
-      setRowsToNumber(num);
-    }
-  };
-
-  const addRow = () => {
-    if (!packageSummary) return;
+  const handleNumGroupsChange = (value: string) => {
+    setNumGroupsInput(value);
+    const numGroups = parseInt(value);
+    const rowsPerGroup = parseInt(rowsPerGroupInput);
     
+    if (!isNaN(numGroups) && numGroups >= 1 && numGroups <= 20 && !isNaN(rowsPerGroup) && rowsPerGroup >= 1) {
+      regenerateTherapyPlans(numGroups, rowsPerGroup);
+    }
+  };
+
+  const handleRowsPerGroupChange = (value: string) => {
+    setRowsPerGroupInput(value);
+    const numGroups = parseInt(numGroupsInput);
+    const rowsPerGroup = parseInt(value);
+    
+    if (!isNaN(numGroups) && numGroups >= 1 && !isNaN(rowsPerGroup) && rowsPerGroup >= 1 && rowsPerGroup <= 10) {
+      regenerateTherapyPlans(numGroups, rowsPerGroup);
+    }
+  };
+
+  const regenerateTherapyPlans = (numGroups: number, rowsPerGroup: number) => {
+    if (!packageSummary) return;
+
     const sessionsCompleted = packageSummary.package?.vouchersUsed || 0;
     const unusedPlans = packageSummary.therapyPlans.existing;
-    const nextNumber = sessionsCompleted + unusedPlans + therapyPlans.length + 1;
+    const startNumber = sessionsCompleted + unusedPlans + 1;
+    
+    const groups: TherapyGroup[] = [];
+    const plans: TherapyPlanRow[] = [];
+
+    for (let g = 0; g < numGroups; g++) {
+      const groupId = `group-${Date.now()}-${g}`;
+      const therapyNum = startNumber + g;
+      
+      groups.push({
+        id: groupId,
+        name: `Terapi #${therapyNum}`,
+        therapyNumber: therapyNum,
+        collapsed: false,
+      });
+
+      for (let i = 0; i < rowsPerGroup; i++) {
+        plans.push({
+          rowId: `row-${Date.now()}-${g}-${i}`,
+          groupId: groupId,
+          therapyNumber: therapyNum,
+          keterangan: `Terapi ke-${therapyNum} - Set ${i + 1}`,
+          ifaType: 'ifa250',
+          ifa250: 1,
+          ifa500: undefined,
+          hho: undefined,
+          h2: undefined,
+          no: undefined,
+          gaso: undefined,
+          o2: undefined,
+          o3: undefined,
+          edta: undefined,
+          mb: undefined,
+          h2s: undefined,
+          kcl: undefined,
+          jmlNb: undefined,
+          ifaSubstances: createDefaultIfaSubstances(),
+          ifaSubstanceTotalMl: 2.5,
+        });
+      }
+    }
+
+    setTherapyGroups(groups);
+    setTherapyPlans(plans);
+  };
+
+  const toggleGroupCollapse = (groupId: string) => {
+    setTherapyGroups((prev) =>
+      prev.map((group) =>
+        group.id === groupId ? { ...group, collapsed: !group.collapsed } : group
+      )
+    );
+  };
+
+  const addRowToGroup = (groupId: string) => {
+    const group = therapyGroups.find((g) => g.id === groupId);
+    if (!group) return;
+
+    const groupPlans = therapyPlans.filter((p) => p.groupId === groupId);
+    const setNumber = groupPlans.length + 1;
 
     const newRow: TherapyPlanRow = {
       rowId: `row-${Date.now()}`,
-      therapyNumber: nextNumber,
-      keterangan: `Terapi ke-${nextNumber}`,
+      groupId: groupId,
+      therapyNumber: group.therapyNumber,
+      keterangan: `Terapi ke-${group.therapyNumber} - Set ${setNumber}`,
       ifaType: 'ifa250',
       ifa250: 1,
       ifa500: undefined,
@@ -223,36 +277,19 @@ export default function BulkTherapyPlanModal({
       ifaSubstanceTotalMl: 2.5,
     };
 
-    setTherapyPlans((prev) => {
-      const newPlans = [...prev, newRow];
-      setNumRowsInput(String(newPlans.length));
-      return newPlans;
-    });
-    showToast.success('Baris baru ditambahkan');
+    setTherapyPlans((prev) => [...prev, newRow]);
+    showToast.success('Baris baru ditambahkan ke grup');
   };
 
-  const removeRow = (rowId: string) => {
-    if (therapyPlans.length === 1) {
-      showToast.error('Minimal harus ada 1 baris');
+  const removeRow = (rowId: string, groupId: string) => {
+    const groupPlans = therapyPlans.filter((p) => p.groupId === groupId);
+    
+    if (groupPlans.length === 1) {
+      showToast.error('Minimal harus ada 1 baris per grup');
       return;
     }
 
-    setTherapyPlans((prev) => {
-      const filtered = prev.filter((p) => p.rowId !== rowId);
-      // Renumber the remaining rows
-      const sessionsCompleted = packageSummary?.package?.vouchersUsed || 0;
-      const unusedPlans = packageSummary?.therapyPlans.existing || 0;
-      const startNumber = sessionsCompleted + unusedPlans + 1;
-      
-      const renumbered = filtered.map((plan, idx) => ({
-        ...plan,
-        therapyNumber: startNumber + idx,
-        keterangan: `Terapi ke-${startNumber + idx}`,
-      }));
-      
-      setNumRowsInput(String(renumbered.length));
-      return renumbered;
-    });
+    setTherapyPlans((prev) => prev.filter((p) => p.rowId !== rowId));
     showToast.success('Baris dihapus');
   };
 
@@ -536,9 +573,9 @@ export default function BulkTherapyPlanModal({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  Buat Rencana Terapi (Bulk)
+                  Buat Set Therapy Plan
                   <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-500 text-white">
-                    {therapyPlans.length} Plans
+                    {therapyPlans.length} Baris
                   </span>
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
@@ -558,173 +595,242 @@ export default function BulkTherapyPlanModal({
 
           {/* Body - Table Container */}
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
-            {/* Row Control Section */}
-            <div className="mb-4 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-4">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                  Jumlah Baris:
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={numRowsInput}
-                  onChange={(e) => handleNumRowsChange(e.target.value)}
-                  disabled={submitting}
-                  className="w-20 px-3 py-2 text-center border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white font-semibold disabled:opacity-50"
-                />
+            {/* Control Section */}
+            <div className="mb-4 p-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Jumlah Grup:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={numGroupsInput}
+                    onChange={(e) => handleNumGroupsChange(e.target.value)}
+                    disabled={submitting}
+                    className="w-20 px-3 py-2 text-center border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white font-semibold disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                    Baris per Grup:
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={rowsPerGroupInput}
+                    onChange={(e) => handleRowsPerGroupChange(e.target.value)}
+                    disabled={submitting}
+                    className="w-20 px-3 py-2 text-center border border-neutral-300 dark:border-neutral-600 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white font-semibold disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex-1" />
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                  Total: <span className="font-bold text-lg text-green-600 dark:text-green-400">{therapyGroups.length}</span> grup, <span className="font-bold text-lg text-blue-600 dark:text-blue-400">{therapyPlans.length}</span> baris
+                </p>
               </div>
-              <div className="flex-1" />
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Total: <span className="font-bold text-lg text-green-600 dark:text-green-400">{therapyPlans.length}</span> therapy plan(s)
-              </p>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-neutral-300 dark:border-neutral-600">
-                    <th className="sticky left-0 z-20 bg-white dark:bg-neutral-900 px-2 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 w-16">
-                      No
-                    </th>
-                    <th className="sticky left-16 z-20 bg-white dark:bg-neutral-900 px-2 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 min-w-[140px]">
-                      Keterangan
-                    </th>
-                    <th className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 min-w-[140px]">
-                      IFA
-                    </th>
-                    {doseFields.map((field) => (
-                      <th
-                        key={field.key}
-                        className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 w-16"
+            {/* Accordion Groups */}
+            <div className="space-y-3">
+              {therapyGroups.map((group) => {
+                const groupPlans = therapyPlans.filter((p) => p.groupId === group.id);
+                const groupErrors = groupPlans.filter((p) => getRowError(p.rowId)).length;
+                
+                return (
+                  <div
+                    key={group.id}
+                    className="border border-neutral-300 dark:border-neutral-600 rounded-lg overflow-hidden bg-white dark:bg-neutral-900"
+                  >
+                    {/* Group Header */}
+                    <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-b border-neutral-300 dark:border-neutral-600">
+                      <button
+                        onClick={() => toggleGroupCollapse(group.id)}
+                        className="flex items-center gap-2 flex-1 text-left group"
+                        disabled={submitting}
                       >
-                        {field.label}
-                      </th>
-                    ))}
-                    <th className="sticky right-0 z-20 bg-white dark:bg-neutral-900 px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 w-24">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {therapyPlans.map((plan, idx) => {
-                    const rowError = getRowError(plan.rowId);
-                    return (
-                      <tr
-                        key={plan.rowId}
-                        className={`border-b border-neutral-200 dark:border-neutral-700 ${
-                          rowError ? 'bg-red-50 dark:bg-red-500/10' : ''
-                        }`}
+                        {group.collapsed ? (
+                          <ChevronRight className="h-5 w-5 text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-neutral-300 transition-colors" />
+                        ) : (
+                          <ChevronDown className="h-5 w-5 text-neutral-500 group-hover:text-neutral-700 dark:group-hover:text-neutral-300 transition-colors" />
+                        )}
+                        <span className="font-bold text-lg text-amber-700 dark:text-amber-400">
+                          {group.name}
+                        </span>
+                        <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                          ({groupPlans.length} baris)
+                        </span>
+                        {groupErrors > 0 && (
+                          <span className="text-xs px-2 py-1 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold">
+                            {groupErrors} error
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => addRowToGroup(group.id)}
+                        disabled={submitting}
+                        className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors text-xs font-semibold disabled:opacity-50"
+                        title="Tambah baris ke grup ini"
                       >
-                        <td className="sticky left-0 z-10 bg-white dark:bg-neutral-900 px-2 py-2 text-sm font-medium text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-700">
-                          {plan.therapyNumber}
-                        </td>
-                        <td className="sticky left-16 z-10 bg-white dark:bg-neutral-900 px-2 py-2 border-r border-neutral-200 dark:border-neutral-700">
-                          <input
-                            type="text"
-                            value={plan.keterangan || ''}
-                            onChange={(e) =>
-                              updateTherapyPlan(plan.rowId, 'keterangan', e.target.value)
-                            }
-                            disabled={submitting}
-                            className="w-full px-2 py-1 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
-                          />
-                        </td>
-                        <td className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700">
-                          <div className="flex flex-col gap-1">
-                            <label className="flex items-center gap-1 p-1.5 rounded border cursor-pointer text-xs"
-                              style={{
-                                background: plan.ifaType === 'ifa250' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.02)',
-                                borderColor: plan.ifaType === 'ifa250' ? '#4ade80' : 'rgba(148,163,184,0.3)',
-                              }}>
-                              <input
-                                type="radio"
-                                name={`ifa-${plan.rowId}`}
-                                checked={plan.ifaType === 'ifa250'}
-                                onChange={() => updateTherapyPlan(plan.rowId, 'ifaType', 'ifa250')}
-                                disabled={submitting}
-                                className="w-3 h-3"
-                                style={{ accentColor: '#4ade80' }}
-                              />
-                              <span className="font-semibold" style={{ color: plan.ifaType === 'ifa250' ? '#4ade80' : '#94a3b8' }}>
-                                250ml
-                              </span>
-                            </label>
-                            <label className="flex items-center gap-1 p-1.5 rounded border cursor-pointer text-xs"
-                              style={{
-                                background: plan.ifaType === 'ifa500' ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.02)',
-                                borderColor: plan.ifaType === 'ifa500' ? '#fbbf24' : 'rgba(148,163,184,0.3)',
-                              }}>
-                              <input
-                                type="radio"
-                                name={`ifa-${plan.rowId}`}
-                                checked={plan.ifaType === 'ifa500'}
-                                onChange={() => updateTherapyPlan(plan.rowId, 'ifaType', 'ifa500')}
-                                disabled={submitting}
-                                className="w-3 h-3"
-                                style={{ accentColor: '#fbbf24' }}
-                              />
-                              <span className="font-semibold" style={{ color: plan.ifaType === 'ifa500' ? '#fbbf24' : '#94a3b8' }}>
-                                500ml
-                              </span>
-                            </label>
-                          </div>
-                        </td>
-                        {doseFields.map((field) => (
-                          <td
-                            key={field.key}
-                            className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700"
-                          >
-                            <input
-                              type="number"
-                              min={0}
-                              step={0.1}
-                              value={plan[field.key] || ''}
-                              onChange={(e) =>
-                                updateTherapyPlan(
-                                  plan.rowId,
-                                  field.key,
-                                  e.target.value ? parseFloat(e.target.value) : undefined
-                                )
-                              }
-                              disabled={submitting}
-                              className="w-full px-1 py-1 text-xs text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
-                            />
-                          </td>
-                        ))}
-                        <td className="sticky right-0 z-10 bg-white dark:bg-neutral-900 px-2 py-2 border-neutral-200 dark:border-neutral-700">
-                          <div className="flex items-center justify-center gap-0.5">
-                            <button
-                              onClick={() => copyToNextRow(plan.rowId)}
-                              disabled={submitting || idx === therapyPlans.length - 1}
-                              title="Copy to next"
-                              className="p-1 rounded bg-blue-100 text-blue-600 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
-                            >
-                              <Copy size={12} />
-                            </button>
-                            <button
-                              onClick={() => copyToAllBelow(plan.rowId)}
-                              disabled={submitting || idx === therapyPlans.length - 1}
-                              title="Copy all below"
-                              className="p-1 rounded bg-green-100 text-green-600 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 transition-colors"
-                            >
-                              <CopyPlus size={12} />
-                            </button>
-                            <button
-                              onClick={() => removeRow(plan.rowId)}
-                              disabled={submitting || therapyPlans.length === 1}
-                              title="Delete"
-                              className="p-1 rounded bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors"
-                            >
-                              <Trash2 size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        <Plus size={14} />
+                        Tambah Baris
+                      </button>
+                    </div>
+
+                    {/* Group Content */}
+                    {!group.collapsed && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                          <thead>
+                            <tr className="bg-neutral-50 dark:bg-neutral-800 border-b border-neutral-200 dark:border-neutral-700">
+                              <th className="px-2 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 w-12">
+                                #
+                              </th>
+                              <th className="px-2 py-2 text-left text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 min-w-[140px]">
+                                Keterangan
+                              </th>
+                              <th className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 min-w-[120px]">
+                                IFA
+                              </th>
+                              {doseFields.map((field) => (
+                                <th
+                                  key={field.key}
+                                  className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 border-r border-neutral-200 dark:border-neutral-700 w-16"
+                                >
+                                  {field.label}
+                                </th>
+                              ))}
+                              <th className="px-2 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 w-24">
+                                Aksi
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {groupPlans.map((plan, idx) => {
+                              const rowError = getRowError(plan.rowId);
+                              return (
+                                <tr
+                                  key={plan.rowId}
+                                  className={`border-b border-neutral-200 dark:border-neutral-700 ${
+                                    rowError ? 'bg-red-50 dark:bg-red-500/10' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+                                  }`}
+                                >
+                                  <td className="px-2 py-2 text-xs font-medium text-neutral-600 dark:text-neutral-400 border-r border-neutral-200 dark:border-neutral-700">
+                                    {idx + 1}
+                                  </td>
+                                  <td className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700">
+                                    <input
+                                      type="text"
+                                      value={plan.keterangan || ''}
+                                      onChange={(e) =>
+                                        updateTherapyPlan(plan.rowId, 'keterangan', e.target.value)
+                                      }
+                                      disabled={submitting}
+                                      className="w-full px-2 py-1 text-xs border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500"
+                                    />
+                                  </td>
+                                  <td className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700">
+                                    <div className="flex flex-col gap-1">
+                                      <label className="flex items-center gap-1 p-1.5 rounded border cursor-pointer text-xs"
+                                        style={{
+                                          background: plan.ifaType === 'ifa250' ? 'rgba(34,197,94,0.15)' : 'rgba(255,255,255,0.02)',
+                                          borderColor: plan.ifaType === 'ifa250' ? '#4ade80' : 'rgba(148,163,184,0.3)',
+                                        }}>
+                                        <input
+                                          type="radio"
+                                          name={`ifa-${plan.rowId}`}
+                                          checked={plan.ifaType === 'ifa250'}
+                                          onChange={() => updateTherapyPlan(plan.rowId, 'ifaType', 'ifa250')}
+                                          disabled={submitting}
+                                          className="w-3 h-3"
+                                          style={{ accentColor: '#4ade80' }}
+                                        />
+                                        <span className="font-semibold" style={{ color: plan.ifaType === 'ifa250' ? '#4ade80' : '#94a3b8' }}>
+                                          250ml
+                                        </span>
+                                      </label>
+                                      <label className="flex items-center gap-1 p-1.5 rounded border cursor-pointer text-xs"
+                                        style={{
+                                          background: plan.ifaType === 'ifa500' ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.02)',
+                                          borderColor: plan.ifaType === 'ifa500' ? '#fbbf24' : 'rgba(148,163,184,0.3)',
+                                        }}>
+                                        <input
+                                          type="radio"
+                                          name={`ifa-${plan.rowId}`}
+                                          checked={plan.ifaType === 'ifa500'}
+                                          onChange={() => updateTherapyPlan(plan.rowId, 'ifaType', 'ifa500')}
+                                          disabled={submitting}
+                                          className="w-3 h-3"
+                                          style={{ accentColor: '#fbbf24' }}
+                                        />
+                                        <span className="font-semibold" style={{ color: plan.ifaType === 'ifa500' ? '#fbbf24' : '#94a3b8' }}>
+                                          500ml
+                                        </span>
+                                      </label>
+                                    </div>
+                                  </td>
+                                  {doseFields.map((field) => (
+                                    <td
+                                      key={field.key}
+                                      className="px-2 py-2 border-r border-neutral-200 dark:border-neutral-700"
+                                    >
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        step={0.1}
+                                        value={plan[field.key] || ''}
+                                        onChange={(e) =>
+                                          updateTherapyPlan(
+                                            plan.rowId,
+                                            field.key,
+                                            e.target.value ? parseFloat(e.target.value) : undefined
+                                          )
+                                        }
+                                        disabled={submitting}
+                                        className="w-full px-1 py-1 text-xs text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"
+                                      />
+                                    </td>
+                                  ))}
+                                  <td className="px-2 py-2">
+                                    <div className="flex items-center justify-center gap-0.5">
+                                      <button
+                                        onClick={() => copyToNextRow(plan.rowId)}
+                                        disabled={submitting || idx === groupPlans.length - 1}
+                                        title="Copy to next"
+                                        className="p-1 rounded bg-blue-100 text-blue-600 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+                                      >
+                                        <Copy size={12} />
+                                      </button>
+                                      <button
+                                        onClick={() => copyToAllBelow(plan.rowId)}
+                                        disabled={submitting || idx === groupPlans.length - 1}
+                                        title="Copy all below"
+                                        className="p-1 rounded bg-green-100 text-green-600 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 transition-colors"
+                                      >
+                                        <CopyPlus size={12} />
+                                      </button>
+                                      <button
+                                        onClick={() => removeRow(plan.rowId, group.id)}
+                                        disabled={submitting || groupPlans.length === 1}
+                                        title="Delete"
+                                        className="p-1 rounded bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Validation Errors - Compact */}
@@ -746,7 +852,7 @@ export default function BulkTherapyPlanModal({
             {/* Info Section - Compact */}
             <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
               <p className="text-xs text-blue-700 dark:text-blue-400">
-                <strong>Tips:</strong> Masukkan jumlah baris, pilih IFA, lalu gunakan tombol copy untuk duplikasi dosage.
+                <strong>Tips:</strong> Masukkan jumlah baris set, pilih IFA, lalu gunakan tombol copy untuk duplikasi dosis.
               </p>
             </div>
           </div>
@@ -773,7 +879,7 @@ export default function BulkTherapyPlanModal({
               ) : (
                 <>
                   <Plus className="h-4 w-4" />
-                  Buat {therapyPlans.length} Plan(s)
+                  Simpan Set ({therapyPlans.length} Baris)
                 </>
               )}
             </button>

@@ -19,15 +19,15 @@ const VITAL_FIELDS: Array<{
   label: string;
   unit: string;
   placeholder: string;
-  min: number;
-  max: number;
 }> = [
-  { type: 'SISTOL', label: 'Sistol', unit: 'mmHg', placeholder: '120', min: 80, max: 200 },
-  { type: 'DIASTOL', label: 'Diastol', unit: 'mmHg', placeholder: '80', min: 40, max: 130 },
-  { type: 'HR', label: 'Heart Rate', unit: 'bpm', placeholder: '75', min: 40, max: 150 },
-  { type: 'SATURASI', label: 'Saturasi O2', unit: '%', placeholder: '98', min: 70, max: 100 },
-  { type: 'PI', label: 'Perfusion Index', unit: '%', placeholder: '5', min: 0.1, max: 20 },
+  { type: 'SISTOL', label: 'Sistol', unit: 'mmHg', placeholder: '120' },
+  { type: 'DIASTOL', label: 'Diastol', unit: 'mmHg', placeholder: '80' },
+  { type: 'HR', label: 'Heart Rate', unit: 'bpm', placeholder: '75' },
+  { type: 'SATURASI', label: 'Saturasi O2', unit: '%', placeholder: '98' },
+  { type: 'PI', label: 'Perfusion Index', unit: '%', placeholder: '5' },
 ];
+
+const parseVitalValue = (value: string) => Number(value.replace(',', '.'));
 
 export default function Step3VitalBefore({
   sessionId,
@@ -95,43 +95,37 @@ export default function Step3VitalBefore({
 
   // Check if all fields have valid values (real-time validation)
   const allFieldsValid = useMemo(() => {
-    return VITAL_FIELDS.every((field) => {
+    return VITAL_FIELDS.some((field) => {
       const value = values[field.type];
       if (!value || value === '') return false;
-      const numValue = Number(value);
-      if (isNaN(numValue) || numValue <= 0) return false;
-      // Check range
-      if (numValue < field.min || numValue > field.max) return false;
-      return true;
+      return Number.isFinite(parseVitalValue(value));
     });
   }, [values]);
 
-  // Validate a single field's range
-  const validateField = (field: typeof VITAL_FIELDS[0], value: string): string => {
+  const validateField = (value: string): string => {
     if (!value || value === '') return '';
-    const numValue = Number(value);
+    const numValue = parseVitalValue(value);
     if (isNaN(numValue)) return 'Harus berupa angka';
-    if (numValue <= 0) return 'Harus lebih besar dari 0';
-    if (numValue < field.min || numValue > field.max) {
-      return `Harus antara ${field.min}-${field.max} ${field.unit}`;
-    }
     return '';
   };
 
   // Check if all fields are saved to database
-  const allFieldsSaved = VITAL_FIELDS.every((field) => saved[field.type]);
+  const allFieldsSaved = VITAL_FIELDS.some((field) => saved[field.type]) && VITAL_FIELDS.every((field) => {
+    const value = values[field.type];
+    return !value || saved[field.type];
+  });
 
   const handleBlur = async (type: VitalType) => {
     const value = values[type];
     if (!value || value === '') return;
 
-    const numValue = Number(value);
-    if (isNaN(numValue) || numValue <= 0) return;
+    const numValue = parseVitalValue(value);
+    if (!Number.isFinite(numValue)) return;
 
-    // Validate range
+    // Validate numeric input
     const field = VITAL_FIELDS.find((f) => f.type === type);
     if (field) {
-      const error = validateField(field, value);
+      const error = validateField(value);
       if (error) {
         setErrors((prev) => ({ ...prev, [type]: error }));
         return;
@@ -173,7 +167,7 @@ export default function Step3VitalBefore({
     // Real-time validation
     const field = VITAL_FIELDS.find((f) => f.type === type);
     if (field && value) {
-      const error = validateField(field, value);
+      const error = validateField(value);
       setErrors((prev) => ({ ...prev, [type]: error }));
     } else {
       setErrors((prev) => ({ ...prev, [type]: '' }));
@@ -192,11 +186,11 @@ export default function Step3VitalBefore({
         const value = values[field.type];
         if (!value || value === '') continue;
         
-        const numValue = Number(value);
-        if (isNaN(numValue) || numValue <= 0) continue;
+        const numValue = parseVitalValue(value);
+        if (!Number.isFinite(numValue)) continue;
 
-        // Validate range before saving
-        const error = validateField(field, value);
+        // Validate numeric input before saving
+        const error = validateField(value);
         if (error) {
           setErrors((prev) => ({ ...prev, [field.type]: error }));
           continue; // Skip this field
@@ -315,7 +309,7 @@ export default function Step3VitalBefore({
             💉 Tanda Vital SEBELUM
           </h3>
           <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-            {showReadyState ? 'Siap disimpan - klik tombol Simpan' : 'Isi semua field untuk menyimpan'}
+            {showReadyState ? 'Siap disimpan - klik tombol Simpan' : 'Isi tanda vital yang tersedia'}
           </p>
         </div>
       </div>
@@ -340,14 +334,11 @@ export default function Step3VitalBefore({
               <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '4px' }}>
                 ({field.unit})
               </span>
-              <span style={{ color: '#64748b', fontSize: '11px', marginLeft: '6px', fontWeight: 'normal' }}>
-                [{field.min}-{field.max}]
-              </span>
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={values[field.type]}
                 onChange={(e) => handleChange(field.type, e.target.value)}
                 onBlur={() => handleBlur(field.type)}
@@ -426,7 +417,7 @@ export default function Step3VitalBefore({
           gap: '12px'
         }}>
           <span style={{ fontSize: '14px', color: '#f59e0b', fontWeight: '600' }}>
-            ✓ Semua field sudah terisi - siap disimpan
+            ✓ Tanda vital siap disimpan
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button
@@ -483,7 +474,7 @@ export default function Step3VitalBefore({
           gap: '12px'
         }}>
           <span style={{ fontSize: '14px', color: 'var(--color-success)', fontWeight: '600' }}>
-            ✓ Semua tanda vital SEBELUM telah tersimpan
+            ✓ Tanda vital SEBELUM telah tersimpan
           </span>
           <div style={{ display: 'flex', gap: '8px' }}>
             <button

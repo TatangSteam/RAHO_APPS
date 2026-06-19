@@ -8,9 +8,17 @@
    npm run dev
    ```
 
-2. **Get Super Admin token:**
+2. **Start the frontend server:**
    ```bash
-   POST http://localhost:3001/api/v1/auth/login
+   cd apps/web
+   npm run dev
+   ```
+
+   Frontend UI: `http://localhost:3000`
+
+3. **Get Super Admin token:**
+   ```bash
+   POST http://localhost:4000/api/v1/auth/login
    Content-Type: application/json
 
    {
@@ -27,7 +35,7 @@
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/managers?page=1&limit=10
+GET http://localhost:4000/api/v1/admin/managers?page=1&limit=10
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -76,7 +84,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/managers?search=manager1
+GET http://localhost:4000/api/v1/admin/managers?search=manager1
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -89,7 +97,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/managers
+GET http://localhost:4000/api/v1/admin/managers
 Authorization: Bearer <admin-manager-token>
 ```
 
@@ -111,7 +119,7 @@ Authorization: Bearer <admin-manager-token>
 ### Setup
 First, get an Admin Manager token:
 ```bash
-POST http://localhost:3001/api/v1/auth/login
+POST http://localhost:4000/api/v1/auth/login
 Content-Type: application/json
 
 {
@@ -122,7 +130,7 @@ Content-Type: application/json
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/branch-admins?page=1&limit=10
+GET http://localhost:4000/api/v1/admin/branch-admins?page=1&limit=10
 Authorization: Bearer <admin-manager-token>
 ```
 
@@ -169,7 +177,7 @@ Authorization: Bearer <admin-manager-token>
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/branch-admins?branchId=<jakarta-branch-uuid>
+GET http://localhost:4000/api/v1/admin/branch-admins?branchId=<jakarta-branch-uuid>
 Authorization: Bearer <admin-manager-token>
 ```
 
@@ -182,7 +190,7 @@ Authorization: Bearer <admin-manager-token>
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/<manager1-uuid>
+POST http://localhost:4000/api/v1/admin/impersonate/<manager1-uuid>
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -250,7 +258,7 @@ Use the impersonation token from Test 6 (Super Admin → Admin Manager)
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/<admincabang-pst-uuid>
+POST http://localhost:4000/api/v1/admin/impersonate/<admincabang-pst-uuid>
 Authorization: Bearer <impersonation-token-from-test-6>
 ```
 
@@ -309,7 +317,7 @@ Authorization: Bearer <impersonation-token-from-test-6>
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/<admincabang-sby-uuid>
+POST http://localhost:4000/api/v1/admin/impersonate/<admincabang-sby-uuid>
 Authorization: Bearer <manager1-token>
 ```
 
@@ -335,7 +343,7 @@ Use the nested impersonation token from Test 7 (Super Admin → Admin Manager �
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/stop-impersonation
+POST http://localhost:4000/api/v1/admin/stop-impersonation
 Authorization: Bearer <nested-impersonation-token>
 ```
 
@@ -392,7 +400,7 @@ Use the single-level impersonation token from Test 9 (Super Admin → Admin Mana
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/stop-impersonation
+POST http://localhost:4000/api/v1/admin/stop-impersonation
 Authorization: Bearer <single-level-impersonation-token>
 ```
 
@@ -443,7 +451,7 @@ Should be back to normal Super Admin token:
 
 ### Test 11.1: Invalid UUID
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/invalid-uuid
+POST http://localhost:4000/api/v1/admin/impersonate/invalid-uuid
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -451,7 +459,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Test 11.2: Invalid Query Parameters
 ```bash
-GET http://localhost:3001/api/v1/admin/managers?page=abc
+GET http://localhost:4000/api/v1/admin/managers?page=abc
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -459,7 +467,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Test 11.3: Invalid isActive Parameter
 ```bash
-GET http://localhost:3001/api/v1/admin/managers?isActive=maybe
+GET http://localhost:4000/api/v1/admin/managers?isActive=maybe
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -471,7 +479,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Request
 ```bash
-GET http://localhost:3001/api/v1/admin/system/audit-logs?action=LOGIN&limit=10
+GET http://localhost:4000/api/v1/admin/system/audit-logs?action=LOGIN&limit=10
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -493,7 +501,7 @@ Should show audit logs with:
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/<inactive-manager-uuid>
+POST http://localhost:4000/api/v1/admin/impersonate/<inactive-manager-uuid>
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -514,7 +522,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/impersonate/<another-super-admin-uuid>
+POST http://localhost:4000/api/v1/admin/impersonate/<another-super-admin-uuid>
 Authorization: Bearer <super-admin-token>
 ```
 
@@ -535,7 +543,7 @@ Authorization: Bearer <super-admin-token>
 
 ### Request
 ```bash
-POST http://localhost:3001/api/v1/admin/stop-impersonation
+POST http://localhost:4000/api/v1/admin/stop-impersonation
 Authorization: Bearer <normal-super-admin-token>
 ```
 
@@ -617,7 +625,7 @@ You can import this collection into Postman for easier testing:
     }
   ],
   "variable": [
-    {"key": "baseUrl", "value": "http://localhost:3001"},
+    {"key": "baseUrl", "value": "http://localhost:4000"},
     {"key": "superAdminToken", "value": ""},
     {"key": "adminManagerToken", "value": ""},
     {"key": "impersonationToken", "value": ""},

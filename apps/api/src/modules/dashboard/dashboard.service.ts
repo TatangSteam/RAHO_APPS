@@ -214,6 +214,8 @@ export class DashboardService {
     const activeMembers = await prisma.member.count({
       where: {
         registrationBranchId: branchId,
+        isActive: true,
+        isDeceased: false,
         memberPackages: {
           some: {
             status: 'ACTIVE',

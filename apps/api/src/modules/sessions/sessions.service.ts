@@ -117,8 +117,12 @@ export class SessionsService {
   // STEP 2: THERAPY PLAN
   // ============================================================
 
-  async createTherapyPlan(sessionId: string, data: CreateTherapyPlanInput, userId: string) {
-    return this.therapyPlanService.createTherapyPlan(sessionId, data, userId);
+  async createTherapyPlan(_sessionId: string, _data: CreateTherapyPlanInput, _userId: string) {
+    throw {
+      status: 410,
+      code: 'THERAPY_PLAN_BULK_ONLY',
+      message: 'Therapy plan sesi hanya sebagai acuan dari set bulk. Buat therapy plan melalui bulk di member detail.',
+    };
   }
 
   async getTherapyPlan(sessionId: string) {

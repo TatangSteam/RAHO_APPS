@@ -66,9 +66,10 @@ export async function listUsersService(
           ],
         }
       : {}),
-    // Exclude members and admin managers from staff user list
+    // Exclude members, admin managers, and super admins from staff user list
     // Admin managers are shown in the separate "Managers" tab
-    NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER] } },
+    // Super admins should not appear in branch staff lists
+    NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER, Role.SUPER_ADMIN] } },
   };
 
   const [total, users] = await Promise.all([

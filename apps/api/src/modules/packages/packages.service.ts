@@ -80,8 +80,8 @@ export class PackagesService {
   /**
    * Get member packages with grouping
    */
-  async getMemberPackages(memberId: string, branchId: string) {
-    return await this.retrievalService.getMemberPackages(memberId, branchId);
+  async getMemberPackages(memberId: string, branchIds: string | string[]) {
+    return await this.retrievalService.getMemberPackages(memberId, branchIds);
   }
 
   // ============================================================

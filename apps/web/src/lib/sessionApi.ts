@@ -5,7 +5,6 @@ import type {
   SessionDetail,
   CreateDiagnosisInput,
   Diagnosis,
-  CreateTherapyPlanInput,
   TherapyPlan,
   CreateVitalSignInput,
   VitalSign,
@@ -60,11 +59,6 @@ export const sessionApi = {
   // ============================================================
   // STEP 2: THERAPY PLAN
   // ============================================================
-
-  createTherapyPlan: async (sessionId: string, data: CreateTherapyPlanInput): Promise<TherapyPlan> => {
-    const response = await api.post(`/treatment-sessions/${sessionId}/therapy-plan`, data);
-    return response.data.data;
-  },
 
   getTherapyPlan: async (sessionId: string): Promise<TherapyPlan | null> => {
     try {

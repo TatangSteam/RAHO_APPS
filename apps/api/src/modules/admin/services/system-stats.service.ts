@@ -33,7 +33,7 @@ export class SystemStatsService {
         prisma.member.count().catch(() => 0),
         
         // Active members
-        prisma.member.count({ where: { isActive: true } }).catch(() => 0),
+        prisma.member.count({ where: { isActive: true, isDeceased: false } }).catch(() => 0),
         
         // Total branches
         prisma.branch.count().catch(() => 0),

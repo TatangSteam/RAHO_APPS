@@ -48,9 +48,13 @@ export interface MemberSessionDetail {
     diagnosisCode: string
     diagnosa: string
     kategoriDiagnosa: string | null
+    kategoriDiagnosaList?: string[] | null
   } | null
   therapyPlan: {
     planCode: string
+    planNumber?: number | null
+    setName?: string | null
+    setVersion?: number | null
     keterangan: string | null
     ifa250: number | null
     ifa500: number | null
@@ -158,10 +162,12 @@ export interface MemberProfile {
   memberNo: string
   nik: string | null
   dateOfBirth: string | null
+  age: number | null
   jenisKelamin: 'L' | 'P' | null
   address: string | null
   voucherCount: number
   isActive: boolean
+  isDeceased: boolean
   registrationBranch: { name: string; branchCode: string; city: string }
   memberSince: string
 }

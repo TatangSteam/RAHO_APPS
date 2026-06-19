@@ -231,7 +231,7 @@ export default function MembersPage() {
               <span style={{ fontSize: '13px', opacity: 0.9 }}>Member Aktif</span>
               <span style={{ fontSize: '32px' }}>✅</span>
             </div>
-            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{members.filter(m => m.isActive).length}</p>
+            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{members.filter(m => m.isActive && !m.isDeceased).length}</p>
             <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>Dari halaman ini</p>
           </div>
 
@@ -458,7 +458,12 @@ export default function MembersPage() {
                             </div>
                           </td>
                           <td style={{ textAlign: 'center' }}>
-                            {member.isActive ? (
+                            {member.isDeceased ? (
+                              <span className="badge badge-danger">
+                                <span style={{ width: '6px', height: '6px', background: '#ef4444', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }}></span>
+                                Meninggal
+                              </span>
+                            ) : member.isActive ? (
                               <span className="badge badge-success">
                                 <span style={{ width: '6px', height: '6px', background: '#22c55e', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }}></span>
                                 Aktif

@@ -26,6 +26,11 @@ interface BulkTherapyPlanInput {
 
 interface BulkCreateTherapyPlansInput {
   therapyPlans: BulkTherapyPlanInput[];
+  name?: string | null;
+}
+
+function padSequence(value: number, size = 3) {
+  return String(value).padStart(size, '0');
 }
 
 export class MemberTherapyPlanBulkService {
@@ -260,9 +265,10 @@ export class MemberTherapyPlanBulkService {
    */
   async bulkCreateTherapyPlans(
     memberId: string,
-    input: BulkCreateTherapyPlansInput
+    input: BulkCreateTherapyPlansInput,
+    userId?: string
   ) {
-    const { therapyPlans } = input;
+    const { therapyPlans, name } = input;
 
     // Validate therapy plans count
     if (!therapyPlans || therapyPlans.length === 0) {
@@ -334,17 +340,37 @@ export class MemberTherapyPlanBulkService {
       };
     }
 
-    // Create all therapy plans in a transaction
-    const createdPlans = await prisma.$transaction(
-      therapyPlans.map((plan, index) => {
-        // Generate unique plan code using timestamp and index
-        const timestamp = Date.now();
-        const planCode = `TPL-${member.registrationBranch.branchCode}-${timestamp}-${index}`;
+    const existingSetsCount = await prisma.therapyPlanSet.count({
+      where: { memberId },
+    });
+    const setSequence = existingSetsCount + 1;
+    const branchCode = member.registrationBranch.branchCode;
+    const setCode = `TPS-${branchCode}-${member.memberNo}-${padSequence(setSequence)}`;
 
-        return prisma.therapyPlan.create({
+    const result = await prisma.$transaction(async (tx) => {
+      const therapyPlanSet = await tx.therapyPlanSet.create({
+        data: {
+          memberId,
+          setCode,
+          name: name || null,
+          version: 1,
+          status: 'ACTIVE',
+          createdBy: userId,
+        },
+      });
+
+      const createdPlans = [];
+
+      for (const [index, plan] of therapyPlans.entries()) {
+        const planNumber = index + 1;
+        const planCode = `TP-${branchCode}-${member.memberNo}-${padSequence(setSequence)}-${padSequence(planNumber, 2)}`;
+
+        const createdPlan = await tx.therapyPlan.create({
           data: {
             planCode,
             member: { connect: { id: memberId } },
+            therapyPlanSet: { connect: { id: therapyPlanSet.id } },
+            planNumber,
             keterangan: plan.keterangan,
             ifa250: plan.ifa250,
             ifa500: plan.ifa500,
@@ -365,16 +391,25 @@ export class MemberTherapyPlanBulkService {
             ) as any),
           },
         });
-      })
-    );
+
+        createdPlans.push(createdPlan);
+      }
+
+      return { therapyPlanSet, createdPlans };
+    });
 
     return {
       success: true,
-      message: `Berhasil membuat ${createdPlans.length} therapy plans`,
+      message: `Berhasil membuat set therapy plan berisi ${result.createdPlans.length} baris`,
       data: {
-        created: createdPlans.length,
-        therapyPlans: createdPlans.map((plan) => ({
+        created: result.createdPlans.length,
+        setId: result.therapyPlanSet.id,
+        setCode: result.therapyPlanSet.setCode,
+        setName: result.therapyPlanSet.name,
+        version: result.therapyPlanSet.version,
+        therapyPlans: result.createdPlans.map((plan) => ({
           id: plan.id,
+          planNumber: plan.planNumber,
           planCode: plan.planCode,
           keterangan: plan.keterangan,
           createdAt: plan.createdAt.toISOString(),

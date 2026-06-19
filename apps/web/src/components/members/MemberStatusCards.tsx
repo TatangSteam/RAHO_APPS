@@ -69,6 +69,14 @@ export default function MemberStatusCards({ member, packages }: MemberStatusCard
         <p style={{ fontSize: '36px', fontWeight: '700', margin: 0 }}>{member.isActive ? 'Aktif' : 'Nonaktif'}</p>
       </div>
 
+      <div className="card" style={{ background: member.isDeceased ? 'linear-gradient(135deg, #ef4444, #b91c1c)' : 'linear-gradient(135deg, #14b8a6, #0f766e)', border: 'none', color: 'white' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          <span style={{ fontSize: '13px', opacity: 0.9 }}>Status Meninggal</span>
+          <span style={{ fontSize: '32px' }}>{member.isDeceased ? '!' : 'OK'}</span>
+        </div>
+        <p style={{ fontSize: '36px', fontWeight: '700', margin: 0 }}>{member.isDeceased ? 'Ya' : 'Tidak'}</p>
+      </div>
+
       <div className="card" style={{ background: member.isConsentToPhoto ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'linear-gradient(135deg, #64748b, #475569)', border: 'none', color: 'white' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
           <span style={{ fontSize: '13px', opacity: 0.9 }}>Consent Foto</span>

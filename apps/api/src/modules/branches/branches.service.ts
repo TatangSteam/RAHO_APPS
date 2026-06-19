@@ -46,6 +46,45 @@ const DEFAULT_SERVICE_TYPES = [
   { code: 'PHC', name: 'Partnership Homecare', price: 750_000 },
 ];
 
+function getRegencyCodePrefix(regencyCode?: string): string {
+  const digits = (regencyCode || '').replace(/\D/g, '');
+  if (digits.length !== 4) {
+    throw errors.badRequest(
+      'REGENCY_CODE_REQUIRED',
+      'Pilih provinsi dan kabupaten/kota dari data wilayah sebelum membuat cabang.'
+    );
+  }
+
+  return digits;
+}
+
+async function generateUniqueBranchCode(input: Pick<CreateBranchInput, 'regencyCode'>): Promise<string> {
+  const prefix = getRegencyCodePrefix(input.regencyCode);
+  const existingCodes = await prisma.branch.findMany({
+    where: { branchCode: { startsWith: prefix } },
+    select: { branchCode: true },
+  });
+
+  const usedCodes = new Set(existingCodes.map((branch) => branch.branchCode));
+  const highestSuffix = existingCodes.reduce((highest, branch) => {
+    const suffix = branch.branchCode.slice(prefix.length);
+    if (!/^\d+$/.test(suffix)) return highest;
+    return Math.max(highest, Number(suffix));
+  }, 0);
+
+  let sequence = highestSuffix + 1;
+  while (sequence < 100) {
+    const code = `${prefix}${String(sequence).padStart(2, '0')}`;
+    if (!usedCodes.has(code)) return code;
+    sequence++;
+  }
+
+  throw errors.badRequest(
+    'BRANCH_CODE_GENERATION_FAILED',
+    `Nomor urut cabang untuk wilayah ${prefix} sudah penuh.`
+  );
+}
+
 // ── Helper: Create Default Package Pricing for Branch ─────────
 async function createDefaultPackagePricingForBranch(branchId: string) {
   console.log(`📦 Creating default package pricings for branch: ${branchId}`);
@@ -233,16 +272,17 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
   const branchesWithCounts = await Promise.all(
     branches.map(async (branch) => {
       const [memberCount, staffCount] = await Promise.all([
-        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
+        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true, isDeceased: false } }),
         // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
+        // Only count actual branch staff (exclude SUPER_ADMIN, ADMIN_MANAGER, and MEMBER)
         prisma.user.count({
           where: { 
             OR: [
               { branchId: branch.id }, // Primary branch
               { staffBranches: { some: { branchId: branch.id } } }, // Multi-branch assignment
             ],
-            isActive: true, 
-            NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+            isActive: true,
+            role: { in: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'] },
           },
         }),
       ]);
@@ -280,7 +320,7 @@ export async function getBranchWithStatsService(branchId: string) {
   if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
 
   // Get stats
-  // Note: activeUsers excludes MEMBER and ADMIN_MANAGER (Admin Managers are shown in separate tab)
+  // Note: activeUsers excludes MEMBER, ADMIN_MANAGER, and SUPER_ADMIN
   // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
   const [activeUsers, totalMembers, activePackages] = await Promise.all([
     prisma.user.count({
@@ -289,11 +329,11 @@ export async function getBranchWithStatsService(branchId: string) {
           { branchId }, // Primary branch
           { staffBranches: { some: { branchId } } }, // Multi-branch assignment
         ],
-        isActive: true, 
-        NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+        isActive: true,
+        role: { in: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'] },
       },
     }),
-    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
+    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true, isDeceased: false } }),
     prisma.memberPackage.count({
       where: { branchId, status: 'ACTIVE' },
     }),
@@ -356,6 +396,7 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
   const branchesWithStats = await Promise.all(
     branches.map(async (branch) => {
       // IMPORTANT: Include staff assigned via StaffBranch (multi-branch assignment)
+      // Only count actual branch staff (exclude SUPER_ADMIN, ADMIN_MANAGER, and MEMBER)
       const [activeUsers, totalMembers, activePackages] = await Promise.all([
         prisma.user.count({
           where: { 
@@ -363,11 +404,11 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
               { branchId: branch.id }, // Primary branch
               { staffBranches: { some: { branchId: branch.id } } }, // Multi-branch assignment
             ],
-            isActive: true, 
-            NOT: { role: { in: ['MEMBER', 'ADMIN_MANAGER'] } },
+            isActive: true,
+            role: { in: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'] },
           },
         }),
-        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true } }),
+        prisma.member.count({ where: { registrationBranchId: branch.id, isActive: true, isDeceased: false } }),
         prisma.memberPackage.count({
           where: { branchId: branch.id, status: 'ACTIVE' },
         }),
@@ -389,18 +430,26 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
 
 // ── Create Branch ─────────────────────────────────────────────
 export async function createBranchService(input: CreateBranchInput, createdBy: string, userRole?: string) {
+  const branchCode = await generateUniqueBranchCode(input);
+
   // Check if branch code already exists
   const existing = await prisma.branch.findUnique({
-    where: { branchCode: input.branchCode },
+    where: { branchCode },
   });
 
   if (existing) {
     throw errors.conflict('BRANCH_CODE_DUPLICATE', 'Kode cabang sudah digunakan.');
   }
 
+  const {
+    provinceCode: _provinceCode,
+    regencyCode: _regencyCode,
+    ...branchInput
+  } = input;
   const branch = await prisma.branch.create({
     data: {
-      ...input,
+      ...branchInput,
+      branchCode,
       createdBy,
     },
     select: branchSelect,
@@ -446,9 +495,14 @@ export async function updateBranchService(
   const existing = await prisma.branch.findUnique({ where: { id: branchId } });
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
+  const {
+    provinceCode: _provinceCode,
+    regencyCode: _regencyCode,
+    ...branchInput
+  } = input;
   const branch = await prisma.branch.update({
     where: { id: branchId },
-    data: input,
+    data: branchInput,
     select: branchSelect,
   });
 
@@ -675,7 +729,7 @@ export async function deleteBranchService(branchId: string) {
     memberAccesses,
   ] = await Promise.all([
     prisma.user.count({ where: { branchId, isActive: true } }),
-    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true } }),
+    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true, isDeceased: false } }),
     prisma.inventoryItem.count({ where: { branchId } }),
     prisma.staffBranch.count({ where: { branchId } }),
     prisma.managerBranch.count({ where: { branchId } }),
@@ -702,7 +756,7 @@ export async function deleteBranchService(branchId: string) {
     // Deactivate all members registered in this branch
     if (totalMembers > 0) {
       await tx.member.updateMany({
-        where: { registrationBranchId: branchId, isActive: true },
+        where: { registrationBranchId: branchId, isActive: true, isDeceased: false },
         data: { isActive: false },
       });
     }

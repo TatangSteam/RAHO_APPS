@@ -3,6 +3,74 @@ import { logAudit } from '../../../utils/auditLog';
 import type { CreateInfusionInput } from '../sessions.schema';
 import { AuditAction, Role, StockMutationType } from '@prisma/client';
 
+const DEFAULT_NO_IN_IFA250_ML = 2.5;
+
+function toPositiveNumber(value: unknown): number {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : 0;
+}
+
+function normalizeSubstanceName(value: unknown): string {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getNoMlPerIfa250Bottle(ifaSubstances: unknown): number {
+  if (!Array.isArray(ifaSubstances)) {
+    return DEFAULT_NO_IN_IFA250_ML;
+  }
+
+  const noSubstance = ifaSubstances.find((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const raw = item as Record<string, unknown>;
+    const unit = String(raw.unit || 'ml').trim().toLowerCase();
+
+    return normalizeSubstanceName(raw.name) === 'no' && unit === 'ml';
+  }) as Record<string, unknown> | undefined;
+
+  const noAmount = toPositiveNumber(noSubstance?.amount);
+  return noAmount || DEFAULT_NO_IN_IFA250_ML;
+}
+
+function getNoStockUsageMl(
+  actualNoMl: unknown,
+  actualIfa250Bottles: unknown,
+  ifaSubstances: unknown
+): { stockUsageMl: number; includedInIfaMl: number; actualNoMl: number } {
+  const actualNo = toPositiveNumber(actualNoMl);
+  if (actualNo <= 0) {
+    return { stockUsageMl: 0, includedInIfaMl: 0, actualNoMl: 0 };
+  }
+
+  const ifa250Bottles = toPositiveNumber(actualIfa250Bottles);
+  const includedInIfa = ifa250Bottles > 0
+    ? getNoMlPerIfa250Bottle(ifaSubstances) * ifa250Bottles
+    : 0;
+
+  return {
+    stockUsageMl: Number(actualNo.toFixed(2)),
+    includedInIfaMl: Number(includedInIfa.toFixed(2)),
+    actualNoMl: actualNo,
+  };
+}
+
+function getPlannedActualNoMl(planNoMl: unknown, actualIfa250Bottles: unknown, ifaSubstances: unknown): number {
+  const plannedNo = toPositiveNumber(planNoMl);
+  const ifa250Bottles = toPositiveNumber(actualIfa250Bottles);
+  const includedInIfa = ifa250Bottles > 0
+    ? getNoMlPerIfa250Bottle(ifaSubstances) * ifa250Bottles
+    : 0;
+
+  return Number(Math.max(plannedNo - includedInIfa, 0).toFixed(2));
+}
+
+function hasDoseDeviation(actualValue: unknown, plannedValue: unknown): boolean {
+  const actual = toPositiveNumber(actualValue);
+  const planned = toPositiveNumber(plannedValue);
+
+  if (actual === 0 && planned === 0) return false;
+  return actual !== planned;
+}
+
 export class InfusionService {
   async createInfusion(sessionId: string, data: CreateInfusionInput, userId: string, branchId: string) {
     // Check if infusion already exists
@@ -52,20 +120,21 @@ export class InfusionService {
     // Validate deviation notes if there's deviation
     const plan = session.therapyPlan;
     if (plan) {
+      const plannedActualNo = getPlannedActualNoMl(plan.no, data.ifa250, plan.ifaSubstances);
       const hasDeviation =
-        (data.ifa250 && Number(data.ifa250) !== Number(plan.ifa250 || 0)) ||
-        (data.ifa500 && Number(data.ifa500) !== Number(plan.ifa500 || 0)) ||
-        (data.hho && Number(data.hho) !== Number(plan.hho || 0)) ||
-        (data.h2 && Number(data.h2) !== Number(plan.h2 || 0)) ||
-        (data.no && Number(data.no) !== Number(plan.no || 0)) ||
-        (data.gaso && Number(data.gaso) !== Number(plan.gaso || 0)) ||
-        (data.o2 && Number(data.o2) !== Number(plan.o2 || 0)) ||
-        (data.o3 && Number(data.o3) !== Number(plan.o3 || 0)) ||
-        (data.edta && Number(data.edta) !== Number(plan.edta || 0)) ||
-        (data.mb && Number(data.mb) !== Number(plan.mb || 0)) ||
-        (data.h2s && Number(data.h2s) !== Number(plan.h2s || 0)) ||
-        (data.kcl && Number(data.kcl) !== Number(plan.kcl || 0)) ||
-        (data.jmlNb && Number(data.jmlNb) !== Number(plan.jmlNb || 0));
+        hasDoseDeviation(data.ifa250, plan.ifa250) ||
+        hasDoseDeviation(data.ifa500, plan.ifa500) ||
+        hasDoseDeviation(data.hho, plan.hho) ||
+        hasDoseDeviation(data.h2, plan.h2) ||
+        hasDoseDeviation(data.no, plannedActualNo) ||
+        hasDoseDeviation(data.gaso, plan.gaso) ||
+        hasDoseDeviation(data.o2, plan.o2) ||
+        hasDoseDeviation(data.o3, plan.o3) ||
+        hasDoseDeviation(data.edta, plan.edta) ||
+        hasDoseDeviation(data.mb, plan.mb) ||
+        hasDoseDeviation(data.h2s, plan.h2s) ||
+        hasDoseDeviation(data.kcl, plan.kcl) ||
+        hasDoseDeviation(data.jmlNb, plan.jmlNb);
 
       if (hasDeviation && !data.deviationNotes) {
         throw {
@@ -81,6 +150,7 @@ export class InfusionService {
       const infusion = await tx.infusionExecution.create({
         data: {
           treatmentSessionId: sessionId,
+          therapyPlanId: plan?.id,
           ...data,
           tanggalProduksi: data.tanggalProduksi ? new Date(data.tanggalProduksi) : null,
         },
@@ -186,6 +256,7 @@ export class InfusionService {
       // Deduct stock for each material used AND create material usage records
       // Map field names to product SKU/name patterns for searching
       // Sesuai List Barang RAHO Official
+      const noStockUsage = getNoStockUsageMl(data.no, data.ifa250, plan?.ifaSubstances);
       const materials = [
         // IFA - Satuan BOTOL
         { field: 'IFA500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA 500ml', qty: data.ifa500, unit: 'Botol' },
@@ -193,7 +264,15 @@ export class InfusionService {
         // Cairan Terapi - Satuan ML
         { field: 'HHO', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', qty: data.hho, unit: 'ml' },
         { field: 'H2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', qty: data.h2, unit: 'ml' },
-        { field: 'NO', sku: 'PRD-NBT-CNO-001', namePattern: 'NB NO', qty: data.no, unit: 'ml' },
+        {
+          field: 'NO',
+          sku: 'PRD-NBT-CNO-001',
+          namePattern: 'NB NO',
+          qty: noStockUsage.stockUsageMl,
+          unit: 'ml',
+          actualQty: noStockUsage.actualNoMl,
+          includedQty: noStockUsage.includedInIfaMl,
+        },
         { field: 'GASO', sku: 'PRD-NBT-CGT-001', namePattern: 'NB Gasotransmitter', qty: data.gaso, unit: 'ml' },
         { field: 'O3', sku: 'PRD-NBT-CO3-001', namePattern: 'Ozone', qty: data.o3, unit: 'ml' },
         { field: 'O2', sku: 'PRD-NBT-CO2-001', namePattern: 'O2', qty: data.o2, unit: 'ml' },
@@ -252,6 +331,11 @@ export class InfusionService {
           // Get conversion factor for unit conversion
           const conversionFactor = Number(inventoryItem.masterProduct.conversionFactor);
           const usageQuantity = material.qty; // Quantity in usage unit (ml)
+          const materialDetails = material as typeof material & { actualQty?: number; includedQty?: number };
+          const noStockNote =
+            material.field === 'NO' && materialDetails.includedQty && materialDetails.includedQty > 0
+              ? ` (NO tambahan ${materialDetails.actualQty} ml; ${materialDetails.includedQty} ml sudah termasuk IFA 250)`
+              : '';
           
           // Convert usage unit to base unit for stock calculation
           // Example: 450 ml → 0.9 botol (if conversionFactor = 500)
@@ -285,7 +369,7 @@ export class InfusionService {
               stockAfter,
               referenceType: 'InfusionExecution',
               referenceId: infusion.id,
-              notes: `Digunakan untuk sesi ${session.sessionCode}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`,
+              notes: `Digunakan untuk sesi ${session.sessionCode}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit}${noStockNote} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`,
               createdBy: userId,
             },
           });
@@ -301,7 +385,7 @@ export class InfusionService {
             },
           });
 
-          console.log(`✅ Auto-created material usage for ${inventoryItem.masterProduct.name}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`);
+          console.log(`✅ Auto-created material usage for ${inventoryItem.masterProduct.name}: ${usageQuantity} ${inventoryItem.masterProduct.usageUnit}${noStockNote} (${baseQuantityUsed.toFixed(4)} ${inventoryItem.masterProduct.baseUnit})`);
 
           // Check if stock is critical
           if (stockAfter < Number(inventoryItem.minThreshold)) {

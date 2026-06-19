@@ -10,6 +10,7 @@ import type { StaffMember } from '@/lib/usersApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import ICDSearchInput from '@/components/ui/ICDSearchInput';
+import { icdApi } from '@/lib/icdApi';
 import { devError } from '@/lib/logger';
 
 interface MemberDiagnosesTabProps {
@@ -18,34 +19,45 @@ interface MemberDiagnosesTabProps {
   canEdit?: boolean;
 }
 
-const CATEGORY_OPTIONS: { value: DiagnosisCategory; label: string; description: string }[] = [
-  { value: 'HIPERTENSI', label: 'Hipertensi', description: 'Penyakit tekanan darah tinggi' },
-  { value: 'NEUROLOGI', label: 'Neurologi', description: 'Gangguan sistem saraf' },
-  { value: 'DIABETES', label: 'Diabetes', description: 'Diabetes melitus' },
-  { value: 'KARDIOVASKULAR', label: 'Kardiovaskular', description: 'Penyakit jantung dan pembuluh darah' },
-  { value: 'ORTOPEDI', label: 'Ortopedi', description: 'Gangguan muskuloskeletal, tulang, dan sendi' },
-  { value: 'IMUNOLOGI', label: 'Imunologi', description: 'Gangguan sistem imun' },
-  { value: 'HEMATOLOGI', label: 'Hematologi', description: 'Gangguan darah' },
-  { value: 'ONKOLOGI', label: 'Onkologi', description: 'Kondisi kanker, tumor, dan pendampingan terapi onkologi' },
+const DEFAULT_CATEGORY_OPTIONS: { value: DiagnosisCategory; label: string; description: string }[] = [
+  { value: 'STROKE', label: 'Stroke', description: 'Gangguan pembuluh darah otak dan pasca stroke' },
+  { value: 'JANTUNG_KARDIOVASKULAR', label: 'Jantung Kardiovascular', description: 'Penyakit jantung dan pembuluh darah' },
+  { value: 'SINDROM_METABOLIK', label: 'Sindrom Metabolik', description: 'Obesitas, resistensi insulin, dislipidemia, dan hipertensi metabolik' },
+  { value: 'KANKER', label: 'Kanker', description: 'Kondisi kanker dan pendampingan terapi terkait' },
+  { value: 'DEGENERATIF', label: 'Degeneratif', description: 'Penyakit degeneratif dan penurunan fungsi organ atau jaringan' },
+  { value: 'AUTO_IMUN', label: 'Auto Imun', description: 'Gangguan sistem imun yang menyerang jaringan tubuh sendiri' },
   { value: 'LAINNYA', label: 'Lainnya', description: 'Kategori diagnosa lainnya' },
 ];
 
 const LEGACY_CATEGORY_LABELS: Partial<Record<DiagnosisCategory, string>> = {
-  STROKE: 'Stroke',
-  JANTUNG_KARDIOVASKULAR: 'Jantung Kardiovascular',
-  SINDROM_METABOLIK: 'Sindrom Metabolik',
-  KANKER: 'Kanker',
-  DEGENERATIF: 'Degeneratif',
-  AUTO_IMUN: 'Auto Imun',
+  HIPERTENSI: 'Hipertensi',
+  NEUROLOGI: 'Neurologi',
+  DIABETES: 'Diabetes',
+  KARDIOVASKULAR: 'Kardiovaskular',
+  ORTOPEDI: 'Ortopedi',
+  IMUNOLOGI: 'Imunologi',
+  HEMATOLOGI: 'Hematologi',
+  ONKOLOGI: 'Onkologi',
 };
 
-function getDiagnosisCategoryLabel(category: DiagnosisCategory | string | null | undefined): string {
+function getDiagnosisCategoryLabel(
+  category: DiagnosisCategory | string | null | undefined,
+  options = DEFAULT_CATEGORY_OPTIONS
+): string {
   if (!category) return 'Umum';
   return (
-    CATEGORY_OPTIONS.find((option) => option.value === category)?.label ||
+    options.find((option) => option.value === category)?.label ||
     LEGACY_CATEGORY_LABELS[category as DiagnosisCategory] ||
     category
   );
+}
+
+function getDiagnosisCategories(diagnosis: Pick<Diagnosis, 'kategoriDiagnosa' | 'kategoriDiagnosaList'>): DiagnosisCategory[] {
+  if (Array.isArray(diagnosis.kategoriDiagnosaList) && diagnosis.kategoriDiagnosaList.length > 0) {
+    return diagnosis.kategoriDiagnosaList;
+  }
+
+  return diagnosis.kategoriDiagnosa ? [diagnosis.kategoriDiagnosa] : [];
 }
 
 export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit = true }: MemberDiagnosesTabProps) {
@@ -58,6 +70,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDiagnosis, setEditingDiagnosis] = useState<Diagnosis | null>(null);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
+  const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
   const [submitting, setSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -65,6 +78,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
     doktorPemeriksa: '',
     diagnosa: '',
     kategoriDiagnosa: undefined,
+    kategoriDiagnosaList: [],
     icdPrimer: '',
     icdSekunder: '',
     icdTersier: '',
@@ -91,6 +105,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   useEffect(() => {
     loadDiagnoses();
     loadDoctors();
+    loadCategoryOptions();
   }, [memberId]);
 
   useEffect(() => {
@@ -125,6 +140,24 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
     }
   };
 
+  const loadCategoryOptions = async () => {
+    try {
+      const data = await diagnosisApi.getCategories();
+      if (data.length > 0) {
+        setCategoryOptions(
+          data.map((category) => ({
+            value: category.value as DiagnosisCategory,
+            label: category.label,
+            description: category.description,
+          }))
+        );
+      }
+    } catch (error) {
+      devError('Failed to load diagnosis categories:', error);
+      setCategoryOptions(DEFAULT_CATEGORY_OPTIONS);
+    }
+  };
+
   const handleAddExam = () => {
     setAdditionalExams([...additionalExams, { key: '', value: '' }]);
   };
@@ -140,8 +173,15 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   };
 
   const toggleCategory = (category: DiagnosisCategory) => {
-    setSelectedCategories((prev) => (prev.includes(category) ? [] : [category]));
+    setSelectedCategories((prev) =>
+      prev.includes(category)
+        ? prev.filter((selectedCategory) => selectedCategory !== category)
+        : [...prev, category]
+    );
   };
+
+  const getCategoryLabel = (category: DiagnosisCategory | string | null | undefined) =>
+    getDiagnosisCategoryLabel(category, categoryOptions);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,12 +207,15 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
         }
       });
 
-      // Backend stores one diagnosis category
       const primaryCategory = selectedCategories.length > 0 ? selectedCategories[0] : undefined;
       
       const payload: CreateDiagnosisInput = {
         ...formData,
         kategoriDiagnosa: primaryCategory,
+        kategoriDiagnosaList: selectedCategories,
+        icdPrimer: formData.icdPrimer ? icdApi.completeICDCode(formData.icdPrimer) : undefined,
+        icdSekunder: formData.icdSekunder ? icdApi.completeICDCode(formData.icdSekunder) : undefined,
+        icdTersier: formData.icdTersier ? icdApi.completeICDCode(formData.icdTersier) : undefined,
         pemeriksaanTambahan: Object.keys(pemeriksaanTambahan).length > 0 ? pemeriksaanTambahan : undefined
       };
 
@@ -202,6 +245,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       doktorPemeriksa: '',
       diagnosa: '',
       kategoriDiagnosa: undefined,
+      kategoriDiagnosaList: [],
       icdPrimer: '',
       icdSekunder: '',
       icdTersier: '',
@@ -229,6 +273,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       doktorPemeriksa: diagnosis.doktorPemeriksa,
       diagnosa: diagnosis.diagnosa,
       kategoriDiagnosa: diagnosis.kategoriDiagnosa || undefined,
+      kategoriDiagnosaList: getDiagnosisCategories(diagnosis),
       icdPrimer: diagnosis.icdPrimer || '',
       icdSekunder: diagnosis.icdSekunder || '',
       icdTersier: diagnosis.icdTersier || '',
@@ -240,12 +285,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       pemeriksaanTambahan: diagnosis.pemeriksaanTambahan || {}
     });
 
-    // Set selected categories
-    if (diagnosis.kategoriDiagnosa) {
-      setSelectedCategories([diagnosis.kategoriDiagnosa]);
-    } else {
-      setSelectedCategories([]);
-    }
+    setSelectedCategories(getDiagnosisCategories(diagnosis));
 
     // Set additional exams
     if (diagnosis.pemeriksaanTambahan && typeof diagnosis.pemeriksaanTambahan === 'object') {
@@ -374,14 +414,14 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                   <span className={selectedCategories.length === 0 ? 'text-neutral-400' : ''}>
                     {selectedCategories.length === 0 
                       ? 'Pilih kategori...' 
-                      : selectedCategories.map(getDiagnosisCategoryLabel).join(', ')}
+                      : selectedCategories.map(getCategoryLabel).join(', ')}
                   </span>
                   <ChevronDown className={`h-4 w-4 text-neutral-400 transition-transform ${showCategoryDropdown ? 'rotate-180' : ''}`} />
                 </button>
                 
                 {showCategoryDropdown && (
                   <div className="absolute z-50 w-full mt-2 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-lg max-h-64 overflow-y-auto">
-                    {CATEGORY_OPTIONS.map((cat) => (
+                    {categoryOptions.map((cat) => (
                       <button
                         key={cat.value}
                         type="button"
@@ -409,7 +449,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                       key={cat}
                       className="inline-flex items-center gap-1 px-3 py-1 text-xs font-medium rounded-full bg-amber-100 dark:bg-amber-500/20 text-amber-700 dark:text-amber-400"
                     >
-                      {getDiagnosisCategoryLabel(cat)}
+                      {getCategoryLabel(cat)}
                       <button
                         type="button"
                         onClick={() => toggleCategory(cat)}
@@ -430,18 +470,21 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                 value={formData.icdPrimer || ''}
                 onChange={(value) => setFormData({ ...formData, icdPrimer: value })}
                 placeholder="Cari kode ICD primer..."
+                category={selectedCategories[0]}
               />
               <ICDSearchInput
                 label="ICD Sekunder"
                 value={formData.icdSekunder || ''}
                 onChange={(value) => setFormData({ ...formData, icdSekunder: value })}
                 placeholder="Cari kode ICD sekunder..."
+                category={selectedCategories[0]}
               />
               <ICDSearchInput
                 label="ICD Tersier"
                 value={formData.icdTersier || ''}
                 onChange={(value) => setFormData({ ...formData, icdTersier: value })}
                 placeholder="Cari kode ICD tersier..."
+                category={selectedCategories[0]}
               />
             </div>
 
@@ -560,7 +603,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
               <div className="text-sm text-amber-700 dark:text-amber-300">
                 <p className="font-medium mb-1">Informasi</p>
                 <p className="text-amber-600 dark:text-amber-400">
-                  Diagnosa wajib dibuat sebelum memulai sesi terapi. Pilih satu kategori diagnosa yang paling sesuai.
+                  Diagnosa wajib dibuat sebelum memulai sesi terapi. Pilih satu atau lebih kategori diagnosa yang paling sesuai.
                 </p>
               </div>
             </div>
@@ -654,11 +697,14 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {diagnosis.kategoriDiagnosa && (
-                      <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400">
-                        {getDiagnosisCategoryLabel(diagnosis.kategoriDiagnosa)}
+                    {getDiagnosisCategories(diagnosis).map((category) => (
+                      <span
+                        key={category}
+                        className="px-3 py-1 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400"
+                      >
+                        {getCategoryLabel(category)}
                       </span>
-                    )}
+                    ))}
                     {canEditDiagnosis && (
                       <button
                         onClick={() => handleEditDiagnosis(diagnosis)}

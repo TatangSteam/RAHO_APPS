@@ -377,8 +377,6 @@ export default function BranchDetailPage() {
       PUSAT: { bg: 'bg-amber-500/15', text: 'text-amber-400', border: 'border-amber-500/30' },
       PREMIER: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', border: 'border-yellow-500/30' },
       PARTNERSHIP: { bg: 'bg-blue-500/15', text: 'text-blue-400', border: 'border-blue-500/30' },
-      KLINIK: { bg: 'bg-emerald-500/15', text: 'text-emerald-400', border: 'border-emerald-500/30' },
-      HOMECARE: { bg: 'bg-purple-500/15', text: 'text-purple-400', border: 'border-purple-500/30' },
     };
     return styles[type] || { bg: 'bg-neutral-500/15', text: 'text-neutral-400', border: 'border-neutral-500/30' };
   };
@@ -538,7 +536,7 @@ export default function BranchDetailPage() {
                     {branch.branchCode}
                   </span>
                   <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${typeStyles.bg} ${typeStyles.text} ${typeStyles.border}`}>
-                    {branch.type === 'PREMIER' ? 'Premier (Cabang)' : branch.type}
+                    {branch.type === 'PUSAT' ? 'Pusat' : branch.type === 'PREMIER' ? 'Premier' : 'Partnership'}
                   </span>
                   <span className={`px-3 py-1 text-xs font-bold rounded-lg border ${
                     branch.isActive 

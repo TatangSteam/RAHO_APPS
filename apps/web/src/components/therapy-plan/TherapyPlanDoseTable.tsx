@@ -57,6 +57,9 @@ interface TherapyPlanDoseTableProps {
   title?: string;
   emptyText?: string;
   compact?: boolean;
+  showSourceColumn?: boolean;
+  showNoteColumn?: boolean;
+  includeDefaultIfaSubstances?: boolean;
 }
 
 const DOSE_FIELDS: DoseFieldMeta[] = [
@@ -84,7 +87,23 @@ function formatAmount(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
 }
 
-function buildRows(plan: TherapyPlanDoseTablePlan): DoseRow[] {
+function normalizeSubstanceName(value: unknown): string {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function isDefaultIfaSubstance(substance: TherapyPlanSubstance): boolean {
+  const amount = Number(substance.amount);
+  const unit = (substance.unit || 'ml').trim().toLowerCase();
+
+  return (
+    (substance.isDefault === true || normalizeSubstanceName(substance.name) === 'no') &&
+    unit === 'ml' &&
+    Number.isFinite(amount) &&
+    Math.abs(amount - 2.5) < 0.001
+  );
+}
+
+function buildRows(plan: TherapyPlanDoseTablePlan, includeDefaultIfaSubstances: boolean): DoseRow[] {
   const mainRows = DOSE_FIELDS.flatMap((field) => {
     const amount = toNumber(plan[field.key]);
     if (amount === null) return [];
@@ -107,6 +126,7 @@ function buildRows(plan: TherapyPlanDoseTablePlan): DoseRow[] {
   (plan.ifaSubstances || []).forEach((substance, index) => {
     const amount = toNumber(substance.amount);
     if (amount === null || !substance.name?.trim()) return;
+    if (!includeDefaultIfaSubstances && isDefaultIfaSubstance(substance)) return;
 
     ifaSubstanceRows.push({
       id: `ifa-substance-${index}-${substance.name}`,
@@ -151,8 +171,18 @@ export default function TherapyPlanDoseTable({
   title = 'Dosis dan Zat Terapi',
   emptyText = 'Belum ada dosis atau zat tercatat.',
   compact = false,
+  showSourceColumn = true,
+  showNoteColumn = true,
+  includeDefaultIfaSubstances = true,
 }: TherapyPlanDoseTableProps) {
-  const rows = buildRows(plan);
+  const rows = buildRows(plan, includeDefaultIfaSubstances);
+  const columns = [
+    { key: 'name', label: 'Zat / Komponen' },
+    { key: 'amount', label: 'Jumlah' },
+    { key: 'unit', label: 'Satuan' },
+    ...(showSourceColumn ? [{ key: 'source', label: 'Sumber' }] : []),
+    ...(showNoteColumn ? [{ key: 'note', label: 'Keterangan' }] : []),
+  ] as const;
 
   return (
     <div
@@ -196,15 +226,28 @@ export default function TherapyPlanDoseTable({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: compact ? '520px' : '640px' }}>
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              minWidth:
+                showSourceColumn || showNoteColumn
+                  ? compact
+                    ? '520px'
+                    : '640px'
+                  : compact
+                  ? '360px'
+                  : '420px',
+            }}
+          >
             <thead>
               <tr style={{ background: 'rgba(255,255,255,0.04)' }}>
-                {['Zat / Komponen', 'Jumlah', 'Satuan', 'Sumber', 'Keterangan'].map((header) => (
+                {columns.map((column) => (
                   <th
-                    key={header}
+                    key={column.key}
                     style={{
                       padding: compact ? '9px 10px' : '10px 12px',
-                      textAlign: header === 'Jumlah' ? 'right' : 'left',
+                      textAlign: column.key === 'amount' ? 'right' : 'left',
                       fontSize: '11px',
                       fontWeight: 700,
                       color: 'var(--text-secondary)',
@@ -214,7 +257,7 @@ export default function TherapyPlanDoseTable({
                       whiteSpace: 'nowrap',
                     }}
                   >
-                    {header}
+                    {column.label}
                   </th>
                 ))}
               </tr>
@@ -260,40 +303,44 @@ export default function TherapyPlanDoseTable({
                     >
                       {row.unit}
                     </td>
-                    <td
-                      style={{
-                        padding: compact ? '9px 10px' : '11px 12px',
-                        borderBottom: '1px solid rgba(148,163,184,0.12)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <span
+                    {showSourceColumn && (
+                      <td
                         style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          padding: '4px 8px',
-                          borderRadius: '8px',
-                          border: `1px solid ${toneStyle.borderColor}`,
-                          background: toneStyle.background,
-                          color: toneStyle.color,
-                          fontSize: '11px',
-                          fontWeight: 700,
+                          padding: compact ? '9px 10px' : '11px 12px',
+                          borderBottom: '1px solid rgba(148,163,184,0.12)',
+                          whiteSpace: 'nowrap',
                         }}
                       >
-                        {row.source}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        padding: compact ? '9px 10px' : '11px 12px',
-                        borderBottom: '1px solid rgba(148,163,184,0.12)',
-                        color: 'var(--text-secondary)',
-                        fontSize: compact ? '12px' : '13px',
-                        minWidth: '180px',
-                      }}
-                    >
-                      {row.note || '-'}
-                    </td>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            padding: '4px 8px',
+                            borderRadius: '8px',
+                            border: `1px solid ${toneStyle.borderColor}`,
+                            background: toneStyle.background,
+                            color: toneStyle.color,
+                            fontSize: '11px',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {row.source}
+                        </span>
+                      </td>
+                    )}
+                    {showNoteColumn && (
+                      <td
+                        style={{
+                          padding: compact ? '9px 10px' : '11px 12px',
+                          borderBottom: '1px solid rgba(148,163,184,0.12)',
+                          color: 'var(--text-secondary)',
+                          fontSize: compact ? '12px' : '13px',
+                          minWidth: '180px',
+                        }}
+                      >
+                        {row.note || '-'}
+                      </td>
+                    )}
                   </tr>
                 );
               })}

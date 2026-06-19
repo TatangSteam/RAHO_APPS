@@ -4,12 +4,15 @@ import { useState, useEffect, useRef } from 'react';
 import { icdApi, type ICDCode } from '@/lib/icdApi';
 import { devError } from '@/lib/logger';
 
+const ICD_DISPLAY_LIMIT = 80;
+
 interface ICDSearchInputProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   label?: string;
   disabled?: boolean;
+  category?: string;
 }
 
 export default function ICDSearchInput({
@@ -18,18 +21,54 @@ export default function ICDSearchInput({
   placeholder = 'Cari kode ICD...',
   label,
   disabled = false,
+  category,
 }: ICDSearchInputProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ICDCode[]>([]);
+  const [resultTotal, setResultTotal] = useState(0);
+  const [selectedCode, setSelectedCode] = useState<ICDCode | null>(null);
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load initial common codes
+  // Load initial common codes (independent of category)
   useEffect(() => {
-    loadCommonCodes();
+    loadInitialCodes();
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSelectedCode = async () => {
+      if (!value) {
+        setSelectedCode(null);
+        return;
+      }
+
+      const existing = results.find(
+        (item) =>
+          item.code.toUpperCase() === value.toUpperCase() ||
+          item.parent?.toUpperCase() === value.toUpperCase()
+      );
+
+      if (existing) {
+        setSelectedCode(existing);
+        return;
+      }
+
+      const code = await icdApi.getICDByCode(value);
+      if (!cancelled) {
+        setSelectedCode(code);
+      }
+    };
+
+    loadSelectedCode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value, results]);
 
   // Handle click outside
   useEffect(() => {
@@ -43,17 +82,21 @@ export default function ICDSearchInput({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Search ICD codes
+  // Search ICD codes (completely independent of category)
   useEffect(() => {
     const searchCodes = async () => {
       if (!showDropdown) return;
 
       setLoading(true);
       try {
-        const codes = await icdApi.searchICD(query);
-        setResults(codes);
+        // Always use general search - no category filtering
+        const { results, total } = await icdApi.searchICDWithTotal(query, ICD_DISPLAY_LIMIT);
+        setResults(results);
+        setResultTotal(total);
       } catch (error) {
         devError('Failed to search ICD codes:', error);
+        setResults([]);
+        setResultTotal(0);
       } finally {
         setLoading(false);
       }
@@ -63,17 +106,22 @@ export default function ICDSearchInput({
     return () => clearTimeout(debounce);
   }, [query, showDropdown]);
 
-  const loadCommonCodes = async () => {
+  const loadInitialCodes = async () => {
     try {
+      // Always load all common ICD codes - ignore category
       const codes = await icdApi.getCommonICDCodes();
-      setResults(codes.slice(0, 20));
+      setResults(codes.slice(0, ICD_DISPLAY_LIMIT));
+      setResultTotal(codes.length);
     } catch (error) {
       devError('Failed to load common ICD codes:', error);
+      setResults([]);
+      setResultTotal(0);
     }
   };
 
   const handleSelect = (code: ICDCode) => {
-    onChange(code.code);
+    onChange(icdApi.completeICDCode(code.code));
+    setSelectedCode(code);
     setQuery('');
     setShowDropdown(false);
   };
@@ -82,6 +130,23 @@ export default function ICDSearchInput({
     onChange('');
     setQuery('');
     inputRef.current?.focus();
+  };
+
+  const normalizedManualCode = query.trim().toUpperCase();
+  const canUseManualCode = /^[A-Z]\d{2}(\.[A-Z0-9]{1,4})?$/.test(normalizedManualCode);
+  const manualCode = canUseManualCode ? icdApi.completeICDCode(normalizedManualCode) : '';
+  const displayResults = canUseManualCode && !results.some((code) => code.code.toUpperCase() === manualCode)
+    ? [{ code: manualCode, title: 'Gunakan kode ICD ini' }, ...results]
+    : results;
+  const visibleResultCount = displayResults.length;
+  const totalResultCount = resultTotal || visibleResultCount;
+  const resultRangeEnd = Math.min(visibleResultCount, totalResultCount);
+  const getDisplayTitle = (code: ICDCode) => {
+    if (code.namaIndonesia && code.englishName) {
+      return `${code.namaIndonesia} - ${code.englishName}`;
+    }
+
+    return code.title || code.englishName || code.namaIndonesia || 'Kode ICD tersimpan';
   };
 
   return (
@@ -108,7 +173,7 @@ export default function ICDSearchInput({
               {value}
             </span>
             <span style={{ flex: 1, fontSize: '13px', color: 'var(--text-secondary)' }}>
-              {results.find((r) => r.code === value)?.title || 'Loading...'}
+              {selectedCode ? getDisplayTitle(selectedCode) : 'Kode ICD tersimpan'}
             </span>
             {!disabled && (
               <button
@@ -168,13 +233,29 @@ export default function ICDSearchInput({
               <div style={{ padding: '16px', textAlign: 'center' }}>
                 <div className="spinner" style={{ width: '20px', height: '20px', margin: '0 auto' }}></div>
               </div>
-            ) : results.length === 0 ? (
+            ) : displayResults.length === 0 ? (
               <div style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>
                 Tidak ada hasil
               </div>
             ) : (
               <div>
-                {results.map((code) => (
+                <div
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    padding: '8px 12px',
+                    background: 'var(--surface-card)',
+                    borderBottom: '1px solid var(--surface-border)',
+                    color: 'var(--text-muted)',
+                    fontSize: '12px',
+                    zIndex: 1,
+                  }}
+                >
+                  {visibleResultCount > 0 ? `1-${resultRangeEnd} / ${totalResultCount}` : `0 / ${totalResultCount}`}
+                </div>
+                {displayResults.map((code) => (
                   <button
                     key={code.code}
                     type="button"
@@ -207,7 +288,7 @@ export default function ICDSearchInput({
                       >
                         {code.code}
                       </span>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{code.title}</span>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>{getDisplayTitle(code)}</span>
                     </div>
                   </button>
                 ))}

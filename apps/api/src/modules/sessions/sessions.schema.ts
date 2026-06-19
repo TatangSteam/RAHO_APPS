@@ -31,7 +31,7 @@ export const createSessionSchema = z.object({
   memberId: z.string().cuid(),
   memberPackageId: z.string().cuid(),
   boosterPackageId: z.string().cuid().optional(),
-  therapyPlanId: z.string().cuid(), // NEW: Required therapy plan
+  therapyPlanId: z.string().cuid().optional(), // Optional: auto-selected from active set by session number
   adminLayananId: z.string().cuid(),
   doctorId: z.string().cuid().optional(), // Optional - auto-filled if user is DOCTOR
   nurseId: z.string().cuid().optional(), // Optional - auto-filled if user is NURSE
@@ -70,6 +70,7 @@ export const createDiagnosisSchema = z.object({
   doktorPemeriksa: z.string().cuid(),
   diagnosa: z.string().min(3, 'Diagnosa minimal 3 karakter'),
   kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional().nullable(),
+  kategoriDiagnosaList: z.array(z.nativeEnum(DiagnosisCategory)).optional().nullable(),
   // Allow empty strings and convert to undefined for optional string fields
   icdPrimer: z.string().optional().nullable().transform(val => val || undefined),
   icdSekunder: z.string().optional().nullable().transform(val => val || undefined),
@@ -88,6 +89,7 @@ export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;
 export const updateDiagnosisSchema = z.object({
   diagnosa: z.string().min(3, 'Diagnosa minimal 3 karakter').optional(),
   kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional().nullable(),
+  kategoriDiagnosaList: z.array(z.nativeEnum(DiagnosisCategory)).optional().nullable(),
   icdPrimer: z.string().optional().nullable().transform(val => val || undefined),
   icdSekunder: z.string().optional().nullable().transform(val => val || undefined),
   icdTersier: z.string().optional().nullable().transform(val => val || undefined),
@@ -152,7 +154,9 @@ export type CreateTherapyPlanInput = z.infer<typeof createTherapyPlanSchema>;
 export const createVitalSignSchema = z.object({
   pencatatan: z.nativeEnum(VitalType),
   waktuCatat: z.nativeEnum(VitalTiming),
-  value: z.number(),
+  value: z.coerce.number().refine(Number.isFinite, {
+    message: 'Nilai tanda vital harus berupa angka',
+  }),
   unit: z.string().optional(),
   recordedBy: z.string().cuid(),
 });

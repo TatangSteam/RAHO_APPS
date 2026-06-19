@@ -4,6 +4,13 @@ import type { TherapyPlanSubstance } from './therapyPlanSubstances';
 export interface TherapyPlan {
   id: string;
   planCode: string;
+  planNumber?: number | null;
+  therapyPlanSetId?: string | null;
+  setCode?: string | null;
+  setName?: string | null;
+  setVersion?: number | null;
+  setStatus?: 'ACTIVE' | 'SUPERSEDED' | string | null;
+  setSupersededById?: string | null;
   keterangan?: string;
   ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
   ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
@@ -78,6 +85,7 @@ export interface PackageSummary {
 }
 
 export interface BulkCreateTherapyPlansInput {
+  name?: string | null;
   therapyPlans: CreateTherapyPlanInput[];
 }
 
@@ -86,8 +94,13 @@ export interface BulkCreateTherapyPlansResponse {
   message: string;
   data: {
     created: number;
+    setId?: string;
+    setCode?: string;
+    setName?: string | null;
+    version?: number;
     therapyPlans: Array<{
       id: string;
+      planNumber?: number | null;
       planCode: string;
       keterangan: string;
       createdAt: string;
@@ -95,17 +108,44 @@ export interface BulkCreateTherapyPlansResponse {
   };
 }
 
+export interface BulkEditTherapyPlanSetInput {
+  plans: Array<{
+    planNumber: number;
+    keterangan?: string;
+    ifa250?: number | null;
+    ifa500?: number | null;
+    hho?: number | null;
+    h2?: number | null;
+    no?: number | null;
+    gaso?: number | null;
+    o2?: number | null;
+    o3?: number | null;
+    edta?: number | null;
+    mb?: number | null;
+    h2s?: number | null;
+    kcl?: number | null;
+    jmlNb?: number | null;
+    ifaSubstances?: TherapyPlanSubstance[];
+    ifaSubstanceTotalMl?: number;
+  }>;
+}
+
+export interface BulkEditTherapyPlanSetResponse {
+  success: boolean;
+  message: string;
+  data: {
+    setId: string;
+    originalSetId: string;
+    version: number;
+    totalPlans: number;
+    editedPlans: number;
+    plans: TherapyPlan[];
+  };
+}
+
 export const therapyPlanApi = {
   getMemberTherapyPlans: async (memberId: string): Promise<TherapyPlan[]> => {
     const response = await api.get(`/members/${memberId}/therapy-plans`);
-    return response.data.data;
-  },
-
-  createMemberTherapyPlan: async (
-    memberId: string,
-    data: CreateTherapyPlanInput
-  ): Promise<{ id: string; planCode: string; message: string }> => {
-    const response = await api.post(`/members/${memberId}/therapy-plans`, data);
     return response.data.data;
   },
 
@@ -123,13 +163,22 @@ export const therapyPlanApi = {
     return response.data;
   },
 
-  // Edit therapy plan (creates new version)
   editTherapyPlan: async (
     memberId: string,
     therapyPlanId: string,
     data: Partial<CreateTherapyPlanInput>
   ): Promise<{ success: boolean; message: string; data: any }> => {
     const response = await api.put(`/members/${memberId}/therapy-plans/${therapyPlanId}`, data);
+    return response.data;
+  },
+
+  // Bulk edit therapy plan set (edit multiple plans at once)
+  bulkEditTherapyPlanSet: async (
+    memberId: string,
+    setId: string,
+    data: BulkEditTherapyPlanSetInput
+  ): Promise<BulkEditTherapyPlanSetResponse> => {
+    const response = await api.put(`/members/${memberId}/therapy-plan-sets/${setId}/bulk-edit`, data);
     return response.data;
   },
 

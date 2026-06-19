@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
+import { normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
 import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import { AuditAction, Role } from '@prisma/client';
 
@@ -109,6 +110,7 @@ export class MemberMedicalRecordsService {
       : 1;
     
     const diagnosisCode = generateDiagnosisCode(branchCode, sequence);
+    const diagnosisCategories = normalizeDiagnosisCategories(data);
 
     // Create diagnosis linked directly to member (NOT to encounter)
     // This allows member to have multiple diagnoses
@@ -119,7 +121,8 @@ export class MemberMedicalRecordsService {
         encounterId: null, // NOT linked to encounter - diagnoses are standalone
         doktorPemeriksa: data.doktorPemeriksa,
         diagnosa: data.diagnosa,
-        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        kategoriDiagnosa: diagnosisCategories.primaryCategory,
+        kategoriDiagnosaList: diagnosisCategories.categoryList,
         icdPrimer: data.icdPrimer || null,
         icdSekunder: data.icdSekunder || null,
         icdTersier: data.icdTersier || null,
@@ -171,13 +174,16 @@ export class MemberMedicalRecordsService {
       }
     }
 
+    const diagnosisCategories = normalizeDiagnosisCategories(data);
+
     // Update diagnosis
     const updatedDiagnosis = await prisma.diagnosis.update({
       where: { id: diagnosisId },
       data: {
         doktorPemeriksa: data.doktorPemeriksa,
         diagnosa: data.diagnosa,
-        kategoriDiagnosa: data.kategoriDiagnosa || null,
+        kategoriDiagnosa: diagnosisCategories.primaryCategory,
+        kategoriDiagnosaList: diagnosisCategories.categoryList,
         icdPrimer: data.icdPrimer || null,
         icdSekunder: data.icdSekunder || null,
         icdTersier: data.icdTersier || null,
@@ -220,6 +226,16 @@ export class MemberMedicalRecordsService {
         memberId,
       },
       include: {
+        therapyPlanSet: {
+          select: {
+            id: true,
+            name: true,
+            setCode: true,
+            version: true,
+            status: true,
+            supersededById: true,
+          },
+        },
         session: {
           select: {
             id: true,
@@ -294,6 +310,13 @@ export class MemberMedicalRecordsService {
         return {
           id: plan.id,
           planCode: plan.planCode,
+          planNumber: plan.planNumber,
+          therapyPlanSetId: plan.therapyPlanSetId,
+          setCode: plan.therapyPlanSet?.setCode || null,
+          setName: plan.therapyPlanSet?.name || null,
+          setVersion: plan.therapyPlanSet?.version || plan.version,
+          setStatus: plan.therapyPlanSet?.status || (plan.supersededById ? 'SUPERSEDED' : 'ACTIVE'),
+          setSupersededById: plan.therapyPlanSet?.supersededById || null,
           keterangan: plan.keterangan,
           ifa250: plan.ifa250 ? Number(plan.ifa250) : null,
           ifa500: plan.ifa500 ? Number(plan.ifa500) : null,
@@ -311,7 +334,7 @@ export class MemberMedicalRecordsService {
           ifaSubstances: plan.ifaSubstances || null,
           ifaSubstanceTotalMl: plan.ifaSubstanceTotalMl ? Number(plan.ifaSubstanceTotalMl) : null,
           version: plan.version,
-          supersededById: plan.supersededById,
+          supersededById: plan.supersededById || plan.therapyPlanSet?.supersededById || null,
           supersededAt: plan.supersededAt?.toISOString() || null,
           isUsed: !!plan.treatmentSessionId,
           usedInSession: sessionInfo,

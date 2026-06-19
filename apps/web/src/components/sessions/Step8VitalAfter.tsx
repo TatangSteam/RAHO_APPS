@@ -21,6 +21,8 @@ const VITAL_FIELDS: Array<{ type: VitalType; label: string; unit: string; placeh
   { type: 'PI', label: 'Perfusion Index', unit: '%', placeholder: '5' },
 ];
 
+const parseVitalValue = (value: string) => Number(value.replace(',', '.'));
+
 export default function Step8VitalAfter({
   sessionId,
   vitalSigns,
@@ -81,23 +83,25 @@ export default function Step8VitalAfter({
 
   // Check if all fields have valid values (real-time validation)
   const allFieldsValid = useMemo(() => {
-    return VITAL_FIELDS.every((field) => {
+    return VITAL_FIELDS.some((field) => {
       const value = values[field.type];
       if (!value || value === '') return false;
-      const numValue = Number(value);
-      return !isNaN(numValue) && numValue > 0;
+      return Number.isFinite(parseVitalValue(value));
     });
   }, [values]);
 
   // Check if all fields are saved to database
-  const allFieldsSaved = VITAL_FIELDS.every((field) => saved[field.type]);
+  const allFieldsSaved = VITAL_FIELDS.some((field) => saved[field.type]) && VITAL_FIELDS.every((field) => {
+    const value = values[field.type];
+    return !value || saved[field.type];
+  });
 
   const handleBlur = async (type: VitalType) => {
     const value = values[type];
     if (!value || value === '') return;
 
-    const numValue = Number(value);
-    if (isNaN(numValue) || numValue <= 0) return;
+    const numValue = parseVitalValue(value);
+    if (!Number.isFinite(numValue)) return;
 
     // Skip if already saved with same value
     if (saved[type]) return;
@@ -139,8 +143,8 @@ export default function Step8VitalAfter({
         const value = values[field.type];
         if (!value || value === '') continue;
         
-        const numValue = Number(value);
-        if (isNaN(numValue) || numValue <= 0) continue;
+        const numValue = parseVitalValue(value);
+        if (!Number.isFinite(numValue)) continue;
 
         await sessionApi.upsertVitalSign(sessionId, {
           pencatatan: field.type,
@@ -246,7 +250,7 @@ export default function Step8VitalAfter({
             💉 Tanda Vital SESUDAH
           </h3>
           <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-            {showReadyState ? 'Siap disimpan - klik tombol Simpan' : 'Isi semua field untuk menyimpan'}
+            {showReadyState ? 'Siap disimpan - klik tombol Simpan' : 'Isi tanda vital yang tersedia'}
           </p>
         </div>
       </div>
@@ -260,8 +264,8 @@ export default function Step8VitalAfter({
             </label>
             <div style={{ position: 'relative' }}>
               <input
-                type="number"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
                 value={values[field.type]}
                 onChange={(e) => handleChange(field.type, e.target.value)}
                 onBlur={() => handleBlur(field.type)}
@@ -323,7 +327,7 @@ export default function Step8VitalAfter({
           gap: '12px'
         }}>
           <span style={{ fontSize: '13px', color: '#f59e0b', fontWeight: '600' }}>
-            ✓ Semua field sudah terisi - siap disimpan
+            ✓ Tanda vital siap disimpan
           </span>
           <button
             onClick={handleSaveAll}
@@ -375,7 +379,7 @@ export default function Step8VitalAfter({
           alignItems: 'center'
         }}>
           <span style={{ fontSize: '13px', color: 'var(--color-success)' }}>
-            ✓ Semua tanda vital SESUDAH telah tersimpan
+            ✓ Tanda vital SESUDAH telah tersimpan
           </span>
           <button
             onClick={onComplete}

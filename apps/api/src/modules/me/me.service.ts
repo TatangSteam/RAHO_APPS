@@ -1,5 +1,6 @@
 import { prisma } from '@lib/prisma';
 import { uploadFile } from '@config/minio';
+import { getDiagnosisCategoryList } from '../../utils/diagnosisCategories';
 
 
 interface MemberDashboardData {
@@ -31,6 +32,7 @@ interface MemberDiagnosis {
   diagnosisCode: string;
   diagnosa: string;
   kategoriDiagnosa: string | null;
+  kategoriDiagnosaList: string[];
   createdAt: Date;
   doctorName: string;
 }
@@ -58,17 +60,33 @@ interface MemberProfile {
   memberNo: string;
   nik: string | null;
   dateOfBirth: Date | null;
+  age: number | null;
   jenisKelamin: string | null;
   agama: string | null;
   address: string | null;
   voucherCount: number;
   isActive: boolean;
+  isDeceased: boolean;
   registrationBranch: {
     name: string;
     branchCode: string;
     city: string;
   } | null;
   memberSince: Date;
+}
+
+function calculateAge(dateOfBirth?: Date | null): number | null {
+  if (!dateOfBirth) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  const monthDelta = today.getMonth() - dateOfBirth.getMonth();
+
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dateOfBirth.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
 }
 
 interface MemberInvoice {
@@ -230,6 +248,7 @@ export async function getMemberDiagnosesService(memberId: string): Promise<Membe
       diagnosisCode: true,
       diagnosa: true,
       kategoriDiagnosa: true,
+      kategoriDiagnosaList: true,
       createdAt: true,
       doktorPemeriksa: true,
     },
@@ -251,6 +270,7 @@ export async function getMemberDiagnosesService(memberId: string): Promise<Membe
     diagnosisCode: d.diagnosisCode,
     diagnosa: d.diagnosa,
     kategoriDiagnosa: d.kategoriDiagnosa,
+    kategoriDiagnosaList: getDiagnosisCategoryList(d),
     createdAt: d.createdAt,
     doctorName: d.doktorPemeriksa ? (doctorMap.get(d.doktorPemeriksa) ?? 'Dokter') : 'Tidak diketahui',
   }));
@@ -321,6 +341,7 @@ export async function getMemberProfileService(userId: string): Promise<MemberPro
           address: true,
           voucherCount: true,
           isActive: true,
+          isDeceased: true,
           registrationBranch: {
             select: { name: true, branchCode: true, city: true },
           },
@@ -342,11 +363,13 @@ export async function getMemberProfileService(userId: string): Promise<MemberPro
     memberNo: user.member.memberNo,
     nik: user.member.nik,
     dateOfBirth: user.member.dateOfBirth,
+    age: calculateAge(user.member.dateOfBirth),
     jenisKelamin: user.member.jenisKelamin,
     agama: user.member.agama,
     address: user.member.address,
     voucherCount: user.member.voucherCount,
     isActive: user.member.isActive,
+    isDeceased: user.member.isDeceased,
     registrationBranch: user.member.registrationBranch ?? null,
     memberSince: user.createdAt,
   };
@@ -697,6 +720,9 @@ interface TherapyPlanSubstanceData {
 
 interface TherapyPlanData {
   planCode: string;
+  planNumber: number | null;
+  setName: string | null;
+  setVersion: number | null;
   keterangan: string | null;
   ifa250: number | null;
   ifa500: number | null;
@@ -767,6 +793,7 @@ interface MemberSessionDetail {
     diagnosisCode: string;
     diagnosa: string;
     kategoriDiagnosa: string | null;
+    kategoriDiagnosaList: string[];
   } | null;
   therapyPlan: TherapyPlanData | null;
   vitalSignsBefore: VitalSignData | null;
@@ -858,7 +885,11 @@ export async function getMemberSessionDetailService(
       nurse: {
         include: { profile: { select: { fullName: true } } },
       },
-      therapyPlan: true,
+      therapyPlan: {
+        include: {
+          therapyPlanSet: true,
+        },
+      },
       vitalSigns: true,
       infusion: true,
       materials: {
@@ -902,11 +933,15 @@ export async function getMemberSessionDetailService(
           diagnosisCode: diagnosis.diagnosisCode,
           diagnosa: diagnosis.diagnosa,
           kategoriDiagnosa: diagnosis.kategoriDiagnosa,
+          kategoriDiagnosaList: getDiagnosisCategoryList(diagnosis),
         }
       : null,
     therapyPlan: session.therapyPlan
       ? {
           planCode: session.therapyPlan.planCode,
+          planNumber: session.therapyPlan.planNumber,
+          setName: session.therapyPlan.therapyPlanSet?.name ?? null,
+          setVersion: session.therapyPlan.therapyPlanSet?.version ?? session.therapyPlan.version ?? null,
           keterangan: session.therapyPlan.keterangan,
           ifa250: session.therapyPlan.ifa250 ? Number(session.therapyPlan.ifa250) : null,
           ifa500: session.therapyPlan.ifa500 ? Number(session.therapyPlan.ifa500) : null,

@@ -554,6 +554,8 @@ export class RoleDashboardService {
       prisma.member.count({
         where: {
           registrationBranchId: { in: branchIds },
+          isActive: true,
+          isDeceased: false,
           memberPackages: { some: { status: 'ACTIVE' } },
         },
       }),
@@ -644,6 +646,8 @@ export class RoleDashboardService {
           prisma.member.count({
             where: {
               registrationBranchId: branch.id,
+              isActive: true,
+              isDeceased: false,
               memberPackages: { some: { status: 'ACTIVE' } },
             },
           }),
@@ -778,7 +782,8 @@ export class RoleDashboardService {
       prisma.memberPackage.findMany({
         where: { 
           branchId, 
-          status: 'ACTIVE' 
+          status: 'ACTIVE',
+          member: { isActive: true, isDeceased: false },
         },
         select: { memberId: true },
         distinct: ['memberId'],
@@ -827,6 +832,8 @@ export class RoleDashboardService {
     const membersWithActivePackages = await prisma.member.findMany({
       where: {
         registrationBranchId: branchId,
+        isActive: true,
+        isDeceased: false,
         memberPackages: { some: { status: 'ACTIVE' } },
       },
       include: {

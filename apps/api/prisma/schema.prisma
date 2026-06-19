@@ -29,8 +29,6 @@ enum Role {
 
 enum BranchType {
   PUSAT
-  KLINIK
-  HOMECARE
   PREMIER
   PARTNERSHIP
 }
@@ -227,7 +225,7 @@ model Branch {
   address        String?
   city           String?
   phone          String?
-  type           BranchType @default(KLINIK)
+  type           BranchType @default(PREMIER)
   operatingHours String?
   isActive       Boolean    @default(true)
   createdBy      String? // User ID who created this branch
@@ -390,6 +388,7 @@ model Member {
   emergencyContact String?
   sumberInfoRaho   String?
   postalCode       String?
+  isDeceased       Boolean   @default(false)
   isActive         Boolean   @default(true)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -406,6 +405,7 @@ model Member {
   encounters          Encounter[]
   diagnoses           Diagnosis[] // Direct diagnoses without encounter
   therapyPlans        TherapyPlan[] // Therapy plans for preparation
+  therapyPlanSets     TherapyPlanSet[]
   chatRoom            ChatRoom?
   incentiveRecords    ReferralIncentiveRecord[]
   labResults          LabResult[]
@@ -1019,6 +1019,7 @@ model Diagnosis {
   doktorPemeriksa          String
   diagnosa                 String             @db.Text
   kategoriDiagnosa         DiagnosisCategory?
+  kategoriDiagnosaList     Json?              @map("kategori_diagnosa_list")
   icdPrimer                String?
   icdSekunder              String?
   icdTersier               String?
@@ -1040,10 +1041,34 @@ model Diagnosis {
   @@map("diagnoses")
 }
 
+model TherapyPlanSet {
+  id             String   @id @default(cuid())
+  memberId       String
+  setCode        String   @unique // Internal code, hidden from UI tables
+  name           String?
+  version        Int      @default(1)
+  status         String   @default("ACTIVE") // ACTIVE, SUPERSEDED
+  supersededById String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  member       Member           @relation(fields: [memberId], references: [id])
+  plans        TherapyPlan[]
+  supersededBy TherapyPlanSet?  @relation("TherapyPlanSetVersioning", fields: [supersededById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supersedes   TherapyPlanSet[] @relation("TherapyPlanSetVersioning")
+
+  @@index([memberId, status])
+  @@index([supersededById])
+  @@map("therapy_plan_sets")
+}
+
 model TherapyPlan {
   id                 String   @id @default(cuid())
   planCode           String   @unique
   memberId           String? // NEW: For preparation (before session)
+  therapyPlanSetId   String?
+  planNumber         Int?
   treatmentSessionId String?  @unique // Make optional
   keterangan         String?  @db.Text
   // IFA fields - IFA A + MG (pilih salah satu: 500ml atau 250ml)
@@ -1071,12 +1096,16 @@ model TherapyPlan {
   updatedAt          DateTime @updatedAt
 
   member         Member?           @relation(fields: [memberId], references: [id])
+  therapyPlanSet TherapyPlanSet?   @relation(fields: [therapyPlanSetId], references: [id])
   session        TreatmentSession? @relation(fields: [treatmentSessionId], references: [id])
   supersededBy   TherapyPlan?      @relation("TherapyPlanVersioning", fields: [supersededById], references: [id], onDelete: NoAction, onUpdate: NoAction)
   supersedes     TherapyPlan[]     @relation("TherapyPlanVersioning")
+  infusions      InfusionExecution[]
 
   @@index([memberId])
+  @@index([therapyPlanSetId])
   @@index([supersededById])
+  @@unique([therapyPlanSetId, planNumber])
   @@map("therapy_plans")
 }
 
@@ -1101,6 +1130,7 @@ model VitalSign {
 model InfusionExecution {
   id                 String      @id @default(cuid())
   treatmentSessionId String      @unique
+  therapyPlanId      String?
   // IFA fields - IFA A + MG (pilih salah satu: 500ml atau 250ml)
   ifa250             Decimal?    @db.Decimal(10, 2) // IFA A + MG 250ml (satuan: Botol)
   ifa500             Decimal?    @db.Decimal(10, 2) // IFA A + MG 500ml (satuan: Botol)
@@ -1124,8 +1154,10 @@ model InfusionExecution {
   createdAt          DateTime    @default(now())
   updatedAt          DateTime    @updatedAt
 
-  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+  session     TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
+  therapyPlan TherapyPlan?     @relation(fields: [therapyPlanId], references: [id])
 
+  @@index([therapyPlanId])
   @@map("infusion_executions")
 }
 

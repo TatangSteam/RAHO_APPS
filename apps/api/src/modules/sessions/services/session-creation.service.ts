@@ -42,24 +42,21 @@ export class SessionCreationService {
     // 6. Validate diagnosis exists
     await this.validateDiagnosisExists(sessionData.memberId);
 
-    // 7. Validate therapy plan
-    await this.validateTherapyPlan(sessionData.therapyPlanId, sessionData.memberId);
-
-    // 8. Validate booster package if provided
+    // 7. Validate booster package if provided
     if (sessionData.boosterPackageId) {
       await this.validateBoosterPackage(sessionData.boosterPackageId, branchId);
     }
 
-    // 9. Validate infus set stock availability
+    // 8. Validate infus set stock availability
     await this.validateInfusSetStock(branchId);
 
-    // 10. Get branch for code generation
+    // 9. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
     if (!branch) {
       throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
     }
 
-    // 11. Calculate infusKe (global and branch-specific) - either manual or automatic
+    // 10. Calculate infusKe (global and branch-specific) - either manual or automatic
     let globalInfusKe: number;
     let branchInfusKe: number;
     
@@ -82,6 +79,14 @@ export class SessionCreationService {
         `🤖 [SESSION-NUMBER] Auto mode - Calculated infusKe - Global: ${globalInfusKe}, Branch: ${branchInfusKe}`
       );
     }
+
+    // 11. Validate or auto-select therapy plan after session number is known.
+    const selectedTherapyPlan = await this.resolveTherapyPlanForSession(
+      sessionData.therapyPlanId,
+      sessionData.memberId,
+      globalInfusKe
+    );
+    sessionData.therapyPlanId = selectedTherapyPlan.id;
 
     // 12. Create session in transaction
     const result = await this.createSessionTransaction(
@@ -385,6 +390,51 @@ export class SessionCreationService {
   }
 
   /**
+   * Resolve therapy plan for this session.
+   * If no plan is selected, choose active set plan by the member's global session number.
+   */
+  private async resolveTherapyPlanForSession(therapyPlanId: string | undefined, memberId: string, infusKe: number) {
+    if (therapyPlanId) {
+      const selectedPlan = await this.validateTherapyPlan(therapyPlanId, memberId);
+      if (selectedPlan.planNumber && selectedPlan.planNumber !== infusKe) {
+        throw {
+          status: 422,
+          code: 'THERAPY_PLAN_NUMBER_MISMATCH',
+          message: `Therapy plan yang dipilih adalah Terapi #${selectedPlan.planNumber}, sedangkan sesi ini Terapi #${infusKe}. Pilih plan yang sesuai.`,
+        };
+      }
+
+      return selectedPlan;
+    }
+
+    const therapyPlan = await prisma.therapyPlan.findFirst({
+      where: {
+        memberId,
+        planNumber: infusKe,
+        treatmentSessionId: null,
+        supersededById: null,
+        therapyPlanSet: {
+          status: 'ACTIVE',
+        },
+      },
+      include: {
+        therapyPlanSet: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (!therapyPlan) {
+      throw {
+        status: 422,
+        code: 'THERAPY_PLAN_AUTO_SELECT_FAILED',
+        message: `Tidak ada therapy plan aktif untuk Terapi #${infusKe}. Buat set therapy plan bulk dengan baris #${infusKe} terlebih dahulu.`,
+      };
+    }
+
+    return therapyPlan;
+  }
+
+  /**
    * Validate therapy plan
    * IMPORTANT: Therapy plan must be created fresh for each session
    * Cannot reuse therapy plan from previous sessions
@@ -392,6 +442,7 @@ export class SessionCreationService {
   private async validateTherapyPlan(therapyPlanId: string, memberId: string) {
     const therapyPlan = await prisma.therapyPlan.findUnique({
       where: { id: therapyPlanId },
+      include: { therapyPlanSet: true },
     });
 
     if (!therapyPlan) {
@@ -407,6 +458,14 @@ export class SessionCreationService {
         status: 403,
         code: 'THERAPY_PLAN_MISMATCH',
         message: 'Therapy plan bukan milik member ini',
+      };
+    }
+
+    if (therapyPlan.therapyPlanSet?.status === 'SUPERSEDED') {
+      throw {
+        status: 422,
+        code: 'THERAPY_PLAN_SET_SUPERSEDED',
+        message: 'Therapy plan ini berasal dari set lama. Gunakan set aktif terbaru.',
       };
     }
 

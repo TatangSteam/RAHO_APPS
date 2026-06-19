@@ -7,6 +7,23 @@ interface PersonalDataSectionProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
 }
 
+function calculateAge(birthDate?: string): string {
+  if (!birthDate) return '';
+
+  const parsedDate = new Date(birthDate);
+  if (isNaN(parsedDate.getTime())) return '';
+
+  const today = new Date();
+  let age = today.getFullYear() - parsedDate.getFullYear();
+  const monthDelta = today.getMonth() - parsedDate.getMonth();
+
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < parsedDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? `${age} tahun` : '';
+}
+
 export default function PersonalDataSection({ formData, onChange }: PersonalDataSectionProps) {
   const identityType = formData.identityType || 'NIK';
   const autoIdentityTypes = ['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'];
@@ -23,6 +40,7 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
       : identityType === 'KITAS'
         ? 'Masukkan nomor KITAS/KITAP'
         : 'Nomor Induk Kependudukan';
+  const ageLabel = calculateAge(formData.birthDate);
 
   return (
     <div className="card">
@@ -157,6 +175,19 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
           />
         </div>
 
+        {/* Umur - otomatis dari tanggal lahir */}
+        <div className="form-col-4">
+          <label className="form-label">Umur</label>
+          <input
+            type="text"
+            value={ageLabel}
+            readOnly
+            className="form-input"
+            placeholder="Otomatis"
+            style={{ opacity: ageLabel ? 1 : 0.75 }}
+          />
+        </div>
+
         {/* Jenis Kelamin - 4 cols on desktop */}
         <div className="form-col-4">
           <label className="form-label">
@@ -211,18 +242,29 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
 
         {/* Pekerjaan - 6 cols */}
         <div className="form-col-6">
-          <label className="form-label">
-            Pekerjaan <span style={{ color: '#ef4444' }}>*</span>
-          </label>
+          <label className="form-label">Pekerjaan</label>
           <input
             type="text"
             name="occupation"
             value={formData.occupation || ''}
             onChange={onChange}
-            required
             className="form-input"
-            placeholder="Pekerjaan saat ini"
+            placeholder="Opsional"
           />
+        </div>
+
+        {/* Status meninggal */}
+        <div className="form-col-6">
+          <label className="form-label">Status Meninggal</label>
+          <select
+            name="isDeceased"
+            value={formData.isDeceased ? 'true' : 'false'}
+            onChange={onChange}
+            className="form-input"
+          >
+            <option value="false">Tidak</option>
+            <option value="true">Ya</option>
+          </select>
         </div>
 
         {/* Alamat - Full width */}

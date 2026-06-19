@@ -87,8 +87,9 @@ export const config = {
      * - _next/image (image optimization)
      * - favicon.ico
      * - api routes
+     * - wilayah-api routes
      * - asset folder (public assets like images)
      */
-    '/((?!_next/static|_next/image|favicon.ico|api|asset).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api|wilayah-api|asset).*)',
   ],
 };

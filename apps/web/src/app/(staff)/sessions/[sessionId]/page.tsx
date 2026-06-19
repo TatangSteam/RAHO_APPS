@@ -474,6 +474,7 @@ export default function SessionDetailPage() {
         {activeStep === 2 && (
           <Step2TherapyPlan 
             sessionId={sessionId}
+            memberId={session.memberId}
             therapyPlan={session.therapyPlan}
             isLocked={!canAccessStep(2)}
             onComplete={handleStepComplete}
@@ -493,6 +494,7 @@ export default function SessionDetailPage() {
         {activeStep === 4 && (
           <Step5Infusion 
             sessionId={sessionId}
+            memberId={session.memberId}
             therapyPlan={session.therapyPlan}
             infusion={session.infusion}
             isLocked={!canAccessStep(4)}

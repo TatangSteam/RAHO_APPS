@@ -9,6 +9,9 @@ import { devError } from '@/lib/logger';
 
 interface MemberProfileTabProps {
   member: MemberDetail;
+  canEditLifeStatus?: boolean;
+  updatingLifeStatus?: boolean;
+  onToggleLifeStatus?: () => void;
 }
 
 interface IncentiveRecord {
@@ -26,8 +29,27 @@ interface IncentiveRecord {
   createdAt: string;
 }
 
+function calculateAge(dateOfBirth?: string): number | null {
+  if (!dateOfBirth) return null;
+  const birthDate = new Date(dateOfBirth);
+  if (isNaN(birthDate.getTime())) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDelta = today.getMonth() - birthDate.getMonth();
+
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 export default function MemberProfileTab({ 
-  member
+  member,
+  canEditLifeStatus = false,
+  updatingLifeStatus = false,
+  onToggleLifeStatus,
 }: MemberProfileTabProps) {
   const [loadingDocUrl, setLoadingDocUrl] = useState<string | null>(null);
   const [incentiveData, setIncentiveData] = useState<{
@@ -67,6 +89,7 @@ export default function MemberProfileTab({
   };
 
   const totalPages = incentiveData ? Math.ceil(incentiveData.records.length / itemsPerPage) : 0;
+  const memberAge = member.age ?? calculateAge(member.dateOfBirth);
 
   const handleViewDocument = async (fileUrl: string, fileName: string) => {
     try {
@@ -111,6 +134,10 @@ export default function MemberProfileTab({
             </p>
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Umur</p>
+            <p style={{ fontWeight: '600' }}>{memberAge !== null ? `${memberAge} tahun` : '-'}</p>
+          </div>
+          <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Jenis Kelamin</p>
             <p style={{ fontWeight: '600' }}>
               {member.jenisKelamin === 'L' ? '👨 Laki-laki' : member.jenisKelamin === 'P' ? '👩 Perempuan' : '-'}
@@ -131,6 +158,33 @@ export default function MemberProfileTab({
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Pekerjaan</p>
             <p style={{ fontWeight: '600' }}>💼 {member.pekerjaan || '-'}</p>
+          </div>
+          <div style={{ padding: '12px', background: member.isDeceased ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)', border: member.isDeceased ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(34,197,94,0.2)', borderRadius: 'var(--radius-md)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div>
+              <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Status Meninggal</p>
+              <p style={{ fontWeight: '700', color: member.isDeceased ? '#ef4444' : '#22c55e' }}>{member.isDeceased ? 'Ya' : 'Tidak'}</p>
+            </div>
+            {canEditLifeStatus && onToggleLifeStatus && (
+              <button
+                type="button"
+                onClick={onToggleLifeStatus}
+                disabled={updatingLifeStatus}
+                className="btn btn-sm"
+                style={{
+                  background: member.isDeceased ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
+                  border: member.isDeceased ? '1px solid rgba(34,197,94,0.35)' : '1px solid rgba(239,68,68,0.35)',
+                  color: member.isDeceased ? '#22c55e' : '#ef4444',
+                  whiteSpace: 'nowrap',
+                  opacity: updatingLifeStatus ? 0.7 : 1,
+                }}
+              >
+                {updatingLifeStatus
+                  ? 'Menyimpan...'
+                  : member.isDeceased
+                    ? 'Tandai Masih Hidup'
+                    : 'Tandai Meninggal'}
+              </button>
+            )}
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)', gridColumn: '1 / -1' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Alamat</p>

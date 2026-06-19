@@ -9,6 +9,7 @@ import { MemberBranchAccessService } from './services/member-branch-access.servi
 import { MemberMedicalRecordsService } from './services/member-medical-records.service';
 import { MemberTherapyPlanBulkService } from './services/member-therapy-plan-bulk.service';
 import { MemberTherapyPlanEditService } from './services/member-therapy-plan-edit.service';
+import { MemberTherapyPlanSetEditService } from './services/member-therapy-plan-set-edit.service';
 
 /**
  * Main Members Service - Orchestrates all member-related operations
@@ -30,6 +31,7 @@ export class MembersService {
   private medicalRecordsService: MemberMedicalRecordsService;
   private therapyPlanBulkService: MemberTherapyPlanBulkService;
   private therapyPlanEditService: MemberTherapyPlanEditService;
+  private therapyPlanSetEditService: MemberTherapyPlanSetEditService;
 
   constructor() {
     this.retrievalService = new MemberRetrievalService();
@@ -39,6 +41,7 @@ export class MembersService {
     this.medicalRecordsService = new MemberMedicalRecordsService();
     this.therapyPlanBulkService = new MemberTherapyPlanBulkService();
     this.therapyPlanEditService = new MemberTherapyPlanEditService();
+    this.therapyPlanSetEditService = new MemberTherapyPlanSetEditService();
   }
 
   // ============================================================
@@ -110,6 +113,7 @@ export class MembersService {
       emergencyContactPhone?: string;
       infoSource?: string;
       postalCode?: string;
+      isDeceased?: boolean;
       memberEmail: string;
       memberPassword: string;
       referralCode?: string;
@@ -215,8 +219,12 @@ export class MembersService {
   /**
    * Create member therapy plan
    */
-  async createMemberTherapyPlan(memberId: string, data: any, userId: string) {
-    return await this.medicalRecordsService.createMemberTherapyPlan(memberId, data, userId);
+  async createMemberTherapyPlan(_memberId: string, _data: any, _userId: string) {
+    throw {
+      status: 410,
+      code: 'THERAPY_PLAN_BULK_ONLY',
+      message: 'Therapy plan hanya bisa dibuat melalui bulk sebagai satu set.',
+    };
   }
 
   /**
@@ -241,14 +249,21 @@ export class MembersService {
    * Bulk create therapy plans
    */
   async bulkCreateTherapyPlans(memberId: string, data: any, userId: string) {
-    return await this.therapyPlanBulkService.bulkCreateTherapyPlans(memberId, data);
+    return await this.therapyPlanBulkService.bulkCreateTherapyPlans(memberId, data, userId);
   }
 
   /**
-   * Edit therapy plan (creates new version, marks old as superseded)
+   * Edit therapy plan by creating a new version for the whole set.
    */
-  async editTherapyPlan(therapyPlanId: string, data: any, userId: string) {
+  async editTherapyPlan(therapyPlanId: string, data: any, _userId: string) {
     return await this.therapyPlanEditService.editTherapyPlan(therapyPlanId, data);
+  }
+
+  /**
+   * Bulk edit therapy plan set (edit multiple plans at once, creates new set version)
+   */
+  async bulkEditTherapyPlanSet(setId: string, data: any, _userId: string) {
+    return await this.therapyPlanSetEditService.bulkEditTherapyPlanSet(setId, data);
   }
 
   /**

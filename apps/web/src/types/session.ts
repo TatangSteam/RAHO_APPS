@@ -40,7 +40,7 @@ export interface CreateSessionInput {
   memberId: string;
   memberPackageId: string;
   boosterPackageId?: string;
-  therapyPlanId: string; // NEW: Required therapy plan
+  therapyPlanId?: string; // Optional: backend can auto-select from active set by session number
   adminLayananId: string;
   doctorId?: string; // Optional - auto-filled if user is DOCTOR
   nurseId?: string; // Optional - auto-filled if user is NURSE
@@ -117,6 +117,7 @@ export interface Diagnosis {
   doktorPemeriksa: string;
   diagnosa: string;
   kategoriDiagnosa: DiagnosisCategory | null;
+  kategoriDiagnosaList?: DiagnosisCategory[] | null;
   icdPrimer: string | null;
   icdSekunder: string | null;
   icdTersier: string | null;
@@ -133,6 +134,11 @@ export interface Diagnosis {
 export interface TherapyPlan {
   id: string;
   planCode: string;
+  planNumber?: number | null;
+  therapyPlanSetId?: string | null;
+  setName?: string | null;
+  setVersion?: number | null;
+  setStatus?: string | null;
   treatmentSessionId: string;
   keterangan: string | null;
   ifa250: number | null; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
@@ -241,6 +247,7 @@ export interface CreateDiagnosisInput {
   doktorPemeriksa: string;
   diagnosa: string;
   kategoriDiagnosa?: DiagnosisCategory;
+  kategoriDiagnosaList?: DiagnosisCategory[];
   icdPrimer?: string;
   icdSekunder?: string;
   icdTersier?: string;

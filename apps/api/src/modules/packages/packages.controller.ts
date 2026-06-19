@@ -96,7 +96,7 @@ export class PackagesController {
   async getMemberPackages(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId } = req.params;
-      const { branchId, role } = req.user!;
+      const { branchId, role, branches } = req.user!;
 
       console.log('🎯 [Packages Controller] getMemberPackages called');
       console.log('  - memberId:', memberId);
@@ -105,7 +105,7 @@ export class PackagesController {
 
       // ADMIN_MANAGER and SUPER_ADMIN should ALWAYS use member's registration branch
       // They can view packages across all branches
-      let effectiveBranchId = branchId;
+      let effectiveBranchIds = branchId ? [branchId] : [];
       
       if (role === 'ADMIN_MANAGER' || role === 'SUPER_ADMIN') {
         console.log('  - Global role detected, fetching member registration branch');
@@ -118,13 +118,21 @@ export class PackagesController {
           throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
         }
         
-        effectiveBranchId = member.registrationBranchId;
-        console.log('  - Using member registration branch:', effectiveBranchId);
+        effectiveBranchIds = [member.registrationBranchId];
+        console.log('  - Using member registration branch:', effectiveBranchIds);
+      } else if (role === 'DOCTOR' || role === 'NURSE') {
+        effectiveBranchIds = Array.from(new Set([...(branches || []), ...(branchId ? [branchId] : [])]));
+
+        if (effectiveBranchIds.length === 0) {
+          throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
+        }
+
+        console.log('  - Staff accessible branches:', effectiveBranchIds);
       } else if (!branchId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
       }
 
-      const packages = await packagesService.getMemberPackages(memberId, effectiveBranchId);
+      const packages = await packagesService.getMemberPackages(memberId, effectiveBranchIds);
       console.log('✅ [Packages Controller] Returning', packages.length, 'packages');
       return sendSuccess(res, packages);
     } catch (error) {

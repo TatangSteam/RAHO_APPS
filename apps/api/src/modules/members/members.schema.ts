@@ -6,6 +6,12 @@ const GenderEnum = z.enum(['L', 'P']);
 // Incentive type enum
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
 const IdentityTypeEnum = z.enum(['NIK', 'PASSPORT', 'KITAS', 'VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK']);
+const booleanFromFormSchema = z.union([z.boolean(), z.string()]).transform((val) => {
+  if (typeof val === 'string') {
+    return val === 'true' || val === '1';
+  }
+  return val;
+});
 
 const ifaSubstanceSchema = z.object({
   name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
@@ -67,6 +73,7 @@ export const therapyPlanDataSchema = z.object({
 
 // Bulk create therapy plans schema
 export const bulkCreateTherapyPlansSchema = z.object({
+  name: z.string().trim().max(120).nullable().optional(),
   therapyPlans: z.array(therapyPlanDataSchema)
     .min(1, 'Minimal 1 therapy plan harus dibuat')
     .max(50, 'Maksimal 50 therapy plans dapat dibuat sekaligus'),
@@ -90,6 +97,32 @@ export const editTherapyPlanSchema = z.object({
   jmlNb: z.number().min(0).nullable().optional(),
   ifaSubstances: z.array(ifaSubstanceSchema).nullable().optional(),
   ifaSubstanceTotalMl: z.number().min(0).nullable().optional(),
+});
+
+// Bulk edit therapy plan set schema (for editing multiple plans in a set at once)
+export const bulkEditTherapyPlanSetSchema = z.object({
+  plans: z.array(
+    z.object({
+      planNumber: z.number().int().min(1, 'Plan number harus positif'),
+      keterangan: z.string().optional(),
+      ifa250: z.number().int().min(0).nullable().optional(),
+      ifa500: z.number().int().min(0).nullable().optional(),
+      hho: z.number().min(0).nullable().optional(),
+      h2: z.number().min(0).nullable().optional(),
+      no: z.number().min(0).nullable().optional(),
+      gaso: z.number().min(0).nullable().optional(),
+      o2: z.number().min(0).nullable().optional(),
+      o3: z.number().min(0).nullable().optional(),
+      edta: z.number().min(0).nullable().optional(),
+      mb: z.number().min(0).nullable().optional(),
+      h2s: z.number().min(0).nullable().optional(),
+      kcl: z.number().min(0).nullable().optional(),
+      jmlNb: z.number().min(0).nullable().optional(),
+      ifaSubstances: z.array(ifaSubstanceSchema).nullable().optional(),
+      ifaSubstanceTotalMl: z.number().min(0).nullable().optional(),
+    })
+  ).min(1, 'Minimal 1 therapy plan harus diedit')
+    .max(50, 'Maksimal 50 therapy plans dapat diedit sekaligus'),
 });
 
 // ============================================================
@@ -117,6 +150,7 @@ export const createMemberSchema = z.object({
   emergencyContactPhone: z.string().optional(),
   infoSource: z.string().optional(),
   postalCode: z.string().optional(),
+  isDeceased: booleanFromFormSchema.default(false),
 
   // Section B - Akun Member
   memberEmail: z.string().email('Format email tidak valid'),
@@ -131,15 +165,7 @@ export const createMemberSchema = z.object({
     if (val === '' || val === null) return undefined;
     return val;
   }),
-  isConsentToPhoto: z
-    .union([z.boolean(), z.string()])
-    .transform((val) => {
-      if (typeof val === 'string') {
-        return val === 'true' || val === '1';
-      }
-      return val;
-    })
-    .default(false),
+  isConsentToPhoto: booleanFromFormSchema.default(false),
   
   // Section C - Incentive Settings (Optional)
   firstIncentiveType: z.string().optional().transform((val) => {
@@ -179,6 +205,7 @@ export const updateMemberSchema = z.object({
   infoSource: z.string().optional(),
   postalCode: z.string().optional(),
   isActive: z.boolean().optional(),
+  isDeceased: booleanFromFormSchema.optional(),
   
   // Incentive fields
   firstIncentiveType: IncentiveTypeEnum.optional(),

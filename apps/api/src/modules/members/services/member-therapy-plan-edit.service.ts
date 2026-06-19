@@ -1,6 +1,6 @@
 /**
- * Service for editing therapy plans with versioning
- * When a therapy plan is edited, a new version is created and the old one is marked as superseded
+ * Service for set-level therapy plan versioning.
+ * Editing one row creates a new set version and copies every row in the set.
  */
 
 import { prisma } from '@/lib/prisma';
@@ -25,22 +25,24 @@ interface EditTherapyPlanInput {
   ifaSubstanceTotalMl?: number | null;
 }
 
+function padSequence(value: number, size = 2) {
+  return String(value).padStart(size, '0');
+}
+
+function createPlanCodeFromSet(setCode: string, planNumber: number) {
+  return `${setCode.replace(/^TPS-/, 'TP-')}-${padSequence(planNumber)}`;
+}
+
 export class MemberTherapyPlanEditService {
-  /**
-   * Edit therapy plan by creating a new version
-   * Old version is marked as superseded, not deleted
-   */
   async editTherapyPlan(therapyPlanId: string, input: EditTherapyPlanInput) {
-    // Get the original therapy plan
     const originalPlan = await prisma.therapyPlan.findUnique({
       where: { id: therapyPlanId },
       include: {
+        therapyPlanSet: true,
         member: {
           include: {
             registrationBranch: {
-              select: {
-                branchCode: true,
-              },
+              select: { branchCode: true },
             },
           },
         },
@@ -48,24 +50,18 @@ export class MemberTherapyPlanEditService {
     });
 
     if (!originalPlan) {
-      throw {
-        status: 404,
-        code: 'THERAPY_PLAN_NOT_FOUND',
-        message: 'Therapy plan tidak ditemukan',
-      };
+      throw { status: 404, code: 'THERAPY_PLAN_NOT_FOUND', message: 'Therapy plan tidak ditemukan' };
     }
 
-    // Cannot edit if already used in a session
     if (originalPlan.treatmentSessionId) {
       throw {
         status: 400,
         code: 'THERAPY_PLAN_IN_USE',
-        message: 'Therapy plan sudah digunakan dalam sesi treatment, tidak dapat diedit',
+        message: 'Therapy plan sudah digunakan dalam sesi treatment, tidak dapat diedit. Buat versi set baru dari plan yang belum digunakan.',
       };
     }
 
-    // Cannot edit if this version has already been replaced by a newer version
-    if (originalPlan.supersededById) {
+    if (originalPlan.supersededById || originalPlan.therapyPlanSet?.status === 'SUPERSEDED') {
       throw {
         status: 400,
         code: 'THERAPY_PLAN_EDIT_HISTORY',
@@ -73,7 +69,6 @@ export class MemberTherapyPlanEditService {
       };
     }
 
-    // Validate IFA mutual exclusivity
     if (input.ifa250 && input.ifa500) {
       throw {
         status: 400,
@@ -82,7 +77,6 @@ export class MemberTherapyPlanEditService {
       };
     }
 
-    // Check if at least one dose field is filled
     const hasDose =
       input.ifa250 ||
       input.ifa500 ||
@@ -99,146 +93,166 @@ export class MemberTherapyPlanEditService {
       input.jmlNb;
 
     if (!hasDose) {
-      throw {
-        status: 400,
-        code: 'NO_DOSE_PROVIDED',
-        message: 'Minimal satu field dosis harus diisi',
-      };
+      throw { status: 400, code: 'NO_DOSE_PROVIDED', message: 'Minimal satu field dosis harus diisi' };
     }
 
-    // Create new version in a transaction
+    const originalSet = originalPlan.therapyPlanSet;
+    const plansInSet = originalSet
+      ? await prisma.therapyPlan.findMany({
+          where: { therapyPlanSetId: originalSet.id },
+          orderBy: [{ planNumber: 'asc' }, { createdAt: 'asc' }],
+        })
+      : [originalPlan];
+
+    const baseSetCode = originalSet?.setCode || originalPlan.planCode.replace(/-\d+$/i, '');
+    const newVersion = (originalSet?.version || originalPlan.version || 1) + 1;
+    const newSetCode = `${baseSetCode.replace(/-V\d+$/i, '')}-V${newVersion}`;
+
     const result = await prisma.$transaction(async (tx) => {
-      // Generate new plan code with incremented version
-      const newVersion = originalPlan.version + 1;
-      const basePlanCode = originalPlan.planCode.replace(/-V\d+$/i, '');
-      const newPlanCode = `${basePlanCode}-V${newVersion}`;
-
-      const ifaSubstanceData: any =
-        input.ifaSubstances !== undefined
-          ? normalizeIfaSubstances(input.ifaSubstances, false)
-          : {
-              ifaSubstances: originalPlan.ifaSubstances,
-              ifaSubstanceTotalMl: originalPlan.ifaSubstanceTotalMl,
-            };
-
-      // Create new therapy plan (new version)
-      const newPlan = await tx.therapyPlan.create({
+      const newSet = await tx.therapyPlanSet.create({
         data: {
-          planCode: newPlanCode,
-          member: originalPlan.memberId ? { connect: { id: originalPlan.memberId } } : undefined,
-          keterangan: input.keterangan ?? originalPlan.keterangan,
-          ifa250: input.ifa250 !== undefined ? input.ifa250 : originalPlan.ifa250,
-          ifa500: input.ifa500 !== undefined ? input.ifa500 : originalPlan.ifa500,
-          hho: input.hho !== undefined ? input.hho : originalPlan.hho,
-          h2: input.h2 !== undefined ? input.h2 : originalPlan.h2,
-          no: input.no !== undefined ? input.no : originalPlan.no,
-          gaso: input.gaso !== undefined ? input.gaso : originalPlan.gaso,
-          o2: input.o2 !== undefined ? input.o2 : originalPlan.o2,
-          o3: input.o3 !== undefined ? input.o3 : originalPlan.o3,
-          edta: input.edta !== undefined ? input.edta : originalPlan.edta,
-          mb: input.mb !== undefined ? input.mb : originalPlan.mb,
-          h2s: input.h2s !== undefined ? input.h2s : originalPlan.h2s,
-          kcl: input.kcl !== undefined ? input.kcl : originalPlan.kcl,
-          jmlNb: input.jmlNb !== undefined ? input.jmlNb : originalPlan.jmlNb,
-          ...ifaSubstanceData,
+          memberId: originalPlan.memberId!,
+          setCode: newSetCode,
+          name: originalSet?.name || null,
           version: newVersion,
+          status: 'ACTIVE',
+          createdBy: originalSet?.createdBy || null,
         },
       });
 
-      // Mark original as superseded
-      await tx.therapyPlan.update({
-        where: { id: therapyPlanId },
-        data: {
-          supersededById: newPlan.id,
-          supersededAt: new Date(),
-        },
-      });
+      const copiedPlans = [];
 
-      return newPlan;
+      for (const oldPlan of plansInSet) {
+        const isEditedPlan = oldPlan.id === therapyPlanId;
+        const planNumber = oldPlan.planNumber || copiedPlans.length + 1;
+        const ifaSubstanceData =
+          isEditedPlan && input.ifaSubstances !== undefined
+            ? normalizeIfaSubstances(input.ifaSubstances, Boolean(input.ifa250 && input.ifa250 > 0))
+            : {
+                ifaSubstances: oldPlan.ifaSubstances,
+                ifaSubstanceTotalMl: oldPlan.ifaSubstanceTotalMl,
+              };
+
+        const copiedPlan = await tx.therapyPlan.create({
+          data: {
+            planCode: createPlanCodeFromSet(newSetCode, planNumber),
+            member: oldPlan.memberId ? { connect: { id: oldPlan.memberId } } : undefined,
+            therapyPlanSet: { connect: { id: newSet.id } },
+            planNumber,
+            keterangan: isEditedPlan && input.keterangan !== undefined ? input.keterangan : oldPlan.keterangan,
+            ifa250: isEditedPlan && input.ifa250 !== undefined ? input.ifa250 : oldPlan.ifa250,
+            ifa500: isEditedPlan && input.ifa500 !== undefined ? input.ifa500 : oldPlan.ifa500,
+            hho: isEditedPlan && input.hho !== undefined ? input.hho : oldPlan.hho,
+            h2: isEditedPlan && input.h2 !== undefined ? input.h2 : oldPlan.h2,
+            no: isEditedPlan && input.no !== undefined ? input.no : oldPlan.no,
+            gaso: isEditedPlan && input.gaso !== undefined ? input.gaso : oldPlan.gaso,
+            o2: isEditedPlan && input.o2 !== undefined ? input.o2 : oldPlan.o2,
+            o3: isEditedPlan && input.o3 !== undefined ? input.o3 : oldPlan.o3,
+            edta: isEditedPlan && input.edta !== undefined ? input.edta : oldPlan.edta,
+            mb: isEditedPlan && input.mb !== undefined ? input.mb : oldPlan.mb,
+            h2s: isEditedPlan && input.h2s !== undefined ? input.h2s : oldPlan.h2s,
+            kcl: isEditedPlan && input.kcl !== undefined ? input.kcl : oldPlan.kcl,
+            jmlNb: isEditedPlan && input.jmlNb !== undefined ? input.jmlNb : oldPlan.jmlNb,
+            ...ifaSubstanceData,
+            version: newVersion,
+          } as any,
+        });
+
+        copiedPlans.push({ oldPlan, copiedPlan });
+      }
+
+      if (originalSet) {
+        await tx.therapyPlanSet.update({
+          where: { id: originalSet.id },
+          data: {
+            status: 'SUPERSEDED',
+            supersededById: newSet.id,
+          },
+        });
+      }
+
+      for (const pair of copiedPlans) {
+        await tx.therapyPlan.update({
+          where: { id: pair.oldPlan.id },
+          data: {
+            supersededById: pair.copiedPlan.id,
+            supersededAt: new Date(),
+          },
+        });
+      }
+
+      const editedNewPlan = copiedPlans.find((pair) => pair.oldPlan.id === therapyPlanId)?.copiedPlan;
+      return { newSet, copiedPlans, editedNewPlan };
     });
-
-    console.log('✅ Therapy Plan Edited:');
-    console.log('  Original ID:', therapyPlanId);
-    console.log('  Original Version:', originalPlan.version);
-    console.log('  New ID:', result.id);
-    console.log('  New Version:', result.version);
-    console.log('  New Plan Code:', result.planCode);
 
     return {
       success: true,
-      message: `Therapy plan berhasil diedit (versi ${result.version})`,
+      message: `Set therapy plan berhasil dibuat versi ${result.newSet.version}`,
       data: {
-        id: result.id,
-        planCode: result.planCode,
-        version: result.version,
-        keterangan: result.keterangan,
-        ifaSubstances: result.ifaSubstances,
-        ifaSubstanceTotalMl: result.ifaSubstanceTotalMl ? Number(result.ifaSubstanceTotalMl) : null,
+        setId: result.newSet.id,
+        setCode: result.newSet.setCode,
+        version: result.newSet.version,
+        editedPlanId: result.editedNewPlan?.id,
+        copiedPlans: result.copiedPlans.length,
         originalPlanId: therapyPlanId,
-        originalVersion: originalPlan.version,
-        createdAt: result.createdAt.toISOString(),
+        originalSetId: originalSet?.id || null,
+        createdAt: result.newSet.createdAt.toISOString(),
       },
     };
   }
 
-  /**
-   * Get therapy plan history (all versions)
-   */
   async getTherapyPlanHistory(therapyPlanId: string) {
-    // Get the therapy plan
     const plan = await prisma.therapyPlan.findUnique({
       where: { id: therapyPlanId },
+      include: { therapyPlanSet: true },
     });
 
     if (!plan) {
-      throw {
-        status: 404,
-        code: 'THERAPY_PLAN_NOT_FOUND',
-        message: 'Therapy plan tidak ditemukan',
+      throw { status: 404, code: 'THERAPY_PLAN_NOT_FOUND', message: 'Therapy plan tidak ditemukan' };
+    }
+
+    if (plan.therapyPlanSetId && plan.therapyPlanSet) {
+      const baseSetCode = plan.therapyPlanSet.setCode.replace(/-V\d+$/i, '');
+      const setVersions = await prisma.therapyPlanSet.findMany({
+        where: {
+          memberId: plan.memberId!,
+          setCode: { startsWith: baseSetCode },
+        },
+        include: {
+          plans: {
+            orderBy: [{ planNumber: 'asc' }, { createdAt: 'asc' }],
+          },
+        },
+        orderBy: { version: 'desc' },
+      });
+
+      return {
+        success: true,
+        data: {
+          currentVersion: setVersions[0] || plan.therapyPlanSet,
+          versions: setVersions,
+          totalVersions: setVersions.length,
+        },
       };
     }
 
-    // Find all versions (walk backwards through supersedes chain)
-    const versions: any[] = [];
-    let currentPlan: any = plan;
-
-    // Walk forward to find the latest version
-    while (currentPlan.supersededById) {
-      const nextPlan = await prisma.therapyPlan.findUnique({
-        where: { id: currentPlan.supersededById },
-      });
-      if (!nextPlan) break;
-      currentPlan = nextPlan;
-    }
-
-    // Now walk backwards to collect all versions
-    versions.push(currentPlan);
-    
     const allPlans = await prisma.therapyPlan.findMany({
       where: {
         OR: [
-          { supersededById: currentPlan.id },
-          { id: currentPlan.id },
+          { supersededById: plan.id },
+          { id: plan.id },
+          ...(plan.supersededById ? [{ id: plan.supersededById }] : []),
         ],
       },
       orderBy: { version: 'desc' },
     });
 
-    // Build version chain
-    const versionChain: any[] = [];
-    let current: any = allPlans.find((p) => !p.supersededById); // Latest version
-
-    while (current) {
-      versionChain.push(current);
-      current = allPlans.find((p) => p.supersededById === current.id);
-    }
-
     return {
       success: true,
       data: {
-        currentVersion: versionChain[0],
-        versions: versionChain,
-        totalVersions: versionChain.length,
+        currentVersion: allPlans[0] || plan,
+        versions: allPlans,
+        totalVersions: allPlans.length,
       },
     };
   }

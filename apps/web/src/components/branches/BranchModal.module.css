@@ -188,6 +188,26 @@
   margin-top: -2px;
 }
 
+.autoCodeCard {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.autoCodeValue {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .checkboxLabel {
   display: flex;
   align-items: center;

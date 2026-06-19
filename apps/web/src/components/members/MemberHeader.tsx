@@ -108,7 +108,7 @@ export default function MemberHeader({
               ) : (
                 (member.profile?.fullName || 'M').charAt(0).toUpperCase()
               )}
-              {member.user?.isActive && (
+              {member.user?.isActive && !member.isDeceased && (
                 <span style={{
                   position: 'absolute',
                   bottom: '2px',
@@ -127,6 +127,21 @@ export default function MemberHeader({
               <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
                 <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span> • 🏢 {member.registrationBranch?.name || 'N/A'}
               </p>
+              {member.isDeceased && (
+                <span style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  marginTop: '8px',
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  background: 'rgba(239,68,68,0.12)',
+                  color: '#ef4444',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                }}>
+                  Status: Meninggal
+                </span>
+              )}
             </div>
           </div>
         </div>

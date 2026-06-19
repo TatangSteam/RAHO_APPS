@@ -17,7 +17,7 @@ export interface Branch {
   address: string;
   city: string;
   phone: string;
-  type: 'PUSAT' | 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
   operatingHours?: string;
   isActive: boolean;
   createdBy?: string;
@@ -31,11 +31,12 @@ export interface Branch {
 }
 
 export interface CreateBranchData {
-  branchCode: string;
   name: string;
-  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE';
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
   address: string;
   city: string;
+  provinceCode?: string;
+  regencyCode: string;
   phone: string;
   operatingHours?: string;
   isActive?: boolean;

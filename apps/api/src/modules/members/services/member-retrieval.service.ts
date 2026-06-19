@@ -2,6 +2,20 @@
 import { prisma } from '../../../lib/prisma';
 import { Role } from '@prisma/client';
 
+function calculateAge(dateOfBirth?: Date | null): number | null {
+  if (!dateOfBirth) return null;
+
+  const today = new Date();
+  let age = today.getFullYear() - dateOfBirth.getFullYear();
+  const monthDelta = today.getMonth() - dateOfBirth.getMonth();
+
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < dateOfBirth.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
+}
+
 export interface MemberFilters {
   search?: string;
   status?: string;
@@ -655,6 +669,7 @@ export class MemberRetrievalService {
       nik: member.nik,
       tempatLahir: member.tempatLahir,
       dateOfBirth: member.dateOfBirth?.toISOString(),
+      age: calculateAge(member.dateOfBirth),
       jenisKelamin: member.jenisKelamin,
       agama: member.agama,
       address: member.address,
@@ -666,6 +681,7 @@ export class MemberRetrievalService {
       voucherCount: member.voucherCount,
       isConsentToPhoto: member.isConsentToPhoto,
       isActive: member.isActive,
+      isDeceased: member.isDeceased,
       createdAt: member.createdAt.toISOString(),
     };
   }
@@ -694,9 +710,11 @@ export class MemberRetrievalService {
       fullName: member.user?.profile?.fullName || '',
       phone: member.user?.profile?.phone || '',
       email: member.user?.email || '',
+      age: calculateAge(member.dateOfBirth),
       voucherCount: member.voucherCount || 0,
       basicPackageCount: basicVoucherCount,
       isActive: member.isActive,
+      isDeceased: member.isDeceased,
       isLintas,
       registrationBranch: member.registrationBranch?.name || 'N/A',
       photoUrl,

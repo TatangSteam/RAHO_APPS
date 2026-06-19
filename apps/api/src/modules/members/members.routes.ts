@@ -5,7 +5,7 @@ import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
 import { uploadMemberDocuments, uploadLabResult } from '../../middleware/upload';
 import { validate } from '../../middleware/validate';
-import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema } from './members.schema';
+import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema, bulkEditTherapyPlanSetSchema } from './members.schema';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -21,6 +21,9 @@ const ALLSTAFF = [
 ];
 
 const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
+
+// Roles that can edit therapy plans (SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, DOCTOR)
+const THERAPY_PLAN_EDITORS = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.DOCTOR];
 
 // GET /api/v1/members - List members
 router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(controller));
@@ -228,7 +231,7 @@ router.get(
   controller.getMemberTherapyPlans.bind(controller)
 );
 
-// POST /api/v1/members/:memberId/therapy-plans - Create therapy plan
+// POST /api/v1/members/:memberId/therapy-plans - Disabled: therapy plans must be created in bulk as one set
 router.post(
   '/:memberId/therapy-plans',
   authenticate,
@@ -237,14 +240,25 @@ router.post(
   controller.createMemberTherapyPlan.bind(controller)
 );
 
-// PUT /api/v1/members/:memberId/therapy-plans/:therapyPlanId - Edit therapy plan (creates new version)
+// PUT /api/v1/members/:memberId/therapy-plans/:therapyPlanId - Edit one row by creating a new set version
+// Only SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, DOCTOR can edit therapy plans
 router.put(
   '/:memberId/therapy-plans/:therapyPlanId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(THERAPY_PLAN_EDITORS),
   assertBranchAccess,
   validate(editTherapyPlanSchema),
   controller.editTherapyPlan.bind(controller)
+);
+
+// PUT /api/v1/members/:memberId/therapy-plan-sets/:setId/bulk-edit - Bulk edit therapy plan set
+router.put(
+  '/:memberId/therapy-plan-sets/:setId/bulk-edit',
+  authenticate,
+  authorize(THERAPY_PLAN_EDITORS),
+  assertBranchAccess,
+  validate(bulkEditTherapyPlanSetSchema),
+  controller.bulkEditTherapyPlanSet.bind(controller)
 );
 
 // GET /api/v1/members/:memberId/therapy-plans/:therapyPlanId/history - Get therapy plan history

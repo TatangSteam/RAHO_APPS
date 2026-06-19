@@ -33,6 +33,22 @@ export interface ExportPayload {
   format: 'csv' | 'xlsx';
 }
 
+function calculateAge(dateOfBirth?: Date | string | null): number | '' {
+  if (!dateOfBirth) return '';
+  const birthDate = new Date(dateOfBirth);
+  if (isNaN(birthDate.getTime())) return '';
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const monthDelta = today.getMonth() - birthDate.getMonth();
+
+  if (monthDelta < 0 || (monthDelta === 0 && today.getDate() < birthDate.getDate())) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : '';
+}
+
 // Column definitions for mapping
 const COLUMN_MAPPINGS: Record<string, (member: any) => any> = {
   memberNo: (m) => m.memberNo,
@@ -40,11 +56,13 @@ const COLUMN_MAPPINGS: Record<string, (member: any) => any> = {
   nik: (m) => m.nik || '',
   birthPlace: (m) => m.tempatLahir || '',
   birthDate: (m) => m.dateOfBirth ? new Date(m.dateOfBirth).toLocaleDateString('id-ID') : '',
+  age: (m) => calculateAge(m.dateOfBirth),
   gender: (m) => m.jenisKelamin === 'L' ? 'Laki-laki' : m.jenisKelamin === 'P' ? 'Perempuan' : '',
   maritalStatus: (m) => m.statusNikah || '',
   occupation: (m) => m.pekerjaan || '',
   registrationBranch: (m) => m.registrationBranch?.name || '',
   status: (m) => m.isActive ? 'Aktif' : 'Nonaktif',
+  lifeStatus: (m) => m.isDeceased ? 'Meninggal' : 'Tidak Meninggal',
   registrationDate: (m) => new Date(m.createdAt).toLocaleDateString('id-ID'),
   phone: (m) => m.user?.profile?.phone || '',
   email: (m) => m.user?.email || '',
@@ -72,11 +90,13 @@ const COLUMN_LABELS: Record<string, string> = {
   nik: 'NIK',
   birthPlace: 'Tempat Lahir',
   birthDate: 'Tanggal Lahir',
+  age: 'Umur',
   gender: 'Jenis Kelamin',
   maritalStatus: 'Status Nikah',
   occupation: 'Pekerjaan',
   registrationBranch: 'Cabang Registrasi',
   status: 'Status',
+  lifeStatus: 'Status Meninggal',
   registrationDate: 'Tanggal Registrasi',
   phone: 'Telepon',
   email: 'Email',

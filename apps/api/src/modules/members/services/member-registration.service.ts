@@ -31,6 +31,7 @@ export class MemberRegistrationService {
       emergencyContactPhone?: string;
       infoSource?: string;
       postalCode?: string;
+      isDeceased?: boolean;
       memberEmail: string;
       memberPassword: string;
       referralCode?: string;
@@ -205,6 +206,7 @@ export class MemberRegistrationService {
             : null,
           sumberInfoRaho: data.infoSource || null,
           postalCode: data.postalCode || null,
+          isDeceased: data.isDeceased ?? false,
           // Incentive fields (use user-provided values or defaults if referral code is provided)
           firstIncentiveType: finalFirstIncentiveType as any || null,
           firstIncentiveValue: finalFirstIncentiveValue || null,
@@ -442,6 +444,7 @@ export class MemberRegistrationService {
       postalCode: member.postalCode,
       emergencyContact: member.emergencyContact,
       voucherCount: member.voucherCount,
+      isDeceased: member.isDeceased,
       registrationBranch: member.registrationBranch ? {
         id: member.registrationBranch.id,
         name: member.registrationBranch.name,

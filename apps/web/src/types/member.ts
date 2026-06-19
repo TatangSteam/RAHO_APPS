@@ -4,9 +4,11 @@ export interface Member {
   fullName: string;
   phone: string;
   email: string;
+  age?: number | null;
   voucherCount: number;
   basicPackageCount: number;
   isActive: boolean;
+  isDeceased?: boolean;
   isLintas: boolean;
   registrationBranch: string;
   photoUrl?: string;
@@ -59,6 +61,7 @@ export interface MemberDetail {
   nik?: string;
   tempatLahir?: string;
   dateOfBirth?: string;
+  age?: number | null;
   jenisKelamin?: 'L' | 'P';
   agama?: string;
   address?: string;
@@ -70,6 +73,7 @@ export interface MemberDetail {
   voucherCount: number;
   isConsentToPhoto: boolean;
   isActive: boolean;
+  isDeceased: boolean;
   createdAt: string;
 }
 
@@ -107,6 +111,7 @@ export interface CreateMemberData {
   emergencyContactPhone?: string;
   infoSource?: string;
   postalCode?: string;
+  isDeceased?: boolean;
 
   // Section B - Akun Member
   memberEmail: string;

@@ -5,7 +5,7 @@ export interface BranchDetail {
   address: string;
   city: string;
   phone: string;
-  type: 'KLINIK' | 'HOMECARE' | 'PREMIER' | 'PARTNERSHIP';
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
   operatingHours?: string;
   isActive: boolean;
   createdAt: string;

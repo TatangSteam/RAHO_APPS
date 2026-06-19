@@ -29,7 +29,7 @@ export default function EditBranchPage() {
   const [formData, setFormData] = useState({
     branchCode: '',
     name: '',
-    type: 'KLINIK' as 'PUSAT' | 'PREMIER' | 'PARTNERSHIP' | 'KLINIK' | 'HOMECARE',
+    type: 'PREMIER' as 'PUSAT' | 'PREMIER' | 'PARTNERSHIP',
     address: '',
     city: '',
     phone: '',
@@ -71,7 +71,8 @@ export default function EditBranchPage() {
     
     try {
       setSaving(true);
-      await branchesApi.updateBranch(branchId, formData);
+      const { branchCode, ...updateData } = formData;
+      await branchesApi.updateBranch(branchId, updateData);
       showToast.success('Cabang berhasil diperbarui');
       router.push(`/branches/${branchId}`);
     } catch (error: any) {
@@ -144,7 +145,7 @@ export default function EditBranchPage() {
           <div className="form-row">
             <div className="form-group">
               <label htmlFor="branchCode">
-                Kode Cabang <span className="required">*</span>
+                Kode Cabang
               </label>
               <input
                 type="text"
@@ -175,8 +176,6 @@ export default function EditBranchPage() {
                 <option value="PUSAT">Pusat</option>
                 <option value="PREMIER">Premier</option>
                 <option value="PARTNERSHIP">Partnership</option>
-                <option value="KLINIK">Klinik</option>
-                <option value="HOMECARE">Homecare</option>
               </select>
             </div>
           </div>

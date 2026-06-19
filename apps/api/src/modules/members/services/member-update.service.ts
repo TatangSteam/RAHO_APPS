@@ -17,15 +17,28 @@ export class MemberUpdateService {
   async updateMember(
     memberId: string,
     data: {
+      nik?: string;
       fullName?: string;
+      birthPlace?: string;
       birthDate?: string;
       gender?: string;
       religion?: string;
       phone?: string;
       email?: string;
       address?: string;
+      occupation?: string;
+      maritalStatus?: string;
+      emergencyContact?: string;
       emergencyContactName?: string;
       emergencyContactPhone?: string;
+      infoSource?: string;
+      postalCode?: string;
+      isActive?: boolean;
+      isDeceased?: boolean;
+      firstIncentiveType?: string;
+      firstIncentiveValue?: number;
+      nextIncentiveType?: string;
+      nextIncentiveValue?: number;
     },
     userId: string
   ) {
@@ -80,10 +93,24 @@ export class MemberUpdateService {
       }
     }
 
+    if (data.nik && data.nik !== member.nik) {
+      const existingIdentity = await prisma.member.findUnique({
+        where: { nik: data.nik },
+      });
+
+      if (existingIdentity) {
+        throw {
+          status: 409,
+          code: 'IDENTITY_EXISTS',
+          message: 'Nomor identitas sudah terdaftar',
+        };
+      }
+    }
+
     // Update in transaction
     const updated = await prisma.$transaction(async (tx) => {
       // Update User table (email)
-      if (data.email) {
+      if (data.email !== undefined) {
         await tx.user.update({
           where: { id: member.userId },
           data: { email: data.email }
@@ -91,23 +118,40 @@ export class MemberUpdateService {
       }
 
       // Update UserProfile table (fullName, phone)
-      if (data.fullName || data.phone) {
+      if (data.fullName !== undefined || data.phone !== undefined) {
         await tx.userProfile.update({
           where: { userId: member.userId },
           data: {
-            ...(data.fullName && { fullName: data.fullName }),
-            ...(data.phone && { phone: data.phone })
+            ...(data.fullName !== undefined && { fullName: data.fullName }),
+            ...(data.phone !== undefined && { phone: data.phone })
           }
         });
       }
 
       // Update Member table (member-specific fields)
       const memberUpdateData: any = {};
-      if (data.birthDate) memberUpdateData.dateOfBirth = new Date(data.birthDate);
-      if (data.gender) memberUpdateData.jenisKelamin = data.gender;
+      if (data.nik !== undefined) memberUpdateData.nik = data.nik || null;
+      if (data.birthPlace !== undefined) memberUpdateData.tempatLahir = data.birthPlace || null;
+      if (data.birthDate !== undefined) memberUpdateData.dateOfBirth = data.birthDate ? new Date(data.birthDate) : null;
+      if (data.gender !== undefined) memberUpdateData.jenisKelamin = data.gender || null;
       if (data.religion !== undefined) memberUpdateData.agama = data.religion || null;
-      if (data.address) memberUpdateData.address = data.address;
-      if (data.emergencyContactName) memberUpdateData.emergencyContact = data.emergencyContactName;
+      if (data.address !== undefined) memberUpdateData.address = data.address || null;
+      if (data.occupation !== undefined) memberUpdateData.pekerjaan = data.occupation || null;
+      if (data.maritalStatus !== undefined) memberUpdateData.statusNikah = data.maritalStatus || null;
+      if (data.emergencyContact !== undefined || data.emergencyContactName !== undefined || data.emergencyContactPhone !== undefined) {
+        const emergencyName = data.emergencyContact ?? data.emergencyContactName ?? '';
+        memberUpdateData.emergencyContact = emergencyName
+          ? `${emergencyName}${data.emergencyContactPhone ? ' - ' + data.emergencyContactPhone : ''}`
+          : null;
+      }
+      if (data.infoSource !== undefined) memberUpdateData.sumberInfoRaho = data.infoSource || null;
+      if (data.postalCode !== undefined) memberUpdateData.postalCode = data.postalCode || null;
+      if (data.isActive !== undefined) memberUpdateData.isActive = data.isActive;
+      if (data.isDeceased !== undefined) memberUpdateData.isDeceased = data.isDeceased;
+      if (data.firstIncentiveType !== undefined) memberUpdateData.firstIncentiveType = data.firstIncentiveType || null;
+      if (data.firstIncentiveValue !== undefined) memberUpdateData.firstIncentiveValue = data.firstIncentiveValue ?? null;
+      if (data.nextIncentiveType !== undefined) memberUpdateData.nextIncentiveType = data.nextIncentiveType || null;
+      if (data.nextIncentiveValue !== undefined) memberUpdateData.nextIncentiveValue = data.nextIncentiveValue ?? null;
 
       if (Object.keys(memberUpdateData).length > 0) {
         await tx.member.update({
@@ -278,6 +322,7 @@ export class MemberUpdateService {
       emergencyContact: member.emergencyContact,
       voucherCount: member.voucherCount,
       isActive: member.isActive,
+      isDeceased: member.isDeceased,
       registrationBranch: member.registrationBranch ? {
         id: member.registrationBranch.id,
         name: member.registrationBranch.name,
