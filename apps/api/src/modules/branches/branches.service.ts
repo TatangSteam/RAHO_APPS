@@ -867,9 +867,9 @@ export async function getBranchSessionsService(
     nurse: {
       fullName: s.nurse.profile?.fullName || 'N/A',
     },
-    package: {
+    package: s.memberPackage ? {
       name: s.memberPackage.name,
-    },
+    } : null,
   }));
 
   return {
