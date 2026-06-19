@@ -99,12 +99,23 @@ export async function createUser(req: Request, res: Response, next: NextFunction
 export async function updateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     console.log('🔍 [UsersController] Update user request:', req.params.userId);
-    console.log('🔍 [UsersController] Update body:', req.body);
+    console.log('🔍 [UsersController] Update body:', {
+      ...req.body,
+      ...(req.body?.password ? { password: '[REDACTED]' } : {}),
+    });
     
     const input = updateUserSchema.parse(req.body);
-    console.log('🔍 [UsersController] Parsed input:', input);
+    const { password, ...inputForLog } = input;
+    console.log('🔍 [UsersController] Parsed input:', {
+      ...inputForLog,
+      ...(password !== undefined ? { password: '[REDACTED]' } : {}),
+    });
     
-    const user = await updateUserService(req.params.userId, input);
+    const user = await updateUserService(req.params.userId, input, req.user.role as Role);
+    const auditChanges = {
+      ...inputForLog,
+      ...(password !== undefined ? { passwordChanged: true } : {}),
+    };
 
     // Create audit log for user update (fire-and-forget)
     logAudit({
@@ -114,7 +125,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
       resource: 'User',
       resourceId: user.id,
       meta: { 
-        changes: input,
+        changes: auditChanges,
         updatedUserEmail: user.email,
       },
       ipAddress: req.ip,

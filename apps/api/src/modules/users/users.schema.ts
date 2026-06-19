@@ -13,6 +13,11 @@ export const createUserSchema = z.object({
 
 // ── Update User ───────────────────────────────────────────────
 export const updateUserSchema = z.object({
+  email: z.string().trim().email('Format email tidak valid.').optional(),
+  password: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(8, 'Password minimal 8 karakter.').optional(),
+  ),
   role: z.nativeEnum(Role).optional(),
   fullName: z.string().min(2).optional(),
   phone: z.string().optional(),

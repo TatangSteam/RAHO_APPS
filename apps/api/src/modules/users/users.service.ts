@@ -12,6 +12,12 @@ import {
 } from './users.schema';
 
 const HASH_ROUNDS = 12;
+const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+  Role.DOCTOR,
+  Role.NURSE,
+];
 
 // ── Shared User Select ───────────────────────────────────────
 
@@ -232,22 +238,59 @@ export async function createUserService(
 
 // ── Update User ──────────────────────────────────────────────
 
-export async function updateUserService(userId: string, input: UpdateUserInput) {
+export async function updateUserService(
+  userId: string,
+  input: UpdateUserInput,
+  callerRole?: Role,
+) {
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) throw errors.notFound('User tidak ditemukan.');
+
+  const hasCredentialUpdate = input.email !== undefined || input.password !== undefined;
+  if (hasCredentialUpdate) {
+    if (callerRole !== Role.SUPER_ADMIN && callerRole !== Role.ADMIN_MANAGER) {
+      throw errors.forbidden('Hanya Super Admin dan Admin Manager yang dapat mengubah email atau password staff.');
+    }
+
+    if (
+      callerRole === Role.ADMIN_MANAGER &&
+      !STAFF_CREDENTIAL_MANAGED_ROLES.includes(existing.role)
+    ) {
+      throw errors.forbidden('Admin Manager hanya dapat mengubah email atau password akun staff cabang.');
+    }
+  }
+
+  if (input.email !== undefined && input.email !== existing.email) {
+    const emailOwner = await prisma.user.findUnique({ where: { email: input.email } });
+    if (emailOwner && emailOwner.id !== userId) {
+      throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user lain.');
+    }
+  }
+
+  const hashedPassword = input.password
+    ? await bcrypt.hash(input.password, HASH_ROUNDS)
+    : undefined;
+
+  const profileUpdate = {
+    ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),
+    ...(input.phone !== undefined ? { phone: input.phone } : {}),
+  };
 
   const user = await prisma.user.update({
     where: { id: userId },
     data: {
+      ...(input.email !== undefined ? { email: input.email } : {}),
+      ...(hashedPassword !== undefined ? { password: hashedPassword } : {}),
       ...(input.role !== undefined ? { role: input.role } : {}),
       ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
-      profile: {
-        update: {
-          ...(input.fullName ? { fullName: input.fullName } : {}),
-          ...(input.phone !== undefined ? { phone: input.phone } : {}),
-        },
-      },
+      ...(Object.keys(profileUpdate).length > 0
+        ? {
+            profile: {
+              update: profileUpdate,
+            },
+          }
+        : {}),
     },
     select: userSelect,
   });

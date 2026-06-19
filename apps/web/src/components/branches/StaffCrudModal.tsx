@@ -20,6 +20,7 @@ interface StaffCrudModalProps {
 interface StaffFormData {
   email: string;
   password?: string;
+  confirmPassword?: string;
   role: 'ADMIN_CABANG' | 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE';
   fullName: string;
   phone: string;
@@ -54,6 +55,7 @@ export default function StaffCrudModal({
   const roleOptions = (callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN_MANAGER') 
     ? ROLE_OPTIONS_MANAGER 
     : ROLE_OPTIONS_ADMIN_CABANG;
+  const canManageCredentials = callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN_MANAGER';
   const [loading, setLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState('');
@@ -61,6 +63,7 @@ export default function StaffCrudModal({
   const [formData, setFormData] = useState<StaffFormData>({
     email: '',
     password: '',
+    confirmPassword: '',
     role: 'ADMIN_LAYANAN',
     fullName: '',
     phone: '',
@@ -88,6 +91,8 @@ export default function StaffCrudModal({
       devLog('🔍 [StaffCrudModal] Setting form data from staffData:', staffData);
       setFormData({
         email: staffData.email || '',
+        password: '',
+        confirmPassword: '',
         role: staffData.role || 'ADMIN_LAYANAN',
         fullName: staffData.profile?.fullName || '',
         phone: staffData.profile?.phone || '',
@@ -99,6 +104,7 @@ export default function StaffCrudModal({
       setFormData({
         email: '',
         password: '',
+        confirmPassword: '',
         role: 'ADMIN_LAYANAN',
         fullName: '',
         phone: '',
@@ -118,34 +124,90 @@ export default function StaffCrudModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
-    devLog('🔍 [StaffCrudModal] Submit attempt:', { action, formData, staffData });
+    const email = formData.email.trim();
+    const password = formData.password?.trim() || '';
+    const shouldSendCredentials = action === 'create' || (action === 'edit' && canManageCredentials);
+
+    if (shouldSendCredentials && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      const message = 'Format email tidak valid';
+      setError(message);
+      showToast.error(message);
+      return;
+    }
+
+    if (action === 'create' && password.length < 8) {
+      const message = 'Password minimal 8 karakter';
+      setError(message);
+      showToast.error(message);
+      return;
+    }
+
+    if (action === 'edit' && canManageCredentials && password) {
+      if (password.length < 8) {
+        const message = 'Password baru minimal 8 karakter';
+        setError(message);
+        showToast.error(message);
+        return;
+      }
+
+      if (password !== (formData.confirmPassword || '').trim()) {
+        const message = 'Konfirmasi password baru tidak sama';
+        setError(message);
+        showToast.error(message);
+        return;
+      }
+    }
+
+    setLoading(true);
+
+    devLog('🔍 [StaffCrudModal] Submit attempt:', {
+      action,
+      formData: {
+        ...formData,
+        password: password ? '[REDACTED]' : '',
+        confirmPassword: formData.confirmPassword ? '[REDACTED]' : '',
+      },
+      staffData,
+    });
 
     try {
       if (action === 'create') {
         const createData = {
-          email: formData.email,
-          password: formData.password,
+          email,
+          password,
           role: formData.role,
           fullName: formData.fullName,
           phone: formData.phone,
           branchId: branchId
         };
         
-        devLog('🔍 [StaffCrudModal] Creating staff with data:', createData);
+        devLog('🔍 [StaffCrudModal] Creating staff with data:', {
+          ...createData,
+          password: '[REDACTED]',
+        });
         await api.post('/users', createData);
         showToast.success('Staff berhasil ditambahkan');
       } else if (action === 'edit') {
-        const updateData = {
+        const updateData: Record<string, string | boolean> = {
           role: formData.role,
           fullName: formData.fullName,
           phone: formData.phone,
           isActive: formData.isActive
         };
+
+        if (canManageCredentials) {
+          updateData.email = email;
+          if (password) {
+            updateData.password = password;
+          }
+        }
         
-        devLog('🔍 [StaffCrudModal] Updating staff:', staffData.id, 'with data:', updateData);
+        devLog('🔍 [StaffCrudModal] Updating staff:', staffData.id, 'with data:', {
+          ...updateData,
+          ...(updateData.password ? { password: '[REDACTED]' } : {}),
+        });
         await api.patch(`/users/${staffData.id}`, updateData);
         showToast.success('Staff berhasil diperbarui');
       }
@@ -234,7 +296,7 @@ export default function StaffCrudModal({
                   value={formData.email}
                   onChange={handleInputChange}
                   required
-                  disabled={action === 'edit'}
+                  disabled={action === 'edit' && !canManageCredentials}
                   placeholder="staff@example.com"
                   className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                 />
@@ -244,10 +306,11 @@ export default function StaffCrudModal({
 
           {/* Password & Phone */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {action === 'create' && (
+            {(action === 'create' || (action === 'edit' && canManageCredentials)) && (
               <div>
                 <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                  Password <span className="text-red-500">*</span>
+                  {action === 'create' ? 'Password' : 'Password Baru'}
+                  {action === 'create' && <span className="text-red-500"> *</span>}
                 </label>
                 <div className="relative">
                   <Shield className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
@@ -256,8 +319,8 @@ export default function StaffCrudModal({
                     name="password"
                     value={formData.password}
                     onChange={handleInputChange}
-                    required
-                    placeholder="Minimal 8 karakter"
+                    required={action === 'create'}
+                    placeholder={action === 'create' ? 'Minimal 8 karakter' : 'Kosongkan jika tidak diubah'}
                     minLength={8}
                     className="w-full pl-11 pr-11 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   />
@@ -269,6 +332,27 @@ export default function StaffCrudModal({
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {action === 'edit' && canManageCredentials && formData.password && (
+              <div>
+                <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  Konfirmasi Password Baru
+                </label>
+                <div className="relative">
+                  <Shield className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    name="confirmPassword"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    required
+                    placeholder="Ulangi password baru"
+                    minLength={8}
+                    className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
+                  />
                 </div>
               </div>
             )}
@@ -357,7 +441,9 @@ export default function StaffCrudModal({
               <p className="text-orange-600 dark:text-orange-400">
                 {action === 'create' 
                   ? 'Staff akan menerima email dengan kredensial login setelah akun dibuat.'
-                  : 'Perubahan role akan mempengaruhi akses staff ke fitur sistem.'}
+                  : canManageCredentials
+                    ? 'Email dapat diubah. Isi password baru hanya jika ingin mengganti password staff.'
+                    : 'Perubahan role akan mempengaruhi akses staff ke fitur sistem.'}
               </p>
             </div>
           </div>
