@@ -109,7 +109,7 @@ services:
       MINIO_USE_SSL: "false"
       CORS_ORIGIN: ${CORS_ORIGIN:-https://erp.rahopremier.id,http://38.147.122.167}
       JWT_ACCESS_EXPIRES: 15m
-      JWT_REFRESH_EXPIRES: 3h
+      JWT_REFRESH_EXPIRES: 5h
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX: 100
       AUTH_RATE_LIMIT_MAX: 10
@@ -122,6 +122,8 @@ services:
       - MINIO_SECRET_KEY
       - JWT_ACCESS_SECRET
       - JWT_REFRESH_SECRET
+      - ICD_API_CLIENT_ID
+      - ICD_API_CLIENT_SECRET
     deploy:
       resources:
         limits:
@@ -221,6 +223,10 @@ networks:
 secrets:
   DATABASE_URL:
     file: ./secrets/DATABASE_URL
+  ICD_API_CLIENT_ID:
+    file: ./secrets/ICD_API_CLIENT_ID
+  ICD_API_CLIENT_SECRET:
+    file: ./secrets/ICD_API_CLIENT_SECRET
   JWT_ACCESS_SECRET:
     file: ./secrets/JWT_ACCESS_SECRET
   JWT_REFRESH_SECRET:
