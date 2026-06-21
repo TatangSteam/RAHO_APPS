@@ -4,6 +4,8 @@ import { env } from '../../../config/env';
 import { v4 as uuidv4 } from 'uuid';
 import { processFile } from '../../../utils/imageProcessor';
 import type { SessionSupportingPhoto } from '@prisma/client';
+import { mkdir, writeFile, unlink } from 'fs/promises';
+import path from 'path';
 
 export interface UploadSupportingPhotoDto {
   file: Express.Multer.File;
@@ -35,6 +37,42 @@ function getFileExtension(mimeType: string, originalName: string): string {
   if (mimeType === 'image/webp') return 'webp';
   if (mimeType === 'image/png') return 'png';
   return originalName.split('.').pop() || 'jpg';
+}
+
+function extractLocalKey(fileUrl: string): string {
+  if (fileUrl.includes('/api/v1/files/')) {
+    return fileUrl.split('/api/v1/files/')[1].split('?')[0];
+  }
+
+  return fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '').split('?')[0];
+}
+
+async function saveLocalFile(buffer: Buffer, key: string) {
+  const cwd = path.resolve(process.cwd());
+  const localPath = path.resolve(cwd, key);
+
+  if (!localPath.startsWith(cwd)) {
+    throw { status: 400, code: 'INVALID_FILE_PATH', message: 'Path file tidak valid' };
+  }
+
+  await mkdir(path.dirname(localPath), { recursive: true });
+  await writeFile(localPath, buffer);
+
+  return { key, url: `${env.API_URL}${env.API_PREFIX}/files/${key}` };
+}
+
+async function deleteLocalFile(key: string) {
+  const cleanKey = key.split('?')[0];
+  const cwd = path.resolve(process.cwd());
+  const localPath = path.resolve(cwd, cleanKey);
+
+  if (!localPath.startsWith(cwd)) return;
+
+  try {
+    await unlink(localPath);
+  } catch {
+    // Ignore missing local files.
+  }
 }
 
 export class SupportingPhotosService {
@@ -69,7 +107,13 @@ export class SupportingPhotosService {
     const processed = await processFile(dto.file.buffer, dto.file.mimetype, 'sessionPhoto');
     const fileExtension = getFileExtension(processed.mimeType, dto.file.originalname);
     const key = `session-supporting-photos/${uuidv4()}.${fileExtension}`;
-    const uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
+    let uploadResult: { key: string; url: string };
+    try {
+      uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
+    } catch (error) {
+      console.error('[SupportingPhotosService] MinIO upload failed, saving supporting photo locally:', error);
+      uploadResult = await saveLocalFile(processed.buffer, key);
+    }
     const fileUrl = `${env.API_URL}${env.API_PREFIX}/files/${uploadResult.key}`;
 
     return prisma.sessionSupportingPhoto.create({
@@ -169,6 +213,7 @@ export class SupportingPhotosService {
     } catch (error) {
       console.error('Failed to delete supporting photo from MinIO:', error);
     }
+    await deleteLocalFile(extractLocalKey(photo.fileUrl));
 
     await prisma.sessionSupportingPhoto.delete({
       where: { id: photoId },

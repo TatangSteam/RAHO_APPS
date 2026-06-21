@@ -36,11 +36,6 @@ interface AssignData {
   paymentPlan: {
     type: 'FULL_PAYMENT' | 'INSTALLMENT';
     installmentCount: number;
-    installments: Array<{
-      installmentNumber: number;
-      amount: number;
-      dueDate?: string;
-    }>;
   };
 }
 
@@ -52,6 +47,49 @@ interface AssignPackageModalProps {
   onClose: () => void;
   onAssignDataChange: (data: AssignData) => void;
   onSubmit: () => void;
+}
+
+function InstallmentCountInput({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (count: number) => void;
+}) {
+  const [inputValue, setInputValue] = useState(String(value || 2));
+
+  useEffect(() => {
+    setInputValue(String(value || 2));
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={inputValue}
+      onChange={(e) => {
+        const nextValue = e.target.value;
+        if (nextValue === '' || /^\d+$/.test(nextValue)) {
+          setInputValue(nextValue);
+          if (nextValue !== '' && Number(nextValue) >= 2 && Number(nextValue) <= 24) {
+            onChange(Number(nextValue));
+          }
+        }
+      }}
+      onBlur={() => {
+        if (inputValue === '' || Number(inputValue) < 2) {
+          setInputValue('2');
+          onChange(2);
+        } else if (Number(inputValue) > 24) {
+          setInputValue('24');
+          onChange(24);
+        }
+      }}
+      onFocus={(e) => e.target.select()}
+      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"
+      placeholder="2"
+    />
+  );
 }
 
 export default function AssignPackageModal({
@@ -104,25 +142,6 @@ export default function AssignPackageModal({
   const paymentPlan = assignData.paymentPlan || {
     type: 'FULL_PAYMENT' as const,
     installmentCount: 2,
-    installments: [],
-  };
-
-  const buildInstallments = (count: number, total: number) => {
-    if (count <= 0) return [];
-
-    const baseAmount = Math.floor(total / count);
-    let remaining = total;
-
-    return Array.from({ length: count }, (_, index) => {
-      const isLast = index === count - 1;
-      const amount = isLast ? remaining : baseAmount;
-      remaining -= amount;
-
-      return {
-        installmentNumber: index + 1,
-        amount,
-      };
-    });
   };
 
   const updatePaymentPlanType = (type: 'FULL_PAYMENT' | 'INSTALLMENT') => {
@@ -132,9 +151,6 @@ export default function AssignPackageModal({
       paymentPlan: {
         type,
         installmentCount,
-        installments: type === 'INSTALLMENT'
-          ? buildInstallments(installmentCount, preview.total)
-          : [],
       },
     });
   };
@@ -146,37 +162,9 @@ export default function AssignPackageModal({
       paymentPlan: {
         type: 'INSTALLMENT',
         installmentCount: safeCount,
-        installments: buildInstallments(safeCount, preview.total),
       },
     });
   };
-
-  const updateInstallmentAmount = (installmentNumber: number, amount: number) => {
-    const installments = paymentPlan.installments.length > 0
-      ? paymentPlan.installments
-      : buildInstallments(paymentPlan.installmentCount || 2, preview.total);
-
-    onAssignDataChange({
-      ...assignData,
-      paymentPlan: {
-        type: 'INSTALLMENT',
-        installmentCount: paymentPlan.installmentCount || 2,
-        installments: installments.map((installment) => (
-          installment.installmentNumber === installmentNumber
-            ? { ...installment, amount: Math.max(0, Math.round(amount || 0)) }
-            : installment
-        )),
-      },
-    });
-  };
-
-  const activeInstallments = paymentPlan.type === 'INSTALLMENT'
-    ? (paymentPlan.installments.length > 0
-      ? paymentPlan.installments
-      : buildInstallments(paymentPlan.installmentCount || 2, preview.total))
-    : [];
-  const installmentTotal = activeInstallments.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  const installmentDiff = installmentTotal - preview.total;
 
   const modalContent = (
     <div className="assign-package-modal-root fixed inset-0 z-[9999] overflow-hidden">
@@ -314,45 +302,13 @@ export default function AssignPackageModal({
                     <label className="block text-xs font-semibold text-neutral-600 dark:text-neutral-300 mb-1">
                       Jumlah Termin
                     </label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={24}
+                    <InstallmentCountInput
                       value={paymentPlan.installmentCount || 2}
-                      onChange={(e) => updateInstallmentCount(Number(e.target.value))}
-                      className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"
+                      onChange={updateInstallmentCount}
                     />
                   </div>
-
-                  <div className="space-y-2">
-                    {activeInstallments.map((installment) => (
-                      <div
-                        key={installment.installmentNumber}
-                        className="grid grid-cols-[96px_1fr] items-center gap-3"
-                      >
-                        <div className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                          Termin {installment.installmentNumber}
-                        </div>
-                        <input
-                          type="number"
-                          min={0}
-                          value={installment.amount}
-                          onChange={(e) => updateInstallmentAmount(installment.installmentNumber, Number(e.target.value))}
-                          className="w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:border-amber-500 dark:border-neutral-700 dark:bg-neutral-800 dark:text-white"
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className={`rounded-lg px-3 py-2 text-xs font-semibold ${
-                    installmentDiff === 0
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
-                      : 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300'
-                  }`}>
-                    Total termin: Rp {installmentTotal.toLocaleString('id-ID')} dari Rp {preview.total.toLocaleString('id-ID')}
-                    {installmentDiff !== 0 && (
-                      <span> ({installmentDiff > 0 ? 'lebih' : 'kurang'} Rp {Math.abs(installmentDiff).toLocaleString('id-ID')})</span>
-                    )}
+                  <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700 dark:bg-amber-500/10 dark:text-amber-300">
+                    Nominal pembayaran tidak diisi saat assign. Staff menginput nominal aktual setiap kali member membayar termin.
                   </div>
                 </div>
               )}
@@ -369,7 +325,7 @@ export default function AssignPackageModal({
             </button>
             <button
               onClick={onSubmit}
-              disabled={submitting || preview.items.length === 0 || (paymentPlan.type === 'INSTALLMENT' && installmentDiff !== 0)}
+              disabled={submitting || preview.items.length === 0}
               className="assign-package-modal-action px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white font-semibold hover:from-amber-600 hover:to-amber-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-amber-500/30 flex items-center gap-2 flex-1 justify-center"
             >
               {submitting ? (

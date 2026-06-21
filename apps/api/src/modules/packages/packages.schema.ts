@@ -61,7 +61,7 @@ export const assignPackageSchema = z.object({
     installmentCount: z.number().int().min(2).max(24).optional(),
     installments: z.array(z.object({
       installmentNumber: z.number().int().min(1),
-      amount: z.number().min(0),
+      amount: z.number().min(0).optional(),
       dueDate: z.string().datetime().optional(),
     })).optional(),
   }).optional(),
@@ -85,19 +85,11 @@ export const assignPackageSchema = z.object({
       });
     }
 
-    if (installments.length !== installmentCount) {
+    if (installments.length > 0 && installments.length !== installmentCount) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['paymentPlan', 'installments'],
-        message: 'Jumlah nominal termin harus sesuai jumlah termin',
-      });
-    }
-
-    if (!installments[0] || installments[0].amount <= 0) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['paymentPlan', 'installments', 0, 'amount'],
-        message: 'Termin pertama wajib memiliki nominal pembayaran awal',
+        message: 'Jumlah jadwal termin harus sesuai jumlah termin',
       });
     }
 

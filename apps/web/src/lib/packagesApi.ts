@@ -23,11 +23,6 @@ export interface AssignPackageData {
   paymentPlan?: {
     type: 'FULL_PAYMENT' | 'INSTALLMENT';
     installmentCount?: number;
-    installments?: Array<{
-      installmentNumber: number;
-      amount: number;
-      dueDate?: string;
-    }>;
   };
 }
 

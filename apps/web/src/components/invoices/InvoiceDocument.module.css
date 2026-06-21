@@ -18,10 +18,19 @@
    HEADER SECTION
    ============================================================ */
 .header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  text-align: left;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 2px solid #1976d2;
+  border-bottom: 2px solid #b91c1c;
+}
+
+.companyLogo {
+  width: 118px;
+  height: auto;
+  flex-shrink: 0;
 }
 
 .headerContent {
@@ -34,7 +43,7 @@
   font-size: 20px;
   font-weight: 700;
   margin: 0;
-  color: #1976d2;
+  color: #b91c1c;
   letter-spacing: 0.5px;
 }
 
@@ -80,7 +89,7 @@
   font-size: 24px;
   font-weight: 700;
   margin: 0;
-  color: #1976d2;
+  color: #b91c1c;
   letter-spacing: 1px;
 }
 
@@ -147,7 +156,7 @@
 .infoGroupTitle {
   font-size: 11px;
   font-weight: 700;
-  color: #1976d2;
+  color: #b91c1c;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 8px 0;
@@ -202,7 +211,7 @@
 
 
 .tableHeader th {
-  background-color: skyblue;
+  background-color: #fee2e2;
   padding: 12px 8px;
   text-align: left;
   font-weight: 700;
@@ -223,7 +232,7 @@
 }
 
 .tableRow:last-child td {
-  border-bottom: 2px solid #1976d2;
+  border-bottom: 2px solid #b91c1c;
 }
 
 /* Column Widths */
@@ -337,7 +346,7 @@
 }
 
 .summaryTotal {
-  background: #1976d2;
+  background: #b91c1c;
   color: white;
   font-size: 13px;
   font-weight: 700;
@@ -353,9 +362,9 @@
    PAYMENT SECTION
    ============================================================ */
 .paymentSection {
-  background: #f0f7ff;
+  background: #fff1f2;
   padding: 15px;
-  border-left: 4px solid #1976d2;
+  border-left: 4px solid #b91c1c;
   border-radius: 4px;
   margin-bottom: 20px;
 }
@@ -363,7 +372,7 @@
 .sectionTitle {
   font-size: 11px;
   font-weight: 700;
-  color: #1976d2;
+  color: #b91c1c;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin: 0 0 10px 0;
@@ -414,9 +423,9 @@
    PAYMENT HISTORY
    ============================================================ */
 .paymentHistory {
-  background: #f0f7ff;
+  background: #fff1f2;
   padding: 15px;
-  border-left: 4px solid #1976d2;
+  border-left: 4px solid #b91c1c;
   border-radius: 4px;
   margin-bottom: 20px;
 }
@@ -581,6 +590,16 @@
 @media (max-width: 768px) {
   .invoiceDocument {
     padding: 20px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .companyLogo {
+    width: 96px;
   }
 
   .invoiceInfo {

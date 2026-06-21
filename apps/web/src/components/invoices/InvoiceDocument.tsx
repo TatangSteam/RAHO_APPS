@@ -98,6 +98,11 @@ export default function InvoiceDocument({ invoice }: Props) {
     <div id="invoice-document" className={styles.invoiceDocument}>
       {/* Header */}
       <div className={styles.header}>
+        <img
+          src="/asset/LogoInInvoiceAndKuitansi.png"
+          alt="RAHO Premier"
+          className={styles.companyLogo}
+        />
         <div className={styles.headerContent}>
           <h1 className={styles.companyName}>REVERSE AGING & HOMEOSTASIS CLUB</h1>
           <p className={styles.companyLegal}>CV DUNIA SEHAT SENTOSA INDONESIA</p>

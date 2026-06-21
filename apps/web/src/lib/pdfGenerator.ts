@@ -10,6 +10,26 @@ const COMPANY_ADDRESS = 'Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada N
 const COMPANY_CITY = 'Jakarta Pusat';
 const COMPANY_PHONE = '(021) 3192-8888';
 const COMPANY_EMAIL = 'info@raho.id';
+const COMPANY_LOGO_PATH = '/asset/LogoInInvoiceAndKuitansi.png';
+const BRAND_RED: [number, number, number] = [185, 28, 28];
+const LIGHT_RED: [number, number, number] = [254, 226, 226];
+const NOTE_YELLOW: [number, number, number] = [255, 251, 234];
+
+async function loadImageDataUrl(path: string): Promise<string | null> {
+  try {
+    const response = await fetch(path);
+    const blob = await response.blob();
+
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
 export async function generateInvoicePDF(invoice: Invoice) {
   devLog('📥 Starting PDF generation for invoice:', invoice.invoiceNumber);
@@ -35,6 +55,12 @@ export async function generateInvoicePDF(invoice: Invoice) {
       month: 'long',
       year: 'numeric',
     });
+    const ensureSpace = (requiredHeight: number) => {
+      if (currentY + requiredHeight > pageHeight - margin) {
+        doc.addPage();
+        currentY = margin;
+      }
+    };
     const getStatusText = (status: string) => {
       const textMap: Record<string, string> = {
         DRAFT: 'DRAFT',
@@ -47,31 +73,34 @@ export async function generateInvoicePDF(invoice: Invoice) {
     };
     
     let currentY = margin;
+    const logoDataUrl = await loadImageDataUrl(COMPANY_LOGO_PATH);
     
     // ============================================================
     // HEADER - Company Info
     // ============================================================
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', margin, currentY, 28, 18);
+    }
+
+    const headerTextX = logoDataUrl ? margin + 34 : margin;
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(25, 118, 210); // Professional blue
-    doc.text(COMPANY_NAME, pageWidth / 2, currentY, { align: 'center' });
+    doc.setTextColor(...BRAND_RED);
+    doc.text(COMPANY_NAME, headerTextX, currentY + 4);
     
-    currentY += 8;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80, 80, 80);
-    doc.text(COMPANY_LEGAL, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(COMPANY_LEGAL, headerTextX, currentY + 10);
     
-    currentY += 4;
     doc.setFontSize(8);
-    doc.text(COMPANY_ADDRESS, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(COMPANY_ADDRESS, headerTextX, currentY + 15);
     
-    currentY += 3;
-    doc.text(`${COMPANY_CITY} | ${COMPANY_PHONE} | ${COMPANY_EMAIL}`, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(`${COMPANY_CITY} | ${COMPANY_PHONE} | ${COMPANY_EMAIL}`, headerTextX, currentY + 19);
     
     // Decorative line
-    currentY += 5;
-    doc.setDrawColor(25, 118, 210);
+    currentY += 25;
+    doc.setDrawColor(...BRAND_RED);
     doc.setLineWidth(0.8);
     doc.line(margin, currentY, pageWidth - margin, currentY);
     
@@ -81,23 +110,23 @@ export async function generateInvoicePDF(invoice: Invoice) {
     currentY += 8;
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(...BRAND_RED);
     doc.text(documentTitle, margin, currentY);
     
     // Status badge
-    const statusColors: Record<string, [number, number, number]> = {
-      DRAFT: [200, 200, 200],
-      PENDING_PAYMENT: [255, 152, 0],
-      PAID: [76, 175, 80],
-      CANCELLED: [244, 67, 54],
-      OVERDUE: [244, 67, 54],
+    const statusStyles: Record<string, { fill: [number, number, number]; text: [number, number, number] }> = {
+      DRAFT: { fill: [224, 224, 224], text: [66, 66, 66] },
+      PENDING_PAYMENT: { fill: [255, 243, 205], text: [133, 100, 4] },
+      PAID: { fill: [212, 237, 218], text: [21, 87, 36] },
+      CANCELLED: { fill: [248, 215, 218], text: [114, 28, 36] },
+      OVERDUE: { fill: [248, 215, 218], text: [114, 28, 36] },
     };
-    const statusColor = statusColors[invoice.status] || [100, 100, 100];
+    const statusStyle = statusStyles[invoice.status] || statusStyles.DRAFT;
     const statusText = getStatusText(invoice.status);
     const badgeWidth = Math.max(40, doc.getTextWidth(statusText) + 10);
-    doc.setFillColor(...statusColor);
-    doc.rect(pageWidth - margin - badgeWidth, currentY - 5, badgeWidth, 7, 'F');
-    doc.setTextColor(255, 255, 255);
+    doc.setFillColor(...statusStyle.fill);
+    doc.roundedRect(pageWidth - margin - badgeWidth, currentY - 6, badgeWidth, 8, 1, 1, 'F');
+    doc.setTextColor(...statusStyle.text);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.text(statusText, pageWidth - margin - (badgeWidth / 2), currentY - 1, { align: 'center' });
@@ -106,12 +135,15 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // INVOICE DETAILS - Two Column Layout
     // ============================================================
     currentY += 10;
+    doc.setFillColor(249, 249, 249);
+    doc.roundedRect(margin, currentY - 4, contentWidth, 26, 1, 1, 'F');
+    currentY += 2;
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     
     // Left column - Invoice info
-    const leftX = margin;
+    const leftX = margin + 4;
     const rightX = pageWidth / 2 + 5;
     const detailsStartY = currentY;
     let leftY = detailsStartY;
@@ -162,14 +194,14 @@ export async function generateInvoicePDF(invoice: Invoice) {
       ].filter(Boolean).join(' | ');
       const splitInstallmentLines = doc.splitTextToSize(installmentLines, contentWidth - 6);
 
-      doc.setFillColor(255, 251, 234);
+      doc.setFillColor(...NOTE_YELLOW);
       doc.setDrawColor(255, 193, 7);
       doc.setLineWidth(0.5);
       doc.roundedRect(margin, currentY - 3, contentWidth, 14 + (splitInstallmentLines.length * 4), 2, 2, 'FD');
 
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      doc.setTextColor(25, 118, 210);
+      doc.setTextColor(...BRAND_RED);
       doc.text(`TERMIN ${invoice.installmentNumber} DARI ${invoice.installmentTotal}`, margin + 3, currentY + 2);
 
       doc.setFont('helvetica', 'normal');
@@ -216,34 +248,45 @@ export async function generateInvoicePDF(invoice: Invoice) {
       const price = formatNumberWithDots(item.pricePerUnit);
       const total = formatNumberWithDots(item.totalAmount);
       
-      return [code, qty.toString(), description, `Rp ${price}`, `Rp ${total}`];
+      return [(idx + 1).toString(), code, description, qty.toString(), `Rp ${price}`, `Rp ${total}`];
     });
     
     autoTable(doc, {
       startY: currentY,
-      head: [['Kode', 'Qty', 'Nama Barang / Layanan', 'Harga Satuan', 'Total']],
+      head: [['NO', 'KODE BARANG', 'NAMA BARANG / LAYANAN', 'QTY', 'HARGA SATUAN', 'TOTAL']],
       body: tableData,
-      theme: 'grid',
+      theme: 'plain',
       headStyles: {
-        fillColor: [25, 118, 210],
-        textColor: 255,
+        fillColor: LIGHT_RED,
+        textColor: 0,
         fontStyle: 'bold',
-        halign: 'center',
-        fontSize: 9,
-        cellPadding: 4
+        halign: 'left',
+        fontSize: 8,
+        cellPadding: { top: 4, right: 2, bottom: 4, left: 2 },
+        overflow: 'linebreak',
       },
       bodyStyles: {
         fontSize: 8,
-        cellPadding: 3
+        cellPadding: { top: 4, right: 2, bottom: 4, left: 2 },
+        textColor: 0,
+        overflow: 'linebreak',
       },
       columnStyles: {
-        0: { cellWidth: 25, halign: 'center' },
-        1: { cellWidth: 15, halign: 'center' },
-        2: { cellWidth: 65 },
-        3: { cellWidth: 35, halign: 'right' },
-        4: { cellWidth: 35, halign: 'right' }
+        0: { cellWidth: 9, halign: 'center', overflow: 'visible' },
+        1: { cellWidth: 25, halign: 'left' },
+        2: { cellWidth: 64, halign: 'left' },
+        3: { cellWidth: 10, halign: 'center', overflow: 'visible' },
+        4: { cellWidth: 36, halign: 'right', overflow: 'visible' },
+        5: { cellWidth: 36, halign: 'right', overflow: 'visible' }
       },
       margin: { left: margin, right: margin },
+      didDrawCell: (data) => {
+        if (data.section === 'body') {
+          doc.setDrawColor(224, 224, 224);
+          doc.setLineWidth(0.1);
+          doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
+        }
+      },
       didDrawPage: (data) => {
         // Footer on each page
         const pageCount = (doc as any).internal.pages.length - 1;
@@ -259,8 +302,12 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // SUMMARY SECTION
     // ============================================================
     currentY = (doc as any).lastAutoTable.finalY + 8;
+    doc.setDrawColor(...BRAND_RED);
+    doc.setLineWidth(0.6);
+    doc.line(margin, currentY - 5, pageWidth - margin, currentY - 5);
     
-    const summaryX = pageWidth - margin - 70;
+    const summaryWidth = 90;
+    const summaryX = pageWidth - margin - summaryWidth;
     const summaryLabelX = summaryX;
     const summaryValueX = pageWidth - margin;
     
@@ -268,6 +315,9 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.setFont('helvetica', 'normal');
     
     // Subtotal
+    doc.setDrawColor(220, 220, 220);
+    doc.setLineWidth(0.2);
+    doc.rect(summaryX - 4, currentY - 5, summaryWidth + 4, 12);
     doc.text('Subtotal', summaryLabelX, currentY);
     doc.text(`Rp ${formatNumberWithDots(invoice.subtotal)}`, summaryValueX, currentY, { align: 'right' });
     
@@ -297,14 +347,12 @@ export async function generateInvoicePDF(invoice: Invoice) {
     
     // Total line
     currentY += 2;
-    doc.setDrawColor(25, 118, 210);
-    doc.setLineWidth(0.5);
-    doc.line(summaryLabelX, currentY, summaryValueX, currentY);
-    
-    currentY += 6;
+    doc.setFillColor(...BRAND_RED);
+    doc.rect(summaryX - 4, currentY - 4, summaryWidth + 4, 12, 'F');
+    currentY += 4;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.setTextColor(25, 118, 210);
+    doc.setTextColor(255, 255, 255);
     doc.text(totalLabel, summaryLabelX, currentY);
     doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, currentY, { align: 'right' });
     
@@ -370,22 +418,20 @@ export async function generateInvoicePDF(invoice: Invoice) {
     }
     
     // ============================================================
-    // FOOTER - Signature & Info
+    // SIGNATURE & FOOTER - Match preview document
     // ============================================================
-    let signatureY = Math.max(currentY + 18, pageHeight - 48);
-    if (signatureY > pageHeight - 35) {
-      doc.addPage();
-      signatureY = margin + 15;
-    }
+    currentY += 18;
+    ensureSpace(72);
 
     const memberSignatureX = margin + 42;
     const adminSignatureX = pageWidth - margin - 42;
-    const signatureLineWidth = 55;
+    const signatureLineWidth = 58;
 
-    doc.setDrawColor(210, 210, 210);
-    doc.setLineWidth(0.3);
-    doc.line(margin, signatureY - 8, pageWidth - margin, signatureY - 8);
+    doc.setDrawColor(221, 221, 221);
+    doc.setLineWidth(0.2);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
 
+    const signatureY = currentY + 15;
     doc.setFontSize(8);
     doc.setTextColor(0, 0, 0);
     doc.setFont('helvetica', 'bold');
@@ -402,11 +448,23 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.text(invoice.memberName || 'Member', memberSignatureX, signatureY + 31, { align: 'center' });
     doc.text(invoice.verifiedByName || invoice.createdByName || 'Admin', adminSignatureX, signatureY + 31, { align: 'center' });
 
-    // Document info
+    currentY = signatureY + 43;
+    ensureSpace(22);
+
+    doc.setDrawColor(221, 221, 221);
+    doc.setLineWidth(0.2);
+    doc.line(margin, currentY, pageWidth - margin, currentY);
+
+    currentY += 8;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(136, 136, 136);
+    doc.text('Terima kasih atas kepercayaan Anda menggunakan layanan Raho ERP', pageWidth / 2, currentY, { align: 'center' });
+
+    currentY += 5;
     doc.setFontSize(7);
-    doc.setTextColor(150, 150, 150);
-    doc.text(`Generated: ${new Date().toLocaleString('id-ID')}`, margin, pageHeight - 5);
-    doc.text(`${documentTitle} #${invoice.invoiceNumber}`, pageWidth - margin - 40, pageHeight - 5, { align: 'right' });
+    doc.setTextColor(170, 170, 170);
+    doc.text(`Generated: ${new Date().toLocaleString('id-ID')} | ${documentTitle} #${invoice.invoiceNumber}`, pageWidth / 2, currentY, { align: 'center' });
     
     // Save PDF
     const fileName = `${isReceipt ? 'Kwitansi' : 'Invoice'}-${invoice.invoiceNumber}.pdf`;

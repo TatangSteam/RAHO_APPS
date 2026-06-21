@@ -5,6 +5,8 @@ import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '../../../config/env';
 import { Readable } from 'stream';
 import { Role } from '@prisma/client';
+import { createReadStream, existsSync, statSync } from 'fs';
+import path from 'path';
 
 /**
  * Service for invoice retrieval
@@ -170,22 +172,62 @@ export class InvoiceRetrievalService {
     // Extract the MinIO key from the stored URL
     const key = extractKeyFromUrl(payment.proofFileUrl);
 
-    const command = new GetObjectCommand({
-      Bucket: env.MINIO_BUCKET,
-      Key: key,
-    });
+    try {
+      const command = new GetObjectCommand({
+        Bucket: env.MINIO_BUCKET,
+        Key: key,
+      });
 
-    const response = await s3Client.send(command);
+      const response = await s3Client.send(command);
 
-    if (!response.Body) {
-      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+      if (!response.Body) {
+        throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+      }
+
+      return {
+        stream: response.Body as Readable,
+        contentType: response.ContentType || payment.proofMimeType || 'application/octet-stream',
+        contentLength: response.ContentLength || 0,
+        etag: response.ETag || '',
+        fileName: payment.proofFileName,
+        mimeType: payment.proofMimeType,
+      };
+    } catch (error: any) {
+      const localFile = this.getLocalPaymentProofFile(key, payment);
+      if (localFile) {
+        return localFile;
+      }
+
+      throw error;
+    }
+  }
+
+  private getLocalPaymentProofFile(key: string, payment: any) {
+    const cleanKey = key.split('?')[0];
+    const cwd = path.resolve(process.cwd());
+    const localPath = path.resolve(cwd, cleanKey);
+
+    if (!localPath.startsWith(cwd) || !existsSync(localPath)) {
+      return null;
     }
 
+    const stat = statSync(localPath);
+    const ext = path.extname(localPath).toLowerCase();
+    const contentTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+      '.bmp': 'image/bmp',
+      '.pdf': 'application/pdf',
+    };
+
     return {
-      stream: response.Body as Readable,
-      contentType: response.ContentType || 'application/octet-stream',
-      contentLength: response.ContentLength || 0,
-      etag: response.ETag || '',
+      stream: createReadStream(localPath) as unknown as Readable,
+      contentType: payment.proofMimeType || contentTypes[ext] || 'application/octet-stream',
+      contentLength: stat.size,
+      etag: `"${stat.mtimeMs}-${stat.size}"`,
       fileName: payment.proofFileName,
       mimeType: payment.proofMimeType,
     };
@@ -195,6 +237,22 @@ export class InvoiceRetrievalService {
    * Format invoice for API response
    */
   async formatInvoice(invoice: any) {
+    const groupPayments = invoice.paymentGroupId
+      ? await prisma.invoicePayment.findMany({
+          where: {
+            invoice: {
+              paymentGroupId: invoice.paymentGroupId,
+            },
+          },
+          include: {
+            receivedByUser: true,
+          },
+          orderBy: {
+            receivedAt: 'asc',
+          },
+        })
+      : invoice.payments;
+
     // Get incentive information for packages in this invoice
     let incentiveInfo = null;
     
@@ -241,6 +299,15 @@ export class InvoiceRetrievalService {
         };
       }
     }
+
+    const items = await this.formatInvoiceItems(invoice);
+    const displaySubtotal = items.reduce((sum: number, item: any) => sum + Number(item.subtotal || 0), 0);
+    const shouldUseDisplaySubtotal =
+      invoice.paymentPlanType === 'INSTALLMENT' &&
+      invoice.status === 'PENDING_PAYMENT' &&
+      Number(invoice.totalAmount || 0) === 0 &&
+      Number(invoice.subtotal || 0) === 0 &&
+      displaySubtotal > 0;
     
     return {
       id: invoice.id,
@@ -252,7 +319,7 @@ export class InvoiceRetrievalService {
       branchName: invoice.branch.name,
       
       // Financial
-      subtotal: Number(invoice.subtotal),
+      subtotal: shouldUseDisplaySubtotal ? displaySubtotal : Number(invoice.subtotal),
       discountPercent: invoice.discountPercent ? Number(invoice.discountPercent) : undefined,
       discountAmount: invoice.discountAmount && Number(invoice.discountAmount) > 0 ? Number(invoice.discountAmount) : undefined,
       discountNote: invoice.discountNote || undefined,
@@ -292,19 +359,8 @@ export class InvoiceRetrievalService {
       updatedAt: invoice.updatedAt.toISOString(),
       
       // Relations
-      items: invoice.items.map((item: any) => ({
-        id: item.id,
-        itemType: item.itemType,
-        itemId: item.itemId,
-        code: item.code || undefined,
-        description: item.description,
-        quantity: item.quantity,
-        pricePerUnit: Number(item.pricePerUnit),
-        subtotal: Number(item.subtotal),
-        discountAmount: Number(item.discountAmount),
-        totalAmount: Number(item.totalAmount),
-      })),
-      payments: invoice.payments.map((payment: any) => ({
+      items,
+      payments: groupPayments.map((payment: any) => ({
         id: payment.id,
         amount: Number(payment.amount),
         paymentMethod: payment.paymentMethod,
@@ -319,5 +375,95 @@ export class InvoiceRetrievalService {
         receivedAt: payment.receivedAt.toISOString(),
       })),
     };
+  }
+
+  private async formatInvoiceItems(invoice: any) {
+    const formattedItems = invoice.items.map((item: any) => ({
+      id: item.id,
+      itemType: item.itemType,
+      itemId: item.itemId,
+      code: item.code || undefined,
+      description: item.description,
+      quantity: item.quantity,
+      pricePerUnit: Number(item.pricePerUnit),
+      subtotal: Number(item.subtotal),
+      discountAmount: Number(item.discountAmount),
+      totalAmount: Number(item.totalAmount),
+    }));
+
+    const shouldHydrateOpenInstallmentPrices =
+      invoice.paymentPlanType === 'INSTALLMENT' &&
+      invoice.status === 'PENDING_PAYMENT' &&
+      Number(invoice.totalAmount || 0) === 0 &&
+      formattedItems.length > 0 &&
+      formattedItems.every((item: any) => Number(item.totalAmount || 0) === 0);
+
+    if (!shouldHydrateOpenInstallmentPrices) {
+      return formattedItems;
+    }
+
+    const packageIds = formattedItems
+      .filter((item: any) => item.itemType === 'PACKAGE')
+      .map((item: any) => item.itemId);
+    const addOnIds = formattedItems
+      .filter((item: any) => item.itemType === 'ADDON')
+      .map((item: any) => item.itemId);
+
+    const [packages, addOns] = await Promise.all([
+      packageIds.length > 0
+        ? prisma.memberPackage.findMany({
+            where: { id: { in: packageIds } },
+            select: { id: true, finalPrice: true, discountAmount: true },
+          })
+        : [],
+      addOnIds.length > 0
+        ? prisma.memberAddOn.findMany({
+            where: { id: { in: addOnIds } },
+            select: { id: true, totalPrice: true, quantity: true, pricePerUnit: true },
+          })
+        : [],
+    ]);
+
+    const packagePriceById = new Map(
+      packages.map((pkg: any) => [
+        pkg.id,
+        Number(pkg.finalPrice || 0) + Number(pkg.discountAmount || 0),
+      ])
+    );
+    const addOnPriceById = new Map(
+      addOns.map((addon: any) => [
+        addon.id,
+        {
+          totalPrice: Number(addon.totalPrice || 0),
+          pricePerUnit: Number(addon.pricePerUnit || 0),
+        },
+      ])
+    );
+
+    return formattedItems.map((item: any) => {
+      if (item.itemType === 'PACKAGE') {
+        const price = packagePriceById.get(item.itemId) || 0;
+        return {
+          ...item,
+          pricePerUnit: price,
+          subtotal: price,
+          totalAmount: price,
+        };
+      }
+
+      if (item.itemType === 'ADDON') {
+        const price = addOnPriceById.get(item.itemId);
+        if (!price) return item;
+
+        return {
+          ...item,
+          pricePerUnit: price.pricePerUnit,
+          subtotal: price.totalPrice,
+          totalAmount: price.totalPrice,
+        };
+      }
+
+      return item;
+    });
   }
 }

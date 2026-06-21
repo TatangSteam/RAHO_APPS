@@ -10,12 +10,14 @@ import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
 import { MemberExportService } from './services/member-export.service';
 import { MemberLabResultsService } from './services/member-lab-results.service';
+import { SupportingPhotosService } from '../sessions/services/supporting-photos.service';
 import { logAudit } from '../../utils/auditLog';
 import { prisma } from '../../lib/prisma';
 
 const membersService = new MembersService();
 const exportService = new MemberExportService();
 const labResultsService = new MemberLabResultsService();
+const supportingPhotosService = new SupportingPhotosService();
 
 export class MembersController {
   async getMembers(req: Request, res: Response, next: NextFunction) {
@@ -675,6 +677,16 @@ export class MembersController {
     try {
       const { memberId } = req.params;
       const result = await labResultsService.getMemberLabResults(memberId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMemberSupportingPhotos(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const result = await supportingPhotosService.getSupportingPhotosByMember(memberId);
       sendSuccess(res, result);
     } catch (error) {
       next(error);

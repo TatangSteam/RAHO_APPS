@@ -108,8 +108,9 @@
    PAYMENT DETAILS
    ============================================================ */
 .paymentDetails {
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--surface-border);
+  padding: 16px;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
   background: var(--surface-ground);
 }
 
@@ -161,16 +162,58 @@
   align-items: center;
 }
 
+.proofList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.proofCard {
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  background: var(--surface-card);
+  padding: 16px;
+}
+
+.proofCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.proofCardTitle {
+  margin: 0 0 4px 0;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.proofCardMeta {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* ============================================================
    IMAGE DISPLAY
    ============================================================ */
 .imageContainer {
   width: 100%;
   max-width: 600px;
+  margin-top: 14px;
   border: 1px solid var(--surface-border);
   border-radius: 8px;
   overflow: hidden;
   background: var(--surface-ground);
+}
+
+.imagePlaceholder {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-muted);
 }
 
 .proofImage {

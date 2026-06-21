@@ -93,6 +93,48 @@
   color: var(--text-secondary);
 }
 
+.installmentBox {
+  display: block;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.24);
+}
+
+.installmentSummary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.installmentLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.installmentTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.installmentAmount {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--color-primary-500);
+  white-space: nowrap;
+}
+
+.installmentMeta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
 .formGroup {
   margin-bottom: 24px;
 }
