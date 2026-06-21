@@ -611,6 +611,28 @@ export default function MemberSessionDetailPage() {
                 </span>
               </div>
               
+              {evaluation.keluhan && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary-400)', margin: '0 0 4px 0' }}>
+                    Keluhan
+                  </p>
+                  <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>
+                    {evaluation.keluhan}
+                  </p>
+                </div>
+              )}
+
+              {evaluation.rekomendasi && (
+                <div>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary-400)', margin: '0 0 4px 0' }}>
+                    Rekomendasi
+                  </p>
+                  <p style={{ fontSize: 13, color: 'var(--text-primary)', margin: 0, lineHeight: 1.5 }}>
+                    {evaluation.rekomendasi}
+                  </p>
+                </div>
+              )}
+
               {evaluation.subjective && (
                 <div>
                   <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-primary-400)', margin: '0 0 4px 0' }}>

@@ -65,6 +65,10 @@ export interface MemberPackage {
   discountNote?: string;
   notes?: string;
   status: PackageStatus;
+  paymentPlanType?: 'FULL_PAYMENT' | 'INSTALLMENT';
+  installmentTotal?: number;
+  totalVerifiedPaid?: number;
+  paymentPlanStatus?: string;
   boosterType?: BoosterType;
   serviceType?: string;
   branchName?: string;
@@ -130,6 +134,10 @@ export interface StandaloneAddOn {
   pricePerUnit: number;
   totalPrice: number;
   status: PackageStatus;
+  paymentPlanType?: 'FULL_PAYMENT' | 'INSTALLMENT';
+  installmentTotal?: number;
+  totalVerifiedPaid?: number;
+  paymentPlanStatus?: string;
   notes?: string;
   branchName: string;
   assignedBy: string;

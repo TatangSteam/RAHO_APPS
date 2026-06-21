@@ -94,6 +94,8 @@ export class SessionExportService {
       jumlahJarum: { label: 'Jumlah Jarum', getter: (s) => s.infusion?.jumlahJarum ?? '-' },
       deviationNotes: { label: 'Catatan Deviasi', getter: (s) => s.infusion?.deviationNotes ?? '-' },
       materialsSummary: { label: 'Ringkasan Material', getter: (s) => s.materials?.map((m: any) => `${m.inventoryItem?.masterProduct?.name || 'Unknown'}: ${m.quantity} ${m.unit}`).join('; ') || '-' },
+      keluhan: { label: 'Keluhan', getter: (s) => s.evaluation?.keluhan ?? '-' },
+      rekomendasi: { label: 'Rekomendasi', getter: (s) => s.evaluation?.rekomendasi ?? '-' },
       subjective: { label: 'Subjective', getter: (s) => s.evaluation?.subjective ?? '-' },
       objective: { label: 'Objective', getter: (s) => s.evaluation?.objective ?? '-' },
       assessment: { label: 'Assessment', getter: (s) => s.evaluation?.assessment ?? '-' },
@@ -268,7 +270,7 @@ export class SessionExportService {
       'planIfa250', 'planIfa500', 'planHho', 'planH2', 'planNo', 'planGaso', 'planO2', 'planO3', 'planEdta', 'planMb', 'planH2s', 'planKcl', 'planJmlNb', 'planKeterangan',
       'aktualIfa250', 'aktualIfa500', 'aktualHho', 'aktualH2', 'aktualNo', 'aktualGaso', 'aktualO2', 'aktualO3', 'aktualEdta', 'aktualMb', 'aktualH2s', 'aktualKcl', 'aktualJmlNb', 'bottleType', 'jenisCairan', 'volumeCarrier', 'jumlahJarum', 'deviationNotes',
       'materialsSummary',
-      'subjective', 'objective', 'assessment', 'plan', 'generalNotes',
+      'keluhan', 'rekomendasi', 'subjective', 'objective', 'assessment', 'plan', 'generalNotes',
     ];
     
     const selectedFields = fieldOrder.filter(key => options.fields[key] && fieldMapping[key]);

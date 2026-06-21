@@ -27,6 +27,7 @@ interface EditPlanInput {
 }
 
 interface BulkEditSetInput {
+  newSetName?: string; // Optional: Custom set name (only for authorized users)
   plans: EditPlanInput[];
 }
 
@@ -36,6 +37,46 @@ function padSequence(value: number, size = 2) {
 
 function createPlanCodeFromSet(setCode: string, planNumber: number) {
   return `${setCode.replace(/^TPS-/, 'TP-')}-${padSequence(planNumber)}`;
+}
+
+/**
+ * Generate a new name for the edited set with current date
+ * Format: "Set #[number] - [current date]"
+ * Example: "Set #1 - 20 Jun"
+ * 
+ * IMPORTANT: When editing, the set NUMBER must stay the same, only date changes.
+ * The set number comes from the original name, NOT from the setCode sequence.
+ */
+function generateEditedSetName(originalName: string | null, setCode: string): string {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('id-ID', {
+    day: '2-digit',
+    month: 'short'
+  });
+
+  let setNumber: number | null = null;
+
+  // ALWAYS try to extract set number from original name first
+  if (originalName) {
+    // Try to extract number from name like "Set #1 - 19 Jun" or "Set#1-20 jun v1"
+    const nameMatch = originalName.match(/Set\s*#?(\d+)/i);
+    if (nameMatch) {
+      setNumber = parseInt(nameMatch[1], 10);
+      // Use the extracted number and return immediately to preserve original set number
+      return `Set #${setNumber} - ${dateStr}`;
+    }
+  }
+
+  // Only if original name doesn't exist or doesn't contain set number,
+  // extract from setCode as fallback (e.g., "TPS-PST-MBR-PST-0008-003" -> 3)
+  const codeMatch = setCode.match(/(\d+)$/);
+  if (codeMatch) {
+    setNumber = parseInt(codeMatch[1], 10);
+    return `Set #${setNumber} - ${dateStr}`;
+  }
+
+  // Fallback if no number found anywhere
+  return `Set ${dateStr}`;
 }
 
 export class MemberTherapyPlanSetEditService {
@@ -62,19 +103,21 @@ export class MemberTherapyPlanSetEditService {
       };
     }
 
-    // 2. Check if any plan in the set has been used
+    // 2. Identify used plans (plans that have been used in sessions)
     const usedPlans = originalSet.plans.filter((p) => p.treatmentSessionId);
-    if (usedPlans.length > 0) {
-      throw {
-        status: 400,
-        code: 'THERAPY_PLAN_IN_USE',
-        message: `${usedPlans.length} plan dalam set ini sudah digunakan, tidak dapat diedit. Buat set baru sebagai gantinya.`,
-      };
-    }
+    const usedPlanNumbers = new Set(usedPlans.map((p) => p.planNumber || 0));
 
-    // 3. Validate input plans
+    // 3. Validate input plans and check for edits to locked plans
     const planEditsMap = new Map<number, EditPlanInput>();
+    const attemptedLockedEdits: number[] = [];
+    
     input.plans.forEach((planInput) => {
+      // Check if trying to edit a locked (used) plan
+      if (usedPlanNumbers.has(planInput.planNumber)) {
+        attemptedLockedEdits.push(planInput.planNumber);
+        return; // Skip this plan, don't add to edits
+      }
+
       // Validate mutual exclusivity
       if (planInput.ifa250 && planInput.ifa500) {
         throw {
@@ -111,18 +154,39 @@ export class MemberTherapyPlanSetEditService {
       planEditsMap.set(planInput.planNumber, planInput);
     });
 
+    // If there were attempts to edit locked plans, throw error
+    if (attemptedLockedEdits.length > 0) {
+      throw {
+        status: 400,
+        code: 'LOCKED_PLAN_EDIT_ATTEMPT',
+        message: `Plan ${attemptedLockedEdits.join(', ')} sudah digunakan dalam sesi dan tidak dapat diedit (terkunci).`,
+      };
+    }
+
+    // If no edits remain after filtering locked plans
+    if (planEditsMap.size === 0) {
+      throw {
+        status: 400,
+        code: 'NO_VALID_EDITS',
+        message: 'Tidak ada plan yang dapat diedit. Semua plan yang dipilih sudah terkunci.',
+      };
+    }
+
     // 4. Create new set version
     const newVersion = originalSet.version + 1;
     const baseSetCode = originalSet.setCode.replace(/-V\d+$/i, '');
     const newSetCode = `${baseSetCode}-V${newVersion}`;
 
     const result = await prisma.$transaction(async (tx) => {
-      // Create new set
+      // Determine set name: use custom name if provided, otherwise auto-generate
+      const setName = input.newSetName || generateEditedSetName(originalSet.name, baseSetCode);
+      
+      // Create new set with updated name containing current date
       const newSet = await tx.therapyPlanSet.create({
         data: {
           memberId: originalSet.memberId,
           setCode: newSetCode,
-          name: originalSet.name,
+          name: setName,
           version: newVersion,
           status: 'ACTIVE',
           createdBy: originalSet.createdBy,
@@ -130,8 +194,17 @@ export class MemberTherapyPlanSetEditService {
       });
 
       const copiedPlans = [];
+      const existingPlanNumbers = new Set(originalSet.plans.map(p => p.planNumber || 0));
+      const newPlanInputs: EditPlanInput[] = [];
 
-      // Copy all plans with edits applied
+      // Identify new plans (plans that don't exist in original set)
+      planEditsMap.forEach((planInput, planNumber) => {
+        if (!existingPlanNumbers.has(planNumber)) {
+          newPlanInputs.push(planInput);
+        }
+      });
+
+      // Copy all existing plans with edits applied
       for (const oldPlan of originalSet.plans) {
         const planNumber = oldPlan.planNumber || 1;
         const editInput = planEditsMap.get(planNumber);
@@ -174,6 +247,44 @@ export class MemberTherapyPlanSetEditService {
         copiedPlans.push({ oldPlan, copiedPlan, edited: hasEdit });
       }
 
+      // Create new plans (plans that didn't exist in original set)
+      for (const newPlanInput of newPlanInputs) {
+        const planNumber = newPlanInput.planNumber;
+        
+        // Prepare IFA substance data for new plan
+        const ifaSubstanceData = newPlanInput.ifaSubstances !== undefined
+          ? normalizeIfaSubstances(newPlanInput.ifaSubstances, Boolean(newPlanInput.ifa250 && newPlanInput.ifa250 > 0))
+          : { ifaSubstances: null, ifaSubstanceTotalMl: null };
+
+        const newPlan = await tx.therapyPlan.create({
+          data: {
+            planCode: createPlanCodeFromSet(newSetCode, planNumber),
+            member: { connect: { id: originalSet.memberId } },
+            therapyPlanSet: { connect: { id: newSet.id } },
+            planNumber,
+            keterangan: newPlanInput.keterangan || '',
+            ifa250: newPlanInput.ifa250,
+            ifa500: newPlanInput.ifa500,
+            hho: newPlanInput.hho,
+            h2: newPlanInput.h2,
+            no: newPlanInput.no,
+            gaso: newPlanInput.gaso,
+            o2: newPlanInput.o2,
+            o3: newPlanInput.o3,
+            edta: newPlanInput.edta,
+            mb: newPlanInput.mb,
+            h2s: newPlanInput.h2s,
+            kcl: newPlanInput.kcl,
+            jmlNb: newPlanInput.jmlNb,
+            ...ifaSubstanceData,
+            version: newVersion,
+          } as any,
+        });
+
+        // Add to copiedPlans as edited (new plans are always "edited")
+        copiedPlans.push({ oldPlan: null as any, copiedPlan: newPlan, edited: true });
+      }
+
       // Mark old set as SUPERSEDED
       await tx.therapyPlanSet.update({
         where: { id: originalSet.id },
@@ -183,15 +294,17 @@ export class MemberTherapyPlanSetEditService {
         },
       });
 
-      // Update old plans with supersededById
+      // Update old plans with supersededById (skip new plans that don't have oldPlan)
       for (const pair of copiedPlans) {
-        await tx.therapyPlan.update({
-          where: { id: pair.oldPlan.id },
-          data: {
-            supersededById: pair.copiedPlan.id,
-            supersededAt: new Date(),
-          },
-        });
+        if (pair.oldPlan) {
+          await tx.therapyPlan.update({
+            where: { id: pair.oldPlan.id },
+            data: {
+              supersededById: pair.copiedPlan.id,
+              supersededAt: new Date(),
+            },
+          });
+        }
       }
 
       return { newSet, copiedPlans };

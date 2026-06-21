@@ -101,6 +101,7 @@ export const editTherapyPlanSchema = z.object({
 
 // Bulk edit therapy plan set schema (for editing multiple plans in a set at once)
 export const bulkEditTherapyPlanSetSchema = z.object({
+  newSetName: z.string().trim().max(120).optional(), // Optional custom set name (only for authorized users)
   plans: z.array(
     z.object({
       planNumber: z.number().int().min(1, 'Plan number harus positif'),

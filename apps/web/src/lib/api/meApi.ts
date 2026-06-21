@@ -117,6 +117,8 @@ export interface MemberSessionDetail {
   } | null
   evaluation: {
     evaluationCode: string
+    keluhan: string | null
+    rekomendasi: string | null
     subjective: string | null
     objective: string | null
     assessment: string | null

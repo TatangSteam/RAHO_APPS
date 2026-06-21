@@ -60,6 +60,18 @@ export interface Invoice {
   
   // Status
   status: InvoiceStatus;
+  paymentPlanType?: 'FULL_PAYMENT' | 'INSTALLMENT';
+  paymentGroupId?: string;
+  installmentNumber?: number;
+  installmentTotal?: number;
+  totalPurchaseAmount?: number;
+  installmentAmount?: number;
+  carryOverAmount?: number;
+  creditAmount?: number;
+  actualPaidAmount?: number;
+  paymentVerificationStatus?: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  paymentRejectionReason?: string;
+  isAdjustment?: boolean;
   dueDate?: string;
   paidAt?: string;
   cancelledAt?: string;

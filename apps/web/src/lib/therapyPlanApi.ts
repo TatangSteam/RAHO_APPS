@@ -109,6 +109,7 @@ export interface BulkCreateTherapyPlansResponse {
 }
 
 export interface BulkEditTherapyPlanSetInput {
+  newSetName?: string; // New set name (optional, only for authorized roles)
   plans: Array<{
     planNumber: number;
     keterangan?: string;

@@ -1,16 +1,21 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { AdminManagersTab } from './AdminManagersTab';
 import { adminManagersApi, AdminManager } from '@/lib/api/adminManagersApi';
 import { showToast } from '@/lib/toast';
-import { useImpersonation } from '@/contexts/ImpersonationContext';
 
 // ── Mocks ─────────────────────────────────────────────────────
 
+const mockRouterPush = jest.fn();
+
 jest.mock('@/lib/api/adminManagersApi');
 jest.mock('@/lib/toast');
-jest.mock('@/contexts/ImpersonationContext');
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({
+    push: mockRouterPush,
+  }),
+}));
 
 // Mock lucide-react icons
 jest.mock('lucide-react', () => ({
@@ -20,6 +25,7 @@ jest.mock('lucide-react', () => ({
   ChevronRight: () => <div data-testid="chevron-right-icon">ChevronRight</div>,
   Users: () => <div data-testid="users-icon">Users</div>,
   Building2: () => <div data-testid="building-icon">Building2</div>,
+  Eye: () => <div data-testid="eye-icon">Eye</div>,
 }));
 
 // ── Test Data ─────────────────────────────────────────────────
@@ -29,10 +35,11 @@ const mockManagers: AdminManager[] = [
     id: 'manager-1',
     email: 'manager1@raho.id',
     fullName: 'Manager One',
+    phoneNumber: '081234567890',
     isActive: true,
     branches: [
-      { id: 'branch-1', name: 'Jakarta', branchCode: 'JKT' },
-      { id: 'branch-2', name: 'Bandung', branchCode: 'BDG' },
+      { id: 'branch-1', name: 'Jakarta', branchCode: 'JKT', type: 'CABANG', isActive: true },
+      { id: 'branch-2', name: 'Bandung', branchCode: 'BDG', type: 'CABANG', isActive: true },
     ],
     createdAt: '2024-01-15T10:00:00Z',
     lastLoginAt: '2024-05-10T14:30:00Z',
@@ -41,9 +48,10 @@ const mockManagers: AdminManager[] = [
     id: 'manager-2',
     email: 'manager2@raho.id',
     fullName: 'Manager Two',
+    phoneNumber: '081234567891',
     isActive: true,
     branches: [
-      { id: 'branch-3', name: 'Surabaya', branchCode: 'SBY' },
+      { id: 'branch-3', name: 'Surabaya', branchCode: 'SBY', type: 'CABANG', isActive: true },
     ],
     createdAt: '2024-02-20T11:00:00Z',
     lastLoginAt: null,
@@ -52,6 +60,7 @@ const mockManagers: AdminManager[] = [
     id: 'manager-3',
     email: 'manager3@raho.id',
     fullName: 'Manager Three',
+    phoneNumber: '081234567892',
     isActive: false,
     branches: [],
     createdAt: '2024-03-10T09:00:00Z',
@@ -73,7 +82,6 @@ describe('AdminManagersTab', () => {
     typeof adminManagersApi.getAdminManagers
   >;
   const mockShowToastError = showToast.error as jest.MockedFunction<typeof showToast.error>;
-  const mockUseImpersonation = useImpersonation as jest.MockedFunction<typeof useImpersonation>;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -82,18 +90,6 @@ describe('AdminManagersTab', () => {
     mockGetAdminManagers.mockResolvedValue({
       data: mockManagers,
       meta: mockPaginationMeta,
-    });
-
-    mockUseImpersonation.mockReturnValue({
-      isImpersonating: false,
-      originalUser: null,
-      impersonatedUser: null,
-      impersonationChain: [],
-      loading: false,
-      error: null,
-      startImpersonation: jest.fn(),
-      stopImpersonation: jest.fn(),
-      clearError: jest.fn(),
     });
   });
 
@@ -230,7 +226,7 @@ describe('AdminManagersTab', () => {
       });
     });
 
-    it('should show add button in empty state', async () => {
+    it('should show only one add button when empty', async () => {
       mockGetAdminManagers.mockResolvedValue({
         data: [],
         meta: { total: 0, page: 1, limit: 10, totalPages: 0 },
@@ -240,7 +236,7 @@ describe('AdminManagersTab', () => {
 
       await waitFor(() => {
         const addButtons = screen.getAllByText('Tambah Admin Manager');
-        expect(addButtons.length).toBeGreaterThan(0);
+        expect(addButtons).toHaveLength(1);
       });
     });
   });
@@ -369,7 +365,7 @@ describe('AdminManagersTab', () => {
       await waitFor(() => {
         expect(mockGetAdminManagers).toHaveBeenCalledWith(
           expect.objectContaining({
-            status: 'active',
+            isActive: true,
             page: 1,
           })
         );
@@ -562,47 +558,34 @@ describe('AdminManagersTab', () => {
   // ── 9. Action Buttons Tests ─────────────────────────────────
 
   describe('Action Buttons', () => {
-    it('should render impersonate button for each manager', async () => {
+    it('should render detail button for each manager', async () => {
       render(<AdminManagersTab />);
 
       await waitFor(() => {
-        const impersonateButtons = screen.getAllByText('Masuk Sebagai');
-        expect(impersonateButtons).toHaveLength(3);
+        const detailButtons = screen.getAllByText('Detail');
+        expect(detailButtons).toHaveLength(3);
       });
     });
 
-    it('should render edit button for each manager', async () => {
+    it('should use detail action title for each manager', async () => {
       render(<AdminManagersTab />);
 
       await waitFor(() => {
-        const editButtons = screen.getAllByTitle('Edit Admin Manager');
-        expect(editButtons).toHaveLength(3);
+        const detailButtons = screen.getAllByTitle('Lihat Detail & Kelola');
+        expect(detailButtons).toHaveLength(3);
       });
     });
 
-    it('should render deactivate/activate button for each manager', async () => {
+    it('should navigate to manager detail when detail is clicked', async () => {
       render(<AdminManagersTab />);
 
       await waitFor(() => {
-        const deactivateButtons = screen.getAllByTitle('Nonaktifkan');
-        expect(deactivateButtons).toHaveLength(2); // Only active managers
-
-        const activateButtons = screen.getAllByTitle('Aktifkan');
-        expect(activateButtons).toHaveLength(1); // Only inactive managers
+        expect(screen.getByText('Manager One')).toBeInTheDocument();
       });
-    });
 
-    it('should disable impersonate button for inactive managers', async () => {
-      render(<AdminManagersTab />);
+      fireEvent.click(screen.getAllByText('Detail')[0]);
 
-      await waitFor(() => {
-        const rows = screen.getAllByRole('row');
-        const manager3Row = rows.find(row => row.textContent?.includes('Manager Three'));
-        
-        // The ImpersonateButton component should receive disabled prop
-        // This is tested through the component's props
-        expect(manager3Row).toBeInTheDocument();
-      });
+      expect(mockRouterPush).toHaveBeenCalledWith('/admin/managers/manager-1');
     });
   });
 
@@ -635,30 +618,30 @@ describe('AdminManagersTab', () => {
     });
   });
 
-  // ── 11. Integration with ImpersonationContext ───────────────
+  // ── 11. Integration with Detail Navigation ───────────────
 
-  describe('Integration with ImpersonationContext', () => {
-    it('should render ImpersonateButton components', async () => {
+  describe('Integration with detail navigation', () => {
+    it('should render detail actions for loaded managers', async () => {
       render(<AdminManagersTab />);
 
       await waitFor(() => {
         expect(screen.getByText('Manager One')).toBeInTheDocument();
       });
 
-      // ImpersonateButton should be rendered for each manager
-      const impersonateButtons = screen.getAllByText('Masuk Sebagai');
-      expect(impersonateButtons).toHaveLength(3);
+      const detailButtons = screen.getAllByText('Detail');
+      expect(detailButtons).toHaveLength(3);
     });
 
-    it('should pass correct props to ImpersonateButton', async () => {
+    it('should navigate to the selected manager detail page', async () => {
       render(<AdminManagersTab />);
 
       await waitFor(() => {
-        expect(screen.getByText('Manager One')).toBeInTheDocument();
+        expect(screen.getByText('Manager Two')).toBeInTheDocument();
       });
 
-      // ImpersonateButton should be rendered with correct props
-      // This is implicitly tested through the component rendering
+      fireEvent.click(screen.getAllByText('Detail')[1]);
+
+      expect(mockRouterPush).toHaveBeenCalledWith('/admin/managers/manager-2');
     });
   });
 
@@ -785,7 +768,7 @@ describe('AdminManagersTab', () => {
         expect(mockGetAdminManagers).toHaveBeenCalledWith(
           expect.objectContaining({
             search: 'Manager',
-            status: 'active',
+            isActive: true,
           })
         );
       });

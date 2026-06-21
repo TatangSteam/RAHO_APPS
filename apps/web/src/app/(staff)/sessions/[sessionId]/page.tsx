@@ -13,6 +13,7 @@ import Step5Infusion from '@/components/sessions/Step5Infusion';
 import Step6Materials from '@/components/sessions/Step6Materials';
 import Step7Photo from '@/components/sessions/Step7Photo';
 import Step8VitalAfter from '@/components/sessions/Step8VitalAfter';
+import Step8ComplaintsRecommendations from '@/components/sessions/Step8ComplaintsRecommendations';
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
 
 export default function SessionDetailPage() {
@@ -46,7 +47,7 @@ export default function SessionDetailPage() {
         else if (!data.steps.step5_materials) setActiveStep(5);
         else if (!data.steps.step6_photo) setActiveStep(6);
         else if (!data.steps.step7_vitalAfter) setActiveStep(7);
-        else if (!data.steps.step8_evaluation) setActiveStep(8);
+        else if (!data.steps.step8_evaluation) setActiveStep(9); // Step 8 is optional, Step 9 is required
       }
     } catch (error: any) {
       devError('Error loading session detail:', error);
@@ -58,8 +59,8 @@ export default function SessionDetailPage() {
     }
   };
 
-  const handleStepComplete = () => {
-    loadSessionDetail();
+  const handleStepComplete = async () => {
+    await loadSessionDetail();
   };
 
   const handleCompleteSession = async () => {
@@ -133,7 +134,8 @@ export default function SessionDetailPage() {
     if (step === 5) return steps.step4_infusion; // Materials needs infusion
     if (step === 6) return steps.step5_materials; // Photo needs materials (optional step)
     if (step === 7) return steps.step5_materials; // Vital After needs materials (photo is optional)
-    if (step === 8) return steps.step7_vitalAfter; // Evaluation needs vital after
+    if (step === 8) return steps.step7_vitalAfter; // Complaints & Recommendations needs vital after (optional step)
+    if (step === 9) return steps.step7_vitalAfter; // Evaluation needs vital after (step 8 is optional)
     return false;
   };
 
@@ -447,13 +449,23 @@ export default function SessionDetailPage() {
             locked={!canAccessStep(7)}
             icon="💉"
           />
-          <StepIndicator 
-            number={8} 
-            title="Evaluasi Dokter" 
-            completed={steps.step8_evaluation} 
+          <StepIndicator
+            number={8}
+            title="Keluhan & Rekomendasi"
+            completed={session.evaluation?.keluhan || session.evaluation?.rekomendasi ? true : false}
             active={activeStep === 8}
             onClick={() => canAccessStep(8) && setActiveStep(8)}
             locked={!canAccessStep(8)}
+            icon="📝"
+            optional={true}
+          />
+          <StepIndicator
+            number={9}
+            title="Evaluasi Dokter"
+            completed={steps.step8_evaluation}
+            active={activeStep === 9}
+            onClick={() => canAccessStep(9) && setActiveStep(9)}
+            locked={!canAccessStep(9)}
             icon="📋"
           />
         </div>
@@ -531,10 +543,25 @@ export default function SessionDetailPage() {
         )}
         
         {activeStep === 8 && (
+          <Step8ComplaintsRecommendations
+            sessionId={sessionId}
+            complaintsRecommendations={session.evaluation ? {
+              keluhan: session.evaluation.keluhan,
+              rekomendasi: session.evaluation.rekomendasi
+            } : null}
+            isLocked={!canAccessStep(8)}
+            onComplete={async () => {
+              await handleStepComplete();
+              setActiveStep(9);
+            }}
+          />
+        )}
+
+        {activeStep === 9 && (
           <Step9Evaluation 
             sessionId={sessionId}
             evaluation={session.evaluation}
-            isLocked={!canAccessStep(8)}
+            isLocked={!canAccessStep(9)}
             onComplete={handleStepComplete}
           />
         )}

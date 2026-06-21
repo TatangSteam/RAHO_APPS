@@ -63,6 +63,9 @@ export default function InvoiceDocument({ invoice }: Props) {
   const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
   const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
   const numberLabel = isReceipt ? 'No. Kwitansi:' : 'No. Faktur:';
+  const isInstallment = Boolean(
+    invoice.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal
+  );
 
   // Group invoice items by code + description + pricePerUnit
   const groupedItems = React.useMemo(() => {
@@ -146,6 +149,23 @@ export default function InvoiceDocument({ invoice }: Props) {
           </div>
         </div>
       </div>
+
+      {isInstallment && (
+        <div className={styles.notes}>
+          <h3 className={styles.sectionTitle}>
+            Termin {invoice.installmentNumber} dari {invoice.installmentTotal}
+          </h3>
+          <p className={styles.notesContent}>
+            Total pembelian: {formatCurrency(invoice.totalPurchaseAmount || invoice.totalAmount)}
+            {invoice.carryOverAmount && invoice.carryOverAmount > 0
+              ? ` | Sisa termin sebelumnya: ${formatCurrency(invoice.carryOverAmount)}`
+              : ''}
+            {invoice.creditAmount && invoice.creditAmount > 0
+              ? ` | Kredit termin sebelumnya: ${formatCurrency(invoice.creditAmount)}`
+              : ''}
+          </p>
+        </div>
+      )}
 
       {/* Items Table */}
       <div className={styles.tableWrapper}>
@@ -243,62 +263,33 @@ export default function InvoiceDocument({ invoice }: Props) {
       {/* Notes */}
       {invoice.notes && (
         <div className={styles.notes}>
-          <h3 className={styles.sectionTitle}>📝 Catatan</h3>
+          <h3 className={styles.sectionTitle}>Catatan</h3>
           <p className={styles.notesContent}>{invoice.notes}</p>
-        </div>
-      )}
-
-      {/* Payment History */}
-      {invoice.status === 'PAID' && invoice.payments && invoice.payments.length > 0 && (
-        <div className={styles.paymentHistory}>
-          <h3 className={styles.sectionTitle}>✅ Riwayat Pembayaran</h3>
-          {invoice.payments.map((payment) => (
-            <div key={payment.id} className={styles.paymentHistoryItem}>
-              <p><strong>Metode:</strong> {payment.paymentMethod}</p>
-              {payment.paymentReference && (
-                <p><strong>Referensi:</strong> {payment.paymentReference}</p>
-              )}
-              <p><strong>Jumlah:</strong> {formatCurrency(payment.amount)}</p>
-              <p><strong>Tanggal Bayar:</strong> {formatDate(payment.receivedAt)}</p>
-            </div>
-          ))}
         </div>
       )}
 
       {/* Signature */}
       <div className={styles.signature}>
         <div className={styles.signatureBox}>
-          <div className={styles.signatureLabel}>Penerima</div>
+          <div className={styles.signatureLabel}>Member</div>
           <div className={styles.signatureLine}></div>
           <div className={styles.signatureName}>
             {invoice.memberName || 'Member'}
           </div>
         </div>
         <div className={styles.signatureBox}>
-          <div className={styles.signatureLabel}>Dibuat Oleh</div>
+          <div className={styles.signatureLabel}>Admin</div>
           <div className={styles.signatureLine}></div>
           <div className={styles.signatureName}>
-            {invoice.createdByName || 'Admin'}
+            {invoice.verifiedByName || invoice.createdByName || 'Admin'}
           </div>
         </div>
-        {invoice.verifiedByName && (
-          <div className={styles.signatureBox}>
-            <div className={styles.signatureLabel}>Diverifikasi Oleh</div>
-            <div className={styles.signatureLine}></div>
-            <div className={styles.signatureName}>
-              {invoice.verifiedByName}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Footer */}
       <div className={styles.footer}>
         <p className={styles.footerText}>
           Terima kasih atas kepercayaan Anda menggunakan layanan Raho ERP
-        </p>
-        <p className={styles.footerText}>
-          Dokumen ini dicetak secara otomatis dan sah tanpa tanda tangan
         </p>
         <p className={styles.footerMeta}>
           Generated: {new Date().toLocaleString('id-ID')} | {documentTitle} #{invoice.invoiceNumber}

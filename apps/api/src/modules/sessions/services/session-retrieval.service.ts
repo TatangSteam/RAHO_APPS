@@ -5,6 +5,18 @@ import { prisma } from '../../../lib/prisma';
  * Service for session retrieval
  */
 export class SessionRetrievalService {
+  private hasDoctorEvaluation(evaluation: any): boolean {
+    if (!evaluation) return false;
+
+    return [
+      evaluation.subjective,
+      evaluation.objective,
+      evaluation.assessment,
+      evaluation.plan,
+      evaluation.generalNotes,
+    ].some((value) => typeof value === 'string' && value.trim().length > 0);
+  }
+
   /**
    * Get session by ID with all details
    */
@@ -415,7 +427,7 @@ export class SessionRetrievalService {
       step5_materials: session.materials.length > 0,
       step6_photo: !!session.photo,
       step7_vitalAfter: session.vitalSigns.some((v: any) => v.waktuCatat === 'SESUDAH'),
-      step8_evaluation: !!session.evaluation,
+      step8_evaluation: this.hasDoctorEvaluation(session.evaluation),
     };
   }
 

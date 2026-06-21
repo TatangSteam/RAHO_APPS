@@ -183,7 +183,7 @@ export default function BulkTherapyPlanModal({
     const numGroups = parseInt(numGroupsInput);
     const rowsPerGroup = parseInt(value);
     
-    if (!isNaN(numGroups) && numGroups >= 1 && !isNaN(rowsPerGroup) && rowsPerGroup >= 1 && rowsPerGroup <= 10) {
+    if (!isNaN(numGroups) && numGroups >= 1 && !isNaN(rowsPerGroup) && rowsPerGroup >= 1 && rowsPerGroup <= 30) {
       regenerateTherapyPlans(numGroups, rowsPerGroup);
     }
   };
@@ -619,7 +619,7 @@ export default function BulkTherapyPlanModal({
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max="30"
                     value={rowsPerGroupInput}
                     onChange={(e) => handleRowsPerGroupChange(e.target.value)}
                     disabled={submitting}

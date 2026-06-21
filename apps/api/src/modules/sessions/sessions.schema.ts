@@ -253,11 +253,13 @@ export type CreateEMRNoteInput = z.infer<typeof createEMRNoteSchema>;
 // ============================================================
 
 export const createEvaluationSchema = z.object({
-  subjective: z.string().optional(),
-  objective: z.string().optional(),
-  assessment: z.string().optional(),
-  plan: z.string().optional(),
-  generalNotes: z.string().optional(),
+  keluhan: z.string().nullable().optional(),
+  rekomendasi: z.string().nullable().optional(),
+  subjective: z.string().nullable().optional(),
+  objective: z.string().nullable().optional(),
+  assessment: z.string().nullable().optional(),
+  plan: z.string().nullable().optional(),
+  generalNotes: z.string().nullable().optional(),
   writtenBy: z.string().cuid(),
 });
 

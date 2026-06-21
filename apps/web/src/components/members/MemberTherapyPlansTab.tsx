@@ -88,9 +88,86 @@ function getPlanSetKey(plan: TherapyPlan): string {
   return plan.therapyPlanSetId || `${plan.setName || 'legacy'}-${plan.setVersion || plan.version || 1}`;
 }
 
+/**
+ * Build set families: group all versions of the same set together
+ * Returns a map of setFamilyKey -> array of set IDs (sorted from oldest to newest)
+ */
+function buildSetFamilies(plans: TherapyPlan[]): Map<string, string[]> {
+  // First, get unique sets
+  const uniqueSetIds = new Set<string>();
+  plans.forEach(plan => {
+    const setKey = getPlanSetKey(plan);
+    uniqueSetIds.add(setKey);
+  });
+
+  // Build a map of setId -> supersededById
+  const supersessionMap = new Map<string, string>();
+  const setInfoMap = new Map<string, { setId: string; status: string; createdAt: string }>();
+  
+  plans.forEach(plan => {
+    const setKey = getPlanSetKey(plan);
+    if (!setInfoMap.has(setKey)) {
+      setInfoMap.set(setKey, {
+        setId: setKey,
+        status: plan.setStatus || 'ACTIVE',
+        createdAt: plan.createdAt,
+      });
+      
+      if (plan.setSupersededById) {
+        // Find the superseding set's key
+        const supersedingPlan = plans.find(p => p.therapyPlanSetId === plan.setSupersededById);
+        if (supersedingPlan) {
+          supersessionMap.set(setKey, getPlanSetKey(supersedingPlan));
+        }
+      }
+    }
+  });
+
+  // Find the "head" (latest version) of each family
+  const setToFamily = new Map<string, string>(); // setId -> familyHead
+  
+  uniqueSetIds.forEach(setId => {
+    // Trace forward to find the head
+    let current = setId;
+    const visited = new Set<string>();
+    
+    while (supersessionMap.has(current) && !visited.has(current)) {
+      visited.add(current);
+      current = supersessionMap.get(current)!;
+    }
+    
+    // 'current' is now the head of the family
+    setToFamily.set(setId, current);
+  });
+
+  // Group sets by family
+  const families = new Map<string, string[]>();
+  
+  uniqueSetIds.forEach(setId => {
+    const familyHead = setToFamily.get(setId)!;
+    if (!families.has(familyHead)) {
+      families.set(familyHead, []);
+    }
+    families.get(familyHead)!.push(setId);
+  });
+
+  // Sort each family by creation date (oldest first)
+  families.forEach((setIds, familyHead) => {
+    setIds.sort((a, b) => {
+      const infoA = setInfoMap.get(a);
+      const infoB = setInfoMap.get(b);
+      if (!infoA || !infoB) return 0;
+      return new Date(infoA.createdAt).getTime() - new Date(infoB.createdAt).getTime();
+    });
+  });
+
+  return families;
+}
+
 function getSetSummary(plans: TherapyPlan[]) {
+  const families = buildSetFamilies(plans);
   return {
-    totalSets: new Set(plans.map(getPlanSetKey)).size,
+    totalSets: families.size, // Count families, not individual sets
     totalRows: plans.length,
     available: plans.filter((plan) => getPlanStatusKey(plan) === 'available').length,
     used: plans.filter((plan) => getPlanStatusKey(plan) === 'used').length,
@@ -108,6 +185,8 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [selectedSetPlans, setSelectedSetPlans] = useState<TherapyPlan[]>([]);
   const [filters, setFilters] = useState<TherapyPlanFilters>(createInitialFilters);
   const [collapsedSets, setCollapsedSets] = useState<Set<string>>(new Set());
+  const [collapsedHistory, setCollapsedHistory] = useState<Set<string>>(new Set());
+  const [expandedHistoricalSets, setExpandedHistoricalSets] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadTherapyPlans();
@@ -129,26 +208,35 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     return therapyPlans.filter((plan) => planMatchesFilters(plan, filters));
   }, [therapyPlans, filters]);
 
-  // Extract unique sets with metadata
+  // Build set families: group versions together
+  const setFamilies = useMemo(() => buildSetFamilies(therapyPlans), [therapyPlans]);
+
+  // Extract unique set families with metadata (showing only latest version of each family)
   const uniqueSets = useMemo(() => {
-    const setsMap = new Map<string, { id: string; name: string; version: number; count: number; firstPlan: TherapyPlan }>();
+    const setsMap = new Map<string, { 
+      id: string; 
+      name: string; 
+      version: number; 
+      count: number; 
+      firstPlan: TherapyPlan;
+      familyMembers: string[]; // All set IDs in this family
+      hasHistory: boolean;
+    }>();
     
+    // Build individual set metadata first
+    const setMetadata = new Map<string, { name: string; version: number; count: number; firstPlan: TherapyPlan }>();
     therapyPlans.forEach((plan) => {
       const setKey = getPlanSetKey(plan);
-      const existing = setsMap.get(setKey);
+      const existing = setMetadata.get(setKey);
       
       if (existing) {
         existing.count++;
       } else {
-        // Generate user-friendly name with priority:
-        // 1. setName (user-defined)
-        // 2. Extract short number from setCode + date
-        // 3. Creation date only (for legacy data)
+        // Generate user-friendly name
         let displayName: string;
         if (plan.setName && plan.setName.trim()) {
           displayName = plan.setName;
         } else if (plan.setCode) {
-          // Extract the last number from setCode (e.g., "TPS-PST-MBR-PST-0008-003" -> "003")
           const match = plan.setCode.match(/(\d+)$/);
           const date = new Date(plan.createdAt);
           const dateStr = date.toLocaleDateString('id-ID', { 
@@ -160,7 +248,6 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             const setNumber = parseInt(match[1], 10);
             displayName = `Set #${setNumber} - ${dateStr}`;
           } else {
-            // If no number found, use date + time
             const timeStr = date.toLocaleTimeString('id-ID', { 
               hour: '2-digit', 
               minute: '2-digit',
@@ -169,7 +256,6 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             displayName = `Set ${dateStr} ${timeStr}`;
           }
         } else {
-          // Fallback for legacy data without setCode
           const date = new Date(plan.createdAt);
           const dateStr = date.toLocaleDateString('id-ID', { 
             day: '2-digit', 
@@ -183,12 +269,27 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
           displayName = `Set ${dateStr} ${timeStr}`;
         }
         
-        setsMap.set(setKey, {
-          id: setKey,
+        setMetadata.set(setKey, {
           name: displayName,
           version: plan.setVersion || plan.version || 1,
           count: 1,
           firstPlan: plan,
+        });
+      }
+    });
+
+    // Now create family entries (one entry per family, showing latest version)
+    setFamilies.forEach((familyMemberIds, familyHeadId) => {
+      const headMetadata = setMetadata.get(familyHeadId);
+      if (headMetadata) {
+        setsMap.set(familyHeadId, {
+          id: familyHeadId,
+          name: headMetadata.name,
+          version: headMetadata.version,
+          count: headMetadata.count,
+          firstPlan: headMetadata.firstPlan,
+          familyMembers: familyMemberIds,
+          hasHistory: familyMemberIds.length > 1,
         });
       }
     });
@@ -199,7 +300,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
       const dateB = new Date(b.firstPlan.createdAt).getTime();
       return dateB - dateA;
     });
-  }, [therapyPlans]);
+  }, [therapyPlans, setFamilies]);
 
   const summary = useMemo(() => getSetSummary(therapyPlans), [therapyPlans]);
   const hasActiveFilters = Boolean(
@@ -248,6 +349,30 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     });
   };
 
+  const toggleHistoryCollapse = (familyId: string) => {
+    setCollapsedHistory((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(familyId)) {
+        newSet.delete(familyId);
+      } else {
+        newSet.add(familyId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleHistoricalSetExpand = (historicalSetId: string) => {
+    setExpandedHistoricalSets((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(historicalSetId)) {
+        newSet.delete(historicalSetId);
+      } else {
+        newSet.add(historicalSetId);
+      }
+      return newSet;
+    });
+  };
+
   // Group filtered plans by set
   const groupedPlans = useMemo(() => {
     const grouped = new Map<string, TherapyPlan[]>();
@@ -258,6 +383,12 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
       }
       grouped.get(setKey)!.push(plan);
     });
+    
+    // Sort plans within each set by planNumber (ascending: 1, 2, 3, ...)
+    grouped.forEach((plans, key) => {
+      plans.sort((a, b) => (a.planNumber || 0) - (b.planNumber || 0));
+    });
+    
     return grouped;
   }, [filteredTherapyPlans]);
 
@@ -668,6 +799,159 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   {/* Set Content */}
                   {!isCollapsed && (
                     <div style={{ padding: '0' }}>
+                      {/* History Section - Show historical versions if they exist */}
+                      {set.hasHistory && set.familyMembers.length > 1 && (
+                        <div style={{ 
+                          padding: '12px 16px', 
+                          background: 'rgba(148,163,184,0.04)',
+                          borderBottom: '1px solid rgba(148,163,184,0.12)'
+                        }}>
+                          <button
+                            onClick={() => toggleHistoryCollapse(set.id)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '6px 10px',
+                              border: '1px solid rgba(148,163,184,0.2)',
+                              borderRadius: '6px',
+                              background: 'rgba(148,163,184,0.06)',
+                              color: 'var(--text-secondary)',
+                              fontSize: '12px',
+                              fontWeight: '600',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = 'rgba(148,163,184,0.12)';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = 'rgba(148,163,184,0.06)';
+                            }}
+                          >
+                            {collapsedHistory.has(set.id) ? (
+                              <ChevronRight style={{ width: '16px', height: '16px' }} />
+                            ) : (
+                              <ChevronDown style={{ width: '16px', height: '16px' }} />
+                            )}
+                            <span>
+                              Lihat History Edit ({set.familyMembers.length - 1} versi sebelumnya)
+                            </span>
+                          </button>
+
+                          {/* Show historical versions */}
+                          {!collapsedHistory.has(set.id) && (
+                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                              {set.familyMembers.slice(0, -1).reverse().map((historicalSetId) => {
+                                const historicalPlans = therapyPlans
+                                  .filter(p => getPlanSetKey(p) === historicalSetId)
+                                  .sort((a, b) => (a.planNumber || 0) - (b.planNumber || 0)); // Sort by planNumber
+                                  
+                                if (historicalPlans.length === 0) return null;
+                                
+                                const firstPlan = historicalPlans[0];
+                                const historicalName = firstPlan.setName || `Set ${new Date(firstPlan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}`;
+                                const historicalVersion = firstPlan.setVersion || firstPlan.version || 1;
+                                const isExpanded = expandedHistoricalSets.has(historicalSetId);
+                                
+                                return (
+                                  <div 
+                                    key={historicalSetId}
+                                    style={{
+                                      border: '1px solid rgba(148,163,184,0.16)',
+                                      borderRadius: '6px',
+                                      background: 'rgba(148,163,184,0.03)',
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    {/* Historical Set Header - Collapsible */}
+                                    <button
+                                      onClick={() => toggleHistoricalSetExpand(historicalSetId)}
+                                      style={{
+                                        width: '100%',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        padding: '10px',
+                                        border: 'none',
+                                        background: 'transparent',
+                                        cursor: 'pointer',
+                                        textAlign: 'left',
+                                        transition: 'background 0.2s',
+                                      }}
+                                      onMouseEnter={(e) => {
+                                        e.currentTarget.style.background = 'rgba(148,163,184,0.06)';
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        e.currentTarget.style.background = 'transparent';
+                                      }}
+                                    >
+                                      {isExpanded ? (
+                                        <ChevronDown style={{ width: '14px', height: '14px', color: '#94a3b8', flexShrink: 0 }} />
+                                      ) : (
+                                        <ChevronRight style={{ width: '14px', height: '14px', color: '#94a3b8', flexShrink: 0 }} />
+                                      )}
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          gap: '8px',
+                                          marginBottom: '4px',
+                                          fontSize: '12px',
+                                          color: 'var(--text-secondary)',
+                                          fontWeight: '600',
+                                          flexWrap: 'wrap'
+                                        }}>
+                                          <span style={{ color: '#94a3b8' }}>📜</span>
+                                          <span>{historicalName} v{historicalVersion}</span>
+                                          <span style={{
+                                            fontSize: '10px',
+                                            padding: '2px 6px',
+                                            borderRadius: '3px',
+                                            background: 'rgba(148,163,184,0.12)',
+                                            color: '#94a3b8',
+                                          }}>
+                                            SUPERSEDED
+                                          </span>
+                                          <span style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                            {new Date(firstPlan.createdAt).toLocaleDateString('id-ID', {
+                                              year: 'numeric',
+                                              month: 'short',
+                                              day: '2-digit',
+                                              hour: '2-digit',
+                                              minute: '2-digit',
+                                            })}
+                                          </span>
+                                        </div>
+                                        <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                          {historicalPlans.length} baris therapy plan (klik untuk {isExpanded ? 'sembunyikan' : 'lihat detail'})
+                                        </div>
+                                      </div>
+                                    </button>
+
+                                    {/* Historical Plans Table - Shown when expanded */}
+                                    {isExpanded && (
+                                      <div style={{ 
+                                        borderTop: '1px solid rgba(148,163,184,0.12)',
+                                        background: 'rgba(255,255,255,0.02)'
+                                      }}>
+                                        <TherapyPlanListTable
+                                          plans={historicalPlans}
+                                          memberId={memberId}
+                                          onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+                                          onEdit={loadTherapyPlans}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Current Version Plans */}
                       <TherapyPlanListTable
                         plans={setPlans}
                         memberId={memberId}

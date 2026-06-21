@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
 import {
   AlertCircle,
@@ -224,7 +225,7 @@ export default function PackagePricingPage() {
     try {
       const { data } = await api.get<ApiResponse<Branch[]>>('/admin/branches');
       setBranches(data.data || []);
-    } catch (error) {
+    } catch {
       setBranches([]);
     }
   }, []);
@@ -833,218 +834,255 @@ function PricingModal({
   setGeneratedName: () => void;
 }) {
   const isEditing = Boolean(editingPricing);
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div 
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        backdropFilter: 'blur(4px)',
-        padding: '16px',
-      }}
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="max-h-[92vh] w-full max-w-2xl overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
-          <div>
-            <h2 className="text-lg font-semibold text-neutral-950 dark:text-white">
-              {isEditing ? 'Edit Harga Paket' : 'Tambah Harga Paket'}
-            </h2>
-            {isEditing && (
-              <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                {editingPricing?.branch ? editingPricing.branch.branchCode : 'Global'}
-              </p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-neutral-500 transition hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-            aria-label="Tutup modal"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
-        <form onSubmit={onSubmit} className="flex max-h-[calc(92vh-73px)] flex-col">
-          <div className="overflow-y-auto px-5 py-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Tipe paket">
-                <div className="grid grid-cols-2 gap-2">
-                  <SegmentButton
-                    active={form.packageType === 'BASIC'}
-                    disabled={isEditing}
-                    onClick={() => onPackageTypeChange('BASIC')}
-                  >
-                    BASIC
-                  </SegmentButton>
-                  <SegmentButton
-                    active={form.packageType === 'BOOSTER'}
-                    disabled={isEditing}
-                    onClick={() => onPackageTypeChange('BOOSTER')}
-                  >
-                    BOOSTER
-                  </SegmentButton>
-                </div>
-              </Field>
+  useEffect(() => {
+    if (!mounted) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [mounted]);
 
-              <Field label="Scope">
-                {canSelectBranch && !isEditing ? (
-                  <select
-                    value={form.branchId}
-                    onChange={(event) => setForm((current) => ({ ...current, branchId: event.target.value }))}
-                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                  >
-                    <option value="">Global</option>
-                    {branches.map((branch) => (
-                      <option key={branch.id} value={branch.id}>
-                        {branch.branchCode} - {branch.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <div className="flex h-10 items-center rounded-lg border border-neutral-300 bg-neutral-100 px-3 text-sm font-semibold text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200">
-                    {editingPricing?.branch
-                      ? `${editingPricing.branch.branchCode} - ${editingPricing.branch.name}`
-                      : editingPricing
-                        ? 'Global'
-                        : userBranchCode
-                          ? `Cabang ${userBranchCode}`
-                          : 'Cabang saya'}
-                  </div>
-                )}
-              </Field>
+  useEffect(() => {
+    if (!mounted) return;
 
-              {form.packageType === 'BOOSTER' && (
-                <Field label="Tipe booster">
-                  <select
-                    value={form.boosterType}
-                    disabled={isEditing}
-                    onChange={(event) => setForm((current) => ({ ...current, boosterType: event.target.value }))}
-                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:disabled:bg-neutral-900"
-                  >
-                    <option value="">Pilih booster</option>
-                    {boosterTypes.map((booster) => (
-                      <option key={booster.id} value={booster.code}>
-                        {booster.code} - {booster.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
 
-              <Field label={form.packageType === 'BOOSTER' ? 'Tipe layanan' : 'Tipe layanan'}>
-                <select
-                  value={form.serviceType}
-                  onChange={(event) => setForm((current) => ({ ...current, serviceType: event.target.value }))}
-                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                >
-                  <option value="">{form.packageType === 'BOOSTER' ? 'Pilih layanan' : 'Tanpa layanan'}</option>
-                  {serviceTypes.map((service) => (
-                    <option key={service.id} value={service.code}>
-                      {service.code} - {service.name}
-                    </option>
-                  ))}
-                </select>
-              </Field>
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [mounted, onClose]);
 
-              <Field label="Nama paket" className="md:col-span-2">
-                <div className="flex gap-2">
-                  <input
-                    value={form.name}
-                    onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                    className="h-10 min-w-0 flex-1 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                    placeholder="Nama paket"
-                  />
-                  {!isEditing && (
-                    <button
-                      type="button"
-                      onClick={setGeneratedName}
-                      className="h-10 rounded-lg border border-neutral-300 px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                    >
-                      Isi Nama
-                    </button>
-                  )}
-                </div>
-              </Field>
+  if (!mounted) return null;
 
-              <Field label="Kode produk">
-                <input
-                  value={form.productCode}
-                  onChange={(event) => setForm((current) => ({ ...current, productCode: event.target.value.toUpperCase() }))}
-                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 font-mono text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                  placeholder="TNB-P7-PM"
-                />
-              </Field>
+  const modalContent = (
+    <div className="fixed inset-0 z-[9999] overflow-hidden">
+      <div
+        className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
-              <Field label="Jumlah sesi">
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={form.totalSessions}
-                  onChange={(event) => setForm((current) => ({ ...current, totalSessions: Number(event.target.value) || 0 }))}
-                  className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                />
-              </Field>
-
-              <Field label="Harga" className="md:col-span-2">
-                <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-                  <input
-                    type="number"
-                    min={0}
-                    step={1000}
-                    value={form.price}
-                    onChange={(event) => setForm((current) => ({ ...current, price: Number(event.target.value) || 0 }))}
-                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
-                  />
-                  <div className="rounded-lg bg-neutral-100 px-3 py-2 text-sm font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
-                    {formatCurrency(form.price)}
-                  </div>
-                </div>
-              </Field>
-
-              <label className="flex items-center gap-3 rounded-lg border border-neutral-200 px-3 py-3 dark:border-neutral-800 md:col-span-2">
-                <input
-                  type="checkbox"
-                  checked={form.isActive}
-                  onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
-                  className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-500"
-                />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Aktif</span>
-              </label>
+      <div className="flex min-h-full items-center justify-center p-3 sm:p-4">
+        <div
+          className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-2xl dark:border-neutral-700 dark:bg-neutral-900"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pricing-modal-title"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between gap-4 border-b border-neutral-200 px-5 py-4 dark:border-neutral-800 sm:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500 text-black shadow-lg shadow-amber-500/25">
+                <BadgeDollarSign className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <h2 id="pricing-modal-title" className="truncate text-lg font-bold text-neutral-950 dark:text-white">
+                  {isEditing ? 'Edit Harga Paket' : 'Tambah Harga Paket'}
+                </h2>
+                <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+                  {isEditing
+                    ? editingPricing?.branch
+                      ? editingPricing.branch.branchCode
+                      : 'Global'
+                    : 'Atur harga paket terapi'}
+                </p>
+              </div>
             </div>
-          </div>
-
-          <div className="flex justify-end gap-2 border-t border-neutral-200 px-5 py-4 dark:border-neutral-800">
             <button
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="h-10 rounded-lg border border-neutral-300 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              className="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              aria-label="Tutup modal"
             >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex h-10 items-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-              Simpan
+              <X className="h-5 w-5" />
             </button>
           </div>
-        </form>
+
+          <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 sm:px-6 sm:py-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Tipe paket">
+                  <div className="grid grid-cols-2 gap-2">
+                    <SegmentButton
+                      active={form.packageType === 'BASIC'}
+                      disabled={isEditing}
+                      onClick={() => onPackageTypeChange('BASIC')}
+                    >
+                      BASIC
+                    </SegmentButton>
+                    <SegmentButton
+                      active={form.packageType === 'BOOSTER'}
+                      disabled={isEditing}
+                      onClick={() => onPackageTypeChange('BOOSTER')}
+                    >
+                      BOOSTER
+                    </SegmentButton>
+                  </div>
+                </Field>
+
+                <Field label="Scope">
+                  {canSelectBranch && !isEditing ? (
+                    <select
+                      value={form.branchId}
+                      onChange={(event) => setForm((current) => ({ ...current, branchId: event.target.value }))}
+                      className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                    >
+                      <option value="">Global</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.branchCode} - {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex h-10 items-center rounded-lg border border-neutral-300 bg-neutral-100 px-3 text-sm font-semibold text-neutral-700 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-200">
+                      {editingPricing?.branch
+                        ? `${editingPricing.branch.branchCode} - ${editingPricing.branch.name}`
+                        : editingPricing
+                          ? 'Global'
+                          : userBranchCode
+                            ? `Cabang ${userBranchCode}`
+                            : 'Cabang saya'}
+                    </div>
+                  )}
+                </Field>
+
+                {form.packageType === 'BOOSTER' && (
+                  <Field label="Tipe booster">
+                    <select
+                      value={form.boosterType}
+                      disabled={isEditing}
+                      onChange={(event) => setForm((current) => ({ ...current, boosterType: event.target.value }))}
+                      className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-neutral-100 disabled:opacity-70 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:disabled:bg-neutral-900"
+                    >
+                      <option value="">Pilih booster</option>
+                      {boosterTypes.map((booster) => (
+                        <option key={booster.id} value={booster.code}>
+                          {booster.code} - {booster.name}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                <Field label="Tipe layanan">
+                  <select
+                    value={form.serviceType}
+                    onChange={(event) => setForm((current) => ({ ...current, serviceType: event.target.value }))}
+                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                  >
+                    <option value="">{form.packageType === 'BOOSTER' ? 'Pilih layanan' : 'Tanpa layanan'}</option>
+                    {serviceTypes.map((service) => (
+                      <option key={service.id} value={service.code}>
+                        {service.code} - {service.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+
+                <Field label="Nama paket" className="md:col-span-2">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+                    <input
+                      value={form.name}
+                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                      className="h-10 min-w-0 rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                      placeholder="Nama paket"
+                    />
+                    {!isEditing && (
+                      <button
+                        type="button"
+                        onClick={setGeneratedName}
+                        className="h-10 rounded-lg border border-neutral-300 px-3 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                      >
+                        Isi Nama
+                      </button>
+                    )}
+                  </div>
+                </Field>
+
+                <Field label="Kode produk">
+                  <input
+                    value={form.productCode}
+                    onChange={(event) => setForm((current) => ({ ...current, productCode: event.target.value.toUpperCase() }))}
+                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 font-mono text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                    placeholder="TNB-P7-PM"
+                  />
+                </Field>
+
+                <Field label="Jumlah sesi">
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.totalSessions}
+                    onChange={(event) => setForm((current) => ({ ...current, totalSessions: Number(event.target.value) || 0 }))}
+                    className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                  />
+                </Field>
+
+                <Field label="Harga" className="md:col-span-2">
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                    <input
+                      type="number"
+                      min={0}
+                      step={1000}
+                      value={form.price}
+                      onChange={(event) => setForm((current) => ({ ...current, price: Number(event.target.value) || 0 }))}
+                      className="h-10 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
+                    />
+                    <div className="rounded-lg bg-neutral-100 px-3 py-2 text-sm font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">
+                      {formatCurrency(form.price)}
+                    </div>
+                  </div>
+                </Field>
+
+                <label className="flex items-center gap-3 rounded-lg border border-neutral-200 px-3 py-3 dark:border-neutral-800 md:col-span-2">
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(event) => setForm((current) => ({ ...current, isActive: event.target.checked }))}
+                    className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-500"
+                  />
+                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-200">Aktif</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-neutral-200 px-5 py-4 dark:border-neutral-800 sm:flex-row sm:justify-end sm:px-6">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="h-10 rounded-lg border border-neutral-300 px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+              >
+                Batal
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-black transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Simpan
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
 
 function Field({

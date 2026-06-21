@@ -228,6 +228,8 @@ export interface SessionDetail {
   } | null;
   evaluation: {
     id: string;
+    keluhan: string | null;
+    rekomendasi: string | null;
     subjective: string | null;
     objective: string | null;
     assessment: string | null;

@@ -59,6 +59,8 @@ export class EvaluationService {
       data: {
         evaluationCode,
         treatmentSessionId: sessionId,
+        keluhan: data.keluhan,
+        rekomendasi: data.rekomendasi,
         subjective: data.subjective,
         objective: data.objective,
         assessment: data.assessment,
@@ -95,6 +97,8 @@ export class EvaluationService {
     const updated = await prisma.doctorEvaluation.update({
       where: { treatmentSessionId: sessionId },
       data: {
+        keluhan: data.keluhan,
+        rekomendasi: data.rekomendasi,
         subjective: data.subjective,
         objective: data.objective,
         assessment: data.assessment,

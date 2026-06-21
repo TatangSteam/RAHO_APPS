@@ -6,6 +6,16 @@ import { PackageType, PackageStatus, AuditAction } from '@prisma/client';
 import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
 import { InvoiceGenerationService } from './invoice-generation.service';
 
+type NormalizedPaymentPlan = {
+  type: 'FULL_PAYMENT' | 'INSTALLMENT';
+  installmentCount?: number;
+  installments?: Array<{
+    installmentNumber: number;
+    amount: number;
+    dueDate?: string;
+  }>;
+};
+
 /**
  * Service for handling package assignment to members
  */
@@ -146,6 +156,7 @@ export class PackageAssignmentService {
     const amountDiscount = Math.round(data.discountAmount || 0);
     const totalDiscountAmount = percentDiscount + amountDiscount;
     const finalTotal = Math.round(totalSubtotal - totalDiscountAmount);
+    const paymentPlan = this.normalizePaymentPlan(data, finalTotal);
     console.log('💰 Final calculation:', { percentDiscount, amountDiscount, totalDiscountAmount, finalTotal });
 
     // Determine purchase group
@@ -171,6 +182,7 @@ export class PackageAssignmentService {
         notes: data.notes,
         purchaseGroupId,
         userId,
+        paymentPlan,
       },
       basicSequence,
       boosterSequence
@@ -187,7 +199,8 @@ export class PackageAssignmentService {
       result.createdPackages,
       result.createdAddOns,
       member,
-      userId
+      userId,
+      paymentPlan
     );
 
     // Audit logs
@@ -278,6 +291,53 @@ export class PackageAssignmentService {
     return undefined;
   }
 
+  private normalizePaymentPlan(data: AssignPackageInput, finalTotal: number): NormalizedPaymentPlan {
+    if (!data.paymentPlan || data.paymentPlan.type !== 'INSTALLMENT') {
+      return { type: 'FULL_PAYMENT' };
+    }
+
+    const installmentCount = data.paymentPlan.installmentCount || 0;
+    const installments = data.paymentPlan.installments || [];
+    const totalInstallments = installments.reduce(
+      (sum, installment) => sum + Math.round(installment.amount || 0),
+      0
+    );
+
+    if (installmentCount < 2 || installments.length !== installmentCount) {
+      throw {
+        status: 400,
+        code: 'INVALID_INSTALLMENT_PLAN',
+        message: 'Konfigurasi termin tidak valid',
+      };
+    }
+
+    if (!installments[0] || Math.round(installments[0].amount || 0) <= 0) {
+      throw {
+        status: 400,
+        code: 'FIRST_INSTALLMENT_REQUIRED',
+        message: 'Termin pertama wajib memiliki nominal pembayaran awal',
+      };
+    }
+
+    if (totalInstallments !== finalTotal) {
+      throw {
+        status: 400,
+        code: 'INSTALLMENT_TOTAL_MISMATCH',
+        message: 'Total nominal termin harus sama dengan total harga paket',
+      };
+    }
+
+    return {
+      type: 'INSTALLMENT',
+      installmentCount,
+      installments: installments.map((installment, index) => ({
+        installmentNumber: index + 1,
+        amount: Math.round(installment.amount || 0),
+        dueDate: installment.dueDate,
+      })),
+    };
+  }
+
   /**
    * Get next sequence numbers for package codes
    */
@@ -341,6 +401,7 @@ export class PackageAssignmentService {
       notes?: string;
       purchaseGroupId?: string;
       userId: string;
+      paymentPlan: NormalizedPaymentPlan;
     },
     initialBasicSequence: number,
     initialBoosterSequence: number
@@ -427,6 +488,11 @@ export class PackageAssignmentService {
               discountAmount: packageDiscount,
               discountNote: packageDiscount > 0 ? params.discountNote : null,
               status: PackageStatus.PENDING_PAYMENT,
+              paymentPlanType: params.paymentPlan.type,
+              installmentTotal: params.paymentPlan.installmentCount || null,
+              installmentSchedule: params.paymentPlan.installments || null,
+              totalVerifiedPaid: 0,
+              paymentPlanStatus: params.paymentPlan.type === 'INSTALLMENT' ? 'PENDING_FIRST_PAYMENT' : null,
               boosterType: detail.boosterType ? (detail.boosterType === 'NO' ? 'NO2' : 'HHO') : null,
               notes: params.notes,
               assignedBy: params.userId,
@@ -510,6 +576,11 @@ export class PackageAssignmentService {
             pricePerUnit: addon.price,
             totalPrice: addon.price * addon.quantity,
             status: PackageStatus.PENDING_PAYMENT,
+            paymentPlanType: params.paymentPlan.type,
+            installmentTotal: params.paymentPlan.installmentCount || null,
+            installmentSchedule: params.paymentPlan.installments || null,
+            totalVerifiedPaid: 0,
+            paymentPlanStatus: params.paymentPlan.type === 'INSTALLMENT' ? 'PENDING_FIRST_PAYMENT' : null,
             notes: `${addon.name} (${addon.code})${params.notes ? ' - ' + params.notes : ''}`,
             assignedBy: params.userId,
           },

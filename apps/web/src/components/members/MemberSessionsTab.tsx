@@ -6,6 +6,7 @@ import { sessionApi } from '@/lib/sessionApi';
 import CreateSessionModal from '@/components/sessions/CreateSessionModal';
 import SessionCountDisplay from '@/components/members/SessionCountDisplay';
 import type { SessionDetail } from '@/types/session';
+import { useAuthStore } from '@/stores/authStore';
 import { devError } from '@/lib/logger';
 
 interface MemberSessionsTabProps {
@@ -16,6 +17,7 @@ interface MemberSessionsTabProps {
 
 export default function MemberSessionsTab({ memberId, memberNo, memberName }: MemberSessionsTabProps) {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionDetail[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
   // Separate sessions into incomplete and complete
   const incompleteSessions = validSessions.filter(session => getStepProgress(session) < 7);
   const completeSessions = validSessions.filter(session => getStepProgress(session) === 7);
+  const canCreateSession = Boolean(user && user.role !== 'DOCTOR');
 
   return (
     <div>
@@ -95,12 +98,14 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
               ⏳ Lanjutkan Sesi Pending ({incompleteSessions.length})
             </button>
           )}
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="btn btn-primary"
-          >
-            ➕ Buat Sesi Baru
-          </button>
+          {canCreateSession && (
+            <button
+              onClick={() => setIsCreateModalOpen(true)}
+              className="btn btn-primary"
+            >
+              ➕ Buat Sesi Baru
+            </button>
+          )}
         </div>
       </div>
 
@@ -111,7 +116,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
             Belum Ada Sesi Terapi
           </p>
           <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '24px' }}>
-            Klik tombol "Buat Sesi Baru" untuk memulai sesi terapi pertama
+            {canCreateSession
+              ? 'Klik tombol "Buat Sesi Baru" untuk memulai sesi terapi pertama'
+              : 'Sesi terapi baru dibuat oleh admin layanan atau admin cabang.'}
           </p>
         </div>
       ) : (
@@ -131,7 +138,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                     Ada {incompleteSessions.length} Sesi yang Belum Lengkap
                   </p>
                   <p style={{ fontSize: '13px', color: '#fcd34d' }}>
-                    Anda dapat melanjutkan sesi yang pending atau membuat sesi baru. Klik tombol "Lanjutkan Sesi Pending" untuk melanjutkan sesi yang belum selesai.
+                    {canCreateSession
+                      ? 'Anda dapat melanjutkan sesi yang pending atau membuat sesi baru. Klik tombol "Lanjutkan Sesi Pending" untuk melanjutkan sesi yang belum selesai.'
+                      : 'Anda dapat melanjutkan sesi yang pending. Klik tombol "Lanjutkan Sesi Pending" untuk melanjutkan sesi yang belum selesai.'}
                   </p>
                 </div>
               </div>
@@ -378,12 +387,14 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
         </>
       )}
 
-      <CreateSessionModal
-        isOpen={isCreateModalOpen}
-        onClose={() => setIsCreateModalOpen(false)}
-        onSuccess={handleSessionCreated}
-        preselectedMemberId={memberId}
-      />
+      {canCreateSession && (
+        <CreateSessionModal
+          isOpen={isCreateModalOpen}
+          onClose={() => setIsCreateModalOpen(false)}
+          onSuccess={handleSessionCreated}
+          preselectedMemberId={memberId}
+        />
+      )}
     </div>
   );
 }

@@ -10,9 +10,6 @@ const COMPANY_ADDRESS = 'Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada N
 const COMPANY_CITY = 'Jakarta Pusat';
 const COMPANY_PHONE = '(021) 3192-8888';
 const COMPANY_EMAIL = 'info@raho.id';
-const BANK_NAME = 'BCA';
-const BANK_ACCOUNT = '1306-9938-88';
-const BANK_HOLDER = 'CV DUNIA SEHAT SENTOSA';
 
 export async function generateInvoicePDF(invoice: Invoice) {
   devLog('📥 Starting PDF generation for invoice:', invoice.invoiceNumber);
@@ -29,6 +26,25 @@ export async function generateInvoicePDF(invoice: Invoice) {
     const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
     const numberLabel = isReceipt ? 'No. Kwitansi' : 'No. Faktur';
     const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
+    const isInstallment = Boolean(
+      invoice.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal
+    );
+    const formatCurrency = (amount: number) => `Rp ${formatNumberWithDots(amount || 0)}`;
+    const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+    const getStatusText = (status: string) => {
+      const textMap: Record<string, string> = {
+        DRAFT: 'DRAFT',
+        PENDING_PAYMENT: 'MENUNGGU PEMBAYARAN',
+        PAID: 'LUNAS',
+        OVERDUE: 'JATUH TEMPO',
+        CANCELLED: 'DIBATALKAN',
+      };
+      return textMap[status] || status;
+    };
     
     let currentY = margin;
     
@@ -77,12 +93,14 @@ export async function generateInvoicePDF(invoice: Invoice) {
       OVERDUE: [244, 67, 54],
     };
     const statusColor = statusColors[invoice.status] || [100, 100, 100];
+    const statusText = getStatusText(invoice.status);
+    const badgeWidth = Math.max(40, doc.getTextWidth(statusText) + 10);
     doc.setFillColor(...statusColor);
-    doc.rect(pageWidth - margin - 40, currentY - 5, 40, 7, 'F');
+    doc.rect(pageWidth - margin - badgeWidth, currentY - 5, badgeWidth, 7, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
-    doc.text(invoice.status, pageWidth - margin - 20, currentY - 1, { align: 'center' });
+    doc.text(statusText, pageWidth - margin - (badgeWidth / 2), currentY - 1, { align: 'center' });
     
     // ============================================================
     // INVOICE DETAILS - Two Column Layout
@@ -95,49 +113,70 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // Left column - Invoice info
     const leftX = margin;
     const rightX = pageWidth / 2 + 5;
+    const detailsStartY = currentY;
+    let leftY = detailsStartY;
+    let rightY = detailsStartY;
     
     doc.setFont('helvetica', 'bold');
-    doc.text(detailTitle, leftX, currentY);
+    doc.text(detailTitle, leftX, leftY);
     
     doc.setFont('helvetica', 'normal');
-    currentY += 5;
-    doc.text(`${numberLabel}: ${invoice.invoiceNumber}`, leftX, currentY);
+    leftY += 5;
+    doc.text(`${numberLabel}: ${invoice.invoiceNumber}`, leftX, leftY);
     
-    currentY += 4;
-    const createdDate = new Date(invoice.createdAt).toLocaleDateString('id-ID', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
-    doc.text(`Tanggal: ${createdDate}`, leftX, currentY);
+    leftY += 4;
+    doc.text(`Tanggal: ${formatDate(invoice.createdAt)}`, leftX, leftY);
     
-    currentY += 4;
     if (invoice.dueDate) {
-      const dueDate = new Date(invoice.dueDate).toLocaleDateString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-      });
-      doc.text(`Jatuh Tempo: ${dueDate}`, leftX, currentY);
+      leftY += 4;
+      doc.text(`Jatuh Tempo: ${formatDate(invoice.dueDate)}`, leftX, leftY);
     }
     
     // Right column - Bill to
-    currentY -= 8;
     doc.setFont('helvetica', 'bold');
-    doc.text(billToTitle, rightX, currentY);
+    doc.text(billToTitle, rightX, rightY);
     
     doc.setFont('helvetica', 'normal');
-    currentY += 5;
-    doc.text(invoice.memberName || 'Member', rightX, currentY);
+    rightY += 5;
+    doc.text(invoice.memberName || 'Member', rightX, rightY);
     
-    currentY += 4;
-    if (invoice.memberNo) {
-      doc.text(`Member No: ${invoice.memberNo}`, rightX, currentY);
-      currentY += 4;
-    }
+    rightY += 4;
+    doc.text(`Member No: ${invoice.memberNo || '-'}`, rightX, rightY);
     
     if (invoice.branchName) {
-      doc.text(`Cabang: ${invoice.branchName}`, rightX, currentY);
+      rightY += 4;
+      doc.text(`Cabang: ${invoice.branchName}`, rightX, rightY);
+    }
+
+    currentY = Math.max(leftY, rightY) + 10;
+
+    if (isInstallment) {
+      const installmentLines = [
+        `Total pembelian: ${formatCurrency(invoice.totalPurchaseAmount || invoice.totalAmount)}`,
+        invoice.carryOverAmount && invoice.carryOverAmount > 0
+          ? `Sisa termin sebelumnya: ${formatCurrency(invoice.carryOverAmount)}`
+          : '',
+        invoice.creditAmount && invoice.creditAmount > 0
+          ? `Kredit termin sebelumnya: ${formatCurrency(invoice.creditAmount)}`
+          : '',
+      ].filter(Boolean).join(' | ');
+      const splitInstallmentLines = doc.splitTextToSize(installmentLines, contentWidth - 6);
+
+      doc.setFillColor(255, 251, 234);
+      doc.setDrawColor(255, 193, 7);
+      doc.setLineWidth(0.5);
+      doc.roundedRect(margin, currentY - 3, contentWidth, 14 + (splitInstallmentLines.length * 4), 2, 2, 'FD');
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(25, 118, 210);
+      doc.text(`TERMIN ${invoice.installmentNumber} DARI ${invoice.installmentTotal}`, margin + 3, currentY + 2);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(0, 0, 0);
+      doc.text(splitInstallmentLines, margin + 3, currentY + 8);
+      currentY += 18 + (splitInstallmentLines.length * 4);
     }
     
     // ============================================================
@@ -314,26 +353,6 @@ export async function generateInvoicePDF(invoice: Invoice) {
     }
     
     // ============================================================
-    // PAYMENT INFORMATION
-    // ============================================================
-    currentY += 12;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INFORMASI PEMBAYARAN', margin, currentY);
-    
-    currentY += 5;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.text(`Bank: ${BANK_NAME}`, margin, currentY);
-    
-    currentY += 3;
-    doc.text(`No. Rekening: ${BANK_ACCOUNT}`, margin, currentY);
-    
-    currentY += 3;
-    doc.text(`Atas Nama: ${BANK_HOLDER}`, margin, currentY);
-    
-    // ============================================================
     // NOTES
     // ============================================================
     if (invoice.notes) {
@@ -347,27 +366,42 @@ export async function generateInvoicePDF(invoice: Invoice) {
       doc.setFontSize(8);
       const splitNotes = doc.splitTextToSize(invoice.notes, contentWidth);
       doc.text(splitNotes, margin, currentY);
+      currentY += splitNotes.length * 4;
     }
     
     // ============================================================
     // FOOTER - Signature & Info
     // ============================================================
-    const footerY = pageHeight - 25;
-    
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Dibuat oleh:', margin, footerY);
-    doc.setFont('helvetica', 'bold');
-    doc.text(invoice.createdByName || 'Admin', margin, footerY + 4);
-    
-    if (invoice.verifiedByName) {
-      doc.setFont('helvetica', 'normal');
-      doc.text('Diverifikasi oleh:', pageWidth / 2, footerY);
-      doc.setFont('helvetica', 'bold');
-      doc.text(invoice.verifiedByName, pageWidth / 2, footerY + 4);
+    let signatureY = Math.max(currentY + 18, pageHeight - 48);
+    if (signatureY > pageHeight - 35) {
+      doc.addPage();
+      signatureY = margin + 15;
     }
-    
+
+    const memberSignatureX = margin + 42;
+    const adminSignatureX = pageWidth - margin - 42;
+    const signatureLineWidth = 55;
+
+    doc.setDrawColor(210, 210, 210);
+    doc.setLineWidth(0.3);
+    doc.line(margin, signatureY - 8, pageWidth - margin, signatureY - 8);
+
+    doc.setFontSize(8);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'bold');
+    doc.text('MEMBER', memberSignatureX, signatureY, { align: 'center' });
+    doc.text('ADMIN', adminSignatureX, signatureY, { align: 'center' });
+
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.2);
+    doc.line(memberSignatureX - (signatureLineWidth / 2), signatureY + 25, memberSignatureX + (signatureLineWidth / 2), signatureY + 25);
+    doc.line(adminSignatureX - (signatureLineWidth / 2), signatureY + 25, adminSignatureX + (signatureLineWidth / 2), signatureY + 25);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text(invoice.memberName || 'Member', memberSignatureX, signatureY + 31, { align: 'center' });
+    doc.text(invoice.verifiedByName || invoice.createdByName || 'Admin', adminSignatureX, signatureY + 31, { align: 'center' });
+
     // Document info
     doc.setFontSize(7);
     doc.setTextColor(150, 150, 150);

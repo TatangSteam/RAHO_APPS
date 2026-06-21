@@ -2,6 +2,15 @@
 import { prisma } from '../../../lib/prisma';
 
 type InvoiceTargetStatus = 'PENDING_PAYMENT' | 'PAID';
+type PaymentPlanConfig = {
+  type: 'FULL_PAYMENT' | 'INSTALLMENT';
+  installmentCount?: number;
+  installments?: Array<{
+    installmentNumber: number;
+    amount: number;
+    dueDate?: string;
+  }>;
+};
 
 /**
  * Service for creating invoice records from assigned packages/add-ons.
@@ -15,7 +24,8 @@ export class InvoiceGenerationService {
     packages: any[],
     addOns: any[] = [],
     member: any,
-    userId: string
+    userId: string,
+    paymentPlan?: PaymentPlanConfig
   ) {
     return this.createOrUpdateInvoiceForPurchase({
       packages,
@@ -23,6 +33,7 @@ export class InvoiceGenerationService {
       member,
       userId,
       targetStatus: 'PENDING_PAYMENT',
+      paymentPlan,
     });
   }
 
@@ -59,12 +70,103 @@ export class InvoiceGenerationService {
     });
   }
 
+  async verifyActiveInvoiceForPurchase(
+    packages: any[],
+    addOns: any[] | undefined,
+    member: any,
+    userId: string,
+    paymentData: {
+      paidAmount?: number;
+      notes?: string;
+      proofFileUrl?: string;
+      proofFileName?: string;
+      proofFileSize?: number;
+      proofMimeType?: string;
+    }
+  ) {
+    const resolvedAddOns = await this.resolveAddOns(packages, addOns);
+    const itemIds = [
+      ...packages.map((pkg) => pkg.id),
+      ...resolvedAddOns.map((addon) => addon.id),
+    ].filter(Boolean);
+
+    const invoice = itemIds.length > 0
+      ? await prisma.invoice.findFirst({
+          where: {
+            status: 'PENDING_PAYMENT',
+            items: {
+              some: {
+                itemId: { in: itemIds },
+              },
+            },
+          },
+          include: {
+            items: true,
+            payments: true,
+          },
+          orderBy: [
+            { installmentNumber: 'asc' },
+            { createdAt: 'asc' },
+          ],
+        })
+      : null;
+
+    if (!invoice) {
+      return this.markInvoicePaidForPackages(packages, resolvedAddOns, member, userId);
+    }
+
+    const now = new Date();
+    const invoiceTotal = Number(invoice.totalAmount);
+    const paidAmount = Math.round(paymentData.paidAmount || invoiceTotal);
+
+    await prisma.invoicePayment.create({
+      data: {
+        invoiceId: invoice.id,
+        amount: paidAmount,
+        paymentMethod: paymentData.proofFileUrl ? 'TRANSFER' : 'CASH',
+        notes: paymentData.notes || null,
+        proofFileUrl: paymentData.proofFileUrl || null,
+        proofFileName: paymentData.proofFileName || null,
+        proofFileSize: paymentData.proofFileSize || null,
+        proofMimeType: paymentData.proofMimeType || null,
+        receivedBy: userId,
+        receivedAt: now,
+      },
+    });
+
+    const paidInvoice = await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        status: 'PAID',
+        paidAt: now,
+        paymentMethod: paymentData.proofFileUrl ? 'TRANSFER' : 'CASH',
+        paymentNotes: paymentData.notes || null,
+        verifiedBy: userId,
+        verifiedAt: now,
+        actualPaidAmount: paidAmount,
+        paymentVerificationStatus: 'VERIFIED',
+      },
+    });
+
+    if (
+      invoice.paymentPlanType === 'INSTALLMENT' &&
+      invoice.installmentNumber &&
+      invoice.installmentTotal &&
+      invoice.installmentNumber < invoice.installmentTotal
+    ) {
+      await this.createNextInstallmentInvoice(invoice, paidAmount, userId);
+    }
+
+    return paidInvoice;
+  }
+
   private async createOrUpdateInvoiceForPurchase(params: {
     packages: any[];
     addOns?: any[];
     member: any;
     userId: string;
     targetStatus: InvoiceTargetStatus;
+    paymentPlan?: PaymentPlanConfig;
   }) {
     try {
       const packages = params.packages || [];
@@ -94,10 +196,18 @@ export class InvoiceGenerationService {
       const subtotal = invoiceItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
       const discountInfo = this.calculateDiscount(packages);
       const totalAmount = Math.max(0, subtotal - discountInfo.discountAmount);
+      const paymentPlan = params.paymentPlan || { type: 'FULL_PAYMENT' };
+      const isInstallmentInvoice = params.targetStatus === 'PENDING_PAYMENT' && paymentPlan.type === 'INSTALLMENT';
+      const firstInstallment = isInstallmentInvoice ? paymentPlan.installments?.[0] : undefined;
+      const invoiceTotalAmount = isInstallmentInvoice ? Math.round(firstInstallment?.amount || 0) : totalAmount;
+      const invoiceItemsForCreate = isInstallmentInvoice
+        ? this.allocateInvoiceItems(invoiceItems, invoiceTotalAmount, subtotal)
+        : invoiceItems;
       const itemIds = [
         ...packages.map((pkg) => pkg.id),
         ...addOns.map((addon) => addon.id),
       ].filter(Boolean);
+      const paymentGroupId = this.getPaymentGroupId(packages, addOns);
 
       const existingInvoice = itemIds.length > 0
         ? await prisma.invoice.findFirst({
@@ -120,14 +230,27 @@ export class InvoiceGenerationService {
       const baseInvoiceData: any = {
         memberId: params.member.id,
         branchId,
-        subtotal,
+        subtotal: invoiceItemsForCreate.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
         discountPercent: discountInfo.discountPercent || null,
-        discountAmount: discountInfo.discountAmount,
+        discountAmount: isInstallmentInvoice ? 0 : discountInfo.discountAmount,
         discountNote: discountInfo.discountNote || null,
         taxPercent: 0,
         taxAmount: 0,
-        totalAmount,
+        totalAmount: invoiceTotalAmount,
         status: params.targetStatus,
+        paymentPlanType: paymentPlan.type,
+        paymentGroupId,
+        installmentNumber: isInstallmentInvoice ? 1 : null,
+        installmentTotal: isInstallmentInvoice ? paymentPlan.installmentCount : null,
+        installmentSchedule: isInstallmentInvoice ? paymentPlan.installments : null,
+        totalPurchaseAmount: isInstallmentInvoice ? totalAmount : null,
+        installmentAmount: isInstallmentInvoice ? invoiceTotalAmount : null,
+        carryOverAmount: 0,
+        creditAmount: 0,
+        actualPaidAmount: null,
+        paymentVerificationStatus: 'PENDING',
+        paymentRejectionReason: null,
+        isAdjustment: false,
       };
 
       if (params.targetStatus === 'PAID') {
@@ -136,7 +259,9 @@ export class InvoiceGenerationService {
         baseInvoiceData.verifiedBy = params.userId;
         baseInvoiceData.verifiedAt = now;
       } else {
-        baseInvoiceData.dueDate = this.getDefaultDueDate(now);
+        baseInvoiceData.dueDate = isInstallmentInvoice && firstInstallment?.dueDate
+          ? new Date(firstInstallment.dueDate)
+          : this.getDefaultDueDate(now);
         baseInvoiceData.paidAt = null;
         baseInvoiceData.paymentMethod = null;
         baseInvoiceData.paymentReference = null;
@@ -157,7 +282,7 @@ export class InvoiceGenerationService {
           data: {
             ...baseInvoiceData,
             items: {
-              create: invoiceItems,
+              create: invoiceItemsForCreate,
             },
           },
         });
@@ -170,14 +295,14 @@ export class InvoiceGenerationService {
             ...baseInvoiceData,
             createdBy: params.userId,
             items: {
-              create: invoiceItems,
+              create: invoiceItemsForCreate,
             },
           },
         });
       }
 
       if (params.targetStatus === 'PAID') {
-        await this.recordPaymentIfNeeded(invoice.id, totalAmount, packages, addOns, params.userId, now);
+        await this.recordPaymentIfNeeded(invoice.id, invoiceTotalAmount, packages, addOns, params.userId, now);
       }
 
       console.log(
@@ -262,6 +387,49 @@ export class InvoiceGenerationService {
     }
 
     return items;
+  }
+
+  private allocateInvoiceItems(items: any[], invoiceAmount: number, sourceTotal: number) {
+    if (items.length === 0) return [];
+
+    if (sourceTotal <= 0 || invoiceAmount <= 0) {
+      return items.map((item, index) => ({
+        ...item,
+        description: index === 0 ? `${item.description} - Termin` : item.description,
+        pricePerUnit: index === 0 ? invoiceAmount : 0,
+        subtotal: index === 0 ? invoiceAmount : 0,
+        totalAmount: index === 0 ? invoiceAmount : 0,
+        discountAmount: 0,
+      }));
+    }
+
+    let allocated = 0;
+
+    return items.map((item, index) => {
+      const isLast = index === items.length - 1;
+      const rawAmount = isLast
+        ? invoiceAmount - allocated
+        : Math.round((Number(item.totalAmount || item.subtotal || 0) / sourceTotal) * invoiceAmount);
+      allocated += rawAmount;
+
+      return {
+        ...item,
+        pricePerUnit: rawAmount,
+        subtotal: rawAmount,
+        discountAmount: 0,
+        totalAmount: rawAmount,
+      };
+    });
+  }
+
+  private getPaymentGroupId(packages: any[], addOns: any[]) {
+    return (
+      packages[0]?.purchaseGroupId ||
+      packages[0]?.id ||
+      addOns[0]?.packageId ||
+      addOns[0]?.id ||
+      `PAY-${Date.now()}`
+    );
   }
 
   private calculateDiscount(packages: any[]) {
@@ -381,6 +549,102 @@ export class InvoiceGenerationService {
         proofMimeType: proof.proofMimeType || null,
         receivedBy: userId,
         receivedAt,
+      },
+    });
+  }
+
+  private async createNextInstallmentInvoice(previousInvoice: any, paidAmount: number, userId: string) {
+    const nextInstallmentNumber = Number(previousInvoice.installmentNumber) + 1;
+    const installmentTotal = Number(previousInvoice.installmentTotal);
+    const schedule = Array.isArray(previousInvoice.installmentSchedule)
+      ? previousInvoice.installmentSchedule
+      : [];
+    const nextSchedule = schedule.find((item: any) => Number(item.installmentNumber) === nextInstallmentNumber);
+    const plannedAmount = Math.round(Number(nextSchedule?.amount || 0));
+    const previousDue = Number(previousInvoice.totalAmount || 0);
+    const carryOverAmount = Math.max(0, previousDue - paidAmount);
+    const creditAmount = Math.max(0, paidAmount - previousDue);
+    const nextAmount = Math.max(0, plannedAmount + carryOverAmount - creditAmount);
+
+    const existingNextInvoice = await prisma.invoice.findFirst({
+      where: {
+        paymentGroupId: previousInvoice.paymentGroupId,
+        installmentNumber: nextInstallmentNumber,
+        status: { not: 'CANCELLED' },
+      },
+    });
+
+    if (existingNextInvoice) {
+      return existingNextInvoice;
+    }
+
+    const branch = await prisma.branch.findUnique({
+      where: { id: previousInvoice.branchId },
+      select: { branchCode: true },
+    });
+
+    if (!branch) {
+      console.error('[InvoiceGeneration] Branch not found for next installment');
+      return null;
+    }
+
+    const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode);
+    const sourceItems = previousInvoice.items || [];
+    const sourceTotal = sourceItems.reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0);
+    const nextItems = this.allocateInvoiceItems(
+      sourceItems.map((item: any) => ({
+        itemType: item.itemType,
+        itemId: item.itemId,
+        code: item.code,
+        description: item.description,
+        quantity: item.quantity,
+        pricePerUnit: Number(item.pricePerUnit),
+        subtotal: Number(item.subtotal),
+        discountAmount: 0,
+        totalAmount: Number(item.totalAmount),
+      })),
+      nextAmount,
+      sourceTotal
+    );
+
+    return prisma.invoice.create({
+      data: {
+        invoiceNumber,
+        memberId: previousInvoice.memberId,
+        branchId: previousInvoice.branchId,
+        subtotal: nextAmount,
+        discountPercent: null,
+        discountAmount: 0,
+        discountNote: null,
+        taxPercent: 0,
+        taxAmount: 0,
+        totalAmount: nextAmount,
+        status: 'PENDING_PAYMENT',
+        paymentPlanType: 'INSTALLMENT',
+        paymentGroupId: previousInvoice.paymentGroupId,
+        installmentNumber: nextInstallmentNumber,
+        installmentTotal,
+        installmentSchedule: previousInvoice.installmentSchedule,
+        totalPurchaseAmount: previousInvoice.totalPurchaseAmount,
+        installmentAmount: plannedAmount,
+        carryOverAmount,
+        creditAmount,
+        actualPaidAmount: null,
+        paymentVerificationStatus: 'PENDING',
+        paymentRejectionReason: null,
+        isAdjustment: false,
+        dueDate: nextSchedule?.dueDate ? new Date(nextSchedule.dueDate) : this.getDefaultDueDate(new Date()),
+        paidAt: null,
+        paymentMethod: null,
+        paymentReference: null,
+        paymentNotes: null,
+        notes: `Termin ${nextInstallmentNumber}/${installmentTotal}`,
+        createdBy: userId,
+        verifiedBy: null,
+        verifiedAt: null,
+        items: {
+          create: nextItems,
+        },
       },
     });
   }

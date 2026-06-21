@@ -15,6 +15,16 @@ export class PaymentVerificationService {
     this.invoiceService = new InvoiceGenerationService();
   }
 
+  private getPaymentPlanStatus(invoice: any) {
+    if (invoice?.paymentPlanType !== 'INSTALLMENT') {
+      return 'PAID';
+    }
+
+    return Number(invoice.installmentNumber || 0) >= Number(invoice.installmentTotal || 0)
+      ? 'PAID'
+      : 'ACTIVE_INSTALLMENT';
+  }
+
   /**
    * Verify payment for package or add-on
    */
@@ -41,6 +51,12 @@ export class PaymentVerificationService {
     if (pkg.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
       // Staff is uploading proof and verifying in one step
       // This is valid - proceed with verification
+    } else if (
+      pkg.status === PackageStatus.ACTIVE &&
+      pkg.paymentPlanType === 'INSTALLMENT' &&
+      pkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
+    ) {
+      // Active installment package can still verify the next unpaid invoice.
     } else if (pkg.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {
         status: 422,
@@ -123,6 +139,12 @@ export class PaymentVerificationService {
 
     if (addon.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
       // Staff is uploading proof and verifying in one step.
+    } else if (
+      addon.status === PackageStatus.ACTIVE &&
+      addon.paymentPlanType === 'INSTALLMENT' &&
+      addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
+    ) {
+      // Active installment add-on can still verify the next unpaid invoice.
     } else if (addon.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {
         status: 422,
@@ -133,6 +155,14 @@ export class PaymentVerificationService {
 
     const now = new Date();
 
+    const paidInvoice = await this.invoiceService.verifyActiveInvoiceForPurchase(
+      [],
+      [addon],
+      addon.member,
+      userId,
+      data
+    );
+
     const updatedAddOn = await prisma.memberAddOn.update({
       where: { id: addOnId },
       data: {
@@ -140,6 +170,8 @@ export class PaymentVerificationService {
         paidAt: now,
         verifiedBy: userId,
         verifiedAt: now,
+        totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || addon.totalPrice || 0) },
+        paymentPlanStatus: this.getPaymentPlanStatus(paidInvoice),
         paymentProofUrl: data.proofFileUrl,
         paymentProofFileName: data.proofFileName,
         paymentProofFileSize: data.proofFileSize,
@@ -166,8 +198,6 @@ export class PaymentVerificationService {
       meta: { action: 'VERIFY_PAYMENT', status: 'ACTIVE', proofFile: data.proofFileName },
     });
 
-    await this.invoiceService.markInvoicePaidForAddOns([updatedAddOn], addon.member, userId);
-
     return { addOn: updatedAddOn, message: 'Pembayaran add-on berhasil diverifikasi' };
   }
 
@@ -189,6 +219,16 @@ export class PaymentVerificationService {
       },
     });
 
+    const paidInvoice = await this.invoiceService.verifyActiveInvoiceForPurchase(
+      groupPackages,
+      groupAddOns,
+      pkg.member,
+      userId,
+      data
+    );
+    const verifiedAmount = data.paidAmount || Number(paidInvoice?.totalAmount || 0);
+    const paymentPlanStatus = this.getPaymentPlanStatus(paidInvoice);
+
     // Update all packages in the group
     await prisma.memberPackage.updateMany({
       where: { purchaseGroupId: pkg.purchaseGroupId },
@@ -198,6 +238,8 @@ export class PaymentVerificationService {
         verifiedBy: userId,
         verifiedAt: now,
         activatedAt: now,
+        totalVerifiedPaid: { increment: verifiedAmount },
+        paymentPlanStatus,
         paymentProofUrl: data.proofFileUrl,
         paymentProofFileName: data.proofFileName,
         paymentProofFileSize: data.proofFileSize,
@@ -216,6 +258,8 @@ export class PaymentVerificationService {
           paidAt: now,
           verifiedBy: userId,
           verifiedAt: now,
+          totalVerifiedPaid: { increment: verifiedAmount },
+          paymentPlanStatus,
           paymentProofUrl: data.proofFileUrl,
           paymentProofFileName: data.proofFileName,
           paymentProofFileSize: data.proofFileSize,
@@ -233,9 +277,6 @@ export class PaymentVerificationService {
         packageId: { in: packageIds },
       },
     });
-
-    // Mark the existing invoice as paid, or create a paid invoice if it is missing.
-    await this.invoiceService.markInvoicePaidForPackages(updatedPackages, updatedAddOns, pkg.member, userId);
 
     // NOTE: Payment record is already created inside the invoice service.
     // No need to create another one here
@@ -296,6 +337,14 @@ export class PaymentVerificationService {
    * Verify single package payment
    */
   private async verifySinglePackagePayment(pkg: any, data: VerifyPaymentInput, userId: string, now: Date) {
+    const paidInvoice = await this.invoiceService.verifyActiveInvoiceForPurchase(
+      [pkg],
+      undefined,
+      pkg.member,
+      userId,
+      data
+    );
+
     const updatedPackage = await prisma.memberPackage.update({
       where: { id: pkg.id },
       data: {
@@ -303,6 +352,8 @@ export class PaymentVerificationService {
         paidAt: now,
         verifiedBy: userId,
         verifiedAt: now,
+        totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || pkg.finalPrice || 0) },
+        paymentPlanStatus: this.getPaymentPlanStatus(paidInvoice),
         paymentProofUrl: data.proofFileUrl,
         paymentProofFileName: data.proofFileName,
         paymentProofFileSize: data.proofFileSize,
@@ -311,9 +362,6 @@ export class PaymentVerificationService {
         notes: data.notes || pkg.notes,
       },
     });
-
-    // Mark the existing invoice as paid, or create a paid invoice if it is missing.
-    await this.invoiceService.markInvoicePaidForPackages([updatedPackage], undefined, pkg.member, userId);
 
     // NOTE: Payment record is already created inside the invoice service.
     // No need to create another one here

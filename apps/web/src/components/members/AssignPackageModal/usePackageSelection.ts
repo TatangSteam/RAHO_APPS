@@ -24,7 +24,7 @@ interface AddOnSelection {
   quantity: number;
 }
 
-interface AssignData {
+interface PackageSelectionData {
   selectedPackages: PackageSelection[];
   selectedAddOns: AddOnSelection[];
   discountPercent: number;
@@ -33,9 +33,9 @@ interface AssignData {
   notes: string;
 }
 
-export function usePackageSelection(
-  assignData: AssignData,
-  onAssignDataChange: (data: AssignData) => void,
+export function usePackageSelection<TAssignData extends PackageSelectionData>(
+  assignData: TAssignData,
+  onAssignDataChange: (data: TAssignData) => void,
   pricingsList: PackagePricing[]
 ) {
   // ── BASIC helpers ──────────────────────────────────────────

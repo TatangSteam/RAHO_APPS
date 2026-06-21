@@ -12,6 +12,8 @@ const ServiceTypeEnum = z.enum(['PM', 'PS', 'PTY', 'PDA', 'PHC']);
 // Add-on types
 const AddOnTypeEnum = z.enum(['AIR_NANO', 'ROKOK_KENKOU', 'KONSULTASI_GIZI', 'KONSULTASI_PSIKOLOG', 'LAINNYA']);
 
+const PaymentPlanTypeEnum = z.enum(['FULL_PAYMENT', 'INSTALLMENT']);
+
 function isValidProofFileUrl(value: string): boolean {
   const trimmed = value.trim();
 
@@ -54,13 +56,66 @@ export const assignPackageSchema = z.object({
   discountAmount: z.number().min(0).optional(),
   discountNote: z.string().optional(),
   notes: z.string().optional(),
-}).refine(
-  (data) => data.packages.length > 0 || data.addOns.length > 0,
-  { message: 'Minimal 1 paket atau add-on harus dipilih' }
-);
+  paymentPlan: z.object({
+    type: PaymentPlanTypeEnum.default('FULL_PAYMENT'),
+    installmentCount: z.number().int().min(2).max(24).optional(),
+    installments: z.array(z.object({
+      installmentNumber: z.number().int().min(1),
+      amount: z.number().min(0),
+      dueDate: z.string().datetime().optional(),
+    })).optional(),
+  }).optional(),
+}).superRefine((data, ctx) => {
+  if (data.packages.length === 0 && data.addOns.length === 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Minimal 1 paket atau add-on harus dipilih',
+    });
+  }
+
+  if (data.paymentPlan?.type === 'INSTALLMENT') {
+    const installmentCount = data.paymentPlan.installmentCount || 0;
+    const installments = data.paymentPlan.installments || [];
+
+    if (installmentCount < 2) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paymentPlan', 'installmentCount'],
+        message: 'Jumlah termin minimal 2',
+      });
+    }
+
+    if (installments.length !== installmentCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paymentPlan', 'installments'],
+        message: 'Jumlah nominal termin harus sesuai jumlah termin',
+      });
+    }
+
+    if (!installments[0] || installments[0].amount <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['paymentPlan', 'installments', 0, 'amount'],
+        message: 'Termin pertama wajib memiliki nominal pembayaran awal',
+      });
+    }
+
+    installments.forEach((installment, index) => {
+      if (installment.installmentNumber !== index + 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['paymentPlan', 'installments', index, 'installmentNumber'],
+          message: 'Nomor termin tidak berurutan',
+        });
+      }
+    });
+  }
+});
 
 export const verifyPaymentSchema = z.object({
   notes: z.string().optional(),
+  paidAmount: z.number().min(0).optional(),
   // Payment proof file (required)
   proofFileUrl: z.string().min(1, 'URL file bukti pembayaran harus valid').refine(
     isValidProofFileUrl,

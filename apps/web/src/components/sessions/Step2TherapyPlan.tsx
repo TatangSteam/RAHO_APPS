@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import type { TherapyPlan } from '@/types/session';
 import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
-import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
 import { therapyPlanApi } from '@/lib/therapyPlanApi';
 import type { TherapyPlan as TherapyPlanApiType } from '@/lib/therapyPlanApi';
 import styles from './Step2TherapyPlan.module.css';
@@ -95,11 +94,11 @@ export default function Step2TherapyPlan({
       </div>
 
       <div className={styles.completedContent}>
-        {/* Show therapy plan set table if available */}
+        {/* Show full therapy plan set with details */}
         {therapyPlanSet.length > 0 && (
           <div style={{ marginBottom: '24px' }}>
             <div style={{ 
-              marginBottom: '12px',
+              marginBottom: '16px',
               padding: '12px 16px',
               background: 'rgba(59,130,246,0.08)',
               border: '1px solid rgba(59,130,246,0.22)',
@@ -133,52 +132,56 @@ export default function Step2TherapyPlan({
                 <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Memuat therapy plan set...</p>
               </div>
             ) : (
-              <TherapyPlanListTable
-                plans={therapyPlanSet}
-                memberId={memberId}
-                onOpenSession={() => {}}
-                hideInfusKe={true}
-                hideStatus={true}
-                hideAksi={true}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {therapyPlanSet.map((plan, index) => {
+                  const isCurrentPlan = plan.id === therapyPlan.id;
+                  
+                  return (
+                    <div key={plan.id}>
+                      <div style={{ 
+                        marginBottom: '8px',
+                        padding: '8px 12px',
+                        background: isCurrentPlan ? 'rgba(34,197,94,0.08)' : 'rgba(148,163,184,0.06)',
+                        border: isCurrentPlan ? '1px solid rgba(34,197,94,0.22)' : '1px solid rgba(148,163,184,0.18)',
+                        borderRadius: '6px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}>
+                        <span style={{ fontSize: '16px' }}>{isCurrentPlan ? '✅' : '📝'}</span>
+                        <span style={{ 
+                          fontSize: '12px', 
+                          fontWeight: '700',
+                          color: isCurrentPlan ? '#22c55e' : 'var(--text-secondary)',
+                        }}>
+                          Terapi #{plan.planNumber || index + 1}
+                          {isCurrentPlan && ' (Terapi Saat Ini)'}
+                        </span>
+                        {plan.keterangan && (
+                          <span style={{
+                            marginLeft: 'auto',
+                            fontSize: '11px',
+                            color: 'var(--text-muted)',
+                            fontStyle: 'italic',
+                          }}>
+                            {plan.keterangan}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <TherapyPlanDoseTable
+                        plan={plan}
+                        title={`Dosis Terapi #${plan.planNumber || index + 1}`}
+                        showSourceColumn={false}
+                        showNoteColumn={false}
+                        includeDefaultIfaSubstances={false}
+                        compact={!isCurrentPlan}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </div>
-        )}
-
-        {/* Current plan detail */}
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ 
-            marginBottom: '12px',
-            padding: '10px 14px',
-            background: 'rgba(34,197,94,0.08)',
-            border: '1px solid rgba(34,197,94,0.22)',
-            borderRadius: '8px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <span style={{ fontSize: '18px' }}>✅</span>
-            <span style={{ 
-              fontSize: '13px', 
-              fontWeight: '700',
-              color: '#22c55e',
-            }}>
-              Terapi Saat Ini (Terapi #{therapyPlan.planNumber || '-'})
-            </span>
-          </div>
-
-          <TherapyPlanDoseTable
-            plan={therapyPlan}
-            showSourceColumn={false}
-            showNoteColumn={false}
-            includeDefaultIfaSubstances={false}
-          />
-        </div>
-
-        {therapyPlan.keterangan && (
-          <div className={styles.keteranganSection}>
-            <p className={styles.keteranganLabel}>Keterangan:</p>
-            <p className={styles.keteranganValue}>{therapyPlan.keterangan}</p>
           </div>
         )}
 

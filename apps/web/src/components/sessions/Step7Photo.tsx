@@ -4,8 +4,14 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { photoApi, type SessionPhoto } from '@/lib/photoApi';
+import {
+  uploadSupportingPhoto,
+  getSupportingPhotosBySession,
+  deleteSupportingPhoto,
+  type SupportingPhoto
+} from '@/lib/api/supportingPhotoApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
-import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
+import { compressImageWithPreset, isImageFile } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
 
 interface Step7PhotoProps {
@@ -27,6 +33,12 @@ export default function Step7Photo({
   const [preview, setPreview] = useState<string | null>(null);
   const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Supporting photos state
+  const [supportingPhotos, setSupportingPhotos] = useState<SupportingPhoto[]>([]);
+  const [supportingPhotoPreviews, setSupportingPhotoPreviews] = useState<Record<string, string>>({});
+  const [uploadingSupportingPhoto, setUploadingSupportingPhoto] = useState(false);
+  const supportingPhotoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,6 +82,68 @@ export default function Step7Photo({
       }
     };
   }, [preview]);
+
+  // Load supporting photos
+  useEffect(() => {
+    if (!sessionId || isLocked) return;
+
+    const loadSupportingPhotos = async () => {
+      try {
+        const photos = await getSupportingPhotosBySession(sessionId);
+        setSupportingPhotos(photos);
+      } catch (error) {
+        devError('Failed to load supporting photos:', error);
+      }
+    };
+
+    loadSupportingPhotos();
+  }, [sessionId, isLocked]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls: string[] = [];
+
+    const loadSupportingPhotoPreviews = async () => {
+      if (supportingPhotos.length === 0) {
+        setSupportingPhotoPreviews({});
+        return;
+      }
+
+      const previews: Record<string, string> = {};
+
+      await Promise.all(
+        supportingPhotos.map(async (supportingPhoto) => {
+          if (!supportingPhoto.fileUrl) return;
+
+          if (supportingPhoto.fileUrl.startsWith('data:') || supportingPhoto.fileUrl.startsWith('blob:')) {
+            previews[supportingPhoto.id] = supportingPhoto.fileUrl;
+            return;
+          }
+
+          try {
+            const objectUrl = await createAuthenticatedObjectUrl(supportingPhoto.fileUrl);
+            objectUrls.push(objectUrl);
+            previews[supportingPhoto.id] = objectUrl;
+          } catch (error) {
+            devError('Failed to load supporting photo URL:', error);
+          }
+        })
+      );
+
+      if (!cancelled) {
+        setSupportingPhotoPreviews(previews);
+      } else {
+        objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+      }
+    };
+
+    loadSupportingPhotoPreviews();
+
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
+    };
+  }, [supportingPhotos]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -145,6 +219,58 @@ export default function Step7Photo({
     } catch (error: any) {
       devError('Error deleting photo:', error);
       showToast.error(error.message || 'Gagal menghapus foto');
+    }
+  };
+
+  // Supporting photo handlers
+  const handleUploadSupportingPhoto = () => {
+    supportingPhotoInputRef.current?.click();
+  };
+
+  const handleSupportingPhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showToast.error('File harus berupa gambar');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast.error('Ukuran file maksimal 10MB');
+      e.target.value = '';
+      return;
+    }
+
+    setUploadingSupportingPhoto(true);
+    try {
+      const newPhoto = await uploadSupportingPhoto({
+        sessionId,
+        file,
+        description: '',
+      });
+      setSupportingPhotos((current) => [newPhoto, ...current]);
+      showToast.success('Foto penunjang berhasil diupload');
+    } catch (error: any) {
+      devError('Error uploading supporting photo:', error);
+      showToast.error(error.message || 'Gagal upload foto penunjang');
+    } finally {
+      setUploadingSupportingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteSupportingPhoto = async (photoId: string) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus foto penunjang ini?')) return;
+
+    try {
+      await deleteSupportingPhoto(photoId);
+      setSupportingPhotos((current) => current.filter((p) => p.id !== photoId));
+      showToast.success('Foto penunjang berhasil dihapus');
+    } catch (error: any) {
+      devError('Error deleting supporting photo:', error);
+      showToast.error(error.message || 'Gagal menghapus foto penunjang');
     }
   };
 
@@ -412,6 +538,147 @@ export default function Step7Photo({
           ℹ️ Upload foto bersifat opsional. Anda dapat melewati step ini dan klik save untuk melanjutkan.
         </div>
       )}
+
+      {/* Supporting Photos Section */}
+      <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '2px dashed rgba(148,163,184,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <h4 style={{ fontSize: '16px', fontWeight: '600', color: '#f1f5f9' }}>
+            📷 Foto Penunjang ({supportingPhotos.length})
+          </h4>
+          <button
+            onClick={handleUploadSupportingPhoto}
+            disabled={uploadingSupportingPhoto}
+            style={{
+              padding: '8px 16px',
+              background: uploadingSupportingPhoto
+                ? 'rgba(139,92,246,0.3)'
+                : 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+              border: 'none',
+              borderRadius: 'var(--radius-md)',
+              color: 'white',
+              fontSize: '13px',
+              fontWeight: '600',
+              cursor: uploadingSupportingPhoto ? 'not-allowed' : 'pointer',
+              opacity: uploadingSupportingPhoto ? 0.5 : 1
+            }}
+          >
+            {uploadingSupportingPhoto ? '⏳ Mengupload...' : '➕ Upload Foto Penunjang'}
+          </button>
+          <input
+            ref={supportingPhotoInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleSupportingPhotoSelect}
+            style={{ display: 'none' }}
+            disabled={uploadingSupportingPhoto}
+          />
+        </div>
+
+        {supportingPhotos.length === 0 ? (
+          <div style={{
+            padding: '32px',
+            background: 'rgba(15,23,42,0.3)',
+            border: '2px dashed rgba(148,163,184,0.2)',
+            borderRadius: 'var(--radius-md)',
+            textAlign: 'center'
+          }}>
+            <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+              Belum ada foto penunjang. Klik tombol di atas untuk menambahkan.
+            </p>
+          </div>
+        ) : (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '16px'
+          }}>
+            {supportingPhotos.map((supportingPhoto) => {
+              const previewUrl = supportingPhotoPreviews[supportingPhoto.id];
+
+              return (
+                <div
+                  key={supportingPhoto.id}
+                  style={{
+                    background: 'rgba(15,23,42,0.5)',
+                    border: '1px solid rgba(148,163,184,0.2)',
+                    borderRadius: 'var(--radius-md)',
+                    overflow: 'hidden',
+                    transition: 'transform 0.2s'
+                  }}
+                >
+                  <div style={{ position: 'relative', paddingBottom: '75%', background: '#0f172a' }}>
+                    {previewUrl ? (
+                      <img
+                        src={previewUrl}
+                        alt={supportingPhoto.description || 'Supporting photo'}
+                        style={{
+                          position: 'absolute',
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
+                    ) : (
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: '#94a3b8',
+                        fontSize: '13px',
+                        textAlign: 'center',
+                        padding: '12px'
+                      }}>
+                        Memuat preview...
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ padding: '12px' }}>
+                    {supportingPhoto.description && (
+                      <p style={{
+                        fontSize: '13px',
+                        color: '#f1f5f9',
+                        marginBottom: '8px',
+                        wordBreak: 'break-word'
+                      }}>
+                        {supportingPhoto.description}
+                      </p>
+                    )}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: '11px',
+                      color: '#64748b',
+                      marginBottom: '8px'
+                    }}>
+                      <span>{formatFileSize(supportingPhoto.fileSize)}</span>
+                      <span>{new Date(supportingPhoto.createdAt).toLocaleDateString('id-ID')}</span>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSupportingPhoto(supportingPhoto.id)}
+                      style={{
+                        width: '100%',
+                        padding: '6px',
+                        background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                        border: 'none',
+                        borderRadius: 'var(--radius-sm)',
+                        color: 'white',
+                        fontSize: '12px',
+                        fontWeight: '600',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🗑️ Hapus
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

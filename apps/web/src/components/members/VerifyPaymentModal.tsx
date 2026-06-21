@@ -14,9 +14,11 @@ interface PaymentProof {
 interface VerifyPaymentModalProps {
   show: boolean;
   notes: string;
+  paidAmount: number;
   submitting: boolean;
   onClose: () => void;
   onNotesChange: (notes: string) => void;
+  onPaidAmountChange: (amount: number) => void;
   onProofChange: (proof: PaymentProof) => void;
   onSubmit: () => void;
   onReject?: (reason: string) => void;
@@ -28,9 +30,11 @@ interface VerifyPaymentModalProps {
 export default function VerifyPaymentModal({
   show,
   notes,
+  paidAmount,
   submitting,
   onClose,
   onNotesChange,
+  onPaidAmountChange,
   onProofChange,
   onSubmit,
   onReject,
@@ -288,6 +292,24 @@ export default function VerifyPaymentModal({
               {error && <div className={styles.errorMessage}>{error}</div>}
             </div>
           )}
+
+          {/* Paid Amount */}
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>
+              Nominal Dibayarkan
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={paidAmount || ''}
+              onChange={(e) => onPaidAmountChange(Number(e.target.value || 0))}
+              className={styles.formInput}
+              placeholder="Kosongkan jika sesuai tagihan invoice"
+            />
+            <p className={styles.formHint}>
+              Isi nominal aktual yang diterima. Jika kurang/lebih dari tagihan termin, sistem akan membawa selisih ke termin berikutnya.
+            </p>
+          </div>
 
           {/* Notes */}
           <div className={styles.formGroup}>

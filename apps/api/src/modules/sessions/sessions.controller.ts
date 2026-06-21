@@ -11,10 +11,12 @@ import {
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
 import { SessionExportService } from './services/session-export.service';
+import { SupportingPhotosService } from './services/supporting-photos.service';
 import { Role } from '@prisma/client';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
+const supportingPhotosService = new SupportingPhotosService();
 
 export class SessionsController {
   // ============================================================
@@ -573,6 +575,82 @@ export class SessionsController {
       }
     } catch (error) {
       next(error);
+    }
+  }
+
+  // ============================================================
+  // STEP 7: SUPPORTING PHOTOS (MULTIPLE)
+  // ============================================================
+
+  async uploadSupportingPhoto(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const { description } = req.body;
+
+      if (!req.file) {
+        return sendError(res, 400, 'FILE_REQUIRED', 'File foto penunjang harus disertakan');
+      }
+
+      const result = await supportingPhotosService.uploadSupportingPhoto(sessionId, {
+        file: req.file,
+        description,
+        uploadedBy: req.user!.userId,
+      });
+
+      return sendSuccess(res, result, 201);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async getSupportingPhotos(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const result = await supportingPhotosService.getSupportingPhotosBySession(sessionId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async deleteSupportingPhoto(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { photoId } = req.params;
+      await supportingPhotosService.deleteSupportingPhoto(photoId, req.user!.userId);
+      return sendSuccess(res, { message: 'Foto penunjang berhasil dihapus' });
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async updateSupportingPhotoDescription(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { photoId } = req.params;
+      const { description } = req.body;
+
+      if (description === undefined) {
+        return sendError(res, 400, 'DESCRIPTION_REQUIRED', 'Keterangan foto harus disertakan');
+      }
+
+      const result = await supportingPhotosService.updateSupportingPhotoDescription(
+        photoId,
+        description
+      );
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
     }
   }
 }

@@ -17,6 +17,8 @@ const ALLSTAFF: Role[] = [
   Role.NURSE,
 ];
 
+const SESSION_CREATORS: Role[] = ALLSTAFF.filter((role) => role !== Role.DOCTOR);
+
 // ============================================================
 // SESSION ROUTES
 // ============================================================
@@ -41,7 +43,7 @@ router.post(
 router.post(
   '/',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(SESSION_CREATORS),
   controller.createSession.bind(controller)
 );
 
@@ -217,6 +219,53 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   controller.getPhoto.bind(controller)
+);
+
+// ============================================================
+// STEP 7: SUPPORTING PHOTOS (MULTIPLE)
+// ============================================================
+
+router.delete(
+  '/supporting-photos/:photoId',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.deleteSupportingPhoto.bind(controller)
+);
+
+router.patch(
+  '/supporting-photos/:photoId',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.updateSupportingPhotoDescription.bind(controller)
+);
+
+router.post(
+  '/:sessionId/supporting-photos',
+  authenticate,
+  authorize(ALLSTAFF),
+  upload.single('photo'),
+  controller.uploadSupportingPhoto.bind(controller)
+);
+
+router.get(
+  '/:sessionId/supporting-photos',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.getSupportingPhotos.bind(controller)
+);
+
+router.delete(
+  '/:sessionId/supporting-photos/:photoId',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.deleteSupportingPhoto.bind(controller)
+);
+
+router.patch(
+  '/:sessionId/supporting-photos/:photoId',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.updateSupportingPhotoDescription.bind(controller)
 );
 
 // ============================================================

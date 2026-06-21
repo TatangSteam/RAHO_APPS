@@ -3,6 +3,18 @@ import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
 
 export class SessionCompletionService {
+  private hasDoctorEvaluation(evaluation: any): boolean {
+    if (!evaluation) return false;
+
+    return [
+      evaluation.subjective,
+      evaluation.objective,
+      evaluation.assessment,
+      evaluation.plan,
+      evaluation.generalNotes,
+    ].some((value) => typeof value === 'string' && value.trim().length > 0);
+  }
+
   async completeSession(sessionId: string, userId: string) {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
@@ -55,7 +67,7 @@ export class SessionCompletionService {
       errors.push('Tanda vital SESUDAH belum diisi');
     }
 
-    if (!session.evaluation) {
+    if (!this.hasDoctorEvaluation(session.evaluation)) {
       errors.push('Evaluasi dokter belum dibuat');
     }
 
@@ -162,7 +174,7 @@ export class SessionCompletionService {
       step5_materials: session.materials.length > 0, // REQUIRED
       step6_photo: !!session.photo, // Optional
       step7_vitalAfter: hasVitalAfter,
-      step8_evaluation: !!session.evaluation,
+      step8_evaluation: this.hasDoctorEvaluation(session.evaluation),
     };
 
     const requiredSteps = [

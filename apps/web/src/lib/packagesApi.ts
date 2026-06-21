@@ -9,14 +9,31 @@ export interface PackageSelection {
 
 export interface AssignPackageData {
   packages: PackageSelection[];
+  addOns?: Array<{
+    type: string;
+    code: string;
+    name: string;
+    price: number;
+    quantity: number;
+  }>;
   discountPercent?: number;
   discountAmount?: number;
   discountNote?: string;
   notes?: string;
+  paymentPlan?: {
+    type: 'FULL_PAYMENT' | 'INSTALLMENT';
+    installmentCount?: number;
+    installments?: Array<{
+      installmentNumber: number;
+      amount: number;
+      dueDate?: string;
+    }>;
+  };
 }
 
 export interface VerifyPaymentData {
   notes?: string;
+  paidAmount?: number;
   proofFileUrl: string;
   proofFileName: string;
   proofFileSize: number;

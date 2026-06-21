@@ -36,8 +36,20 @@ export function normalizeFileRequestPath(fileUrlOrPath: string): string {
     return value;
   }
 
-  if (value.startsWith('/session-photos/') || value.startsWith('/uploads/')) {
+  if (
+    value.startsWith('/session-photos/') ||
+    value.startsWith('/session-supporting-photos/') ||
+    value.startsWith('/uploads/')
+  ) {
     return `/files${value}`;
+  }
+
+  if (
+    value.startsWith('session-photos/') ||
+    value.startsWith('session-supporting-photos/') ||
+    value.startsWith('uploads/')
+  ) {
+    return `/files/${value}`;
   }
 
   return value;

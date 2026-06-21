@@ -31,7 +31,7 @@ import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 
 type MemberDetailTab = 'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
 
-const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'sesi', 'diagnosa', 'therapy-plan', 'lab-results'];
+const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'therapy-plan', 'diagnosa', 'sesi', 'lab-results'];
 
 function isMemberDetailTab(value: string | null): value is MemberDetailTab {
   return Boolean(value && MEMBER_DETAIL_TABS.includes(value as MemberDetailTab));
@@ -78,9 +78,15 @@ export default function MemberDetailPage() {
     discountPercent: 0,
     discountAmount: 0,
     discountNote: '',
-    notes: ''
+    notes: '',
+    paymentPlan: {
+      type: 'FULL_PAYMENT' as 'FULL_PAYMENT' | 'INSTALLMENT',
+      installmentCount: 2,
+      installments: [] as Array<{ installmentNumber: number; amount: number; dueDate?: string }>,
+    },
   });
   const [verifyNotes, setVerifyNotes] = useState('');
+  const [verifyPaidAmount, setVerifyPaidAmount] = useState<number>(0);
   const [paymentProof, setPaymentProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [submitting, setSubmitting] = useState(false);
   const [selectedPackageProof, setSelectedPackageProof] = useState<{ url: string | null; fileName: string | null; status: string }>({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
@@ -264,8 +270,22 @@ export default function MemberDetailPage() {
         discountPercent: assignData.discountPercent || undefined,
         discountAmount: assignData.discountAmount || undefined,
         discountNote: assignData.discountNote || undefined,
-        notes: assignData.notes || undefined
+        notes: assignData.notes || undefined,
+        paymentPlan: assignData.paymentPlan?.type === 'INSTALLMENT'
+          ? assignData.paymentPlan
+          : { type: 'FULL_PAYMENT' },
       };
+
+      if (payload.paymentPlan.type === 'INSTALLMENT') {
+        const installments = payload.paymentPlan.installments || [];
+        const firstAmount = Number(installments[0]?.amount || 0);
+
+        if (firstAmount <= 0) {
+          showToast.error('Termin pertama wajib memiliki pembayaran awal');
+          setSubmitting(false);
+          return;
+        }
+      }
       
       // Add addOns if any selected
       if (assignData.selectedAddOns.length > 0) {
@@ -283,7 +303,12 @@ export default function MemberDetailPage() {
         discountPercent: 0,
         discountAmount: 0,
         discountNote: '',
-        notes: ''
+        notes: '',
+        paymentPlan: {
+          type: 'FULL_PAYMENT',
+          installmentCount: 2,
+          installments: [],
+        },
       });
       await loadPackages();
     } catch (error: any) {
@@ -312,6 +337,7 @@ export default function MemberDetailPage() {
         // Use existing proof from member upload
         proofData = {
           notes: verifyNotes || undefined,
+          paidAmount: verifyPaidAmount > 0 ? verifyPaidAmount : undefined,
           proofFileUrl: selectedPackageProof.url!,
           proofFileName: selectedPackageProof.fileName || 'payment-proof.jpg',
           proofFileSize: 0, // Not available for existing
@@ -322,6 +348,7 @@ export default function MemberDetailPage() {
         const uploadResult = await packagesApi.uploadPaymentProof(paymentProof.file!);
         proofData = {
           notes: verifyNotes || undefined,
+          paidAmount: verifyPaidAmount > 0 ? verifyPaidAmount : undefined,
           proofFileUrl: uploadResult.url,
           proofFileName: uploadResult.fileName,
           proofFileSize: uploadResult.fileSize,
@@ -335,6 +362,7 @@ export default function MemberDetailPage() {
       showToast.success('Pembayaran berhasil diverifikasi');
       setShowVerifyModal(false);
       setVerifyNotes('');
+      setVerifyPaidAmount(0);
       setPaymentProof({ file: null, preview: null });
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
@@ -353,6 +381,7 @@ export default function MemberDetailPage() {
       showToast.success('Pembayaran berhasil ditolak');
       setShowVerifyModal(false);
       setVerifyNotes('');
+      setVerifyPaidAmount(0);
       setPaymentProof({ file: null, preview: null });
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
@@ -731,11 +760,14 @@ export default function MemberDetailPage() {
         onClose={() => {
           setShowVerifyModal(false);
           setVerifyNotes('');
+          setVerifyPaidAmount(0);
           setPaymentProof({ file: null, preview: null });
           setSelectedPackageId('');
           setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
         }}
         onNotesChange={setVerifyNotes}
+        paidAmount={verifyPaidAmount}
+        onPaidAmountChange={setVerifyPaidAmount}
         onProofChange={setPaymentProof}
         onSubmit={handleVerifyPayment}
         onReject={handleRejectPayment}

@@ -246,10 +246,6 @@ export default function NewMemberPage() {
       showToast.error('Alamat wajib diisi');
       return;
     }
-    if (!formData.postalCode) {
-      showToast.error('Kode pos wajib diisi');
-      return;
-    }
     
     // Validation for account section
     if (!formData.memberEmail) {

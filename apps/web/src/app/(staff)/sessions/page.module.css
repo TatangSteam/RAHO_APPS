@@ -203,78 +203,119 @@
   margin: 0;
 }
 
-/* Sessions List */
-.sessionsList {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-  gap: 16px;
-}
-
-.sessionCard {
+/* Sessions Table */
+.tableContainer {
+  width: 100%;
+  overflow-x: auto;
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  position: relative;
-  overflow: hidden;
 }
 
-.sessionCard::before {
+.sessionsTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.sessionsTable thead {
+  background: rgba(15, 23, 42, 0.6);
+  border-bottom: 2px solid var(--surface-border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.sessionsTable thead th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.sessionsTable tbody tr {
+  border-bottom: 1px solid var(--surface-border);
+  position: relative;
+}
+
+.tableRow {
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.tableRow::before {
   content: '';
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
   width: 4px;
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
 }
 
-.sessionCard:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg);
-  border-color: rgba(148, 163, 184, 0.2);
-  background: var(--surface-card-hover);
-}
-
-.sessionCard:focus {
-  outline: 2px solid var(--color-primary-500);
-  outline-offset: 2px;
-}
-
-.sessionCard.completed::before {
+.tableRow.completed::before {
   background: linear-gradient(180deg, var(--color-success), #16a34a);
 }
 
-.sessionCard.incomplete::before {
+.tableRow.incomplete::before {
   background: linear-gradient(180deg, var(--color-warning), #d97706);
 }
 
-.sessionHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-left: 8px;
+.tableRow:hover {
+  background: var(--surface-card-hover);
+}
+
+.tableRow:focus {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: -2px;
+}
+
+.sessionsTable tbody td {
+  padding: 16px;
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+/* Table Cell Specific Styles */
+.sessionCodeCell {
+  padding-left: 24px !important;
 }
 
 .sessionCode {
-  font-size: 0.9rem;
+  display: inline-block;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-primary-400);
   font-family: 'SF Mono', 'Fira Code', monospace;
   background: rgba(59, 130, 246, 0.1);
   padding: 4px 10px;
   border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+
+.boosterTag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #c084fc;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(168, 85, 247, 0.1));
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  margin-left: 8px;
 }
 
 .statusBadge {
+  display: inline-block;
   padding: 5px 12px;
   border-radius: 99px;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   font-weight: 600;
   letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .statusCompleted {
@@ -289,96 +330,64 @@
   border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
-.sessionBody {
-  margin-bottom: 16px;
-  padding-left: 8px;
-}
-
-.memberInfo {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-bottom: 16px;
+.memberCell {
+  min-width: 180px;
 }
 
 .memberName {
-  font-size: 1.125rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-primary);
+  margin-bottom: 2px;
 }
 
 .memberNo {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.sessionMeta {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-  padding: 12px;
-  background: rgba(15, 23, 42, 0.4);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--surface-border);
+.dateCell {
+  min-width: 110px;
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
-.metaItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.timeCell {
+  min-width: 80px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
-.metaLabel {
+.sessionNumberCell {
+  min-width: 100px;
+}
+
+.sessionGlobal {
+  font-weight: 600;
+  color: var(--color-primary-400);
+  font-size: 0.95rem;
+  margin-bottom: 2px;
+}
+
+.sessionBranch {
   font-size: 0.7rem;
   color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 500;
 }
 
-.metaValue {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-primary);
+.typeCell {
+  min-width: 130px;
+  white-space: nowrap;
 }
 
-.boosterBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 12px;
-  padding: 8px 14px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(168, 85, 247, 0.1));
-  color: #c084fc;
-  border-radius: var(--radius-md);
-  font-size: 0.8rem;
-  font-weight: 600;
-  border: 1px solid rgba(139, 92, 246, 0.25);
-}
-
-.sessionFooter {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-top: 16px;
-  padding-left: 8px;
-  border-top: 1px solid var(--surface-border);
-}
-
-.staffInfo {
-  display: flex;
-  gap: 16px;
-  font-size: 0.8rem;
+.staffCell {
+  min-width: 150px;
   color: var(--text-secondary);
 }
 
-.branchInfo {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  background: rgba(148, 163, 184, 0.1);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
+.branchCell {
+  min-width: 140px;
+  color: var(--text-secondary);
 }
 
 /* Pagination */
@@ -406,10 +415,6 @@
 
 /* Responsive */
 @media (max-width: 768px) {
-  .sessionsList {
-    grid-template-columns: 1fr;
-  }
-
   .filterTabs {
     width: 100%;
     overflow-x: auto;
@@ -423,19 +428,39 @@
     font-size: 0.8rem;
   }
 
-  .sessionMeta {
-    grid-template-columns: 1fr 1fr;
+  .tableContainer {
+    border-radius: var(--radius-md);
   }
 
-  .sessionFooter {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
+  .sessionsTable {
+    font-size: 0.8rem;
   }
 
-  .staffInfo {
-    flex-direction: column;
-    gap: 6px;
+  .sessionsTable thead th {
+    padding: 12px 12px;
+    font-size: 0.7rem;
+  }
+
+  .sessionsTable tbody td {
+    padding: 12px;
+  }
+
+  .sessionCodeCell {
+    padding-left: 20px !important;
+  }
+
+  .memberCell {
+    min-width: 150px;
+  }
+
+  .memberName {
+    font-size: 0.875rem;
+  }
+
+  .staffCell,
+  .branchCell {
+    min-width: 120px;
+    font-size: 0.8rem;
   }
 
   .pagination {
@@ -464,21 +489,77 @@
     font-size: 1.5rem;
   }
 
-  .sessionCard {
-    padding: 16px;
+  .filterGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tableContainer {
+    border-radius: var(--radius-sm);
+    margin: 0 -16px;
+  }
+
+  .sessionsTable {
+    font-size: 0.75rem;
+  }
+
+  .sessionsTable thead th {
+    padding: 10px 8px;
+    font-size: 0.65rem;
+  }
+
+  .sessionsTable tbody td {
+    padding: 10px 8px;
+  }
+
+  .sessionCodeCell {
+    padding-left: 16px !important;
+  }
+
+  .sessionCode {
+    font-size: 0.75rem;
+    padding: 3px 8px;
+  }
+
+  .boosterTag {
+    display: block;
+    margin-left: 0;
+    margin-top: 4px;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+  }
+
+  .statusBadge {
+    font-size: 0.65rem;
+    padding: 4px 8px;
+  }
+
+  .memberCell {
+    min-width: 120px;
   }
 
   .memberName {
-    font-size: 1rem;
+    font-size: 0.8rem;
   }
 
-  .sessionMeta {
-    padding: 10px;
-    gap: 10px;
+  .memberNo {
+    font-size: 0.7rem;
   }
 
-  .filterGrid {
-    grid-template-columns: 1fr;
+  .sessionGlobal {
+    font-size: 0.85rem;
+  }
+
+  .sessionBranch {
+    font-size: 0.65rem;
+  }
+
+  .dateCell,
+  .timeCell,
+  .typeCell,
+  .staffCell,
+  .branchCell {
+    min-width: auto;
+    font-size: 0.75rem;
   }
 }
 

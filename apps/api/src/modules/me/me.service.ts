@@ -764,6 +764,8 @@ interface InfusionData {
 
 interface EvaluationData {
   evaluationCode: string;
+  keluhan: string | null;
+  rekomendasi: string | null;
   subjective: string | null;
   objective: string | null;
   assessment: string | null;
@@ -1002,6 +1004,8 @@ export async function getMemberSessionDetailService(
     evaluation: session.evaluation
       ? {
           evaluationCode: session.evaluation.evaluationCode,
+          keluhan: session.evaluation.keluhan,
+          rekomendasi: session.evaluation.rekomendasi,
           subjective: session.evaluation.subjective,
           objective: session.evaluation.objective,
           assessment: session.evaluation.assessment,

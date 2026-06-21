@@ -67,6 +67,11 @@ enum PackageStatus {
   CANCELLED
 }
 
+enum PaymentPlanType {
+  FULL_PAYMENT
+  INSTALLMENT
+}
+
 enum BoosterType {
   NO // Nitric Oxide
   GT // Glutathione
@@ -587,6 +592,11 @@ model MemberPackage {
   discountNote     String?
   notes            String?
   status           PackageStatus @default(PENDING_PAYMENT)
+  paymentPlanType  PaymentPlanType @default(FULL_PAYMENT)
+  installmentTotal Int?
+  installmentSchedule Json?
+  totalVerifiedPaid Decimal @default(0) @db.Decimal(12, 2)
+  paymentPlanStatus String?
   boosterType      String?
   serviceType      String? // HC, PS, PHC, PTY, PDA
   purchaseGroupId  String? // Group BASIC + BOOSTER purchased together
@@ -656,6 +666,11 @@ model MemberAddOn {
   pricePerUnit Decimal       @db.Decimal(12, 2)
   totalPrice   Decimal       @db.Decimal(12, 2)
   status       PackageStatus @default(PENDING_PAYMENT)
+  paymentPlanType  PaymentPlanType @default(FULL_PAYMENT)
+  installmentTotal Int?
+  installmentSchedule Json?
+  totalVerifiedPaid Decimal @default(0) @db.Decimal(12, 2)
+  paymentPlanStatus String?
   notes        String?
 
   // Payment proof (bukti pembayaran)
@@ -778,6 +793,19 @@ model Invoice {
 
   // Status and dates
   status      InvoiceStatus @default(DRAFT)
+  paymentPlanType PaymentPlanType @default(FULL_PAYMENT)
+  paymentGroupId String?
+  installmentNumber Int?
+  installmentTotal Int?
+  installmentSchedule Json?
+  totalPurchaseAmount Decimal? @db.Decimal(12, 2)
+  installmentAmount Decimal? @db.Decimal(12, 2)
+  carryOverAmount Decimal? @default(0) @db.Decimal(12, 2)
+  creditAmount Decimal? @default(0) @db.Decimal(12, 2)
+  actualPaidAmount Decimal? @db.Decimal(12, 2)
+  paymentVerificationStatus PaymentVerificationStatus @default(PENDING)
+  paymentRejectionReason String?
+  isAdjustment Boolean @default(false)
   dueDate     DateTime?
   paidAt      DateTime?
   cancelledAt DateTime?
@@ -806,6 +834,8 @@ model Invoice {
   @@index([branchId, status])
   @@index([invoiceNumber])
   @@index([status, dueDate])
+  @@index([paymentGroupId, installmentNumber])
+  @@index([paymentPlanType])
   @@index([createdAt])
   @@map("invoices")
 }
@@ -958,13 +988,14 @@ model TreatmentSession {
   nurse          User           @relation("SessionNurse", fields: [nurseId], references: [id])
   boosterPackage MemberPackage? @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
 
-  therapyPlan TherapyPlan?
-  vitalSigns  VitalSign[]
-  infusion    InfusionExecution?
-  materials   MaterialUsage[]
-  photo       SessionPhoto?
-  emrNotes    EMRNote[]
-  evaluation  DoctorEvaluation?
+  therapyPlan       TherapyPlan?
+  vitalSigns        VitalSign[]
+  infusion          InfusionExecution?
+  materials         MaterialUsage[]
+  photo             SessionPhoto?
+  supportingPhotos  SessionSupportingPhoto[]
+  emrNotes          EMRNote[]
+  evaluation        DoctorEvaluation?
 
   // Multiple doctors and nurses support
   sessionDoctors SessionDoctor[]
@@ -1193,6 +1224,24 @@ model SessionPhoto {
   @@map("session_photos")
 }
 
+model SessionSupportingPhoto {
+  id                 String   @id @default(cuid())
+  treatmentSessionId String
+  fileUrl            String
+  fileName           String
+  fileSize           Int
+  mimeType           String
+  description        String?  @db.Text
+  uploadedBy         String
+  createdAt          DateTime @default(now())
+
+  session TreatmentSession @relation(fields: [treatmentSessionId], references: [id], onDelete: Cascade)
+
+  @@index([treatmentSessionId])
+  @@index([createdAt])
+  @@map("session_supporting_photos")
+}
+
 model EMRNote {
   id                 String      @id @default(cuid())
   treatmentSessionId String
@@ -1213,6 +1262,8 @@ model DoctorEvaluation {
   id                 String   @id @default(cuid())
   evaluationCode     String   @unique
   treatmentSessionId String   @unique
+  keluhan            String?  @db.Text
+  rekomendasi        String?  @db.Text
   subjective         String?  @db.Text
   objective          String?  @db.Text
   assessment         String?  @db.Text

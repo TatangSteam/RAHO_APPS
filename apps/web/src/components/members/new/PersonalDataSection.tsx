@@ -287,16 +287,15 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
         {/* Kode Pos - 4 cols */}
         <div className="form-col-4">
           <label className="form-label">
-            Kode Pos <span style={{ color: '#ef4444' }}>*</span>
+            Kode Pos
           </label>
           <input
             type="text"
             name="postalCode"
             value={formData.postalCode || ''}
             onChange={onChange}
-            required
             className="form-input"
-            placeholder="12345"
+            placeholder="12345 (opsional)"
             maxLength={5}
           />
         </div>

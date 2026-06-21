@@ -65,7 +65,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   
   // Check if current user can edit diagnosis based on their role
-  const canEditDiagnosis = user?.role && ['DOCTOR', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role);
+  const canEditDiagnosis = user?.role && ['DOCTOR', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDiagnosis, setEditingDiagnosis] = useState<Diagnosis | null>(null);

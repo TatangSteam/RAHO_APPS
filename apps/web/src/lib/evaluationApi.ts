@@ -3,6 +3,8 @@ import { api } from './api';
 export interface DoctorEvaluation {
   id: string;
   evaluationCode: string;
+  keluhan: string | null;
+  rekomendasi: string | null;
   subjective: string | null;
   objective: string | null;
   assessment: string | null;
@@ -14,11 +16,13 @@ export interface DoctorEvaluation {
 }
 
 export interface CreateEvaluationInput {
-  subjective?: string;
-  objective?: string;
-  assessment?: string;
-  plan?: string;
-  generalNotes?: string;
+  keluhan?: string | null;
+  rekomendasi?: string | null;
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  generalNotes?: string | null;
   writtenBy: string;
 }
 

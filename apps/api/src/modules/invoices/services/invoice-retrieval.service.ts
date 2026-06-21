@@ -69,6 +69,7 @@ export class InvoiceRetrievalService {
           },
         },
       },
+      orderBy: { createdAt: 'desc' },
     });
 
     if (!invoice) {
@@ -264,6 +265,18 @@ export class InvoiceRetrievalService {
       
       // Status
       status: invoice.status,
+      paymentPlanType: invoice.paymentPlanType,
+      paymentGroupId: invoice.paymentGroupId || undefined,
+      installmentNumber: invoice.installmentNumber || undefined,
+      installmentTotal: invoice.installmentTotal || undefined,
+      totalPurchaseAmount: invoice.totalPurchaseAmount ? Number(invoice.totalPurchaseAmount) : undefined,
+      installmentAmount: invoice.installmentAmount ? Number(invoice.installmentAmount) : undefined,
+      carryOverAmount: invoice.carryOverAmount ? Number(invoice.carryOverAmount) : undefined,
+      creditAmount: invoice.creditAmount ? Number(invoice.creditAmount) : undefined,
+      actualPaidAmount: invoice.actualPaidAmount ? Number(invoice.actualPaidAmount) : undefined,
+      paymentVerificationStatus: invoice.paymentVerificationStatus,
+      paymentRejectionReason: invoice.paymentRejectionReason || undefined,
+      isAdjustment: Boolean(invoice.isAdjustment),
       dueDate: invoice.dueDate?.toISOString(),
       paidAt: invoice.paidAt?.toISOString(),
       cancelledAt: invoice.cancelledAt?.toISOString(),

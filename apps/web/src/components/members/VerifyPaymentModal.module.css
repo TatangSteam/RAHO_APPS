@@ -262,6 +262,28 @@
   color: var(--text-muted);
 }
 
+.formInput {
+  width: 100%;
+  padding: 12px;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.formInput::placeholder {
+  color: var(--text-muted);
+}
+
 /* Modal Footer */
 .modalFooter {
   display: flex;
@@ -335,4 +357,3 @@
     transform: translateY(0);
   }
 }
-

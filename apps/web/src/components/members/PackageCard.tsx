@@ -163,6 +163,22 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     return null;
   };
 
+  const getPaymentPlanInfo = (item: any, totalPrice: number) => {
+    if (item?.paymentPlanType !== 'INSTALLMENT') return null;
+
+    const paid = Number(item.totalVerifiedPaid || 0);
+    const installmentTotal = item.installmentTotal || '-';
+    const planStatus = item.paymentPlanStatus === 'PAID'
+      ? 'Lunas semua termin'
+      : 'Aktif - cicilan berjalan';
+
+    return (
+      <div className={styles.discountInfo}>
+        Termin {installmentTotal}x • {planStatus} • Terverifikasi {formatCurrency(paid)} / {formatCurrency(totalPrice)}
+      </div>
+    );
+  };
+
   const isGroup = 'isGroup' in pkg && pkg.isGroup;
   const isAddOn = 'isAddOn' in pkg && pkg.isAddOn;
 
@@ -271,6 +287,18 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                   packageCode={addon.addOnCode}
                   status={addon.status}
                 />
+                {addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onVerifyPayment(addon.addOnId, addon.status, addon.paymentProofUrl, addon.paymentProofFileName);
+                    }}
+                    className={styles.verifyButton}
+                    style={{ marginTop: 0 }}
+                  >
+                    ✅ Verify Termin Berikutnya
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -287,6 +315,9 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     const groupStatus = basics[0]?.status || boosters[0]?.status || groupAddOns[0]?.status;
     const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
+    const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item: any) => (
+      item?.paymentPlanType === 'INSTALLMENT' && item?.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
+    ));
     
     // Calculate total prices for all packages and add-ons
     const totalBasicPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
@@ -516,6 +547,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 {formatCurrency(totalFinalPrice)}
               </div>
             </div>
+            {getPaymentPlanInfo(basics[0] || boosters[0] || groupAddOns[0], totalFinalPrice)}
 
             {/* Actions */}
             {anyPending && (
@@ -588,6 +620,24 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'ACTIVE'}
                 />
+                {anyActiveInstallment && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const firstItem: any = basics[0] || boosters[0] || groupAddOns[0];
+                      onVerifyPayment(
+                        firstItem?.packageId || firstItem?.addOnId || '',
+                        firstItem?.status || 'ACTIVE',
+                        firstItem?.paymentProofUrl,
+                        firstItem?.paymentProofFileName
+                      );
+                    }}
+                    className={styles.verifyButton}
+                    style={{ marginTop: 0 }}
+                  >
+                    ✅ Verify Termin Berikutnya
+                  </button>
+                )}
                 {onRefundPackage && basics[0] && (
                   <button
                     onClick={(e) => {
@@ -732,6 +782,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
               {formatCurrency(standaloneFinalPrice)}
             </div>
           </div>
+          {getPaymentPlanInfo(memberPkg, standaloneFinalPrice)}
 
           {/* Actions */}
           {(memberPkg.status === 'PENDING_PAYMENT' || memberPkg.status === 'WAITING_VERIFICATION') && (
@@ -796,6 +847,18 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 packageCode={memberPkg.packageCode}
                 status={memberPkg.status}
               />
+              {memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onVerifyPayment(memberPkg.packageId, memberPkg.status, memberPkg.paymentProofUrl, memberPkg.paymentProofFileName);
+                  }}
+                  className={styles.verifyButton}
+                  style={{ marginTop: 0 }}
+                >
+                  ✅ Verify Termin Berikutnya
+                </button>
+              )}
               {onRefundPackage && (
                 <button
                   onClick={(e) => {

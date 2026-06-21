@@ -22,8 +22,8 @@ const ALLSTAFF = [
 
 const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 
-// Roles that can edit therapy plans (SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, DOCTOR)
-const THERAPY_PLAN_EDITORS = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.DOCTOR];
+// Roles that can edit therapy plans (SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR)
+const THERAPY_PLAN_EDITORS = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR];
 
 // GET /api/v1/members - List members
 router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(controller));

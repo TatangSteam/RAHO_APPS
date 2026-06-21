@@ -8,6 +8,8 @@ import { devError } from '@/lib/logger';
 
 interface Evaluation {
   id: string;
+  keluhan: string | null;
+  rekomendasi: string | null;
   subjective: string | null;
   objective: string | null;
   assessment: string | null;
@@ -33,12 +35,20 @@ export default function Step9Evaluation({
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    subjective: '',
-    objective: '',
-    assessment: '',
-    plan: '',
-    generalNotes: '',
+    subjective: evaluation?.subjective || '',
+    objective: evaluation?.objective || '',
+    assessment: evaluation?.assessment || '',
+    plan: evaluation?.plan || '',
+    generalNotes: evaluation?.generalNotes || '',
   });
+
+  const hasDoctorEvaluation = !!evaluation && [
+    evaluation.subjective,
+    evaluation.objective,
+    evaluation.assessment,
+    evaluation.plan,
+    evaluation.generalNotes,
+  ].some((value) => typeof value === 'string' && value.trim().length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,10 +63,20 @@ export default function Step9Evaluation({
     setLoading(true);
 
     try {
-      await evaluationApi.createEvaluation(sessionId, {
-        ...formData,
+      const payload = {
+        subjective: formData.subjective.trim() || null,
+        objective: formData.objective.trim() || null,
+        assessment: formData.assessment.trim() || null,
+        plan: formData.plan.trim() || null,
+        generalNotes: formData.generalNotes.trim() || null,
         writtenBy: user?.userId || '',
-      });
+      };
+
+      if (evaluation) {
+        await evaluationApi.updateEvaluation(sessionId, payload);
+      } else {
+        await evaluationApi.createEvaluation(sessionId, payload);
+      }
 
       showToast.success('Evaluasi dokter berhasil disimpan');
       onComplete();
@@ -104,7 +124,7 @@ export default function Step9Evaluation({
     );
   }
 
-  if (evaluation) {
+  if (hasDoctorEvaluation) {
     return (
       <div style={{
         padding: '24px',
@@ -147,7 +167,7 @@ export default function Step9Evaluation({
               borderRadius: 'var(--radius-md)'
             }}>
               <p style={{ fontSize: '12px', fontWeight: '700', color: '#94a3b8', marginBottom: '8px' }}>
-                SUBJECTIVE (Keluhan Pasien)
+                SUBJECTIVE (Data Subjektif)
               </p>
               <p style={{ fontSize: '14px', color: '#f1f5f9', lineHeight: '1.6', whiteSpace: 'pre-wrap' }}>
                 {evaluation.subjective}
@@ -259,13 +279,13 @@ export default function Step9Evaluation({
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '13px', fontWeight: '700', color: '#cbd5e1', marginBottom: '8px' }}>
-            Subjective (Keluhan Pasien)
+            Subjective (Data Subjektif)
           </label>
           <textarea
             value={formData.subjective}
             onChange={(e) => setFormData({ ...formData, subjective: e.target.value })}
             rows={3}
-            placeholder="Keluhan yang disampaikan pasien..."
+            placeholder="Data subjektif dari pasien..."
             style={{
               width: '100%',
               padding: '12px',

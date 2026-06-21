@@ -15,6 +15,7 @@ import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
 import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
+import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
 
 interface CreateSessionModalProps {
   isOpen: boolean;
@@ -1400,28 +1401,42 @@ export default function CreateSessionModal({
                 </div>
               </form>
             ) : (
-              /* Therapy Plan Detail Tab */
+              /* Therapy Plan Detail Tab - Table View */
               <div className="space-y-4">
                 {selectedPlan ? (
                   <>
-                    <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
-                      <h3 className="text-sm font-bold text-amber-700 dark:text-amber-400 mb-2">
-                        Terapi #{selectedPlan.planNumber || '-'}
+                    {/* Set Header */}
+                    <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                      <h3 className="text-sm font-bold text-blue-700 dark:text-blue-400 mb-1">
+                        📋 {selectedPlan.setName || `Set v${selectedPlan.setVersion || selectedPlan.version || 1}`}
                       </h3>
-                      <p className="text-xs text-amber-600 dark:text-amber-400/80">
-                        {selectedPlan.setName || `Set v${selectedPlan.setVersion || selectedPlan.version || 1}`} - Dibuat: {new Date(selectedPlan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}
+                      <p className="text-xs text-blue-600 dark:text-blue-400/80">
+                        {(() => {
+                          const setKey = getPlanSetKey(selectedPlan);
+                          const setData = groupedTherapyPlans[setKey];
+                          const plansCount = setData?.plans.length || 0;
+                          return `${plansCount} Terapi dalam Set - Dibuat: ${new Date(selectedPlan.createdAt).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })}`;
+                        })()}
                       </p>
                     </div>
 
-                    <TherapyPlanDoseTable plan={selectedPlan} compact />
-
-                    {/* Notes */}
-                    {selectedPlan.keterangan && (
-                      <div className="p-4 rounded-xl bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
-                        <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-2">Keterangan</h4>
-                        <p className="text-xs text-neutral-600 dark:text-neutral-400">{selectedPlan.keterangan}</p>
-                      </div>
-                    )}
+                    {/* Table View - All therapy plans in one table */}
+                    {(() => {
+                      const setKey = getPlanSetKey(selectedPlan);
+                      const setData = groupedTherapyPlans[setKey];
+                      const plansInSet = setData?.plans || [selectedPlan];
+                      
+                      return (
+                        <TherapyPlanListTable
+                          plans={plansInSet}
+                          memberId={memberId}
+                          onOpenSession={() => {}}
+                          hideInfusKe={true}
+                          hideStatus={true}
+                          hideAksi={true}
+                        />
+                      );
+                    })()}
                   </>
                 ) : (
                   <div className="flex items-center justify-center py-12">

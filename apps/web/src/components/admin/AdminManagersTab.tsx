@@ -178,10 +178,6 @@ export const AdminManagersTab: React.FC = () => {
             <Users size={48} />
             <h3>Belum Ada Admin Manager</h3>
             <p>Mulai dengan menambahkan Admin Manager pertama Anda.</p>
-            <button className={styles.addButton} onClick={() => setShowCreateModal(true)}>
-              <span className={styles.addIcon}>+</span>
-              Tambah Admin Manager
-            </button>
           </div>
         ) : (
           <>

@@ -135,6 +135,8 @@ export default function SessionsPage() {
     materialsSummary: false,
     
     // Evaluation (SOAP)
+    keluhan: false,
+    rekomendasi: false,
     subjective: false,
     objective: false,
     assessment: false,
@@ -267,6 +269,8 @@ export default function SessionsPage() {
       label: 'Evaluasi Dokter',
       icon: '📄',
       fields: [
+        { key: 'keluhan', label: 'Keluhan' },
+        { key: 'rekomendasi', label: 'Rekomendasi' },
         { key: 'subjective', label: 'Subjective' },
         { key: 'objective', label: 'Objective' },
         { key: 'assessment', label: 'Assessment' },
@@ -652,7 +656,7 @@ export default function SessionsPage() {
         </button>
       </div>
 
-      {/* Sessions List */}
+      {/* Sessions Table */}
       {loading ? (
         <div className={styles.loading}>
           <div className={styles.spinner}></div>
@@ -674,90 +678,73 @@ export default function SessionsPage() {
           )}
         </div>
       ) : (
-        <div className={styles.sessionsList}>
-          {sessions.map((sessionDetail) => (
-            <div
-              key={sessionDetail.session.sessionId}
-              className={`${styles.sessionCard} ${sessionDetail.session.isCompleted ? styles.completed : styles.incomplete}`}
-              onClick={() => handleSessionClick(sessionDetail.session.sessionId)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  handleSessionClick(sessionDetail.session.sessionId);
-                }
-              }}
-            >
-              <div className={styles.sessionHeader}>
-                <div className={styles.sessionCode}>
-                  {sessionDetail.session.sessionCode}
-                </div>
-                <div
-                  className={`${styles.statusBadge} ${
-                    sessionDetail.session.isCompleted ? styles.statusCompleted : styles.statusIncomplete
-                  }`}
+        <div className={styles.tableContainer}>
+          <table className={styles.sessionsTable}>
+            <thead>
+              <tr>
+                <th>Kode Sesi</th>
+                <th>Status</th>
+                <th>Member</th>
+                <th>Tanggal</th>
+                <th>Waktu</th>
+                <th>Sesi #</th>
+                <th>Tipe</th>
+                <th>Dokter</th>
+                <th>Nakes</th>
+                <th>Cabang</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((sessionDetail) => (
+                <tr
+                  key={sessionDetail.session.sessionId}
+                  className={`${styles.tableRow} ${sessionDetail.session.isCompleted ? styles.completed : styles.incomplete}`}
+                  onClick={() => handleSessionClick(sessionDetail.session.sessionId)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      handleSessionClick(sessionDetail.session.sessionId);
+                    }
+                  }}
                 >
-                  {sessionDetail.session.isCompleted ? '✓ Selesai' : '⏳ Belum Selesai'}
-                </div>
-              </div>
-
-              <div className={styles.sessionBody}>
-                <div className={styles.memberInfo}>
-                  <span className={styles.memberName}>{sessionDetail.session.member.fullName}</span>
-                  <span className={styles.memberNo}>{sessionDetail.session.member.memberNo}</span>
-                </div>
-
-                <div className={styles.sessionMeta}>
-                  <div className={styles.metaItem}>
-                    <span className={styles.metaLabel}>Tanggal</span>
-                    <span className={styles.metaValue}>
-                      {formatDate(sessionDetail.session.treatmentDate)}
+                  <td className={styles.sessionCodeCell}>
+                    <span className={styles.sessionCode}>{sessionDetail.session.sessionCode}</span>
+                    {sessionDetail.session.boosterPackage?.boosterType && (
+                      <span className={styles.boosterTag}>⚡ {sessionDetail.session.boosterPackage.boosterType}</span>
+                    )}
+                  </td>
+                  <td>
+                    <span
+                      className={`${styles.statusBadge} ${
+                        sessionDetail.session.isCompleted ? styles.statusCompleted : styles.statusIncomplete
+                      }`}
+                    >
+                      {sessionDetail.session.isCompleted ? '✓ Selesai' : '⏳ Belum Selesai'}
                     </span>
-                  </div>
-                  <div className={styles.metaItem}>
-                    <span className={styles.metaLabel}>Waktu</span>
-                    <span className={styles.metaValue}>
-                      {formatTime(sessionDetail.session.treatmentDate)}
-                    </span>
-                  </div>
-                  <div className={styles.metaItem}>
-                    <span className={styles.metaLabel}>Sesi Global</span>
-                    <span className={styles.metaValue} style={{ fontWeight: '600', color: 'var(--color-primary)' }}>
-                      #{sessionDetail.session.infusKe}
-                    </span>
-                  </div>
-                  {sessionDetail.session.branchInfusKe && sessionDetail.session.branchInfusKe !== sessionDetail.session.infusKe && (
-                    <div className={styles.metaItem}>
-                      <span className={styles.metaLabel}>Sesi Cabang</span>
-                      <span className={styles.metaValue}>#{sessionDetail.session.branchInfusKe}</span>
-                    </div>
-                  )}
-                  <div className={styles.metaItem}>
-                    <span className={styles.metaLabel}>Tipe</span>
-                    <span className={styles.metaValue}>
-                      {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On-Site' : '🏠 Home Care'}
-                    </span>
-                  </div>
-                </div>
-
-                {sessionDetail.session.boosterPackage?.boosterType && (
-                  <div className={styles.boosterBadge}>
-                    ⚡ Booster: {sessionDetail.session.boosterPackage.boosterType}
-                  </div>
-                )}
-              </div>
-
-              <div className={styles.sessionFooter}>
-                <div className={styles.staffInfo}>
-                  <span>👨‍⚕️ {sessionDetail.session.doctor?.fullName || '-'}</span>
-                  <span>👩‍⚕️ {sessionDetail.session.nurse?.fullName || '-'}</span>
-                </div>
-                <div className={styles.branchInfo}>
-                  📍 {sessionDetail.session.branchName || '-'}
-                </div>
-              </div>
-            </div>
-          ))}
+                  </td>
+                  <td className={styles.memberCell}>
+                    <div className={styles.memberName}>{sessionDetail.session.member.fullName}</div>
+                    <div className={styles.memberNo}>{sessionDetail.session.member.memberNo}</div>
+                  </td>
+                  <td className={styles.dateCell}>{formatDate(sessionDetail.session.treatmentDate)}</td>
+                  <td className={styles.timeCell}>{formatTime(sessionDetail.session.treatmentDate)}</td>
+                  <td className={styles.sessionNumberCell}>
+                    <div className={styles.sessionGlobal}>#{sessionDetail.session.infusKe}</div>
+                    {sessionDetail.session.branchInfusKe && sessionDetail.session.branchInfusKe !== sessionDetail.session.infusKe && (
+                      <div className={styles.sessionBranch}>Cabang: #{sessionDetail.session.branchInfusKe}</div>
+                    )}
+                  </td>
+                  <td className={styles.typeCell}>
+                    {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On-Site' : '🏠 Home Care'}
+                  </td>
+                  <td className={styles.staffCell}>{sessionDetail.session.doctor?.fullName || '-'}</td>
+                  <td className={styles.staffCell}>{sessionDetail.session.nurse?.fullName || '-'}</td>
+                  <td className={styles.branchCell}>{sessionDetail.session.branchName || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
