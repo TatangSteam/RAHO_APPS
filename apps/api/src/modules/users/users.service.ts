@@ -174,11 +174,17 @@ export async function createUserService(
   console.log('🔍 [UserService] Caller role:', callerRole);
   console.log('🔍 [UserService] Caller branchId:', callerBranchId);
 
-  // Check email uniqueness
-  const existing = await prisma.user.findUnique({ where: { email: input.email } });
+  // Check email uniqueness (only check active users)
+  // Inactive users are soft-deleted and their emails can be reused
+  const existing = await prisma.user.findFirst({ 
+    where: { 
+      email: input.email,
+      isActive: true
+    } 
+  });
   if (existing) {
-    console.log('❌ [UserService] Email already exists:', input.email);
-    throw errors.conflict('USER_EMAIL_DUPLICATE', 'Email sudah digunakan.');
+    console.log('❌ [UserService] Email already exists (active user):', input.email);
+    throw errors.conflict('USER_EMAIL_DUPLICATE', 'Email sudah digunakan oleh user aktif lain.');
   }
 
   // If caller is ADMIN_CABANG, enforce branch assignment to their branch
@@ -261,9 +267,15 @@ export async function updateUserService(
   }
 
   if (input.email !== undefined && input.email !== existing.email) {
-    const emailOwner = await prisma.user.findUnique({ where: { email: input.email } });
+    // Only check active users - inactive users' emails can be reused
+    const emailOwner = await prisma.user.findFirst({ 
+      where: { 
+        email: input.email,
+        isActive: true
+      } 
+    });
     if (emailOwner && emailOwner.id !== userId) {
-      throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user lain.');
+      throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user aktif lain.');
     }
   }
 

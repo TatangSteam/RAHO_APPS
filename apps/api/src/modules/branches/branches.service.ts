@@ -296,7 +296,6 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
       };
     })
   );
-
   return {
     branches: branchesWithCounts,
     total,
@@ -850,23 +849,23 @@ export async function getBranchSessionsService(
     }),
   ]);
 
-  // Transform data
+  // Transform data with null safety for all optional relations
   const sessionsFormatted = sessions.map((s) => ({
     id: s.id,
     sessionCode: s.sessionCode,
     date: s.sessionDate,
     status: s.status,
-    member: {
+    member: s.member ? {
       id: s.member.id,
       fullName: s.member.profile?.fullName || 'N/A',
       memberNo: s.member.memberNo,
-    },
-    doctor: {
+    } : null,
+    doctor: s.doctor ? {
       fullName: s.doctor.profile?.fullName || 'N/A',
-    },
-    nurse: {
+    } : null,
+    nurse: s.nurse ? {
       fullName: s.nurse.profile?.fullName || 'N/A',
-    },
+    } : null,
     package: s.memberPackage ? {
       name: s.memberPackage.name,
     } : null,

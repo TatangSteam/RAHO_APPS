@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { ShipmentStatus } from '@prisma/client';
+import { ShipmentStatus, StockMutationType } from '@prisma/client';
 
 /**
  * Service for retrieving shipments
@@ -96,7 +96,39 @@ export class ShipmentRetrievalService {
       orderBy: { createdAt: 'desc' },
     });
 
-    return shipments.map(shipment => this.formatShipment(shipment));
+    // Query stock mutations separately for all shipments
+    const shipmentIds = shipments.map(s => s.id);
+    let stockMutationsMap: Map<string, any> = new Map();
+
+    if (shipmentIds.length > 0) {
+      const stockMutations = await prisma.stockMutation.findMany({
+        where: {
+          referenceType: { in: ['SHIPMENT', 'Shipment'] },
+          referenceId: { in: shipmentIds },
+          type: StockMutationType.RECEIVED,
+        },
+        select: {
+          id: true,
+          referenceId: true,
+          stockBefore: true,
+          stockAfter: true,
+          quantity: true,
+          inventoryItem: {
+            select: {
+              masterProductId: true,
+            },
+          },
+        },
+      });
+
+      // Create a map: shipmentId-masterProductId -> mutation
+      stockMutations.forEach(mutation => {
+        const key = `${mutation.referenceId}-${mutation.inventoryItem.masterProductId}`;
+        stockMutationsMap.set(key, mutation);
+      });
+    }
+
+    return shipments.map(shipment => this.formatShipment(shipment, stockMutationsMap));
   }
 
   /**
@@ -150,7 +182,7 @@ export class ShipmentRetrievalService {
   /**
    * Format shipment for list response
    */
-  private formatShipment(shipment: any) {
+  private formatShipment(shipment: any, stockMutationsMap?: Map<string, any>) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -187,7 +219,20 @@ export class ShipmentRetrievalService {
         // requestedQty in ShipmentItem is the original request amount (stored for reference)
         // sentQty is the amount to send (after overstock deduction = finalQty)
         const requestedQty = item.requestedQty ? Number(item.requestedQty) : originalRequestedQty;
-        
+
+        // Get stock before/after from stock mutations (RECEIVED records)
+        let stockBefore: number | null = null;
+        let stockAfter: number | null = null;
+
+        if (stockMutationsMap) {
+          const key = `${shipment.id}-${item.masterProductId}`;
+          const mutation = stockMutationsMap.get(key);
+          if (mutation) {
+            stockBefore = mutation.stockBefore ? Number(mutation.stockBefore) : null;
+            stockAfter = mutation.stockAfter ? Number(mutation.stockAfter) : null;
+          }
+        }
+
         return {
           id: item.id,
           masterProductId: item.masterProductId,
@@ -200,6 +245,8 @@ export class ShipmentRetrievalService {
           overstockQty: item.overstockQty ? Number(item.overstockQty) : null, // New overstock from this shipment
           overstockReason: item.overstockReason || null, // Reason for overstock
           receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
+          stockBefore, // Stock quantity at destination branch before receiving
+          stockAfter, // Stock quantity at destination branch after receiving
           unit: item.masterProduct.baseUnit,
         };
       }),

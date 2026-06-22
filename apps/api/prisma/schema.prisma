@@ -921,6 +921,7 @@ enum InvoiceStatus {
   DRAFT
   PENDING_PAYMENT
   PAID
+  DEBT
   CANCELLED
   OVERDUE
 }

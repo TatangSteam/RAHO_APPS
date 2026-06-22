@@ -11,8 +11,11 @@ import TabNavigation from './TabNavigation';
 import OverviewTab from './OverviewTab';
 import UsersTab from './UsersTab';
 import MembersTab from './MembersTab';
+import StockTab from './StockTab';
 import { useBranchData } from './useBranchData';
 import styles from './page.module.css';
+
+type BranchTab = 'overview' | 'users' | 'members' | 'stock';
 
 export default function BranchDetailPage() {
   const router = useRouter();
@@ -20,7 +23,7 @@ export default function BranchDetailPage() {
   const branchId = params.branchId as string;
   const { user, accessToken } = useAuthStore();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'members'>('overview');
+  const [activeTab, setActiveTab] = useState<BranchTab>('overview');
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -28,10 +31,12 @@ export default function BranchDetailPage() {
     branch,
     users,
     members,
+    inventory,
     loading,
     loadBranchDetail,
     loadBranchUsers,
     loadBranchMembers,
+    loadBranchInventory,
     toggleUserActive,
   } = useBranchData(branchId, accessToken || '');
 
@@ -56,6 +61,7 @@ export default function BranchDetailPage() {
     loadBranchDetail();
     loadBranchUsers();
     loadBranchMembers();
+    loadBranchInventory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mounted, user, accessToken, branchId]);
 
@@ -101,6 +107,7 @@ export default function BranchDetailPage() {
         activeTab={activeTab}
         usersCount={users.length}
         membersCount={members.length}
+        stockCount={inventory.length}
         onTabChange={setActiveTab}
       />
 
@@ -121,6 +128,13 @@ export default function BranchDetailPage() {
           branchName={branch.name}
           onAddMember={() => router.push('/members/new')}
           onViewMember={(memberId) => router.push(`/members/${memberId}`)}
+        />
+      )}
+
+      {activeTab === 'stock' && (
+        <StockTab
+          inventory={inventory}
+          branchName={branch.name}
         />
       )}
 

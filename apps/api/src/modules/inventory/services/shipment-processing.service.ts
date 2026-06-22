@@ -22,6 +22,15 @@ interface ReceiveShipmentInput {
   notes?: string;
 }
 
+interface ReviewShipmentIssueInput {
+  decision: 'SEND_SHORTAGE' | 'CLOSE_CASE' | 'COMPLETE_CASE';
+  notes?: string;
+  shortageItems?: Array<{
+    masterProductId: string;
+    quantity: number;
+  }>;
+}
+
 /**
  * Service for processing shipments (ship, receive with discrepancy support, overstock handling)
  */
@@ -291,7 +300,7 @@ export class ShipmentProcessingService {
 
     const hasDiscrepancies = input.discrepancies && input.discrepancies.length > 0;
     const newStatus = hasDiscrepancies ? 'RECEIVED_WITH_ISSUE' : 'RECEIVED';
-    const requestStatus = hasDiscrepancies ? 'COMPLETED_WITH_ISSUE' : 'COMPLETED';
+    const requestStatus = hasDiscrepancies ? 'SHIPPED' : 'COMPLETED';
 
     // Track created overstocks for response
     const createdOverstocks: Array<{
@@ -376,7 +385,9 @@ export class ShipmentProcessingService {
             status: requestStatus,
             receivedBy: userId,
             receivedAt: new Date(),
-            receivingNotes: input.notes,
+            receivingNotes: hasDiscrepancies
+              ? `${input.notes || ''}${input.notes ? '\n' : ''}Menunggu review Admin Manager untuk ketidaksesuaian pengiriman.`
+              : input.notes,
           },
         });
       }
@@ -495,6 +506,257 @@ export class ShipmentProcessingService {
   }
 
   /**
+   * Review a shipment that was received with issue.
+   */
+  async reviewShipmentIssue(
+    shipmentId: string,
+    userId: string,
+    input: ReviewShipmentIssueInput
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
+      throw {
+        status: 403,
+        code: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Hanya Super Admin atau Admin Manager yang dapat mereview masalah pengiriman',
+      };
+    }
+
+    const shipment = await prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      include: {
+        items: {
+          include: {
+            masterProduct: true,
+          },
+        },
+        discrepancies: true,
+        fromBranch: true,
+        toBranch: true,
+        stockRequest: true,
+      },
+    });
+
+    if (!shipment) {
+      throw {
+        status: 404,
+        code: 'SHIPMENT_NOT_FOUND',
+        message: 'Pengiriman tidak ditemukan',
+      };
+    }
+
+    if (shipment.status !== 'RECEIVED_WITH_ISSUE') {
+      throw {
+        status: 422,
+        code: 'INVALID_STATUS',
+        message: 'Hanya pengiriman yang diterima dengan masalah yang dapat direview',
+      };
+    }
+
+    if (shipment.approvedAt) {
+      throw {
+        status: 422,
+        code: 'ISSUE_ALREADY_REVIEWED',
+        message: 'Masalah pengiriman ini sudah direview',
+      };
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: shipment.toBranchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda tidak memiliki akses untuk mereview pengiriman cabang ini',
+        };
+      }
+    }
+
+    const decision = input.decision;
+    const reviewNotes = input.notes?.trim();
+    const reviewLine = `[Review Admin Manager] ${
+      decision === 'SEND_SHORTAGE'
+        ? 'Kirim kekurangan barang'
+        : decision === 'CLOSE_CASE'
+          ? 'Kasus ditutup dengan catatan'
+          : 'Kasus diselesaikan'
+    }${reviewNotes ? ` - ${reviewNotes}` : ''}`;
+    const mergedNotes = [shipment.notes, reviewLine].filter(Boolean).join('\n');
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (decision === 'SEND_SHORTAGE') {
+        const shortageMap = new Map<string, number>();
+
+        if (input.shortageItems?.length) {
+          input.shortageItems.forEach(item => {
+            if (item.quantity > 0) {
+              shortageMap.set(item.masterProductId, item.quantity);
+            }
+          });
+        } else {
+          shipment.items.forEach(item => {
+            if (item.receivedQty === null || item.receivedQty === undefined) {
+              return;
+            }
+
+            const shortageQty = Number(item.sentQty) - Number(item.receivedQty);
+            if (shortageQty > 0) {
+              shortageMap.set(item.masterProductId, shortageQty);
+            }
+          });
+
+          if (shortageMap.size === 0) {
+            const latestShortageByProduct = new Map<string, any>();
+
+            shipment.discrepancies.forEach(discrepancy => {
+              if (discrepancy.discrepancyType !== 'SHORTAGE') {
+                return;
+              }
+
+              const existing = latestShortageByProduct.get(discrepancy.masterProductId);
+              const existingTime = existing?.createdAt ? new Date(existing.createdAt).getTime() : 0;
+              const currentTime = discrepancy.createdAt ? new Date(discrepancy.createdAt).getTime() : 0;
+
+              if (!existing || currentTime >= existingTime) {
+                latestShortageByProduct.set(discrepancy.masterProductId, discrepancy);
+              }
+            });
+
+            latestShortageByProduct.forEach(discrepancy => {
+              const shortageQty = Number(discrepancy.expectedQty) - Number(discrepancy.receivedQty);
+              if (shortageQty > 0) {
+                shortageMap.set(discrepancy.masterProductId, shortageQty);
+              }
+            });
+          }
+        }
+
+        if (shortageMap.size === 0) {
+          throw {
+            status: 422,
+            code: 'NO_SHORTAGE_TO_SEND',
+            message: 'Tidak ada kekurangan barang yang bisa dikirim ulang',
+          };
+        }
+
+        for (const item of shipment.items) {
+          const shortageQty = shortageMap.get(item.masterProductId) || 0;
+          await tx.shipmentItem.update({
+            where: { id: item.id },
+            data: {
+              sentQty: shortageQty,
+              requestedQty: shortageQty,
+              receivedQty: null,
+              overstockQty: null,
+              overstockReason: null,
+            },
+          });
+        }
+
+        if (shipment.stockRequestId) {
+          await tx.stockRequest.update({
+            where: { id: shipment.stockRequestId },
+            data: {
+              status: 'APPROVED',
+              receivingNotes: mergedNotes,
+            },
+          });
+        }
+
+        return await tx.shipment.update({
+          where: { id: shipmentId },
+          data: {
+            status: 'PREPARING',
+            shippedAt: null,
+            shippedBy: null,
+            shipmentPhotoUrl: null,
+            shipmentPhotoName: null,
+            receivedAt: null,
+            receivedBy: null,
+            notes: mergedNotes,
+          },
+          include: {
+            items: {
+              include: {
+                masterProduct: true,
+              },
+            },
+            fromBranch: true,
+            toBranch: true,
+            discrepancies: true,
+          },
+        });
+      }
+
+      const requestStatus = decision === 'COMPLETE_CASE' ? 'COMPLETED' : 'COMPLETED_WITH_ISSUE';
+      const shipmentStatus = decision === 'COMPLETE_CASE' ? 'RECEIVED' : 'RECEIVED_WITH_ISSUE';
+
+      if (shipment.stockRequestId) {
+        await tx.stockRequest.update({
+          where: { id: shipment.stockRequestId },
+          data: {
+            status: requestStatus,
+            receivingNotes: mergedNotes,
+          },
+        });
+      }
+
+      return await tx.shipment.update({
+        where: { id: shipmentId },
+        data: {
+          status: shipmentStatus,
+          approvedAt: new Date(),
+          approvedBy: userId,
+          notes: mergedNotes,
+        },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+            },
+          },
+          fromBranch: true,
+          toBranch: true,
+          discrepancies: true,
+        },
+      });
+    });
+
+    await logAudit({
+      userId,
+      branchId: shipment.toBranchId,
+      action: AuditAction.UPDATE,
+      resource: 'Shipment',
+      resourceId: shipmentId,
+      meta: {
+        action: 'REVIEW_SHIPMENT_ISSUE',
+        shipmentCode: shipment.shipmentCode,
+        decision,
+        notes: reviewNotes,
+      },
+    });
+
+    return {
+      shipment: this.formatShipment(result),
+      message: decision === 'SEND_SHORTAGE'
+        ? 'Masalah pengiriman direview. Pengiriman kekurangan barang siap disiapkan ulang.'
+        : decision === 'CLOSE_CASE'
+          ? 'Kasus pengiriman ditutup dengan catatan.'
+          : 'Kasus pengiriman diselesaikan.',
+    };
+  }
+
+  /**
    * Format shipment for response
    */
   private formatShipment(shipment: any) {
@@ -530,6 +792,8 @@ export class ShipmentProcessingService {
         discrepancyType: d.discrepancyType,
         notes: d.notes,
         photoUrl: d.photoUrl,
+        photoFileName: d.photoFileName,
+        createdAt: d.createdAt?.toISOString(),
       })) || [],
       shippedBy: shipment.shippedBy,
       shippedAt: shipment.shippedAt?.toISOString(),

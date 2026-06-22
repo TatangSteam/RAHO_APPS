@@ -13,6 +13,7 @@ interface InvoiceItemInput {
 interface CreateInvoiceInput {
   items: InvoiceItemInput[];
   notes?: string;
+  paymentMode?: 'NORMAL' | 'DEBT';
 }
 
 /**
@@ -111,6 +112,7 @@ export class StockRequestApprovalService {
             items: true,
           },
         },
+        shipment: true,
       },
     });
 
@@ -282,9 +284,10 @@ export class StockRequestApprovalService {
       };
     });
     const isFreeRequest = subtotal <= 0;
+    const isDebtRequest = !isFreeRequest && invoiceData.paymentMode === 'DEBT';
     const now = new Date();
-    const senderBranch = isFreeRequest ? await this.getOrCreateExternalBranch() : null;
-    const shipmentCode = isFreeRequest
+    const senderBranch = (isFreeRequest || isDebtRequest) ? await this.getOrCreateExternalBranch() : null;
+    const shipmentCode = (isFreeRequest || isDebtRequest)
       ? await this.generateShipmentCode(senderBranch.id, request.branchId)
       : null;
 
@@ -301,11 +304,15 @@ export class StockRequestApprovalService {
           branchId: request.branchId,
           subtotal,
           totalAmount: subtotal,
-          status: isFreeRequest ? 'PAID' : 'PENDING_PAYMENT',
+          status: isFreeRequest ? 'PAID' : isDebtRequest ? 'DEBT' : 'PENDING_PAYMENT',
           paymentVerificationStatus: isFreeRequest ? 'VERIFIED' : 'PENDING',
           verifiedBy: isFreeRequest ? userId : null,
           verifiedAt: isFreeRequest ? now : null,
-          verificationNotes: isFreeRequest ? 'Invoice gratis - tidak memerlukan bukti pembayaran' : null,
+          verificationNotes: isFreeRequest
+            ? 'Invoice gratis - tidak memerlukan bukti pembayaran'
+            : isDebtRequest
+              ? 'Pembayaran ditandai sebagai utang - bukti pembayaran wajib diupload kemudian'
+              : null,
           paidAt: isFreeRequest ? now : null,
           notes: invoiceData.notes,
           createdBy: userId,
@@ -326,13 +333,15 @@ export class StockRequestApprovalService {
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
         data: {
-          status: isFreeRequest ? 'APPROVED' : 'WAITING_PAYMENT',
+          status: (isFreeRequest || isDebtRequest) ? 'APPROVED' : 'WAITING_PAYMENT',
           reviewedBy: userId,
           reviewedAt: now,
           paymentVerifiedBy: isFreeRequest ? userId : null,
           paymentVerifiedAt: isFreeRequest ? now : null,
           paymentVerificationNotes: isFreeRequest
             ? 'Invoice gratis - tidak memerlukan bukti pembayaran'
+            : isDebtRequest
+              ? 'Pembayaran ditandai sebagai utang - bukti pembayaran wajib diupload kemudian'
             : null,
         },
         include: {
@@ -350,7 +359,7 @@ export class StockRequestApprovalService {
         },
       });
 
-      const shipment = isFreeRequest
+      const shipment = (isFreeRequest || isDebtRequest)
         ? await tx.shipment.create({
             data: {
               shipmentCode,
@@ -358,7 +367,9 @@ export class StockRequestApprovalService {
               toBranchId: request.branchId,
               stockRequestId: requestId,
               status: 'PREPARING',
-              notes: `Pengiriman untuk permintaan ${request.requestCode} (Gratis - tanpa bukti pembayaran)`,
+              notes: isFreeRequest
+                ? `Pengiriman untuk permintaan ${request.requestCode} (Gratis - tanpa bukti pembayaran)`
+                : `Pengiriman untuk permintaan ${request.requestCode} (Utang - bukti pembayaran menyusul)`,
               items: {
                 create: request.items.map(item => ({
                   masterProductId: item.masterProductId,
@@ -394,6 +405,7 @@ export class StockRequestApprovalService {
         totalAmount: subtotal,
         branchType: request.branch.type,
         paymentRequired: !isFreeRequest,
+        paymentMode: isDebtRequest ? 'DEBT' : isFreeRequest ? 'FREE' : 'NORMAL',
         shipmentId: result.shipment?.id,
       },
     });
@@ -403,6 +415,8 @@ export class StockRequestApprovalService {
       invoice: this.formatInvoice(result.invoice),
       message: isFreeRequest
         ? 'Request gratis disetujui dan pengiriman telah dibuat tanpa bukti pembayaran.'
+        : isDebtRequest
+          ? 'Request disetujui sebagai utang. Pengiriman telah dibuat dan bukti pembayaran wajib diupload kemudian.'
         : 'Invoice berhasil dibuat. Menunggu upload bukti pembayaran.',
     };
 
@@ -423,7 +437,147 @@ export class StockRequestApprovalService {
   }
 
   /**
-   * Upload payment proof (by Admin Manager after receiving proof from Admin Cabang externally)
+   * Allow a paid invoice to continue as debt.
+   * The request moves to APPROVED and shipment is created immediately,
+   * while the invoice remains unpaid until proof is uploaded later.
+   */
+  async markPaymentAsDebt(requestId: string, userId: string, notes?: string) {
+    const request = await this.getRequestWithValidation(requestId, ['WAITING_PAYMENT']);
+    await this.validateManagerPermission(userId, request.branchId);
+
+    if (!request.invoice) {
+      throw {
+        status: 422,
+        code: 'INVOICE_NOT_FOUND',
+        message: 'Invoice belum dibuat untuk request ini',
+      };
+    }
+
+    if (Number(request.invoice.totalAmount || 0) <= 0) {
+      throw {
+        status: 422,
+        code: 'FREE_INVOICE_CANNOT_BE_DEBT',
+        message: 'Invoice gratis tidak perlu ditandai sebagai utang',
+      };
+    }
+
+    if (request.invoice.status !== 'PENDING_PAYMENT') {
+      throw {
+        status: 422,
+        code: 'INVALID_INVOICE_STATUS',
+        message: `Invoice tidak dapat dijadikan utang. Status saat ini: ${request.invoice.status}`,
+      };
+    }
+
+    if (request.shipment) {
+      throw {
+        status: 422,
+        code: 'SHIPMENT_ALREADY_EXISTS',
+        message: 'Pengiriman untuk request ini sudah dibuat',
+      };
+    }
+
+    const now = new Date();
+    const senderBranch = await this.getOrCreateExternalBranch();
+    const shipmentCode = await this.generateShipmentCode(senderBranch.id, request.branchId);
+    const debtNote = notes?.trim();
+    const paymentNote = debtNote
+      ? `Pembayaran ditandai sebagai utang - ${debtNote}`
+      : 'Pembayaran ditandai sebagai utang - bukti pembayaran wajib diupload kemudian';
+
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedRequest = await tx.stockRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'APPROVED',
+          paymentVerificationNotes: paymentNote,
+        },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+            },
+          },
+          branch: true,
+          invoice: {
+            include: {
+              items: true,
+            },
+          },
+        },
+      });
+
+      const invoice = await tx.stockRequestInvoice.update({
+        where: { id: request.invoice.id },
+        data: {
+          status: 'DEBT',
+          paymentVerificationStatus: 'PENDING',
+          verificationNotes: paymentNote,
+        },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+            },
+          },
+        },
+      });
+
+      const shipment = await tx.shipment.create({
+        data: {
+          shipmentCode,
+          fromBranchId: senderBranch.id,
+          toBranchId: request.branchId,
+          stockRequestId: requestId,
+          status: 'PREPARING',
+          notes: `Pengiriman untuk permintaan ${request.requestCode} (Utang - bukti pembayaran menyusul)`,
+          items: {
+            create: request.items.map(item => ({
+              masterProductId: item.masterProductId,
+              sentQty: item.finalQty || item.requestedQty,
+              requestedQty: item.requestedQty,
+            })),
+          },
+        },
+        include: {
+          items: {
+            include: {
+              masterProduct: true,
+            },
+          },
+          fromBranch: true,
+          toBranch: true,
+        },
+      });
+
+      return { updatedRequest, invoice, shipment };
+    });
+
+    await logAudit({
+      userId,
+      branchId: request.branchId,
+      action: AuditAction.UPDATE,
+      resource: 'StockRequest',
+      resourceId: requestId,
+      meta: {
+        action: 'MARK_PAYMENT_AS_DEBT',
+        invoiceId: request.invoice.id,
+        invoiceNumber: request.invoice.invoiceNumber,
+        shipmentId: result.shipment.id,
+        notes: debtNote,
+      },
+    });
+
+    return {
+      request: this.formatStockRequest(result.updatedRequest),
+      invoice: this.formatInvoice(result.invoice),
+      shipment: this.formatShipment(result.shipment),
+      message: 'Request disetujui sebagai utang. Pengiriman telah dibuat dan bukti pembayaran wajib diupload kemudian.',
+    };
+  }
+
+  /**
+   * Upload payment proof (by Admin Manager / Super Admin)
    */
   async uploadPaymentProof(
     requestId: string, 
@@ -435,7 +589,30 @@ export class StockRequestApprovalService {
       mimeType: string;
     }
   ) {
-    const request = await this.getRequestWithValidation(requestId, ['WAITING_PAYMENT']);
+    const request = await this.getRequestWithValidation(requestId, [
+      'WAITING_PAYMENT',
+      'APPROVED',
+      'SHIPPED',
+      'COMPLETED',
+      'COMPLETED_WITH_ISSUE',
+    ]);
+    const isDebtRequest = request.invoice?.status === 'DEBT';
+
+    if (request.status !== 'WAITING_PAYMENT' && !isDebtRequest) {
+      throw {
+        status: 422,
+        code: 'INVALID_PAYMENT_UPLOAD_STATUS',
+        message: 'Bukti pembayaran hanya dapat diupload untuk invoice menunggu pembayaran atau invoice utang',
+      };
+    }
+
+    if (request.invoice && Number(request.invoice.totalAmount || 0) <= 0) {
+      throw {
+        status: 422,
+        code: 'FREE_INVOICE_NO_PAYMENT_PROOF',
+        message: 'Invoice gratis tidak memerlukan bukti pembayaran',
+      };
+    }
 
     // Verify user is Admin Manager or Super Admin
     const user = await prisma.user.findUnique({
@@ -481,7 +658,7 @@ export class StockRequestApprovalService {
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
         data: {
-          status: 'PAYMENT_UPLOADED',
+          status: isDebtRequest ? request.status : 'PAYMENT_UPLOADED',
           paymentProofUrl: fileData.url,
           paymentProofFileName: fileData.fileName,
           paymentProofFileSize: fileData.fileSize,
@@ -515,6 +692,8 @@ export class StockRequestApprovalService {
             paymentProofMimeType: fileData.mimeType,
             paymentUploadedAt: new Date(),
             paymentUploadedBy: userId,
+            paymentVerificationStatus: 'PENDING',
+            rejectionReason: null,
           },
         });
       }
@@ -532,6 +711,7 @@ export class StockRequestApprovalService {
       meta: { 
         action: 'UPLOAD_PAYMENT_PROOF',
         fileName: fileData.fileName,
+        paymentMode: isDebtRequest ? 'DEBT' : 'NORMAL',
       },
     });
 
@@ -543,11 +723,27 @@ export class StockRequestApprovalService {
    * Creates shipment after payment confirmation - stock is added when Admin Cabang receives the shipment
    */
   async confirmPayment(requestId: string, userId: string, verificationNotes?: string) {
-    const request = await this.getRequestWithValidation(requestId, ['WAITING_PAYMENT', 'PAYMENT_UPLOADED']);
+    const request = await this.getRequestWithValidation(requestId, [
+      'WAITING_PAYMENT',
+      'PAYMENT_UPLOADED',
+      'APPROVED',
+      'SHIPPED',
+      'COMPLETED',
+      'COMPLETED_WITH_ISSUE',
+    ]);
     const user = await this.validateManagerPermission(userId, request.branchId);
     const isFreeRequest = Number(request.invoice?.totalAmount || 0) <= 0;
+    const isDebtRequest = request.invoice?.status === 'DEBT';
 
-    if (!isFreeRequest && request.status === 'WAITING_PAYMENT') {
+    if (!isDebtRequest && !['WAITING_PAYMENT', 'PAYMENT_UPLOADED'].includes(request.status)) {
+      throw {
+        status: 422,
+        code: 'INVALID_PAYMENT_CONFIRM_STATUS',
+        message: 'Pembayaran hanya dapat dikonfirmasi untuk invoice menunggu pembayaran atau invoice utang',
+      };
+    }
+
+    if (!isFreeRequest && !isDebtRequest && request.status === 'WAITING_PAYMENT') {
       throw {
         status: 422,
         code: 'PAYMENT_PROOF_REQUIRED',
@@ -560,6 +756,73 @@ export class StockRequestApprovalService {
         status: 422,
         code: 'NO_PAYMENT_PROOF',
         message: 'Bukti pembayaran belum diupload',
+      };
+    }
+
+    if (isDebtRequest) {
+      const result = await prisma.$transaction(async (tx) => {
+        const updatedRequest = await tx.stockRequest.update({
+          where: { id: requestId },
+          data: {
+            paymentVerifiedBy: userId,
+            paymentVerifiedAt: new Date(),
+            paymentVerificationNotes: verificationNotes,
+          },
+          include: {
+            items: {
+              include: {
+                masterProduct: true,
+              },
+            },
+            branch: true,
+            invoice: {
+              include: {
+                items: true,
+              },
+            },
+          },
+        });
+
+        const invoice = request.invoice
+          ? await tx.stockRequestInvoice.update({
+              where: { id: request.invoice.id },
+              data: {
+                status: 'PAID',
+                paymentVerificationStatus: 'VERIFIED',
+                verifiedBy: userId,
+                verifiedAt: new Date(),
+                verificationNotes,
+                paidAt: new Date(),
+              },
+              include: {
+                items: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
+              },
+            })
+          : null;
+
+        return { updatedRequest, invoice };
+      });
+
+      await logAudit({
+        userId,
+        action: AuditAction.UPDATE,
+        resource: 'StockRequest',
+        resourceId: requestId,
+        meta: {
+          action: 'CONFIRM_DEBT_PAYMENT',
+          verificationNotes,
+          branchType: request.branch.type,
+        },
+      });
+
+      return {
+        request: this.formatStockRequest(result.updatedRequest),
+        invoice: result.invoice ? this.formatInvoice(result.invoice) : null,
+        message: 'Pembayaran utang dikonfirmasi. Invoice sudah lunas.',
       };
     }
 
@@ -677,8 +940,31 @@ export class StockRequestApprovalService {
       };
     }
 
-    const request = await this.getRequestWithValidation(requestId, ['PAYMENT_UPLOADED']);
+    const request = await this.getRequestWithValidation(requestId, [
+      'PAYMENT_UPLOADED',
+      'APPROVED',
+      'SHIPPED',
+      'COMPLETED',
+      'COMPLETED_WITH_ISSUE',
+    ]);
     const user = await this.validateManagerPermission(userId, request.branchId);
+    const isDebtRequest = request.invoice?.status === 'DEBT';
+
+    if (request.status !== 'PAYMENT_UPLOADED' && !isDebtRequest) {
+      throw {
+        status: 422,
+        code: 'INVALID_PAYMENT_REJECT_STATUS',
+        message: 'Pembayaran hanya dapat ditolak untuk bukti pembayaran yang sudah diupload',
+      };
+    }
+
+    if (isDebtRequest && !request.paymentProofUrl) {
+      throw {
+        status: 422,
+        code: 'NO_PAYMENT_PROOF',
+        message: 'Belum ada bukti pembayaran utang yang dapat ditolak',
+      };
+    }
 
     // Delete payment proof from MinIO before clearing the reference
     if (request.paymentProofUrl) {
@@ -691,7 +977,7 @@ export class StockRequestApprovalService {
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
         data: {
-          status: 'WAITING_PAYMENT',
+          status: isDebtRequest ? request.status : 'WAITING_PAYMENT',
           paymentRejectionReason: rejectionReason,
           // Clear payment proof so they can upload again
           paymentProofUrl: null,
@@ -721,6 +1007,7 @@ export class StockRequestApprovalService {
         await tx.stockRequestInvoice.update({
           where: { id: request.invoice.id },
           data: {
+            status: isDebtRequest ? 'DEBT' : request.invoice.status,
             paymentVerificationStatus: 'REJECTED',
             rejectionReason,
             paymentProofUrl: null,
@@ -745,6 +1032,7 @@ export class StockRequestApprovalService {
       meta: { 
         action: 'REJECT_PAYMENT',
         rejectionReason,
+        paymentMode: isDebtRequest ? 'DEBT' : 'NORMAL',
       },
     });
 

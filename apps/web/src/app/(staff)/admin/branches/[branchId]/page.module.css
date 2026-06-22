@@ -911,6 +911,129 @@
   transform: translateY(0);
 }
 
+/* Stock Section */
+.stockSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.stockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+}
+
+.stockHeader h3 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.stockHeader p {
+  margin: 0.35rem 0 0;
+  color: var(--text-secondary);
+}
+
+.stockSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  gap: 0.75rem;
+}
+
+.stockSummaryItem {
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+}
+
+.stockSummaryItem span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stockSummaryItem strong {
+  display: block;
+  margin-top: 0.25rem;
+  color: var(--text-primary);
+  font-size: 1.3rem;
+}
+
+.stockDangerText {
+  color: #ef4444 !important;
+}
+
+.stockTableWrap {
+  overflow-x: auto;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+}
+
+.stockTable {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+}
+
+.stockTable th,
+.stockTable td {
+  padding: 1rem;
+  border-bottom: 1px solid var(--surface-border);
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.stockTable th {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.stockTable tr:last-child td {
+  border-bottom: none;
+}
+
+.stockItemName {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stockItemName span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.stockStatus {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.stockNormal {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+
+.stockLow {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .container {
@@ -956,6 +1079,15 @@
   }
 
   .membersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .stockHeader {
+    flex-direction: column;
+  }
+
+  .stockSummary {
+    width: 100%;
     grid-template-columns: 1fr;
   }
 

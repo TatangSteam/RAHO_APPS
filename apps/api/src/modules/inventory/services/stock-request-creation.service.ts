@@ -80,11 +80,11 @@ export class StockRequestCreationService {
 
     console.log('Branch:', branch);
 
-    // Check for pending shipments (PREPARING or SHIPPED status)
+    // Check for pending shipments (including shipments waiting for issue review)
     const pendingShipments = await prisma.shipment.findMany({
       where: {
         toBranchId: branchId,
-        status: { in: ['PREPARING', 'SHIPPED'] },
+        status: { in: ['PREPARING', 'SHIPPED', 'RECEIVED_WITH_ISSUE'] },
       },
       select: {
         id: true,

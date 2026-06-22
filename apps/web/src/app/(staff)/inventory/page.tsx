@@ -74,9 +74,7 @@ export default function InventoryPage() {
   // Check if user can access stock requests and shipments
   const canAccessStockRequests = user?.role && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role);
   
-  // Super Admin, Admin Manager, and Admin Cabang can edit stock.
-  // Branch-level access is enforced by the API.
-  const canEditStock = user?.role && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role);
+  const canEditStock = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
   
   // Check if user can select branches (Super Admin or Admin Manager)
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
@@ -203,6 +201,11 @@ export default function InventoryPage() {
   };
 
   const handleOpenEditModal = (item: InventoryItem) => {
+    if (!canEditStock) {
+      showToast.error('Hanya Admin Manager atau Super Admin yang dapat mengedit stok');
+      return;
+    }
+
     setSelectedItem(item);
     setAdjustment('');
     setReason('');
@@ -232,8 +235,16 @@ export default function InventoryPage() {
       return;
     }
 
-    const conversionFactorNum = parseFloat(conversionFactor);
-    const hasConversionChange = conversionFactorNum !== selectedItem.masterProduct.conversionFactor;
+    const stockAfter = selectedItem.stockInfo.baseStock + adjustmentNum;
+
+    if (stockAfter < 0) {
+      showToast.error('Stok setelah penyesuaian tidak boleh negatif');
+      return;
+    }
+
+    const hasSeparateUsageUnit = selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit;
+    const conversionFactorNum = hasSeparateUsageUnit ? parseFloat(conversionFactor) : selectedItem.masterProduct.conversionFactor;
+    const hasConversionChange = hasSeparateUsageUnit && conversionFactorNum !== selectedItem.masterProduct.conversionFactor;
     
     if (hasConversionChange && (isNaN(conversionFactorNum) || conversionFactorNum <= 0)) {
       showToast.error('Faktor konversi harus berupa angka positif');
@@ -300,8 +311,16 @@ export default function InventoryPage() {
   if (!mounted) return null;
 
   // Edit Stock Modal
-  const EditStockModal = () => {
+    const EditStockModal = () => {
     if (!editModalOpen || !selectedItem) return null;
+
+    const adjustmentNum = parseFloat(adjustment);
+    const hasValidAdjustment = !isNaN(adjustmentNum) && adjustmentNum !== 0;
+    const stockAfter = hasValidAdjustment ? selectedItem.stockInfo.baseStock + adjustmentNum : selectedItem.stockInfo.baseStock;
+    const wouldBeNegative = hasValidAdjustment && stockAfter < 0;
+    const hasSeparateUsageUnit = selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit;
+    const conversionFactorNum = parseFloat(conversionFactor);
+    const conversionInvalid = hasSeparateUsageUnit && (isNaN(conversionFactorNum) || conversionFactorNum <= 0);
 
     const modalContent = (
       <div className="fixed inset-0 z-[9999] overflow-hidden">
@@ -335,24 +354,43 @@ export default function InventoryPage() {
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
                   {selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
                 </p>
-                <p className="text-sm text-blue-600 dark:text-blue-400/80">
-                  ({selectedItem.stockInfo.usageStock.toFixed(0)} {selectedItem.stockInfo.usageUnit})
-                </p>
+                {selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit && (
+                  <p className="text-sm text-blue-600 dark:text-blue-400/80">
+                    ({selectedItem.stockInfo.usageStock.toFixed(0)} {selectedItem.stockInfo.usageUnit})
+                  </p>
+                )}
               </div>
 
-              {/* Conversion Factor */}
-              <div className="space-y-2">
-                <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
-                  <ArrowUpDown className="h-4 w-4" />
-                  Konversi (1 {selectedItem.stockInfo.baseUnit} = ? {selectedItem.stockInfo.usageUnit})
-                </label>
-                <input
-                  type="number"
-                  value={conversionFactor}
-                  onChange={(e) => setConversionFactor(e.target.value)}
-                  className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
-                />
-              </div>
+              {hasSeparateUsageUnit ? (
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
+                    <ArrowUpDown className="h-4 w-4" />
+                    Konversi (1 {selectedItem.stockInfo.baseUnit} = {conversionFactor || '?'} {selectedItem.stockInfo.usageUnit})
+                  </label>
+                  <input
+                    type="number"
+                    min="0.0001"
+                    step="0.0001"
+                    value={conversionFactor}
+                    onChange={(e) => setConversionFactor(e.target.value)}
+                    className={`w-full px-4 py-3 text-sm rounded-xl border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 transition-all ${
+                      conversionInvalid
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-neutral-300 dark:border-neutral-600 focus:ring-blue-500'
+                    }`}
+                  />
+                  {conversionInvalid && (
+                    <p className="text-xs font-medium text-red-500">Faktor konversi harus lebih dari 0</p>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700">
+                  <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wide mb-1">Satuan Stok</p>
+                  <p className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">
+                    Produk ini memakai satuan yang sama: {selectedItem.stockInfo.baseUnit}
+                  </p>
+                </div>
+              )}
 
               {/* Stock Adjustment */}
               <div className="space-y-2">
@@ -384,12 +422,29 @@ export default function InventoryPage() {
               </div>
 
               {/* Live Preview */}
-              {adjustment && !isNaN(parseFloat(adjustment)) && (
-                <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
-                  <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">Preview Stok Setelah Penyesuaian:</p>
-                  <p className="text-xl font-bold text-emerald-700 dark:text-emerald-300">
-                    {(selectedItem.stockInfo.baseStock + parseFloat(adjustment)).toFixed(2)} {selectedItem.stockInfo.baseUnit}
+              {hasValidAdjustment && (
+                <div className={`p-4 rounded-xl border ${
+                  wouldBeNegative
+                    ? 'bg-red-50 dark:bg-red-500/10 border-red-200 dark:border-red-500/30'
+                    : 'bg-emerald-50 dark:bg-emerald-500/10 border-emerald-200 dark:border-emerald-500/30'
+                }`}>
+                  <p className={`text-xs font-semibold mb-1 ${
+                    wouldBeNegative
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
+                  }`}>Preview Stok Setelah Penyesuaian:</p>
+                  <p className={`text-xl font-bold ${
+                    wouldBeNegative
+                      ? 'text-red-700 dark:text-red-300'
+                      : 'text-emerald-700 dark:text-emerald-300'
+                  }`}>
+                    {stockAfter.toFixed(2)} {selectedItem.stockInfo.baseUnit}
                   </p>
+                  {wouldBeNegative && (
+                    <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
+                      Stok tidak boleh kurang dari 0. Maksimal pengurangan: -{selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}.
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -404,7 +459,7 @@ export default function InventoryPage() {
               </button>
               <button
                 onClick={handleAdjustStock}
-                disabled={adjusting || !adjustment || !reason.trim()}
+                disabled={adjusting || !hasValidAdjustment || !reason.trim() || wouldBeNegative || conversionInvalid}
                 className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {adjusting ? (
@@ -492,6 +547,25 @@ export default function InventoryPage() {
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Warning Banner */}
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 shadow-sm">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 mt-0.5">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 mb-1">
+                ⚠️ Perhatian Penting
+              </h3>
+              <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                Jika terjadi perubahan stok atau kesalahan input, segera hubungi <span className="font-bold">Admin Manager</span> untuk verifikasi dan perbaikan data.
+              </p>
             </div>
           </div>
         </div>
@@ -631,97 +705,211 @@ export default function InventoryPage() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredItems.map((item) => {
-              const categoryStyle = getCategoryIcon(item.masterProduct.category);
-              return (
-                <div
-                  key={item.id}
-                  className={`bg-white dark:bg-neutral-900 rounded-2xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${
-                    item.stockInfo.isLowStock
-                      ? 'border-red-200 dark:border-red-500/30'
-                      : 'border-neutral-200 dark:border-neutral-800'
-                  }`}
-                >
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden md:block bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-800">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Produk
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Kategori
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Stok
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Konversi
+                      </th>
+                      <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-4 text-right text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                    {filteredItems.map((item) => {
+                      const categoryStyle = getCategoryIcon(item.masterProduct.category);
+                      return (
+                        <tr key={item.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${categoryStyle.bg} text-lg flex-shrink-0`}>
+                                {categoryStyle.icon}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-semibold text-neutral-900 dark:text-white">
+                                  {item.masterProduct.name}
+                                </div>
+                                {item.storageLocation && (
+                                  <div className="flex items-center gap-1 text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
+                                    <MapPin className="h-3 w-3" />
+                                    {item.storageLocation}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-neutral-700 dark:text-neutral-300">
+                              {getCategoryName(item.masterProduct.category)}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm">
+                              <div className={`font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
+                                {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                              </div>
+                              <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                                ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-xs text-neutral-600 dark:text-neutral-400">
+                              1 {item.stockInfo.baseUnit} = {item.masterProduct.conversionFactor} {item.stockInfo.usageUnit}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            {item.stockInfo.isLowStock ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/30">
+                                <AlertTriangle className="h-3 w-3" />
+                                Rendah
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-500/30">
+                                <CheckCircle2 className="h-3 w-3" />
+                                Normal
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {item.stockInfo.isLowStock && canAccessStockRequests && (
+                                <button
+                                  onClick={() => router.push('/inventory/stock-requests')}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all"
+                                >
+                                  <ShoppingCart className="h-3.5 w-3.5" />
+                                  Request
+                                </button>
+                              )}
+                              {canEditStock && (
+                                <button
+                                  onClick={() => handleOpenEditModal(item)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                                >
+                                  <Edit3 className="h-3.5 w-3.5" />
+                                  Edit
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                  {/* Card Header */}
-                  <div className="p-4 flex items-start gap-3">
-                    <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${categoryStyle.bg} text-xl flex-shrink-0`}>
-                      {categoryStyle.icon}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-neutral-900 dark:text-white truncate">{item.masterProduct.name}</h3>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">{getCategoryName(item.masterProduct.category)}</p>
-                    </div>
-                    {item.stockInfo.isLowStock ? (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
-                        <AlertTriangle className="h-3 w-3" />
-                        Stok Rendah
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                        <CheckCircle2 className="h-3 w-3" />
-                        NORMAL
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="px-4 pb-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-neutral-500 dark:text-neutral-400">Stok Saat Ini</span>
-                      <div className="text-right">
-                        <span className={`text-lg font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
-                          {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {filteredItems.map((item) => {
+                const categoryStyle = getCategoryIcon(item.masterProduct.category);
+                return (
+                  <div
+                    key={item.id}
+                    className={`bg-white dark:bg-neutral-900 rounded-2xl border shadow-sm overflow-hidden transition-all ${
+                      item.stockInfo.isLowStock
+                        ? 'border-red-200 dark:border-red-500/30'
+                        : 'border-neutral-200 dark:border-neutral-800'
+                    }`}
+                  >
+                    {/* Card Header */}
+                    <div className="p-4 flex items-start gap-3">
+                      <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${categoryStyle.bg} text-xl flex-shrink-0`}>
+                        {categoryStyle.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-semibold text-neutral-900 dark:text-white">{item.masterProduct.name}</h3>
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">{getCategoryName(item.masterProduct.category)}</p>
+                      </div>
+                      {item.stockInfo.isLowStock ? (
+                        <span className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
+                          <AlertTriangle className="h-3 w-3" />
+                          Rendah
                         </span>
-                        <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-1">
-                          ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                      ) : (
+                        <span className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Normal
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Card Body */}
+                    <div className="px-4 pb-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-neutral-500 dark:text-neutral-400">Stok Saat Ini</span>
+                        <div className="text-right">
+                          <span className={`text-lg font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
+                            {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                          </span>
+                          <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-1">
+                            ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                        <span className="text-xs text-neutral-400 dark:text-neutral-500">Konversi</span>
+                        <span className="text-xs text-neutral-500 dark:text-neutral-400">
+                          1 {item.stockInfo.baseUnit} = {item.masterProduct.conversionFactor} {item.stockInfo.usageUnit}
                         </span>
                       </div>
+
+                      {item.storageLocation && (
+                        <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
+                          <MapPin className="h-3 w-3" />
+                          {item.storageLocation}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-neutral-100 dark:border-neutral-800">
-                      <span className="text-xs text-neutral-400 dark:text-neutral-500">Konversi</span>
-                      <span className="text-xs text-neutral-500 dark:text-neutral-400">
-                        1 {item.stockInfo.baseUnit} = {item.masterProduct.conversionFactor} {item.stockInfo.usageUnit}
-                      </span>
-                    </div>
-
-                    {item.storageLocation && (
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-500 dark:text-neutral-400">
-                        <MapPin className="h-3 w-3" />
-                        {item.storageLocation}
+                    {/* Card Footer */}
+                    {(item.stockInfo.isLowStock && canAccessStockRequests) || canEditStock ? (
+                      <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-2">
+                        {item.stockInfo.isLowStock && canAccessStockRequests && (
+                          <button
+                            onClick={() => router.push('/inventory/stock-requests')}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all"
+                          >
+                            <ShoppingCart className="h-3.5 w-3.5" />
+                            Request Stok
+                          </button>
+                        )}
+                        {canEditStock && (
+                          <button
+                            onClick={() => handleOpenEditModal(item)}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                          >
+                            <Edit3 className="h-3.5 w-3.5" />
+                            Edit Stok
+                          </button>
+                        )}
                       </div>
-                    )}
+                    ) : null}
                   </div>
-
-                  {/* Card Footer */}
-                  {(item.stockInfo.isLowStock && canAccessStockRequests) || canEditStock ? (
-                    <div className="px-4 py-3 bg-neutral-50 dark:bg-neutral-800/50 border-t border-neutral-100 dark:border-neutral-800 flex items-center gap-2">
-                      {item.stockInfo.isLowStock && canAccessStockRequests && (
-                        <button
-                          onClick={() => router.push('/inventory/stock-requests')}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all"
-                        >
-                          <ShoppingCart className="h-3.5 w-3.5" />
-                          Request Stok
-                        </button>
-                      )}
-                      {canEditStock && (
-                        <button
-                          onClick={() => handleOpenEditModal(item)}
-                          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
-                        >
-                          <Edit3 className="h-3.5 w-3.5" />
-                          Edit Stok
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

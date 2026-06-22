@@ -1,8 +1,11 @@
 // @ts-nocheck
-import { StockRequestStatus, Role } from '@prisma/client';
+import { StockRequestStatus, Role, AuditAction } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
+import { logAudit } from '../../utils/auditLog';
 import { StockRequestCreationService, type CreateStockRequestInput } from './services/stock-request-creation.service';
 import { StockRequestApprovalService } from './services/stock-request-approval.service';
 import { StockRequestRetrievalService } from './services/stock-request-retrieval.service';
+import { OverstockService } from './services/overstock.service';
 
 /**
  * Main Stock Request Service - Orchestrates stock request operations
@@ -15,17 +18,19 @@ import { StockRequestRetrievalService } from './services/stock-request-retrieval
  *    - Admin Manager uploads payment proof (PAYMENT_UPLOADED)
  *    - Admin Manager confirms payment (PAYMENT_CONFIRMED) → Create Shipment
  * 4. Admin Manager ships (SHIPPED)
- * 5. Admin Cabang receives (COMPLETED or COMPLETED_WITH_ISSUE)
+ * 5. Admin Cabang receives (COMPLETED if matched, manager review if issue)
  */
 export class StockRequestService {
   private creationService: StockRequestCreationService;
   private approvalService: StockRequestApprovalService;
   private retrievalService: StockRequestRetrievalService;
+  private overstockService: OverstockService;
 
   constructor() {
     this.creationService = new StockRequestCreationService();
     this.approvalService = new StockRequestApprovalService();
     this.retrievalService = new StockRequestRetrievalService();
+    this.overstockService = new OverstockService();
   }
 
   // ============================================================
@@ -37,6 +42,216 @@ export class StockRequestService {
    */
   async createRequest(data: CreateStockRequestInput, branchId: string, userId: string) {
     return await this.creationService.createRequest(data, branchId, userId);
+  }
+
+  /**
+   * Update a pending stock request (Admin Manager / Super Admin).
+   */
+  async updateRequest(
+    requestId: string,
+    userId: string,
+    data: {
+      notes?: string;
+      items?: Array<{
+        masterProductId: string;
+        requestedQty: number;
+        notes?: string;
+      }>;
+    }
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
+      throw {
+        status: 403,
+        code: 'INSUFFICIENT_PERMISSIONS',
+        message: 'Hanya Super Admin atau Admin Manager yang dapat mengedit request stok',
+      };
+    }
+
+    const request = await prisma.stockRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        branch: true,
+        items: true,
+        invoice: true,
+        shipment: true,
+      },
+    });
+
+    if (!request) {
+      throw {
+        status: 404,
+        code: 'REQUEST_NOT_FOUND',
+        message: 'Permintaan stok tidak ditemukan',
+      };
+    }
+
+    if (request.status !== StockRequestStatus.PENDING) {
+      throw {
+        status: 422,
+        code: 'REQUEST_NOT_EDITABLE',
+        message: 'Request stok hanya dapat diedit saat status masih PENDING',
+      };
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranch = await prisma.managerBranch.findFirst({
+        where: {
+          userId,
+          branchId: request.branchId,
+        },
+      });
+
+      if (!managerBranch) {
+        throw {
+          status: 403,
+          code: 'BRANCH_ACCESS_DENIED',
+          message: 'Anda hanya dapat mengedit request dari cabang yang Anda kelola',
+        };
+      }
+    }
+
+    const itemUpdates = Array.isArray(data.items) ? data.items : undefined;
+    if (itemUpdates) {
+      if (itemUpdates.length === 0) {
+        throw {
+          status: 400,
+          code: 'ITEMS_REQUIRED',
+          message: 'Minimal satu item harus dikirim untuk update',
+        };
+      }
+
+      const existingProductIds = new Set(request.items.map(item => item.masterProductId));
+      const seenProductIds = new Set<string>();
+
+      for (const item of itemUpdates) {
+        if (!item.masterProductId || !existingProductIds.has(item.masterProductId)) {
+          throw {
+            status: 400,
+            code: 'INVALID_ITEM',
+            message: 'Item yang diedit harus berasal dari request stok ini',
+          };
+        }
+
+        if (seenProductIds.has(item.masterProductId)) {
+          throw {
+            status: 400,
+            code: 'DUPLICATE_ITEM',
+            message: 'Item request tidak boleh duplikat',
+          };
+        }
+
+        if (!item.requestedQty || Number(item.requestedQty) <= 0) {
+          throw {
+            status: 400,
+            code: 'INVALID_QUANTITY',
+            message: 'Jumlah request harus lebih dari 0',
+          };
+        }
+
+        seenProductIds.add(item.masterProductId);
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.stockRequest.update({
+        where: { id: requestId },
+        data: {
+          ...(data.notes !== undefined ? { notes: data.notes?.trim() || null } : {}),
+        },
+      });
+
+      if (!itemUpdates) {
+        return;
+      }
+
+      const usages = await tx.overstockUsage.findMany({
+        where: { stockRequestId: requestId },
+        include: { overstock: true },
+      });
+
+      for (const usage of usages) {
+        const restoredQty = Math.min(
+          Number(usage.overstock.originalQty),
+          Number(usage.overstock.quantity) + Number(usage.quantityUsed)
+        );
+        const status = restoredQty <= 0
+          ? 'FULLY_USED'
+          : restoredQty >= Number(usage.overstock.originalQty)
+            ? 'AVAILABLE'
+            : 'PARTIALLY_USED';
+
+        await tx.branchOverstock.update({
+          where: { id: usage.overstockId },
+          data: {
+            quantity: restoredQty,
+            status,
+          },
+        });
+      }
+
+      await tx.overstockUsage.deleteMany({
+        where: { stockRequestId: requestId },
+      });
+
+      await tx.stockRequestItem.updateMany({
+        where: { stockRequestId: requestId },
+        data: {
+          approvedQty: null,
+          overstockDeducted: 0,
+          finalQty: null,
+        },
+      });
+
+      for (const item of itemUpdates) {
+        const existingItem = request.items.find(i => i.masterProductId === item.masterProductId);
+        await tx.stockRequestItem.update({
+          where: { id: existingItem.id },
+          data: {
+            requestedQty: item.requestedQty,
+            approvedQty: null,
+            overstockDeducted: 0,
+            finalQty: item.requestedQty,
+            notes: item.notes?.trim() || null,
+          },
+        });
+      }
+
+      const currentItems = await tx.stockRequestItem.findMany({
+        where: { stockRequestId: requestId },
+      });
+
+      for (const item of currentItems) {
+        await this.overstockService.applyOverstockDeduction(
+          request.branchId,
+          item.masterProductId,
+          Number(item.requestedQty),
+          requestId,
+          item.id,
+          userId,
+          tx
+        );
+      }
+    });
+
+    await logAudit({
+      userId,
+      branchId: request.branchId,
+      action: AuditAction.UPDATE,
+      resource: 'StockRequest',
+      resourceId: requestId,
+      meta: {
+        action: 'UPDATE_PENDING_REQUEST',
+        requestCode: request.requestCode,
+        itemCount: itemUpdates?.length,
+      },
+    });
+
+    return await this.retrievalService.getRequestById(requestId);
   }
 
   // ============================================================
@@ -63,6 +278,7 @@ export class StockRequestService {
         pricePerUnit: number;
       }>;
       notes?: string;
+      paymentMode?: 'NORMAL' | 'DEBT';
     }
   ) {
     return await this.approvalService.createInvoice(requestId, userId, invoiceData);
@@ -82,9 +298,17 @@ export class StockRequestService {
         pricePerUnit: number;
       }>;
       notes?: string;
+      paymentMode?: 'NORMAL' | 'DEBT';
     }
   ) {
     return await this.approvalService.createPartnershipInvoice(requestId, userId, invoiceData);
+  }
+
+  /**
+   * Mark invoice payment as debt and continue stock request flow
+   */
+  async markPaymentAsDebt(requestId: string, userId: string, notes?: string) {
+    return await this.approvalService.markPaymentAsDebt(requestId, userId, notes);
   }
 
   /**
@@ -99,7 +323,7 @@ export class StockRequestService {
   // ============================================================
 
   /**
-   * Upload payment proof (Admin Cabang Partnership)
+   * Upload payment proof (Admin Manager / Super Admin)
    */
   async uploadPaymentProof(
     requestId: string, 

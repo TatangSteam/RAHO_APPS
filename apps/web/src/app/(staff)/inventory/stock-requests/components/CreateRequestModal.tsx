@@ -69,6 +69,7 @@ export default function CreateRequestModal({
         // Fetch pending shipments
         const shipmentsResponse = await inventoryApi.getShipments({ status: 'PREPARING' });
         const shippedResponse = await inventoryApi.getShipments({ status: 'SHIPPED' });
+        const issueResponse = await inventoryApi.getShipments({ status: 'RECEIVED_WITH_ISSUE' });
         
         let pendingShipments: Array<{ shipmentCode: string; status: string }> = [];
         
@@ -86,6 +87,7 @@ export default function CreateRequestModal({
         pendingShipments = [
           ...extractShipments(shipmentsResponse),
           ...extractShipments(shippedResponse),
+          ...extractShipments(issueResponse),
         ];
         
         // Fetch pending requests

@@ -16,7 +16,7 @@ export class StockRequestController {
    */
   async createRequest(req: Request, res: Response, next: NextFunction) {
     try {
-      const { items, notes } = req.body;
+      const { items, notes, paymentMode } = req.body;
       const branchId = req.user?.branchId;
       const userId = req.user?.userId;
 
@@ -69,7 +69,7 @@ export class StockRequestController {
   async createPartnershipInvoice(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
-      const { items, notes } = req.body;
+      const { items, notes, paymentMode } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -93,7 +93,15 @@ export class StockRequestController {
         }
       }
 
-      const result = await stockRequestService.createPartnershipInvoice(requestId, userId, { items, notes });
+      if (paymentMode && !['NORMAL', 'DEBT'].includes(paymentMode)) {
+        return sendError(res, 400, 'INVALID_PAYMENT_MODE', 'Mode pembayaran harus NORMAL atau DEBT');
+      }
+
+      const result = await stockRequestService.createPartnershipInvoice(requestId, userId, {
+        items,
+        notes,
+        paymentMode,
+      });
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);
@@ -101,7 +109,28 @@ export class StockRequestController {
   }
 
   /**
-   * Upload payment proof (Admin Cabang Partnership)
+   * Mark payment as debt and continue request flow
+   * POST /api/v1/inventory/stock-requests/:requestId/mark-debt
+   */
+  async markPaymentAsDebt(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { requestId } = req.params;
+      const { notes } = req.body;
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+      }
+
+      const result = await stockRequestService.markPaymentAsDebt(requestId, userId, notes);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Upload payment proof (Admin Manager / Super Admin)
    * POST /api/v1/inventory/stock-requests/:requestId/upload-payment-proof
    */
   async uploadPaymentProof(req: Request, res: Response, next: NextFunction) {
@@ -321,6 +350,35 @@ export class StockRequestController {
           return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke request ini');
         }
       }
+
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Update stock request
+   * PATCH /api/v1/inventory/stock-requests/:requestId
+   */
+  async updateRequest(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { requestId } = req.params;
+      const { notes, items } = req.body;
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+      }
+
+      if (items !== undefined && !Array.isArray(items)) {
+        return sendError(res, 400, 'INVALID_ITEMS', 'Items harus berupa array');
+      }
+
+      const result = await stockRequestService.updateRequest(requestId, userId, {
+        notes,
+        items,
+      });
 
       return sendSuccess(res, result);
     } catch (err: any) {

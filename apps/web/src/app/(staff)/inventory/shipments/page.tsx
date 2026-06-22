@@ -5,17 +5,36 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
-import { inventoryApi, Shipment, ReceiveShipmentInput, ShipShipmentInput } from '@/lib/api/inventoryApi';
-import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight } from 'lucide-react';
-import { ShipModal, ReceiveModal, DetailModal } from './components';
+import { inventoryApi, type Shipment, type ReceiveShipmentInput, type ShipShipmentInput, type ShipmentIssueDecision, type UpdateShipmentInput } from '@/lib/api/inventoryApi';
+import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight, Edit3 } from 'lucide-react';
+import { ShipModal, ReceiveModal, DetailModal, NotesModal, SendShortageModal, EditShipmentModal } from './components';
 
 type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
+type ShipmentQueryParams = NonNullable<Parameters<typeof inventoryApi.getShipments>[0]>;
+type ApiErrorLike = {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+};
 
 const STATUS_LABELS: Record<string, string> = {
   PREPARING: 'Sedang Disiapkan',
   SHIPPED: 'Dikirim',
   RECEIVED: 'Diterima',
   RECEIVED_WITH_ISSUE: 'Diterima (Ada Masalah)',
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  if (typeof error === 'object' && error !== null && 'response' in error) {
+    const response = (error as ApiErrorLike).response;
+    if (typeof response?.data?.message === 'string') {
+      return response.data.message;
+    }
+  }
+
+  return fallback;
 };
 
 export default function ShipmentsPage() {
@@ -25,8 +44,10 @@ export default function ShipmentsPage() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<ShipmentStatus>('ALL');
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
-  const [modalAction, setModalAction] = useState<'ship' | 'receive' | 'detail' | null>(null);
+  const [modalAction, setModalAction] = useState<'ship' | 'receive' | 'detail' | 'edit' | null>(null);
+  const [issueReviewDecision, setIssueReviewDecision] = useState<ShipmentIssueDecision | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
 
   const fetchShipments = useCallback(async () => {
@@ -34,7 +55,7 @@ export default function ShipmentsPage() {
     
     try {
       setLoading(true);
-      const params: any = {};
+      const params: ShipmentQueryParams = {};
       if (filter !== 'ALL') {
         params.status = filter;
       }
@@ -53,7 +74,7 @@ export default function ShipmentsPage() {
       }
       
       setShipments(shipmentsData);
-    } catch (error: any) {
+    } catch (error: unknown) {
       devError('Shipments fetch error:', error);
       showToast.error('Gagal memuat pengiriman');
       setShipments([]);
@@ -81,7 +102,7 @@ export default function ShipmentsPage() {
     
     try {
       setActionLoading(true);
-      const response = await inventoryApi.shipShipment(selectedShipment.id, data);
+      await inventoryApi.shipShipment(selectedShipment.id, data);
       
       // Check if there was overstock
       const hasOverstock = data.items?.some(item => item.overstockReason);
@@ -93,8 +114,8 @@ export default function ShipmentsPage() {
       
       closeModal();
       fetchShipments();
-    } catch (error: any) {
-      showToast.error(error.response?.data?.message || 'Gagal mengirim pengiriman');
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal mengirim pengiriman'));
     } finally {
       setActionLoading(false);
     }
@@ -110,8 +131,8 @@ export default function ShipmentsPage() {
       showToast.success(hasDiscrepancy ? 'Pengiriman diterima dengan catatan ketidaksesuaian' : 'Pengiriman berhasil diterima');
       closeModal();
       fetchShipments();
-    } catch (error: any) {
-      showToast.error(error.response?.data?.message || 'Gagal menerima pengiriman');
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal menerima pengiriman'));
     } finally {
       setActionLoading(false);
     }
@@ -120,6 +141,28 @@ export default function ShipmentsPage() {
   const closeModal = () => {
     setSelectedShipment(null);
     setModalAction(null);
+    setIssueReviewDecision(null);
+    setDetailLoading(false);
+  };
+
+  const handleUpdateShipment = async (data: UpdateShipmentInput) => {
+    if (!selectedShipment) return;
+
+    try {
+      setActionLoading(true);
+      await inventoryApi.updateShipment(selectedShipment.id, data);
+      showToast.success('Pengiriman berhasil diperbarui');
+      closeModal();
+      fetchShipments();
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal memperbarui pengiriman'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const closeIssueReviewModal = () => {
+    setIssueReviewDecision(null);
   };
 
   const openShipModal = (shipment: Shipment) => {
@@ -132,9 +175,42 @@ export default function ShipmentsPage() {
     setModalAction('receive');
   };
 
-  const openDetailModal = (shipment: Shipment) => {
+  const openEditShipmentModal = async (shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setModalAction('edit');
+    setDetailLoading(true);
+
+    try {
+      const response = await inventoryApi.getShipmentById(shipment.id);
+      const detail = response.data?.data?.data || response.data?.data;
+
+      if (detail) {
+        setSelectedShipment(detail as Shipment);
+      }
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const openDetailModal = async (shipment: Shipment) => {
     setSelectedShipment(shipment);
     setModalAction('detail');
+    setDetailLoading(true);
+
+    try {
+      const response = await inventoryApi.getShipmentById(shipment.id);
+      const detail = response.data?.data?.data || response.data?.data;
+
+      if (detail) {
+        setSelectedShipment(detail as Shipment);
+      }
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const getStatusBadgeClass = (status: string) => {
@@ -170,10 +246,44 @@ export default function ShipmentsPage() {
   const canShip = (shipment: Shipment) => 
     ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && 
     shipment.status === 'PREPARING';
+
+  const canEditShipment = (shipment: Shipment) =>
+    ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') &&
+    shipment.status === 'PREPARING';
     
   const canReceive = (shipment: Shipment) =>
     user?.role === 'ADMIN_CABANG' &&
     shipment.status === 'SHIPPED';
+
+  const canReviewIssue = (shipment: Shipment) =>
+    ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') &&
+    shipment.status === 'RECEIVED_WITH_ISSUE' &&
+    !shipment.approvedAt;
+
+  const openIssueReviewModal = async (decision: ShipmentIssueDecision) => {
+    setIssueReviewDecision(decision);
+  };
+
+  const submitIssueReview = async (notes: string, shortageItems?: Array<{ masterProductId: string; quantity: number }>) => {
+    if (!selectedShipment || !issueReviewDecision) return;
+
+    try {
+      setActionLoading(true);
+      const response = await inventoryApi.reviewShipmentIssue(selectedShipment.id, {
+        decision: issueReviewDecision,
+        notes,
+        shortageItems,
+      });
+      const message = response.data?.data?.message || 'Tindak lanjut pengiriman bermasalah berhasil disimpan';
+      showToast.success(message);
+      closeModal();
+      fetchShipments();
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error, 'Gagal memproses tindak lanjut pengiriman'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const filterOptions: { value: ShipmentStatus; label: string; icon: React.ReactNode }[] = [
     { value: 'ALL', label: 'Semua', icon: <FileText className="h-4 w-4" /> },
@@ -190,6 +300,14 @@ export default function ShipmentsPage() {
     });
   };
 
+  const formatQuantity = (value: number) => {
+    return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+  };
+
+  const getTotalSentQty = (shipment: Shipment) => {
+    return shipment.items.reduce((sum, item) => sum + Number(item.sentQty || 0), 0);
+  };
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 p-6">
       {/* Header */}
@@ -204,6 +322,39 @@ export default function ShipmentsPage() {
             </h1>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
               Kelola pengiriman stok antar cabang
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-500">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold">Penerima wajib merekam video saat membuka paket.</p>
+            <p className="mt-1 text-sm leading-relaxed text-red-700/90 dark:text-red-200/90">
+              Komplain tidak dapat diproses tanpa video unboxing. Jika ditemukan selisih, rusak, atau barang salah, segera hubungi Admin Manager dan Super Admin.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Warning Banner - Stock Changes */}
+      <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 mb-1">
+              ⚠️ Perhatian Penting
+            </h3>
+            <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+              Jika terjadi perubahan stok atau kesalahan input, segera hubungi <span className="font-bold">Admin Manager</span> untuk verifikasi dan perbaikan data.
             </p>
           </div>
         </div>
@@ -255,7 +406,197 @@ export default function ShipmentsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        <>
+        <div className="rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] table-fixed">
+              <colgroup>
+                <col className="w-[190px]" />
+                <col className="w-[230px]" />
+                <col className="w-[170px]" />
+                <col className="w-[260px]" />
+                <col className="w-[110px]" />
+                <col className="w-[190px]" />
+                <col className="w-[210px]" />
+                <col className="w-[190px]" />
+              </colgroup>
+              <thead className="border-b border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-900/70">
+                <tr>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Kode</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Rute</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Status</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Item</th>
+                  <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Total Qty</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Timeline</th>
+                  <th className="px-5 py-4 text-left text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Catatan</th>
+                  <th className="px-5 py-4 text-right text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
+                {shipments.map((shipment) => {
+                  const hasOverstock = shipment.items.some(item => item.overstockQty && item.overstockQty > 0);
+                  const hasDiscrepancy = Boolean(
+                    shipment.discrepancies?.length || shipment.hasDiscrepancies || shipment.discrepancyCount
+                  );
+                  const totalQty = getTotalSentQty(shipment);
+
+                  return (
+                    <tr
+                      key={shipment.id}
+                      onClick={() => openDetailModal(shipment)}
+                      className="cursor-pointer transition-colors hover:bg-amber-50/60 dark:hover:bg-neutral-800/70"
+                    >
+                      <td className="px-5 py-4 align-top">
+                        <div className="flex items-start gap-3">
+                          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-blue-500/15 text-blue-500">
+                            <Truck className="h-4 w-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-bold text-neutral-900 dark:text-white">
+                              {shipment.shipmentCode}
+                            </div>
+                            <div className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                              Dibuat {formatDate(shipment.createdAt)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <div className="flex min-w-0 items-center gap-2 text-sm">
+                          <span className="truncate font-medium text-neutral-800 dark:text-neutral-200">
+                            {shipment.fromBranchName}
+                          </span>
+                          <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-neutral-400" />
+                          <span className="truncate font-medium text-neutral-800 dark:text-neutral-200">
+                            {shipment.toBranchName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold ${getStatusBadgeClass(shipment.status)}`}>
+                          {getStatusIcon(shipment.status)}
+                          {STATUS_LABELS[shipment.status] || shipment.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <div className="space-y-1.5">
+                          {shipment.items.slice(0, 2).map((item) => (
+                            <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-2 text-sm dark:bg-neutral-800/70">
+                              <span className="truncate text-neutral-800 dark:text-neutral-200">
+                                {item.productName}
+                              </span>
+                              <span className="flex-shrink-0 font-semibold text-blue-500">
+                                {formatQuantity(Number(item.sentQty))} {item.unit}
+                              </span>
+                            </div>
+                          ))}
+                          {shipment.items.length > 2 && (
+                            <div className="text-xs font-medium text-neutral-500 dark:text-neutral-400">
+                              +{shipment.items.length - 2} item lainnya
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {hasOverstock && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-purple-500/10 px-2 py-1 text-xs font-semibold text-purple-500">
+                                <Package className="h-3 w-3" />
+                                Overstock
+                              </span>
+                            )}
+                            {hasDiscrepancy && (
+                              <span className="inline-flex items-center gap-1 rounded-md bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-500">
+                                <AlertTriangle className="h-3 w-3" />
+                                Masalah
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 text-right align-top">
+                        <div className="text-lg font-bold text-amber-500">
+                          {formatQuantity(totalQty)}
+                        </div>
+                        <div className="text-xs text-neutral-500 dark:text-neutral-400">
+                          {shipment.items.length} item
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400">
+                            <Calendar className="h-3.5 w-3.5" />
+                            <span>Dibuat: {formatDate(shipment.createdAt)}</span>
+                          </div>
+                          {shipment.shippedAt && (
+                            <div className="flex items-center gap-2 text-blue-500">
+                              <Truck className="h-3.5 w-3.5" />
+                              <span>Dikirim: {formatDate(shipment.shippedAt)}</span>
+                            </div>
+                          )}
+                          {shipment.receivedAt && (
+                            <div className="flex items-center gap-2 text-emerald-500">
+                              <Inbox className="h-3.5 w-3.5" />
+                              <span>Diterima: {formatDate(shipment.receivedAt)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-4 align-top">
+                        {shipment.notes ? (
+                          <p className="line-clamp-2 text-sm text-neutral-600 dark:text-neutral-300">
+                            {shipment.notes}
+                          </p>
+                        ) : (
+                          <span className="text-sm text-neutral-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-4 text-right align-top" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {canEditShipment(shipment) && (
+                            <button
+                              onClick={() => openEditShipmentModal(shipment)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-neutral-700 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                          )}
+                          {canShip(shipment) && (
+                            <button
+                              onClick={() => openShipModal(shipment)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-blue-600"
+                            >
+                              <Send className="h-3.5 w-3.5" />
+                              Kirim
+                            </button>
+                          )}
+                          {canReceive(shipment) && (
+                            <button
+                              onClick={() => openReceiveModal(shipment)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:bg-emerald-600"
+                            >
+                              <Inbox className="h-3.5 w-3.5" />
+                              Terima
+                            </button>
+                          )}
+                          <button
+                            onClick={() => openDetailModal(shipment)}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-100 px-3 py-1.5 text-xs font-semibold text-neutral-700 transition-all hover:bg-neutral-200 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+                          >
+                            Detail
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className="border-t border-neutral-200 px-5 py-3 text-xs text-neutral-500 dark:border-neutral-800 dark:text-neutral-400">
+            Geser tabel ke samping untuk melihat seluruh kolom pada layar kecil.
+          </div>
+        </div>
+
+        <div className="hidden">
           {shipments.map((shipment) => (
             <div
               key={shipment.id}
@@ -442,9 +783,19 @@ export default function ShipmentsPage() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       {/* Ship Modal */}
+      {selectedShipment && modalAction === 'edit' && (
+        <EditShipmentModal
+          shipment={selectedShipment}
+          onClose={closeModal}
+          onSubmit={handleUpdateShipment}
+          loading={actionLoading || detailLoading}
+        />
+      )}
+
       {selectedShipment && modalAction === 'ship' && (
         <ShipModal
           shipment={selectedShipment}
@@ -477,6 +828,35 @@ export default function ShipmentsPage() {
             closeModal();
             setTimeout(() => openReceiveModal(selectedShipment), 100);
           } : undefined}
+          onReviewIssue={canReviewIssue(selectedShipment) ? openIssueReviewModal : undefined}
+          detailLoading={detailLoading}
+          loading={actionLoading}
+        />
+      )}
+
+      {selectedShipment && issueReviewDecision === 'SEND_SHORTAGE' && (
+        <SendShortageModal
+          shipment={selectedShipment}
+          onClose={closeIssueReviewModal}
+          onSubmit={async ({ items, notes }) => {
+            await submitIssueReview(
+              notes,
+              items.map((item) => ({
+                masterProductId: item.productId,
+                quantity: item.sendQty,
+              }))
+            );
+          }}
+          loading={actionLoading}
+        />
+      )}
+
+      {selectedShipment && issueReviewDecision && issueReviewDecision !== 'SEND_SHORTAGE' && (
+        <NotesModal
+          decision={issueReviewDecision}
+          onClose={closeIssueReviewModal}
+          onSubmit={(notes) => submitIssueReview(notes)}
+          loading={actionLoading}
         />
       )}
     </div>

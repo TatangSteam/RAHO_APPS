@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
-import { Package, ArrowRight, Calendar, Building2, TrendingUp, Filter as FilterIcon } from 'lucide-react';
+import { Package, ArrowRight, Calendar, Building2, TrendingUp, Filter as FilterIcon, AlertTriangle } from 'lucide-react';
 
 type ShipmentStatus = 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE' | 'APPROVED';
 
@@ -27,6 +27,8 @@ interface TransferShipment {
     productCategory?: string;
     sentQty: number;
     receivedQty?: number | null;
+    stockBefore?: number | null;
+    stockAfter?: number | null;
     unit: string;
   }>;
   stockRequest?: {
@@ -242,6 +244,25 @@ export default function BranchTransfersPage() {
         </div>
       </div>
 
+      {/* Warning Banner */}
+      <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 mb-1">
+              ⚠️ Perhatian Penting
+            </h3>
+            <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+              Jika terjadi perubahan stok atau kesalahan input, segera hubungi <span className="font-bold">Admin Manager</span> untuk verifikasi dan perbaikan data.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {loading ? (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-20 text-center">
           <div className="flex flex-col items-center gap-4">
@@ -320,20 +341,100 @@ export default function BranchTransfersPage() {
                   <TrendingUp className="h-4 w-4" />
                   <span>Item yang Ditransfer ({shipment.items.length} item)</span>
                 </div>
-                {shipment.items.slice(0, 3).map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-4 p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-neutral-900 dark:text-white truncate">{item.productName}</p>
-                      <p className="text-xs text-neutral-500 dark:text-neutral-400">{item.productCategory || '-'}</p>
+                {shipment.items.slice(0, 3).map((item) => {
+                  const hasReceived = item.receivedQty !== undefined && item.receivedQty !== null;
+                  const hasDifference = hasReceived && item.receivedQty !== item.sentQty;
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      className="p-3 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700"
+                    >
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-neutral-900 dark:text-white truncate">{item.productName}</p>
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">{item.productCategory || '-'}</p>
+                        </div>
+                      </div>
+                      
+                      {/* Mutasi Stok */}
+                      <div className="mt-3 space-y-2">
+                        {/* Stok Sebelum dan Sesudah (jika sudah diterima dan ada data) */}
+                        {hasReceived && item.stockBefore !== null && item.stockBefore !== undefined && (
+                          <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-gradient-to-r from-violet-50 to-purple-50 dark:from-violet-500/10 dark:to-purple-500/10 border border-violet-200 dark:border-violet-500/30">
+                            <div className="text-center">
+                              <p className="text-xs text-violet-600 dark:text-violet-400 mb-1">Stok Sebelum</p>
+                              <p className="text-base font-bold text-violet-700 dark:text-violet-300">
+                                {item.stockBefore} <span className="text-xs font-normal">{item.unit}</span>
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-blue-600 dark:text-blue-400 mb-1">Penambahan</p>
+                              <p className="text-base font-bold text-blue-700 dark:text-blue-300">
+                                +{item.receivedQty} <span className="text-xs font-normal">{item.unit}</span>
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-1">Stok Sesudah</p>
+                              <p className="text-base font-bold text-emerald-700 dark:text-emerald-300">
+                                {item.stockAfter} <span className="text-xs font-normal">{item.unit}</span>
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Jumlah Penambahan (fallback jika tidak ada data stok sebelum/sesudah) */}
+                        {(!hasReceived || item.stockBefore === null || item.stockBefore === undefined) && (
+                          <div className="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
+                            <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                              {hasReceived ? 'Jumlah Diterima' : 'Jumlah Akan Ditambahkan'}
+                            </span>
+                            <div className="flex items-baseline gap-1">
+                              <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+                                +{hasReceived ? item.receivedQty : item.sentQty}
+                              </span>
+                              <span className="text-xs text-blue-500 dark:text-blue-400">{item.unit}</span>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Status Detail */}
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="p-2 rounded bg-neutral-100 dark:bg-neutral-800">
+                            <p className="text-neutral-500 dark:text-neutral-400 mb-0.5">Dikirim dari cabang</p>
+                            <p className="font-semibold text-neutral-900 dark:text-white">{item.sentQty} {item.unit}</p>
+                          </div>
+                          {hasReceived ? (
+                            <div className={`p-2 rounded ${hasDifference ? 'bg-orange-50 dark:bg-orange-500/10' : 'bg-emerald-50 dark:bg-emerald-500/10'}`}>
+                              <p className="text-neutral-500 dark:text-neutral-400 mb-0.5">Diterima di cabang</p>
+                              <p className={`font-semibold ${hasDifference ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                {item.receivedQty} {item.unit}
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-2 rounded bg-neutral-100 dark:bg-neutral-800">
+                              <p className="text-neutral-500 dark:text-neutral-400 mb-0.5">Status</p>
+                              <p className="font-semibold text-neutral-500 dark:text-neutral-400">Dalam perjalanan</p>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Catatan Selisih */}
+                        {hasDifference && (
+                          <div className="p-2 rounded-lg bg-orange-50 dark:bg-orange-500/10 border border-orange-200 dark:border-orange-500/30">
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-medium text-orange-600 dark:text-orange-400">⚠️ Ada Selisih</span>
+                              <span className={`text-xs font-bold ${(item.receivedQty || 0) - item.sentQty > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                {(item.receivedQty || 0) - item.sentQty > 0 ? '+' : ''}
+                                {(item.receivedQty || 0) - item.sentQty} {item.unit}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <span className="shrink-0 font-bold text-blue-600 dark:text-blue-400">
-                      {item.sentQty} {item.unit}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
                 {shipment.items.length > 3 && (
                   <p className="text-sm text-neutral-500 dark:text-neutral-400 text-center py-2">
                     + {shipment.items.length - 3} item lainnya

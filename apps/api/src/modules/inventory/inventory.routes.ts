@@ -70,7 +70,7 @@ router.get(
 router.post(
   '/items',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize(MANAGER_ROLES),
   inventoryController.createInventoryItem.bind(inventoryController)
 );
 
@@ -78,7 +78,7 @@ router.post(
 router.post(
   '/items/batch',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize(MANAGER_ROLES),
   inventoryController.batchCreateInventoryItems.bind(inventoryController)
 );
 
@@ -86,7 +86,7 @@ router.post(
 router.patch(
   '/items/:itemId',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize(MANAGER_ROLES),
   inventoryController.updateInventoryItem.bind(inventoryController)
 );
 
@@ -94,7 +94,7 @@ router.patch(
 router.delete(
   '/items/:itemId',
   authenticate,
-  authorize(ADMIN_ROLES),
+  authorize(MANAGER_ROLES),
   inventoryController.deleteInventoryItem.bind(inventoryController)
 );
 
@@ -106,19 +106,19 @@ router.get(
   inventoryController.getLowStockItems.bind(inventoryController)
 );
 
-// Adjust stock (SUPER_ADMIN, ADMIN_MANAGER, or ADMIN_CABANG)
+// Adjust stock (SUPER_ADMIN or ADMIN_MANAGER)
 router.patch(
   '/items/:itemId/adjust-stock',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  authorize(MANAGER_ROLES),
   inventoryController.adjustStock.bind(inventoryController)
 );
 
-// Update master product conversion factor (stock editors)
+// Update master product conversion factor (SUPER_ADMIN or ADMIN_MANAGER)
 router.patch(
   '/master-products/:productId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  authorize(MANAGER_ROLES),
   inventoryController.updateMasterProduct.bind(inventoryController)
 );
 
@@ -198,6 +198,14 @@ router.get(
   stockRequestController.getRequestById.bind(stockRequestController)
 );
 
+// Update stock request (SUPER_ADMIN and ADMIN_MANAGER)
+router.patch(
+  '/stock-requests/:requestId',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.updateRequest.bind(stockRequestController)
+);
+
 // Approve stock request for PREMIER branch
 router.post(
   '/stock-requests/:requestId/approve-premier',
@@ -214,7 +222,15 @@ router.post(
   stockRequestController.createPartnershipInvoice.bind(stockRequestController)
 );
 
-// Upload payment proof (ADMIN_MANAGER / SUPER_ADMIN - receives proof from Admin Cabang externally)
+// Mark invoice as debt and continue flow (ADMIN_MANAGER / SUPER_ADMIN)
+router.post(
+  '/stock-requests/:requestId/mark-debt',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockRequestController.markPaymentAsDebt.bind(stockRequestController)
+);
+
+// Upload payment proof (ADMIN_MANAGER / SUPER_ADMIN)
 router.post(
   '/stock-requests/:requestId/upload-payment-proof',
   authenticate,
@@ -275,6 +291,14 @@ router.get(
   shipmentController.getShipmentById.bind(shipmentController)
 );
 
+// Update shipment before shipping (SUPER_ADMIN and ADMIN_MANAGER)
+router.patch(
+  '/shipments/:shipmentId',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  shipmentController.updateShipment.bind(shipmentController)
+);
+
 // Ship shipment (SUPER_ADMIN and ADMIN_MANAGER)
 router.post(
   '/shipments/:shipmentId/ship',
@@ -289,6 +313,14 @@ router.post(
   authenticate,
   authorize([Role.ADMIN_CABANG]),
   shipmentController.receiveShipment.bind(shipmentController)
+);
+
+// Review shipment issue (SUPER_ADMIN and ADMIN_MANAGER)
+router.post(
+  '/shipments/:shipmentId/review-issue',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  shipmentController.reviewShipmentIssue.bind(shipmentController)
 );
 
 // Legacy approve shipment endpoint (for backward compatibility)

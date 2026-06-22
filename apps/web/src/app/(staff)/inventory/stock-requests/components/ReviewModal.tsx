@@ -15,7 +15,13 @@ interface ReviewModalProps {
   onClose: () => void;
   /** @deprecated No longer used - both Premier and Partnership use onCreatePartnershipInvoice */
   onApprovePremierRequest?: (requestId: string, reviewNotes: string) => Promise<void>;
-  onCreatePartnershipInvoice: (requestId: string, items: InvoiceItemInput[], notes?: string) => Promise<void>;
+  onCreatePartnershipInvoice: (
+    requestId: string,
+    items: InvoiceItemInput[],
+    notes?: string,
+    paymentMode?: 'NORMAL' | 'DEBT'
+  ) => Promise<void>;
+  onMarkPaymentAsDebt: (requestId: string, notes?: string) => Promise<void>;
   onConfirmPayment: (requestId: string, verificationNotes?: string) => Promise<void>;
   onRejectPayment: (requestId: string, rejectionReason: string) => Promise<void>;
   onReject: (requestId: string, reviewNotes: string) => Promise<void>;
@@ -29,6 +35,7 @@ export default function ReviewModal({
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   onApprovePremierRequest, // Deprecated - kept for backward compatibility
   onCreatePartnershipInvoice,
+  onMarkPaymentAsDebt,
   onConfirmPayment,
   onRejectPayment,
   onReject, 
@@ -134,6 +141,21 @@ export default function ReviewModal({
     await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
   };
 
+  const handleApproveDebt = async () => {
+    const total = parseFloat(totalInvoiceAmount) || 0;
+    if (total <= 0) {
+      showToast.error('Masukkan total harga lebih dari 0 untuk pembayaran utang');
+      return;
+    }
+
+    const invoiceItems = buildInvoiceItems();
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, 'DEBT');
+  };
+
+  const handleMarkDebt = async () => {
+    await onMarkPaymentAsDebt(request.id, reviewNotes);
+  };
+
   const handleConfirmPayment = async () => {
     await onConfirmPayment(request.id, reviewNotes);
   };
@@ -215,8 +237,12 @@ export default function ReviewModal({
 
   const canApprove = isManager && request.status === 'PENDING';
   const existingInvoiceTotal = request.invoice?.totalAmount ?? 0;
+  const isDebtInvoice = request.invoice?.status === 'DEBT';
+  const hasPaymentProof = Boolean(request.paymentProofUrl || request.invoice?.paymentProofUrl);
   const isFreeWaitingPayment = request.status === 'WAITING_PAYMENT' && existingInvoiceTotal <= 0;
-  const canConfirmPayment = isManager && (request.status === 'PAYMENT_UPLOADED' || isFreeWaitingPayment);
+  const canMarkDebt = isManager && request.status === 'WAITING_PAYMENT' && Boolean(request.invoice) && existingInvoiceTotal > 0 && !isDebtInvoice;
+  const canConfirmPayment = isManager && (request.status === 'PAYMENT_UPLOADED' || isFreeWaitingPayment || (isDebtInvoice && hasPaymentProof));
+  const canRejectUploadedPayment = isManager && (request.status === 'PAYMENT_UPLOADED' || (isDebtInvoice && hasPaymentProof));
   const canReject = isManager && ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED'].includes(request.status);
   const invoiceTotal = parseFloat(totalInvoiceAmount) || 0;
   const isFreeInvoice = (canApprove && invoiceTotal <= 0) || isFreeWaitingPayment;
@@ -232,6 +258,23 @@ export default function ReviewModal({
       case 'SHIPPED': return 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30';
       case 'COMPLETED': return 'bg-green-500/20 text-green-400 border-green-500/30';
       default: return 'bg-neutral-500/20 text-neutral-400 border-neutral-500/30';
+    }
+  };
+
+  const getInvoiceStatusLabel = (status: string) => {
+    switch (status) {
+      case 'DEBT':
+        return 'Utang';
+      case 'PAID':
+        return 'Lunas';
+      case 'PENDING_PAYMENT':
+        return 'Menunggu Pembayaran';
+      case 'OVERDUE':
+        return 'Jatuh Tempo';
+      case 'CANCELLED':
+        return 'Dibatalkan';
+      default:
+        return status;
     }
   };
 
@@ -458,8 +501,14 @@ export default function ReviewModal({
                     <div>
                       <h4 className="text-lg font-bold text-emerald-400">{request.invoice.invoiceNumber}</h4>
                       <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
-                        Status: {request.invoice.status}
+                        Status: {getInvoiceStatusLabel(request.invoice.status)}
                       </p>
+                      {isDebtInvoice && (
+                        <p className="mt-2 inline-flex items-center gap-1 rounded-lg bg-orange-500/10 px-2.5 py-1 text-xs font-semibold text-orange-400">
+                          <CreditCard className="h-3.5 w-3.5" />
+                          Pembayaran utang, bukti wajib diupload kemudian
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-2xl font-bold text-emerald-400">
@@ -600,11 +649,11 @@ export default function ReviewModal({
             )}
 
             {/* Notes Input - Only show for managers */}
-            {isManager && (canApprove || canConfirmPayment || canReject) && (
+            {isManager && (canApprove || canMarkDebt || canConfirmPayment || canReject) && (
               <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
                 <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-amber-500" />
-                  {isFreeWaitingPayment ? 'Catatan Approve Gratis' : canConfirmPayment ? 'Catatan Verifikasi' : 'Catatan Review'}
+                  {canMarkDebt ? 'Catatan Utang' : isFreeWaitingPayment ? 'Catatan Approve Gratis' : canConfirmPayment ? 'Catatan Verifikasi' : 'Catatan Review'}
                   {(canApprove || canReject) && !canConfirmPayment && (
                     <span className="text-red-500">*</span>
                   )}
@@ -615,7 +664,7 @@ export default function ReviewModal({
                     setReviewNotes(e.target.value);
                     if (e.target.value.trim()) setNotesError(false);
                   }}
-                  placeholder={isFreeWaitingPayment ? 'Catatan approve gratis (opsional)...' : canConfirmPayment ? 'Catatan verifikasi pembayaran (opsional)...' : 'Masukkan catatan review (wajib diisi)...'}
+                  placeholder={canMarkDebt ? 'Catatan alasan utang (opsional)...' : isFreeWaitingPayment ? 'Catatan approve gratis (opsional)...' : canConfirmPayment ? 'Catatan verifikasi pembayaran (opsional)...' : 'Masukkan catatan review (wajib diisi)...'}
                   rows={3}
                   className={`w-full px-4 py-3 text-sm rounded-xl border bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-all ${
                     notesError ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'
@@ -635,10 +684,52 @@ export default function ReviewModal({
           <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 flex-shrink-0">
             {/* Approve/Create Invoice Button */}
             {canApprove && (
+              <>
+                {!isFreeInvoice && (
+                  <button
+                    onClick={handleApproveDebt}
+                    disabled={loading}
+                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Memproses...
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4" />
+                        Approve Utang
+                      </>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={handleApprove}
+                  disabled={loading}
+                  className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/30 flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      Memproses...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      {isFreeInvoice ? 'Approve Gratis' : 'Buat Invoice'}
+                    </>
+                  )}
+                </button>
+              </>
+            )}
+
+            {/* Mark Existing Invoice as Debt */}
+            {canMarkDebt && (
               <button
-                onClick={handleApprove}
+                onClick={handleMarkDebt}
                 disabled={loading}
-                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/30 flex items-center gap-2"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold hover:from-orange-600 hover:to-orange-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 flex items-center gap-2"
               >
                 {loading ? (
                   <>
@@ -647,8 +738,8 @@ export default function ReviewModal({
                   </>
                 ) : (
                   <>
-                    <Check className="h-4 w-4" />
-                    {isFreeInvoice ? 'Approve Gratis' : 'Buat Invoice'}
+                    <CreditCard className="h-4 w-4" />
+                    Jadikan Utang
                   </>
                 )}
               </button>
@@ -670,17 +761,19 @@ export default function ReviewModal({
                   ) : (
                     <>
                       <Check className="h-4 w-4" />
-                      {isFreeWaitingPayment ? 'Approve Gratis' : 'Konfirmasi Pembayaran'}
+                      {isFreeWaitingPayment ? 'Approve Gratis' : isDebtInvoice ? 'Konfirmasi Pelunasan' : 'Konfirmasi Pembayaran'}
                     </>
                   )}
                 </button>
-                <button
-                  onClick={handleRejectPayment}
-                  disabled={loading}
-                  className="px-5 py-2.5 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Tolak Pembayaran'}
-                </button>
+                {canRejectUploadedPayment && (
+                  <button
+                    onClick={handleRejectPayment}
+                    disabled={loading}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Tolak Pembayaran'}
+                  </button>
+                )}
               </>
             )}
 

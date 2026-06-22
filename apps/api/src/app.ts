@@ -94,21 +94,6 @@ export function createApp(): Application {
     }),
   );
 
-  // ── Auth Specific Rate Limiter ────────────────────────────
-  const authLimiter = rateLimit({
-    windowMs: env.RATE_LIMIT_WINDOW_MS,
-    max: env.AUTH_RATE_LIMIT_MAX,
-    standardHeaders: true,
-    legacyHeaders: false,
-    message: {
-      success: false,
-      error: {
-        code: 'AUTH_RATE_LIMIT_EXCEEDED',
-        message: 'Terlalu banyak percobaan login. Silakan coba lagi dalam 1 menit.',
-      },
-    },
-  });
-
   // ── Health Check ──────────────────────────────────────────
   app.get('/health', (_req: Request, res: Response) => {
     res.json({
@@ -121,7 +106,7 @@ export function createApp(): Application {
   // ── API Routes ────────────────────────────────────────────
   const prefix = env.API_PREFIX;
 
-  app.use(`${prefix}/auth`, authLimiter, authRouter);
+  app.use(`${prefix}/auth`, authRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

@@ -4,10 +4,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { inventoryApi } from '@/lib/api/inventoryApi';
+import { inventoryApi, type UpdateStockRequestInput } from '@/lib/api/inventoryApi';
 import { devLog, devError } from '@/lib/logger';
 import { 
+  AlertTriangle,
   ClipboardList, 
+  Edit3,
   Plus, 
   Clock, 
   CreditCard, 
@@ -25,11 +27,12 @@ import {
   RequestItem, 
   FilterType, 
   InvoiceItemInput,
+  STATUS_COLORS,
 } from './types';
-import StockRequestCard from './components/StockRequestCard';
 import ReviewModal from './components/ReviewModal';
 import CreateRequestModal from './components/CreateRequestModal';
 import UploadPaymentModal from './components/UploadPaymentModal';
+import EditRequestModal from './components/EditRequestModal';
 
 const filterOptions: { value: FilterType; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'ALL', label: 'Semua', icon: <ClipboardList className="w-4 h-4" />, color: 'bg-neutral-500' },
@@ -50,6 +53,7 @@ export default function StockRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedRequest, setSelectedRequest] = useState<StockRequest | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [mounted, setMounted] = useState(false);
@@ -215,10 +219,15 @@ export default function StockRequestsPage() {
     }
   };
 
-  const handleCreatePartnershipInvoice = async (requestId: string, items: InvoiceItemInput[], notes?: string) => {
+  const handleCreatePartnershipInvoice = async (
+    requestId: string,
+    items: InvoiceItemInput[],
+    notes?: string,
+    paymentMode?: 'NORMAL' | 'DEBT'
+  ) => {
     try {
       setActionLoading(true);
-      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes });
+      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes, paymentMode });
       const message = response.data?.data?.message || 'Invoice berhasil dibuat';
       showToast.success(message);
       setShowModal(false);
@@ -226,6 +235,22 @@ export default function StockRequestsPage() {
       fetchRequests();
     } catch (error: any) {
       showToast.error(error.response?.data?.message || 'Gagal membuat invoice');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleMarkPaymentAsDebt = async (requestId: string, notes?: string) => {
+    try {
+      setActionLoading(true);
+      const response = await inventoryApi.markPaymentAsDebt(requestId, notes);
+      const message = response.data?.data?.message || 'Request disetujui sebagai utang';
+      showToast.success(message);
+      setShowModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal menjadikan pembayaran sebagai utang');
     } finally {
       setActionLoading(false);
     }
@@ -308,12 +333,59 @@ export default function StockRequestsPage() {
   };
 
   const handleUploadPayment = (request: StockRequest) => {
+    const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+    if (!isManager) {
+      showToast.error('Hanya Admin Manager atau Super Admin yang dapat upload bukti pembayaran');
+      return;
+    }
+
     setSelectedRequest(request);
     setShowPaymentModal(true);
   };
 
+  const handleEditRequest = async (request: StockRequest) => {
+    const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+    if (!isManager || request.status !== 'PENDING') {
+      showToast.error('Request stok hanya dapat diedit Admin Manager saat status pending');
+      return;
+    }
+
+    try {
+      const response = await inventoryApi.getStockRequestById(request.id);
+      const fullRequest = response.data?.data || request;
+      setSelectedRequest(fullRequest);
+      setShowEditModal(true);
+    } catch (error) {
+      devError('Failed to fetch request details for edit:', error);
+      setSelectedRequest(request);
+      setShowEditModal(true);
+    }
+  };
+
+  const handleUpdateRequest = async (data: UpdateStockRequestInput) => {
+    if (!selectedRequest) return;
+
+    try {
+      setActionLoading(true);
+      await inventoryApi.updateStockRequest(selectedRequest.id, data);
+      showToast.success('Request stok berhasil diperbarui');
+      setShowEditModal(false);
+      setSelectedRequest(null);
+      fetchRequests();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.message || 'Gagal memperbarui request stok');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
+    setSelectedRequest(null);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
     setSelectedRequest(null);
   };
 
@@ -352,6 +424,39 @@ export default function StockRequestsPage() {
               Buat Request
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-red-700 dark:text-red-300">
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-red-500/15 text-red-500">
+            <AlertTriangle className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-bold">Wajib video pembukaan paket pengiriman.</p>
+            <p className="mt-1 text-sm leading-relaxed text-red-700/90 dark:text-red-200/90">
+              Komplain tidak dapat diproses tanpa video unboxing. Jika ada masalah pada barang, segera hubungi Admin Manager dan Super Admin.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Warning Banner - Stock Changes */}
+      <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 shadow-sm">
+        <div className="flex items-start gap-3">
+          <div className="flex-shrink-0 mt-0.5">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 dark:bg-amber-500/20">
+              <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-amber-900 dark:text-amber-200 mb-1">
+              ⚠️ Perhatian Penting
+            </h3>
+            <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+              Jika terjadi perubahan stok atau kesalahan input, segera hubungi <span className="font-bold">Admin Manager</span> untuk verifikasi dan perbaikan data.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -407,16 +512,155 @@ export default function StockRequestsPage() {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {requests.map((request) => (
-            <StockRequestCard
-              key={request.id}
-              request={request}
-              userRole={user?.role}
-              onReview={handleReviewRequest}
-              onUploadPayment={handleUploadPayment}
-            />
-          ))}
+        <div className="bg-white dark:bg-neutral-800 rounded-2xl border border-neutral-200 dark:border-neutral-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-neutral-50 dark:bg-neutral-900/50 border-b border-neutral-200 dark:border-neutral-700">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Kode Request
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Cabang
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Tipe
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Item
+                  </th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Tanggal
+                  </th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
+                {requests.map((request) => {
+                  const statusConfig = filterOptions.find(f => f.value === request.status) || filterOptions[0];
+                  const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+                  const isDebtInvoice = request.invoice?.status === 'DEBT';
+                  const hasPaymentProof = Boolean(request.paymentProofUrl || request.invoice?.paymentProofUrl);
+                  const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
+                  const canReview = (
+                    (request.status === 'PENDING' && isManager) ||
+                    (request.status === 'PAYMENT_UPLOADED' && isManager) ||
+                    (isDebtInvoice && hasPaymentProof && isManager)
+                  );
+                  const canEditRequest = isManager && request.status === 'PENDING';
+                  const canUploadPayment = isManager && !isFreeInvoice && (
+                    request.status === 'WAITING_PAYMENT' ||
+                    (isDebtInvoice && !hasPaymentProof)
+                  );
+
+                  return (
+                    <tr key={request.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <ClipboardList className="h-4 w-4 text-amber-500" />
+                          <span className="text-sm font-semibold text-neutral-900 dark:text-white">
+                            {request.requestCode}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-neutral-900 dark:text-white font-medium">
+                          {request.branchName}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${
+                          request.branchType === 'PREMIER'
+                            ? 'bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300'
+                            : request.branchType === 'PARTNERSHIP'
+                            ? 'bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300'
+                            : 'bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          {request.branchType}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                          style={{ backgroundColor: STATUS_COLORS[request.status] }}
+                        >
+                          {statusConfig.icon}
+                          {statusConfig.label}
+                        </span>
+                        {isDebtInvoice && (
+                          <div className="mt-1">
+                            <span className="inline-flex items-center gap-1 rounded-md bg-orange-500/10 px-2 py-0.5 text-xs font-semibold text-orange-500">
+                              <CreditCard className="h-3 w-3" />
+                              Utang
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5">
+                          <Package className="h-4 w-4 text-neutral-400" />
+                          <span className="text-sm text-neutral-600 dark:text-neutral-400">
+                            {request.itemCount || request.items?.length || 0} item
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-neutral-600 dark:text-neutral-400">
+                          {new Date(request.createdAt).toLocaleDateString('id-ID', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {canEditRequest && (
+                            <button
+                              onClick={() => handleEditRequest(request)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-neutral-900 text-white hover:bg-neutral-700 transition-all dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
+                            >
+                              <Edit3 className="h-3.5 w-3.5" />
+                              Edit
+                            </button>
+                          )}
+                          {canReview && (
+                            <button
+                              onClick={() => handleReviewRequest(request)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all"
+                            >
+                              <CheckCircle className="h-3.5 w-3.5" />
+                              Review
+                            </button>
+                          )}
+                          {canUploadPayment && (
+                            <button
+                              onClick={() => handleUploadPayment(request)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-all"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                              Upload Bukti
+                            </button>
+                          )}
+                          <button
+                            onClick={() => handleReviewRequest(request)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-neutral-100 dark:bg-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-600 transition-all"
+                          >
+                            Detail
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -428,6 +672,7 @@ export default function StockRequestsPage() {
           onClose={handleCloseModal}
           onApprovePremierRequest={handleApprovePremierRequest}
           onCreatePartnershipInvoice={handleCreatePartnershipInvoice}
+          onMarkPaymentAsDebt={handleMarkPaymentAsDebt}
           onConfirmPayment={handleConfirmPayment}
           onRejectPayment={handleRejectPayment}
           onReject={handleReject}
@@ -443,6 +688,15 @@ export default function StockRequestsPage() {
             setSelectedRequest(null);
           }}
           onUpload={handleUploadPaymentProof}
+          loading={actionLoading}
+        />
+      )}
+
+      {showEditModal && selectedRequest && (
+        <EditRequestModal
+          request={selectedRequest}
+          onClose={handleCloseEditModal}
+          onSubmit={handleUpdateRequest}
           loading={actionLoading}
         />
       )}

@@ -85,6 +85,46 @@ export class ShipmentController {
   }
 
   /**
+   * Review shipment issue (Admin Manager / Super Admin)
+   * POST /api/v1/inventory/shipments/:shipmentId/review-issue
+   *
+   * Body:
+   * - decision: SEND_SHORTAGE | CLOSE_CASE | COMPLETE_CASE
+   * - notes: string (optional)
+   * - shortageItems: Array of { masterProductId, quantity } (optional)
+   */
+  async reviewShipmentIssue(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { shipmentId } = req.params;
+      const { decision, notes, shortageItems } = req.body;
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+      }
+
+      const validDecisions = ['SEND_SHORTAGE', 'CLOSE_CASE', 'COMPLETE_CASE'];
+      if (!validDecisions.includes(decision)) {
+        return sendError(res, 400, 'INVALID_DECISION', `Keputusan tidak valid. Gunakan: ${validDecisions.join(', ')}`);
+      }
+
+      if (shortageItems && !Array.isArray(shortageItems)) {
+        return sendError(res, 400, 'INVALID_SHORTAGE_ITEMS', 'shortageItems harus berupa array');
+      }
+
+      const result = await shipmentService.reviewShipmentIssue(shipmentId, userId, {
+        decision,
+        notes,
+        shortageItems,
+      });
+
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
    * Legacy approve shipment endpoint (for backward compatibility)
    * POST /api/v1/inventory/shipments/:shipmentId/approve
    */
@@ -206,6 +246,35 @@ export class ShipmentController {
           return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke shipment ini');
         }
       }
+
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Update shipment
+   * PATCH /api/v1/inventory/shipments/:shipmentId
+   */
+  async updateShipment(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { shipmentId } = req.params;
+      const { notes, items } = req.body;
+      const userId = req.user?.userId;
+
+      if (!userId) {
+        return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+      }
+
+      if (items !== undefined && !Array.isArray(items)) {
+        return sendError(res, 400, 'INVALID_ITEMS', 'Items harus berupa array');
+      }
+
+      const result = await shipmentService.updateShipment(shipmentId, userId, {
+        notes,
+        items,
+      });
 
       return sendSuccess(res, result);
     } catch (err: any) {

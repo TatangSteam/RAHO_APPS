@@ -13,6 +13,12 @@ const COMPANY_EMAIL = 'info@raho.id';
 const COMPANY_LOGO_PATH = '/asset/LogoInInvoiceAndKuitansi.png';
 const BRAND_RED: [number, number, number] = [185, 28, 28];
 
+type AutoTableDocument = jsPDF & {
+  lastAutoTable?: {
+    finalY: number;
+  };
+};
+
 async function loadImageDataUrl(path: string): Promise<string | null> {
   try {
     const response = await fetch(path);
@@ -94,6 +100,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     const statusColors: Record<string, [number, number, number]> = {
       PENDING: [255, 152, 0],
       PAID: [76, 175, 80],
+      DEBT: [249, 115, 22],
       CANCELLED: [244, 67, 54],
       WAITING_PAYMENT: [156, 39, 176],
     };
@@ -104,6 +111,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     const statusLabel = invoice.status === 'PAID' ? 'LUNAS' : 
+                        invoice.status === 'DEBT' ? 'UTANG' :
                         invoice.status === 'PENDING' ? 'BELUM BAYAR' : 
                         invoice.status === 'WAITING_PAYMENT' ? 'MENUNGGU' : invoice.status;
     doc.text(statusLabel, pageWidth - margin - 22.5, currentY - 1, { align: 'center' });
@@ -197,7 +205,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     // ============================================================
     // SUMMARY SECTION - Total Only
     // ============================================================
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = ((doc as AutoTableDocument).lastAutoTable?.finalY ?? currentY) + 8;
 
     const summaryX = pageWidth - margin - 70;
     const summaryValueX = pageWidth - margin;
@@ -227,9 +235,35 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
       currentY += 4;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      const splitNotes = doc.splitTextToSize(request.notes, contentWidth);
+      const splitNotes = doc.splitTextToSize(request.notes, contentWidth) as string[];
       doc.text(splitNotes, margin, currentY);
+      currentY += splitNotes.length * 4;
     }
+
+    // ============================================================
+    // SIGNATURES
+    // ============================================================
+    if (currentY + 55 > pageHeight - 25) {
+      doc.addPage();
+      currentY = margin;
+    }
+
+    currentY += 18;
+    const signatureWidth = 70;
+    const adminBranchCenterX = margin + (signatureWidth / 2);
+    const adminManagerCenterX = pageWidth - margin - (signatureWidth / 2);
+
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Admin Cabang', adminBranchCenterX, currentY, { align: 'center' });
+    doc.text('Admin Manager', adminManagerCenterX, currentY, { align: 'center' });
+
+    currentY += 30;
+    doc.setDrawColor(120, 120, 120);
+    doc.setLineWidth(0.3);
+    doc.line(margin, currentY, margin + signatureWidth, currentY);
+    doc.line(pageWidth - margin - signatureWidth, currentY, pageWidth - margin, currentY);
 
     // ============================================================
     // FOOTER

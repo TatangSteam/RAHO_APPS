@@ -178,8 +178,8 @@ export class InventoryController {
 
   /**
    * Adjust stock
-   * - SUPER_ADMIN, ADMIN_MANAGER: can adjust any branch's stock
-   * - ADMIN_CABANG: can only adjust their own branch's stock
+   * - SUPER_ADMIN: can adjust any branch's stock
+   * - ADMIN_MANAGER: can adjust branches they manage
    * PATCH /api/v1/inventory/items/:itemId/adjust-stock
    */
   async adjustStock(req: Request, res: Response, next: NextFunction) {
@@ -189,7 +189,10 @@ export class InventoryController {
       const notes = req.body.notes ?? req.body.reason;
       const userId = req.user!.userId;
       const userRole = req.user!.role;
-      const userBranchId = req.user!.branchId;
+
+      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER) {
+        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Admin Manager atau Super Admin yang dapat mengedit stok');
+      }
 
       // Validate input
       if (typeof adjustment !== 'number' || adjustment === 0) {
@@ -215,16 +218,6 @@ export class InventoryController {
 
       if (!inventoryItem.branch.isActive) {
         return sendError(res, 422, 'BRANCH_INACTIVE', 'Stok tidak dapat diedit karena cabang sudah tidak aktif');
-      }
-
-      // Branch restriction only for ADMIN_CABANG
-      if (userRole === 'ADMIN_CABANG' && inventoryItem.branchId !== userBranchId) {
-        return sendError(
-          res,
-          403,
-          'BRANCH_MISMATCH',
-          'Anda hanya dapat mengedit stok di cabang Anda sendiri'
-        );
       }
 
       if (userRole === Role.ADMIN_MANAGER) {
@@ -264,6 +257,11 @@ export class InventoryController {
     try {
       const { productId } = req.params;
       const { conversionFactor } = req.body;
+      const userRole = req.user!.role;
+
+      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER) {
+        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Admin Manager atau Super Admin yang dapat mengubah konversi stok');
+      }
 
       // Validate input
       if (conversionFactor !== undefined) {

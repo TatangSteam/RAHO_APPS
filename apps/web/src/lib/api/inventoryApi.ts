@@ -15,6 +15,11 @@ export interface CreateStockRequestInput {
   notes?: string;
 }
 
+export interface UpdateStockRequestInput {
+  notes?: string;
+  items?: StockRequestItem[];
+}
+
 export interface InvoiceItemInput {
   masterProductId: string;
   quantity: number;
@@ -24,6 +29,7 @@ export interface InvoiceItemInput {
 export interface CreateInvoiceInput {
   items: InvoiceItemInput[];
   notes?: string;
+  paymentMode?: 'NORMAL' | 'DEBT';
 }
 
 export interface ReceiveShipmentInput {
@@ -50,6 +56,26 @@ export interface ShipShipmentInput {
     masterProductId: string;
     sentQty: number;
     overstockReason?: string;
+  }>;
+}
+
+export interface UpdateShipmentInput {
+  notes?: string;
+  items?: Array<{
+    masterProductId: string;
+    sentQty: number;
+    overstockReason?: string;
+  }>;
+}
+
+export type ShipmentIssueDecision = 'SEND_SHORTAGE' | 'CLOSE_CASE' | 'COMPLETE_CASE';
+
+export interface ReviewShipmentIssueInput {
+  decision: ShipmentIssueDecision;
+  notes?: string;
+  shortageItems?: Array<{
+    masterProductId: string;
+    quantity: number;
   }>;
 }
 
@@ -179,11 +205,19 @@ export interface Shipment {
   shipmentCode: string;
   fromBranchId: string;
   fromBranchName: string;
+  fromBranchCode?: string;
   toBranchId: string;
   toBranchName: string;
+  toBranchCode?: string;
+  toBranchType?: string;
   status: string;
   notes?: string;
   shipmentPhotoUrl?: string;
+  shipmentPhotoName?: string;
+  itemCount?: number;
+  totalItems?: number;
+  hasDiscrepancies?: boolean;
+  discrepancyCount?: number;
   items: Array<{
     id: string;
     masterProductId: string;
@@ -207,7 +241,43 @@ export interface Shipment {
     discrepancyType: string;
     notes?: string;
     photoUrl?: string;
+    photoFileName?: string;
+    reportedBy?: string;
+    createdAt?: string;
   }>;
+  stockRequest?: {
+    id: string;
+    requestCode: string;
+    status: string;
+    branchId?: string;
+    branchName?: string;
+    branchType?: string;
+    items?: Array<{
+      id: string;
+      masterProductId: string;
+      productName: string;
+      requestedQty: number;
+      approvedQty?: number | null;
+      unit: string;
+    }>;
+    invoice?: {
+      id: string;
+      invoiceNumber: string;
+      subtotal?: number;
+      totalAmount: number;
+      status: string;
+      items?: Array<{
+        id: string;
+        masterProductId: string;
+        sku?: string;
+        productName: string;
+        description?: string;
+        quantity: number;
+        pricePerUnit: number;
+        subtotal: number;
+      }>;
+    } | null;
+  } | null;
   overstocksCreated?: Array<{
     masterProductId: string;
     productName: string;
@@ -218,6 +288,8 @@ export interface Shipment {
   shippedAt?: string;
   receivedBy?: string;
   receivedAt?: string;
+  approvedBy?: string;
+  approvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -315,6 +387,13 @@ export const inventoryApi = {
   },
 
   /**
+   * Update pending stock request (Admin Manager / Super Admin)
+   */
+  updateStockRequest: (requestId: string, data: UpdateStockRequestInput) => {
+    return api.patch(`/inventory/stock-requests/${requestId}`, data);
+  },
+
+  /**
    * Approve stock request for PREMIER branch
    */
   approvePremierRequest: (requestId: string, reviewNotes?: string) => {
@@ -329,7 +408,14 @@ export const inventoryApi = {
   },
 
   /**
-   * Upload payment proof (Admin Cabang Partnership)
+   * Mark stock request invoice as debt and continue flow
+   */
+  markPaymentAsDebt: (requestId: string, notes?: string) => {
+    return api.post(`/inventory/stock-requests/${requestId}/mark-debt`, { notes });
+  },
+
+  /**
+   * Upload payment proof (Admin Manager / Super Admin)
    */
   uploadPaymentProof: (requestId: string, file: File) => {
     const formData = new FormData();
@@ -388,6 +474,13 @@ export const inventoryApi = {
   },
 
   /**
+   * Update preparing shipment (Admin Manager / Super Admin)
+   */
+  updateShipment: (shipmentId: string, data: UpdateShipmentInput) => {
+    return api.patch(`/inventory/shipments/${shipmentId}`, data);
+  },
+
+  /**
    * Ship shipment (Admin Manager / Super Admin)
    * Supports sending more items than requested (overstock)
    */
@@ -400,6 +493,13 @@ export const inventoryApi = {
    */
   receiveShipment: (shipmentId: string, data: ReceiveShipmentInput) => {
     return api.post(`/inventory/shipments/${shipmentId}/receive`, data);
+  },
+
+  /**
+   * Review shipment issue (Admin Manager / Super Admin)
+   */
+  reviewShipmentIssue: (shipmentId: string, data: ReviewShipmentIssueInput) => {
+    return api.post(`/inventory/shipments/${shipmentId}/review-issue`, data);
   },
 
   /**

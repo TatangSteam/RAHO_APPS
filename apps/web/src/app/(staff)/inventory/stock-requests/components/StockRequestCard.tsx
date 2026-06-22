@@ -131,7 +131,7 @@ export default function StockRequestCard({
     (request.status === 'WAITING_PAYMENT' && isFreeInvoice)
   );
   const canUploadPayment = isManager && request.status === 'WAITING_PAYMENT' && !isFreeInvoice;
-  const canReceive = isAdminCabang && request.status === 'SHIPPED';
+  const canReceive = isAdminCabang && request.status === 'SHIPPED' && request.shipment?.status === 'SHIPPED';
 
   return (
     <div className="group bg-white dark:bg-neutral-800 rounded-2xl border border-neutral-200 dark:border-neutral-700 shadow-sm hover:shadow-lg hover:border-amber-300 dark:hover:border-amber-500/50 transition-all duration-300 flex flex-col overflow-hidden">

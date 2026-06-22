@@ -1,12 +1,13 @@
 import { useState, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
-import { BranchDetail, User, BranchMember } from './types';
+import { BranchDetail, User, BranchMember, BranchInventoryItem } from './types';
 
 export function useBranchData(branchId: string, accessToken: string) {
   const [branch, setBranch] = useState<BranchDetail | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [members, setMembers] = useState<BranchMember[]>([]);
+  const [inventory, setInventory] = useState<BranchInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadBranchDetail = useCallback(async () => {
@@ -90,6 +91,29 @@ export function useBranchData(branchId: string, accessToken: string) {
     }
   }, [branchId, accessToken]);
 
+  const loadBranchInventory = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/inventory/items?branchId=${branchId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error('Gagal memuat data stok');
+
+      const result = await response.json();
+      const inventoryData = result.data?.items || result.data || [];
+      setInventory(Array.isArray(inventoryData) ? inventoryData : []);
+    } catch (error: any) {
+      devError('Error loading branch inventory:', error);
+      showToast.error(error.message || 'Gagal memuat data stok');
+      setInventory([]);
+    }
+  }, [branchId, accessToken]);
+
   const toggleUserActive = useCallback(async (userId: string, currentStatus: boolean) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}`, {
@@ -116,10 +140,12 @@ export function useBranchData(branchId: string, accessToken: string) {
     branch,
     users,
     members,
+    inventory,
     loading,
     loadBranchDetail,
     loadBranchUsers,
     loadBranchMembers,
+    loadBranchInventory,
     toggleUserActive,
   };
 }

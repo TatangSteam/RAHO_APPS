@@ -1,16 +1,18 @@
 import styles from './page.module.css';
 
 interface TabNavigationProps {
-  activeTab: 'overview' | 'users' | 'members';
+  activeTab: 'overview' | 'users' | 'members' | 'stock';
   usersCount: number;
   membersCount: number;
-  onTabChange: (tab: 'overview' | 'users' | 'members') => void;
+  stockCount: number;
+  onTabChange: (tab: 'overview' | 'users' | 'members' | 'stock') => void;
 }
 
 export default function TabNavigation({
   activeTab,
   usersCount,
   membersCount,
+  stockCount,
   onTabChange,
 }: TabNavigationProps) {
   return (
@@ -32,6 +34,12 @@ export default function TabNavigation({
         onClick={() => onTabChange('members')}
       >
         🧑‍⚕️ Kelola Member ({membersCount})
+      </button>
+      <button
+        className={`${styles.tab} ${activeTab === 'stock' ? styles.active : ''}`}
+        onClick={() => onTabChange('stock')}
+      >
+        Stok ({stockCount})
       </button>
     </div>
   );

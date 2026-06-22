@@ -49,3 +49,19 @@ export interface BranchMember {
   photoUrl?: string;
   createdAt: string;
 }
+
+export interface BranchInventoryItem {
+  id: string;
+  name: string;
+  category: string;
+  baseUnit: string;
+  usageUnit: string;
+  stock: number;
+  usageStock: number;
+  stockDisplay: string;
+  minThreshold: number;
+  minThresholdUsage: number;
+  thresholdDisplay: string;
+  isLowStock: boolean;
+  storageLocation?: string;
+}

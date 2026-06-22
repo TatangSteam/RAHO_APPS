@@ -19,6 +19,7 @@ export const loginRateLimiter = rateLimit({
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skipSuccessfulRequests: true,
   
   // Use IP address as the key
   keyGenerator: (req: Request): string => {
@@ -31,13 +32,6 @@ export const loginRateLimiter = rateLimit({
     
     // Fallback to connection remote address
     return req.ip || req.socket.remoteAddress || 'unknown';
-  },
-  
-  // Skip successful requests (only count failed login attempts)
-  skip: (req: Request) => {
-    // We'll implement this logic in the controller
-    // For now, count all requests
-    return false;
   },
 });
 

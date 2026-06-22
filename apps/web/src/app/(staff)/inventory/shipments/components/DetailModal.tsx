@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info } from 'lucide-react';
-import { Shipment } from '@/lib/api/inventoryApi';
+import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info, CheckCircle2 } from 'lucide-react';
+import { Shipment, ShipmentIssueDecision } from '@/lib/api/inventoryApi';
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
   PREPARING: {
@@ -36,14 +36,43 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgCo
   },
 };
 
+const DISCREPANCY_LABELS: Record<string, string> = {
+  SHORTAGE: 'Kurang',
+  DAMAGE: 'Rusak',
+  WRONG_ITEM: 'Salah Item',
+  OTHER: 'Lainnya',
+};
+
+const formatQuantity = (value: number) => {
+  return Number.isInteger(value) ? value.toString() : value.toFixed(2);
+};
+
+const formatDateTime = (dateString?: string) => {
+  if (!dateString) return '-';
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return '-';
+
+  return date.toLocaleString('id-ID', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 interface DetailModalProps {
   shipment: Shipment;
   onClose: () => void;
   onShip?: () => void;
   onReceive?: () => void;
+  onReviewIssue?: (decision: ShipmentIssueDecision) => Promise<void>;
+  loading?: boolean;
+  detailLoading?: boolean;
 }
 
-export default function DetailModal({ shipment, onClose, onShip, onReceive }: DetailModalProps) {
+export default function DetailModal({ shipment, onClose, onShip, onReceive, onReviewIssue, loading, detailLoading }: DetailModalProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -59,6 +88,16 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
   }, []);
 
   const statusConfig = STATUS_CONFIG[shipment.status] || STATUS_CONFIG.PREPARING;
+  const discrepancies = shipment.discrepancies || [];
+  const issueCount = discrepancies.length || shipment.discrepancyCount || 0;
+  const hasIssueHistory = Boolean(
+    issueCount || shipment.hasDiscrepancies || shipment.status === 'RECEIVED_WITH_ISSUE' || shipment.approvedAt
+  );
+  const hasOpenIssue = shipment.status === 'RECEIVED_WITH_ISSUE' && !shipment.approvedAt;
+  const reviewHistory = (shipment.notes || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.startsWith('[Review Admin Manager]'));
 
   if (!mounted) return null;
 
@@ -74,7 +113,7 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
       {/* Modal Container */}
       <div className="flex min-h-full items-center justify-center p-4">
         <div
-          className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
+          className="relative w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
           role="dialog"
           aria-modal="true"
           onClick={(e) => e.stopPropagation()}
@@ -123,6 +162,45 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
                   {statusConfig.label}
                 </span>
               </div>
+            </div>
+
+            {detailLoading && (
+              <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-sm text-blue-300 flex items-center gap-2">
+                <Info className="h-4 w-4 flex-shrink-0" />
+                Memuat histori masalah pengiriman...
+              </div>
+            )}
+
+            <div className={`p-4 rounded-xl border ${
+              hasIssueHistory
+                ? hasOpenIssue
+                  ? 'bg-orange-500/10 border-orange-500/40'
+                  : 'bg-red-500/10 border-red-500/30'
+                : 'bg-emerald-500/10 border-emerald-500/30'
+            }`}>
+              <h3 className={`text-sm font-semibold mb-2 flex items-center gap-2 ${
+                hasIssueHistory
+                  ? hasOpenIssue ? 'text-orange-400' : 'text-red-400'
+                  : 'text-emerald-400'
+              }`}>
+                {hasIssueHistory ? (
+                  <AlertTriangle className="h-4 w-4" />
+                ) : (
+                  <CheckCircle2 className="h-4 w-4" />
+                )}
+                Riwayat Masalah Pengiriman
+              </h3>
+              <p className={`text-sm ${
+                hasIssueHistory
+                  ? hasOpenIssue ? 'text-orange-200/80' : 'text-red-200/80'
+                  : 'text-emerald-200/80'
+              }`}>
+                {hasIssueHistory
+                  ? hasOpenIssue
+                    ? `Pernah bermasalah dan masih menunggu review Admin Manager (${issueCount || 1} catatan).`
+                    : `Pernah bermasalah${shipment.approvedAt ? ' dan sudah direview Admin Manager' : ''} (${issueCount || 1} catatan).`
+                  : 'Tidak ada histori masalah pada pengiriman ini.'}
+              </p>
             </div>
 
             {/* Timeline */}
@@ -272,32 +350,124 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
               </div>
             )}
 
-            {/* Discrepancies */}
-            {shipment.discrepancies && shipment.discrepancies.length > 0 && (
+            {/* Issue History */}
+            {hasIssueHistory && (
               <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/40">
                 <h3 className="text-sm font-semibold text-red-400 mb-4 flex items-center gap-2">
                   <AlertTriangle className="h-4 w-4" />
-                  Ketidaksesuaian ({shipment.discrepancies.length})
+                  Histori Pengiriman Bermasalah ({issueCount || 1})
                 </h3>
-                
-                <div className="space-y-2">
-                  {shipment.discrepancies.map((d, index) => (
-                    <div 
-                      key={index} 
-                      className="p-3 rounded-lg bg-red-500/10 border border-red-500/30"
-                    >
-                      <div className="font-semibold text-neutral-700 dark:text-neutral-200 mb-1">
-                        {d.productName}
-                      </div>
-                      <div className="text-sm text-red-400">
-                        {d.discrepancyType === 'SHORTAGE' ? 'Kurang' : 
-                         d.discrepancyType === 'DAMAGE' ? 'Rusak' : 
-                         d.discrepancyType === 'WRONG_ITEM' ? 'Salah Item' : 'Lainnya'}
-                        {d.notes && ` - ${d.notes}`}
-                      </div>
+
+                {discrepancies.length > 0 ? (
+                  <div className="space-y-3">
+                    {discrepancies.map((d, index) => {
+                      const difference = d.expectedQty - d.receivedQty;
+
+                      return (
+                        <div
+                          key={d.id || index}
+                          className="p-3 rounded-lg bg-red-500/10 border border-red-500/30"
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                              <div className="font-semibold text-neutral-700 dark:text-neutral-200">
+                                {d.productName}
+                              </div>
+                              <div className="mt-1 text-xs text-red-300">
+                                Dilaporkan: {formatDateTime(d.createdAt)}
+                              </div>
+                            </div>
+                            <span className="rounded-full bg-red-500/15 px-3 py-1 text-xs font-semibold text-red-300">
+                              {DISCREPANCY_LABELS[d.discrepancyType] || d.discrepancyType}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
+                            <div className="rounded-lg bg-neutral-950/5 p-2 dark:bg-neutral-950/30">
+                              <div className="text-neutral-500 dark:text-neutral-400">Seharusnya</div>
+                              <div className="mt-1 font-bold text-neutral-800 dark:text-neutral-100">
+                                {formatQuantity(d.expectedQty)}
+                              </div>
+                            </div>
+                            <div className="rounded-lg bg-neutral-950/5 p-2 dark:bg-neutral-950/30">
+                              <div className="text-neutral-500 dark:text-neutral-400">Diterima</div>
+                              <div className="mt-1 font-bold text-neutral-800 dark:text-neutral-100">
+                                {formatQuantity(d.receivedQty)}
+                              </div>
+                            </div>
+                            <div className="rounded-lg bg-red-500/10 p-2">
+                              <div className="text-red-300">Selisih</div>
+                              <div className="mt-1 font-bold text-red-300">
+                                {formatQuantity(Math.abs(difference))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {d.notes && (
+                            <p className="mt-3 rounded-lg bg-neutral-950/5 p-3 text-sm text-neutral-600 dark:bg-neutral-950/30 dark:text-neutral-300">
+                              {d.notes}
+                            </p>
+                          )}
+
+                          {d.photoUrl && (
+                            <a
+                              href={d.photoUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-red-300 hover:text-red-200"
+                            >
+                              <FileText className="h-4 w-4" />
+                              Lihat bukti foto{d.photoFileName ? ` (${d.photoFileName})` : ''}
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-lg bg-red-500/10 p-3 text-sm text-red-200/80">
+                    Pengiriman ini ditandai pernah bermasalah, namun detail item masalah belum tersedia.
+                  </p>
+                )}
+
+                {reviewHistory.length > 0 && (
+                  <div className="mt-4 rounded-lg bg-orange-500/10 border border-orange-500/30 p-3">
+                    <div className="text-xs font-semibold uppercase text-orange-300 mb-2">
+                      Histori Review Admin Manager
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-2">
+                      {reviewHistory.map((line, index) => (
+                        <p key={`${line}-${index}`} className="text-sm text-orange-100/85">
+                          {line.replace('[Review Admin Manager]', '').trim()}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {shipment.status === 'RECEIVED_WITH_ISSUE' && !shipment.approvedAt && (
+              <div className="p-4 rounded-xl bg-orange-500/10 border border-orange-500/40">
+                <h3 className="text-sm font-semibold text-orange-400 mb-2 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4" />
+                  Menunggu Review Admin Manager
+                </h3>
+                <p className="text-sm text-orange-200/80 leading-relaxed">
+                  Pengiriman ini sudah diterima cabang dengan ketidaksesuaian. Admin Manager harus menentukan apakah kekurangan barang dikirim ulang, kasus ditutup dengan catatan, atau kasus diselesaikan.
+                </p>
+              </div>
+            )}
+
+            {shipment.approvedAt && (
+              <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <h3 className="text-sm font-semibold text-emerald-400 mb-2 flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Sudah Direview Admin Manager
+                </h3>
+                <p className="text-sm text-emerald-200/80">
+                  Direview pada {new Date(shipment.approvedAt).toLocaleString('id-ID')}.
+                </p>
               </div>
             )}
 
@@ -315,21 +485,49 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive }: De
             )}
 
             {/* Stock Request Info */}
-            {(shipment as any).stockRequest && (
+            {shipment.stockRequest && (
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
                 <h3 className="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
                   <FileText className="h-4 w-4" />
                   Request Stok Terkait
                 </h3>
                 <p className="font-semibold text-neutral-700 dark:text-neutral-200">
-                  {(shipment as any).stockRequest.requestCode}
+                  {shipment.stockRequest.requestCode}
                 </p>
               </div>
             )}
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 flex-shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-5 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800/50 flex-shrink-0">
+            {onReviewIssue && (
+              <>
+                <button
+                  onClick={() => onReviewIssue('SEND_SHORTAGE')}
+                  disabled={loading}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Truck className="h-4 w-4" />
+                  Kirim Kekurangan
+                </button>
+                <button
+                  onClick={() => onReviewIssue('CLOSE_CASE')}
+                  disabled={loading}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white font-semibold hover:from-orange-600 hover:to-orange-700 transition-all shadow-lg shadow-orange-500/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                  Tutup Kasus
+                </button>
+                <button
+                  onClick={() => onReviewIssue('COMPLETE_CASE')}
+                  disabled={loading}
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all shadow-lg shadow-emerald-500/30 flex items-center gap-2 disabled:opacity-50"
+                >
+                  <PackageCheck className="h-4 w-4" />
+                  Selesaikan
+                </button>
+              </>
+            )}
             {onShip && (
               <button
                 onClick={onShip}

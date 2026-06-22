@@ -170,6 +170,8 @@ export default function UploadPaymentModal({
 
   if (!mounted) return null;
 
+  const isDebtInvoice = request.invoice?.status === 'DEBT';
+
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center">
       {/* Backdrop with blur */}
@@ -216,7 +218,7 @@ export default function UploadPaymentModal({
                 <span className="text-sm font-medium text-neutral-200">{request.branchName}</span>
               </div>
               <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                PARTNERSHIP
+                {request.branchType}
               </span>
             </div>
 
@@ -231,7 +233,9 @@ export default function UploadPaymentModal({
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-sm font-mono text-neutral-300">{request.invoice.invoiceNumber}</p>
-                    <p className="text-xs text-neutral-500 mt-0.5">{request.itemCount} item</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      {request.itemCount} item{isDebtInvoice ? ' - pembayaran utang' : ''}
+                    </p>
                   </div>
                   <p className="text-2xl font-bold text-emerald-400">
                     {formatCurrency(request.invoice.totalAmount)}
@@ -350,7 +354,9 @@ export default function UploadPaymentModal({
             <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
               <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-blue-300/80 leading-relaxed">
-                Upload bukti transfer dari Admin Cabang. Setelah diupload, Anda dapat memverifikasi dan mengkonfirmasi pembayaran.
+                {isDebtInvoice
+                  ? 'Upload bukti pembayaran untuk melunasi invoice utang. Setelah tersimpan, pembayaran dapat dikonfirmasi sebagai lunas.'
+                  : 'Upload bukti pembayaran sebagai Admin Manager. Setelah tersimpan, pembayaran dapat dikonfirmasi untuk membuat pengiriman.'}
               </p>
             </div>
           </div>
