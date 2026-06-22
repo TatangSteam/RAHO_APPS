@@ -3,6 +3,7 @@ import type {
   CreateSessionInput,
   CreateSessionResponse,
   SessionDetail,
+  SuggestedSessionNumbers,
   CreateDiagnosisInput,
   Diagnosis,
   TherapyPlan,
@@ -21,6 +22,11 @@ export const sessionApi = {
   // Create session
   createSession: async (data: CreateSessionInput): Promise<CreateSessionResponse> => {
     const response = await api.post('/treatment-sessions', data);
+    return response.data.data;
+  },
+
+  getSuggestedSessionNumbers: async (memberId: string): Promise<SuggestedSessionNumbers> => {
+    const response = await api.get(`/treatment-sessions/members/${memberId}/suggested-numbers`);
     return response.data.data;
   },
 
@@ -129,7 +135,9 @@ export const sessionApi = {
   // ============================================================
 
   getMemberSessions: async (memberId: string): Promise<SessionDetail[]> => {
-    const response = await api.get(`/treatment-sessions?memberId=${memberId}`);
+    const response = await api.get('/treatment-sessions', {
+      params: { memberId, limit: 1000 },
+    });
     return response.data.data || [];
   },
 

@@ -25,6 +25,94 @@ interface Staff {
   role: string;
 }
 
+const TABLE_COLUMNS_STORAGE_VERSION = 1;
+
+const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
+  memberName: true,
+  infusKe: true,
+  status: true,
+  treatmentDate: true,
+  treatmentTime: true,
+  pelaksanaan: true,
+  sessionCode: false,
+  memberNo: false,
+  doctorName: true,
+  nurseName: true,
+  branchName: false,
+  branchCode: false,
+  boosterType: false,
+  adminLayanan: false,
+  allDoctors: false,
+  allNurses: false,
+  sistolBefore: true,
+  diastolBefore: true,
+  hrBefore: true,
+  saturasiBefore: true,
+  piBefore: false,
+  sistolAfter: true,
+  diastolAfter: true,
+  hrAfter: true,
+  saturasiAfter: true,
+  piAfter: false,
+  planIfa: false,
+  planHho: false,
+  planH2: false,
+  planNo: false,
+  planGaso: false,
+  planO2: false,
+  planO3: false,
+  planEdta: false,
+  planMb: false,
+  planH2s: false,
+  planKcl: false,
+  planJmlNb: false,
+  planKeterangan: false,
+  aktualIfa: false,
+  aktualHho: false,
+  aktualH2: false,
+  aktualNo: false,
+  aktualGaso: false,
+  aktualO2: false,
+  aktualO3: false,
+  aktualEdta: false,
+  aktualMb: false,
+  aktualH2s: false,
+  aktualKcl: false,
+  aktualJmlNb: false,
+  bottleType: false,
+  jenisCairan: false,
+  volumeCarrier: false,
+  jumlahJarum: false,
+  deviationNotes: false,
+  materialsSummary: false,
+  keluhan: false,
+  rekomendasi: false,
+  subjective: false,
+  objective: false,
+  assessment: false,
+  plan: false,
+  generalNotes: false,
+};
+
+const COMPACT_TABLE_FIELDS = new Set(['memberName', 'infusKe', 'status', 'treatmentDate', 'treatmentTime']);
+
+const getTableColumnsStorageKey = (userId: string) => `raho:sessions:table-columns:v${TABLE_COLUMNS_STORAGE_VERSION}:${userId}`;
+
+const mergeTableFieldsWithDefault = (savedFields: unknown) => {
+  const merged = { ...DEFAULT_TABLE_FIELDS };
+
+  if (savedFields && typeof savedFields === 'object') {
+    Object.keys(merged).forEach((key) => {
+      const savedValue = (savedFields as Record<string, unknown>)[key];
+      if (typeof savedValue === 'boolean') {
+        merged[key] = savedValue;
+      }
+    });
+  }
+
+  return Object.values(merged).some(Boolean) ? merged : { ...DEFAULT_TABLE_FIELDS };
+};
+
 export default function SessionsPage() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -146,72 +234,7 @@ export default function SessionsPage() {
     generalNotes: false,
   });
 
-  const [tableFields, setTableFields] = useState<Record<string, boolean>>({
-    sessionCode: true,
-    status: true,
-    memberName: true,
-    treatmentDate: true,
-    treatmentTime: true,
-    infusKe: true,
-    pelaksanaan: true,
-    memberNo: false,
-    doctorName: true,
-    nurseName: true,
-    branchName: false,
-    branchCode: false,
-    boosterType: false,
-    adminLayanan: false,
-    allDoctors: false,
-    allNurses: false,
-    sistolBefore: true,
-    diastolBefore: true,
-    hrBefore: true,
-    saturasiBefore: true,
-    piBefore: false,
-    sistolAfter: true,
-    diastolAfter: true,
-    hrAfter: true,
-    saturasiAfter: true,
-    piAfter: false,
-    planIfa: false,
-    planHho: false,
-    planH2: false,
-    planNo: false,
-    planGaso: false,
-    planO2: false,
-    planO3: false,
-    planEdta: false,
-    planMb: false,
-    planH2s: false,
-    planKcl: false,
-    planJmlNb: false,
-    planKeterangan: false,
-    aktualIfa: false,
-    aktualHho: false,
-    aktualH2: false,
-    aktualNo: false,
-    aktualGaso: false,
-    aktualO2: false,
-    aktualO3: false,
-    aktualEdta: false,
-    aktualMb: false,
-    aktualH2s: false,
-    aktualKcl: false,
-    aktualJmlNb: false,
-    bottleType: false,
-    jenisCairan: false,
-    volumeCarrier: false,
-    jumlahJarum: false,
-    deviationNotes: false,
-    materialsSummary: false,
-    keluhan: false,
-    rekomendasi: false,
-    subjective: false,
-    objective: false,
-    assessment: false,
-    plan: false,
-    generalNotes: false,
-  });
+  const [tableFields, setTableFields] = useState<Record<string, boolean>>({ ...DEFAULT_TABLE_FIELDS });
 
   // Field categories for UI grouping
   const fieldCategories = [
@@ -259,7 +282,7 @@ export default function SessionsPage() {
     },
     {
       id: 'vitalBefore',
-      label: 'Vital Sign (Sebelum)',
+      label: 'Vital Sebelum',
       icon: '❤️',
       fields: [
         { key: 'sistolBefore', label: 'Sistol' },
@@ -271,7 +294,7 @@ export default function SessionsPage() {
     },
     {
       id: 'vitalAfter',
-      label: 'Vital Sign (Sesudah)',
+      label: 'Vital Sesudah',
       icon: '💚',
       fields: [
         { key: 'sistolAfter', label: 'Sistol' },
@@ -411,7 +434,174 @@ export default function SessionsPage() {
     return acc;
   }, {});
 
+  const tableFieldCategoryByKey = fieldCategories.reduce<Record<string, { id: string; label: string }>>((acc, category) => {
+    category.fields.forEach((field) => {
+      acc[field.key] = { id: category.id, label: category.label };
+    });
+    return acc;
+  }, {});
+
+  const visibleTableFieldKeys = Object.entries(tableFields)
+    .filter(([, visible]) => visible)
+    .map(([key]) => key);
+
+  const groupedTableHeaders = visibleTableFieldKeys.reduce<Array<{ id: string; label: string; colSpan: number }>>((groups, key) => {
+    const category = tableFieldCategoryByKey[key] || { id: 'other', label: 'Lainnya' };
+    const previousGroup = groups[groups.length - 1];
+
+    if (previousGroup?.id === category.id) {
+      previousGroup.colSpan += 1;
+      return groups;
+    }
+
+    groups.push({
+      id: category.id,
+      label: category.label,
+      colSpan: 1,
+    });
+
+    return groups;
+  }, []);
+
+  const metricFieldKeys = new Set([
+    'sistolBefore',
+    'diastolBefore',
+    'hrBefore',
+    'saturasiBefore',
+    'piBefore',
+    'sistolAfter',
+    'diastolAfter',
+    'hrAfter',
+    'saturasiAfter',
+    'piAfter',
+    'planIfa',
+    'planHho',
+    'planH2',
+    'planNo',
+    'planGaso',
+    'planO2',
+    'planO3',
+    'planEdta',
+    'planMb',
+    'planH2s',
+    'planKcl',
+    'planJmlNb',
+    'aktualIfa',
+    'aktualHho',
+    'aktualH2',
+    'aktualNo',
+    'aktualGaso',
+    'aktualO2',
+    'aktualO3',
+    'aktualEdta',
+    'aktualMb',
+    'aktualH2s',
+    'aktualKcl',
+    'aktualJmlNb',
+    'bottleType',
+    'jenisCairan',
+    'volumeCarrier',
+    'jumlahJarum',
+  ]);
+
+  const longTextFieldKeys = new Set([
+    'planKeterangan',
+    'deviationNotes',
+    'materialsSummary',
+    'keluhan',
+    'rekomendasi',
+    'subjective',
+    'objective',
+    'assessment',
+    'plan',
+    'generalNotes',
+  ]);
+
+  const getTableCellClass = (key: string, index: number) => {
+    const classes = [styles.dynamicCell];
+
+    if (index === 0) classes.push(styles.firstDataCell);
+    if (key === 'sessionCode') classes.push(styles.sessionCodeCell);
+    if (key === 'status') classes.push(styles.statusCell);
+    if (key === 'memberName') classes.push(styles.memberDataCell);
+    if (key === 'memberNo') classes.push(styles.memberNoCell);
+    if (key === 'treatmentDate') classes.push(styles.dateCell);
+    if (key === 'treatmentTime') classes.push(styles.timeCell);
+    if (key === 'pelaksanaan') classes.push(styles.typeCell);
+    if (key === 'infusKe') classes.push(styles.sessionNumberCell);
+    if (['adminLayanan', 'doctorName', 'nurseName', 'allDoctors', 'allNurses'].includes(key)) {
+      classes.push(styles.staffCell);
+    }
+    if (['branchName', 'branchCode', 'boosterType'].includes(key)) {
+      classes.push(styles.branchCell);
+    }
+    if (metricFieldKeys.has(key)) classes.push(styles.metricCell);
+    if (longTextFieldKeys.has(key)) classes.push(styles.longTextCell);
+
+    return classes.filter(Boolean).join(' ');
+  };
+
   const getSelectedTableFieldCount = () => Object.values(tableFields).filter(Boolean).length;
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (!user?.userId) {
+      setTableFields({ ...DEFAULT_TABLE_FIELDS });
+      return;
+    }
+
+    const storageKey = getTableColumnsStorageKey(user.userId);
+    const savedPreference = localStorage.getItem(storageKey);
+
+    if (!savedPreference) {
+      setTableFields({ ...DEFAULT_TABLE_FIELDS });
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedPreference) as { fields?: Record<string, boolean> };
+      setTableFields(mergeTableFieldsWithDefault(parsed.fields));
+    } catch (error) {
+      devError('Failed to load saved session table columns:', error);
+      localStorage.removeItem(storageKey);
+      setTableFields({ ...DEFAULT_TABLE_FIELDS });
+    }
+  }, [user?.userId]);
+
+  const saveTableColumnsDefault = () => {
+    if (typeof window === 'undefined') return;
+
+    if (!user?.userId) {
+      showToast.error('Akun belum terbaca. Silakan login ulang.');
+      return;
+    }
+
+    if (!Object.values(tableFields).some(Boolean)) {
+      showToast.error('Pilih minimal satu kolom untuk disimpan.');
+      return;
+    }
+
+    localStorage.setItem(
+      getTableColumnsStorageKey(user.userId),
+      JSON.stringify({
+        version: TABLE_COLUMNS_STORAGE_VERSION,
+        fields: tableFields,
+        savedAt: new Date().toISOString(),
+      }),
+    );
+
+    showToast.success('Default kolom sesi terapi disimpan untuk akun ini.');
+  };
+
+  const resetTableColumnsDefault = () => {
+    if (typeof window !== 'undefined' && user?.userId) {
+      localStorage.removeItem(getTableColumnsStorageKey(user.userId));
+    }
+
+    setTableFields({ ...DEFAULT_TABLE_FIELDS });
+    showToast.success('Default kolom sesi terapi dikembalikan.');
+  };
 
   const toggleTableCategory = (categoryId: string, checked: boolean) => {
     const category = fieldCategories.find(c => c.id === categoryId);
@@ -464,9 +654,13 @@ export default function SessionsPage() {
         </div>
       ),
       memberNo: () => session.member.memberNo,
-      treatmentDate: () => formatDate(session.treatmentDate),
-      treatmentTime: () => formatTime(session.treatmentDate),
-      pelaksanaan: () => session.pelaksanaan === 'ON_SITE' ? 'On-Site' : 'Home Care',
+      treatmentDate: () => <span className={styles.dateValue}>{formatDate(session.treatmentDate)}</span>,
+      treatmentTime: () => <span className={styles.timeValue}>{formatTime(session.treatmentDate)}</span>,
+      pelaksanaan: () => (
+        <span className={`${styles.typeBadge} ${session.pelaksanaan === 'ON_SITE' ? styles.typeOnSite : styles.typeHomeCare}`}>
+          {session.pelaksanaan === 'ON_SITE' ? 'On-Site' : 'Home Care'}
+        </span>
+      ),
       infusKe: () => (
         <div>
           <div className={styles.sessionGlobal}>#{session.infusKe}</div>
@@ -475,14 +669,14 @@ export default function SessionsPage() {
           )}
         </div>
       ),
-      branchName: () => session.branchName || '-',
-      branchCode: () => session.branchCode || '-',
-      boosterType: () => session.boosterPackage?.boosterType || '-',
-      adminLayanan: () => session.adminLayanan?.fullName || '-',
-      doctorName: () => session.doctor?.fullName || '-',
-      nurseName: () => session.nurse?.fullName || '-',
-      allDoctors: () => session.doctor?.fullName || '-',
-      allNurses: () => session.nurse?.fullName || '-',
+      branchName: () => <span className={styles.secondaryText}>{session.branchName || '-'}</span>,
+      branchCode: () => <span className={styles.monoText}>{session.branchCode || '-'}</span>,
+      boosterType: () => session.boosterPackage?.boosterType ? <span className={styles.boosterTag}>{session.boosterPackage.boosterType}</span> : '-',
+      adminLayanan: () => <span className={styles.staffName}>{session.adminLayanan?.fullName || '-'}</span>,
+      doctorName: () => <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>,
+      nurseName: () => <span className={styles.staffName}>{session.nurse?.fullName || '-'}</span>,
+      allDoctors: () => <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>,
+      allNurses: () => <span className={styles.staffName}>{session.nurse?.fullName || '-'}</span>,
       sistolBefore: () => getVitalValue(sessionDetail, 'SISTOL', 'SEBELUM'),
       diastolBefore: () => getVitalValue(sessionDetail, 'DIASTOL', 'SEBELUM'),
       hrBefore: () => getVitalValue(sessionDetail, 'HR', 'SEBELUM'),
@@ -869,15 +1063,28 @@ export default function SessionsPage() {
                 type="button"
                 className={styles.deselectAllBtn}
                 onClick={() => {
-                  const compactFields = new Set(['sessionCode', 'status', 'memberName', 'treatmentDate', 'infusKe']);
                   const updates: Record<string, boolean> = {};
                   Object.keys(tableFields).forEach((key) => {
-                    updates[key] = compactFields.has(key);
+                    updates[key] = COMPACT_TABLE_FIELDS.has(key);
                   });
                   setTableFields(updates);
                 }}
               >
                 Ringkas
+              </button>
+              <button
+                type="button"
+                className={styles.saveDefaultBtn}
+                onClick={saveTableColumnsDefault}
+              >
+                Simpan Default
+              </button>
+              <button
+                type="button"
+                className={styles.resetDefaultBtn}
+                onClick={resetTableColumnsDefault}
+              >
+                Reset Default
               </button>
             </div>
           </div>
@@ -974,12 +1181,22 @@ export default function SessionsPage() {
         <div className={styles.tableContainer}>
           <table className={styles.sessionsTable}>
             <thead>
+              <tr className={styles.groupHeaderRow}>
+                {groupedTableHeaders.map((group, index) => (
+                  <th
+                    key={`${group.id}-${index}`}
+                    className={styles.groupHeaderCell}
+                    colSpan={group.colSpan}
+                    scope="colgroup"
+                  >
+                    {group.label}
+                  </th>
+                ))}
+              </tr>
               <tr>
-                {Object.entries(tableFields)
-                  .filter(([, visible]) => visible)
-                  .map(([key]) => (
-                    <th key={key}>{tableFieldLabelByKey[key] || key}</th>
-                  ))}
+                {visibleTableFieldKeys.map((key) => (
+                  <th key={key} scope="col">{tableFieldLabelByKey[key] || key}</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -996,16 +1213,15 @@ export default function SessionsPage() {
                     }
                   }}
                 >
-                  {Object.entries(tableFields)
-                    .filter(([, visible]) => visible)
-                    .map(([key], index) => (
-                      <td
-                        key={key}
-                        className={`${index === 0 ? styles.firstDataCell : ''} ${styles.dynamicCell}`}
-                      >
-                        {getTableFieldValue(sessionDetail, key)}
-                      </td>
-                    ))}
+                  {visibleTableFieldKeys.map((key, index) => (
+                    <td
+                      key={key}
+                      className={getTableCellClass(key, index)}
+                      data-label={tableFieldLabelByKey[key] || key}
+                    >
+                      {getTableFieldValue(sessionDetail, key)}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </tbody>

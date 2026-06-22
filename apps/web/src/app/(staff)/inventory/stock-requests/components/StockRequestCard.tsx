@@ -124,9 +124,13 @@ export default function StockRequestCard({
 
   const isManager = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER';
   const isAdminCabang = userRole === 'ADMIN_CABANG';
+  const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
   
-  const canReview = isManager && ['PENDING', 'PAYMENT_UPLOADED'].includes(request.status);
-  const canUploadPayment = isManager && request.status === 'WAITING_PAYMENT';
+  const canReview = isManager && (
+    ['PENDING', 'PAYMENT_UPLOADED'].includes(request.status) ||
+    (request.status === 'WAITING_PAYMENT' && isFreeInvoice)
+  );
+  const canUploadPayment = isManager && request.status === 'WAITING_PAYMENT' && !isFreeInvoice;
   const canReceive = isAdminCabang && request.status === 'SHIPPED';
 
   return (
@@ -295,7 +299,7 @@ export default function StockRequestCard({
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-amber-500 text-white hover:bg-amber-600 shadow-sm hover:shadow transition-all"
               >
                 <ClipboardCheck className="w-3.5 h-3.5" />
-                {request.status === 'PENDING' ? 'Review' : 'Konfirmasi'}
+                {request.status === 'PENDING' ? 'Review' : isFreeInvoice ? 'Approve Gratis' : 'Konfirmasi'}
               </button>
             )}
 

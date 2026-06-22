@@ -75,6 +75,10 @@ export class SessionsService {
     return this.creationService.createSession(data, branchId, userId, userRole);
   }
 
+  async getSuggestedSessionNumbers(memberId: string, branchId: string) {
+    return this.creationService.getSuggestedSessionNumbers(memberId, branchId);
+  }
+
   async getSessionById(sessionId: string) {
     return this.retrievalService.getSessionById(sessionId);
   }

@@ -281,6 +281,12 @@ export class StockRequestApprovalService {
         subtotal: itemSubtotal,
       };
     });
+    const isFreeRequest = subtotal <= 0;
+    const now = new Date();
+    const senderBranch = isFreeRequest ? await this.getOrCreateExternalBranch() : null;
+    const shipmentCode = isFreeRequest
+      ? await this.generateShipmentCode(senderBranch.id, request.branchId)
+      : null;
 
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber(request.branchId);
@@ -295,7 +301,12 @@ export class StockRequestApprovalService {
           branchId: request.branchId,
           subtotal,
           totalAmount: subtotal,
-          status: 'PENDING_PAYMENT',
+          status: isFreeRequest ? 'PAID' : 'PENDING_PAYMENT',
+          paymentVerificationStatus: isFreeRequest ? 'VERIFIED' : 'PENDING',
+          verifiedBy: isFreeRequest ? userId : null,
+          verifiedAt: isFreeRequest ? now : null,
+          verificationNotes: isFreeRequest ? 'Invoice gratis - tidak memerlukan bukti pembayaran' : null,
+          paidAt: isFreeRequest ? now : null,
           notes: invoiceData.notes,
           createdBy: userId,
           items: {
@@ -315,9 +326,14 @@ export class StockRequestApprovalService {
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
         data: {
-          status: 'WAITING_PAYMENT',
+          status: isFreeRequest ? 'APPROVED' : 'WAITING_PAYMENT',
           reviewedBy: userId,
-          reviewedAt: new Date(),
+          reviewedAt: now,
+          paymentVerifiedBy: isFreeRequest ? userId : null,
+          paymentVerifiedAt: isFreeRequest ? now : null,
+          paymentVerificationNotes: isFreeRequest
+            ? 'Invoice gratis - tidak memerlukan bukti pembayaran'
+            : null,
         },
         include: {
           items: {
@@ -334,7 +350,36 @@ export class StockRequestApprovalService {
         },
       });
 
-      return { updatedRequest, invoice };
+      const shipment = isFreeRequest
+        ? await tx.shipment.create({
+            data: {
+              shipmentCode,
+              fromBranchId: senderBranch.id,
+              toBranchId: request.branchId,
+              stockRequestId: requestId,
+              status: 'PREPARING',
+              notes: `Pengiriman untuk permintaan ${request.requestCode} (Gratis - tanpa bukti pembayaran)`,
+              items: {
+                create: request.items.map(item => ({
+                  masterProductId: item.masterProductId,
+                  sentQty: item.finalQty || item.requestedQty,
+                  requestedQty: item.requestedQty,
+                })),
+              },
+            },
+            include: {
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
+              fromBranch: true,
+              toBranch: true,
+            },
+          })
+        : null;
+
+      return { updatedRequest, invoice, shipment };
     });
 
     // Audit log
@@ -348,13 +393,24 @@ export class StockRequestApprovalService {
         invoiceNumber,
         totalAmount: subtotal,
         branchType: request.branch.type,
+        paymentRequired: !isFreeRequest,
+        shipmentId: result.shipment?.id,
       },
     });
 
-    return {
+    const response: any = {
       request: this.formatStockRequest(result.updatedRequest),
       invoice: this.formatInvoice(result.invoice),
+      message: isFreeRequest
+        ? 'Request gratis disetujui dan pengiriman telah dibuat tanpa bukti pembayaran.'
+        : 'Invoice berhasil dibuat. Menunggu upload bukti pembayaran.',
     };
+
+    if (result.shipment) {
+      response.shipment = this.formatShipment(result.shipment);
+    }
+
+    return response;
   }
 
   /**
@@ -487,10 +543,19 @@ export class StockRequestApprovalService {
    * Creates shipment after payment confirmation - stock is added when Admin Cabang receives the shipment
    */
   async confirmPayment(requestId: string, userId: string, verificationNotes?: string) {
-    const request = await this.getRequestWithValidation(requestId, ['PAYMENT_UPLOADED']);
+    const request = await this.getRequestWithValidation(requestId, ['WAITING_PAYMENT', 'PAYMENT_UPLOADED']);
     const user = await this.validateManagerPermission(userId, request.branchId);
+    const isFreeRequest = Number(request.invoice?.totalAmount || 0) <= 0;
 
-    if (!request.paymentProofUrl) {
+    if (!isFreeRequest && request.status === 'WAITING_PAYMENT') {
+      throw {
+        status: 422,
+        code: 'PAYMENT_PROOF_REQUIRED',
+        message: 'Bukti pembayaran wajib diupload untuk invoice berbayar',
+      };
+    }
+
+    if (!isFreeRequest && !request.paymentProofUrl) {
       throw {
         status: 422,
         code: 'NO_PAYMENT_PROOF',
@@ -550,7 +615,9 @@ export class StockRequestApprovalService {
           toBranchId: request.branchId,
           stockRequestId: requestId,
           status: 'PREPARING',
-          notes: `Pengiriman untuk permintaan ${request.requestCode} (Partnership - Pembayaran Dikonfirmasi)`,
+          notes: isFreeRequest
+            ? `Pengiriman untuk permintaan ${request.requestCode} (Gratis - tanpa bukti pembayaran)`
+            : `Pengiriman untuk permintaan ${request.requestCode} (Pembayaran Dikonfirmasi)`,
           items: {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
@@ -584,14 +651,17 @@ export class StockRequestApprovalService {
         action: 'CONFIRM_PAYMENT',
         verificationNotes,
         shipmentId: result.shipment.id,
-        branchType: 'PARTNERSHIP',
+        branchType: request.branch.type,
+        paymentRequired: !isFreeRequest,
       },
     });
 
     return {
       request: this.formatStockRequest(result.updatedRequest),
       shipment: this.formatShipment(result.shipment),
-      message: 'Pembayaran dikonfirmasi dan pengiriman telah dibuat. Stok akan ditambahkan setelah Admin Cabang menerima barang.',
+      message: isFreeRequest
+        ? 'Request gratis disetujui tanpa bukti pembayaran dan pengiriman telah dibuat.'
+        : 'Pembayaran dikonfirmasi dan pengiriman telah dibuat. Stok akan ditambahkan setelah Admin Cabang menerima barang.',
     };
   }
 

@@ -305,122 +305,214 @@
 .tableContainer {
   width: 100%;
   max-width: 100%;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
   border-radius: var(--radius-lg);
+  padding: 0 0 8px;
+  scrollbar-gutter: stable;
+}
+
+.tableContainer::-webkit-scrollbar {
+  height: 10px;
+}
+
+.tableContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tableContainer::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.tableContainer::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.45);
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
 
 .sessionsTable {
-  width: max-content;
-  min-width: 100%;
-  border-collapse: collapse;
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: separate;
+  border-spacing: 0 8px;
   font-size: 0.875rem;
   table-layout: auto;
 }
 
 .sessionsTable thead {
-  background: rgba(15, 23, 42, 0.86);
-  border-bottom: 2px solid var(--surface-border);
+  background: transparent;
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
 .sessionsTable thead th {
-  padding: 14px 16px;
+  padding: 12px 14px;
+  background: rgba(15, 23, 42, 0.78);
+  border-top: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--surface-border);
   text-align: left;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   white-space: nowrap;
   vertical-align: middle;
 }
 
+.groupHeaderRow th {
+  padding: 9px 14px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border-bottom: 0;
+  color: var(--color-primary-400);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.groupHeaderCell + .groupHeaderCell {
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.sessionsTable thead tr:not(.groupHeaderRow) th {
+  border-top: 0;
+}
+
+.sessionsTable thead th:first-child {
+  border-left: 1px solid var(--surface-border);
+  border-radius: 8px 0 0 8px;
+}
+
+.sessionsTable thead th:last-child {
+  border-right: 1px solid var(--surface-border);
+  border-radius: 0 8px 8px 0;
+}
+
+.sessionsTable thead .groupHeaderRow th:first-child {
+  border-radius: 8px 0 0 0;
+}
+
+.sessionsTable thead .groupHeaderRow th:last-child {
+  border-radius: 0 8px 0 0;
+}
+
+.sessionsTable thead tr:not(.groupHeaderRow) th:first-child {
+  border-radius: 0 0 0 8px;
+}
+
+.sessionsTable thead tr:not(.groupHeaderRow) th:last-child {
+  border-radius: 0 0 8px 0;
+}
+
 .sessionsTable tbody tr {
-  border-bottom: 1px solid var(--surface-border);
   position: relative;
-  background: rgba(255, 255, 255, 0.025);
+  background: transparent;
 }
 
 .sessionsTable tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
 }
 
 .tableRow {
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: transform var(--transition-fast);
 }
 
 .tableRow::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
+  display: none;
 }
 
-.tableRow.completed::before {
-  background: linear-gradient(180deg, var(--color-success), #16a34a);
-}
-
-.tableRow.incomplete::before {
-  background: linear-gradient(180deg, var(--color-warning), #d97706);
-}
-
-.tableRow:hover {
+.tableRow:hover td {
   background: var(--surface-card-hover);
+  border-color: rgba(148, 163, 184, 0.26);
 }
 
 .tableRow:focus {
   outline: 2px solid var(--color-primary-500);
-  outline-offset: -2px;
+  outline-offset: 2px;
 }
 
 .sessionsTable tbody td {
-  padding: 14px 16px;
+  padding: 13px 14px;
   color: var(--text-primary);
-  vertical-align: top;
-  white-space: nowrap;
+  vertical-align: middle;
+  white-space: normal;
+  line-height: 1.35;
+  background: rgba(255, 255, 255, 0.032);
+  border-top: 1px solid var(--surface-border);
+  border-bottom: 1px solid var(--surface-border);
+  overflow-wrap: anywhere;
+}
+
+.sessionsTable tbody td:first-child {
+  border-left: 1px solid var(--surface-border);
+  border-radius: 8px 0 0 8px;
+}
+
+.sessionsTable tbody td:last-child {
+  border-right: 1px solid var(--surface-border);
+  border-radius: 0 8px 8px 0;
 }
 
 .dynamicCell {
-  min-width: 112px;
-  max-width: 260px;
+  min-width: 118px;
+  max-width: 280px;
 }
 
 .firstDataCell {
   position: sticky;
   left: 0;
   z-index: 2;
-  padding-left: 24px !important;
-  background: inherit;
+  padding-left: 20px !important;
+  background: var(--surface-card) !important;
+  box-shadow: 10px 0 18px rgba(0, 0, 0, 0.16);
+}
+
+.tableRow:hover .firstDataCell {
+  background: var(--surface-card-hover) !important;
 }
 
 .sessionsTable thead th:first-child {
   position: sticky;
   left: 0;
   z-index: 11;
-  background: rgba(15, 23, 42, 0.96);
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 10px 0 18px rgba(0, 0, 0, 0.16);
+}
+
+.sessionsTable thead .groupHeaderRow th:first-child {
+  background: rgba(59, 130, 246, 0.16);
 }
 
 /* Table Cell Specific Styles */
 .sessionCodeCell {
-  padding-left: 24px !important;
+  min-width: 220px;
+}
+
+.tableRow.completed .firstDataCell {
+  border-left: 4px solid var(--color-success);
+}
+
+.tableRow.incomplete .firstDataCell {
+  border-left: 4px solid var(--color-warning);
 }
 
 .sessionCode {
   display: inline-block;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 700;
   color: var(--color-primary-400);
   font-family: 'SF Mono', 'Fira Code', monospace;
-  background: rgba(59, 130, 246, 0.1);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  padding: 5px 9px;
+  border-radius: 6px;
   margin-bottom: 0;
   white-space: nowrap;
 }
@@ -455,6 +547,10 @@
   white-space: nowrap;
 }
 
+.statusCell {
+  min-width: 132px;
+}
+
 .statusCompleted {
   background: rgba(34, 197, 94, 0.15);
   color: #4ade80;
@@ -467,15 +563,21 @@
   border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
+.memberDataCell {
+  min-width: 190px;
+}
+
 .memberCell {
-  min-width: 180px;
+  min-width: 0;
 }
 
 .memberName {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 0.92rem;
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 2px;
+  max-width: 220px;
+  overflow-wrap: anywhere;
 }
 
 .memberNo {
@@ -484,25 +586,37 @@
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
+.memberNoCell {
+  min-width: 130px;
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
 .dateCell {
-  min-width: 110px;
+  min-width: 126px;
+}
+
+.dateValue {
   color: var(--text-primary);
   font-weight: 500;
 }
 
 .timeCell {
-  min-width: 80px;
+  min-width: 92px;
+}
+
+.timeValue {
   color: var(--text-secondary);
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 .sessionNumberCell {
-  min-width: 100px;
+  min-width: 96px;
 }
 
 .sessionGlobal {
-  font-weight: 600;
-  color: var(--color-primary-400);
+  font-weight: 800;
+  color: #facc15;
   font-size: 0.95rem;
   margin-bottom: 2px;
 }
@@ -513,18 +627,71 @@
 }
 
 .typeCell {
-  min-width: 130px;
+  min-width: 140px;
+}
+
+.typeBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
   white-space: nowrap;
 }
 
+.typeOnSite {
+  color: #bae6fd;
+  background: rgba(14, 165, 233, 0.13);
+  border: 1px solid rgba(14, 165, 233, 0.24);
+}
+
+.typeHomeCare {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.13);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+}
+
 .staffCell {
+  min-width: 180px;
+  color: var(--text-secondary);
+}
+
+.staffName {
+  display: inline-block;
+  max-width: 220px;
+  color: var(--text-primary);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.branchCell {
   min-width: 150px;
   color: var(--text-secondary);
 }
 
-.branchCell {
-  min-width: 140px;
+.metricCell {
+  min-width: 96px;
+  max-width: 160px;
   color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.longTextCell {
+  min-width: 220px;
+  max-width: 360px;
+  color: var(--text-secondary);
+}
+
+.secondaryText {
+  color: var(--text-secondary);
+}
+
+.monoText {
+  color: var(--text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 /* Pagination */
@@ -552,6 +719,46 @@
 
 /* Responsive */
 @media (max-width: 768px) {
+  .header {
+    align-items: flex-start;
+    gap: 18px;
+  }
+
+  .headerActions {
+    flex-wrap: wrap;
+  }
+
+  .filterPanel,
+  .columnPanel {
+    padding: 18px;
+  }
+
+  .columnPanelHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .columnActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .selectAllBtn,
+  .deselectAllBtn,
+  .saveDefaultBtn,
+  .resetDefaultBtn {
+    min-height: 38px;
+    width: 100%;
+  }
+
+  .columnCategoryGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .columnFieldItem {
+    min-height: 40px;
+  }
+
   .filterTabs {
     width: 100%;
     overflow-x: auto;
@@ -566,38 +773,104 @@
   }
 
   .tableContainer {
-    border-radius: var(--radius-md);
+    overflow: visible;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
   }
 
   .sessionsTable {
-    font-size: 0.8rem;
+    display: block;
+    min-width: 0;
+    width: 100%;
+    border-spacing: 0;
+    font-size: 0.82rem;
   }
 
-  .sessionsTable thead th {
-    padding: 12px 12px;
-    font-size: 0.7rem;
+  .sessionsTable thead {
+    display: none;
+  }
+
+  .sessionsTable tbody {
+    display: grid;
+    gap: 12px;
+  }
+
+  .sessionsTable tbody tr {
+    display: block;
+    border: 1px solid var(--surface-border);
+    border-radius: 8px;
+    background: var(--surface-card);
+    overflow: hidden;
+  }
+
+  .tableRow.completed {
+    border-left: 4px solid var(--color-success);
+  }
+
+  .tableRow.incomplete {
+    border-left: 4px solid var(--color-warning);
   }
 
   .sessionsTable tbody td {
-    padding: 12px;
+    display: grid;
+    grid-template-columns: minmax(96px, 36%) minmax(0, 1fr);
+    gap: 12px;
+    align-items: center;
+    min-width: 0;
+    max-width: none;
+    padding: 11px 14px;
+    background: transparent !important;
+    border: 0;
+    border-bottom: 1px solid var(--surface-border);
+    border-radius: 0;
+    white-space: normal;
   }
 
-  .sessionCodeCell {
-    padding-left: 20px !important;
+  .sessionsTable tbody td:last-child {
+    border-bottom: 0;
   }
 
-  .memberCell {
-    min-width: 150px;
+  .sessionsTable tbody td::before {
+    content: attr(data-label);
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0;
   }
 
-  .memberName {
-    font-size: 0.875rem;
+  .firstDataCell {
+    position: static;
+    padding-left: 14px !important;
+    box-shadow: none;
   }
 
+  .tableRow.completed .firstDataCell,
+  .tableRow.incomplete .firstDataCell {
+    border-left: 0;
+  }
+
+  .sessionCodeCell,
+  .statusCell,
+  .memberDataCell,
+  .memberNoCell,
+  .dateCell,
+  .timeCell,
+  .typeCell,
+  .sessionNumberCell,
   .staffCell,
-  .branchCell {
-    min-width: 120px;
-    font-size: 0.8rem;
+  .branchCell,
+  .metricCell,
+  .longTextCell {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .memberName,
+  .staffName {
+    max-width: none;
   }
 
   .pagination {
@@ -611,45 +884,131 @@
 }
 
 @media (max-width: 480px) {
+  .container {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
   .header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 14px;
+    margin-bottom: 18px;
   }
 
   .headerActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
-    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .headerActions :global(.btn) {
+    width: 100%;
+    min-height: 42px;
+    justify-content: center;
+    padding-inline: 10px;
+    font-size: 0.8rem;
+  }
+
+  .headerActions :global(.btn):last-child {
+    grid-column: 1 / -1;
   }
 
   .title {
     font-size: 1.5rem;
   }
 
+  .subtitle {
+    font-size: 0.8rem;
+  }
+
+  .filterPanel,
+  .columnPanel {
+    padding: 14px;
+    margin-bottom: 16px;
+    border-radius: var(--radius-md);
+  }
+
+  .filterSelect,
+  .filterInput {
+    min-height: 42px;
+    font-size: 0.85rem;
+  }
+
+  .filterActions {
+    justify-content: stretch;
+  }
+
+  .filterActions :global(.btn) {
+    width: 100%;
+    min-height: 40px;
+  }
+
   .filterGrid {
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .columnPanelHeader h3 {
+    font-size: 0.95rem;
+  }
+
+  .columnPanelHeader p {
+    font-size: 0.76rem;
+    line-height: 1.45;
+  }
+
+  .columnActions {
+    gap: 7px;
+  }
+
+  .selectAllBtn,
+  .deselectAllBtn,
+  .saveDefaultBtn,
+  .resetDefaultBtn {
+    padding: 8px 9px;
+    font-size: 0.7rem;
+    min-height: 40px;
+  }
+
+  .filterTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    overflow: visible;
+    margin-bottom: 16px;
+  }
+
+  .filterTab {
+    min-width: 0;
+    white-space: normal;
+    padding: 9px 6px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    text-align: center;
   }
 
   .tableContainer {
-    border-radius: var(--radius-sm);
-    margin: 0 -16px;
+    margin: 0;
   }
 
   .sessionsTable {
     font-size: 0.75rem;
   }
 
-  .sessionsTable thead th {
-    padding: 10px 8px;
-    font-size: 0.65rem;
-  }
-
   .sessionsTable tbody td {
-    padding: 10px 8px;
+    grid-template-columns: 1fr;
+    gap: 5px;
+    padding: 11px 13px;
   }
 
-  .sessionCodeCell {
-    padding-left: 16px !important;
+  .sessionsTable tbody tr {
+    border-radius: 8px;
+  }
+
+  .sessionsTable tbody td::before {
+    font-size: 0.66rem;
   }
 
   .sessionCode {
@@ -694,9 +1053,33 @@
   .timeCell,
   .typeCell,
   .staffCell,
-  .branchCell {
-    min-width: auto;
+  .branchCell,
+  .metricCell,
+  .longTextCell {
     font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 390px) {
+  .headerActions,
+  .columnActions {
+    grid-template-columns: 1fr;
+  }
+
+  .headerActions :global(.btn):last-child {
+    grid-column: auto;
+  }
+
+  .filterTabs {
+    grid-template-columns: 1fr;
+  }
+
+  .filterTab {
+    min-height: 38px;
+  }
+
+  .sessionsTable tbody td {
+    padding: 10px 12px;
   }
 }
 
@@ -835,7 +1218,9 @@
 }
 
 .selectAllBtn,
-.deselectAllBtn {
+.deselectAllBtn,
+.saveDefaultBtn,
+.resetDefaultBtn {
   padding: 6px 12px;
   font-size: 0.75rem;
   font-weight: 500;
@@ -861,6 +1246,24 @@
 
 .deselectAllBtn:hover {
   background: rgba(148, 163, 184, 0.2);
+}
+
+.saveDefaultBtn {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.saveDefaultBtn:hover {
+  background: rgba(34, 197, 94, 0.24);
+}
+
+.resetDefaultBtn {
+  background: rgba(248, 113, 113, 0.12);
+  color: #f87171;
+}
+
+.resetDefaultBtn:hover {
+  background: rgba(248, 113, 113, 0.2);
 }
 
 /* Field Categories */

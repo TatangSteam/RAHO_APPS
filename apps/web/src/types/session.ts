@@ -63,6 +63,11 @@ export interface CreateSessionResponse {
   message: string;
 }
 
+export interface SuggestedSessionNumbers {
+  globalInfusKe: number;
+  branchInfusKe: number;
+}
+
 // ============================================================
 // SESSION DETAIL
 // ============================================================

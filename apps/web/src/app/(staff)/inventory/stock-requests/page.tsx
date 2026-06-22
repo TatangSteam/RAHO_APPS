@@ -218,8 +218,9 @@ export default function StockRequestsPage() {
   const handleCreatePartnershipInvoice = async (requestId: string, items: InvoiceItemInput[], notes?: string) => {
     try {
       setActionLoading(true);
-      await inventoryApi.createPartnershipInvoice(requestId, { items, notes });
-      showToast.success('Invoice berhasil dibuat');
+      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes });
+      const message = response.data?.data?.message || 'Invoice berhasil dibuat';
+      showToast.success(message);
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();

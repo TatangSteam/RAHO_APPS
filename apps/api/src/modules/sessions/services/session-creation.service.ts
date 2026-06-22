@@ -135,6 +135,11 @@ export class SessionCreationService {
     };
   }
 
+  async getSuggestedSessionNumbers(memberId: string, branchId: string) {
+    await this.validateMemberAccess(memberId, branchId);
+    return this.calculateInfusKe(memberId, branchId);
+  }
+
   /**
    * Auto-fill doctorId or nurseId based on user role
    * - If user is DOCTOR: auto-fill doctorId with userId
@@ -626,8 +631,8 @@ export class SessionCreationService {
       take: 1,
     });
 
-    // Get sessions for this member in current branch only (BASIC only)
-    const branchSessions = await prisma.treatmentSession.findMany({
+    // Count sessions for this member in current branch only (BASIC only)
+    const branchSessionCount = await prisma.treatmentSession.count({
       where: {
         encounter: {
           memberId,
@@ -637,12 +642,10 @@ export class SessionCreationService {
           },
         },
       },
-      orderBy: { infusKe: 'desc' },
-      take: 1,
     });
 
     const globalInfusKe = allMemberSessions.length > 0 ? allMemberSessions[0].infusKe + 1 : 1;
-    const branchInfusKe = branchSessions.length > 0 ? branchSessions[0].infusKe + 1 : 1;
+    const branchInfusKe = branchSessionCount + 1;
 
     return { globalInfusKe, branchInfusKe };
   }

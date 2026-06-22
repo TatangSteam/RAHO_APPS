@@ -10,7 +10,7 @@ import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { useAuthStore } from '@/stores/authStore';
-import type { CreateSessionInput, SessionType, Diagnosis } from '@/types/session';
+import type { CreateSessionInput, SessionType, Diagnosis, SessionDetail } from '@/types/session';
 import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
@@ -125,7 +125,7 @@ export default function CreateSessionModal({
       loadDiagnoses(memberId);
       loadSuggestedSessionNumbers(memberId);
     }
-  }, [memberId]);
+  }, [memberId, user?.branchId]);
 
   useEffect(() => {
     const targetInfusKe = useManualNumbering && manualInfusKe ? Number(manualInfusKe) : calculatedGlobalInfusKe;
@@ -487,27 +487,42 @@ export default function CreateSessionModal({
 
   const loadSuggestedSessionNumbers = async (id: string) => {
     try {
-      // Load member's existing sessions to calculate suggested next numbers
-      const sessions = await sessionApi.getMemberSessions(id);
-      if (sessions && sessions.length > 0) {
-        // Find the highest infusKe for global
-        const maxGlobal = Math.max(...sessions.map((s: any) => s.infusKe || 0));
-        setCalculatedGlobalInfusKe(maxGlobal + 1);
+      const suggested = await sessionApi.getSuggestedSessionNumbers(id);
+      setCalculatedGlobalInfusKe(suggested.globalInfusKe);
+      setCalculatedBranchInfusKe(suggested.branchInfusKe);
+    } catch (err: any) {
+      devError('Failed to load suggested session numbers:', err);
+      try {
+        // Fallback for older API responses: member sessions are SessionDetail objects.
+        const sessions = await sessionApi.getMemberSessions(id);
+        const sessionRows = sessions
+          .map((sessionDetail: SessionDetail) => sessionDetail.session)
+          .filter(Boolean);
 
-        // Find the highest infusKe for current branch
-        const branchSessions = sessions.filter((s: any) => s.branch?.id === user?.branchId);
-        const maxBranch = branchSessions.length > 0 
-          ? Math.max(...branchSessions.map((s: any) => s.infusKe || 0))
-          : 0;
-        setCalculatedBranchInfusKe(maxBranch + 1);
-      } else {
+        if (sessionRows.length > 0) {
+          const maxGlobal = sessionRows.reduce(
+            (max, session) => Math.max(max, Number(session.infusKe) || 0),
+            0
+          );
+          const branchSessions = user?.branchId
+            ? sessionRows.filter((session) => session.branchId === user.branchId)
+            : [];
+          const maxBranch = branchSessions.reduce(
+            (max, session) => Math.max(max, Number(session.branchInfusKe) || 0),
+            0
+          );
+
+          setCalculatedGlobalInfusKe(maxGlobal + 1);
+          setCalculatedBranchInfusKe(maxBranch > 0 ? maxBranch + 1 : branchSessions.length + 1);
+        } else {
+          setCalculatedGlobalInfusKe(1);
+          setCalculatedBranchInfusKe(1);
+        }
+      } catch (fallbackErr: any) {
+        devError('Failed to load fallback suggested session numbers:', fallbackErr);
         setCalculatedGlobalInfusKe(1);
         setCalculatedBranchInfusKe(1);
       }
-    } catch (err: any) {
-      devError('Failed to load suggested session numbers:', err);
-      setCalculatedGlobalInfusKe(1);
-      setCalculatedBranchInfusKe(1);
     }
   };
 

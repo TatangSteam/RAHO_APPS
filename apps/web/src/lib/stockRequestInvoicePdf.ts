@@ -2,7 +2,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNumberWithDots } from './formatNumber';
 import { devLog, devError } from '@/lib/logger';
-import type { StockRequest, StockRequestInvoice } from '@/app/(staff)/inventory/stock-requests/types';
+import type { StockRequest } from '@/app/(staff)/inventory/stock-requests/types';
 
 const COMPANY_NAME = 'REVERSE AGING & HOMEOSTASIS CLUB';
 const COMPANY_LEGAL = 'CV DUNIA SEHAT SENTOSA INDONESIA';
@@ -10,9 +10,24 @@ const COMPANY_ADDRESS = 'Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada N
 const COMPANY_CITY = 'Jakarta Pusat';
 const COMPANY_PHONE = '(021) 3192-8888';
 const COMPANY_EMAIL = 'info@raho.id';
-const BANK_NAME = 'BCA';
-const BANK_ACCOUNT = '1306-9938-88';
-const BANK_HOLDER = 'CV DUNIA SEHAT SENTOSA';
+const COMPANY_LOGO_PATH = '/asset/LogoInInvoiceAndKuitansi.png';
+const BRAND_RED: [number, number, number] = [185, 28, 28];
+
+async function loadImageDataUrl(path: string): Promise<string | null> {
+  try {
+    const response = await fetch(path);
+    const blob = await response.blob();
+
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
 export async function generateStockRequestInvoicePDF(request: StockRequest) {
   const invoice = request.invoice;
@@ -34,27 +49,35 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     // ============================================================
     // HEADER - Company Info
     // ============================================================
+    const logoDataUrl = await loadImageDataUrl(COMPANY_LOGO_PATH);
+    if (logoDataUrl) {
+      doc.addImage(logoDataUrl, 'PNG', margin, currentY - 2, 28, 20);
+    }
+
+    const headerTextX = logoDataUrl ? margin + 34 : pageWidth / 2;
+    const headerTextOptions = logoDataUrl ? undefined : { align: 'center' as const };
+
     doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(25, 118, 210); // Professional blue
-    doc.text(COMPANY_NAME, pageWidth / 2, currentY, { align: 'center' });
+    doc.setTextColor(...BRAND_RED);
+    doc.text(COMPANY_NAME, headerTextX, currentY, headerTextOptions);
 
     currentY += 8;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(80, 80, 80);
-    doc.text(COMPANY_LEGAL, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(COMPANY_LEGAL, headerTextX, currentY, headerTextOptions);
 
     currentY += 4;
     doc.setFontSize(8);
-    doc.text(COMPANY_ADDRESS, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(COMPANY_ADDRESS, headerTextX, currentY, headerTextOptions);
 
     currentY += 3;
-    doc.text(`${COMPANY_CITY} | ${COMPANY_PHONE} | ${COMPANY_EMAIL}`, pageWidth / 2, currentY, { align: 'center' });
+    doc.text(`${COMPANY_CITY} | ${COMPANY_PHONE} | ${COMPANY_EMAIL}`, headerTextX, currentY, headerTextOptions);
 
     // Decorative line
     currentY += 5;
-    doc.setDrawColor(25, 118, 210);
+    doc.setDrawColor(...BRAND_RED);
     doc.setLineWidth(0.8);
     doc.line(margin, currentY, pageWidth - margin, currentY);
 
@@ -64,7 +87,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     currentY += 8;
     doc.setFontSize(16);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(0, 0, 0);
+    doc.setTextColor(...BRAND_RED);
     doc.text('INVOICE PERMINTAAN STOK', margin, currentY);
 
     // Status badge
@@ -152,7 +175,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
       body: tableData,
       theme: 'grid',
       headStyles: {
-        fillColor: [25, 118, 210],
+        fillColor: BRAND_RED,
         textColor: 255,
         fontStyle: 'bold',
         halign: 'center',
@@ -180,71 +203,16 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     const summaryValueX = pageWidth - margin;
 
     // Total line
-    doc.setDrawColor(25, 118, 210);
+    doc.setDrawColor(...BRAND_RED);
     doc.setLineWidth(0.5);
     doc.line(summaryX, currentY, summaryValueX, currentY);
 
     currentY += 6;
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(11);
-    doc.setTextColor(25, 118, 210);
+    doc.setTextColor(...BRAND_RED);
     doc.text('TOTAL PEMBAYARAN', summaryX, currentY);
     doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, currentY, { align: 'right' });
-
-    // ============================================================
-    // PAYMENT INFORMATION
-    // ============================================================
-    currentY += 15;
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INFORMASI PEMBAYARAN', margin, currentY);
-
-    // Payment info box
-    currentY += 3;
-    doc.setFillColor(249, 250, 251); // Light gray background
-    doc.setDrawColor(229, 231, 235); // Border
-    doc.setLineWidth(0.3);
-    doc.roundedRect(margin, currentY, contentWidth, 25, 2, 2, 'FD');
-
-    currentY += 7;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(`Bank: ${BANK_NAME}`, margin + 5, currentY);
-
-    currentY += 5;
-    doc.setFont('helvetica', 'bold');
-    doc.text(`No. Rekening: ${BANK_ACCOUNT}`, margin + 5, currentY);
-
-    currentY += 5;
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Atas Nama: ${BANK_HOLDER}`, margin + 5, currentY);
-
-    // ============================================================
-    // PAYMENT STATUS (if paid)
-    // ============================================================
-    if (invoice.paidAt) {
-      currentY += 15;
-      doc.setFillColor(220, 252, 231); // Light green background
-      doc.setDrawColor(34, 197, 94); // Green border
-      doc.setLineWidth(0.5);
-      doc.roundedRect(margin, currentY - 3, contentWidth, 12, 2, 2, 'FD');
-
-      doc.setTextColor(22, 101, 52); // Dark green
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('✓ PEMBAYARAN TELAH DIKONFIRMASI', margin + 5, currentY + 3);
-
-      const paidDate = new Date(invoice.paidAt).toLocaleDateString('id-ID', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-      doc.setFont('helvetica', 'normal');
-      doc.text(`Tanggal: ${paidDate}`, pageWidth - margin - 5, currentY + 3, { align: 'right' });
-    }
 
     // ============================================================
     // NOTES

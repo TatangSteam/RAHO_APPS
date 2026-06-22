@@ -130,12 +130,6 @@ export default function ReviewModal({
   };
 
   const handleApprove = async () => {
-    // Both PREMIER and PARTNERSHIP now use the same invoice flow
-    const total = parseFloat(totalInvoiceAmount) || 0;
-    // Allow 0 price (free items)
-    if (totalInvoiceAmount === '' && total === 0) {
-      // If input is empty, treat as 0 (free)
-    }
     const invoiceItems = buildInvoiceItems();
     await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
   };
@@ -220,8 +214,12 @@ export default function ReviewModal({
   };
 
   const canApprove = isManager && request.status === 'PENDING';
-  const canConfirmPayment = isManager && request.status === 'PAYMENT_UPLOADED';
+  const existingInvoiceTotal = request.invoice?.totalAmount ?? 0;
+  const isFreeWaitingPayment = request.status === 'WAITING_PAYMENT' && existingInvoiceTotal <= 0;
+  const canConfirmPayment = isManager && (request.status === 'PAYMENT_UPLOADED' || isFreeWaitingPayment);
   const canReject = isManager && ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED'].includes(request.status);
+  const invoiceTotal = parseFloat(totalInvoiceAmount) || 0;
+  const isFreeInvoice = (canApprove && invoiceTotal <= 0) || isFreeWaitingPayment;
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -445,7 +443,7 @@ export default function ReviewModal({
                       />
                     </div>
                     <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
-                      Masukkan 0 atau kosongkan untuk transfer gratis
+                      Masukkan 0 atau kosongkan untuk approve gratis tanpa bukti pembayaran.
                     </p>
                   </div>
                 )}
@@ -606,7 +604,7 @@ export default function ReviewModal({
               <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
                 <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-amber-500" />
-                  {canConfirmPayment ? 'Catatan Verifikasi' : 'Catatan Review'}
+                  {isFreeWaitingPayment ? 'Catatan Approve Gratis' : canConfirmPayment ? 'Catatan Verifikasi' : 'Catatan Review'}
                   {(canApprove || canReject) && !canConfirmPayment && (
                     <span className="text-red-500">*</span>
                   )}
@@ -617,7 +615,7 @@ export default function ReviewModal({
                     setReviewNotes(e.target.value);
                     if (e.target.value.trim()) setNotesError(false);
                   }}
-                  placeholder={canConfirmPayment ? 'Catatan verifikasi pembayaran (opsional)...' : 'Masukkan catatan review (wajib diisi)...'}
+                  placeholder={isFreeWaitingPayment ? 'Catatan approve gratis (opsional)...' : canConfirmPayment ? 'Catatan verifikasi pembayaran (opsional)...' : 'Masukkan catatan review (wajib diisi)...'}
                   rows={3}
                   className={`w-full px-4 py-3 text-sm rounded-xl border bg-white dark:bg-neutral-900 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none transition-all ${
                     notesError ? 'border-red-500' : 'border-neutral-300 dark:border-neutral-600'
@@ -650,7 +648,7 @@ export default function ReviewModal({
                 ) : (
                   <>
                     <Check className="h-4 w-4" />
-                    Buat Invoice
+                    {isFreeInvoice ? 'Approve Gratis' : 'Buat Invoice'}
                   </>
                 )}
               </button>
@@ -672,7 +670,7 @@ export default function ReviewModal({
                   ) : (
                     <>
                       <Check className="h-4 w-4" />
-                      Konfirmasi Pembayaran
+                      {isFreeWaitingPayment ? 'Approve Gratis' : 'Konfirmasi Pembayaran'}
                     </>
                   )}
                 </button>

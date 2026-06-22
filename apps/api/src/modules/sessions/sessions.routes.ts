@@ -47,6 +47,14 @@ router.post(
   controller.createSession.bind(controller)
 );
 
+// Get suggested next session numbers for create-session preview
+router.get(
+  '/members/:memberId/suggested-numbers',
+  authenticate,
+  authorize(SESSION_CREATORS),
+  controller.getSuggestedSessionNumbers.bind(controller)
+);
+
 // Get session detail
 router.get(
   '/:sessionId',

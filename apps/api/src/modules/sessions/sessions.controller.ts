@@ -50,6 +50,24 @@ export class SessionsController {
     }
   }
 
+  async getSuggestedSessionNumbers(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const branchId = req.user!.branchId;
+      if (!branchId) {
+        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
+      }
+
+      const result = await sessionsService.getSuggestedSessionNumbers(memberId, branchId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
   // ============================================================
   // GET SESSION DETAIL
   // ============================================================
