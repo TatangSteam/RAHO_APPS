@@ -319,7 +319,10 @@ export class DashboardService {
         branchId,
         status: 'PAID',
       },
-      include: {
+      select: {
+        invoiceNumber: true,
+        totalAmount: true,
+        paidAt: true,
         member: {
           select: {
             memberNo: true,

@@ -1,5 +1,4 @@
 import { prisma } from '../../lib/prisma';
-import { MemberPackage } from '@prisma/client';
 
 /**
  * Role-specific Dashboard Service
@@ -229,7 +228,11 @@ export class RoleDashboardService {
                 user: { include: { profile: true } },
               },
             },
-            memberPackage: true,
+            memberPackage: {
+              select: {
+                packageType: true,
+              },
+            },
           },
         },
       },
@@ -271,7 +274,13 @@ export class RoleDashboardService {
                 user: { include: { profile: true } },
               },
             },
-            memberPackage: true,
+            memberPackage: {
+              select: {
+                packageType: true,
+                usedSessions: true,
+                totalSessions: true,
+              },
+            },
           },
         },
       },
@@ -322,6 +331,11 @@ export class RoleDashboardService {
             where: {
               status: 'ACTIVE',
               branchId: branchId,
+            },
+            select: {
+              packageType: true,
+              usedSessions: true,
+              totalSessions: true,
             },
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -801,7 +815,11 @@ export class RoleDashboardService {
             member: {
               include: { user: { include: { profile: true } } },
             },
-            memberPackage: true,
+            memberPackage: {
+              select: {
+                packageType: true,
+              },
+            },
           },
         },
         doctor: { include: { profile: true } },
@@ -815,9 +833,23 @@ export class RoleDashboardService {
         branchId,
         status: { in: ['PENDING_PAYMENT', 'OVERDUE'] },
       },
-      include: {
+      select: {
+        id: true,
+        invoiceNumber: true,
+        totalAmount: true,
+        createdAt: true,
         member: {
-          include: { user: { include: { profile: true } } },
+          select: {
+            user: {
+              select: {
+                profile: {
+                  select: {
+                    fullName: true,
+                  },
+                },
+              },
+            },
+          },
         },
       },
       orderBy: { createdAt: 'asc' },
@@ -930,7 +962,20 @@ export class RoleDashboardService {
         registrationBranch: true,
         memberPackages: {
           where: { status: 'ACTIVE' },
-          include: { branch: true },
+          select: {
+            id: true,
+            packageCode: true,
+            packageType: true,
+            totalSessions: true,
+            usedSessions: true,
+            status: true,
+            expiredAt: true,
+            branch: {
+              select: {
+                name: true,
+              },
+            },
+          },
           orderBy: { createdAt: 'desc' },
         },
         encounters: {
@@ -943,7 +988,6 @@ export class RoleDashboardService {
                 branch: true,
               },
             },
-            memberPackage: true,
           },
           orderBy: { createdAt: 'desc' },
           take: 5,
@@ -1020,7 +1064,7 @@ export class RoleDashboardService {
         totalSesi: sessionStats._count,
         sesiSelesai: completedSessions,
       },
-      activePackages: member.memberPackages.map((pkg: MemberPackage & { branch: { name: string } }) => ({
+      activePackages: member.memberPackages.map(pkg => ({
         id: pkg.id,
         packageCode: pkg.packageCode,
         packageType: pkg.packageType,
