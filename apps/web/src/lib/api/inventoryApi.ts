@@ -417,9 +417,15 @@ export const inventoryApi = {
   /**
    * Upload payment proof (Admin Manager / Super Admin)
    */
-  uploadPaymentProof: (requestId: string, file: File) => {
+  uploadPaymentProof: (requestId: string, file: File, amount?: number, notes?: string) => {
     const formData = new FormData();
     formData.append('paymentProof', file);
+    if (amount !== undefined) {
+      formData.append('amount', String(amount));
+    }
+    if (notes) {
+      formData.append('notes', notes);
+    }
     return api.post(`/inventory/stock-requests/${requestId}/upload-payment-proof`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',

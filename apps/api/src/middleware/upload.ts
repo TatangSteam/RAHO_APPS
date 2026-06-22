@@ -7,6 +7,7 @@ const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg
 const PAYMENT_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // Accept all common image formats
 const LAB_RESULT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'] as const; // PDF and images for lab results
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_LAB_RESULT_SIZE = 10 * 1024 * 1024; // 10 MB for lab results
 
 function fileFilter(
@@ -84,7 +85,7 @@ export const uploadMemberDocuments = multer({
  */
 export const uploadPaymentProof = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_FILE_SIZE },
+  limits: { fileSize: MAX_PAYMENT_PROOF_SIZE },
   fileFilter: paymentProofFileFilter,
 });
 

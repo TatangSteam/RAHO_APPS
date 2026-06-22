@@ -488,7 +488,8 @@ export class FilesService {
 
     const requestId = match[1];
 
-    // Find stock request by ID and verify the payment proof URL matches
+    // Find stock request by ID and verify the payment proof URL matches either
+    // the latest proof or one of the historical invoice payments.
     const stockRequest = await prisma.stockRequest.findFirst({
       where: {
         id: requestId,
@@ -497,6 +498,23 @@ export class FilesService {
         id: true,
         branchId: true,
         paymentProofUrl: true,
+        invoice: {
+          select: {
+            payments: {
+              where: {
+                OR: [
+                  { proofFileUrl: key },
+                  { proofFileUrl: `${env.API_PREFIX}/files/${key}` },
+                  { proofFileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
+                  { proofFileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
+                  { proofFileUrl: { endsWith: key } },
+                ],
+              },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        },
       },
     });
 
@@ -504,21 +522,20 @@ export class FilesService {
       throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
     }
 
-    // Verify the key matches the stored payment proof URL
+    // Verify the key matches the latest stored URL or a historical payment.
     const storedUrl = stockRequest.paymentProofUrl;
-    if (!storedUrl) {
-      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
-    }
+    const keyMatchesLatest = Boolean(
+      storedUrl && (
+        storedUrl === key ||
+        storedUrl === `${env.API_PREFIX}/files/${key}` ||
+        storedUrl === `${env.API_URL}${env.API_PREFIX}/files/${key}` ||
+        storedUrl.endsWith(key) ||
+        storedUrl.includes(key)
+      )
+    );
+    const keyMatchesHistory = Boolean(stockRequest.invoice?.payments.length);
 
-    // Check if the key matches the stored URL (handle various URL formats)
-    const keyMatches = 
-      storedUrl === key ||
-      storedUrl === `${env.API_PREFIX}/files/${key}` ||
-      storedUrl === `${env.API_URL}${env.API_PREFIX}/files/${key}` ||
-      storedUrl.endsWith(key) ||
-      storedUrl.includes(key);
-
-    if (!keyMatches) {
+    if (!keyMatchesLatest && !keyMatchesHistory) {
       throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
     }
 

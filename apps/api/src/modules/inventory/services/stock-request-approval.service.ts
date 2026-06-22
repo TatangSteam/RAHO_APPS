@@ -110,6 +110,9 @@ export class StockRequestApprovalService {
         invoice: {
           include: {
             items: true,
+            payments: {
+              orderBy: { uploadedAt: 'desc' },
+            },
           },
         },
         shipment: true,
@@ -304,6 +307,8 @@ export class StockRequestApprovalService {
           branchId: request.branchId,
           subtotal,
           totalAmount: subtotal,
+          paidAmount: isFreeRequest ? subtotal : 0,
+          remainingAmount: isFreeRequest ? 0 : subtotal,
           status: isFreeRequest ? 'PAID' : isDebtRequest ? 'DEBT' : 'PENDING_PAYMENT',
           paymentVerificationStatus: isFreeRequest ? 'VERIFIED' : 'PENDING',
           verifiedBy: isFreeRequest ? userId : null,
@@ -587,6 +592,10 @@ export class StockRequestApprovalService {
       fileName: string;
       fileSize: number;
       mimeType: string;
+    },
+    paymentData?: {
+      amount?: number;
+      notes?: string;
     }
   ) {
     const request = await this.getRequestWithValidation(requestId, [
@@ -611,6 +620,35 @@ export class StockRequestApprovalService {
         status: 422,
         code: 'FREE_INVOICE_NO_PAYMENT_PROOF',
         message: 'Invoice gratis tidak memerlukan bukti pembayaran',
+      };
+    }
+
+    if (!request.invoice) {
+      throw {
+        status: 422,
+        code: 'INVOICE_NOT_FOUND',
+        message: 'Invoice belum dibuat untuk request ini',
+      };
+    }
+
+    const totalAmount = Number(request.invoice.totalAmount || 0);
+    const paidAmount = Number(request.invoice.paidAmount || 0);
+    const remainingAmount = Math.max(0, Number(request.invoice.remainingAmount ?? (totalAmount - paidAmount)));
+    const paymentAmount = paymentData?.amount ?? (isDebtRequest ? undefined : totalAmount);
+
+    if (!paymentAmount || !Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+      throw {
+        status: 400,
+        code: 'PAYMENT_AMOUNT_REQUIRED',
+        message: 'Jumlah pembayaran harus diisi dan lebih dari 0',
+      };
+    }
+
+    if (paymentAmount > remainingAmount) {
+      throw {
+        status: 422,
+        code: 'PAYMENT_AMOUNT_EXCEEDS_DEBT',
+        message: `Jumlah pembayaran melebihi sisa utang. Sisa utang saat ini Rp ${remainingAmount.toLocaleString('id-ID')}`,
       };
     }
 
@@ -646,14 +684,13 @@ export class StockRequestApprovalService {
       }
     }
 
-    // Delete old payment proof from MinIO if exists (when re-uploading)
-    if (request.paymentProofUrl) {
-      console.log(`[StockRequest] Deleting old payment proof: ${request.paymentProofUrl}`);
-      await deleteFileByUrl(request.paymentProofUrl);
-    }
-
     // Update request and invoice with payment proof
     const result = await prisma.$transaction(async (tx) => {
+      const now = new Date();
+      const nextPaidAmount = isDebtRequest ? paidAmount + paymentAmount : paidAmount;
+      const nextRemainingAmount = isDebtRequest ? Math.max(0, totalAmount - nextPaidAmount) : remainingAmount;
+      const isFullyPaid = isDebtRequest && nextRemainingAmount <= 0;
+
       // Update request
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
@@ -663,8 +700,15 @@ export class StockRequestApprovalService {
           paymentProofFileName: fileData.fileName,
           paymentProofFileSize: fileData.fileSize,
           paymentProofMimeType: fileData.mimeType,
-          paymentUploadedAt: new Date(),
+          paymentUploadedAt: now,
           paymentUploadedBy: userId,
+          paymentVerifiedBy: isDebtRequest && isFullyPaid ? userId : request.paymentVerifiedBy,
+          paymentVerifiedAt: isDebtRequest && isFullyPaid ? now : request.paymentVerifiedAt,
+          paymentVerificationNotes: isDebtRequest
+            ? isFullyPaid
+              ? 'Pembayaran utang sudah lunas'
+              : `Pembayaran parsial diterima. Sisa utang Rp ${nextRemainingAmount.toLocaleString('id-ID')}`
+            : request.paymentVerificationNotes,
         },
         include: {
           items: {
@@ -676,27 +720,61 @@ export class StockRequestApprovalService {
           invoice: {
             include: {
               items: true,
+              payments: {
+                orderBy: { uploadedAt: 'desc' },
+              },
             },
           },
         },
       });
 
-      // Update invoice if exists
-      if (request.invoice) {
-        await tx.stockRequestInvoice.update({
-          where: { id: request.invoice.id },
-          data: {
-            paymentProofUrl: fileData.url,
-            paymentProofFileName: fileData.fileName,
-            paymentProofFileSize: fileData.fileSize,
-            paymentProofMimeType: fileData.mimeType,
-            paymentUploadedAt: new Date(),
-            paymentUploadedBy: userId,
-            paymentVerificationStatus: 'PENDING',
-            rejectionReason: null,
-          },
-        });
-      }
+      await tx.stockRequestInvoicePayment.create({
+        data: {
+          invoiceId: request.invoice.id,
+          amount: paymentAmount,
+          proofFileUrl: fileData.url,
+          proofFileName: fileData.fileName,
+          proofFileSize: fileData.fileSize,
+          proofMimeType: fileData.mimeType,
+          notes: paymentData?.notes?.trim() || null,
+          uploadedBy: userId,
+          uploadedAt: now,
+          verifiedBy: isDebtRequest ? userId : null,
+          verifiedAt: isDebtRequest ? now : null,
+          verificationNotes: isDebtRequest
+            ? isFullyPaid
+              ? 'Pembayaran utang sudah lunas'
+              : `Pembayaran parsial diterima. Sisa utang Rp ${nextRemainingAmount.toLocaleString('id-ID')}`
+            : null,
+        },
+      });
+
+      await tx.stockRequestInvoice.update({
+        where: { id: request.invoice.id },
+        data: {
+          paidAmount: nextPaidAmount,
+          remainingAmount: nextRemainingAmount,
+          status: isFullyPaid ? 'PAID' : isDebtRequest ? 'DEBT' : request.invoice.status,
+          paymentProofUrl: fileData.url,
+          paymentProofFileName: fileData.fileName,
+          paymentProofFileSize: fileData.fileSize,
+          paymentProofMimeType: fileData.mimeType,
+          paymentUploadedAt: now,
+          paymentUploadedBy: userId,
+          paymentVerificationStatus: isDebtRequest
+            ? isFullyPaid ? 'VERIFIED' : 'PENDING'
+            : 'PENDING',
+          verifiedBy: isDebtRequest && isFullyPaid ? userId : request.invoice.verifiedBy,
+          verifiedAt: isDebtRequest && isFullyPaid ? now : request.invoice.verifiedAt,
+          verificationNotes: isDebtRequest
+            ? isFullyPaid
+              ? 'Pembayaran utang sudah lunas'
+              : `Pembayaran parsial diterima. Sisa utang Rp ${nextRemainingAmount.toLocaleString('id-ID')}`
+            : request.invoice.verificationNotes,
+          paidAt: isFullyPaid ? now : request.invoice.paidAt,
+          rejectionReason: null,
+        },
+      });
 
       return updatedRequest;
     });
@@ -711,6 +789,8 @@ export class StockRequestApprovalService {
       meta: { 
         action: 'UPLOAD_PAYMENT_PROOF',
         fileName: fileData.fileName,
+        amount: paymentAmount,
+        remainingAmount: Math.max(0, remainingAmount - paymentAmount),
         paymentMode: isDebtRequest ? 'DEBT' : 'NORMAL',
       },
     });
@@ -760,6 +840,15 @@ export class StockRequestApprovalService {
     }
 
     if (isDebtRequest) {
+      const remainingAmount = Number(request.invoice?.remainingAmount ?? request.invoice?.totalAmount ?? 0);
+      if (remainingAmount > 0) {
+        throw {
+          status: 422,
+          code: 'DEBT_PAYMENT_NOT_FULLY_PAID',
+          message: `Pembayaran utang belum lunas. Sisa utang Rp ${remainingAmount.toLocaleString('id-ID')}`,
+        };
+      }
+
       const result = await prisma.$transaction(async (tx) => {
         const updatedRequest = await tx.stockRequest.update({
           where: { id: requestId },
@@ -788,6 +877,8 @@ export class StockRequestApprovalService {
               where: { id: request.invoice.id },
               data: {
                 status: 'PAID',
+                paidAmount: request.invoice.totalAmount,
+                remainingAmount: 0,
                 paymentVerificationStatus: 'VERIFIED',
                 verifiedBy: userId,
                 verifiedAt: new Date(),
@@ -861,6 +952,8 @@ export class StockRequestApprovalService {
           where: { id: request.invoice.id },
           data: {
             status: 'PAID',
+            paidAmount: request.invoice.totalAmount,
+            remainingAmount: 0,
             paymentVerificationStatus: 'VERIFIED',
             verifiedBy: userId,
             verifiedAt: new Date(),
@@ -1213,6 +1306,8 @@ export class StockRequestApprovalService {
       invoiceNumber: invoice.invoiceNumber,
       subtotal: Number(invoice.subtotal),
       totalAmount: Number(invoice.totalAmount),
+      paidAmount: Number(invoice.paidAmount || 0),
+      remainingAmount: Number(invoice.remainingAmount ?? invoice.totalAmount ?? 0),
       status: invoice.status,
       paymentVerificationStatus: invoice.paymentVerificationStatus,
       paymentProofUrl: invoice.paymentProofUrl,
@@ -1227,6 +1322,21 @@ export class StockRequestApprovalService {
         quantity: Number(item.quantity),
         pricePerUnit: Number(item.pricePerUnit),
         subtotal: Number(item.subtotal),
+      })),
+      payments: invoice.payments?.map((payment: any) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        proofFileUrl: payment.proofFileUrl,
+        proofFileName: payment.proofFileName,
+        proofFileSize: payment.proofFileSize,
+        proofMimeType: payment.proofMimeType,
+        notes: payment.notes,
+        uploadedBy: payment.uploadedBy,
+        uploadedAt: payment.uploadedAt?.toISOString(),
+        verifiedBy: payment.verifiedBy,
+        verifiedAt: payment.verifiedAt?.toISOString(),
+        verificationNotes: payment.verificationNotes,
+        rejectionReason: payment.rejectionReason,
       })),
       createdAt: invoice.createdAt.toISOString(),
     };

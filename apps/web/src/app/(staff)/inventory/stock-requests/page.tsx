@@ -256,12 +256,12 @@ export default function StockRequestsPage() {
     }
   };
 
-  const handleUploadPaymentProof = async (file: File) => {
+  const handleUploadPaymentProof = async (file: File, amount?: number, notes?: string) => {
     if (!selectedRequest) return;
     
     try {
       setActionLoading(true);
-      await inventoryApi.uploadPaymentProof(selectedRequest.id, file);
+      await inventoryApi.uploadPaymentProof(selectedRequest.id, file, amount, notes);
       showToast.success('Bukti pembayaran berhasil diupload');
       setShowPaymentModal(false);
       setSelectedRequest(null);
@@ -545,17 +545,16 @@ export default function StockRequestsPage() {
                   const statusConfig = filterOptions.find(f => f.value === request.status) || filterOptions[0];
                   const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
                   const isDebtInvoice = request.invoice?.status === 'DEBT';
-                  const hasPaymentProof = Boolean(request.paymentProofUrl || request.invoice?.paymentProofUrl);
+                  const remainingAmount = request.invoice?.remainingAmount ?? Math.max(0, (request.invoice?.totalAmount ?? 0) - (request.invoice?.paidAmount ?? 0));
                   const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
                   const canReview = (
                     (request.status === 'PENDING' && isManager) ||
-                    (request.status === 'PAYMENT_UPLOADED' && isManager) ||
-                    (isDebtInvoice && hasPaymentProof && isManager)
+                    (request.status === 'PAYMENT_UPLOADED' && isManager)
                   );
                   const canEditRequest = isManager && request.status === 'PENDING';
                   const canUploadPayment = isManager && !isFreeInvoice && (
                     request.status === 'WAITING_PAYMENT' ||
-                    (isDebtInvoice && !hasPaymentProof)
+                    (isDebtInvoice && remainingAmount > 0)
                   );
 
                   return (
@@ -676,6 +675,7 @@ export default function StockRequestsPage() {
           onConfirmPayment={handleConfirmPayment}
           onRejectPayment={handleRejectPayment}
           onReject={handleReject}
+          onRefresh={fetchRequests}
           loading={actionLoading}
         />
       )}

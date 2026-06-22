@@ -1,4 +1,11 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  CreateBucketCommand,
+} from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from './env';
 
@@ -12,6 +19,50 @@ const s3Client = new S3Client({
   },
   forcePathStyle: true, // Required for MinIO
 });
+
+let bucketInitialization: Promise<void> | null = null;
+
+function getHttpStatusCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null || !('$metadata' in error)) {
+    return undefined;
+  }
+
+  const metadata = (error as { $metadata?: { httpStatusCode?: number } }).$metadata;
+  return metadata?.httpStatusCode;
+}
+
+/**
+ * Ensure the configured bucket exists before performing storage operations.
+ * The cached promise prevents multiple simultaneous uploads from racing to
+ * create the same bucket.
+ */
+export async function ensureBucketExists(): Promise<void> {
+  if (!bucketInitialization) {
+    bucketInitialization = (async () => {
+      try {
+        await s3Client.send(new HeadBucketCommand({ Bucket: env.MINIO_BUCKET }));
+      } catch (error) {
+        if (getHttpStatusCode(error) !== 404) {
+          throw error;
+        }
+
+        try {
+          await s3Client.send(new CreateBucketCommand({ Bucket: env.MINIO_BUCKET }));
+        } catch (createError) {
+          // Another process may have created it after the HEAD request.
+          if (getHttpStatusCode(createError) !== 409) {
+            throw createError;
+          }
+        }
+      }
+    })().catch((error) => {
+      bucketInitialization = null;
+      throw error;
+    });
+  }
+
+  await bucketInitialization;
+}
 
 export interface UploadResult {
   key: string;
@@ -30,6 +81,8 @@ export async function uploadFile(
   key: string,
   mimeType: string,
 ): Promise<UploadResult> {
+  await ensureBucketExists();
+
   await s3Client.send(
     new PutObjectCommand({
       Bucket: env.MINIO_BUCKET,

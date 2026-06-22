@@ -71,13 +71,9 @@ export function errorHandler(
   //   body: req.body,
   // });
 
-  logger.error('[Unhandled Error]', {
-    error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
-    url: req.url,
-    method: req.method,
-    
-    body: typeof req.body === 'object' ? JSON.stringify(req.body).slice(0, 1000) : req.body,
-  });
+  const errorMessage = err instanceof Error ? err.message : String(err);
+  const errorStack = err instanceof Error && err.stack ? `\n${err.stack}` : '';
+  logger.error(`[Unhandled Error] ${req.method} ${req.url}: ${errorMessage}${errorStack}`);
 
   sendError(
     res,

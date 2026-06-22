@@ -125,12 +125,17 @@ export default function StockRequestCard({
   const isManager = userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER';
   const isAdminCabang = userRole === 'ADMIN_CABANG';
   const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
+  const isDebtInvoice = request.invoice?.status === 'DEBT';
+  const remainingAmount = request.invoice?.remainingAmount ?? Math.max(0, (request.invoice?.totalAmount ?? 0) - (request.invoice?.paidAmount ?? 0));
   
   const canReview = isManager && (
     ['PENDING', 'PAYMENT_UPLOADED'].includes(request.status) ||
     (request.status === 'WAITING_PAYMENT' && isFreeInvoice)
   );
-  const canUploadPayment = isManager && request.status === 'WAITING_PAYMENT' && !isFreeInvoice;
+  const canUploadPayment = isManager && !isFreeInvoice && (
+    request.status === 'WAITING_PAYMENT' ||
+    (isDebtInvoice && remainingAmount > 0)
+  );
   const canReceive = isAdminCabang && request.status === 'SHIPPED' && request.shipment?.status === 'SHIPPED';
 
   return (

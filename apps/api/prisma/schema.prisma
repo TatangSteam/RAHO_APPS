@@ -1519,6 +1519,8 @@ model StockRequestInvoice {
   // Pricing
   subtotal    Decimal @db.Decimal(12, 2)
   totalAmount Decimal @db.Decimal(12, 2)
+  paidAmount      Decimal @default(0) @db.Decimal(12, 2)
+  remainingAmount Decimal @default(0) @db.Decimal(12, 2)
 
   // Invoice Status
   status InvoiceStatus @default(PENDING_PAYMENT)
@@ -1547,12 +1549,44 @@ model StockRequestInvoice {
 
   stockRequest StockRequest              @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
   items        StockRequestInvoiceItem[]
+  payments     StockRequestInvoicePayment[]
 
   @@index([branchId])
   @@index([status])
   @@index([paymentVerificationStatus])
   @@index([createdAt])
   @@map("stock_request_invoices")
+}
+
+model StockRequestInvoicePayment {
+  id        String @id @default(cuid())
+  invoiceId String
+
+  amount Decimal @db.Decimal(12, 2)
+
+  proofFileUrl  String
+  proofFileName String
+  proofFileSize Int
+  proofMimeType String
+
+  notes      String?
+  uploadedBy String
+  uploadedAt DateTime @default(now())
+
+  verifiedBy        String?
+  verifiedAt        DateTime?
+  verificationNotes String?
+  rejectionReason   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  invoice StockRequestInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([uploadedBy])
+  @@index([uploadedAt])
+  @@map("stock_request_invoice_payments")
 }
 
 model StockRequestInvoiceItem {
