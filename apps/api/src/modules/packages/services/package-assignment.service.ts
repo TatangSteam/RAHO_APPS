@@ -11,7 +11,7 @@ type NormalizedPaymentPlan = {
   installmentCount?: number;
   installments?: Array<{
     installmentNumber: number;
-    amount: number;
+    amount?: number;
     dueDate?: string;
   }>;
 };
@@ -297,13 +297,9 @@ export class PackageAssignmentService {
     }
 
     const installmentCount = data.paymentPlan.installmentCount || 0;
-    const installments = data.paymentPlan.installments || [];
-    const totalInstallments = installments.reduce(
-      (sum, installment) => sum + Math.round(installment.amount || 0),
-      0
-    );
+    const providedInstallments = data.paymentPlan.installments || [];
 
-    if (installmentCount < 2 || installments.length !== installmentCount) {
+    if (installmentCount < 2) {
       throw {
         status: 400,
         code: 'INVALID_INSTALLMENT_PLAN',
@@ -311,30 +307,27 @@ export class PackageAssignmentService {
       };
     }
 
-    if (!installments[0] || Math.round(installments[0].amount || 0) <= 0) {
+    if (providedInstallments.length > 0 && providedInstallments.length !== installmentCount) {
       throw {
         status: 400,
-        code: 'FIRST_INSTALLMENT_REQUIRED',
-        message: 'Termin pertama wajib memiliki nominal pembayaran awal',
+        code: 'INVALID_INSTALLMENT_PLAN',
+        message: 'Jumlah jadwal termin harus sesuai jumlah termin',
       };
     }
 
-    if (totalInstallments !== finalTotal) {
-      throw {
-        status: 400,
-        code: 'INSTALLMENT_TOTAL_MISMATCH',
-        message: 'Total nominal termin harus sama dengan total harga paket',
+    const installments = Array.from({ length: installmentCount }, (_, index) => {
+      const provided = providedInstallments[index];
+
+      return {
+        installmentNumber: index + 1,
+        dueDate: provided?.dueDate,
       };
-    }
+    });
 
     return {
       type: 'INSTALLMENT',
       installmentCount,
-      installments: installments.map((installment, index) => ({
-        installmentNumber: index + 1,
-        amount: Math.round(installment.amount || 0),
-        dueDate: installment.dueDate,
-      })),
+      installments,
     };
   }
 

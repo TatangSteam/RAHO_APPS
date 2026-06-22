@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import styles from './VerifyPaymentModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
+import type { Invoice } from '@/types/invoice';
 
 interface PaymentProof {
   file: File | null;
@@ -15,6 +16,7 @@ interface VerifyPaymentModalProps {
   show: boolean;
   notes: string;
   paidAmount: number;
+  invoice?: Invoice | null;
   submitting: boolean;
   onClose: () => void;
   onNotesChange: (notes: string) => void;
@@ -27,10 +29,16 @@ interface VerifyPaymentModalProps {
   packageStatus?: string;
 }
 
+const formatRupiahInput = (value: number) => {
+  if (!value) return '';
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+
 export default function VerifyPaymentModal({
   show,
   notes,
   paidAmount,
+  invoice,
   submitting,
   onClose,
   onNotesChange,
@@ -49,8 +57,21 @@ export default function VerifyPaymentModal({
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
+  const [paidAmountInput, setPaidAmountInput] = useState(formatRupiahInput(paidAmount));
 
   const hasExistingProof = packageStatus === 'WAITING_VERIFICATION' && existingProofUrl;
+  const isInstallment = invoice?.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal;
+  const remainingInstallments = isInstallment
+    ? Math.max(0, Number(invoice.installmentTotal) - Number(invoice.installmentNumber) + 1)
+    : 0;
+  const isFinalInstallment = Boolean(
+    isInstallment &&
+    Number(invoice?.installmentNumber) >= Number(invoice?.installmentTotal)
+  );
+  const paidInstallmentTotal = invoice?.payments?.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) || 0;
+  const remainingAmount = invoice
+    ? Math.max(0, Number(invoice.totalAmount || 0) || Number(invoice.totalPurchaseAmount || 0) - paidInstallmentTotal)
+    : 0;
 
   // Reset state when modal opens or closes
   useEffect(() => {
@@ -64,6 +85,7 @@ export default function VerifyPaymentModal({
       setRejecting(false);
       onProofChange({ file: null, preview: null });
       document.body.style.overflow = 'hidden';
+      setPaidAmountInput(formatRupiahInput(paidAmount));
     } else {
       document.body.style.overflow = '';
     }
@@ -71,6 +93,10 @@ export default function VerifyPaymentModal({
       document.body.style.overflow = '';
     };
   }, [show]);
+
+  useEffect(() => {
+    setPaidAmountInput(formatRupiahInput(paidAmount));
+  }, [paidAmount]);
 
   // Handle ESC key
   useEffect(() => {
@@ -160,6 +186,14 @@ export default function VerifyPaymentModal({
 
   if (!show) return null;
 
+  const finalInstallmentAmountInvalid = isFinalInstallment && paidAmount !== remainingAmount;
+  const canSubmit =
+    !submitting &&
+    !rejecting &&
+    !compressing &&
+    (hasExistingProof || Boolean(paymentProof.file)) &&
+    !finalInstallmentAmountInvalid;
+
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
@@ -194,6 +228,26 @@ export default function VerifyPaymentModal({
                 : 'Pastikan pembayaran telah diterima sebelum melakukan verifikasi. Paket akan langsung aktif setelah diverifikasi dan invoice akan menjadi kwitansi lunas.'}
             </div>
           </div>
+
+          {isInstallment && (
+            <div className={`${styles.warningBox} ${styles.installmentBox}`}>
+              <div className={styles.installmentSummary}>
+                <div>
+                  <div className={styles.installmentLabel}>Detail Termin</div>
+                  <div className={styles.installmentTitle}>
+                    Termin {invoice.installmentNumber} dari {invoice.installmentTotal}
+                  </div>
+                </div>
+                <div className={styles.installmentAmount}>
+                  Rp {formatRupiahInput(remainingAmount)}
+                </div>
+              </div>
+              <div className={styles.installmentMeta}>
+                <span>Sisa termin: {remainingInstallments}</span>
+                {isFinalInstallment && <span>Termin terakhir wajib lunas penuh</span>}
+              </div>
+            </div>
+          )}
 
           {/* Existing Payment Proof (for WAITING_VERIFICATION) */}
           {hasExistingProof && (
@@ -294,22 +348,39 @@ export default function VerifyPaymentModal({
           )}
 
           {/* Paid Amount */}
-          <div className={styles.formGroup}>
-            <label className={styles.formLabel}>
-              Nominal Dibayarkan
-            </label>
-            <input
-              type="number"
-              min={0}
-              value={paidAmount || ''}
-              onChange={(e) => onPaidAmountChange(Number(e.target.value || 0))}
-              className={styles.formInput}
-              placeholder="Kosongkan jika sesuai tagihan invoice"
-            />
-            <p className={styles.formHint}>
-              Isi nominal aktual yang diterima. Jika kurang/lebih dari tagihan termin, sistem akan membawa selisih ke termin berikutnya.
-            </p>
-          </div>
+          {isInstallment && (
+            <div className={styles.formGroup}>
+              <label className={styles.formLabel}>
+                Nominal Dibayarkan
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={paidAmountInput}
+                onChange={(e) => {
+                  const rawValue = e.target.value.replace(/\D/g, '');
+                  const nextAmount = rawValue ? Number(rawValue) : 0;
+                  setPaidAmountInput(rawValue ? formatRupiahInput(nextAmount) : '');
+                  onPaidAmountChange(nextAmount);
+                }}
+                onBlur={() => {
+                  setPaidAmountInput(formatRupiahInput(paidAmount));
+                }}
+                className={styles.formInput}
+                placeholder="Isi nominal aktual yang diterima"
+              />
+              <p className={styles.formHint}>
+                {isFinalInstallment
+                  ? `Termin terakhir wajib diisi penuh sebesar Rp ${formatRupiahInput(remainingAmount)}.`
+                  : 'Untuk pembayaran termin, nominal wajib diisi setiap kali member membayar.'}
+              </p>
+              {finalInstallmentAmountInvalid && (
+                <div className={styles.errorMessage}>
+                  Nominal termin terakhir harus sama dengan sisa pembayaran: Rp {formatRupiahInput(remainingAmount)}.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Notes */}
           <div className={styles.formGroup}>
@@ -350,9 +421,15 @@ export default function VerifyPaymentModal({
           )}
           <button
             onClick={onSubmit}
-            disabled={submitting || rejecting || (!hasExistingProof && !paymentProof.file) || compressing}
+            disabled={!canSubmit}
             className={`${styles.button} ${styles.buttonPrimary}`}
-            title={!hasExistingProof && !paymentProof.file ? 'Bukti pembayaran wajib diupload' : ''}
+            title={
+              !hasExistingProof && !paymentProof.file
+                ? 'Bukti pembayaran wajib diupload'
+                : finalInstallmentAmountInvalid
+                  ? 'Termin terakhir wajib dibayar penuh'
+                  : ''
+            }
           >
             {submitting ? '⏳ Memverifikasi...' : '✅ Verifikasi'}
           </button>

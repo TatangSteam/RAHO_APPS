@@ -212,13 +212,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
         <div className={styles.compactRight}>
           <div className={styles.compactPrice}>{formatCurrency(addon.totalPrice)}</div>
           {getStatusBadge(addon.status)}
-          {['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(addon.status) && (
-            <ViewInvoiceButton
-              packageId={addon.addOnId}
-              packageCode={addon.addOnCode}
-              status={addon.status}
-            />
-          )}
           <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         </div>
         </div>
@@ -261,6 +254,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                   packageId={addon.addOnId}
                   packageCode={addon.addOnCode}
                   status={addon.status}
+                  documentLabel={addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
                 />
                 <button
                   onClick={(e) => {
@@ -281,6 +275,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                   packageId={addon.addOnId}
                   packageCode={addon.addOnCode}
                   status={addon.status}
+                  documentLabel={addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
                 />
                 <ViewPaymentProofButton
                   packageId={addon.addOnId}
@@ -355,13 +350,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
             <div className={styles.compactPrice}>{formatCurrency(totalFinalPrice)}</div>
             {getStatusBadge(groupStatus || 'ACTIVE')}
             {(basics[0] && getRefundBadge(basics[0])) || (boosters[0] && getRefundBadge(boosters[0]))}
-            {(anyPending || anyActive) && (
-              <ViewInvoiceButton
-                packageId={basics[0]?.packageId || boosters[0]?.packageId || groupAddOns[0]?.addOnId || ''}
-                packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
-                status={groupStatus || 'ACTIVE'}
-              />
-            )}
             <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
           </div>
         </div>
@@ -614,6 +602,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                   packageId={basics[0]?.packageId || boosters[0]?.packageId || ''}
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'ACTIVE'}
+                  documentLabel={anyActiveInstallment ? 'Lihat Invoice' : undefined}
                 />
                 <ViewPaymentProofButton
                   packageId={basics[0]?.packageId || boosters[0]?.packageId || ''}
@@ -691,13 +680,6 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
           <div className={styles.compactPrice}>{formatCurrency(standaloneFinalPrice)}</div>
           {getStatusBadge(memberPkg.status)}
           {getRefundBadge(memberPkg)}
-          {['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(memberPkg.status) && (
-            <ViewInvoiceButton
-              packageId={memberPkg.packageId}
-              packageCode={memberPkg.packageCode}
-              status={memberPkg.status}
-            />
-          )}
           <span className={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</span>
         </div>
       </div>
@@ -791,6 +773,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 packageId={memberPkg.packageId}
                 packageCode={memberPkg.packageCode}
                 status={memberPkg.status}
+                documentLabel={memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
               />
               <button
                 onClick={(e) => {
@@ -841,6 +824,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 packageId={memberPkg.packageId}
                 packageCode={memberPkg.packageCode}
                 status={memberPkg.status}
+                documentLabel={memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
               />
               <ViewPaymentProofButton
                 packageId={memberPkg.packageId}

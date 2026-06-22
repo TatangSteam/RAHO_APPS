@@ -21,6 +21,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status, docu
   const canShowDocument = ['PENDING_PAYMENT', 'WAITING_VERIFICATION', 'ACTIVE', 'EXPIRED'].includes(status);
   const isReceipt = status === 'ACTIVE' || status === 'EXPIRED';
   const label = documentLabel || (isReceipt ? 'Lihat Kwitansi' : 'Lihat Invoice');
+  const isInvoiceButton = label.toLowerCase().includes('invoice');
 
   if (!canShowDocument) {
     return null;
@@ -55,7 +56,7 @@ export default function ViewInvoiceButton({ packageId, packageCode, status, docu
         disabled={loading}
         style={{
           padding: '6px 12px',
-          background: isReceipt ? '#16A34A' : '#3B82F6',
+          background: isInvoiceButton ? '#2563EB' : '#16A34A',
           color: 'white',
           border: 'none',
           borderRadius: '6px',

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { BadgePercent } from 'lucide-react';
 
 interface DiscountSectionProps {
@@ -14,6 +15,69 @@ interface DiscountSectionProps {
 const formatNumberInput = (value: number): string => {
   return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
+
+function NumericTextInput({
+  value,
+  onChange,
+  min = 0,
+  max,
+  placeholder,
+  className,
+  format,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  placeholder?: string;
+  className?: string;
+  format?: boolean;
+}) {
+  const [inputValue, setInputValue] = useState(format ? formatNumberInput(value) : String(value));
+
+  useEffect(() => {
+    setInputValue(format ? formatNumberInput(value) : String(value));
+  }, [format, value]);
+
+  const normalize = (rawValue: string) => (format ? rawValue.replace(/\D/g, '') : rawValue);
+
+  return (
+    <input
+      type="text"
+      inputMode="numeric"
+      value={inputValue}
+      onChange={(e) => {
+        const nextValue = e.target.value;
+        const normalized = normalize(nextValue);
+
+        if (nextValue === '' || normalized === '' || /^\d+$/.test(normalized)) {
+          setInputValue(format && normalized !== '' ? formatNumberInput(Number(normalized)) : normalized);
+
+          if (normalized !== '') {
+            const boundedValue = Math.min(Math.max(Number(normalized), min), max ?? Number.MAX_SAFE_INTEGER);
+            onChange(boundedValue);
+          }
+        }
+      }}
+      onBlur={() => {
+        const normalized = normalize(inputValue);
+
+        if (normalized === '') {
+          setInputValue(format ? formatNumberInput(min) : String(min));
+          onChange(min);
+          return;
+        }
+
+        const boundedValue = Math.min(Math.max(Number(normalized), min), max ?? Number.MAX_SAFE_INTEGER);
+        setInputValue(format ? formatNumberInput(boundedValue) : String(boundedValue));
+        onChange(boundedValue);
+      }}
+      onFocus={(e) => e.target.select()}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+}
 
 export default function DiscountSection({
   discountPercent,
@@ -35,25 +99,22 @@ export default function DiscountSection({
         <div className="assign-package-discount-grid grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Diskon (%)</label>
-            <input
-              type="number"
+            <NumericTextInput
               value={discountPercent}
-              onChange={(e) => onDiscountPercentChange(Math.min(Math.max(parseInt(e.target.value) || 0, 0), 100))}
+              onChange={onDiscountPercentChange}
+              min={0}
+              max={100}
               className="w-full px-3 py-2 text-sm rounded-lg border border-emerald-300 dark:border-emerald-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              min="0"
-              max="100"
               placeholder="0-100"
             />
           </div>
           <div>
             <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Diskon (Rp)</label>
-            <input
-              type="text"
-              value={formatNumberInput(discountAmount)}
-              onChange={(e) => {
-                const numValue = parseInt(e.target.value.replace(/\D/g, '')) || 0;
-                onDiscountAmountChange(Math.max(numValue, 0));
-              }}
+            <NumericTextInput
+              value={discountAmount}
+              onChange={onDiscountAmountChange}
+              min={0}
+              format
               className="w-full px-3 py-2 text-sm rounded-lg border border-emerald-300 dark:border-emerald-500/30 bg-white dark:bg-neutral-800/50 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               placeholder="Nominal diskon"
             />

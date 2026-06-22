@@ -13,6 +13,8 @@ import {
 import { sendSuccess, sendCreated } from '../../utils/response';
 import { env } from '../../config/env';
 import { uploadFile } from '../../config/minio';
+import fs from 'fs/promises';
+import path from 'path';
 
 const packagesService = new PackagesService();
 
@@ -256,8 +258,15 @@ export class PackagesController {
       const fileExt = req.file.mimetype.split('/')[1];
       const key = `uploads/payment-proofs/${userId}/${timestamp}.${fileExt}`;
 
-      // Upload to MinIO
-      const uploadResult = await uploadFile(req.file.buffer, key, req.file.mimetype);
+      try {
+        await uploadFile(req.file.buffer, key, req.file.mimetype);
+      } catch (uploadError) {
+        console.error('[Packages] MinIO payment proof upload failed, saving locally:', uploadError);
+        const localPath = path.resolve(process.cwd(), key);
+        await fs.mkdir(path.dirname(localPath), { recursive: true });
+        await fs.writeFile(localPath, req.file.buffer);
+      }
+
       const apiUrl = `${env.API_PREFIX}/files/${key}`;
 
       return sendSuccess(res, {

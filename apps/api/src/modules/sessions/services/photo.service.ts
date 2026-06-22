@@ -2,7 +2,37 @@ import { prisma } from '../../../lib/prisma';
 import { uploadFile, deleteFile } from '../../../config/minio';
 import { env } from '../../../config/env';
 import { v4 as uuidv4 } from 'uuid';
-import { processFile, isImage } from '../../../utils/imageProcessor';
+import { processFile } from '../../../utils/imageProcessor';
+import { mkdir, writeFile, unlink } from 'fs/promises';
+import path from 'path';
+
+async function saveLocalFile(buffer: Buffer, key: string) {
+  const cwd = path.resolve(process.cwd());
+  const localPath = path.resolve(cwd, key);
+
+  if (!localPath.startsWith(cwd)) {
+    throw { status: 400, code: 'INVALID_FILE_PATH', message: 'Path file tidak valid' };
+  }
+
+  await mkdir(path.dirname(localPath), { recursive: true });
+  await writeFile(localPath, buffer);
+
+  return { key, url: `${env.API_URL}${env.API_PREFIX}/files/${key}` };
+}
+
+async function deleteLocalFile(key: string) {
+  const cleanKey = key.split('?')[0];
+  const cwd = path.resolve(process.cwd());
+  const localPath = path.resolve(cwd, cleanKey);
+
+  if (!localPath.startsWith(cwd)) return;
+
+  try {
+    await unlink(localPath);
+  } catch {
+    // Ignore missing local files.
+  }
+}
 
 export class PhotoService {
   async uploadPhoto(
@@ -34,15 +64,20 @@ export class PhotoService {
         
         if (existingPhoto.fileUrl.includes('/api/v1/files/')) {
           // New format - extract everything after /files/
-          oldKey = existingPhoto.fileUrl.split('/api/v1/files/')[1];
+          oldKey = existingPhoto.fileUrl.split('/api/v1/files/')[1].split('?')[0];
         } else {
           // Old format - extract from MinIO URL
-          oldKey = existingPhoto.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+          oldKey = existingPhoto.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '').split('?')[0];
         }
         
-        await deleteFile(oldKey);
+        try {
+          await deleteFile(oldKey);
+        } catch (error) {
+          console.error('Error deleting old photo from MinIO:', error);
+        }
+        await deleteLocalFile(oldKey);
       } catch (error) {
-        console.error('Error deleting old photo from MinIO:', error);
+        console.error('Error deleting old photo:', error);
       }
     }
 
@@ -58,11 +93,16 @@ export class PhotoService {
     const fileName = `${uuidv4()}.${fileExtension}`;
     const key = `session-photos/${fileName}`;
 
-    // Upload processed image to MinIO
-    const uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
+    let uploadResult: { key: string; url: string };
+    try {
+      uploadResult = await uploadFile(processed.buffer, key, processed.mimeType);
+    } catch (error) {
+      console.error('[PhotoService] MinIO upload failed, saving session photo locally:', error);
+      uploadResult = await saveLocalFile(processed.buffer, key);
+    }
 
     // Use API endpoint URL instead of direct MinIO URL
-    const apiUrl = `${env.API_URL}/api/v1/files/${key}`;
+    const apiUrl = `${env.API_URL}${env.API_PREFIX}/files/${uploadResult.key}`;
 
     // Save or update in database with processed file info
     const photoData = {
@@ -104,15 +144,20 @@ export class PhotoService {
       
       if (photo.fileUrl.includes('/api/v1/files/')) {
         // New format - extract everything after /files/
-        key = photo.fileUrl.split('/api/v1/files/')[1];
+        key = photo.fileUrl.split('/api/v1/files/')[1].split('?')[0];
       } else {
         // Old format - extract from MinIO URL
-        key = photo.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '');
+        key = photo.fileUrl.replace(`${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/`, '').split('?')[0];
       }
       
-      await deleteFile(key);
+      try {
+        await deleteFile(key);
+      } catch (error) {
+        console.error('Error deleting photo from MinIO:', error);
+      }
+      await deleteLocalFile(key);
     } catch (error) {
-      console.error('Error deleting photo from MinIO:', error);
+      console.error('Error deleting photo:', error);
     }
 
     // Delete from database

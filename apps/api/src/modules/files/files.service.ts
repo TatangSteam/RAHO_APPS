@@ -3,6 +3,8 @@ import { s3Client } from '../../config/minio';
 import { env } from '../../config/env';
 import { prisma } from '@lib/prisma';
 import { Readable } from 'stream';
+import { createReadStream, existsSync, statSync } from 'fs';
+import path from 'path';
 
 type AuthUser = {
   userId: string;
@@ -46,6 +48,11 @@ export class FilesService {
         throw error;
       }
 
+      const localFile = this.getLocalFile(filePath);
+      if (localFile) {
+        return localFile;
+      }
+
       // Handle S3/MinIO errors
       if (error.name === 'NoSuchKey' || error.$metadata?.httpStatusCode === 404) {
         throw {
@@ -62,6 +69,35 @@ export class FilesService {
         details: error.message,
       };
     }
+  }
+
+  private getLocalFile(filePath: string) {
+    const key = this.normalizeFileKey(filePath);
+    const cwd = path.resolve(process.cwd());
+    const localPath = path.resolve(cwd, key);
+
+    if (!localPath.startsWith(cwd) || !existsSync(localPath)) {
+      return null;
+    }
+
+    const stat = statSync(localPath);
+    const ext = path.extname(localPath).toLowerCase();
+    const contentTypes: Record<string, string> = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.gif': 'image/gif',
+      '.bmp': 'image/bmp',
+      '.pdf': 'application/pdf',
+    };
+
+    return {
+      stream: createReadStream(localPath) as unknown as Readable,
+      contentType: contentTypes[ext] || 'application/octet-stream',
+      contentLength: stat.size,
+      etag: `"${stat.mtimeMs}-${stat.size}"`,
+    };
   }
 
   private normalizeFileKey(filePath: string): string {
@@ -113,6 +149,11 @@ export class FilesService {
 
     if (key.startsWith('session-photos/')) {
       await this.authorizeSessionPhotoAccess(key, user);
+      return;
+    }
+
+    if (key.startsWith('session-supporting-photos/')) {
+      await this.authorizeSessionSupportingPhotoAccess(key, user);
       return;
     }
 
@@ -273,6 +314,53 @@ export class FilesService {
 
     const accessibleBranchIds = await this.getAccessibleBranchIds(user);
     if (!accessibleBranchIds || !accessibleBranchIds.includes(sessionPhoto.session.branchId)) {
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
+  }
+
+  private async authorizeSessionSupportingPhotoAccess(key: string, user: AuthUser): Promise<void> {
+    const supportingPhoto = await prisma.sessionSupportingPhoto.findFirst({
+      where: {
+        OR: [
+          { fileUrl: key },
+          { fileUrl: `${env.API_PREFIX}/files/${key}` },
+          { fileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
+          { fileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
+          { fileUrl: { endsWith: key } },
+        ],
+      },
+      select: {
+        fileUrl: true,
+        session: {
+          select: {
+            branchId: true,
+            encounter: {
+              select: {
+                member: {
+                  select: {
+                    userId: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!supportingPhoto) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    if (user.role === 'MEMBER') {
+      if (supportingPhoto.session.encounter.member.userId !== user.userId) {
+        throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+      }
+      return;
+    }
+
+    const accessibleBranchIds = await this.getAccessibleBranchIds(user);
+    if (!accessibleBranchIds || !accessibleBranchIds.includes(supportingPhoto.session.branchId)) {
       throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
     }
   }

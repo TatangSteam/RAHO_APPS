@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { showToast } from '@/lib/toast';
@@ -35,6 +36,7 @@ export default function SessionsPage() {
 
   // Filter states
   const [showFilters, setShowFilters] = useState(false);
+  const [showTableColumns, setShowTableColumns] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [doctors, setDoctors] = useState<Staff[]>([]);
   const [nurses, setNurses] = useState<Staff[]>([]);
@@ -135,6 +137,73 @@ export default function SessionsPage() {
     materialsSummary: false,
     
     // Evaluation (SOAP)
+    keluhan: false,
+    rekomendasi: false,
+    subjective: false,
+    objective: false,
+    assessment: false,
+    plan: false,
+    generalNotes: false,
+  });
+
+  const [tableFields, setTableFields] = useState<Record<string, boolean>>({
+    sessionCode: true,
+    status: true,
+    memberName: true,
+    treatmentDate: true,
+    treatmentTime: true,
+    infusKe: true,
+    pelaksanaan: true,
+    memberNo: false,
+    doctorName: true,
+    nurseName: true,
+    branchName: false,
+    branchCode: false,
+    boosterType: false,
+    adminLayanan: false,
+    allDoctors: false,
+    allNurses: false,
+    sistolBefore: true,
+    diastolBefore: true,
+    hrBefore: true,
+    saturasiBefore: true,
+    piBefore: false,
+    sistolAfter: true,
+    diastolAfter: true,
+    hrAfter: true,
+    saturasiAfter: true,
+    piAfter: false,
+    planIfa: false,
+    planHho: false,
+    planH2: false,
+    planNo: false,
+    planGaso: false,
+    planO2: false,
+    planO3: false,
+    planEdta: false,
+    planMb: false,
+    planH2s: false,
+    planKcl: false,
+    planJmlNb: false,
+    planKeterangan: false,
+    aktualIfa: false,
+    aktualHho: false,
+    aktualH2: false,
+    aktualNo: false,
+    aktualGaso: false,
+    aktualO2: false,
+    aktualO3: false,
+    aktualEdta: false,
+    aktualMb: false,
+    aktualH2s: false,
+    aktualKcl: false,
+    aktualJmlNb: false,
+    bottleType: false,
+    jenisCairan: false,
+    volumeCarrier: false,
+    jumlahJarum: false,
+    deviationNotes: false,
+    materialsSummary: false,
     keluhan: false,
     rekomendasi: false,
     subjective: false,
@@ -335,6 +404,140 @@ export default function SessionsPage() {
     return Object.values(exportFields).filter(v => v).length;
   };
 
+  const tableFieldLabelByKey = fieldCategories.reduce<Record<string, string>>((acc, category) => {
+    category.fields.forEach((field) => {
+      acc[field.key] = field.label;
+    });
+    return acc;
+  }, {});
+
+  const getSelectedTableFieldCount = () => Object.values(tableFields).filter(Boolean).length;
+
+  const toggleTableCategory = (categoryId: string, checked: boolean) => {
+    const category = fieldCategories.find(c => c.id === categoryId);
+    if (!category) return;
+
+    const updates: Record<string, boolean> = {};
+    category.fields.forEach((field) => {
+      if (field.key in tableFields) {
+        updates[field.key] = checked;
+      }
+    });
+    setTableFields(prev => ({ ...prev, ...updates }));
+  };
+
+  const getVitalValue = (sessionDetail: SessionDetail, pencatatan: string, waktuCatat: 'SEBELUM' | 'SESUDAH') => {
+    const vital = sessionDetail.vitalSigns?.find((item) => (
+      item.pencatatan === pencatatan && item.waktuCatat === waktuCatat
+    ));
+    return vital ? `${vital.value}${vital.unit ? ` ${vital.unit}` : ''}` : '-';
+  };
+
+  const formatDose = (value: number | null | undefined) => {
+    if (value === null || value === undefined || Number(value) === 0) return '-';
+    return String(value);
+  };
+
+  const getTableFieldValue = (sessionDetail: SessionDetail, key: string) => {
+    const session = sessionDetail.session;
+    const planData = sessionDetail.therapyPlan;
+    const infusion = sessionDetail.infusion;
+
+    const valueMap: Record<string, () => ReactNode> = {
+      sessionCode: () => (
+        <div className={styles.sessionCodeStack}>
+          <span className={styles.sessionCode}>{session.sessionCode}</span>
+          {session.boosterPackage?.boosterType && (
+            <span className={styles.boosterTag}>{session.boosterPackage.boosterType}</span>
+          )}
+        </div>
+      ),
+      status: () => (
+        <span className={`${styles.statusBadge} ${session.isCompleted ? styles.statusCompleted : styles.statusIncomplete}`}>
+          {session.isCompleted ? 'Selesai' : 'Belum Selesai'}
+        </span>
+      ),
+      memberName: () => (
+        <div className={styles.memberCell}>
+          <div className={styles.memberName}>{session.member.fullName}</div>
+          <div className={styles.memberNo}>{session.member.memberNo}</div>
+        </div>
+      ),
+      memberNo: () => session.member.memberNo,
+      treatmentDate: () => formatDate(session.treatmentDate),
+      treatmentTime: () => formatTime(session.treatmentDate),
+      pelaksanaan: () => session.pelaksanaan === 'ON_SITE' ? 'On-Site' : 'Home Care',
+      infusKe: () => (
+        <div>
+          <div className={styles.sessionGlobal}>#{session.infusKe}</div>
+          {session.branchInfusKe && session.branchInfusKe !== session.infusKe && (
+            <div className={styles.sessionBranch}>Cabang #{session.branchInfusKe}</div>
+          )}
+        </div>
+      ),
+      branchName: () => session.branchName || '-',
+      branchCode: () => session.branchCode || '-',
+      boosterType: () => session.boosterPackage?.boosterType || '-',
+      adminLayanan: () => session.adminLayanan?.fullName || '-',
+      doctorName: () => session.doctor?.fullName || '-',
+      nurseName: () => session.nurse?.fullName || '-',
+      allDoctors: () => session.doctor?.fullName || '-',
+      allNurses: () => session.nurse?.fullName || '-',
+      sistolBefore: () => getVitalValue(sessionDetail, 'SISTOL', 'SEBELUM'),
+      diastolBefore: () => getVitalValue(sessionDetail, 'DIASTOL', 'SEBELUM'),
+      hrBefore: () => getVitalValue(sessionDetail, 'HR', 'SEBELUM'),
+      saturasiBefore: () => getVitalValue(sessionDetail, 'SATURASI', 'SEBELUM'),
+      piBefore: () => getVitalValue(sessionDetail, 'PI', 'SEBELUM'),
+      sistolAfter: () => getVitalValue(sessionDetail, 'SISTOL', 'SESUDAH'),
+      diastolAfter: () => getVitalValue(sessionDetail, 'DIASTOL', 'SESUDAH'),
+      hrAfter: () => getVitalValue(sessionDetail, 'HR', 'SESUDAH'),
+      saturasiAfter: () => getVitalValue(sessionDetail, 'SATURASI', 'SESUDAH'),
+      piAfter: () => getVitalValue(sessionDetail, 'PI', 'SESUDAH'),
+      planIfa: () => [planData?.ifa250 ? `${planData.ifa250} IFA250` : '', planData?.ifa500 ? `${planData.ifa500} IFA500` : ''].filter(Boolean).join(' / ') || '-',
+      planHho: () => formatDose(planData?.hho),
+      planH2: () => formatDose(planData?.h2),
+      planNo: () => formatDose(planData?.no),
+      planGaso: () => formatDose(planData?.gaso),
+      planO2: () => formatDose(planData?.o2),
+      planO3: () => formatDose(planData?.o3),
+      planEdta: () => formatDose(planData?.edta),
+      planMb: () => formatDose(planData?.mb),
+      planH2s: () => formatDose(planData?.h2s),
+      planKcl: () => formatDose(planData?.kcl),
+      planJmlNb: () => formatDose(planData?.jmlNb),
+      planKeterangan: () => planData?.keterangan || '-',
+      aktualIfa: () => [infusion?.ifa250 ? `${infusion.ifa250} IFA250` : '', infusion?.ifa500 ? `${infusion.ifa500} IFA500` : ''].filter(Boolean).join(' / ') || '-',
+      aktualHho: () => formatDose(infusion?.hho),
+      aktualH2: () => formatDose(infusion?.h2),
+      aktualNo: () => formatDose(infusion?.no),
+      aktualGaso: () => formatDose(infusion?.gaso),
+      aktualO2: () => formatDose(infusion?.o2),
+      aktualO3: () => formatDose(infusion?.o3),
+      aktualEdta: () => formatDose(infusion?.edta),
+      aktualMb: () => formatDose(infusion?.mb),
+      aktualH2s: () => formatDose(infusion?.h2s),
+      aktualKcl: () => formatDose(infusion?.kcl),
+      aktualJmlNb: () => formatDose(infusion?.jmlNb),
+      bottleType: () => infusion?.bottleType || '-',
+      jenisCairan: () => infusion?.jenisCairan || '-',
+      volumeCarrier: () => formatDose(infusion?.volumeCarrier),
+      jumlahJarum: () => formatDose(infusion?.jumlahJarum),
+      deviationNotes: () => infusion?.deviationNotes || '-',
+      materialsSummary: () => sessionDetail.materials?.length
+        ? sessionDetail.materials.map((item: any) => `${item.inventoryItem?.masterProduct?.name || 'Material'}: ${item.quantity} ${item.unit || ''}`).join('; ')
+        : '-',
+      keluhan: () => sessionDetail.evaluation?.keluhan || '-',
+      rekomendasi: () => sessionDetail.evaluation?.rekomendasi || '-',
+      subjective: () => sessionDetail.evaluation?.subjective || '-',
+      objective: () => sessionDetail.evaluation?.objective || '-',
+      assessment: () => sessionDetail.evaluation?.assessment || '-',
+      plan: () => sessionDetail.evaluation?.plan || '-',
+      generalNotes: () => sessionDetail.evaluation?.generalNotes || '-',
+    };
+
+    return valueMap[key]?.() ?? '-';
+  };
+
   // Check if user can see all branches
   const canSeeAllBranches = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
@@ -504,6 +707,12 @@ export default function SessionsPage() {
         </div>
         <div className={styles.headerActions}>
           <button
+            className={`btn btn-secondary ${styles.filterBtn} ${showTableColumns ? styles.hasFilters : ''}`}
+            onClick={() => setShowTableColumns(!showTableColumns)}
+          >
+            Kolom ({getSelectedTableFieldCount()})
+          </button>
+          <button
             className={`btn btn-secondary ${styles.filterBtn} ${activeFilterCount > 0 ? styles.hasFilters : ''}`}
             onClick={() => setShowFilters(!showFilters)}
           >
@@ -634,6 +843,90 @@ export default function SessionsPage() {
         </div>
       )}
 
+      {/* Column Selection Panel */}
+      {showTableColumns && (
+        <div className={styles.columnPanel}>
+          <div className={styles.columnPanelHeader}>
+            <div>
+              <h3>Kolom Tabel</h3>
+              <p>Pilih data sesi dan data kesehatan yang ingin ditampilkan dalam satu baris.</p>
+            </div>
+            <div className={styles.columnActions}>
+              <button
+                type="button"
+                className={styles.selectAllBtn}
+                onClick={() => {
+                  const updates: Record<string, boolean> = {};
+                  Object.keys(tableFields).forEach((key) => {
+                    updates[key] = true;
+                  });
+                  setTableFields(updates);
+                }}
+              >
+                Pilih Semua
+              </button>
+              <button
+                type="button"
+                className={styles.deselectAllBtn}
+                onClick={() => {
+                  const compactFields = new Set(['sessionCode', 'status', 'memberName', 'treatmentDate', 'infusKe']);
+                  const updates: Record<string, boolean> = {};
+                  Object.keys(tableFields).forEach((key) => {
+                    updates[key] = compactFields.has(key);
+                  });
+                  setTableFields(updates);
+                }}
+              >
+                Ringkas
+              </button>
+            </div>
+          </div>
+
+          <div className={styles.columnCategoryGrid}>
+            {fieldCategories
+              .filter((category) => category.fields.some((field) => field.key in tableFields))
+              .map((category) => {
+                const availableFields = category.fields.filter((field) => field.key in tableFields);
+                const selectedCount = availableFields.filter((field) => tableFields[field.key]).length;
+
+                return (
+                  <div key={category.id} className={styles.columnCategory}>
+                    <label className={styles.columnCategoryTitle}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCount === availableFields.length}
+                        ref={(el) => {
+                          if (el) {
+                            el.indeterminate = selectedCount > 0 && selectedCount < availableFields.length;
+                          }
+                        }}
+                        onChange={(e) => toggleTableCategory(category.id, e.target.checked)}
+                      />
+                      <span>{category.label}</span>
+                      <small>{selectedCount}/{availableFields.length}</small>
+                    </label>
+                    <div className={styles.columnFieldList}>
+                      {availableFields.map((field) => (
+                        <label key={field.key} className={styles.columnFieldItem}>
+                          <input
+                            type="checkbox"
+                            checked={tableFields[field.key]}
+                            onChange={(e) => setTableFields(prev => ({
+                              ...prev,
+                              [field.key]: e.target.checked,
+                            }))}
+                          />
+                          <span>{field.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Quick Status Tabs */}
       <div className={styles.filterTabs}>
         <button
@@ -682,16 +975,11 @@ export default function SessionsPage() {
           <table className={styles.sessionsTable}>
             <thead>
               <tr>
-                <th>Kode Sesi</th>
-                <th>Status</th>
-                <th>Member</th>
-                <th>Tanggal</th>
-                <th>Waktu</th>
-                <th>Sesi #</th>
-                <th>Tipe</th>
-                <th>Dokter</th>
-                <th>Nakes</th>
-                <th>Cabang</th>
+                {Object.entries(tableFields)
+                  .filter(([, visible]) => visible)
+                  .map(([key]) => (
+                    <th key={key}>{tableFieldLabelByKey[key] || key}</th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -708,39 +996,16 @@ export default function SessionsPage() {
                     }
                   }}
                 >
-                  <td className={styles.sessionCodeCell}>
-                    <span className={styles.sessionCode}>{sessionDetail.session.sessionCode}</span>
-                    {sessionDetail.session.boosterPackage?.boosterType && (
-                      <span className={styles.boosterTag}>⚡ {sessionDetail.session.boosterPackage.boosterType}</span>
-                    )}
-                  </td>
-                  <td>
-                    <span
-                      className={`${styles.statusBadge} ${
-                        sessionDetail.session.isCompleted ? styles.statusCompleted : styles.statusIncomplete
-                      }`}
-                    >
-                      {sessionDetail.session.isCompleted ? '✓ Selesai' : '⏳ Belum Selesai'}
-                    </span>
-                  </td>
-                  <td className={styles.memberCell}>
-                    <div className={styles.memberName}>{sessionDetail.session.member.fullName}</div>
-                    <div className={styles.memberNo}>{sessionDetail.session.member.memberNo}</div>
-                  </td>
-                  <td className={styles.dateCell}>{formatDate(sessionDetail.session.treatmentDate)}</td>
-                  <td className={styles.timeCell}>{formatTime(sessionDetail.session.treatmentDate)}</td>
-                  <td className={styles.sessionNumberCell}>
-                    <div className={styles.sessionGlobal}>#{sessionDetail.session.infusKe}</div>
-                    {sessionDetail.session.branchInfusKe && sessionDetail.session.branchInfusKe !== sessionDetail.session.infusKe && (
-                      <div className={styles.sessionBranch}>Cabang: #{sessionDetail.session.branchInfusKe}</div>
-                    )}
-                  </td>
-                  <td className={styles.typeCell}>
-                    {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On-Site' : '🏠 Home Care'}
-                  </td>
-                  <td className={styles.staffCell}>{sessionDetail.session.doctor?.fullName || '-'}</td>
-                  <td className={styles.staffCell}>{sessionDetail.session.nurse?.fullName || '-'}</td>
-                  <td className={styles.branchCell}>{sessionDetail.session.branchName || '-'}</td>
+                  {Object.entries(tableFields)
+                    .filter(([, visible]) => visible)
+                    .map(([key], index) => (
+                      <td
+                        key={key}
+                        className={`${index === 0 ? styles.firstDataCell : ''} ${styles.dynamicCell}`}
+                      >
+                        {getTableFieldValue(sessionDetail, key)}
+                      </td>
+                    ))}
                 </tr>
               ))}
             </tbody>

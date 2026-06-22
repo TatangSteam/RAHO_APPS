@@ -4,8 +4,10 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
 import { packagesApi } from '@/lib/packagesApi';
+import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
+import type { Invoice } from '@/types/invoice';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
@@ -82,14 +84,22 @@ export default function MemberDetailPage() {
     paymentPlan: {
       type: 'FULL_PAYMENT' as 'FULL_PAYMENT' | 'INSTALLMENT',
       installmentCount: 2,
-      installments: [] as Array<{ installmentNumber: number; amount: number; dueDate?: string }>,
     },
   });
   const [verifyNotes, setVerifyNotes] = useState('');
   const [verifyPaidAmount, setVerifyPaidAmount] = useState<number>(0);
+  const [verifyInvoice, setVerifyInvoice] = useState<Invoice | null>(null);
   const [paymentProof, setPaymentProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
   const [submitting, setSubmitting] = useState(false);
   const [selectedPackageProof, setSelectedPackageProof] = useState<{ url: string | null; fileName: string | null; status: string }>({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
+
+  const getRemainingInvoiceAmount = (invoice: Invoice | null) => {
+    if (!invoice) return 0;
+    if (Number(invoice.totalAmount || 0) > 0) return Number(invoice.totalAmount);
+
+    const paidTotal = invoice.payments?.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) || 0;
+    return Math.max(0, Number(invoice.totalPurchaseAmount || 0) - paidTotal);
+  };
 
   // Refund modal state
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -272,20 +282,12 @@ export default function MemberDetailPage() {
         discountNote: assignData.discountNote || undefined,
         notes: assignData.notes || undefined,
         paymentPlan: assignData.paymentPlan?.type === 'INSTALLMENT'
-          ? assignData.paymentPlan
+          ? {
+              type: 'INSTALLMENT',
+              installmentCount: assignData.paymentPlan.installmentCount,
+            }
           : { type: 'FULL_PAYMENT' },
       };
-
-      if (payload.paymentPlan.type === 'INSTALLMENT') {
-        const installments = payload.paymentPlan.installments || [];
-        const firstAmount = Number(installments[0]?.amount || 0);
-
-        if (firstAmount <= 0) {
-          showToast.error('Termin pertama wajib memiliki pembayaran awal');
-          setSubmitting(false);
-          return;
-        }
-      }
       
       // Add addOns if any selected
       if (assignData.selectedAddOns.length > 0) {
@@ -307,7 +309,6 @@ export default function MemberDetailPage() {
         paymentPlan: {
           type: 'FULL_PAYMENT',
           installmentCount: 2,
-          installments: [],
         },
       });
       await loadPackages();
@@ -326,6 +327,20 @@ export default function MemberDetailPage() {
     
     if (!hasExistingProof && !paymentProof.file) {
       showToast.error('Bukti pembayaran wajib diupload');
+      return;
+    }
+
+    const isFinalInstallment = Boolean(
+      verifyInvoice?.paymentPlanType === 'INSTALLMENT' &&
+      verifyInvoice.installmentNumber &&
+      verifyInvoice.installmentTotal &&
+      verifyInvoice.installmentNumber >= verifyInvoice.installmentTotal
+    );
+
+    const remainingInvoiceAmount = getRemainingInvoiceAmount(verifyInvoice);
+
+    if (isFinalInstallment && verifyInvoice && verifyPaidAmount !== remainingInvoiceAmount) {
+      showToast.error(`Termin terakhir wajib dibayar penuh sebesar Rp ${remainingInvoiceAmount.toLocaleString('id-ID')}`);
       return;
     }
 
@@ -363,6 +378,7 @@ export default function MemberDetailPage() {
       setShowVerifyModal(false);
       setVerifyNotes('');
       setVerifyPaidAmount(0);
+      setVerifyInvoice(null);
       setPaymentProof({ file: null, preview: null });
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
@@ -382,6 +398,7 @@ export default function MemberDetailPage() {
       setShowVerifyModal(false);
       setVerifyNotes('');
       setVerifyPaidAmount(0);
+      setVerifyInvoice(null);
       setPaymentProof({ file: null, preview: null });
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
@@ -632,7 +649,7 @@ export default function MemberDetailPage() {
               <MemberPackagesTab
                 packages={packages}
                 loading={loadingPackages}
-                onVerifyPayment={(packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
+                onVerifyPayment={async (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
                   setSelectedPackageId(packageId);
                   setSelectedPackageProof({
                     url: proofUrl || null,
@@ -641,8 +658,24 @@ export default function MemberDetailPage() {
                   });
                   // Reset state before opening modal
                   setVerifyNotes('');
+                  setVerifyPaidAmount(0);
+                  setVerifyInvoice(null);
                   setPaymentProof({ file: null, preview: null });
                   setShowVerifyModal(true);
+                  try {
+                    const invoice = await invoiceApi.getInvoiceByPackageId(packageId);
+                    setVerifyInvoice(invoice);
+                    if (
+                      invoice.paymentPlanType === 'INSTALLMENT' &&
+                      invoice.installmentNumber &&
+                      invoice.installmentTotal &&
+                      invoice.installmentNumber >= invoice.installmentTotal
+                    ) {
+                      setVerifyPaidAmount(getRemainingInvoiceAmount(invoice));
+                    }
+                  } catch (error) {
+                    devError('Load verification invoice error:', error);
+                  }
                 }}
                 onRefundPackage={(packageId: string, packageCode: string, finalPrice: number) => {
                   setSelectedPackageId(packageId);
@@ -761,12 +794,14 @@ export default function MemberDetailPage() {
           setShowVerifyModal(false);
           setVerifyNotes('');
           setVerifyPaidAmount(0);
+          setVerifyInvoice(null);
           setPaymentProof({ file: null, preview: null });
           setSelectedPackageId('');
           setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
         }}
         onNotesChange={setVerifyNotes}
         paidAmount={verifyPaidAmount}
+        invoice={verifyInvoice}
         onPaidAmountChange={setVerifyPaidAmount}
         onProofChange={setPaymentProof}
         onSubmit={handleVerifyPayment}

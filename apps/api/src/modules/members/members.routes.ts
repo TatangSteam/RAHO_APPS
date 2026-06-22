@@ -338,6 +338,15 @@ router.get(
   controller.getMemberLabResults.bind(controller)
 );
 
+// GET /api/v1/members/:memberId/supporting-photos - Get supporting photos shown in lab result tab
+router.get(
+  '/:memberId/supporting-photos',
+  authenticate,
+  authorize(ALLSTAFF),
+  assertBranchAccess,
+  controller.getMemberSupportingPhotos.bind(controller)
+);
+
 // POST /api/v1/members/:memberId/lab-results - Upload lab result
 router.post(
   '/:memberId/lab-results',
