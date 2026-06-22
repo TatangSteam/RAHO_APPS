@@ -791,30 +791,52 @@ export async function getBranchSessionsService(
 
   if (!branch) throw errors.notFound('Cabang tidak ditemukan.');
 
-  const { page = 1, limit = 50, status } = params;
+  const page = Number.isFinite(params.page) ? Math.max(1, params.page as number) : 1;
+  const limit = Number.isFinite(params.limit)
+    ? Math.min(100, Math.max(1, params.limit as number))
+    : 50;
   const skip = (page - 1) * limit;
+  const normalizedStatus = params.status?.trim().toUpperCase();
 
-  const where: Prisma.TherapySessionWhereInput = {
+  const where: Prisma.TreatmentSessionWhereInput = {
     branchId,
-    ...(status ? { status } : {}),
+    ...(normalizedStatus === 'COMPLETED'
+      ? { isCompleted: true }
+      : normalizedStatus === 'ONGOING' || normalizedStatus === 'IN_PROGRESS'
+        ? { isCompleted: false }
+        : {}),
   };
 
   const [total, sessions] = await Promise.all([
-    prisma.therapySession.count({ where }),
-    prisma.therapySession.findMany({
+    prisma.treatmentSession.count({ where }),
+    prisma.treatmentSession.findMany({
       where,
       select: {
         id: true,
         sessionCode: true,
-        sessionDate: true,
-        status: true,
-        member: {
+        treatmentDate: true,
+        isCompleted: true,
+        encounter: {
           select: {
-            id: true,
-            memberNo: true,
-            profile: {
+            member: {
               select: {
-                fullName: true,
+                id: true,
+                memberNo: true,
+                user: {
+                  select: {
+                    profile: {
+                      select: {
+                        fullName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            memberPackage: {
+              select: {
+                packageCode: true,
+                productCode: true,
               },
             },
           },
@@ -837,15 +859,10 @@ export async function getBranchSessionsService(
             },
           },
         },
-        memberPackage: {
-          select: {
-            name: true,
-          },
-        },
       },
       skip,
       take: limit,
-      orderBy: { sessionDate: 'desc' },
+      orderBy: { treatmentDate: 'desc' },
     }),
   ]);
 
@@ -853,12 +870,12 @@ export async function getBranchSessionsService(
   const sessionsFormatted = sessions.map((s) => ({
     id: s.id,
     sessionCode: s.sessionCode,
-    date: s.sessionDate,
-    status: s.status,
-    member: s.member ? {
-      id: s.member.id,
-      fullName: s.member.profile?.fullName || 'N/A',
-      memberNo: s.member.memberNo,
+    date: s.treatmentDate,
+    status: s.isCompleted ? 'COMPLETED' : 'ONGOING',
+    member: s.encounter.member ? {
+      id: s.encounter.member.id,
+      fullName: s.encounter.member.user?.profile?.fullName || 'N/A',
+      memberNo: s.encounter.member.memberNo,
     } : null,
     doctor: s.doctor ? {
       fullName: s.doctor.profile?.fullName || 'N/A',
@@ -866,8 +883,8 @@ export async function getBranchSessionsService(
     nurse: s.nurse ? {
       fullName: s.nurse.profile?.fullName || 'N/A',
     } : null,
-    package: s.memberPackage ? {
-      name: s.memberPackage.name,
+    package: s.encounter.memberPackage ? {
+      name: s.encounter.memberPackage.productCode || s.encounter.memberPackage.packageCode,
     } : null,
   }));
 

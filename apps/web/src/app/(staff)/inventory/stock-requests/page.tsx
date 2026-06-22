@@ -267,7 +267,11 @@ export default function StockRequestsPage() {
       setSelectedRequest(null);
       fetchRequests();
     } catch (error: any) {
-      showToast.error(error.response?.data?.message || 'Gagal upload bukti pembayaran');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal upload bukti pembayaran'
+      );
     } finally {
       setActionLoading(false);
     }

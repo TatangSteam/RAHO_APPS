@@ -419,17 +419,19 @@ export const inventoryApi = {
    */
   uploadPaymentProof: (requestId: string, file: File, amount?: number, notes?: string) => {
     const formData = new FormData();
-    formData.append('paymentProof', file);
     if (amount !== undefined) {
       formData.append('amount', String(amount));
     }
     if (notes) {
       formData.append('notes', notes);
     }
+    formData.append('paymentProof', file);
+
     return api.post(`/inventory/stock-requests/${requestId}/upload-payment-proof`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      // Keep the amount in the multipart body and query string. Some browser /
+      // proxy combinations have dropped text fields from multipart requests,
+      // while the uploaded file still arrives successfully.
+      params: amount !== undefined ? { amount } : undefined,
     });
   },
 
