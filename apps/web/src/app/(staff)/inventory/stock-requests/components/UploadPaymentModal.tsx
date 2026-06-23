@@ -12,7 +12,7 @@ import { devError } from '@/lib/logger';
 interface UploadPaymentModalProps {
   request: StockRequest;
   onClose: () => void;
-  onUpload: (file: File) => Promise<void>;
+  onUpload: (file: File, amount?: number, notes?: string) => Promise<void>;
   loading: boolean;
 }
 
@@ -29,6 +29,8 @@ export default function UploadPaymentModal({
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [compressing, setCompressing] = useState(false);
   const [compressionInfo, setCompressionInfo] = useState<{ original: number; compressed: number } | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentNotes, setPaymentNotes] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -112,7 +114,19 @@ export default function UploadPaymentModal({
       showToast.error('Pilih file bukti pembayaran terlebih dahulu');
       return;
     }
-    await onUpload(file);
+
+    const amount = Number(paymentAmount.replace(/\D/g, ''));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast.error('Masukkan jumlah pembayaran yang valid');
+      return;
+    }
+
+    if (amount > remainingAmount) {
+      showToast.error(`Jumlah pembayaran melebihi sisa utang ${formatCurrency(remainingAmount)}`);
+      return;
+    }
+
+    await onUpload(file, amount, paymentNotes.trim() || undefined);
   };
 
   const formatCurrency = (amount: number) => {
@@ -121,6 +135,11 @@ export default function UploadPaymentModal({
       currency: 'IDR',
       minimumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const formatAmountInput = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    return digits ? new Intl.NumberFormat('id-ID').format(Number(digits)) : '';
   };
 
   const handleDownloadInvoice = async () => {
@@ -171,9 +190,12 @@ export default function UploadPaymentModal({
   if (!mounted) return null;
 
   const isDebtInvoice = request.invoice?.status === 'DEBT';
+  const totalAmount = request.invoice?.totalAmount ?? 0;
+  const paidAmount = request.invoice?.paidAmount ?? 0;
+  const remainingAmount = request.invoice?.remainingAmount ?? Math.max(0, totalAmount - paidAmount);
 
   const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto overscroll-contain p-4">
       {/* Backdrop with blur */}
       <div
         className="absolute inset-0 bg-black/80 backdrop-blur-md"
@@ -181,11 +203,11 @@ export default function UploadPaymentModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg mx-4 animate-in fade-in zoom-in-95 duration-200">
-        <div className="bg-gradient-to-b from-neutral-900 to-neutral-950 rounded-2xl border border-neutral-800 shadow-2xl shadow-black/50 overflow-hidden">
+      <div className="relative my-auto w-full max-w-lg animate-in fade-in zoom-in-95 duration-200">
+        <div className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-gradient-to-b from-neutral-900 to-neutral-950 shadow-2xl shadow-black/50">
           
           {/* Header */}
-          <div className="relative px-6 pt-6 pb-4">
+          <div className="relative flex-shrink-0 px-6 pt-6 pb-4">
             {/* Decorative gradient line */}
             <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500" />
             
@@ -209,7 +231,7 @@ export default function UploadPaymentModal({
           </div>
 
           {/* Content */}
-          <div className="px-6 pb-6 space-y-4">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 pb-6">
             
             {/* Branch Info */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-neutral-800/50 border border-neutral-700/50">
@@ -242,6 +264,17 @@ export default function UploadPaymentModal({
                   </p>
                 </div>
 
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <div className="rounded-lg bg-neutral-950/40 border border-neutral-800 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-neutral-500 uppercase">Terbayar</p>
+                    <p className="text-sm font-bold text-emerald-300">{formatCurrency(paidAmount)}</p>
+                  </div>
+                  <div className="rounded-lg bg-neutral-950/40 border border-neutral-800 px-3 py-2">
+                    <p className="text-[11px] font-semibold text-neutral-500 uppercase">Sisa Utang</p>
+                    <p className="text-sm font-bold text-amber-300">{formatCurrency(remainingAmount)}</p>
+                  </div>
+                </div>
+
                 <button
                   onClick={handleDownloadInvoice}
                   disabled={downloadingPdf}
@@ -267,6 +300,32 @@ export default function UploadPaymentModal({
               <div className="flex items-center gap-2">
                 <CreditCard className="w-4 h-4 text-amber-400" />
                 <span className="text-sm font-semibold text-amber-400">Bukti Pembayaran</span>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-neutral-400">Jumlah Pembayaran</label>
+                <div className="flex items-center gap-2 rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 focus-within:border-amber-500/70">
+                  <span className="text-sm font-bold text-neutral-500">Rp</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={formatAmountInput(paymentAmount)}
+                    onChange={(e) => setPaymentAmount(e.target.value.replace(/\D/g, ''))}
+                    placeholder="0"
+                    className="w-full bg-transparent text-sm font-semibold text-white outline-none placeholder:text-neutral-600"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-neutral-400">Catatan Pembayaran</label>
+                <textarea
+                  value={paymentNotes}
+                  onChange={(e) => setPaymentNotes(e.target.value)}
+                  rows={2}
+                  placeholder="Opsional"
+                  className="w-full resize-none rounded-xl border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-amber-500/70"
+                />
               </div>
 
               {!preview ? (
@@ -355,14 +414,14 @@ export default function UploadPaymentModal({
               <Info className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-blue-300/80 leading-relaxed">
                 {isDebtInvoice
-                  ? 'Upload bukti pembayaran untuk melunasi invoice utang. Setelah tersimpan, pembayaran dapat dikonfirmasi sebagai lunas.'
+                  ? 'Upload bukti pembayaran utang dapat dilakukan berkali-kali. Nominal yang diinput akan mengurangi sisa utang.'
                   : 'Upload bukti pembayaran sebagai Admin Manager. Setelah tersimpan, pembayaran dapat dikonfirmasi untuk membuat pengiriman.'}
               </p>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="px-6 py-4 bg-neutral-900/50 border-t border-neutral-800 flex items-center justify-end gap-3">
+          <div className="flex flex-shrink-0 items-center justify-end gap-3 border-t border-neutral-800 bg-neutral-900/50 px-6 py-4">
             <button
               onClick={onClose}
               disabled={loading}
@@ -373,6 +432,7 @@ export default function UploadPaymentModal({
             <button
               onClick={handleUpload}
               disabled={loading || !file}
+              title={!file ? 'Pilih file bukti pembayaran terlebih dahulu' : undefined}
               className={`px-6 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center gap-2 ${
                 file
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white shadow-lg shadow-amber-500/25'

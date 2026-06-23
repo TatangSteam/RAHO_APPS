@@ -136,6 +136,8 @@ export class StockRequestController {
   async uploadPaymentProof(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
+      const { amount: bodyAmount, notes } = req.body;
+      const amount = bodyAmount ?? req.query.amount;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -146,6 +148,17 @@ export class StockRequestController {
       const file = req.file;
       if (!file) {
         return sendError(res, 400, 'FILE_REQUIRED', 'File bukti pembayaran harus diupload');
+      }
+
+      const normalizedAmount = typeof amount === 'string'
+        ? amount.replace(/\./g, '').replace(',', '.').trim()
+        : amount;
+      const paymentAmount = normalizedAmount === undefined || normalizedAmount === null || normalizedAmount === ''
+        ? undefined
+        : Number(normalizedAmount);
+
+      if (paymentAmount !== undefined && (!Number.isFinite(paymentAmount) || paymentAmount <= 0)) {
+        return sendError(res, 400, 'INVALID_PAYMENT_AMOUNT', 'Jumlah pembayaran harus lebih dari 0');
       }
 
       // Generate unique key for the file
@@ -166,7 +179,10 @@ export class StockRequestController {
         mimeType: file.mimetype,
       };
 
-      const result = await stockRequestService.uploadPaymentProof(requestId, userId, fileData);
+      const result = await stockRequestService.uploadPaymentProof(requestId, userId, fileData, {
+        amount: paymentAmount,
+        notes,
+      });
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);

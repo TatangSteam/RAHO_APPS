@@ -39,6 +39,8 @@ export interface StockRequestInvoice {
   invoiceNumber: string;
   subtotal: number;
   totalAmount: number;
+  paidAmount?: number;
+  remainingAmount?: number;
   status: string;
   paymentVerificationStatus: string;
   paymentProofUrl?: string;
@@ -55,6 +57,21 @@ export interface StockRequestInvoice {
     quantity: number;
     pricePerUnit: number;
     subtotal: number;
+  }>;
+  payments?: Array<{
+    id: string;
+    amount: number;
+    proofFileUrl: string;
+    proofFileName: string;
+    proofFileSize: number;
+    proofMimeType: string;
+    notes?: string;
+    uploadedBy: string;
+    uploadedAt: string;
+    verifiedBy?: string;
+    verifiedAt?: string;
+    verificationNotes?: string;
+    rejectionReason?: string;
   }>;
   createdAt?: string;
 }

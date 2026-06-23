@@ -83,7 +83,8 @@ export function startTokenExpiryCheck(): void {
   // Reset last activity time
   lastActivityTime = Date.now();
 
-  // Check token every 5 seconds (for testing - change to 30000 for production)
+  // Check token periodically. Active users may refresh shortly before expiry;
+  // inactive users are logged out when the 3-hour access token expires.
   tokenCheckInterval = setInterval(async () => {
     const { accessToken, refreshToken, setAccessToken } = useAuthStore.getState();
     
@@ -139,7 +140,7 @@ export function startTokenExpiryCheck(): void {
     } catch (e) {
       // Error checking token expiry
     }
-  }, 5000); // Check every 5 seconds for testing (change to 30000 for production)
+  }, 30000);
 }
 
 export function stopTokenExpiryCheck(): void {

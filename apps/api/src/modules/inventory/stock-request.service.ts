@@ -333,9 +333,13 @@ export class StockRequestService {
       fileName: string;
       fileSize: number;
       mimeType: string;
+    },
+    paymentData?: {
+      amount?: number;
+      notes?: string;
     }
   ) {
-    return await this.approvalService.uploadPaymentProof(requestId, userId, fileData);
+    return await this.approvalService.uploadPaymentProof(requestId, userId, fileData, paymentData);
   }
 
   /**
