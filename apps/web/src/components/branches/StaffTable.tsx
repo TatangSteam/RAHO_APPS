@@ -44,6 +44,7 @@ interface StaffTableProps {
   onManageCredentials?: (staff: Staff) => void;
   onAddStaff: () => void;
   showCredentialsButton?: boolean;
+  showDeleteButton?: boolean;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -81,6 +82,7 @@ export default function StaffTable({
   onManageCredentials,
   onAddStaff,
   showCredentialsButton = false,
+  showDeleteButton = false,
 }: StaffTableProps) {
   
   const columns: Column<Staff>[] = [
@@ -251,12 +253,14 @@ export default function StaffTable({
             title="Unassign dari Cabang"
             variant="warning"
           />
-          <ActionButton
-            onClick={() => onDeleteStaff(staff)}
-            icon={<Trash2 size={14} />}
-            title="Hapus Staff"
-            variant="delete"
-          />
+          {showDeleteButton && (
+            <ActionButton
+              onClick={() => onDeleteStaff(staff)}
+              icon={<Trash2 size={14} />}
+              title="Hapus Staff"
+              variant="delete"
+            />
+          )}
         </ActionButtons>
       ),
     },

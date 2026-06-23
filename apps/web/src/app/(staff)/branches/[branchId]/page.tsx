@@ -793,6 +793,7 @@ export default function BranchDetailPage() {
                   data={staff}
                   loading={tabLoading}
                   showCredentialsButton={user?.role === 'SUPER_ADMIN'}
+                  showDeleteButton={user?.role === 'SUPER_ADMIN'}
                   onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
                   onUnassignFromBranch={handleUnassignFromBranch}
                   onDeleteStaff={handleDeleteStaff}
