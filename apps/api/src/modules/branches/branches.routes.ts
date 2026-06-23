@@ -174,10 +174,10 @@ branchesRouter.patch(
   updateBranch,
 );
 
-// ── Delete Branch (Soft Delete) ───────────────────────────────
+// ── Delete Branch Permanently (Super Admin only) ──────────────
 branchesRouter.delete(
   '/:branchId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN]),
   deleteBranch,
 );

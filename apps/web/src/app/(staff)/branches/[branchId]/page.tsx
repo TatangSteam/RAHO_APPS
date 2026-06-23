@@ -364,11 +364,15 @@ export default function BranchDetailPage() {
 
     try {
       await branchesApi.deleteBranch(branchId);
-      showToast.success('Cabang berhasil dihapus');
+      showToast.success('Cabang berhasil dihapus permanen');
       router.push('/branches');
     } catch (error: any) {
       devError('Error deleting branch:', error);
-      showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus cabang'
+      );
     }
   };
 
@@ -568,13 +572,15 @@ export default function BranchDetailPage() {
                 <Edit size={18} />
                 <span>Edit</span>
               </button>
-              <button 
-                onClick={handleDelete}
-                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-neutral-700 dark:text-neutral-200 hover:text-red-600 dark:hover:text-red-400 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-red-500/50 transition-all duration-200"
-              >
-                <Trash2 size={18} />
-                <span>Hapus</span>
-              </button>
+              {user?.role === 'SUPER_ADMIN' && (
+                <button
+                  onClick={handleDelete}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-neutral-700 dark:text-neutral-200 hover:text-red-600 dark:hover:text-red-400 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-red-500/50 transition-all duration-200"
+                >
+                  <Trash2 size={18} />
+                  <span>Hapus Permanen</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -688,7 +694,9 @@ export default function BranchDetailPage() {
                       <option value="lintas">Member Lintas Cabang</option>
                     </select>
                     <button 
-                      onClick={() => openCrudModal('member', 'create')}
+                      onClick={() => router.push(
+                        `/members/new?branchId=${encodeURIComponent(branchId)}&returnTo=${encodeURIComponent(`/branches/${branchId}`)}`
+                      )}
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-semibold rounded-lg transition-colors shadow-lg shadow-amber-500/20"
                     >
                       <Plus size={18} />
@@ -712,7 +720,9 @@ export default function BranchDetailPage() {
                   showCredentialsButton={user?.role === 'SUPER_ADMIN'}
                   onEdit={(member) => openCrudModal('member', 'edit', member)}
                   onDelete={(member) => handleDeleteItem('member', member.memberId, member.fullName)}
-                  onAddMember={() => openCrudModal('member', 'create')}
+                  onAddMember={() => router.push(
+                    `/members/new?branchId=${encodeURIComponent(branchId)}&returnTo=${encodeURIComponent(`/branches/${branchId}`)}`
+                  )}
                   onManageCredentials={(member) => setMemberCredentialsModal({
                     isOpen: true,
                     memberId: member.memberId,

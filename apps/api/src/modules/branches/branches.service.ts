@@ -699,82 +699,165 @@ export async function getAvailableManagersForBranchService(branchId: string) {
   }));
 }
 
-// ── Delete Branch (Soft Delete) ───────────────────────────────
+// ── Delete Branch Permanently ─────────────────────────────────
 export async function deleteBranchService(branchId: string) {
-  const existing = await prisma.branch.findUnique({ where: { id: branchId } });
+  const existing = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: {
+      id: true,
+      branchCode: true,
+      name: true,
+    },
+  });
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
-  if (!existing.isActive) {
-    return {
-      message: 'Cabang sudah tidak aktif',
-      deactivated: {
-        users: 0,
-        members: 0,
-        inventoryItems: 0,
-        staffAssignments: 0,
-        managerAssignments: 0,
-        memberAccesses: 0,
-      },
-    };
-  }
-
-  // Check related active records before soft delete
+  // Medical, financial, and procurement history must never disappear as a
+  // side effect of deleting a branch. An unused/test branch can still be
+  // removed permanently together with its bootstrap data.
   const [
-    activeUsers,
-    totalMembers,
-    inventoryItems,
-    staffAssignments,
-    managerAssignments,
-    memberAccesses,
+    members,
+    memberPackages,
+    memberAddOns,
+    nonTherapyPurchases,
+    invoices,
+    encounters,
+    treatmentSessions,
+    stockRequests,
+    stockRequestInvoices,
+    shipments,
+    overstocks,
+    inventoryMutations,
+    inventoryMaterialUsages,
+    inventoryRequestItems,
+    branchPricingUsages,
+    referralMembers,
+    referralIncentives,
   ] = await Promise.all([
-    prisma.user.count({ where: { branchId, isActive: true } }),
-    prisma.member.count({ where: { registrationBranchId: branchId, isActive: true, isDeceased: false } }),
-    prisma.inventoryItem.count({ where: { branchId } }),
-    prisma.staffBranch.count({ where: { branchId } }),
-    prisma.managerBranch.count({ where: { branchId } }),
-    prisma.branchMemberAccess.count({ where: { branchId } }),
+    prisma.member.count({ where: { registrationBranchId: branchId } }),
+    prisma.memberPackage.count({ where: { branchId } }),
+    prisma.memberAddOn.count({ where: { branchId } }),
+    prisma.memberNonTherapyPurchase.count({ where: { branchId } }),
+    prisma.invoice.count({ where: { branchId } }),
+    prisma.encounter.count({ where: { branchId } }),
+    prisma.treatmentSession.count({ where: { branchId } }),
+    prisma.stockRequest.count({ where: { branchId } }),
+    prisma.stockRequestInvoice.count({ where: { branchId } }),
+    prisma.shipment.count({
+      where: {
+        OR: [{ fromBranchId: branchId }, { toBranchId: branchId }],
+      },
+    }),
+    prisma.branchOverstock.count({ where: { branchId } }),
+    prisma.stockMutation.count({
+      where: { inventoryItem: { branchId } },
+    }),
+    prisma.materialUsage.count({
+      where: { inventoryItem: { branchId } },
+    }),
+    prisma.stockRequestItem.count({
+      where: { inventoryItem: { branchId } },
+    }),
+    prisma.memberPackage.count({
+      where: { packagePricing: { branchId } },
+    }),
+    prisma.member.count({
+      where: { referralCode: { branchId } },
+    }),
+    prisma.referralIncentiveRecord.count({
+      where: { referralCode: { branchId } },
+    }),
   ]);
 
-  // Soft delete branch (set isActive to false)
-  // Also deactivate all related users
-  await prisma.$transaction(async (tx) => {
-    // Deactivate branch
-    await tx.branch.update({
-      where: { id: branchId },
+  const blockers = [
+    ['member', members],
+    ['paket member', memberPackages],
+    ['add-on member', memberAddOns],
+    ['pembelian non-terapi', nonTherapyPurchases],
+    ['invoice', invoices],
+    ['encounter', encounters],
+    ['sesi terapi', treatmentSessions],
+    ['permintaan stok', stockRequests],
+    ['invoice permintaan stok', stockRequestInvoices],
+    ['pengiriman', shipments],
+    ['overstock', overstocks],
+    ['mutasi stok', inventoryMutations],
+    ['pemakaian material', inventoryMaterialUsages],
+    ['item permintaan stok', inventoryRequestItems],
+    ['paket yang memakai harga cabang', branchPricingUsages],
+    ['member dengan kode referral cabang', referralMembers],
+    ['insentif referral', referralIncentives],
+  ].filter(([, count]) => Number(count) > 0);
+
+  if (blockers.length > 0) {
+    const blockerSummary = blockers
+      .map(([label, count]) => `${label}: ${count}`)
+      .join(', ');
+
+    throw errors.conflict(
+      'BRANCH_HAS_HISTORICAL_DATA',
+      `Cabang tidak dapat dihapus permanen karena masih memiliki data historis (${blockerSummary}). Pindahkan atau selesaikan data tersebut terlebih dahulu.`
+    );
+  }
+
+  const deleted = await prisma.$transaction(async (tx) => {
+    // Staff without another branch must not keep an active orphan account.
+    const deactivatedUsers = await tx.user.updateMany({
+      where: {
+        branchId,
+        isActive: true,
+        staffBranches: {
+          none: {
+            branchId: { not: branchId },
+          },
+        },
+      },
       data: { isActive: false },
     });
 
-    // Deactivate all users in this branch
-    if (activeUsers > 0) {
-      await tx.user.updateMany({
-        where: { branchId, isActive: true },
-        data: { isActive: false },
-      });
-    }
+    const detachedUsers = await tx.user.updateMany({
+      where: { branchId },
+      data: { branchId: null },
+    });
 
-    // Deactivate all members registered in this branch
-    if (totalMembers > 0) {
-      await tx.member.updateMany({
-        where: { registrationBranchId: branchId, isActive: true, isDeceased: false },
-        data: { isActive: false },
-      });
-    }
+    // Preserve the audit trail, but remove its foreign-key reference to the
+    // branch that is about to be deleted.
+    const detachedAuditLogs = await tx.auditLog.updateMany({
+      where: { branchId },
+      data: { branchId: null },
+    });
 
-    await tx.staffBranch.deleteMany({ where: { branchId } });
-    await tx.managerBranch.deleteMany({ where: { branchId } });
-    await tx.branchMemberAccess.deleteMany({ where: { branchId } });
+    const staffAssignments = await tx.staffBranch.deleteMany({ where: { branchId } });
+    const managerAssignments = await tx.managerBranch.deleteMany({ where: { branchId } });
+    const memberAccesses = await tx.branchMemberAccess.deleteMany({ where: { branchId } });
+    const referralCodes = await tx.referralCode.deleteMany({ where: { branchId } });
+    const packagePricings = await tx.packagePricing.deleteMany({ where: { branchId } });
+
+    // Stock mutations do not have cascade deletion in the schema.
+    const stockMutations = await tx.stockMutation.deleteMany({
+      where: { inventoryItem: { branchId } },
+    });
+    const inventoryItems = await tx.inventoryItem.deleteMany({ where: { branchId } });
+
+    await tx.branch.delete({ where: { id: branchId } });
+
+    return {
+      deactivatedUsers: deactivatedUsers.count,
+      detachedUsers: detachedUsers.count,
+      detachedAuditLogs: detachedAuditLogs.count,
+      staffAssignments: staffAssignments.count,
+      managerAssignments: managerAssignments.count,
+      memberAccesses: memberAccesses.count,
+      referralCodes: referralCodes.count,
+      packagePricings: packagePricings.count,
+      stockMutations: stockMutations.count,
+      inventoryItems: inventoryItems.count,
+    };
   });
 
   return {
-    message: 'Cabang berhasil dihapus',
-    deactivated: {
-      users: activeUsers,
-      members: totalMembers,
-      inventoryItems,
-      staffAssignments,
-      managerAssignments,
-      memberAccesses,
-    },
+    message: 'Cabang berhasil dihapus permanen',
+    branch: existing,
+    deleted,
   };
 }
 

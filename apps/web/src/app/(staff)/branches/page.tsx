@@ -119,7 +119,7 @@ export default function BranchesPage() {
 
     try {
       await branchesApi.deleteBranch(branchId);
-      showToast.success('Cabang berhasil dihapus');
+      showToast.success('Cabang berhasil dihapus permanen');
       if (branches.length === 1 && page > 1) {
         setPage((currentPage) => currentPage - 1);
       } else {
@@ -127,7 +127,11 @@ export default function BranchesPage() {
       }
     } catch (error: any) {
       devError('Error deleting branch:', error);
-      showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus cabang'
+      );
     }
   };
 
@@ -405,10 +409,10 @@ export default function BranchesPage() {
                             >
                               <Edit className="h-4 w-4" />
                             </button>
-                            {branch.isActive && (
+                            {user?.role === 'SUPER_ADMIN' && (
                               <button
                                 onClick={() => handleDelete(branch.id, branch.name)}
-                                title="Hapus"
+                                title="Hapus permanen"
                                 className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
                               >
                                 <Trash2 className="h-4 w-4" />

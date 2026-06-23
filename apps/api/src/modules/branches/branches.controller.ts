@@ -119,15 +119,19 @@ export async function updateBranch(req: Request, res: Response, next: NextFuncti
 // ── Delete Branch ─────────────────────────────────────────────
 export async function deleteBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    await deleteBranchService(req.params.branchId);
+    const result = await deleteBranchService(req.params.branchId);
 
     await logAudit({
       userId: req.user.userId,
-      branchId: req.params.branchId, // Use the branch being deleted
       action: 'DELETE',
       resource: 'Branch',
       resourceId: req.params.branchId,
-      meta: { action: 'soft_delete' },
+      meta: {
+        action: 'permanent_delete',
+        branchCode: result.branch.branchCode,
+        branchName: result.branch.name,
+        deleted: result.deleted,
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });

@@ -140,7 +140,7 @@ export const branchesApi = {
   },
 
   /**
-   * Delete branch (soft delete)
+   * Delete branch permanently (SUPER_ADMIN only)
    */
   deleteBranch: (branchId: string) => {
     return api.delete(`/branches/${branchId}`);

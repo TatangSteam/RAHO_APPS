@@ -56,17 +56,22 @@ export default function BranchesPage() {
   };
 
   const handleDelete = async (branchId: string, branchName: string) => {
-    if (!confirm(`Yakin ingin menonaktifkan cabang "${branchName}"?`)) {
+    if (!confirm(`Yakin ingin menghapus cabang "${branchName}" secara permanen? Tindakan ini tidak dapat dibatalkan.`)) {
       return;
     }
 
     try {
       await branchesApi.deleteBranch(branchId);
-      showToast.success('Cabang berhasil dinonaktifkan');
+      showToast.success('Cabang berhasil dihapus permanen');
       loadBranches();
     } catch (error: any) {
       devError('Error deleting branch:', error);
-      showToast.error(error.message || 'Gagal menonaktifkan cabang');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        error.message ||
+        'Gagal menghapus cabang'
+      );
     }
   };
 
@@ -183,7 +188,7 @@ export default function BranchesPage() {
                 >
                   ✏️ Edit
                 </button>
-                {branch.isActive && (
+                {user?.role === 'SUPER_ADMIN' && (
                   <button
                     className={`${styles.actionBtn} ${styles.delete}`}
                     onClick={(e) => {
@@ -191,7 +196,7 @@ export default function BranchesPage() {
                       handleDelete(branch.id, branch.name);
                     }}
                   >
-                    🚫 Nonaktifkan
+                    🗑️ Hapus Permanen
                   </button>
                 )}
               </div>

@@ -93,8 +93,9 @@ export class MembersController {
       // Determine which branchId to use
       let targetBranchId: string | null = null;
       
-      // For ADMIN_MANAGER, must select a branch from their managed branches
-      if (role === Role.ADMIN_MANAGER) {
+      // SUPER_ADMIN and ADMIN_MANAGER create members for an explicitly
+      // selected branch because neither role is tied to one branch account.
+      if (role === Role.SUPER_ADMIN || role === Role.ADMIN_MANAGER) {
         if (!validated.branchId) {
           throw {
             status: 400,
@@ -102,23 +103,40 @@ export class MembersController {
             message: 'Pilih cabang terlebih dahulu',
           };
         }
-        
-        // Verify the manager has access to this branch
-        const managerBranch = await prisma.managerBranch.findFirst({
-          where: {
-            userId,
-            branchId: validated.branchId,
-          },
-        });
-        
-        if (!managerBranch) {
-          throw {
-            status: 403,
-            code: 'BRANCH_ACCESS_DENIED',
-            message: 'Anda tidak memiliki akses ke cabang ini',
-          };
+
+        if (role === Role.ADMIN_MANAGER) {
+          const managerBranch = await prisma.managerBranch.findFirst({
+            where: {
+              userId,
+              branchId: validated.branchId,
+            },
+          });
+
+          if (!managerBranch) {
+            throw {
+              status: 403,
+              code: 'BRANCH_ACCESS_DENIED',
+              message: 'Anda tidak memiliki akses ke cabang ini',
+            };
+          }
+        } else {
+          const branch = await prisma.branch.findFirst({
+            where: {
+              id: validated.branchId,
+              isActive: true,
+            },
+            select: { id: true },
+          });
+
+          if (!branch) {
+            throw {
+              status: 404,
+              code: 'BRANCH_NOT_FOUND',
+              message: 'Cabang tidak ditemukan atau sudah tidak aktif',
+            };
+          }
         }
-        
+
         targetBranchId = validated.branchId;
       } else {
         // For other roles (ADMIN_CABANG, ADMIN_LAYANAN, etc.), use their assigned branch

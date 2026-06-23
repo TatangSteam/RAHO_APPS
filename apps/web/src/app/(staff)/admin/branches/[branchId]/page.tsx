@@ -126,7 +126,9 @@ export default function BranchDetailPage() {
         <MembersTab
           members={members}
           branchName={branch.name}
-          onAddMember={() => router.push('/members/new')}
+          onAddMember={() => router.push(
+            `/members/new?branchId=${encodeURIComponent(branchId)}&returnTo=${encodeURIComponent(`/admin/branches/${branchId}`)}`
+          )}
           onViewMember={(memberId) => router.push(`/members/${memberId}`)}
         />
       )}

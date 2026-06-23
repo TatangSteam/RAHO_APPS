@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createMemberApi } from '@/lib/membersApi';
 import type { CreateMemberData } from '@/types/member';
 import { showToast } from '@/lib/toast';
@@ -22,21 +22,33 @@ interface Branch {
 
 export default function NewMemberPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user } = useAuthStore();
+  const requestedBranchId = searchParams.get('branchId') || '';
+  const requestedReturnTo = searchParams.get('returnTo');
+  const returnTo =
+    requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//')
+      ? requestedReturnTo
+      : null;
   const [loading, setLoading] = useState(false);
   const [referralError, setReferralError] = useState('');
   const [pspFile, setPspFile] = useState<File | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   
-  // Branch selection for ADMIN_MANAGER
+  // Branch selection for roles that are not attached to one branch account.
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const requiresBranchSelection =
+    user?.role === 'ADMIN_MANAGER' || user?.role === 'SUPER_ADMIN';
+  const isBranchLocked =
+    requiresBranchSelection &&
+    !!requestedBranchId &&
+    branches.some((branch) => branch.id === requestedBranchId);
 
   const [formData, setFormData] = useState<CreateMemberData>({
-    // Branch selection (for ADMIN_MANAGER)
-    branchId: '',
+    // Branch selection (for SUPER_ADMIN / ADMIN_MANAGER)
+    branchId: requestedBranchId,
     
     // Section A - Data Pribadi
     fullName: '',
@@ -72,7 +84,9 @@ export default function NewMemberPage() {
   });
 
   // Form persistence - Save to localStorage
-  const FORM_STORAGE_KEY = 'newMemberFormData';
+  const FORM_STORAGE_KEY = requestedBranchId
+    ? `newMemberFormData:${requestedBranchId}`
+    : 'newMemberFormData';
   
   // Load saved form data on mount
   useEffect(() => {
@@ -80,9 +94,12 @@ export default function NewMemberPage() {
       const savedData = localStorage.getItem(FORM_STORAGE_KEY);
       if (savedData) {
         const parsed = JSON.parse(savedData);
-        const savedFormData = parsed.formData || formData;
+        const savedFormData = parsed.formData;
+        if (!savedFormData) return;
+
         setFormData({
           ...savedFormData,
+          branchId: requestedBranchId || savedFormData.branchId || '',
           isDeceased: savedFormData.isDeceased === true || savedFormData.isDeceased === 'true',
         });
         // Note: Files cannot be saved to localStorage, user will need to re-upload
@@ -90,7 +107,7 @@ export default function NewMemberPage() {
     } catch (error) {
       devError('Error loading saved form data:', error);
     }
-  }, []);
+  }, [FORM_STORAGE_KEY, requestedBranchId]);
 
   // Auto-save form data on change (debounced)
   useEffect(() => {
@@ -107,7 +124,7 @@ export default function NewMemberPage() {
     }, 1000); // Save after 1 second of inactivity
 
     return () => clearTimeout(timeoutId);
-  }, [formData]);
+  }, [formData, FORM_STORAGE_KEY]);
 
   // Clear saved form data after successful submission
   const clearSavedFormData = () => {
@@ -118,17 +135,29 @@ export default function NewMemberPage() {
     }
   };
 
-  // Fetch branches for ADMIN_MANAGER
+  // Fetch branches for SUPER_ADMIN / ADMIN_MANAGER.
   useEffect(() => {
-    if (isAdminManager) {
+    if (requiresBranchSelection) {
       setLoadingBranches(true);
       branchesApi.getAllBranches()
         .then((response) => {
-          const branchList = response.data?.data || [];
+          const branchList: Branch[] = response.data?.data || [];
           setBranches(branchList);
-          // Auto-select first branch if only one
-          if (branchList.length === 1) {
-            setFormData(prev => ({ ...prev, branchId: branchList[0].id }));
+
+          if (requestedBranchId) {
+            const requestedBranchExists = branchList.some(
+              (branch) => branch.id === requestedBranchId
+            );
+
+            if (!requestedBranchExists) {
+              showToast.error('Cabang tujuan tidak ditemukan atau tidak dapat diakses');
+              setFormData((prev) => ({ ...prev, branchId: '' }));
+              return;
+            }
+
+            setFormData((prev) => ({ ...prev, branchId: requestedBranchId }));
+          } else if (branchList.length === 1) {
+            setFormData((prev) => ({ ...prev, branchId: branchList[0].id }));
           }
         })
         .catch((err) => {
@@ -139,7 +168,7 @@ export default function NewMemberPage() {
           setLoadingBranches(false);
         });
     }
-  }, [isAdminManager]);
+  }, [requiresBranchSelection, requestedBranchId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -203,8 +232,8 @@ export default function NewMemberPage() {
     // Clear previous errors
     setReferralError('');
 
-    // Validation for ADMIN_MANAGER - must select branch
-    if (isAdminManager && !formData.branchId) {
+    // SUPER_ADMIN / ADMIN_MANAGER must select the registration branch.
+    if (requiresBranchSelection && !formData.branchId) {
       showToast.error('Pilih cabang terlebih dahulu');
       return;
     }
@@ -263,8 +292,8 @@ export default function NewMemberPage() {
       // Prepare data without therapy plans
       const dataToSubmit = {
         ...formData,
-        // Only include branchId for ADMIN_MANAGER
-        branchId: isAdminManager ? formData.branchId : undefined,
+        // Only roles without a fixed branch send an explicit target branch.
+        branchId: requiresBranchSelection ? formData.branchId : undefined,
       };
 
       const result = await createMemberApi(dataToSubmit, {
@@ -299,7 +328,7 @@ export default function NewMemberPage() {
       clearSavedFormData();
       // Reset form to initial state
       setFormData({
-        branchId: '',
+        branchId: requestedBranchId,
         fullName: '',
         identityType: 'NIK',
         nik: '',
@@ -339,11 +368,11 @@ export default function NewMemberPage() {
   useEffect(() => {
     const savedData = localStorage.getItem(FORM_STORAGE_KEY);
     setHasSavedData(!!savedData);
-  }, [formData]);
+  }, [formData, FORM_STORAGE_KEY]);
 
   return (
     <>
-      <NewMemberHeader onBack={() => router.back()} />
+      <NewMemberHeader onBack={() => returnTo ? router.push(returnTo) : router.back()} />
 
       {hasSavedData && (
         <div style={{
@@ -398,11 +427,11 @@ export default function NewMemberPage() {
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Branch Selection for ADMIN_MANAGER */}
-        {isAdminManager && (
+        {/* Branch Selection for SUPER_ADMIN / ADMIN_MANAGER */}
+        {requiresBranchSelection && (
           <div className="card" style={{ padding: '20px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>
-              🏢 Pilih Cabang
+              🏢 Cabang Pendaftaran
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label htmlFor="branchId" style={{ fontSize: '14px', fontWeight: '500' }}>
@@ -413,7 +442,7 @@ export default function NewMemberPage() {
                 name="branchId"
                 value={formData.branchId || ''}
                 onChange={handleInputChange}
-                disabled={loadingBranches}
+                disabled={loadingBranches || isBranchLocked}
                 style={{
                   padding: '12px 16px',
                   borderRadius: '8px',
@@ -421,7 +450,7 @@ export default function NewMemberPage() {
                   fontSize: '14px',
                   backgroundColor: '#1e293b',
                   color: '#f1f5f9',
-                  cursor: loadingBranches ? 'not-allowed' : 'pointer',
+                  cursor: loadingBranches || isBranchLocked ? 'not-allowed' : 'pointer',
                   appearance: 'none',
                   backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
                   backgroundRepeat: 'no-repeat',
@@ -444,7 +473,9 @@ export default function NewMemberPage() {
                 ))}
               </select>
               <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
-                Member akan didaftarkan di cabang yang dipilih
+                {isBranchLocked
+                  ? 'Cabang dipilih otomatis dari halaman detail cabang'
+                  : 'Member akan didaftarkan di cabang yang dipilih'}
               </p>
             </div>
           </div>
@@ -457,7 +488,7 @@ export default function NewMemberPage() {
           onChange={handleInputChange}
           referralError={referralError}
           onReferralErrorChange={setReferralError}
-          branchId={isAdminManager ? formData.branchId : undefined}
+          branchId={requiresBranchSelection ? formData.branchId : undefined}
         />
         
         <IncentiveSection 
@@ -478,7 +509,7 @@ export default function NewMemberPage() {
         <div style={{ display: 'flex', gap: '12px', paddingTop: '8px' }}>
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => returnTo ? router.push(returnTo) : router.back()}
             className="btn btn-secondary"
             style={{ minWidth: '120px' }}
           >
