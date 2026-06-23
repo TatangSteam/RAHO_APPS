@@ -12,6 +12,7 @@ interface TherapyPlanListTableProps {
   hideInfusKe?: boolean;
   hideStatus?: boolean;
   hideAksi?: boolean;
+  highlightPlanId?: string;
 }
 
 type NumericTherapyPlanKey =
@@ -199,6 +200,7 @@ export default function TherapyPlanListTable({
   hideInfusKe = false,
   hideStatus = false,
   hideAksi = false,
+  highlightPlanId,
 }: TherapyPlanListTableProps) {
   const extraColumns = getExtraSubstanceColumns(plans);
 
@@ -269,6 +271,7 @@ export default function TherapyPlanListTable({
           </thead>
           <tbody>
             {plans.map((plan, rowIndex) => {
+              const isHighlighted = plan.id === highlightPlanId;
               const status = getPlanStatus(plan);
               const date = plan.usedInSession?.treatmentDate || plan.createdAt;
               const infusKe = plan.usedInSession?.totalSessionsCount ?? '-';
@@ -282,13 +285,24 @@ export default function TherapyPlanListTable({
                 <tr
                   key={plan.id}
                   style={{
-                    background: rowIndex % 2 === 0 ? 'rgba(255,255,255,0.025)' : 'transparent',
+                    background: isHighlighted
+                      ? 'rgba(34,197,94,0.10)'
+                      : rowIndex % 2 === 0
+                        ? 'rgba(255,255,255,0.025)'
+                        : 'transparent',
+                    outline: isHighlighted ? '1px solid rgba(34,197,94,0.30)' : undefined,
+                    outlineOffset: isHighlighted ? '-1px' : undefined,
                   }}
                 >
                   <td style={cellStyle({ sticky: true })}>
                     <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>
                       Terapi #{planNumber}
                     </div>
+                    {isHighlighted && (
+                      <div style={{ marginTop: '3px', color: '#22c55e', fontSize: '10px', fontWeight: 800 }}>
+                        SESI INI
+                      </div>
+                    )}
                     <div style={{ marginTop: '3px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 700 }}>
                       {plan.setName || `Set v${plan.setVersion || plan.version || 1}`}
                     </div>

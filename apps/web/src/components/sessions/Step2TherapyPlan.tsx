@@ -1,53 +1,115 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import type { TherapyPlan } from '@/types/session';
-import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
-import { therapyPlanApi } from '@/lib/therapyPlanApi';
-import type { TherapyPlan as TherapyPlanApiType } from '@/lib/therapyPlanApi';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import type { TherapyPlan as SessionTherapyPlan } from '@/types/session';
+import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
+import { useAuthStore } from '@/stores/authStore';
+import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
+import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
 import styles from './Step2TherapyPlan.module.css';
 
 interface Step2TherapyPlanProps {
   sessionId: string;
   memberId: string;
-  therapyPlan: TherapyPlan | null;
+  therapyPlan: SessionTherapyPlan | null;
   isLocked: boolean;
   onComplete: () => void;
 }
 
+const SESSION_THERAPY_PLAN_EDITORS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR'];
+
+function toTablePlan(plan: SessionTherapyPlan, sessionId: string): TherapyPlan {
+  return {
+    ...plan,
+    keterangan: plan.keterangan || '',
+    ifa250: plan.ifa250 ?? undefined,
+    ifa500: plan.ifa500 ?? undefined,
+    hho: plan.hho ?? undefined,
+    h2: plan.h2 ?? undefined,
+    no: plan.no ?? undefined,
+    gaso: plan.gaso ?? undefined,
+    o2: plan.o2 ?? undefined,
+    o3: plan.o3 ?? undefined,
+    edta: plan.edta ?? undefined,
+    mb: plan.mb ?? undefined,
+    h2s: plan.h2s ?? undefined,
+    kcl: plan.kcl ?? undefined,
+    jmlNb: plan.jmlNb ?? undefined,
+    isUsed: true,
+    usedInSession: {
+      id: sessionId,
+      sessionCode: '',
+      treatmentDate: plan.createdAt,
+      infusKe: plan.planNumber || 0,
+      branchName: '',
+      branchCode: '',
+      totalSessionsCount: plan.planNumber || 0,
+      branchSessionsCount: plan.planNumber || 0,
+    },
+  };
+}
+
 export default function Step2TherapyPlan({
+  sessionId,
   memberId,
   therapyPlan,
   isLocked,
   onComplete,
 }: Step2TherapyPlanProps) {
-  const [therapyPlanSet, setTherapyPlanSet] = useState<TherapyPlanApiType[]>([]);
+  const router = useRouter();
+  const { user } = useAuthStore();
+  const [therapyPlanSet, setTherapyPlanSet] = useState<TherapyPlan[]>([]);
   const [loadingSet, setLoadingSet] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffect(() => {
-    if (therapyPlan?.therapyPlanSetId && memberId) {
-      loadTherapyPlanSet();
+  const canEdit = Boolean(
+    user?.role && SESSION_THERAPY_PLAN_EDITORS.includes(user.role)
+  );
+
+  const loadTherapyPlanSet = useCallback(async () => {
+    if (!therapyPlan || !memberId) {
+      setTherapyPlanSet([]);
+      return;
     }
-  }, [therapyPlan?.therapyPlanSetId, memberId]);
-
-  const loadTherapyPlanSet = async () => {
-    if (!therapyPlan?.therapyPlanSetId || !memberId) return;
 
     try {
       setLoadingSet(true);
-      const allPlans = await therapyPlanApi.getMemberTherapyPlans(memberId);
-      // Filter to only plans from the same set
-      const samSetPlans = allPlans.filter(
-        (plan) => plan.therapyPlanSetId === therapyPlan.therapyPlanSetId
+      const sameSetPlans = await therapyPlanApi.getSessionTherapyPlanSet(sessionId);
+      setTherapyPlanSet(
+        sameSetPlans.sort(
+          (first, second) =>
+            (first.planNumber || 0) - (second.planNumber || 0)
+        )
       );
-      setTherapyPlanSet(samSetPlans);
     } catch (error) {
       console.error('Error loading therapy plan set:', error);
-      setTherapyPlanSet([]);
+      setTherapyPlanSet([toTablePlan(therapyPlan, sessionId)]);
     } finally {
       setLoadingSet(false);
     }
+  }, [memberId, sessionId, therapyPlan]);
+
+  useEffect(() => {
+    void loadTherapyPlanSet();
+  }, [loadTherapyPlanSet]);
+
+  const plansForTable = useMemo(
+    () =>
+      therapyPlanSet.length > 0
+        ? therapyPlanSet
+        : therapyPlan
+          ? [toTablePlan(therapyPlan, sessionId)]
+          : [],
+    [sessionId, therapyPlan, therapyPlanSet]
+  );
+
+  const handleEditSuccess = async () => {
+    setShowEditModal(false);
+    await onComplete();
   };
+
   if (isLocked) {
     return (
       <div className={`${styles.container} ${styles.locked}`}>
@@ -85,104 +147,53 @@ export default function Step2TherapyPlan({
 
   return (
     <div className={`${styles.container} ${styles.completed}`}>
-      <div className={styles.header}>
-        <div className={`${styles.stepNumber} ${styles.completed}`}>OK</div>
-        <div className={styles.headerContent}>
-          <h3 className={styles.title}>Step 2: Acuan Therapy Plan</h3>
-          <p className={styles.subtitle}>Terapi #{therapyPlan.planNumber || '-'}</p>
+      <div
+        className={styles.header}
+        style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div className={`${styles.stepNumber} ${styles.completed}`}>OK</div>
+          <div className={styles.headerContent}>
+            <h3 className={styles.title}>Step 2: Acuan Therapy Plan</h3>
+            <p className={styles.subtitle}>
+              {therapyPlan.setName || `Set v${therapyPlan.setVersion || 1}`} · Terapi #{therapyPlan.planNumber || '-'}
+            </p>
+          </div>
         </div>
+
+        {canEdit && therapyPlan.therapyPlanSetId && (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setShowEditModal(true)}
+            disabled={loadingSet || plansForTable.length === 0}
+          >
+            <Pencil size={15} />
+            Edit Therapy Plan
+          </button>
+        )}
       </div>
 
       <div className={styles.completedContent}>
-        {/* Show full therapy plan set with details */}
-        {therapyPlanSet.length > 0 && (
-          <div style={{ marginBottom: '24px' }}>
-            <div style={{ 
-              marginBottom: '16px',
-              padding: '12px 16px',
-              background: 'rgba(59,130,246,0.08)',
-              border: '1px solid rgba(59,130,246,0.22)',
-              borderRadius: '8px',
-            }}>
-              <h4 style={{ 
-                fontSize: '14px', 
-                fontWeight: '700',
-                color: '#60a5fa',
-                margin: 0,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}>
-                <span style={{ fontSize: '18px' }}>📋</span>
-                <span>Therapy Plan Set: {therapyPlan.setName || `Set v${therapyPlan.setVersion || 1}`}</span>
-                <span style={{
-                  marginLeft: 'auto',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: 'var(--text-secondary)',
-                }}>
-                  {therapyPlanSet.length} Terapi dalam Set
-                </span>
-              </h4>
-            </div>
-            
-            {loadingSet ? (
-              <div style={{ padding: '32px', textAlign: 'center' }}>
-                <div className="spinner" style={{ width: '32px', height: '32px', margin: '0 auto 12px' }}></div>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Memuat therapy plan set...</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {therapyPlanSet.map((plan, index) => {
-                  const isCurrentPlan = plan.id === therapyPlan.id;
-                  
-                  return (
-                    <div key={plan.id}>
-                      <div style={{ 
-                        marginBottom: '8px',
-                        padding: '8px 12px',
-                        background: isCurrentPlan ? 'rgba(34,197,94,0.08)' : 'rgba(148,163,184,0.06)',
-                        border: isCurrentPlan ? '1px solid rgba(34,197,94,0.22)' : '1px solid rgba(148,163,184,0.18)',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                      }}>
-                        <span style={{ fontSize: '16px' }}>{isCurrentPlan ? '✅' : '📝'}</span>
-                        <span style={{ 
-                          fontSize: '12px', 
-                          fontWeight: '700',
-                          color: isCurrentPlan ? '#22c55e' : 'var(--text-secondary)',
-                        }}>
-                          Terapi #{plan.planNumber || index + 1}
-                          {isCurrentPlan && ' (Terapi Saat Ini)'}
-                        </span>
-                        {plan.keterangan && (
-                          <span style={{
-                            marginLeft: 'auto',
-                            fontSize: '11px',
-                            color: 'var(--text-muted)',
-                            fontStyle: 'italic',
-                          }}>
-                            {plan.keterangan}
-                          </span>
-                        )}
-                      </div>
-                      
-                      <TherapyPlanDoseTable
-                        plan={plan}
-                        title={`Dosis Terapi #${plan.planNumber || index + 1}`}
-                        showSourceColumn={false}
-                        showNoteColumn={false}
-                        includeDefaultIfaSubstances={false}
-                        compact={!isCurrentPlan}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+        {loadingSet ? (
+          <div style={{ padding: '32px', textAlign: 'center' }}>
+            <div className="spinner" style={{ width: '32px', height: '32px', margin: '0 auto 12px' }} />
+            <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+              Memuat therapy plan...
+            </p>
           </div>
+        ) : (
+          <TherapyPlanListTable
+            plans={plansForTable}
+            memberId={memberId}
+            onOpenSession={(targetSessionId) => {
+              if (targetSessionId !== sessionId) {
+                router.push(`/sessions/${targetSessionId}`);
+              }
+            }}
+            hideInfusKe
+            highlightPlanId={therapyPlan.id}
+          />
         )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
@@ -191,6 +202,17 @@ export default function Step2TherapyPlan({
           </button>
         </div>
       </div>
+
+      {canEdit && therapyPlan.therapyPlanSetId && (
+        <EditTherapyPlanSetModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          memberId={memberId}
+          therapyPlans={plansForTable}
+          editableSessionId={sessionId}
+          onSuccess={handleEditSuccess}
+        />
+      )}
     </div>
   );
 }

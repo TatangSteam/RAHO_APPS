@@ -4,6 +4,8 @@ import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { upload } from '../../middleware/upload';
 import { Role } from '@prisma/client';
+import { validate } from '../../middleware/validate';
+import { bulkEditTherapyPlanSetSchema } from '../members/members.schema';
 
 const router = Router();
 const controller = new SessionsController();
@@ -55,6 +57,14 @@ router.get(
   controller.getSuggestedSessionNumbers.bind(controller)
 );
 
+// Get booster stock using the branch that owns the session
+router.get(
+  '/:sessionId/booster-stock-availability',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.getBoosterStockAvailability.bind(controller)
+);
+
 // Get session detail
 router.get(
   '/:sessionId',
@@ -104,6 +114,21 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   controller.getTherapyPlan.bind(controller)
+);
+
+router.get(
+  '/:sessionId/therapy-plan-set',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.getTherapyPlanSet.bind(controller)
+);
+
+router.put(
+  '/:sessionId/therapy-plan-set',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.DOCTOR]),
+  validate(bulkEditTherapyPlanSetSchema),
+  controller.updateTherapyPlanSet.bind(controller)
 );
 
 // ============================================================

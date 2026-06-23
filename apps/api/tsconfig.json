@@ -18,6 +18,7 @@
     "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
     "exactOptionalPropertyTypes": false,
+    "types": ["jest", "node"],
     "paths": {
       "@/*": ["./src/*"],
       "@config/*": ["./src/config/*"],
@@ -28,5 +29,5 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts", "**/*.spec.ts"]
+  "exclude": ["node_modules", "dist"]
 }

@@ -3,8 +3,8 @@
  * Allows editing multiple plans in a set at once, creating a new set version.
  */
 
-import { prisma } from '@/lib/prisma';
-import { normalizeIfaSubstances, type TherapyPlanSubstance } from '@/utils/therapyPlanSubstances';
+import { prisma } from '../../../lib/prisma';
+import { normalizeIfaSubstances, type TherapyPlanSubstance } from '../../../utils/therapyPlanSubstances';
 
 interface EditPlanInput {
   planNumber: number;
@@ -29,6 +29,10 @@ interface EditPlanInput {
 interface BulkEditSetInput {
   newSetName?: string; // Optional: Custom set name (only for authorized users)
   plans: EditPlanInput[];
+}
+
+interface BulkEditSetOptions {
+  editableTreatmentSessionId?: string;
 }
 
 function padSequence(value: number, size = 2) {
@@ -80,7 +84,11 @@ function generateEditedSetName(originalName: string | null, setCode: string): st
 }
 
 export class MemberTherapyPlanSetEditService {
-  async bulkEditTherapyPlanSet(setId: string, input: BulkEditSetInput) {
+  async bulkEditTherapyPlanSet(
+    setId: string,
+    input: BulkEditSetInput,
+    options: BulkEditSetOptions = {}
+  ) {
     // 1. Get the original set and its plans
     const originalSet = await prisma.therapyPlanSet.findUnique({
       where: { id: setId },
@@ -104,7 +112,25 @@ export class MemberTherapyPlanSetEditService {
     }
 
     // 2. Identify used plans (plans that have been used in sessions)
-    const usedPlans = originalSet.plans.filter((p) => p.treatmentSessionId);
+    const editableSessionPlan = options.editableTreatmentSessionId
+      ? originalSet.plans.find(
+          (plan) => plan.treatmentSessionId === options.editableTreatmentSessionId
+        )
+      : null;
+
+    if (options.editableTreatmentSessionId && !editableSessionPlan) {
+      throw {
+        status: 400,
+        code: 'SESSION_THERAPY_PLAN_NOT_IN_SET',
+        message: 'Therapy plan sesi tidak ditemukan pada set yang akan diedit',
+      };
+    }
+
+    const usedPlans = originalSet.plans.filter(
+      (plan) =>
+        plan.treatmentSessionId &&
+        plan.treatmentSessionId !== options.editableTreatmentSessionId
+    );
     const usedPlanNumbers = new Set(usedPlans.map((p) => p.planNumber || 0));
 
     // 3. Validate input plans and check for edits to locked plans
@@ -307,7 +333,40 @@ export class MemberTherapyPlanSetEditService {
         }
       }
 
-      return { newSet, copiedPlans };
+      let sessionTherapyPlanId: string | null = null;
+
+      if (editableSessionPlan && options.editableTreatmentSessionId) {
+        const editablePair = copiedPlans.find(
+          (pair) => pair.oldPlan?.id === editableSessionPlan.id
+        );
+
+        if (!editablePair) {
+          throw {
+            status: 500,
+            code: 'SESSION_THERAPY_PLAN_COPY_MISSING',
+            message: 'Gagal membuat versi baru therapy plan sesi',
+          };
+        }
+
+        await tx.therapyPlan.update({
+          where: { id: editableSessionPlan.id },
+          data: { treatmentSessionId: null },
+        });
+
+        await tx.therapyPlan.update({
+          where: { id: editablePair.copiedPlan.id },
+          data: { treatmentSessionId: options.editableTreatmentSessionId },
+        });
+
+        await tx.infusionExecution.updateMany({
+          where: { treatmentSessionId: options.editableTreatmentSessionId },
+          data: { therapyPlanId: editablePair.copiedPlan.id },
+        });
+
+        sessionTherapyPlanId = editablePair.copiedPlan.id;
+      }
+
+      return { newSet, copiedPlans, sessionTherapyPlanId };
     });
 
     const editedCount = result.copiedPlans.filter((p) => p.edited).length;
@@ -322,6 +381,7 @@ export class MemberTherapyPlanSetEditService {
         totalPlans: result.copiedPlans.length,
         editedPlans: editedCount,
         originalSetId: originalSet.id,
+        sessionTherapyPlanId: result.sessionTherapyPlanId,
         createdAt: result.newSet.createdAt.toISOString(),
       },
     };

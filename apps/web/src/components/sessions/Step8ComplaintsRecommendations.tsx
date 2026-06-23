@@ -26,10 +26,14 @@ export default function Step8ComplaintsRecommendations({
 }: Step8ComplaintsRecommendationsProps) {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     keluhan: complaintsRecommendations?.keluhan || '',
     rekomendasi: complaintsRecommendations?.rekomendasi || '',
   });
+
+  // Check if user can edit (SUPER_ADMIN, ADMIN_MANAGER, DOCTOR)
+  const canEdit = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER' || user?.role === 'DOCTOR';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +61,7 @@ export default function Step8ComplaintsRecommendations({
       }
 
       showToast.success('Keluhan dan rekomendasi berhasil disimpan');
+      setIsEditing(false);
       onComplete();
     } catch (error: any) {
       devError('Error saving complaints & recommendations:', error);
@@ -102,7 +107,7 @@ export default function Step8ComplaintsRecommendations({
     );
   }
 
-  if (complaintsRecommendations && (complaintsRecommendations.keluhan || complaintsRecommendations.rekomendasi)) {
+  if (complaintsRecommendations && (complaintsRecommendations.keluhan || complaintsRecommendations.rekomendasi) && !isEditing) {
     return (
       <div style={{
         padding: '24px',
@@ -110,30 +115,60 @@ export default function Step8ComplaintsRecommendations({
         border: '2px solid rgba(34,197,94,0.3)',
         borderRadius: 'var(--radius-lg)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: '700',
-            fontSize: '24px',
-            boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
-          }}>
-            ✓
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: '700',
+              fontSize: '24px',
+              boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
+            }}>
+              ✓
+            </div>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '4px' }}>
+                📝 Keluhan & Rekomendasi
+              </h3>
+              <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+                Keluhan dan rekomendasi telah dicatat
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '4px' }}>
-              📝 Keluhan & Rekomendasi
-            </h3>
-            <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-              Keluhan dan rekomendasi telah dicatat
-            </p>
-          </div>
+          
+          {canEdit && (
+            <button
+              onClick={() => {
+                setFormData({
+                  keluhan: complaintsRecommendations.keluhan || '',
+                  rekomendasi: complaintsRecommendations.rekomendasi || '',
+                });
+                setIsEditing(true);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                color: 'white',
+                fontSize: '13px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✏️ Edit
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -210,18 +245,20 @@ export default function Step8ComplaintsRecommendations({
       <div style={{
         marginBottom: '20px',
         padding: '12px 16px',
-        background: 'rgba(251,191,36,0.1)',
-        border: '1px solid rgba(251,191,36,0.3)',
+        background: isEditing ? 'rgba(59,130,246,0.1)' : 'rgba(251,191,36,0.1)',
+        border: isEditing ? '1px solid rgba(59,130,246,0.3)' : '1px solid rgba(251,191,36,0.3)',
         borderRadius: 'var(--radius-md)',
         fontSize: '13px',
-        color: '#fbbf24',
+        color: isEditing ? '#60a5fa' : '#fbbf24',
         display: 'flex',
         alignItems: 'center',
         gap: '12px'
       }}>
-        <span style={{ fontSize: '18px' }}>ℹ️</span>
+        <span style={{ fontSize: '18px' }}>{isEditing ? '✏️' : 'ℹ️'}</span>
         <span>
-          Step ini bersifat opsional. Isi keluhan pasien dan rekomendasi jika diperlukan, atau skip langsung ke evaluasi dokter.
+          {isEditing 
+            ? 'Mode Edit: Anda sedang mengubah keluhan dan rekomendasi yang sudah tersimpan.'
+            : 'Step ini bersifat opsional. Isi keluhan pasien dan rekomendasi jika diperlukan, atau skip langsung ke evaluasi dokter.'}
         </span>
       </div>
 
@@ -283,6 +320,31 @@ export default function Step8ComplaintsRecommendations({
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={() => {
+                setIsEditing(false);
+                setFormData({
+                  keluhan: complaintsRecommendations?.keluhan || '',
+                  rekomendasi: complaintsRecommendations?.rekomendasi || '',
+                });
+              }}
+              disabled={loading}
+              style={{
+                padding: '12px 24px',
+                background: 'rgba(148,163,184,0.2)',
+                border: '1px solid rgba(148,163,184,0.3)',
+                borderRadius: 'var(--radius-md)',
+                color: '#cbd5e1',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
+            >
+              ❌ Batal
+            </button>
+          )}
           <button
             type="submit"
             disabled={loading}

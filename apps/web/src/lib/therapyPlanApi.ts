@@ -141,6 +141,7 @@ export interface BulkEditTherapyPlanSetResponse {
     totalPlans: number;
     editedPlans: number;
     plans: TherapyPlan[];
+    sessionTherapyPlanId?: string | null;
   };
 }
 
@@ -181,6 +182,19 @@ export const therapyPlanApi = {
   ): Promise<BulkEditTherapyPlanSetResponse> => {
     const response = await api.put(`/members/${memberId}/therapy-plan-sets/${setId}/bulk-edit`, data);
     return response.data;
+  },
+
+  getSessionTherapyPlanSet: async (sessionId: string): Promise<TherapyPlan[]> => {
+    const response = await api.get(`/treatment-sessions/${sessionId}/therapy-plan-set`);
+    return response.data.data;
+  },
+
+  bulkEditSessionTherapyPlanSet: async (
+    sessionId: string,
+    data: BulkEditTherapyPlanSetInput
+  ): Promise<BulkEditTherapyPlanSetResponse> => {
+    const response = await api.put(`/treatment-sessions/${sessionId}/therapy-plan-set`, data);
+    return response.data.data;
   },
 
   // Get therapy plan history (all versions)

@@ -488,8 +488,7 @@ export class FilesService {
 
     const requestId = match[1];
 
-    // Find stock request by ID and verify the payment proof URL matches either
-    // the latest proof or one of the historical invoice payments.
+    // Find stock request by ID and verify the payment proof URL matches
     const stockRequest = await prisma.stockRequest.findFirst({
       where: {
         id: requestId,
@@ -498,23 +497,6 @@ export class FilesService {
         id: true,
         branchId: true,
         paymentProofUrl: true,
-        invoice: {
-          select: {
-            payments: {
-              where: {
-                OR: [
-                  { proofFileUrl: key },
-                  { proofFileUrl: `${env.API_PREFIX}/files/${key}` },
-                  { proofFileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
-                  { proofFileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
-                  { proofFileUrl: { endsWith: key } },
-                ],
-              },
-              select: { id: true },
-              take: 1,
-            },
-          },
-        },
       },
     });
 
@@ -522,9 +504,9 @@ export class FilesService {
       throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
     }
 
-    // Verify the key matches the latest stored URL or a historical payment.
+    // Verify the key matches the stored URL
     const storedUrl = stockRequest.paymentProofUrl;
-    const keyMatchesLatest = Boolean(
+    const keyMatches = Boolean(
       storedUrl && (
         storedUrl === key ||
         storedUrl === `${env.API_PREFIX}/files/${key}` ||
@@ -533,9 +515,8 @@ export class FilesService {
         storedUrl.includes(key)
       )
     );
-    const keyMatchesHistory = Boolean(stockRequest.invoice?.payments.length);
 
-    if (!keyMatchesLatest && !keyMatchesHistory) {
+    if (!keyMatches) {
       throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
     }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { inventoryApi, type InventoryItemWithStock } from '@/lib/api/inventoryApi';
@@ -26,6 +26,7 @@ interface MaterialUsage {
 
 interface Step6MaterialsProps {
   sessionId: string;
+  branchId: string;
   materials: MaterialUsage[];
   isLocked: boolean;
   onComplete: () => void;
@@ -100,6 +101,7 @@ function getStockStatus(stock: number, minThreshold: number) {
 
 export default function Step6Materials({
   sessionId,
+  branchId,
   materials,
   isLocked,
   onComplete,
@@ -114,25 +116,9 @@ export default function Step6Materials({
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    loadInventoryItems();
-  }, []);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsDropdownOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const loadInventoryItems = async () => {
+  const loadInventoryItems = useCallback(async () => {
     try {
       setLoadingInventory(true);
-      const branchId = user?.branchId;
       if (!branchId) {
         showToast.error('Branch ID tidak ditemukan');
         return;
@@ -146,7 +132,22 @@ export default function Step6Materials({
     } finally {
       setLoadingInventory(false);
     }
-  };
+  }, [branchId]);
+
+  useEffect(() => {
+    void loadInventoryItems();
+  }, [loadInventoryItems]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleAddMaterial = async () => {
     if (!selectedItem || !quantity || Number(quantity) <= 0) {

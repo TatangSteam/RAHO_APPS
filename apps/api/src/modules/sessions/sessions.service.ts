@@ -133,6 +133,14 @@ export class SessionsService {
     return this.therapyPlanService.getTherapyPlan(sessionId);
   }
 
+  async getTherapyPlanSetForSession(sessionId: string) {
+    return this.therapyPlanService.getTherapyPlanSetForSession(sessionId);
+  }
+
+  async updateTherapyPlanSetForSession(sessionId: string, data: any, userId: string) {
+    return this.therapyPlanService.updateTherapyPlanSetForSession(sessionId, data, userId);
+  }
+
   // ============================================================
   // STEP 3 & 7: VITAL SIGNS
   // ============================================================

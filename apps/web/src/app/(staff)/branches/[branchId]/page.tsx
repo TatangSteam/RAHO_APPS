@@ -877,6 +877,7 @@ export default function BranchDetailPage() {
                 <SessionsTable
                   data={sessions}
                   loading={tabLoading}
+                  returnTo={`/branches/${branchId}`}
                 />
               </div>
             )}

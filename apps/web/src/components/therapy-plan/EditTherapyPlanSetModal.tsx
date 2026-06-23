@@ -13,6 +13,7 @@ interface EditTherapyPlanSetModalProps {
   memberId: string;
   therapyPlans: TherapyPlan[]; // All plans in the set
   onSuccess: () => void;
+  editableSessionId?: string;
 }
 
 interface EditableRow {
@@ -40,6 +41,7 @@ export default function EditTherapyPlanSetModal({
   memberId,
   therapyPlans,
   onSuccess,
+  editableSessionId,
 }: EditTherapyPlanSetModalProps) {
   const { user } = useAuthStore();
   const [rows, setRows] = useState<EditableRow[]>([]);
@@ -51,10 +53,12 @@ export default function EditTherapyPlanSetModal({
   const [hasDraft, setHasDraft] = useState(false);
 
   // Check if user has permission to edit set name and add plans
-  const canEditSetNameAndAddPlans = user ? hasRole(user.role, THERAPY_PLAN_EDITORS) : false;
+  const canEditSetNameAndAddPlans = user
+    ? hasRole(user.role, THERAPY_PLAN_EDITORS) && !editableSessionId
+    : false;
 
   // Draft storage key - use therapyPlanSetId from first plan if available
-  const draftKey = `therapy-plan-edit-draft-${therapyPlans[0]?.therapyPlanSetId || memberId}`;
+  const draftKey = `therapy-plan-edit-draft-${therapyPlans[0]?.therapyPlanSetId || memberId}${editableSessionId ? `-${editableSessionId}` : ''}`;
 
   // Helper function to normalize values: treat 0 as null (no meaningful dose)
   const normalizeValue = (value: number | null): number | null => {
@@ -158,7 +162,7 @@ export default function EditTherapyPlanSetModal({
   // Initialize rows and set name from therapy plans
   useEffect(() => {
     if (isOpen && therapyPlans.length > 0) {
-      const initialRowsData: EditableRow[] = therapyPlans
+      const initialRowsData: EditableRow[] = [...therapyPlans]
         .sort((a, b) => (a.planNumber || 0) - (b.planNumber || 0))
         .map((plan) => ({
           planNumber: plan.planNumber || 0,
@@ -176,7 +180,9 @@ export default function EditTherapyPlanSetModal({
           h2s: plan.h2s ?? null,
           kcl: plan.kcl ?? null,
           jmlNb: plan.jmlNb ?? null,
-          isLocked: plan.isUsed, // Lock if already used in session
+          isLocked: editableSessionId
+            ? plan.usedInSession?.id !== editableSessionId
+            : plan.isUsed,
         }));
       setRows(initialRowsData);
       // Create a deep copy for initialRows to avoid reference issues
@@ -187,7 +193,7 @@ export default function EditTherapyPlanSetModal({
       setEditableSetName(currentSetName);
       setInitialSetName(currentSetName);
     }
-  }, [isOpen, therapyPlans]);
+  }, [editableSessionId, isOpen, therapyPlans]);
 
   // Check if there are any meaningful changes (treating 0 as null)
   const hasChanges = () => {
@@ -410,7 +416,9 @@ export default function EditTherapyPlanSetModal({
         payload.newSetName = editableSetName.trim() || undefined;
       }
 
-      const response = await therapyPlanApi.bulkEditTherapyPlanSet(memberId, setId, payload);
+      const response = editableSessionId
+        ? await therapyPlanApi.bulkEditSessionTherapyPlanSet(editableSessionId, payload)
+        : await therapyPlanApi.bulkEditTherapyPlanSet(memberId, setId, payload);
       
       // Clear draft after successful submission
       clearDraft();
@@ -422,7 +430,11 @@ export default function EditTherapyPlanSetModal({
       onSuccess();
       onClose();
     } catch (error: any) {
-      const errorMessage = error?.response?.data?.message || error?.message || 'Gagal mengedit therapy plan set';
+      const errorMessage =
+        error?.response?.data?.error?.message ||
+        error?.response?.data?.message ||
+        error?.message ||
+        'Gagal mengedit therapy plan set';
       showToast.error(errorMessage);
     } finally {
       setIsSubmitting(false);
@@ -755,7 +767,14 @@ export default function EditTherapyPlanSetModal({
                 <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
                 </svg>
-                {rows.filter(r => r.isLocked).length} plan terkunci (sudah digunakan) dan tidak dapat diedit
+                {editableSessionId
+                  ? `${rows.filter(r => r.isLocked).length} plan lain dikunci. Hanya therapy plan sesi ini yang dapat diedit.`
+                  : `${rows.filter(r => r.isLocked).length} plan terkunci (sudah digunakan) dan tidak dapat diedit`}
+              </p>
+            )}
+            {editableSessionId && (
+              <p className="mt-1 text-xs text-blue-600 dark:text-blue-400">
+                Therapy plan milik sesi ini dapat diedit dan akan dipindahkan ke versi set terbaru.
               </p>
             )}
           </div>

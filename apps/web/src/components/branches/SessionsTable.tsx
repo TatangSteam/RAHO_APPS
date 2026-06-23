@@ -1,6 +1,6 @@
 'use client';
 
-import { Calendar, User, Stethoscope, Eye, FileText } from 'lucide-react';
+import { Calendar, User, Stethoscope, Eye, FileText, Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 interface Session {
@@ -27,10 +27,18 @@ interface Session {
 interface SessionsTableProps {
   data: Session[];
   loading: boolean;
+  returnTo?: string;
 }
 
-export default function SessionsTable({ data, loading }: SessionsTableProps) {
+export default function SessionsTable({ data, loading, returnTo }: SessionsTableProps) {
   const router = useRouter();
+
+  const openSession = (sessionId: string) => {
+    const returnQuery = returnTo
+      ? `?returnTo=${encodeURIComponent(returnTo)}`
+      : '';
+    router.push(`/sessions/${sessionId}${returnQuery}`);
+  };
 
   const getStatusBadge = (status: string) => {
     const statusMap: Record<string, { label: string; bg: string; text: string }> = {
@@ -145,11 +153,12 @@ export default function SessionsTable({ data, loading }: SessionsTableProps) {
               <td className="px-6 py-4">
                 <div className="flex justify-center gap-2">
                   <button
-                    onClick={() => router.push(`/sessions/${session.id}`)}
-                    className="p-2 text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
-                    title="Lihat Detail"
+                    onClick={() => openSession(session.id)}
+                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-500/10 rounded-lg transition-colors"
+                    title={session.status === 'COMPLETED' ? 'Lihat detail sesi' : 'Lihat dan edit sesi'}
                   >
-                    <Eye size={18} />
+                    {session.status === 'COMPLETED' ? <Eye size={17} /> : <Pencil size={17} />}
+                    <span>{session.status === 'COMPLETED' ? 'Detail' : 'Detail & Edit'}</span>
                   </button>
                 </div>
               </td>

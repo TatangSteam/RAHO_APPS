@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
@@ -19,7 +19,13 @@ import Step9Evaluation from '@/components/sessions/Step9Evaluation';
 export default function SessionDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const sessionId = params.sessionId as string;
+  const requestedReturnTo = searchParams.get('returnTo');
+  const returnTo =
+    requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//')
+      ? requestedReturnTo
+      : null;
 
   const [session, setSession] = useState<SessionDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -153,7 +159,11 @@ export default function SessionDetailPage() {
     <div>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
-        <button onClick={() => router.back()} className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}>
+        <button
+          onClick={() => returnTo ? router.push(returnTo) : router.back()}
+          className="btn btn-secondary btn-sm"
+          style={{ marginBottom: '16px' }}
+        >
           ← Kembali
         </button>
         
@@ -177,6 +187,12 @@ export default function SessionDetailPage() {
                 year: 'numeric'
               })}
             </p>
+            {sessionInfo.branchName && (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '6px' }}>
+                Cabang: <strong>{sessionInfo.branchName}</strong>
+                {sessionInfo.branchCode ? ` (${sessionInfo.branchCode})` : ''}
+              </p>
+            )}
           </div>
           
           {sessionInfo.isCompleted && (
@@ -518,6 +534,7 @@ export default function SessionDetailPage() {
         {activeStep === 5 && (
           <Step6Materials 
             sessionId={sessionId}
+            branchId={sessionInfo.branchId || ''}
             materials={session.materials || []}
             isLocked={!canAccessStep(5)}
             onComplete={handleStepComplete}

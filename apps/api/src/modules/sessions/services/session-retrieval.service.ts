@@ -442,7 +442,9 @@ export class SessionRetrievalService {
       encounterCode: session.encounter.encounterCode,
       infusKe: session.infusKe,
       branchInfusKe: branchInfusKe,
+      branchId: session.branchId,
       branchName: branch?.name || 'Unknown',
+      branchCode: branch?.branchCode || '',
       infusNote:
         branchInfusKe === 1
           ? `Infus ke-${session.infusKe} (Infus pertama di ${branch?.name || 'cabang ini'})`

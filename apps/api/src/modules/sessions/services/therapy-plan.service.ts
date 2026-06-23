@@ -4,8 +4,11 @@ import { generateTherapyPlanCode } from '../../../utils/codeGenerator';
 import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import type { CreateTherapyPlanInput } from '../sessions.schema';
 import { AuditAction } from '@prisma/client';
+import { MemberTherapyPlanSetEditService } from '../../members/services/member-therapy-plan-set-edit.service';
 
 export class TherapyPlanService {
+  private therapyPlanSetEditService = new MemberTherapyPlanSetEditService();
+
   async createTherapyPlan(sessionId: string, data: CreateTherapyPlanInput, userId: string) {
     // Check if therapy plan already exists
     const existing = await prisma.therapyPlan.findUnique({
@@ -90,5 +93,206 @@ export class TherapyPlanService {
     });
 
     return therapyPlan;
+  }
+
+  async getTherapyPlanSetForSession(sessionId: string) {
+    const currentPlan = await prisma.therapyPlan.findUnique({
+      where: { treatmentSessionId: sessionId },
+      select: {
+        id: true,
+        therapyPlanSetId: true,
+      },
+    });
+
+    if (!currentPlan) {
+      return [];
+    }
+
+    const plans = await prisma.therapyPlan.findMany({
+      where: currentPlan.therapyPlanSetId
+        ? { therapyPlanSetId: currentPlan.therapyPlanSetId }
+        : { id: currentPlan.id },
+      include: {
+        therapyPlanSet: {
+          select: {
+            id: true,
+            name: true,
+            setCode: true,
+            version: true,
+            status: true,
+            supersededById: true,
+          },
+        },
+        session: {
+          select: {
+            id: true,
+            sessionCode: true,
+            treatmentDate: true,
+            infusKe: true,
+            branch: {
+              select: {
+                name: true,
+                branchCode: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ planNumber: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return plans.map((plan) => ({
+      id: plan.id,
+      planCode: plan.planCode,
+      planNumber: plan.planNumber,
+      therapyPlanSetId: plan.therapyPlanSetId,
+      setCode: plan.therapyPlanSet?.setCode || null,
+      setName: plan.therapyPlanSet?.name || null,
+      setVersion: plan.therapyPlanSet?.version || plan.version,
+      setStatus:
+        plan.therapyPlanSet?.status ||
+        (plan.supersededById ? 'SUPERSEDED' : 'ACTIVE'),
+      setSupersededById: plan.therapyPlanSet?.supersededById || null,
+      keterangan: plan.keterangan,
+      ifa250: plan.ifa250 ? Number(plan.ifa250) : null,
+      ifa500: plan.ifa500 ? Number(plan.ifa500) : null,
+      hho: plan.hho ? Number(plan.hho) : null,
+      h2: plan.h2 ? Number(plan.h2) : null,
+      no: plan.no ? Number(plan.no) : null,
+      gaso: plan.gaso ? Number(plan.gaso) : null,
+      o2: plan.o2 ? Number(plan.o2) : null,
+      o3: plan.o3 ? Number(plan.o3) : null,
+      edta: plan.edta ? Number(plan.edta) : null,
+      mb: plan.mb ? Number(plan.mb) : null,
+      h2s: plan.h2s ? Number(plan.h2s) : null,
+      kcl: plan.kcl ? Number(plan.kcl) : null,
+      jmlNb: plan.jmlNb ? Number(plan.jmlNb) : null,
+      ifaSubstances: plan.ifaSubstances || null,
+      ifaSubstanceTotalMl: plan.ifaSubstanceTotalMl
+        ? Number(plan.ifaSubstanceTotalMl)
+        : null,
+      version: plan.version,
+      supersededById: plan.supersededById,
+      supersededAt: plan.supersededAt?.toISOString() || null,
+      isUsed: Boolean(plan.treatmentSessionId),
+      usedInSession: plan.session
+        ? {
+            id: plan.session.id,
+            sessionCode: plan.session.sessionCode,
+            treatmentDate: plan.session.treatmentDate.toISOString(),
+            infusKe: plan.session.infusKe,
+            branchName: plan.session.branch.name,
+            branchCode: plan.session.branch.branchCode,
+            totalSessionsCount: plan.session.infusKe,
+            branchSessionsCount: plan.session.infusKe,
+          }
+        : undefined,
+      createdAt: plan.createdAt.toISOString(),
+    }));
+  }
+
+  async updateTherapyPlanSetForSession(
+    sessionId: string,
+    data: {
+      newSetName?: string;
+      plans: Array<Record<string, unknown>>;
+    },
+    userId: string
+  ) {
+    const therapyPlan = await prisma.therapyPlan.findUnique({
+      where: { treatmentSessionId: sessionId },
+      select: {
+        id: true,
+        planNumber: true,
+        therapyPlanSetId: true,
+        supersededById: true,
+      },
+    });
+
+    if (!therapyPlan) {
+      throw {
+        status: 404,
+        code: 'SESSION_THERAPY_PLAN_NOT_FOUND',
+        message: 'Therapy plan untuk sesi ini tidak ditemukan',
+      };
+    }
+
+    let editablePlan = therapyPlan;
+
+    while (editablePlan.supersededById) {
+      const nextPlan = await prisma.therapyPlan.findUnique({
+        where: { id: editablePlan.supersededById },
+        select: {
+          id: true,
+          planNumber: true,
+          therapyPlanSetId: true,
+          supersededById: true,
+          treatmentSessionId: true,
+        },
+      });
+
+      if (!nextPlan) {
+        break;
+      }
+
+      if (
+        nextPlan.treatmentSessionId &&
+        nextPlan.treatmentSessionId !== sessionId
+      ) {
+        throw {
+          status: 409,
+          code: 'LATEST_THERAPY_PLAN_ALREADY_USED',
+          message: 'Versi terbaru therapy plan sudah digunakan oleh sesi lain',
+        };
+      }
+
+      editablePlan = nextPlan;
+    }
+
+    if (!editablePlan.therapyPlanSetId) {
+      throw {
+        status: 400,
+        code: 'SESSION_THERAPY_PLAN_SET_REQUIRED',
+        message: 'Therapy plan sesi ini tidak berada dalam sebuah set',
+      };
+    }
+
+    if (editablePlan.id !== therapyPlan.id) {
+      await prisma.$transaction(async (tx) => {
+        await tx.therapyPlan.update({
+          where: { id: therapyPlan.id },
+          data: { treatmentSessionId: null },
+        });
+        await tx.therapyPlan.update({
+          where: { id: editablePlan.id },
+          data: { treatmentSessionId: sessionId },
+        });
+        await tx.infusionExecution.updateMany({
+          where: { treatmentSessionId: sessionId },
+          data: { therapyPlanId: editablePlan.id },
+        });
+      });
+    }
+
+    const result = await this.therapyPlanSetEditService.bulkEditTherapyPlanSet(
+      editablePlan.therapyPlanSetId,
+      data as any,
+      { editableTreatmentSessionId: sessionId }
+    );
+
+    await logAudit({
+      userId,
+      action: AuditAction.UPDATE,
+      resource: 'TherapyPlanSet',
+      resourceId: result.data.setId,
+      meta: {
+        sessionId,
+        originalSetId: result.data.originalSetId,
+        version: result.data.version,
+        editedPlans: result.data.editedPlans,
+      },
+    });
+
+    return result;
   }
 }

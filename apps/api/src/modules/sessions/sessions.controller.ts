@@ -13,12 +13,50 @@ import { sendSuccess, sendError } from '../../utils/response';
 import { SessionExportService } from './services/session-export.service';
 import { SupportingPhotosService } from './services/supporting-photos.service';
 import { Role } from '@prisma/client';
+import { prisma } from '../../lib/prisma';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
 const supportingPhotosService = new SupportingPhotosService();
 
 export class SessionsController {
+  private async getAuthorizedSessionBranchId(
+    sessionId: string,
+    user: Request['user']
+  ): Promise<string> {
+    const session = await prisma.treatmentSession.findUnique({
+      where: { id: sessionId },
+      select: { branchId: true },
+    });
+
+    if (!session) {
+      throw {
+        status: 404,
+        code: 'SESSION_NOT_FOUND',
+        message: 'Sesi tidak ditemukan',
+      };
+    }
+
+    if (user.role === Role.SUPER_ADMIN) {
+      return session.branchId;
+    }
+
+    const accessibleBranchIds = new Set([
+      ...(user.branchId ? [user.branchId] : []),
+      ...(user.branches || []),
+    ]);
+
+    if (!accessibleBranchIds.has(session.branchId)) {
+      throw {
+        status: 403,
+        code: 'SESSION_BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
+      };
+    }
+
+    return session.branchId;
+  }
+
   // ============================================================
   // CREATE SESSION
   // ============================================================
@@ -75,6 +113,7 @@ export class SessionsController {
   async getSessionById(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.getSessionById(sessionId);
       return sendSuccess(res, result);
     } catch (err: any) {
@@ -222,6 +261,38 @@ export class SessionsController {
     }
   }
 
+  async getTherapyPlanSet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      const result = await sessionsService.getTherapyPlanSetForSession(sessionId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async updateTherapyPlanSet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      const result = await sessionsService.updateTherapyPlanSetForSession(
+        sessionId,
+        req.body,
+        req.user!.userId
+      );
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
   // ============================================================
   // STEP 4: UPDATE BOOSTER TYPE (Conditional)
   // ============================================================
@@ -235,10 +306,7 @@ export class SessionsController {
         return sendError(res, 400, 'INVALID_BOOSTER_TYPE', 'Jenis booster harus NO2 atau HHO');
       }
 
-      const branchId = req.user!.branchId;
-      if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
-      }
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
 
       const result = await sessionsService.updateBoosterType(sessionId, boosterType, req.user!.userId, branchId);
       return sendSuccess(res, result);
@@ -252,10 +320,13 @@ export class SessionsController {
 
   async getBoosterStockAvailability(req: Request, res: Response, next: NextFunction) {
     try {
-      const branchId = req.user!.branchId;
-      
+      const { sessionId } = req.params;
+      const branchId = sessionId
+        ? await this.getAuthorizedSessionBranchId(sessionId, req.user!)
+        : req.user!.branchId;
+
       if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
+        return sendError(res, 403, 'BRANCH_REQUIRED', 'Cabang sesi tidak ditemukan');
       }
 
       const availability = await sessionsService.getBoosterStockAvailability(branchId);
@@ -319,10 +390,7 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
-      const branchId = req.user!.branchId;
-      if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
-      }
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
 
       const result = await sessionsService.createInfusion(sessionId, validation.data, req.user!.userId, branchId);
       return sendSuccess(res, result, 201);
@@ -363,10 +431,7 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
-      const branchId = req.user!.branchId;
-      if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
-      }
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
 
       const result = await sessionsService.createMaterialUsage(sessionId, validation.data, req.user!.userId, branchId);
       return sendSuccess(res, result, 201);
@@ -416,6 +481,10 @@ export class SessionsController {
   async updateEvaluation(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      
+      // Check branch access for SUPER_ADMIN, ADMIN_MANAGER, and DOCTOR
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      
       const validation = createEvaluationSchema.partial().safeParse(req.body);
       if (!validation.success) {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
