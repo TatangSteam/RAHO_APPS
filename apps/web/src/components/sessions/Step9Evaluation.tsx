@@ -34,6 +34,7 @@ export default function Step9Evaluation({
 }: Step9EvaluationProps) {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     subjective: evaluation?.subjective || '',
     objective: evaluation?.objective || '',
@@ -41,6 +42,9 @@ export default function Step9Evaluation({
     plan: evaluation?.plan || '',
     generalNotes: evaluation?.generalNotes || '',
   });
+
+  // Check if user can edit (SUPER_ADMIN, ADMIN_MANAGER, DOCTOR)
+  const canEdit = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER' || user?.role === 'DOCTOR';
 
   const hasDoctorEvaluation = !!evaluation && [
     evaluation.subjective,
@@ -79,6 +83,7 @@ export default function Step9Evaluation({
       }
 
       showToast.success('Evaluasi dokter berhasil disimpan');
+      setIsEditing(false);
       onComplete();
     } catch (error: any) {
       devError('Error saving evaluation:', error);
@@ -124,7 +129,7 @@ export default function Step9Evaluation({
     );
   }
 
-  if (hasDoctorEvaluation) {
+  if (hasDoctorEvaluation && !isEditing) {
     return (
       <div style={{
         padding: '24px',
@@ -132,30 +137,62 @@ export default function Step9Evaluation({
         border: '2px solid rgba(34,197,94,0.3)',
         borderRadius: 'var(--radius-lg)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: 'linear-gradient(135deg, #22c55e, #16a34a)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: '700',
-            fontSize: '24px',
-            boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
-          }}>
-            ✓
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{
+              width: '48px',
+              height: '48px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              fontWeight: '700',
+              fontSize: '24px',
+              boxShadow: '0 4px 12px rgba(34,197,94,0.3)'
+            }}>
+              ✓
+            </div>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '4px' }}>
+                📋 Evaluasi Dokter
+              </h3>
+              <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+                Evaluasi telah dicatat
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '4px' }}>
-              📋 Evaluasi Dokter
-            </h3>
-            <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-              Evaluasi telah dicatat
-            </p>
-          </div>
+          {canEdit && (
+            <button
+              onClick={() => {
+                setFormData({
+                  subjective: evaluation?.subjective || '',
+                  objective: evaluation?.objective || '',
+                  assessment: evaluation?.assessment || '',
+                  plan: evaluation?.plan || '',
+                  generalNotes: evaluation?.generalNotes || '',
+                });
+                setIsEditing(true);
+              }}
+              style={{
+                padding: '8px 16px',
+                background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
+                border: 'none',
+                borderRadius: 'var(--radius-md)',
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: '600',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(59,130,246,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              ✏️ Edit
+            </button>
+          )}
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -246,8 +283,10 @@ export default function Step9Evaluation({
   return (
     <div style={{
       padding: '24px',
-      background: 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(147,51,234,0.05))',
-      border: '2px solid rgba(59,130,246,0.3)',
+      background: isEditing 
+        ? 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(147,51,234,0.05))'
+        : 'linear-gradient(135deg, rgba(59,130,246,0.05), rgba(147,51,234,0.05))',
+      border: `2px solid ${isEditing ? 'rgba(59,130,246,0.5)' : 'rgba(59,130,246,0.3)'}`,
       borderRadius: 'var(--radius-lg)',
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
@@ -271,10 +310,28 @@ export default function Step9Evaluation({
             📋 Evaluasi Dokter (SOAP)
           </h3>
           <p style={{ fontSize: '14px', color: '#94a3b8' }}>
-            Catat evaluasi dokter menggunakan format SOAP
+            {isEditing ? 'Edit evaluasi dokter' : 'Catat evaluasi dokter menggunakan format SOAP'}
           </p>
         </div>
       </div>
+
+      {isEditing && (
+        <div style={{
+          padding: '12px 16px',
+          background: 'rgba(59,130,246,0.15)',
+          border: '1px solid rgba(59,130,246,0.3)',
+          borderRadius: 'var(--radius-md)',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <span style={{ fontSize: '16px' }}>✏️</span>
+          <span style={{ fontSize: '14px', color: '#60a5fa', fontWeight: '600' }}>
+            Mode Edit: Sedang mengedit evaluasi dokter
+          </span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         <div>
@@ -397,7 +454,26 @@ export default function Step9Evaluation({
           />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={() => setIsEditing(false)}
+              disabled={loading}
+              style={{
+                padding: '12px 32px',
+                background: 'rgba(148,163,184,0.2)',
+                border: '1px solid rgba(148,163,184,0.3)',
+                borderRadius: 'var(--radius-md)',
+                color: '#cbd5e1',
+                fontSize: '15px',
+                fontWeight: '600',
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              ✖️ Batal
+            </button>
+          )}
           <button
             type="submit"
             disabled={loading}

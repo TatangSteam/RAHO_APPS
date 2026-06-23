@@ -144,9 +144,18 @@ export class SessionsController {
       } = req.query;
       const { userId, branchId, role } = req.user!;
       
+      // For SUPER_ADMIN and ADMIN_MANAGER, don't filter by branch unless explicitly requested
+      // This allows them to see sessions across all branches
+      let effectiveBranchId: string | undefined = undefined;
+      if (filterBranchId) {
+        effectiveBranchId = filterBranchId as string;
+      } else if (role !== Role.SUPER_ADMIN && role !== Role.ADMIN_MANAGER) {
+        effectiveBranchId = branchId || undefined;
+      }
+      
       const result = await sessionsService.getAllSessions({
         memberId: memberId as string | undefined,
-        branchId: filterBranchId as string || branchId || undefined,
+        branchId: effectiveBranchId,
         role: role as string,
         userId, // Pass userId for DOCTOR/NURSE multi-branch support
         page: page ? parseInt(page as string) : undefined,

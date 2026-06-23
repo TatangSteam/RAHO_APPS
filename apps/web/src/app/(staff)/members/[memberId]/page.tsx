@@ -30,6 +30,7 @@ import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
+import MemberEditModal from '@/components/members/MemberEditModal';
 
 type MemberDetailTab = 'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
 
@@ -155,6 +156,9 @@ export default function MemberDetailPage() {
   // Upload documents modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [updatingLifeStatus, setUpdatingLifeStatus] = useState(false);
+
+  // Edit member modal state
+  const [showEditMemberModal, setShowEditMemberModal] = useState(false);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -583,7 +587,7 @@ export default function MemberDetailPage() {
         member={member}
         onBack={() => router.back()}
         onSendNotification={() => setShowNotifModal(true)}
-        onEdit={() => router.push(`/members/${memberId}/edit`)}
+        onEdit={() => setShowEditMemberModal(true)}
         onManageCredentials={() => setShowCredentialsModal(true)}
         onUploadDocuments={() => setShowUploadModal(true)}
         isSuperAdmin={isSuperAdmin}
@@ -896,6 +900,22 @@ export default function MemberDetailPage() {
         onSuccess={() => loadMemberDetail()}
         hasDocuments={hasDocuments}
       />
+
+      {/* Edit Member Modal */}
+      {showEditMemberModal && (
+        <MemberEditModal
+          isOpen={showEditMemberModal}
+          onClose={() => setShowEditMemberModal(false)}
+          action="edit"
+          branchId={member.registrationBranch?.id || ''}
+          memberId={memberId}
+          memberData={member}
+          onSuccess={() => {
+            setShowEditMemberModal(false);
+            loadMemberDetail();
+          }}
+        />
+      )}
     </>
   );
 }
