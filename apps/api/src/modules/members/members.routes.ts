@@ -299,7 +299,7 @@ router.get(
 router.patch(
   '/:memberId/email',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   controller.updateMemberEmail.bind(controller)
 );
 

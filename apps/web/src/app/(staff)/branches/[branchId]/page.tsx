@@ -572,7 +572,7 @@ export default function BranchDetailPage() {
                 <Edit size={18} />
                 <span>Edit</span>
               </button>
-              {user?.role === 'SUPER_ADMIN' && (
+              {user && hasRole(user.role, MANAGER_ABOVE_ROLES) && (
                 <button
                   onClick={handleDelete}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-neutral-700 dark:text-neutral-200 hover:text-red-600 dark:hover:text-red-400 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-red-500/50 transition-all duration-200"
@@ -793,7 +793,7 @@ export default function BranchDetailPage() {
                   data={staff}
                   loading={tabLoading}
                   showCredentialsButton={user?.role === 'SUPER_ADMIN'}
-                  showDeleteButton={user?.role === 'SUPER_ADMIN'}
+                  showDeleteButton={!!(user && hasRole(user.role, MANAGER_ABOVE_ROLES))}
                   onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
                   onUnassignFromBranch={handleUnassignFromBranch}
                   onDeleteStaff={handleDeleteStaff}
@@ -934,6 +934,7 @@ export default function BranchDetailPage() {
           action={crudModal.action}
           branchId={branchId}
           memberData={crudModal.data}
+          userRole={user?.role}
         />
       )}
 

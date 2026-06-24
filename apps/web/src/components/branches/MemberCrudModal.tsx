@@ -15,6 +15,7 @@ interface MemberCrudModalProps {
   action: 'create' | 'edit' | 'delete';
   branchId: string;
   memberData?: any;
+  userRole?: string;
 }
 
 interface MemberFormData {
@@ -44,7 +45,8 @@ export default function MemberCrudModal({
   onSuccess,
   action,
   branchId,
-  memberData
+  memberData,
+  userRole
 }: MemberCrudModalProps) {
   const [loading, setLoading] = useState(false);
   const [referralCodes, setReferralCodes] = useState<any[]>([]);
@@ -226,20 +228,28 @@ export default function MemberCrudModal({
         await createMemberApi(createData, {});
         showToast.success('Member berhasil ditambahkan');
       } else if (action === 'edit') {
-        const updateData = {
+        const updateData: any = {
           fullName: formData.fullName,
           phone: formData.phone,
-          email: formData.email,
           address: formData.address,
           birthDate: formData.birthDate,
           gender: formData.gender,
           emergencyContactName: formData.emergencyContact,
-          // Include incentive fields in update
-          firstIncentiveType: formData.firstIncentiveType || undefined,
-          firstIncentiveValue: formData.firstIncentiveType ? formData.firstIncentiveValue : undefined,
-          nextIncentiveType: formData.nextIncentiveType || undefined,
-          nextIncentiveValue: formData.nextIncentiveType ? formData.nextIncentiveValue : undefined,
         };
+        
+        // Always include email in update payload so SUPER_ADMIN can update it
+        updateData.email = formData.memberEmail || formData.email || '';
+        
+        // Include incentive fields in update
+        if (formData.firstIncentiveType) {
+          updateData.firstIncentiveType = formData.firstIncentiveType;
+          updateData.firstIncentiveValue = formData.firstIncentiveValue;
+        }
+        if (formData.nextIncentiveType) {
+          updateData.nextIncentiveType = formData.nextIncentiveType;
+          updateData.nextIncentiveValue = formData.nextIncentiveValue;
+        }
+        
         devLog('🔍 [MemberCrudModal] Updating member:', memberData.memberId, 'with data:', updateData);
         await updateMemberApi(memberData.memberId, updateData);
         showToast.success('Member berhasil diperbarui');
@@ -306,9 +316,17 @@ export default function MemberCrudModal({
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="memberEmail">
-                <Mail size={16} />
-                Email Member *
+              <label htmlFor="memberEmail" className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1">
+                  <Mail size={16} />
+                  Email Member *
+                </span>
+                {userRole === 'SUPER_ADMIN' && action === 'edit' && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-500/30 rounded-full">
+                    <Mail size={12} />
+                    EDITABLE
+                  </span>
+                )}
               </label>
               <input
                 type="email"
@@ -317,9 +335,17 @@ export default function MemberCrudModal({
                 value={formData.memberEmail}
                 onChange={handleInputChange}
                 required
-                disabled={action === 'edit'}
+                disabled={action === 'edit' && userRole !== 'SUPER_ADMIN'}
                 placeholder="member@example.com"
+                className={userRole === 'SUPER_ADMIN' && action === 'edit' 
+                  ? 'border-blue-400 dark:border-blue-600/60 bg-blue-50/50 dark:bg-blue-500/5 focus:ring-blue-500 dark:focus:ring-blue-500/50 focus:border-blue-500 shadow-sm shadow-blue-200/50 dark:shadow-blue-500/10'
+                  : ''}
               />
+              {userRole === 'SUPER_ADMIN' && action === 'edit' && (
+                <small className="block mt-1 text-xs text-blue-600 dark:text-blue-400 font-medium">
+                  ℹ️ Super Admin: Anda dapat mengedit email member ini
+                </small>
+              )}
             </div>
 
             {action === 'create' && (
