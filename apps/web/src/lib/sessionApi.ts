@@ -145,9 +145,12 @@ export const sessionApi = {
     page?: number; 
     limit?: number;
     branchId?: string;
+    branchIds?: string;
     memberId?: string;
     doctorId?: string;
     nurseId?: string;
+    doctorIds?: string;
+    nurseIds?: string;
     dateFrom?: string;
     dateTo?: string;
     status?: 'all' | 'completed' | 'incomplete';
@@ -167,9 +170,12 @@ export const sessionApi = {
     fields: Record<string, boolean>;
     filters?: {
       branchId?: string;
+      branchIds?: string[];
       memberId?: string;
       doctorId?: string;
       nurseId?: string;
+      doctorIds?: string[];
+      nurseIds?: string[];
       dateFrom?: string;
       dateTo?: string;
       status?: string;

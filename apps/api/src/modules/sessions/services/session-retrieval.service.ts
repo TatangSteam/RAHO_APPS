@@ -112,30 +112,38 @@ export class SessionRetrievalService {
    * - ADMIN_CABANG, ADMIN_LAYANAN: See only sessions from their primary branch
    * - DOCTOR, NURSE: See sessions from all branches they have access to (via StaffBranch)
    */
-  async getAllSessions(params: { 
-    memberId?: string; 
-    branchId?: string; 
-    role?: string; 
-    userId?: string; 
-    page?: number; 
+  async getAllSessions(params: {
+    memberId?: string;
+    branchId?: string;
+    branchIds?: string[];
+    diagnosisCategories?: string[];
+    role?: string;
+    userId?: string;
+    page?: number;
     limit?: number;
     // Additional filters
     doctorId?: string;
+    doctorIds?: string[];
     nurseId?: string;
+    nurseIds?: string[];
     dateFrom?: string;
     dateTo?: string;
     status?: string;
     pelaksanaan?: string;
   }) {
-    const { 
-      memberId, 
-      branchId, 
-      role, 
-      userId, 
-      page = 1, 
-      limit = 50,
+    const {
+      memberId,
+      branchId,
+      branchIds,
+      diagnosisCategories,
+      role,
+      userId,
+      page = 1,
+      limit = 20,
       doctorId,
+      doctorIds,
       nurseId,
+      nurseIds,
       dateFrom,
       dateTo,
       status,
@@ -150,20 +158,46 @@ export class SessionRetrievalService {
         },
       },
     };
+
+    const addAndFilter = (condition: any) => {
+      where.AND = Array.isArray(where.AND) ? [...where.AND, condition] : [condition];
+    };
     
     // Filter by memberId if provided
     if (memberId) {
       where.encounter.memberId = memberId;
     }
 
-    // Filter by doctorId if provided
-    if (doctorId) {
-      where.doctorId = doctorId;
+    // Filter by doctor(s), including additional doctors assigned to the session
+    const selectedDoctorIds = doctorIds?.length
+      ? doctorIds
+      : doctorId && doctorId !== 'all'
+        ? [doctorId]
+        : [];
+
+    if (selectedDoctorIds.length > 0) {
+      addAndFilter({
+        OR: [
+          { doctorId: { in: selectedDoctorIds } },
+          { sessionDoctors: { some: { doctorId: { in: selectedDoctorIds } } } },
+        ],
+      });
     }
 
-    // Filter by nurseId if provided
-    if (nurseId) {
-      where.nurseId = nurseId;
+    // Filter by nurse(s), including additional nurses assigned to the session
+    const selectedNurseIds = nurseIds?.length
+      ? nurseIds
+      : nurseId && nurseId !== 'all'
+        ? [nurseId]
+        : [];
+
+    if (selectedNurseIds.length > 0) {
+      addAndFilter({
+        OR: [
+          { nurseId: { in: selectedNurseIds } },
+          { sessionNurses: { some: { nurseId: { in: selectedNurseIds } } } },
+        ],
+      });
     }
 
     // Filter by date range
@@ -190,14 +224,30 @@ export class SessionRetrievalService {
       where.pelaksanaan = pelaksanaan;
     }
 
+    // Filter by diagnosis categories
+    if (diagnosisCategories && diagnosisCategories.length > 0) {
+      where.encounter.diagnoses = {
+        some: {
+          kategoriDiagnosa: { in: diagnosisCategories }
+        }
+      };
+    }
+
     // Role-based branch filtering
-    // SUPER_ADMIN and ADMIN_MANAGER can see all branches (or filter by specific branch)
+    // SUPER_ADMIN and ADMIN_MANAGER can see all branches (or filter by specific branches)
     if (role && ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
-      // If branchId filter is provided, use it
-      if (branchId) {
+      // If branchIds array is provided, use it for filtering (multiple branches)
+      if (branchIds && branchIds.length > 0) {
+        if (branchIds.length === 1) {
+          where.branchId = branchIds[0];
+        } else {
+          where.branchId = { in: branchIds };
+        }
+      } else if (branchId) {
+        // Backward compatibility: single branchId (deprecated, use branchIds instead)
         where.branchId = branchId;
       }
-      // Otherwise, no branch filter - see all
+      // Otherwise, no branch filter - see all branches
     } else if (role && !['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role)) {
       // For DOCTOR and NURSE, get all accessible branches from StaffBranch table
       if ((role === 'DOCTOR' || role === 'NURSE') && userId) {
@@ -247,6 +297,18 @@ export class SessionRetrievalService {
         adminLayanan: { include: { profile: true } },
         doctor: { include: { profile: true } },
         nurse: { include: { profile: true } },
+        sessionDoctors: {
+          include: {
+            doctor: { include: { profile: true } },
+          },
+          orderBy: { isPrimary: 'desc' },
+        },
+        sessionNurses: {
+          include: {
+            nurse: { include: { profile: true } },
+          },
+          orderBy: { isPrimary: 'desc' },
+        },
         boosterPackage: true,
         therapyPlan: true,
         vitalSigns: true,
@@ -365,6 +427,24 @@ export class SessionRetrievalService {
               userId: session.nurse.id,
               fullName: session.nurse.profile?.fullName || '',
             },
+            sessionDoctors: session.sessionDoctors?.map((sd: any) => ({
+              id: sd.id,
+              isPrimary: sd.isPrimary,
+              doctor: {
+                userId: sd.doctor.id,
+                fullName: sd.doctor.profile?.fullName || '',
+                staffCode: sd.doctor.staffCode,
+              },
+            })) || [],
+            sessionNurses: session.sessionNurses?.map((sn: any) => ({
+              id: sn.id,
+              isPrimary: sn.isPrimary,
+              nurse: {
+                userId: sn.nurse.id,
+                fullName: sn.nurse.profile?.fullName || '',
+                staffCode: sn.nurse.staffCode,
+              },
+            })) || [],
             boosterPackage: session.boosterPackage
               ? {
                   packageId: session.boosterPackage.id,

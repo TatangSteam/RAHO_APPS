@@ -19,6 +19,18 @@ const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
 const supportingPhotosService = new SupportingPhotosService();
 
+const parseQueryIdList = (value: unknown): string[] | undefined => {
+  if (!value) return undefined;
+
+  const rawValues = Array.isArray(value) ? value : [value];
+  const ids = rawValues
+    .flatMap((item) => (typeof item === 'string' ? item.split(',') : []))
+    .map((item) => item.trim())
+    .filter((item) => item && item !== 'all');
+
+  return ids.length > 0 ? Array.from(new Set(ids)) : undefined;
+};
+
 export class SessionsController {
   private async getAuthorizedSessionBranchId(
     sessionId: string,
@@ -135,8 +147,12 @@ export class SessionsController {
         page, 
         limit,
         branchId: filterBranchId,
+        branchIds: filterBranchIds,
+        diagnosisCategories: filterDiagnosisCategories,
         doctorId,
+        doctorIds,
         nurseId,
+        nurseIds,
         dateFrom,
         dateTo,
         status,
@@ -144,25 +160,54 @@ export class SessionsController {
       } = req.query;
       const { userId, branchId, role } = req.user!;
       
-      // For SUPER_ADMIN and ADMIN_MANAGER, don't filter by branch unless explicitly requested
-      // This allows them to see sessions across all branches
-      let effectiveBranchId: string | undefined = undefined;
-      if (filterBranchId) {
-        effectiveBranchId = filterBranchId as string;
+      // For SUPER_ADMIN and ADMIN_MANAGER, support multiple branch selection
+      let effectiveBranchIds: string[] | undefined = undefined;
+      
+      if (filterBranchIds) {
+        // Handle multiple branchIds (comma-separated string or array)
+        if (typeof filterBranchIds === 'string') {
+          effectiveBranchIds = filterBranchIds.split(',').filter(Boolean);
+        } else if (Array.isArray(filterBranchIds)) {
+          effectiveBranchIds = (filterBranchIds as string[]).filter(id => typeof id === 'string' && id.trim());
+        }
+      } else if (filterBranchId) {
+        // Backward compatibility: single branchId
+        effectiveBranchIds = [filterBranchId as string];
       } else if (role !== Role.SUPER_ADMIN && role !== Role.ADMIN_MANAGER) {
-        effectiveBranchId = branchId || undefined;
+        // Non-admin roles: use their assigned branch
+        if (branchId) {
+          effectiveBranchIds = [branchId];
+        }
       }
+      // For SUPER_ADMIN/ADMIN_MANAGER without filter: effectiveBranchIds stays undefined (see all)
+      
+      // Parse diagnosis categories filter (comma-separated string to array)
+      let effectiveDiagnosisCategories: string[] | undefined = undefined;
+      if (filterDiagnosisCategories) {
+        if (typeof filterDiagnosisCategories === 'string') {
+          effectiveDiagnosisCategories = filterDiagnosisCategories.split(',').filter(Boolean);
+        } else if (Array.isArray(filterDiagnosisCategories)) {
+          effectiveDiagnosisCategories = (filterDiagnosisCategories as string[]).filter(cat => typeof cat === 'string' && cat.trim());
+        }
+      }
+
+      const effectiveDoctorIds = parseQueryIdList(doctorIds) ?? parseQueryIdList(doctorId);
+      const effectiveNurseIds = parseQueryIdList(nurseIds) ?? parseQueryIdList(nurseId);
       
       const result = await sessionsService.getAllSessions({
         memberId: memberId as string | undefined,
-        branchId: effectiveBranchId,
+        branchId: effectiveBranchIds?.length === 1 ? effectiveBranchIds[0] : undefined,
+        branchIds: effectiveBranchIds,
+        diagnosisCategories: effectiveDiagnosisCategories,
         role: role as string,
         userId, // Pass userId for DOCTOR/NURSE multi-branch support
         page: page ? parseInt(page as string) : undefined,
         limit: limit ? parseInt(limit as string) : undefined,
         // Additional filters
         doctorId: doctorId as string | undefined,
+        doctorIds: effectiveDoctorIds,
         nurseId: nurseId as string | undefined,
+        nurseIds: effectiveNurseIds,
         dateFrom: dateFrom as string | undefined,
         dateTo: dateTo as string | undefined,
         status: status as string | undefined,

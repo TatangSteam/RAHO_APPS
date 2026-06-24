@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
@@ -175,6 +176,11 @@ export default function ExportMembersModal({
   });
   
   const [format, setFormat] = useState<'xlsx' | 'csv'>('xlsx');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (isOpen && (user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER')) {
@@ -304,14 +310,14 @@ export default function ExportMembersModal({
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
   const selectedColumnCount = activeTab === 'quick' && selectedPreset
     ? QUICK_PRESETS[selectedPreset].columns.length
     : options.columns.length;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+  const modalContent = (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       
@@ -827,4 +833,6 @@ export default function ExportMembersModal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

@@ -519,32 +519,54 @@ export async function getStaffByRoleService(
   role: Role,
   branchId?: string,
 ) {
-  // For DOCTOR and NURSE, use StaffBranch for multi-branch support
+  // For DOCTOR and NURSE, include both StaffBranch (multi-branch) AND primary branchId
   // Also include ADMIN_CABANG users who can act as doctors/nurses
   if ((role === Role.DOCTOR || role === Role.NURSE) && branchId) {
-    // Get staff with the specific role via StaffBranch
-    const roleStaff = await prisma.$queryRaw<Array<{
-      id: string;
-      staffCode: string;
-      fullName: string;
-      role: string;
-    }>>`
-      SELECT DISTINCT u.id, u."staffCode", up."fullName", u.role
-      FROM users u
-      INNER JOIN staff_branches sb ON u.id = sb."userId"
-      INNER JOIN user_profiles up ON u.id = up."userId"
-      WHERE u.role = ${role}::"Role"
-        AND u."isActive" = true
-        AND sb."branchId" = ${branchId}
-      ORDER BY up."fullName" ASC
-    `;
+    // Get staff with the specific role
+    // Check BOTH primary branchId AND staff_branches table
+    const roleStaff = await prisma.user.findMany({
+      where: {
+        role,
+        isActive: true,
+        OR: [
+          { branchId }, // Primary branch
+          { 
+            staffBranches: {
+              some: {
+                branchId
+              }
+            }
+          } // Multi-branch assignment
+        ]
+      },
+      select: {
+        id: true,
+        staffCode: true,
+        role: true,
+        profile: {
+          select: {
+            fullName: true,
+          },
+        },
+      },
+      orderBy: { profile: { fullName: 'asc' } },
+    });
 
     // Also get ADMIN_CABANG users from the same branch (they can act as doctor/nurse)
     const adminCabangStaff = await prisma.user.findMany({
       where: {
         role: Role.ADMIN_CABANG,
-        branchId,
         isActive: true,
+        OR: [
+          { branchId },
+          { 
+            staffBranches: {
+              some: {
+                branchId
+              }
+            }
+          }
+        ]
       },
       select: {
         id: true,
@@ -564,7 +586,7 @@ export async function getStaffByRoleService(
       ...roleStaff.map((s) => ({
         userId: s.id,
         staffCode: s.staffCode || '',
-        fullName: s.fullName || '',
+        fullName: s.profile?.fullName || '',
         role: s.role,
       })),
       ...adminCabangStaff.map((s) => ({

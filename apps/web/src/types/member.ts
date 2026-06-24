@@ -7,6 +7,10 @@ export interface Member {
   age?: number | null;
   voucherCount: number;
   basicPackageCount: number;
+  sessionCount?: number;
+  lastInfusionDate?: string | null;
+  primaryDiagnosis?: string | null;
+  primaryDiagnosisIcd?: string | null;
   isActive: boolean;
   isDeceased?: boolean;
   isLintas: boolean;

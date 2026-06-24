@@ -86,13 +86,17 @@ export class SessionsService {
   async getAllSessions(params: { 
     memberId?: string; 
     branchId?: string; 
+    branchIds?: string[];
+    diagnosisCategories?: string[];
     role?: string; 
     userId?: string; 
     page?: number; 
     limit?: number;
     // Additional filters
     doctorId?: string;
+    doctorIds?: string[];
     nurseId?: string;
+    nurseIds?: string[];
     dateFrom?: string;
     dateTo?: string;
     status?: string;

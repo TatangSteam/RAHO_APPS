@@ -25,6 +25,75 @@ interface Staff {
   role: string;
 }
 
+type MultiFilterKey = 'branchIds' | 'diagnosisCategories' | 'doctorIds' | 'nurseIds';
+
+interface SessionFilters {
+  status: 'all' | 'completed' | 'incomplete';
+  branchIds: string[];
+  diagnosisCategories: string[];
+  doctorIds: string[];
+  nurseIds: string[];
+  dateFrom: string;
+  dateTo: string;
+  pelaksanaan: 'all' | 'ON_SITE' | 'HOME_CARE';
+}
+
+interface StaffOptionResponse {
+  id?: string;
+  userId?: string;
+  fullName?: string;
+  email?: string;
+  staffCode?: string;
+  role?: string;
+  profile?: {
+    fullName?: string;
+  };
+}
+
+const normalizeStaffOption = (staff: StaffOptionResponse): Staff | null => {
+  const id = staff.userId || staff.id;
+
+  if (!id) return null;
+
+  return {
+    id,
+    fullName: staff.fullName || staff.profile?.fullName || staff.email || staff.staffCode || 'Tanpa Nama',
+    role: staff.role || '',
+  };
+};
+
+const getSelectedFilterLabel = (
+  selectedIds: string[],
+  options: Array<{ id: string; fullName?: string; name?: string }>,
+  emptyLabel: string,
+) => {
+  if (selectedIds.length === 0) return emptyLabel;
+  if (selectedIds.length === 1) {
+    const selected = options.find((option) => option.id === selectedIds[0]);
+    return selected?.fullName || selected?.name || '1 dipilih';
+  }
+
+  return `${selectedIds.length} dipilih`;
+};
+
+const DIAGNOSIS_CATEGORY_OPTIONS = [
+  { id: 'HIPERTENSI', name: 'Hipertensi' },
+  { id: 'NEUROLOGI', name: 'Neurologi' },
+  { id: 'DIABETES', name: 'Diabetes' },
+  { id: 'KARDIOVASKULAR', name: 'Kardiovaskular' },
+  { id: 'ORTOPEDI', name: 'Ortopedi' },
+  { id: 'IMUNOLOGI', name: 'Imunologi' },
+  { id: 'HEMATOLOGI', name: 'Hematologi' },
+  { id: 'STROKE', name: 'Stroke' },
+  { id: 'JANTUNG_KARDIOVASKULAR', name: 'Jantung & Kardiovaskular' },
+  { id: 'SINDROM_METABOLIK', name: 'Sindrom Metabolik' },
+  { id: 'KANKER', name: 'Kanker' },
+  { id: 'DEGENERATIF', name: 'Degeneratif' },
+  { id: 'AUTO_IMUN', name: 'Auto Imun' },
+  { id: 'ONKOLOGI', name: 'Onkologi' },
+  { id: 'LAINNYA', name: 'Lainnya' },
+];
+
 const TABLE_COLUMNS_STORAGE_VERSION = 1;
 
 const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
@@ -129,15 +198,22 @@ export default function SessionsPage() {
   const [doctors, setDoctors] = useState<Staff[]>([]);
   const [nurses, setNurses] = useState<Staff[]>([]);
   
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<SessionFilters>({
     status: 'all' as 'all' | 'completed' | 'incomplete',
-    branchId: '',
-    doctorId: '',
-    nurseId: '',
+    branchIds: [] as string[],
+    diagnosisCategories: [] as string[],
+    doctorIds: [] as string[],
+    nurseIds: [] as string[],
     dateFrom: '',
     dateTo: '',
     pelaksanaan: 'all' as 'all' | 'ON_SITE' | 'HOME_CARE',
   });
+
+  // Collapsible state for filter sections
+  const [branchFilterExpanded, setBranchFilterExpanded] = useState(false);
+  const [diagnosisFilterExpanded, setDiagnosisFilterExpanded] = useState(false);
+  const [doctorFilterExpanded, setDoctorFilterExpanded] = useState(false);
+  const [nurseFilterExpanded, setNurseFilterExpanded] = useState(false);
 
   // Export modal states
   const [showExportModal, setShowExportModal] = useState(false);
@@ -274,7 +350,7 @@ export default function SessionsPage() {
         { key: 'adminLayanan', label: 'Admin Layanan' },
         { key: 'doctorName', label: 'Nama Dokter Utama' },
         { key: 'doctorCode', label: 'Kode Dokter' },
-        { key: 'nurseName', label: 'Nama Nakes Utama' },
+        { key: 'nurseName', label: 'Nama Nakes' },
         { key: 'nurseCode', label: 'Kode Nakes' },
         { key: 'allDoctors', label: 'Semua Dokter' },
         { key: 'allNurses', label: 'Semua Nakes' },
@@ -628,6 +704,32 @@ export default function SessionsPage() {
     return String(value);
   };
 
+  const renderStaffList = (
+    staff: Array<{ isPrimary?: boolean; fullName: string; staffCode?: string | null }>,
+    fallback?: string,
+  ) => {
+    const staffList = staff.filter((item) => item.fullName?.trim());
+
+    if (staffList.length === 0) {
+      return <span className={styles.staffName}>{fallback || '-'}</span>;
+    }
+
+    return (
+      <div className={styles.staffList}>
+        {staffList.map((item, index) => (
+          <span
+            key={`${item.fullName}-${item.staffCode || index}`}
+            className={`${styles.staffPill} ${item.isPrimary ? styles.primaryStaffPill : ''}`}
+            title={item.staffCode || undefined}
+          >
+            {item.fullName}
+            {item.isPrimary && <span className={styles.primaryStaffMark}>Utama</span>}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const getTableFieldValue = (sessionDetail: SessionDetail, key: string) => {
     const session = sessionDetail.session;
     const planData = sessionDetail.therapyPlan;
@@ -674,9 +776,30 @@ export default function SessionsPage() {
       boosterType: () => session.boosterPackage?.boosterType ? <span className={styles.boosterTag}>{session.boosterPackage.boosterType}</span> : '-',
       adminLayanan: () => <span className={styles.staffName}>{session.adminLayanan?.fullName || '-'}</span>,
       doctorName: () => <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>,
-      nurseName: () => <span className={styles.staffName}>{session.nurse?.fullName || '-'}</span>,
-      allDoctors: () => <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>,
-      allNurses: () => <span className={styles.staffName}>{session.nurse?.fullName || '-'}</span>,
+      nurseName: () => renderStaffList(
+        session.sessionNurses?.map((item) => ({
+          isPrimary: item.isPrimary,
+          fullName: item.nurse.fullName,
+          staffCode: item.nurse.staffCode,
+        })) || [],
+        session.nurse?.fullName,
+      ),
+      allDoctors: () => renderStaffList(
+        session.sessionDoctors?.map((item) => ({
+          isPrimary: item.isPrimary,
+          fullName: item.doctor.fullName,
+          staffCode: item.doctor.staffCode,
+        })) || [],
+        session.doctor?.fullName,
+      ),
+      allNurses: () => renderStaffList(
+        session.sessionNurses?.map((item) => ({
+          isPrimary: item.isPrimary,
+          fullName: item.nurse.fullName,
+          staffCode: item.nurse.staffCode,
+        })) || [],
+        session.nurse?.fullName,
+      ),
       sistolBefore: () => getVitalValue(sessionDetail, 'SISTOL', 'SEBELUM'),
       diastolBefore: () => getVitalValue(sessionDetail, 'DIASTOL', 'SEBELUM'),
       hrBefore: () => getVitalValue(sessionDetail, 'HR', 'SEBELUM'),
@@ -755,19 +878,11 @@ export default function SessionsPage() {
           api.get('/users/staff/NURSE'),
         ]);
         
-        const doctorsList = doctorsRes.data?.data || [];
-        const nursesList = nursesRes.data?.data || [];
+        const doctorsList: StaffOptionResponse[] = Array.isArray(doctorsRes.data?.data) ? doctorsRes.data.data : [];
+        const nursesList: StaffOptionResponse[] = Array.isArray(nursesRes.data?.data) ? nursesRes.data.data : [];
         
-        setDoctors(doctorsList.map((u: any) => ({
-          id: u.id,
-          fullName: u.profile?.fullName || u.email,
-          role: u.role,
-        })));
-        setNurses(nursesList.map((u: any) => ({
-          id: u.id,
-          fullName: u.profile?.fullName || u.email,
-          role: u.role,
-        })));
+        setDoctors(doctorsList.map(normalizeStaffOption).filter((staff): staff is Staff => Boolean(staff)));
+        setNurses(nursesList.map(normalizeStaffOption).filter((staff): staff is Staff => Boolean(staff)));
       } catch (error) {
         devError('Error loading filter options:', error);
       }
@@ -782,9 +897,18 @@ export default function SessionsPage() {
       const params: any = { page, limit };
       
       // Apply filters
-      if (filters.branchId) params.branchId = filters.branchId;
-      if (filters.doctorId) params.doctorId = filters.doctorId;
-      if (filters.nurseId) params.nurseId = filters.nurseId;
+      if (filters.branchIds && filters.branchIds.length > 0) {
+        params.branchIds = filters.branchIds.join(',');
+      }
+      if (filters.diagnosisCategories && filters.diagnosisCategories.length > 0) {
+        params.diagnosisCategories = filters.diagnosisCategories.join(',');
+      }
+      if (filters.doctorIds.length > 0) {
+        params.doctorIds = filters.doctorIds.join(',');
+      }
+      if (filters.nurseIds.length > 0) {
+        params.nurseIds = filters.nurseIds.join(',');
+      }
       if (filters.dateFrom) params.dateFrom = filters.dateFrom;
       if (filters.dateTo) params.dateTo = filters.dateTo;
       if (filters.status !== 'all') params.status = filters.status;
@@ -816,12 +940,33 @@ export default function SessionsPage() {
     setPage(1); // Reset to first page when filter changes
   };
 
+  const handleMultiFilterChange = (key: MultiFilterKey, value: string, checked: boolean) => {
+    setFilters(prev => {
+      const currentValues = prev[key];
+      const nextValues = checked
+        ? Array.from(new Set([...currentValues, value]))
+        : currentValues.filter((item) => item !== value);
+
+      return {
+        ...prev,
+        [key]: nextValues,
+      };
+    });
+    setPage(1);
+  };
+
+  const clearMultiFilter = (key: MultiFilterKey) => {
+    setFilters(prev => ({ ...prev, [key]: [] }));
+    setPage(1);
+  };
+
   const clearFilters = () => {
     setFilters({
       status: 'all',
-      branchId: '',
-      doctorId: '',
-      nurseId: '',
+      branchIds: [],
+      diagnosisCategories: [],
+      doctorIds: [],
+      nurseIds: [],
       dateFrom: '',
       dateTo: '',
       pelaksanaan: 'all',
@@ -837,9 +982,9 @@ export default function SessionsPage() {
         format: exportFormat,
         fields: exportFields,
         filters: {
-          branchId: filters.branchId || undefined,
-          doctorId: filters.doctorId || undefined,
-          nurseId: filters.nurseId || undefined,
+          branchIds: filters.branchIds.length > 0 ? filters.branchIds : undefined,
+          doctorIds: filters.doctorIds.length > 0 ? filters.doctorIds : undefined,
+          nurseIds: filters.nurseIds.length > 0 ? filters.nurseIds : undefined,
           dateFrom: filters.dateFrom || undefined,
           dateTo: filters.dateTo || undefined,
           status: filters.status !== 'all' ? filters.status : undefined,
@@ -889,6 +1034,7 @@ export default function SessionsPage() {
   // Count active filters
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
     if (key === 'status' || key === 'pelaksanaan') return value !== 'all';
+    if (Array.isArray(value)) return value.length > 0;
     return value !== '';
   }).length;
 
@@ -939,57 +1085,197 @@ export default function SessionsPage() {
               </select>
             </div>
 
-            {/* Branch Filter - Only for SUPER_ADMIN and ADMIN_MANAGER */}
+            {/* Branch Filter - Collapsible for SUPER_ADMIN and ADMIN_MANAGER */}
             {canSeeAllBranches && (
-              <div className={styles.filterGroup}>
+              <div className={`${styles.filterGroup} ${styles.multiFilterGroup} ${styles.wideFilterGroup}`}>
                 <label className={styles.filterLabel}>Cabang</label>
-                <select
-                  className={styles.filterSelect}
-                  value={filters.branchId}
-                  onChange={(e) => handleFilterChange('branchId', e.target.value)}
+                <button
+                  type="button"
+                  className={styles.multiFilterHeader}
+                  onClick={() => setBranchFilterExpanded(!branchFilterExpanded)}
                 >
-                  <option value="">Semua Cabang</option>
-                  {branches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
+                  <span className={styles.multiFilterTitle}>
+                    📍 Cabang ({filters.branchIds.length > 0 ? `${filters.branchIds.length} dipilih` : 'Semua'})
+                  </span>
+                  <span className={`${styles.filterHeaderChevron} ${branchFilterExpanded ? styles.expanded : ''}`}>
+                    ▶
+                  </span>
+                </button>
+                {branchFilterExpanded && (
+                  <div className={styles.multiFilterOptions}>
+                    {branches.map((branch) => (
+                      <label
+                        key={branch.id}
+                        className={`${styles.multiFilterOption} ${filters.branchIds.includes(branch.id) ? styles.selected : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={filters.branchIds.includes(branch.id)}
+                          onChange={(e) => handleMultiFilterChange('branchIds', branch.id, e.target.checked)}
+                        />
+                        <span>{branch.name}</span>
+                      </label>
+                    ))}
+                    {branches.length === 0 && (
+                      <div className={styles.multiFilterEmpty}>Cabang tidak tersedia</div>
+                    )}
+                    {filters.branchIds.length > 0 && (
+                      <button
+                        type="button"
+                        className={styles.multiFilterClear}
+                        onClick={() => clearMultiFilter('branchIds')}
+                      >
+                        Bersihkan Cabang
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Doctor Filter */}
-            <div className={styles.filterGroup}>
-              <label className={styles.filterLabel}>Dokter</label>
-              <select
-                className={styles.filterSelect}
-                value={filters.doctorId}
-                onChange={(e) => handleFilterChange('doctorId', e.target.value)}
+            {/* Diagnosis Category Filter - Collapsible */}
+            <div className={`${styles.filterGroup} ${styles.multiFilterGroup} ${styles.wideFilterGroup}`}>
+              <label className={styles.filterLabel}>Kategori Diagnosa</label>
+              <button
+                type="button"
+                className={styles.multiFilterHeader}
+                onClick={() => setDiagnosisFilterExpanded(!diagnosisFilterExpanded)}
               >
-                <option value="">Semua Dokter</option>
-                {doctors.map((doctor) => (
-                  <option key={doctor.id} value={doctor.id}>
-                    {doctor.fullName}
-                  </option>
-                ))}
-              </select>
+                <span className={styles.multiFilterTitle}>
+                  🏥 Kategori Diagnosa ({filters.diagnosisCategories.length > 0 ? `${filters.diagnosisCategories.length} dipilih` : 'Semua'})
+                </span>
+                <span className={`${styles.filterHeaderChevron} ${diagnosisFilterExpanded ? styles.expanded : ''}`}>
+                  ▶
+                </span>
+              </button>
+              {diagnosisFilterExpanded && (
+                <div className={styles.multiFilterOptions}>
+                  {DIAGNOSIS_CATEGORY_OPTIONS.map((category) => (
+                    <label
+                      key={category.id}
+                      className={`${styles.multiFilterOption} ${filters.diagnosisCategories.includes(category.id) ? styles.selected : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.diagnosisCategories.includes(category.id)}
+                        onChange={(e) => handleMultiFilterChange('diagnosisCategories', category.id, e.target.checked)}
+                      />
+                      <span>{category.name}</span>
+                    </label>
+                  ))}
+                  {filters.diagnosisCategories.length > 0 && (
+                    <button
+                      type="button"
+                      className={styles.multiFilterClear}
+                      onClick={() => clearMultiFilter('diagnosisCategories')}
+                    >
+                      Bersihkan Kategori
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Doctor Filter */}
+            <div className={`${styles.filterGroup} ${styles.multiFilterGroup}`}>
+              <label className={styles.filterLabel}>Dokter</label>
+              <button
+                type="button"
+                className={styles.multiFilterHeader}
+                onClick={() => setDoctorFilterExpanded(!doctorFilterExpanded)}
+              >
+                <span className={styles.multiFilterTitle}>
+                  {getSelectedFilterLabel(filters.doctorIds, doctors, 'Semua Dokter')}
+                </span>
+                <span className={`${styles.filterHeaderChevron} ${doctorFilterExpanded ? styles.expanded : ''}`}>
+                  â–¶
+                </span>
+              </button>
+              {doctorFilterExpanded && (
+                <div className={styles.multiFilterOptions}>
+                  {doctors.length === 0 ? (
+                    <div className={styles.multiFilterEmpty}>Dokter tidak tersedia</div>
+                  ) : (
+                    doctors.map((doctor) => {
+                      const checked = filters.doctorIds.includes(doctor.id);
+
+                      return (
+                        <label
+                          key={doctor.id}
+                          className={`${styles.multiFilterOption} ${checked ? styles.selected : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => handleMultiFilterChange('doctorIds', doctor.id, e.target.checked)}
+                          />
+                          <span>{doctor.fullName}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                  {filters.doctorIds.length > 0 && (
+                    <button
+                      type="button"
+                      className={styles.multiFilterClear}
+                      onClick={() => clearMultiFilter('doctorIds')}
+                    >
+                      Bersihkan Dokter
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Nurse Filter */}
-            <div className={styles.filterGroup}>
+            <div className={`${styles.filterGroup} ${styles.multiFilterGroup}`}>
               <label className={styles.filterLabel}>Nakes</label>
-              <select
-                className={styles.filterSelect}
-                value={filters.nurseId}
-                onChange={(e) => handleFilterChange('nurseId', e.target.value)}
+              <button
+                type="button"
+                className={styles.multiFilterHeader}
+                onClick={() => setNurseFilterExpanded(!nurseFilterExpanded)}
               >
-                <option value="">Semua Nakes</option>
-                {nurses.map((nurse) => (
-                  <option key={nurse.id} value={nurse.id}>
-                    {nurse.fullName}
-                  </option>
-                ))}
-              </select>
+                <span className={styles.multiFilterTitle}>
+                  {getSelectedFilterLabel(filters.nurseIds, nurses, 'Semua Nakes')}
+                </span>
+                <span className={`${styles.filterHeaderChevron} ${nurseFilterExpanded ? styles.expanded : ''}`}>
+                  â–¶
+                </span>
+              </button>
+              {nurseFilterExpanded && (
+                <div className={styles.multiFilterOptions}>
+                  {nurses.length === 0 ? (
+                    <div className={styles.multiFilterEmpty}>Nakes tidak tersedia</div>
+                  ) : (
+                    nurses.map((nurse) => {
+                      const checked = filters.nurseIds.includes(nurse.id);
+
+                      return (
+                        <label
+                          key={nurse.id}
+                          className={`${styles.multiFilterOption} ${checked ? styles.selected : ''}`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => handleMultiFilterChange('nurseIds', nurse.id, e.target.checked)}
+                          />
+                          <span>{nurse.fullName}</span>
+                        </label>
+                      );
+                    })
+                  )}
+                  {filters.nurseIds.length > 0 && (
+                    <button
+                      type="button"
+                      className={styles.multiFilterClear}
+                      onClick={() => clearMultiFilter('nurseIds')}
+                    >
+                      Bersihkan Nakes
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Date From */}
@@ -1390,19 +1676,19 @@ export default function SessionsPage() {
                           Status: {filters.status === 'completed' ? 'Selesai' : 'Belum Selesai'}
                         </span>
                       )}
-                      {filters.branchId && (
+                      {filters.branchIds.length > 0 && (
                         <span className={styles.filterTag}>
-                          Cabang: {branches.find(b => b.id === filters.branchId)?.name || filters.branchId}
+                          Cabang: {filters.branchIds.map(id => branches.find(b => b.id === id)?.name || id).join(', ')}
                         </span>
                       )}
-                      {filters.doctorId && (
+                      {filters.doctorIds.length > 0 && (
                         <span className={styles.filterTag}>
-                          Dokter: {doctors.find(d => d.id === filters.doctorId)?.fullName || filters.doctorId}
+                          Dokter: {filters.doctorIds.map(id => doctors.find(d => d.id === id)?.fullName || id).join(', ')}
                         </span>
                       )}
-                      {filters.nurseId && (
+                      {filters.nurseIds.length > 0 && (
                         <span className={styles.filterTag}>
-                          Nakes: {nurses.find(n => n.id === filters.nurseId)?.fullName || filters.nurseId}
+                          Nakes: {filters.nurseIds.map(id => nurses.find(n => n.id === id)?.fullName || id).join(', ')}
                         </span>
                       )}
                       {filters.dateFrom && (

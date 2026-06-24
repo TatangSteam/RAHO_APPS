@@ -81,6 +81,19 @@ export interface SessionMember {
 export interface SessionStaff {
   userId: string;
   fullName: string;
+  staffCode?: string | null;
+}
+
+export interface SessionDoctorAssignment {
+  id: string;
+  isPrimary: boolean;
+  doctor: SessionStaff;
+}
+
+export interface SessionNurseAssignment {
+  id: string;
+  isPrimary: boolean;
+  nurse: SessionStaff;
 }
 
 export interface SessionBoosterPackage {
@@ -112,6 +125,8 @@ export interface Session {
   adminLayanan: SessionStaff;
   doctor: SessionStaff;
   nurse: SessionStaff;
+  sessionDoctors?: SessionDoctorAssignment[];
+  sessionNurses?: SessionNurseAssignment[];
   boosterPackage: SessionBoosterPackage | null;
 }
 

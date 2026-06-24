@@ -8,6 +8,9 @@ import type { Member } from '@/types/member';
 import { useAuthStore } from '@/stores/authStore';
 import { LookupMemberModal } from '@/components/members/LookupMemberModal';
 import ExportMembersModal from '@/components/members/ExportMembersModal';
+import { ColumnConfigModal } from '@/components/members/ColumnConfigModal';
+import { MemberTableCell } from '@/components/members/MemberTableCell';
+import { useMemberColumns } from '@/hooks/useMemberColumns';
 import { devLog, devError } from '@/lib/logger';
 
 export default function MembersPage() {
@@ -27,6 +30,10 @@ export default function MembersPage() {
 
   const [showLookupModal, setShowLookupModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [showColumnConfigModal, setShowColumnConfigModal] = useState(false);
+
+  // Custom columns hook
+  const { columns, visibleColumns, toggleColumn, resetColumns } = useMemberColumns();
 
   // Check if user is ADMIN_MANAGER (can see multiple branches they manage)
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
@@ -181,6 +188,15 @@ export default function MembersPage() {
             <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Kelola data member dan akses lintas cabang</p>
           </div>
           <div className="members-page-actions">
+            {/* Column Configuration Button */}
+            <button
+              onClick={() => setShowColumnConfigModal(true)}
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              title="Konfigurasi kolom tabel"
+            >
+              ⚙️ Kolom
+            </button>
             {/* Hide "Export Data" for DOCTOR and NURSE */}
             {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
               <button
@@ -360,12 +376,18 @@ export default function MembersPage() {
           <table>
             <thead>
               <tr>
-                <th>No. Member</th>
-                <th>Nama & Cabang</th>
-                <th>Telepon</th>
-                <th style={{ textAlign: 'center' }}>Voucher BASIC</th>
-                <th style={{ textAlign: 'center' }}>Status</th>
-                <th style={{ textAlign: 'center' }}>Aksi</th>
+                {visibleColumns.map((column) => (
+                  <th
+                    key={column.id}
+                    style={{
+                      textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                        ? 'center'
+                        : 'left'
+                    }}
+                  >
+                    {column.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -375,130 +397,28 @@ export default function MembersPage() {
                   style={{ cursor: 'pointer' }}
                   onClick={() => router.push(`/members/${member.memberId}`)}
                 >
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo || 'N/A'}</span>
-                      {member.isLintas && (
-                        <span className="badge badge-cyan">🔗 Lintas</span>
-                      )}
-                    </div>
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{ 
-                                width: '40px', 
-                                height: '40px', 
-                                borderRadius: '50%', 
-                                background: photoUrls[member.memberId] ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #2563eb)', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center', 
-                                color: 'white', 
-                                fontWeight: '700',
-                                fontSize: '16px',
-                                flexShrink: 0,
-                                position: 'relative',
-                                overflow: 'visible',
-                                border: '2px solid var(--surface-border)'
-                              }}>
-                                {photoUrls[member.memberId] ? (
-                                  <img
-                                    src={photoUrls[member.memberId]}
-                                    alt={member.fullName || 'Member'}
-                                    style={{
-                                      width: '100%',
-                                      height: '100%',
-                                      objectFit: 'cover',
-                                      borderRadius: '50%'
-                                    }}
-                                  />
-                                ) : (
-                                  (member.fullName || 'M').charAt(0).toUpperCase()
-                                )}
-                                {member.isActive && (
-                                  <span style={{
-                                    position: 'absolute',
-                                    bottom: '0',
-                                    right: '0',
-                                    width: '12px',
-                                    height: '12px',
-                                    background: '#22c55e',
-                                    border: '2px solid var(--surface-card)',
-                                    borderRadius: '50%',
-                                    boxShadow: '0 0 0 2px var(--surface-card)'
-                                  }}></span>
-                                )}
-                              </div>
-                              <div>
-                                <div style={{ fontWeight: '600', marginBottom: '2px' }}>{member.fullName || 'Nama tidak tersedia'}</div>
-                                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                                  🏢 {member.registrationBranch || 'N/A'}
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <span style={{ fontSize: '14px' }}>📞 {member.phone || '-'}</span>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <div style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              width: '48px',
-                              height: '48px',
-                              background: 'linear-gradient(135deg, rgba(245,158,11,0.2), rgba(217,119,6,0.2))',
-                              border: '2px solid rgba(245,158,11,0.3)',
-                              borderRadius: '12px',
-                              fontWeight: '700',
-                              fontSize: '18px',
-                              color: '#f59e0b'
-                            }}>
-                              {member.basicPackageCount || 0}
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            {member.isDeceased ? (
-                              <span className="badge badge-danger">
-                                <span style={{ width: '6px', height: '6px', background: '#ef4444', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }}></span>
-                                Meninggal
-                              </span>
-                            ) : member.isActive ? (
-                              <span className="badge badge-success">
-                                <span style={{ width: '6px', height: '6px', background: '#22c55e', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }}></span>
-                                Aktif
-                              </span>
-                            ) : (
-                              <span className="badge badge-gray">
-                                <span style={{ width: '6px', height: '6px', background: '#64748b', borderRadius: '50%', display: 'inline-block', marginRight: '6px' }}></span>
-                                Nonaktif
-                              </span>
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                router.push(`/members/${member.memberId}`);
-                              }}
-                              className="btn btn-sm btn-primary"
-                              style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '6px',
-                                padding: '8px 16px',
-                                fontWeight: '600'
-                              }}
-                              title="Lihat detail member"
-                          >
-                            👁️ Lihat Detail
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                  {visibleColumns.map((column) => (
+                    <td
+                      key={column.id}
+                      style={{
+                        textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                          ? 'center'
+                          : 'left'
+                      }}
+                    >
+                      <MemberTableCell
+                        columnId={column.id}
+                        member={member}
+                        photoUrl={photoUrls[member.memberId]}
+                        onNavigate={() => router.push(`/members/${member.memberId}`)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
               {/* Pagination */}
               {totalPages > 1 && (
@@ -539,6 +459,15 @@ export default function MembersPage() {
           onClose={() => setShowExportModal(false)}
           currentSearch={debouncedSearch}
           currentStatus={status}
+        />
+
+        {/* Modal Column Config */}
+        <ColumnConfigModal
+          isOpen={showColumnConfigModal}
+          onClose={() => setShowColumnConfigModal(false)}
+          columns={columns}
+          onToggleColumn={toggleColumn}
+          onReset={resetColumns}
         />
     </>
   );

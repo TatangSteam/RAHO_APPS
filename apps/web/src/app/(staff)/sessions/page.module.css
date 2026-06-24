@@ -119,6 +119,137 @@
   border-top: 1px solid var(--surface-border);
 }
 
+.multiFilterGroup {
+  position: relative;
+}
+
+.multiFilterHeader {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.multiFilterHeader:hover {
+  border-color: rgba(148, 163, 184, 0.32);
+  background: var(--surface-hover);
+}
+
+.multiFilterHeader:focus-visible {
+  outline: none;
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.multiFilterTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.multiFilterSummary {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.filterHeaderChevron {
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  transition: transform var(--transition-fast);
+}
+
+.filterHeaderChevron.expanded {
+  transform: rotate(90deg);
+}
+
+.multiFilterOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.multiFilterOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 7px 10px;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: all var(--transition-fast);
+}
+
+.multiFilterOption:hover {
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.32);
+  background: var(--surface-hover);
+}
+
+.multiFilterOption.selected {
+  color: var(--color-primary-400);
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(59, 130, 246, 0.35);
+}
+
+.multiFilterOption input {
+  accent-color: var(--color-primary-500);
+}
+
+.multiFilterClear {
+  min-height: 34px;
+  padding: 7px 12px;
+  border: 1px dashed var(--surface-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  transition: all var(--transition-fast);
+}
+
+.multiFilterClear:hover {
+  color: var(--text-primary);
+  border-color: rgba(148, 163, 184, 0.35);
+  background: var(--surface-hover);
+}
+
+.multiFilterEmpty {
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 /* Column Panel */
 .columnPanel {
   background: var(--surface-card);
@@ -353,24 +484,24 @@
 
 .sessionsTable thead th {
   padding: 12px 14px;
-  background: rgba(15, 23, 42, 0.78);
+  background: var(--surface-card);
   border-top: 1px solid var(--surface-border);
   border-bottom: 1px solid var(--surface-border);
   text-align: left;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-secondary);
+  color: var(--text-primary);
   text-transform: uppercase;
-  letter-spacing: 0;
+  letter-spacing: 0.035em;
   white-space: nowrap;
   vertical-align: middle;
 }
 
 .groupHeaderRow th {
   padding: 9px 14px 8px;
-  background: rgba(59, 130, 246, 0.1);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0.08));
   border-bottom: 0;
-  color: var(--color-primary-400);
+  color: var(--color-primary-500);
   font-size: 0.68rem;
   font-weight: 800;
   text-align: center;
@@ -482,12 +613,12 @@
   position: sticky;
   left: 0;
   z-index: 11;
-  background: rgba(15, 23, 42, 0.94);
+  background: var(--surface-card);
   box-shadow: 10px 0 18px rgba(0, 0, 0, 0.16);
 }
 
 .sessionsTable thead .groupHeaderRow th:first-child {
-  background: rgba(59, 130, 246, 0.16);
+  background: linear-gradient(180deg, rgba(59, 130, 246, 0.2), rgba(59, 130, 246, 0.1));
 }
 
 /* Table Cell Specific Styles */
@@ -665,6 +796,47 @@
   color: var(--text-primary);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.staffList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 260px;
+}
+
+.staffPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.primaryStaffPill {
+  color: var(--color-primary-400);
+  background: rgba(59, 130, 246, 0.13);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.primaryStaffMark {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.18);
+  color: inherit;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 
 .branchCell {

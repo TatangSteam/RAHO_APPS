@@ -63,7 +63,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Sesi Terapi',
         href: '/sessions',
         icon: <Activity size={20} />,
-        roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
     ],
   },

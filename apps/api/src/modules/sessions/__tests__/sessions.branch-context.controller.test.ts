@@ -1,3 +1,4 @@
+/// <reference types="jest" />
 import type { NextFunction, Request, Response } from 'express';
 import { Role } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';

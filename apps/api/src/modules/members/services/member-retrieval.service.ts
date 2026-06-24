@@ -254,6 +254,33 @@ export class MemberRetrievalService {
           },
           take: 1,
         },
+        encounters: {
+          include: {
+            sessions: {
+              select: {
+                id: true,
+                createdAt: true,
+                isCompleted: true,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+        diagnoses: {
+          select: {
+            diagnosa: true,
+            icdPrimer: true,
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -704,6 +731,20 @@ export class MemberRetrievalService {
     // Check if member has cross-branch access
     const isLintas = member.branchAccesses && member.branchAccesses.length > 0;
 
+    // Flatten all sessions from encounters
+    const allSessions = member.encounters?.flatMap((e: any) => e.sessions || []) || [];
+    
+    // Calculate session count
+    const sessionCount = allSessions.length;
+
+    // Get last infusion date (most recent completed session)
+    const lastInfusionSession = allSessions.find((s: any) => s.isCompleted === true);
+    const lastInfusionDate = lastInfusionSession?.createdAt?.toISOString() || null;
+
+    // Get primary diagnosis
+    const primaryDiagnosis = member.diagnoses?.[0]?.diagnosa || null;
+    const primaryDiagnosisIcd = member.diagnoses?.[0]?.icdPrimer || null;
+
     return {
       memberId: member.id,
       memberNo: member.memberNo,
@@ -713,6 +754,10 @@ export class MemberRetrievalService {
       age: calculateAge(member.dateOfBirth),
       voucherCount: member.voucherCount || 0,
       basicPackageCount: basicVoucherCount,
+      sessionCount,
+      lastInfusionDate,
+      primaryDiagnosis,
+      primaryDiagnosisIcd,
       isActive: member.isActive,
       isDeceased: member.isDeceased,
       isLintas,

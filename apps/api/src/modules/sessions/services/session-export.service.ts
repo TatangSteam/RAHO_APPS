@@ -8,12 +8,15 @@ export interface SessionExportOptions {
   format: 'csv' | 'json' | 'xlsx';
   filters?: {
     branchId?: string;
+    branchIds?: string[];
     dateFrom?: string;
     dateTo?: string;
     status?: string;
     pelaksanaan?: string;
     doctorId?: string;
+    doctorIds?: string[];
     nurseId?: string;
+    nurseIds?: string[];
     memberId?: string;
   };
   groupBy?: 'date' | 'member' | 'doctor' | 'none';
@@ -112,6 +115,9 @@ export class SessionExportService {
   ) {
     // Build where clause based on role
     const where: any = {};
+    const addAndFilter = (condition: any) => {
+      where.AND = Array.isArray(where.AND) ? [...where.AND, condition] : [condition];
+    };
 
     if (role === Role.SUPER_ADMIN || role === Role.ADMIN_MANAGER) {
       // Can see all sessions
@@ -147,17 +153,43 @@ export class SessionExportService {
         where.pelaksanaan = options.filters.pelaksanaan;
       }
 
-      if (options.filters.doctorId) {
-        where.doctorId = options.filters.doctorId;
+      const selectedDoctorIds = options.filters.doctorIds?.length
+        ? options.filters.doctorIds
+        : options.filters.doctorId
+          ? [options.filters.doctorId]
+          : [];
+
+      if (selectedDoctorIds.length > 0) {
+        addAndFilter({
+          OR: [
+            { doctorId: { in: selectedDoctorIds } },
+            { sessionDoctors: { some: { doctorId: { in: selectedDoctorIds } } } },
+          ],
+        });
       }
 
-      if (options.filters.nurseId) {
-        where.nurseId = options.filters.nurseId;
+      const selectedNurseIds = options.filters.nurseIds?.length
+        ? options.filters.nurseIds
+        : options.filters.nurseId
+          ? [options.filters.nurseId]
+          : [];
+
+      if (selectedNurseIds.length > 0) {
+        addAndFilter({
+          OR: [
+            { nurseId: { in: selectedNurseIds } },
+            { sessionNurses: { some: { nurseId: { in: selectedNurseIds } } } },
+          ],
+        });
       }
 
       // Branch filter for SUPER_ADMIN and ADMIN_MANAGER
-      if (options.filters.branchId && (role === Role.SUPER_ADMIN || role === Role.ADMIN_MANAGER)) {
-        where.branchId = options.filters.branchId;
+      if (role === Role.SUPER_ADMIN || role === Role.ADMIN_MANAGER) {
+        if (options.filters.branchIds?.length) {
+          where.branchId = { in: options.filters.branchIds };
+        } else if (options.filters.branchId) {
+          where.branchId = options.filters.branchId;
+        }
       }
 
       if (options.filters.memberId) {

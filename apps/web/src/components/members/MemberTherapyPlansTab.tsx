@@ -764,7 +764,13 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         )}
                       </div>
                     </div>
-                    {setStats.history === 0 && (setStats.available > 0 || setStats.used === 0) && (
+                    {/* Show Edit Set button for:
+                        - SUPER_ADMIN: always (can edit any active set, even if used or has history)
+                        - Other roles: only if no history and (available > 0 or used === 0) */}
+                    {(
+                      user?.role === 'SUPER_ADMIN' ||
+                      (setStats.history === 0 && (setStats.available > 0 || setStats.used === 0))
+                    ) && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -775,23 +781,38 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                           fontSize: '12px',
                           fontWeight: '600',
                           borderRadius: '6px',
-                          border: '1px solid rgba(59,130,246,0.3)',
-                          background: 'rgba(59,130,246,0.1)',
-                          color: '#3b82f6',
+                          border: user?.role === 'SUPER_ADMIN' 
+                            ? '1px solid rgba(168,85,247,0.4)' 
+                            : '1px solid rgba(59,130,246,0.3)',
+                          background: user?.role === 'SUPER_ADMIN'
+                            ? 'rgba(168,85,247,0.12)'
+                            : 'rgba(59,130,246,0.1)',
+                          color: user?.role === 'SUPER_ADMIN' ? '#a855f7' : '#3b82f6',
                           cursor: 'pointer',
                           flexShrink: 0,
                           transition: 'all 0.2s',
                         }}
                         onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(59,130,246,0.2)';
-                          e.currentTarget.style.borderColor = 'rgba(59,130,246,0.5)';
+                          if (user?.role === 'SUPER_ADMIN') {
+                            e.currentTarget.style.background = 'rgba(168,85,247,0.2)';
+                            e.currentTarget.style.borderColor = 'rgba(168,85,247,0.6)';
+                          } else {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.2)';
+                            e.currentTarget.style.borderColor = 'rgba(59,130,246,0.5)';
+                          }
                         }}
                         onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
-                          e.currentTarget.style.borderColor = 'rgba(59,130,246,0.3)';
+                          if (user?.role === 'SUPER_ADMIN') {
+                            e.currentTarget.style.background = 'rgba(168,85,247,0.12)';
+                            e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)';
+                          } else {
+                            e.currentTarget.style.background = 'rgba(59,130,246,0.1)';
+                            e.currentTarget.style.borderColor = 'rgba(59,130,246,0.3)';
+                          }
                         }}
+                        title={user?.role === 'SUPER_ADMIN' ? 'Super Admin: Dapat mengedit therapy plan set kapan saja' : 'Edit therapy plan set'}
                       >
-                        Edit Set
+                        {user?.role === 'SUPER_ADMIN' && '⚡ '}Edit Set
                       </button>
                     )}
                   </button>
