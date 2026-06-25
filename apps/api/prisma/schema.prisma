@@ -1737,7 +1737,7 @@ model ChatMessage {
 
 model AuditLog {
   id         String      @id @default(cuid())
-  userId     String
+  userId     String?
   branchId   String? // Branch where action occurred (null for SUPER_ADMIN/ADMIN_MANAGER)
   action     AuditAction
   resource   String
@@ -1747,7 +1747,7 @@ model AuditLog {
   userAgent  String?
   createdAt  DateTime    @default(now())
 
-  user   User    @relation(fields: [userId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   branch Branch? @relation(fields: [branchId], references: [id])
 
   @@index([userId, createdAt])

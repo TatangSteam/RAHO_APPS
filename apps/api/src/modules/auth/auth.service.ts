@@ -1,9 +1,10 @@
 import bcrypt from 'bcryptjs';
+import { AuditAction } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
+import { logAudit } from '@utils/auditLog';
 import { LoginInput } from './auth.schema';
-import { AuditAction } from '@prisma/client';
 
 export interface AuthUser {
   userId: string;
@@ -15,7 +16,9 @@ export interface AuthUser {
   staffCode: string | null;
 }
 
-// ── Login ─────────────────────────────────────────────────────
+function getAuditedBranchId(user: { role: string; branchId: string | null }) {
+  return user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null;
+}
 
 export async function loginService(input: LoginInput, ipAddress?: string, userAgent?: string) {
   const user = await prisma.user.findUnique({
@@ -27,83 +30,64 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
   });
 
   if (!user || !user.isActive) {
-    // Create audit log for FAILED_LOGIN (user not found or inactive) - fire-and-forget
-    if (user) {
-      prisma.auditLog.create({
-        data: {
-          userId: user.id,
-          branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
-          action: 'FAILED_LOGIN' as AuditAction,
-          resource: 'Auth',
-          resourceId: user.id,
-          meta: {
-            email: input.email,
-            reason: !user.isActive ? 'Account inactive' : 'User not found',
-          },
-          ipAddress: ipAddress || 'unknown',
-          userAgent: userAgent || 'unknown',
-        },
-      }).catch((error) => {
-        console.error('❌ Failed to create FAILED_LOGIN audit log:', error);
-      });
-    }
-    
+    logAudit({
+      userId: user?.id || null,
+      branchId: user ? getAuditedBranchId(user) : null,
+      action: AuditAction.FAILED_LOGIN,
+      resource: 'Auth',
+      resourceId: user?.id || input.email,
+      meta: {
+        attemptedEmail: input.email,
+        reason: user && !user.isActive ? 'Account inactive' : 'User not found',
+      },
+      ipAddress: ipAddress || 'unknown',
+      userAgent: userAgent || 'unknown',
+    }).catch(() => void 0);
+
     throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
   }
 
   const isPasswordValid = await bcrypt.compare(input.password, user.password);
   if (!isPasswordValid) {
-    // Create audit log for FAILED_LOGIN (fire-and-forget)
-    prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        branchId: user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER' ? user.branchId : null,
-        action: 'FAILED_LOGIN' as AuditAction,
-        resource: 'Auth',
-        resourceId: user.id,
-        meta: {
-          email: input.email,
-          reason: 'Invalid password',
-        },
-        ipAddress: ipAddress || 'unknown',
-        userAgent: userAgent || 'unknown',
+    logAudit({
+      userId: user.id,
+      branchId: getAuditedBranchId(user),
+      action: AuditAction.FAILED_LOGIN,
+      resource: 'Auth',
+      resourceId: user.id,
+      meta: {
+        attemptedEmail: input.email,
+        reason: 'Invalid password',
       },
-    }).catch((error) => {
-      console.error('❌ Failed to create FAILED_LOGIN audit log:', error);
-    });
+      ipAddress: ipAddress || 'unknown',
+      userAgent: userAgent || 'unknown',
+    }).catch(() => void 0);
 
     throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
   }
 
-  // Fire-and-forget update lastLoginAt
   prisma.user
     .update({ where: { id: user.id }, data: { lastLoginAt: new Date() } })
     .catch(() => void 0);
 
-  // Create audit log for LOGIN (AWAIT to ensure it's saved)
   try {
-    // Only include branchId if user is not SUPER_ADMIN or ADMIN_MANAGER
-    const shouldIncludeBranch = user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER';
-    
-    const auditLog = await prisma.auditLog.create({
-      data: {
-        userId: user.id,
-        branchId: shouldIncludeBranch ? user.branchId : null,
-        action: 'LOGIN',
-        resource: 'Auth',
-        resourceId: user.id,
-        meta: {
-          email: user.email,
-          role: user.role,
-          branchId: user.branchId,
-        },
-        ipAddress: ipAddress || 'unknown',
-        userAgent: userAgent || 'unknown',
+    await logAudit({
+      userId: user.id,
+      branchId: getAuditedBranchId(user),
+      action: AuditAction.LOGIN,
+      resource: 'Auth',
+      resourceId: user.id,
+      meta: {
+        email: user.email,
+        role: user.role,
+        branchId: user.branchId,
       },
+      ipAddress: ipAddress || 'unknown',
+      userAgent: userAgent || 'unknown',
     });
-    console.log('✅ LOGIN audit log created:', auditLog.id);
+    console.log('LOGIN audit log created');
   } catch (error) {
-    console.error('❌ Failed to create LOGIN audit log:', error);
+    console.error('Failed to create LOGIN audit log:', error);
   }
 
   const payload: JwtPayload = {
@@ -126,8 +110,6 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     },
   };
 }
-
-// ── Refresh ───────────────────────────────────────────────────
 
 export async function refreshService(refreshToken: string) {
   let decoded: { userId: string; email: string };
@@ -162,8 +144,6 @@ export async function refreshService(refreshToken: string) {
 
   return generateTokenPair(payload);
 }
-
-// ── Me ────────────────────────────────────────────────────────
 
 export async function getMeService(userId: string) {
   const user = await prisma.user.findUnique({

@@ -30,7 +30,7 @@ interface TherapyPlanRow extends CreateTherapyPlanInput {
 interface TherapyGroup {
   id: string;
   name: string;
-  therapyNumber: number;
+  setNumber: number;
   collapsed: boolean;
 }
 
@@ -56,6 +56,73 @@ export default function BulkTherapyPlanModal({
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [numGroupsInput, setNumGroupsInput] = useState<string>('1');
   const [rowsPerGroupInput, setRowsPerGroupInput] = useState<string>('3');
+
+  const generatedKeteranganPattern = /^Terapi ke-\d+\s*-\s*Set \d+$/i;
+
+  const getStartTherapyNumber = () => {
+    if (!packageSummary) return 1;
+
+    const sessionsCompleted = packageSummary.package?.vouchersUsed || 0;
+    const unusedPlans = packageSummary.therapyPlans.existing;
+    return sessionsCompleted + unusedPlans + 1;
+  };
+
+  const buildKeterangan = (therapyNumber: number, setNumber: number) =>
+    `Terapi ke-${therapyNumber} - Set ${setNumber}`;
+
+  const createDefaultPlanRow = (
+    rowId: string,
+    groupId: string,
+    therapyNumber: number,
+    setNumber: number
+  ): TherapyPlanRow => ({
+    rowId,
+    groupId,
+    therapyNumber,
+    keterangan: buildKeterangan(therapyNumber, setNumber),
+    ifaType: 'ifa250',
+    ifa250: 1,
+    ifa500: undefined,
+    hho: undefined,
+    h2: undefined,
+    no: undefined,
+    gaso: undefined,
+    o2: undefined,
+    o3: undefined,
+    edta: undefined,
+    mb: undefined,
+    h2s: undefined,
+    kcl: undefined,
+    jmlNb: undefined,
+    ifaSubstances: createDefaultIfaSubstances(),
+    ifaSubstanceTotalMl: 2.5,
+  });
+
+  const renumberPlanRows = (plans: TherapyPlanRow[], groups: TherapyGroup[]) => {
+    let globalIndex = 0;
+    const nextPlans: TherapyPlanRow[] = [];
+
+    groups.forEach((group) => {
+      plans
+        .filter((plan) => plan.groupId === group.id)
+        .forEach((plan) => {
+          const therapyNumber = getStartTherapyNumber() + globalIndex;
+          const isGeneratedKeterangan =
+            !plan.keterangan || generatedKeteranganPattern.test(plan.keterangan.trim());
+
+          nextPlans.push({
+            ...plan,
+            therapyNumber,
+            keterangan: isGeneratedKeterangan
+              ? buildKeterangan(therapyNumber, group.setNumber)
+              : plan.keterangan,
+          });
+          globalIndex += 1;
+        });
+    });
+
+    return nextPlans;
+  };
 
   useEffect(() => {
     setMounted(true);
@@ -128,21 +195,23 @@ export default function BulkTherapyPlanModal({
 
     for (let g = 0; g < numGroups; g++) {
       const groupId = `group-${Date.now()}-${g}`;
-      const therapyNum = startNumber + g;
+      const setNumber = g + 1;
       
       groups.push({
         id: groupId,
-        name: `Terapi #${therapyNum}`,
-        therapyNumber: therapyNum,
+        name: `Set #${setNumber}`,
+        setNumber,
         collapsed: false,
       });
 
       for (let i = 0; i < rowsPerGroup; i++) {
+        const therapyNum = startNumber + g * rowsPerGroup + i;
+
         plans.push({
           rowId: `row-${Date.now()}-${g}-${i}`,
           groupId: groupId,
           therapyNumber: therapyNum,
-          keterangan: `Terapi ke-${therapyNum} - Set ${i + 1}`,
+          keterangan: `Terapi ke-${therapyNum} - Set ${setNumber}`,
           ifaType: 'ifa250',
           ifa250: 1,
           ifa500: undefined,
@@ -200,21 +269,23 @@ export default function BulkTherapyPlanModal({
 
     for (let g = 0; g < numGroups; g++) {
       const groupId = `group-${Date.now()}-${g}`;
-      const therapyNum = startNumber + g;
+      const setNumber = g + 1;
       
       groups.push({
         id: groupId,
-        name: `Terapi #${therapyNum}`,
-        therapyNumber: therapyNum,
+        name: `Set #${setNumber}`,
+        setNumber,
         collapsed: false,
       });
 
       for (let i = 0; i < rowsPerGroup; i++) {
+        const therapyNum = startNumber + g * rowsPerGroup + i;
+
         plans.push({
           rowId: `row-${Date.now()}-${g}-${i}`,
           groupId: groupId,
           therapyNumber: therapyNum,
-          keterangan: `Terapi ke-${therapyNum} - Set ${i + 1}`,
+          keterangan: `Terapi ke-${therapyNum} - Set ${setNumber}`,
           ifaType: 'ifa250',
           ifa250: 1,
           ifa500: undefined,
@@ -251,46 +322,34 @@ export default function BulkTherapyPlanModal({
     const group = therapyGroups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const groupPlans = therapyPlans.filter((p) => p.groupId === groupId);
-    const setNumber = groupPlans.length + 1;
-
     const newRow: TherapyPlanRow = {
-      rowId: `row-${Date.now()}`,
-      groupId: groupId,
-      therapyNumber: group.therapyNumber,
-      keterangan: `Terapi ke-${group.therapyNumber} - Set ${setNumber}`,
-      ifaType: 'ifa250',
-      ifa250: 1,
-      ifa500: undefined,
-      hho: undefined,
-      h2: undefined,
-      no: undefined,
-      gaso: undefined,
-      o2: undefined,
-      o3: undefined,
-      edta: undefined,
-      mb: undefined,
-      h2s: undefined,
-      kcl: undefined,
-      jmlNb: undefined,
-      ifaSubstances: createDefaultIfaSubstances(),
-      ifaSubstanceTotalMl: 2.5,
+      ...createDefaultPlanRow(`row-${Date.now()}`, groupId, 0, group.setNumber),
     };
 
-    setTherapyPlans((prev) => [...prev, newRow]);
-    showToast.success('Baris baru ditambahkan ke grup');
+    setTherapyPlans((prev) => {
+      const nextPlans = [...prev];
+      const lastGroupRowIndex = nextPlans.map((plan) => plan.groupId).lastIndexOf(groupId);
+      nextPlans.splice(lastGroupRowIndex + 1, 0, newRow);
+      return renumberPlanRows(nextPlans, therapyGroups);
+    });
+    showToast.success('Terapi baru ditambahkan ke set');
   };
 
   const removeRow = (rowId: string, groupId: string) => {
     const groupPlans = therapyPlans.filter((p) => p.groupId === groupId);
     
     if (groupPlans.length === 1) {
-      showToast.error('Minimal harus ada 1 baris per grup');
+      showToast.error('Minimal harus ada 1 terapi per set');
       return;
     }
 
-    setTherapyPlans((prev) => prev.filter((p) => p.rowId !== rowId));
-    showToast.success('Baris dihapus');
+    setTherapyPlans((prev) =>
+      renumberPlanRows(
+        prev.filter((p) => p.rowId !== rowId),
+        therapyGroups
+      )
+    );
+    showToast.success('Terapi dihapus');
   };
 
   const updateTherapyPlan = (
@@ -353,7 +412,7 @@ export default function BulkTherapyPlanModal({
       )
     );
 
-    showToast.success('Data berhasil disalin ke baris berikutnya');
+    showToast.success('Data berhasil disalin ke terapi berikutnya');
   };
 
   const copyToAllBelow = (rowId: string) => {
@@ -388,7 +447,7 @@ export default function BulkTherapyPlanModal({
       })
     );
 
-    showToast.success('Data berhasil disalin ke semua baris di bawah');
+    showToast.success('Data berhasil disalin ke semua terapi di bawah');
   };
 
   const validateTherapyPlans = (): boolean => {
@@ -575,7 +634,7 @@ export default function BulkTherapyPlanModal({
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white flex items-center gap-2">
                   Buat Set Therapy Plan
                   <span className="text-xs font-semibold px-3 py-1 rounded-full bg-green-500 text-white">
-                    {therapyPlans.length} Baris
+                    {therapyPlans.length} Terapi
                   </span>
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
@@ -600,7 +659,7 @@ export default function BulkTherapyPlanModal({
               <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Jumlah Grup:
+                    Jumlah Set:
                   </label>
                   <input
                     type="number"
@@ -614,7 +673,7 @@ export default function BulkTherapyPlanModal({
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    Baris per Grup:
+                    Terapi per Set:
                   </label>
                   <input
                     type="number"
@@ -628,7 +687,7 @@ export default function BulkTherapyPlanModal({
                 </div>
                 <div className="flex-1" />
                 <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                  Total: <span className="font-bold text-lg text-green-600 dark:text-green-400">{therapyGroups.length}</span> grup, <span className="font-bold text-lg text-blue-600 dark:text-blue-400">{therapyPlans.length}</span> baris
+                  Total: <span className="font-bold text-lg text-green-600 dark:text-green-400">{therapyGroups.length}</span> set, <span className="font-bold text-lg text-blue-600 dark:text-blue-400">{therapyPlans.length}</span> terapi
                 </p>
               </div>
             </div>
@@ -660,7 +719,7 @@ export default function BulkTherapyPlanModal({
                           {group.name}
                         </span>
                         <span className="text-sm text-neutral-600 dark:text-neutral-400">
-                          ({groupPlans.length} baris)
+                          ({groupPlans.length} terapi)
                         </span>
                         {groupErrors > 0 && (
                           <span className="text-xs px-2 py-1 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-semibold">
@@ -672,10 +731,10 @@ export default function BulkTherapyPlanModal({
                         onClick={() => addRowToGroup(group.id)}
                         disabled={submitting}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-500/20 text-green-700 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-500/30 transition-colors text-xs font-semibold disabled:opacity-50"
-                        title="Tambah baris ke grup ini"
+                        title="Tambah terapi ke set ini"
                       >
                         <Plus size={14} />
-                        Tambah Baris
+                        Tambah Terapi
                       </button>
                     </div>
 
@@ -842,7 +901,7 @@ export default function BulkTherapyPlanModal({
                 <ul className="list-disc list-inside space-y-0.5">
                   {validationErrors.map((error, idx) => (
                     <li key={idx} className="text-xs text-red-600 dark:text-red-400">
-                      Baris {therapyPlans.find((p) => p.rowId === error.rowId)?.therapyNumber}: {error.message}
+                      Terapi ke-{therapyPlans.find((p) => p.rowId === error.rowId)?.therapyNumber}: {error.message}
                     </li>
                   ))}
                 </ul>
@@ -852,7 +911,7 @@ export default function BulkTherapyPlanModal({
             {/* Info Section - Compact */}
             <div className="mt-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
               <p className="text-xs text-blue-700 dark:text-blue-400">
-                <strong>Tips:</strong> Masukkan jumlah baris set, pilih IFA, lalu gunakan tombol copy untuk duplikasi dosis.
+                <strong>Tips:</strong> Masukkan jumlah terapi per set, pilih IFA, lalu gunakan tombol copy untuk duplikasi dosis.
               </p>
             </div>
           </div>
@@ -879,7 +938,7 @@ export default function BulkTherapyPlanModal({
               ) : (
                 <>
                   <Plus className="h-4 w-4" />
-                  Simpan Set ({therapyPlans.length} Baris)
+                  Simpan Set ({therapyPlans.length} Terapi)
                 </>
               )}
             </button>

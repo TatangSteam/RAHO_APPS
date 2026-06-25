@@ -3,7 +3,7 @@ import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 
 export interface AuditLogPayload {
-  userId: string;
+  userId?: string | null;
   branchId?: string | null;
   action: AuditAction;
   resource: string;
@@ -18,13 +18,77 @@ export interface AuditLogPayload {
   };
 }
 
+type ActorSnapshot = {
+  userId: string | null;
+  email: string | null;
+  fullName: string | null;
+  role: string | null;
+  staffCode: string | null;
+  branchId: string | null;
+  branchCode: string | null;
+};
+
+const UNKNOWN_USER_IDS = new Set(['', 'unknown', 'system', 'anonymous']);
+
+function isUsableUserId(userId?: string | null): userId is string {
+  return Boolean(userId && !UNKNOWN_USER_IDS.has(userId.toLowerCase()));
+}
+
+function emptyActorSnapshot(userId?: string | null): ActorSnapshot {
+  return {
+    userId: isUsableUserId(userId) ? userId : null,
+    email: null,
+    fullName: null,
+    role: null,
+    staffCode: null,
+    branchId: null,
+    branchCode: null,
+  };
+}
+
+async function getActorSnapshot(userId?: string | null): Promise<ActorSnapshot> {
+  if (!isUsableUserId(userId)) return emptyActorSnapshot(userId);
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      staffCode: true,
+      branchId: true,
+      profile: { select: { fullName: true } },
+      branch: { select: { branchCode: true } },
+    },
+  });
+
+  if (!user) return emptyActorSnapshot(null);
+
+  return {
+    userId: user.id,
+    email: user.email,
+    fullName: user.profile?.fullName || user.email,
+    role: user.role,
+    staffCode: user.staffCode,
+    branchId: user.branchId,
+    branchCode: user.branch?.branchCode || null,
+  };
+}
+
 /**
  * Record a sensitive action to the audit log.
  * Fires and forgets — never throws, just logs warning on failure.
  */
 export async function logAudit(payload: AuditLogPayload): Promise<void> {
   try {
+    const actorSnapshot = await getActorSnapshot(payload.userId);
     const metaData: Record<string, unknown> = { ...(payload.meta ?? {}) };
+    metaData.actorSnapshot = {
+      ...(typeof metaData.actorSnapshot === 'object' && metaData.actorSnapshot !== null
+        ? (metaData.actorSnapshot as Record<string, unknown>)
+        : {}),
+      ...actorSnapshot,
+    };
     
     // Add impersonation info to meta if present
     if (payload.impersonating) {
@@ -35,7 +99,7 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
     
     await prisma.auditLog.create({
       data: {
-        userId: payload.userId,
+        userId: actorSnapshot.userId,
         branchId: payload.branchId || null,
         action: payload.action,
         resource: payload.resource,
