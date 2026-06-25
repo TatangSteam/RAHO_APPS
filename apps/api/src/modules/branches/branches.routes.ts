@@ -9,6 +9,7 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
+  forceDeleteBranch,
   getBranchManagers,
   getBranchSessions,
   assignManagerToBranch,
@@ -172,6 +173,15 @@ branchesRouter.patch(
   authenticate,
   authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   updateBranch,
+);
+
+// ── Force Delete Branch (SUPER_ADMIN ONLY - deletes ALL data) ─
+// ⚠️ DANGEROUS: Must come BEFORE /:branchId route
+branchesRouter.delete(
+  '/:branchId/force',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  forceDeleteBranch,
 );
 
 // ── Delete Branch Permanently (Super Admin only) ──────────────

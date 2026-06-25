@@ -861,6 +861,328 @@ export async function deleteBranchService(branchId: string) {
   };
 }
 
+// ── Force Delete Branch (SUPER_ADMIN ONLY) ────────────────────
+// ⚠️ DANGEROUS: This will permanently delete ALL data related to the branch
+// including members, sessions, revenue, inventory, and all historical data
+export async function forceDeleteBranchService(branchId: string) {
+  const existing = await prisma.branch.findUnique({
+    where: { id: branchId },
+    select: {
+      id: true,
+      branchCode: true,
+      name: true,
+    },
+  });
+  
+  if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
+
+  console.log(`🚨 FORCE DELETE initiated for branch: ${existing.branchCode} (${existing.name})`);
+
+  // Count all data that will be deleted for logging
+  const counts = await Promise.all([
+    prisma.member.count({ where: { registrationBranchId: branchId } }),
+    prisma.memberPackage.count({ where: { branchId } }),
+    prisma.memberAddOn.count({ where: { branchId } }),
+    prisma.memberNonTherapyPurchase.count({ where: { branchId } }),
+    prisma.invoice.count({ where: { branchId } }),
+    prisma.encounter.count({ where: { branchId } }),
+    prisma.treatmentSession.count({ where: { branchId } }),
+    prisma.stockRequest.count({ where: { branchId } }),
+    prisma.shipment.count({
+      where: { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] },
+    }),
+    prisma.user.count({ where: { branchId } }),
+  ]);
+
+  console.log(`📊 Data to be deleted:`, {
+    members: counts[0],
+    packages: counts[1],
+    addOns: counts[2],
+    nonTherapyPurchases: counts[3],
+    invoices: counts[4],
+    encounters: counts[5],
+    sessions: counts[6],
+    stockRequests: counts[7],
+    shipments: counts[8],
+    users: counts[9],
+  });
+
+  // Execute force delete in transaction
+  const deleted = await prisma.$transaction(async (tx) => {
+    const deleteSessionRelatedData = async (sessionId: string) => {
+      const evaluations = await tx.doctorEvaluation.findMany({
+        where: { treatmentSessionId: sessionId },
+        select: { id: true },
+      });
+      const evaluationIds = evaluations.map((evaluation) => evaluation.id);
+
+      if (evaluationIds.length > 0) {
+        await tx.doctorEvaluationHistory.deleteMany({
+          where: { evaluationId: { in: evaluationIds } },
+        });
+      }
+
+      await tx.vitalSign.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.infusionExecution.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.sessionPhoto.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.sessionSupportingPhoto.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.eMRNote.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.doctorEvaluation.deleteMany({ where: { treatmentSessionId: sessionId } });
+      await tx.sessionDoctor.deleteMany({ where: { sessionId } });
+      await tx.sessionNurse.deleteMany({ where: { sessionId } });
+      await tx.materialUsage.deleteMany({ where: { treatmentSessionId: sessionId } });
+    };
+
+    const deleteMemberTherapyPlanData = async (memberId: string) => {
+      const therapyPlanSets = await tx.therapyPlanSet.findMany({
+        where: { memberId },
+        select: { id: true },
+      });
+      const therapyPlanSetIds = therapyPlanSets.map((set) => set.id);
+      const therapyPlans = await tx.therapyPlan.findMany({
+        where: therapyPlanSetIds.length > 0
+          ? {
+              OR: [
+                { memberId },
+                { therapyPlanSetId: { in: therapyPlanSetIds } },
+              ],
+            }
+          : { memberId },
+        select: { id: true },
+      });
+      const therapyPlanIds = therapyPlans.map((plan) => plan.id);
+
+      if (therapyPlanIds.length > 0) {
+        await tx.infusionExecution.updateMany({
+          where: { therapyPlanId: { in: therapyPlanIds } },
+          data: { therapyPlanId: null },
+        });
+        await tx.therapyPlan.updateMany({
+          where: { supersededById: { in: therapyPlanIds } },
+          data: { supersededById: null },
+        });
+        await tx.therapyPlan.deleteMany({
+          where: { id: { in: therapyPlanIds } },
+        });
+      }
+
+      if (therapyPlanSetIds.length > 0) {
+        await tx.therapyPlanSet.updateMany({
+          where: { supersededById: { in: therapyPlanSetIds } },
+          data: { supersededById: null },
+        });
+        await tx.therapyPlanSet.deleteMany({
+          where: { id: { in: therapyPlanSetIds } },
+        });
+      }
+    };
+
+    // 1. Delete all members and their related data
+    const members = await tx.member.findMany({
+      where: { registrationBranchId: branchId },
+      select: { id: true, userId: true },
+    });
+
+    for (const member of members) {
+      await tx.diagnosis.deleteMany({ where: { memberId: member.id } });
+      await tx.labResult.deleteMany({ where: { memberId: member.id } });
+      await tx.memberDocument.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete encounter-related data
+      const encounters = await tx.encounter.findMany({
+        where: { memberId: member.id },
+        select: { id: true },
+      });
+      
+      for (const encounter of encounters) {
+        // Delete session-related data
+        const sessions = await tx.treatmentSession.findMany({
+          where: { encounterId: encounter.id },
+          select: { id: true },
+        });
+        
+        for (const session of sessions) {
+          await deleteSessionRelatedData(session.id);
+        }
+      }
+
+      await deleteMemberTherapyPlanData(member.id);
+
+      for (const encounter of encounters) {
+        await tx.treatmentSession.deleteMany({ where: { encounterId: encounter.id } });
+      }
+      
+      await tx.encounter.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete member packages and related
+      await tx.referralIncentiveRecord.deleteMany({ where: { memberId: member.id } });
+      await tx.memberAddOn.deleteMany({ where: { memberId: member.id } });
+      await tx.memberPackage.deleteMany({ where: { memberId: member.id } });
+      await tx.memberNonTherapyPurchase.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete invoices for this member (must be before deleting member due to FK)
+      const memberInvoices = await tx.invoice.findMany({
+        where: { memberId: member.id },
+        select: { id: true },
+      });
+      
+      for (const invoice of memberInvoices) {
+        await tx.invoicePayment.deleteMany({ where: { invoiceId: invoice.id } });
+        await tx.invoiceItem.deleteMany({ where: { invoiceId: invoice.id } });
+      }
+      await tx.invoice.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete branch member access
+      await tx.branchMemberAccess.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete chat messages and rooms
+      await tx.chatMessage.deleteMany({ where: { chatRoom: { memberId: member.id } } });
+      await tx.chatRoom.deleteMany({ where: { memberId: member.id } });
+      
+      // Delete member
+      await tx.member.delete({ where: { id: member.id } });
+      
+      // Delete user profile and user (if exists)
+      if (member.userId) {
+        await tx.notification.deleteMany({ where: { userId: member.userId } });
+        await tx.userProfile.deleteMany({ where: { userId: member.userId } });
+        await tx.user.delete({ where: { id: member.userId } });
+      }
+    }
+
+    // 2. Delete all invoices and payments for this branch
+    const invoices = await tx.invoice.findMany({
+      where: { branchId },
+      select: { id: true },
+    });
+    
+    for (const invoice of invoices) {
+      await tx.invoicePayment.deleteMany({ where: { invoiceId: invoice.id } });
+    }
+    await tx.invoice.deleteMany({ where: { branchId } });
+
+    // 3. Delete inventory and stock-related data
+    await tx.stockMutation.deleteMany({
+      where: { inventoryItem: { branchId } },
+    });
+    
+    await tx.stockRequestItem.deleteMany({
+      where: { inventoryItem: { branchId } },
+    });
+    
+    const stockRequests = await tx.stockRequest.findMany({
+      where: { branchId },
+      select: { id: true },
+    });
+    
+    for (const stockRequest of stockRequests) {
+      await tx.stockRequestInvoice.deleteMany({ where: { stockRequestId: stockRequest.id } });
+    }
+
+    // Shipments point to stock requests, so they must go first.
+    const shipments = await tx.shipment.findMany({
+      where: { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] },
+      select: { id: true },
+    });
+    
+    for (const shipment of shipments) {
+      await tx.shipmentItem.deleteMany({ where: { shipmentId: shipment.id } });
+    }
+    
+    await tx.shipment.deleteMany({
+      where: { OR: [{ fromBranchId: branchId }, { toBranchId: branchId }] },
+    });
+
+    await tx.stockRequest.deleteMany({ where: { branchId } });
+    
+    await tx.branchOverstock.deleteMany({ where: { branchId } });
+    await tx.inventoryItem.deleteMany({ where: { branchId } });
+
+    // 4. Delete staff and their assignments
+    const staff = await tx.user.findMany({
+      where: { branchId },
+      select: { id: true },
+    });
+    
+    for (const user of staff) {
+      // Delete sessions where user is doctor or nurse
+      // Note: Sessions were already deleted in step 1 (member loop),
+      // but we need to handle any remaining sessions that might reference this staff
+      const staffSessions = await tx.treatmentSession.findMany({
+        where: {
+          OR: [
+            { doctorId: user.id },
+            { nurseId: user.id },
+          ],
+        },
+        select: { id: true },
+      });
+      
+      // Delete all session-related data first
+      for (const session of staffSessions) {
+        await deleteSessionRelatedData(session.id);
+      }
+      
+      // Now delete the sessions
+      await tx.treatmentSession.deleteMany({
+        where: {
+          OR: [
+            { doctorId: user.id },
+            { nurseId: user.id },
+          ],
+        },
+      });
+      
+      await tx.userProfile.deleteMany({ where: { userId: user.id } });
+      await tx.managerBranch.deleteMany({ where: { userId: user.id } });
+      await tx.staffBranch.deleteMany({ where: { userId: user.id } });
+      await tx.chatMessage.deleteMany({ where: { senderId: user.id } });
+      await tx.notification.deleteMany({ where: { userId: user.id } });
+    }
+    
+    await tx.user.deleteMany({ where: { branchId } });
+
+    // 5. Delete branch-specific data
+    await tx.referralCode.deleteMany({ where: { branchId } });
+    await tx.packagePricing.deleteMany({ where: { branchId } });
+    await tx.managerBranch.deleteMany({ where: { branchId } });
+    await tx.staffBranch.deleteMany({ where: { branchId } });
+    await tx.branchMemberAccess.deleteMany({ where: { branchId } });
+    
+    // 6. Detach audit logs (preserve trail but remove FK)
+    const detachedAuditLogs = await tx.auditLog.updateMany({
+      where: { branchId },
+      data: { branchId: null },
+    });
+
+    // 8. Finally, delete the branch itself
+    await tx.branch.delete({ where: { id: branchId } });
+
+    return {
+      members: counts[0],
+      packages: counts[1],
+      addOns: counts[2],
+      nonTherapyPurchases: counts[3],
+      invoices: counts[4],
+      encounters: counts[5],
+      sessions: counts[6],
+      stockRequests: counts[7],
+      shipments: counts[8],
+      users: counts[9],
+      detachedAuditLogs: detachedAuditLogs.count,
+    };
+  });
+
+  console.log(`✅ FORCE DELETE completed for branch: ${existing.branchCode}`);
+  console.log(`📊 Deleted data summary:`, deleted);
+
+  return {
+    message: 'Cabang dan semua data terkait berhasil dihapus permanen',
+    branch: existing,
+    deleted,
+  };
+}
+
 // ── Get Branch Sessions ────────────────────────────────────────
 export async function getBranchSessionsService(
   branchId: string,

@@ -11,6 +11,7 @@ import {
   createBranchService,
   updateBranchService,
   deleteBranchService,
+  forceDeleteBranchService,
   getBranchManagersService,
   getBranchSessionsService,
   assignManagerToBranchService,
@@ -54,6 +55,11 @@ export async function getAllBranchesWithStats(req: Request, res: Response, next:
 export async function getBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const branch = await getBranchWithStatsService(req.params.branchId);
+    console.log('📊 getBranch controller - Sending branch with stats:', {
+      branchId: branch.id,
+      branchCode: branch.branchCode,
+      stats: branch.stats
+    });
     sendSuccess(res, branch);
   } catch (err) {
     next(err);
@@ -226,6 +232,34 @@ export async function getAvailableManagersForBranch(req: Request, res: Response,
   try {
     const managers = await getAvailableManagersForBranchService(req.params.branchId);
     sendSuccess(res, managers);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ── Force Delete Branch (SUPER_ADMIN ONLY) ────────────────────
+// ⚠️ DANGEROUS: This will permanently delete ALL data related to the branch
+export async function forceDeleteBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const result = await forceDeleteBranchService(req.params.branchId);
+
+    await logAudit({
+      userId: req.user.userId,
+      action: 'DELETE',
+      resource: 'Branch',
+      resourceId: req.params.branchId,
+      meta: {
+        action: 'FORCE_DELETE',
+        warning: 'ALL_DATA_DELETED',
+        branchCode: result.branch.branchCode,
+        branchName: result.branch.name,
+        deleted: result.deleted,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
   } catch (err) {
     next(err);
   }

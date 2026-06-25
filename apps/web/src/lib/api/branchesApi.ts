@@ -146,6 +146,14 @@ export const branchesApi = {
     return api.delete(`/branches/${branchId}`);
   },
 
+  /**
+   * Force delete branch (SUPER_ADMIN only - deletes ALL data)
+   * ⚠️ DANGEROUS: This will permanently delete ALL data related to the branch
+   */
+  forceDeleteBranch: (branchId: string) => {
+    return api.delete(`/branches/${branchId}/force`);
+  },
+
   // ============================================================
   // SYSTEM ENDPOINTS (SUPER ADMIN ONLY)
   // ============================================================

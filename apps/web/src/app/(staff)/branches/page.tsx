@@ -13,18 +13,20 @@ import {
   Building2, Plus, Search, Filter, Edit, Trash2, Users, 
   MapPin, Phone, ChevronLeft, ChevronRight, RefreshCw, Eye, AlertTriangle
 } from 'lucide-react';
+import ForceDeleteBranchModal from '@/components/branches/ForceDeleteBranchModal';
 
 interface Branch {
   id: string;
   branchCode: string;
   name: string;
-  type: string;
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
   address: string;
   city: string;
   phone: string;
   operatingHours?: string;
   isActive: boolean;
   createdAt: string;
+  updatedAt: string;
   _count?: {
     members?: number;
     staff?: number;
@@ -48,6 +50,7 @@ export default function BranchesPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [summary, setSummary] = useState<BranchSummary>({ total: 0, active: 0, inactive: 0 });
+  const [forceDeleteBranch, setForceDeleteBranch] = useState<Branch | null>(null);
   const limit = 10;
 
   // Check authorization
@@ -132,6 +135,30 @@ export default function BranchesPage() {
         error.response?.data?.message ||
         'Gagal menghapus cabang'
       );
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (!forceDeleteBranch) return;
+
+    try {
+      await branchesApi.forceDeleteBranch(forceDeleteBranch.id);
+      showToast.success(`Cabang ${forceDeleteBranch.name} dan SEMUA datanya berhasil dihapus PERMANEN`);
+      setForceDeleteBranch(null);
+      if (branches.length === 1 && page > 1) {
+        setPage((currentPage) => currentPage - 1);
+      } else {
+        loadBranches();
+      }
+    } catch (error: any) {
+      devError('Error force deleting branch:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        error.message ||
+        'Gagal menghapus cabang secara paksa'
+      );
+      throw error; // Re-throw to let modal handle it
     }
   };
 
@@ -410,13 +437,22 @@ export default function BranchesPage() {
                               <Edit className="h-4 w-4" />
                             </button>
                             {user?.role === 'SUPER_ADMIN' && (
-                              <button
-                                onClick={() => handleDelete(branch.id, branch.name)}
-                                title="Hapus permanen"
-                                className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleDelete(branch.id, branch.name)}
+                                  title="Hapus permanen"
+                                  className="p-2 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={() => setForceDeleteBranch(branch)}
+                                  title="⚠️ BAHAYA: Hapus cabang beserta SEMUA data terkait"
+                                  className="p-2 rounded-lg text-neutral-400 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-600/20 transition-all"
+                                >
+                                  <AlertTriangle className="h-4 w-4" />
+                                </button>
+                              </>
                             )}
                           </div>
                         </td>
@@ -456,6 +492,14 @@ export default function BranchesPage() {
           </>
         )}
       </div>
+
+      {/* Force Delete Modal */}
+      <ForceDeleteBranchModal
+        isOpen={!!forceDeleteBranch}
+        branch={forceDeleteBranch}
+        onClose={() => setForceDeleteBranch(null)}
+        onConfirm={handleForceDelete}
+      />
     </div>
   );
 }

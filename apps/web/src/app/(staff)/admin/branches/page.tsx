@@ -8,6 +8,7 @@ import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import CreateBranchModal from '@/components/branches/CreateBranchModal';
 import EditBranchModal from '@/components/branches/EditBranchModal';
+import ForceDeleteBranchModal from '@/components/branches/ForceDeleteBranchModal';
 import styles from './page.module.css';
 
 export default function BranchesPage() {
@@ -17,6 +18,7 @@ export default function BranchesPage() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [forceDeleteBranch, setForceDeleteBranch] = useState<Branch | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -72,6 +74,26 @@ export default function BranchesPage() {
         error.message ||
         'Gagal menghapus cabang'
       );
+    }
+  };
+
+  const handleForceDelete = async () => {
+    if (!forceDeleteBranch) return;
+
+    try {
+      await branchesApi.forceDeleteBranch(forceDeleteBranch.id);
+      showToast.success(`Cabang ${forceDeleteBranch.name} dan SEMUA datanya berhasil dihapus PERMANEN`);
+      setForceDeleteBranch(null);
+      loadBranches();
+    } catch (error: any) {
+      devError('Error force deleting branch:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        error.message ||
+        'Gagal menghapus cabang secara paksa'
+      );
+      throw error; // Re-throw to let modal handle it
     }
   };
 
@@ -189,15 +211,32 @@ export default function BranchesPage() {
                   ✏️ Edit
                 </button>
                 {user?.role === 'SUPER_ADMIN' && (
-                  <button
-                    className={`${styles.actionBtn} ${styles.delete}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(branch.id, branch.name);
-                    }}
-                  >
-                    🗑️ Hapus Permanen
-                  </button>
+                  <>
+                    <button
+                      className={`${styles.actionBtn} ${styles.delete}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(branch.id, branch.name);
+                      }}
+                    >
+                      🗑️ Hapus Permanen
+                    </button>
+                    <button
+                      className={`${styles.actionBtn} ${styles.delete}`}
+                      style={{ 
+                        backgroundColor: '#dc2626',
+                        borderColor: '#dc2626',
+                        fontWeight: 'bold'
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setForceDeleteBranch(branch);
+                      }}
+                      title="⚠️ BAHAYA: Hapus cabang beserta SEMUA data terkait"
+                    >
+                      ⚠️ Force Delete
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -227,6 +266,14 @@ export default function BranchesPage() {
           }}
         />
       )}
+
+      {/* Force Delete Modal */}
+      <ForceDeleteBranchModal
+        isOpen={!!forceDeleteBranch}
+        branch={forceDeleteBranch}
+        onClose={() => setForceDeleteBranch(null)}
+        onConfirm={handleForceDelete}
+      />
     </div>
   );
 }
