@@ -195,10 +195,11 @@ export default function MemberDetailPage() {
 
   useEffect(() => {
     // Only load pricings for roles that can assign packages
-    if (activeTab === 'paket' && canAssignPackage) {
+    // Reload when member data is available (to get the correct branchId)
+    if (activeTab === 'paket' && canAssignPackage && member) {
       loadPricings();
     }
-  }, [activeTab, canAssignPackage]);
+  }, [activeTab, canAssignPackage, member]);
 
   const loadMemberDetail = async () => {
     try {
@@ -248,7 +249,10 @@ export default function MemberDetailPage() {
   const loadPricings = async () => {
     try {
       // Fetch actual pricing from backend
-      const data = await packagesApi.getPackagePricings();
+      // Pass member's registration branch to get correct pricing
+      const memberBranchId = member?.registrationBranch?.id;
+      devLog('Loading pricings for member branch:', memberBranchId);
+      const data = await packagesApi.getPackagePricings(memberBranchId);
       devLog('Loaded pricings:', data);
       setPricings(Array.isArray(data) ? data : []);
     } catch (error) {

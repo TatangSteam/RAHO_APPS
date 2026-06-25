@@ -86,9 +86,13 @@ export const packagesApi = {
   },
 
   // Get package pricings
-  getPackagePricings: async () => {
+  getPackagePricings: async (branchId?: string) => {
     // Add timestamp to prevent caching
-    const response = await api.get(`/package-pricings?_t=${Date.now()}`);
+    const queryParams = new URLSearchParams({ _t: Date.now().toString() });
+    if (branchId) {
+      queryParams.append('branchId', branchId);
+    }
+    const response = await api.get(`/package-pricings?${queryParams.toString()}`);
     return response.data.data?.pricings || response.data.pricings || [];
   },
 

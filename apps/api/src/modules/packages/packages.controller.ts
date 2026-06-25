@@ -146,21 +146,36 @@ export class PackagesController {
   // Get package pricings
   async getPackagePricings(req: Request, res: Response, next: NextFunction) {
     try {
-      const branchId = req.user?.branchId;
+      const userBranchId = req.user?.branchId;
       const userRole = req.user?.role;
+      
+      // Check if branchId query param is provided (for filtering by specific branch)
+      const queryBranchId = req.query.branchId as string | undefined;
 
-      // ADMIN_MANAGER & SUPER_ADMIN can see all branches
-      if (userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN') {
+      // If branchId query param provided, use it (for ADMIN_MANAGER/SUPER_ADMIN filtering by member's branch)
+      if (queryBranchId) {
+        if (userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN') {
+          const pricings = await packagesService.getPackagePricings(queryBranchId);
+          return sendSuccess(res, { pricings });
+        }
+        // Other roles can only filter by their own branch
+        if (queryBranchId !== userBranchId) {
+          throw { status: 403, code: 'FORBIDDEN', message: 'Cannot access other branch pricings' };
+        }
+      }
+
+      // ADMIN_MANAGER & SUPER_ADMIN can see all branches (when no branchId filter)
+      if ((userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN') && !queryBranchId) {
         const pricings = await packagesService.getAllPackagePricings();
         return sendSuccess(res, { pricings });
       }
 
       // Other roles need branchId
-      if (!branchId) {
+      if (!userBranchId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'Branch information missing' };
       }
 
-      const pricings = await packagesService.getPackagePricings(branchId);
+      const pricings = await packagesService.getPackagePricings(userBranchId);
       return sendSuccess(res, { pricings });
     } catch (error) {
       console.error('getPackagePricings error:', error);

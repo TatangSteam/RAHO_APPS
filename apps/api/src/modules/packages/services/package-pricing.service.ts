@@ -60,22 +60,25 @@ export class PackagePricingService {
         ],
       });
 
-      return pricings.map(p => ({
-        id: p.id,
-        branchId: p.branchId,
-        branchCode: p.branch.branchCode,
-        branchName: p.branch.name,
-        packageType: p.packageType,
-        boosterType: p.boosterType,
-        serviceType: p.serviceType,
-        productCode: p.productCode,
-        name: p.name,
-        totalSessions: p.totalSessions,
-        price: Number(p.price),
-        isActive: p.isActive,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-      }));
+      // Filter out pricings with null branches and map
+      return pricings
+        .filter(p => p.branch !== null)
+        .map(p => ({
+          id: p.id,
+          branchId: p.branchId,
+          branchCode: p.branch.branchCode,
+          branchName: p.branch.name,
+          packageType: p.packageType,
+          boosterType: p.boosterType,
+          serviceType: p.serviceType,
+          productCode: p.productCode,
+          name: p.name,
+          totalSessions: p.totalSessions,
+          price: Number(p.price),
+          isActive: p.isActive,
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString(),
+        }));
     } catch (error) {
       console.error('getAllPackagePricings service error:', error);
       throw error;
