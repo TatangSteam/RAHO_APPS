@@ -50,18 +50,18 @@ export async function getNextMemberSequence(
 // ── Staff Code ────────────────────────────────────────────────
 
 const ROLE_PREFIX: Record<string, string> = {
-  ADMIN_LAYANAN: 'AL',
-  DOCTOR: 'DR',
-  NURSE: 'NR',
-  ADMIN_CABANG: 'AC',
-  ADMIN_MANAGER: 'AM',
-  SUPER_ADMIN: 'SA',
+  ADMIN_LAYANAN: 'STF',
+  DOCTOR: 'STF',
+  NURSE: 'STF',
+  ADMIN_CABANG: 'STF',
+  ADMIN_MANAGER: 'STF',
+  SUPER_ADMIN: 'STF',
   MEMBER: 'MBR',
 };
 
 /**
- * Generate staff code: {PREFIX}-{YYYYMMDD}-{RAND4}
- * @example AL-20260413-X9KZ
+ * Generate staff code: STF-{YYYYMMDD}-{RAND4}
+ * @example STF-20260413-X9KZ
  */
 export function generateStaffCode(role: string): string {
   const prefix = ROLE_PREFIX[role] ?? 'STF';
