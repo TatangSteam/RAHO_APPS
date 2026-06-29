@@ -1,7 +1,5 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
-
 interface LoadingSpinnerProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
   text?: string;
@@ -38,13 +36,29 @@ export function LoadingSpinner({
     green: 'border-emerald-200 dark:border-emerald-900 border-t-emerald-500',
   };
 
+  const pingColors = {
+    default: 'border-neutral-300 dark:border-neutral-600',
+    primary: 'border-amber-500/20',
+    amber: 'border-amber-500/20',
+    blue: 'border-blue-500/20',
+    green: 'border-emerald-500/20',
+  };
+
+  const dotColors = {
+    default: 'bg-neutral-400',
+    primary: 'bg-amber-500',
+    amber: 'bg-amber-500',
+    blue: 'bg-blue-500',
+    green: 'bg-emerald-500',
+  };
+
   const spinner = (
     <div className="flex flex-col items-center justify-center gap-3">
       {/* Dual Ring Spinner */}
       <div className="relative">
         {/* Outer ring */}
         <div
-          className={`${sizeClasses[size]} rounded-full border-3 ${ringColors[variant]} animate-spin`}
+          className={`${sizeClasses[size]} rounded-full border-[3px] ${ringColors[variant]} animate-spin`}
         />
         {/* Inner ring */}
         <div
@@ -53,7 +67,7 @@ export function LoadingSpinner({
         />
         {/* Ping effect */}
         <div
-          className={`absolute inset-0 ${sizeClasses[size]} rounded-full border-2 ${variant === 'default' ? 'border-neutral-300 dark:border-neutral-600' : `border-${variant === 'primary' || variant === 'amber' ? 'amber' : variant}-500/20`} animate-ping`}
+          className={`absolute inset-0 ${sizeClasses[size]} rounded-full border-2 ${pingColors[variant]} animate-ping`}
           style={{ animationDuration: '2s' }}
         />
       </div>
@@ -71,27 +85,15 @@ export function LoadingSpinner({
           {/* Animated Dots */}
           <div className="flex items-center justify-center gap-1 mt-1">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                variant === 'default'
-                  ? 'bg-neutral-400'
-                  : `bg-${variant === 'primary' || variant === 'amber' ? 'amber' : variant}-500`
-              } animate-bounce`}
+              className={`w-1.5 h-1.5 rounded-full ${dotColors[variant]} animate-bounce`}
               style={{ animationDelay: '0ms' }}
             />
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                variant === 'default'
-                  ? 'bg-neutral-400'
-                  : `bg-${variant === 'primary' || variant === 'amber' ? 'amber' : variant}-500`
-              } animate-bounce`}
+              className={`w-1.5 h-1.5 rounded-full ${dotColors[variant]} animate-bounce`}
               style={{ animationDelay: '150ms' }}
             />
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
-                variant === 'default'
-                  ? 'bg-neutral-400'
-                  : `bg-${variant === 'primary' || variant === 'amber' ? 'amber' : variant}-500`
-              } animate-bounce`}
+              className={`w-1.5 h-1.5 rounded-full ${dotColors[variant]} animate-bounce`}
               style={{ animationDelay: '300ms' }}
             />
           </div>
@@ -118,8 +120,6 @@ interface ButtonLoadingProps {
 }
 
 export function ButtonLoading({ text = 'Memproses', size = 'md' }: ButtonLoadingProps) {
-  const iconSize = size === 'sm' ? 16 : 20;
-  
   return (
     <>
       {/* Dual Ring Spinner */}

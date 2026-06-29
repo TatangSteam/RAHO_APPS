@@ -7,6 +7,7 @@ import axios, {
 // We import the store getter directly to avoid React hook rules outside components
 import { useAuthStore } from '@/stores/authStore';
 import { devLog } from '@/lib/logger';
+import { startApiLoading, endApiLoading } from '@/lib/apiLoadingTracking';
 
 // ── Base Instance ─────────────────────────────────────────────
 
@@ -174,6 +175,20 @@ export function stopTokenExpiryCheck(): void {
 // Attach Bearer token on every request and refresh it first when possible
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  // Start loading tracking (unless explicitly disabled)
+  const skipLoading = (config as any).skipLoading;
+  if (!skipLoading) {
+    startApiLoading();
+  }
+
+  const rejectRequest = (error: Error) => {
+    if (!skipLoading) {
+      endApiLoading();
+    }
+
+    return Promise.reject(error);
+  };
+  
   const { accessToken, refreshToken, setAccessToken } = useAuthStore.getState();
   
   // Set Content-Type based on data type
@@ -218,7 +233,7 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
           }, 100);
         }
         
-        return Promise.reject(new Error('Token expired'));
+        return rejectRequest(new Error('Token expired'));
       }
     } catch (e) {
       // Invalid token format, logout
@@ -236,13 +251,17 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
         }, 100);
       }
       
-      return Promise.reject(new Error('Invalid token'));
+      return rejectRequest(new Error('Invalid token'));
     }
     
     config.headers.Authorization = `Bearer ${accessToken}`;
   }
   
   return config;
+}, (error) => {
+  // End loading on request error
+  endApiLoading();
+  return Promise.reject(error);
 });
 
 // ── Response Interceptor ──────────────────────────────────────
@@ -293,8 +312,21 @@ function handleUnauthorizedLogout(message: string = 'Sesi Anda telah berakhir. S
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // End loading on success
+    const skipLoading = (response.config as any).skipLoading;
+    if (!skipLoading) {
+      endApiLoading();
+    }
+    return response;
+  },
   async (error: AxiosError) => {
+    // End loading on error (will be called in finally block or here)
+    const skipLoading = (error.config as any)?.skipLoading;
+    if (!skipLoading) {
+      endApiLoading();
+    }
+    
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };

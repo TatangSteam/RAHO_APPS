@@ -163,6 +163,34 @@ router.get(
 );
 
 // ============================================================
+// MATERIAL USAGE HISTORY
+// ============================================================
+
+// Get material usage history with filters
+router.get(
+  '/material-usage-history',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getMaterialUsageHistory.bind(inventoryController)
+);
+
+// Get staff list for filter dropdown
+router.get(
+  '/material-usage-history/staff',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getStaffListForFilter.bind(inventoryController)
+);
+
+// Get branch groups for filter dropdown
+router.get(
+  '/material-usage-history/branch-groups',
+  authenticate,
+  authorize(ALLSTAFF),
+  inventoryController.getBranchGroupsForFilter.bind(inventoryController)
+);
+
+// ============================================================
 // STOCK REQUESTS
 // ============================================================
 

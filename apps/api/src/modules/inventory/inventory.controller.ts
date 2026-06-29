@@ -12,7 +12,123 @@ const exportService = new InventoryExportService(prisma);
 import { MaterialUsageService } from '../sessions/services/material-usage.service';
 const materialUsageService = new MaterialUsageService();
 
+// Import MaterialUsageHistoryService for usage history endpoint
+import { MaterialUsageHistoryService } from './services/material-usage-history.service';
+const materialUsageHistoryService = new MaterialUsageHistoryService();
+
 export class InventoryController {
+  /**
+   * Get material usage history with filters
+   * GET /api/v1/inventory/material-usage-history
+   */
+  async getMaterialUsageHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const {
+        branchId,
+        staffId,
+        staffGroupId,
+        startDate,
+        endDate,
+        productName,
+      } = req.query;
+
+      const userRole = req.user?.role;
+      const userId = req.user?.userId;
+      const userBranchId = req.user?.branchId;
+
+      // Determine which branches to query based on role
+      let targetBranchId: string | undefined;
+
+      if (userRole === Role.SUPER_ADMIN) {
+        // Super Admin sees all usage history
+        targetBranchId = branchId as string | undefined;
+      } else if (userRole === Role.ADMIN_MANAGER && userId) {
+        // Admin Manager sees usage from branches they manage
+        const managedBranches = await prisma.managerBranch.findMany({
+          where: {
+            userId,
+            branch: { isActive: true },
+          },
+          select: { branchId: true },
+        });
+
+        const managedBranchIds = managedBranches.map(mb => mb.branchId);
+
+        if (branchId) {
+          // If specific branch requested, check if manager has access
+          if (managedBranchIds.includes(branchId as string)) {
+            targetBranchId = branchId as string;
+          } else {
+            return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+          }
+        }
+        // If no specific branch, leave undefined to get all managed branches (handled by service)
+      } else if (userBranchId) {
+        // Other roles see only their branch
+        if (branchId && branchId !== userBranchId) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+        }
+        targetBranchId = userBranchId;
+      } else {
+        return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
+      }
+
+      const filters = {
+        branchId: targetBranchId,
+        staffId: staffId as string | undefined,
+        staffGroupId: staffGroupId as string | undefined,
+        startDate: startDate ? new Date(startDate as string) : undefined,
+        endDate: endDate ? new Date(endDate as string) : undefined,
+        productName: productName as string | undefined,
+      };
+
+      const result = await materialUsageHistoryService.getMaterialUsageHistory(filters);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get staff list for filter dropdown
+   * GET /api/v1/inventory/material-usage-history/staff
+   */
+  async getStaffListForFilter(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { branchId } = req.query;
+      
+      const userRole = req.user?.role;
+      const userBranchId = req.user?.branchId;
+
+      // Determine branch filter
+      let targetBranchId: string | undefined;
+
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_MANAGER) {
+        targetBranchId = branchId as string | undefined;
+      } else {
+        targetBranchId = userBranchId;
+      }
+
+      const result = await materialUsageHistoryService.getStaffList(targetBranchId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
+  /**
+   * Get branch groups for filter dropdown
+   * GET /api/v1/inventory/material-usage-history/branch-groups
+   */
+  async getBranchGroupsForFilter(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await materialUsageHistoryService.getBranchGroups();
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      next(err);
+    }
+  }
+
   /**
    * Get master products for inventory modal (accessible by ADMIN_ROLES)
    * GET /api/v1/inventory/master-products

@@ -6,13 +6,14 @@ import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2,
-  UserCog, Truck, BarChart3, History,
+  UserCog, Truck, BarChart3, History, ListChecks, Loader2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
 import { clsx } from 'clsx';
-import { useState } from 'react';
+import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { devError } from '@/lib/logger';
+import { useLoading } from '@/contexts/LoadingContext';
 import {
   formatNotificationBadge,
   type ManagerNotificationCounts,
@@ -84,6 +85,12 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Mutasi Stok',
         href: '/inventory/stock-mutations',
         icon: <History size={20} />,
+        roles: ALL_STAFF,
+      },
+      {
+        label: 'Riwayat Penggunaan Barang',
+        href: '/inventory/material-usage-history',
+        icon: <ListChecks size={20} />,
         roles: ALL_STAFF,
       },
       {
@@ -220,7 +227,11 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
+  const { showGlobalLoading, hideGlobalLoading } = useLoading();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const overlayShownRef = useRef(false);
 
   if (!user) return null;
 
@@ -272,11 +283,78 @@ export function Sidebar({
     return pathname.startsWith(href + '/');
   };
 
-  const handleNavClick = () => {
+  useEffect(() => {
+    if (!pendingHref) return;
+
+    if (pathname === pendingHref) {
+      setPendingHref(null);
+    }
+  }, [pathname, pendingHref]);
+
+  useEffect(() => {
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+
+    if (!pendingHref) {
+      if (overlayShownRef.current) {
+        hideGlobalLoading();
+        overlayShownRef.current = false;
+      }
+
+      return;
+    }
+
+    loadingTimerRef.current = setTimeout(() => {
+      overlayShownRef.current = true;
+      showGlobalLoading('Memuat halaman...');
+    }, 180);
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+    };
+  }, [hideGlobalLoading, pendingHref, showGlobalLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+      }
+
+      if (overlayShownRef.current) {
+        hideGlobalLoading();
+      }
+    };
+  }, [hideGlobalLoading]);
+
+  const shouldSkipNavigationLoading = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
+    return (
+      pathname === href ||
+      event.defaultPrevented ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0 ||
+      event.currentTarget.target === '_blank'
+    );
+  };
+
+  const handleNavClick = (href: string, event: MouseEvent<HTMLAnchorElement>) => {
     // Close mobile menu when navigating
     if (mobileOpen && onMobileClose) {
       onMobileClose();
     }
+
+    if (shouldSkipNavigationLoading(event, href)) {
+      return;
+    }
+
+    setPendingHref(href);
   };
 
   const sidebarContent = (
@@ -366,8 +444,13 @@ export function Sidebar({
       {!collapsed && (
         <Link 
           href="/profile"
-          onClick={handleNavClick}
-          className="flex items-center gap-3 px-4 py-4 flex-shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors rounded-xl mx-2"
+          onClick={(event) => handleNavClick('/profile', event)}
+          className={clsx(
+            'flex items-center gap-3 px-4 py-4 flex-shrink-0 transition-colors rounded-xl mx-2',
+            pendingHref === '/profile'
+              ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300'
+              : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+          )}
         >
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 overflow-hidden">
             {user.avatarUrl ? (
@@ -402,7 +485,7 @@ export function Sidebar({
       {collapsed && (
         <Link 
           href="/profile"
-          onClick={handleNavClick}
+          onClick={(event) => handleNavClick('/profile', event)}
           className="hidden lg:flex justify-center py-3 relative cursor-pointer group"
           onMouseEnter={() => setHoveredItem('user-profile')}
           onMouseLeave={() => setHoveredItem(null)}
@@ -447,6 +530,7 @@ export function Sidebar({
               {collapsed && gi > 0 && <div className="hidden lg:block h-px bg-neutral-200 dark:bg-neutral-800 my-2 mx-1" />}
               {visibleItems.map((item) => {
                 const badge = getItemBadge(item);
+                const pending = pendingHref === item.href;
 
                 return (
                   <div 
@@ -457,33 +541,46 @@ export function Sidebar({
                   >
                     <Link
                       href={item.href}
-                      onClick={handleNavClick}
+                      onClick={(event) => handleNavClick(item.href, event)}
                       className={clsx(
                         'flex items-center gap-3 rounded-xl text-sm font-medium',
-                        'transition-all duration-200 relative select-none',
+                        'transition-all duration-200 relative select-none active:scale-[0.98]',
                         collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
-                        isActive(item.href)
+                        pending
+                          ? 'bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300 shadow-inner cursor-wait'
+                          : isActive(item.href)
                           ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
                           : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
                       )}
+                      aria-busy={pending}
                     >
                       <span className="flex items-center justify-center flex-shrink-0">
-                        {item.icon}
+                        {pending ? <Loader2 size={20} className="animate-spin" /> : item.icon}
                       </span>
                       <span className={clsx(collapsed ? 'lg:hidden' : '')}>
                         {item.label}
                       </span>
-                      {badge && !collapsed && (
+                      {pending && !collapsed && (
+                        <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 dark:text-amber-300">
+                          Memuat
+                          <span className="inline-flex gap-0.5">
+                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
+                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:150ms]" />
+                            <span className="h-1 w-1 rounded-full bg-current animate-bounce [animation-delay:300ms]" />
+                          </span>
+                        </span>
+                      )}
+                      {badge && !collapsed && !pending && (
                         <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
                           {badge}
                         </span>
                       )}
-                      {badge && collapsed && (
+                      {badge && collapsed && !pending && (
                         <span className="hidden lg:flex absolute right-1.5 top-1.5 min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
                           {badge}
                         </span>
                       )}
-                      {isActive(item.href) && (
+                      {(isActive(item.href) || pending) && (
                         <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
                       )}
                     </Link>

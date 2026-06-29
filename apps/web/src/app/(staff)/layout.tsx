@@ -7,17 +7,22 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ImpersonationProvider } from '@/contexts/ImpersonationContext';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
+import { LoadingProvider } from '@/contexts/LoadingContext';
+import { GlobalLoadingOverlay } from '@/components/ui/GlobalLoadingOverlay';
+import { ApiLoadingSetup } from '@/components/providers/ApiLoadingSetup';
 import { useManagerInventoryNotifications } from '@/hooks/useManagerInventoryNotifications';
 import { useAuthStore } from '@/stores/authStore';
 import { devLog } from '@/lib/logger';
 import { clsx } from 'clsx';
 
-export default function StaffLayout({ children }: { children: React.ReactNode }) {
+// Inner component that uses LoadingContext
+function StaffLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, accessToken } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  
   const managerNotifications = useManagerInventoryNotifications(
     user?.role === 'ADMIN_MANAGER' && Boolean(accessToken),
     { pollMs: 60000 },
@@ -80,7 +85,9 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <ImpersonationProvider>
+    <>
+      <ApiLoadingSetup />
+      <GlobalLoadingOverlay />
       <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] transition-colors duration-300">
         <ImpersonationBanner />
         <Sidebar 
@@ -109,6 +116,17 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           <Footer />
         </div>
       </div>
-    </ImpersonationProvider>
+    </>
+  );
+}
+
+// Main layout component
+export default function StaffLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <LoadingProvider>
+      <ImpersonationProvider>
+        <StaffLayoutInner>{children}</StaffLayoutInner>
+      </ImpersonationProvider>
+    </LoadingProvider>
   );
 }
