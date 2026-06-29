@@ -3,7 +3,11 @@ import { api } from '../api';
 export interface MaterialUsageHistoryItem {
   id: string;
   date: string;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
   productName: string;
+  productCategory: MaterialCategory;
   quantity: number;
   unit: string;
   staffName: string;
@@ -34,6 +38,8 @@ export interface BranchGroup {
   type: string;
 }
 
+export type MaterialCategory = 'MEDICINE' | 'DEVICE' | 'CONSUMABLE';
+
 export interface MaterialUsageHistoryFilters {
   branchId?: string;
   staffId?: string;
@@ -41,6 +47,7 @@ export interface MaterialUsageHistoryFilters {
   startDate?: string;
   endDate?: string;
   productName?: string;
+  category?: MaterialCategory;
 }
 
 export const materialUsageHistoryApi = {
@@ -58,6 +65,7 @@ export const materialUsageHistoryApi = {
     if (filters?.startDate) params.append('startDate', filters.startDate);
     if (filters?.endDate) params.append('endDate', filters.endDate);
     if (filters?.productName) params.append('productName', filters.productName);
+    if (filters?.category) params.append('category', filters.category);
 
     const response = await api.get(
       `/inventory/material-usage-history?${params.toString()}`

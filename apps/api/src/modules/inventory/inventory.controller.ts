@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { InventoryExportService } from './services/inventory-export.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
-import { BranchType, Role, StockMutationType } from '@prisma/client';
+import { BranchType, ProductCategory, Role, StockMutationType } from '@prisma/client';
 
 const inventoryService = new InventoryService();
 const exportService = new InventoryExportService(prisma);
@@ -17,6 +17,30 @@ import { MaterialUsageHistoryService } from './services/material-usage-history.s
 const materialUsageHistoryService = new MaterialUsageHistoryService();
 
 export class InventoryController {
+  private async getAccessibleMaterialUsageBranchIds(req: Request): Promise<string[] | undefined> {
+    const userRole = req.user?.role;
+    const userId = req.user?.userId;
+    const userBranchId = req.user?.branchId;
+
+    if (userRole === Role.SUPER_ADMIN) {
+      return undefined;
+    }
+
+    if (userRole === Role.ADMIN_MANAGER && userId) {
+      const managedBranches = await prisma.managerBranch.findMany({
+        where: {
+          userId,
+          branch: { isActive: true },
+        },
+        select: { branchId: true },
+      });
+
+      return managedBranches.map((branch) => branch.branchId);
+    }
+
+    return userBranchId ? [userBranchId] : [];
+  }
+
   /**
    * Get material usage history with filters
    * GET /api/v1/inventory/material-usage-history
@@ -30,56 +54,33 @@ export class InventoryController {
         startDate,
         endDate,
         productName,
+        category,
       } = req.query;
 
-      const userRole = req.user?.role;
-      const userId = req.user?.userId;
-      const userBranchId = req.user?.branchId;
+      const accessibleBranchIds = await this.getAccessibleMaterialUsageBranchIds(req);
+      const requestedBranchId = branchId as string | undefined;
 
-      // Determine which branches to query based on role
-      let targetBranchId: string | undefined;
-
-      if (userRole === Role.SUPER_ADMIN) {
-        // Super Admin sees all usage history
-        targetBranchId = branchId as string | undefined;
-      } else if (userRole === Role.ADMIN_MANAGER && userId) {
-        // Admin Manager sees usage from branches they manage
-        const managedBranches = await prisma.managerBranch.findMany({
-          where: {
-            userId,
-            branch: { isActive: true },
-          },
-          select: { branchId: true },
-        });
-
-        const managedBranchIds = managedBranches.map(mb => mb.branchId);
-
-        if (branchId) {
-          // If specific branch requested, check if manager has access
-          if (managedBranchIds.includes(branchId as string)) {
-            targetBranchId = branchId as string;
-          } else {
-            return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
-          }
-        }
-        // If no specific branch, leave undefined to get all managed branches (handled by service)
-      } else if (userBranchId) {
-        // Other roles see only their branch
-        if (branchId && branchId !== userBranchId) {
-          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
-        }
-        targetBranchId = userBranchId;
-      } else {
+      if (accessibleBranchIds && accessibleBranchIds.length === 0) {
         return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
       }
 
+      if (requestedBranchId && accessibleBranchIds && !accessibleBranchIds.includes(requestedBranchId)) {
+        return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+      }
+
+      if (category && !Object.values(ProductCategory).includes(category as ProductCategory)) {
+        return sendError(res, 400, 'INVALID_CATEGORY', 'Kategori material tidak valid');
+      }
+
       const filters = {
-        branchId: targetBranchId,
+        branchId: requestedBranchId,
+        branchIds: requestedBranchId ? undefined : accessibleBranchIds,
         staffId: staffId as string | undefined,
         staffGroupId: staffGroupId as string | undefined,
         startDate: startDate ? new Date(startDate as string) : undefined,
-        endDate: endDate ? new Date(endDate as string) : undefined,
+        endDate: endDate ? new Date(`${endDate as string}T23:59:59.999`) : undefined,
         productName: productName as string | undefined,
+        category: category as ProductCategory | undefined,
       };
 
       const result = await materialUsageHistoryService.getMaterialUsageHistory(filters);
@@ -96,20 +97,22 @@ export class InventoryController {
   async getStaffListForFilter(req: Request, res: Response, next: NextFunction) {
     try {
       const { branchId } = req.query;
-      
-      const userRole = req.user?.role;
-      const userBranchId = req.user?.branchId;
 
-      // Determine branch filter
-      let targetBranchId: string | undefined;
+      const accessibleBranchIds = await this.getAccessibleMaterialUsageBranchIds(req);
+      const requestedBranchId = branchId as string | undefined;
 
-      if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_MANAGER) {
-        targetBranchId = branchId as string | undefined;
-      } else {
-        targetBranchId = userBranchId;
+      if (accessibleBranchIds && accessibleBranchIds.length === 0) {
+        return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
       }
 
-      const result = await materialUsageHistoryService.getStaffList(targetBranchId);
+      if (requestedBranchId && accessibleBranchIds && !accessibleBranchIds.includes(requestedBranchId)) {
+        return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+      }
+
+      const result = await materialUsageHistoryService.getStaffList(
+        requestedBranchId,
+        requestedBranchId ? undefined : accessibleBranchIds
+      );
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);
@@ -122,7 +125,13 @@ export class InventoryController {
    */
   async getBranchGroupsForFilter(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await materialUsageHistoryService.getBranchGroups();
+      const accessibleBranchIds = await this.getAccessibleMaterialUsageBranchIds(req);
+
+      if (accessibleBranchIds && accessibleBranchIds.length === 0) {
+        return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
+      }
+
+      const result = await materialUsageHistoryService.getBranchGroups(accessibleBranchIds);
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);

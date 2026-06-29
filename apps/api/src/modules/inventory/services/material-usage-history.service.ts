@@ -1,18 +1,25 @@
 import { prisma } from '../../../lib/prisma';
+import { ProductCategory } from '@prisma/client';
 
 export interface MaterialUsageHistoryFilters {
   branchId?: string;
+  branchIds?: string[];
   staffId?: string;
   staffGroupId?: string;
   startDate?: Date;
   endDate?: Date;
   productName?: string;
+  category?: ProductCategory;
 }
 
 export interface MaterialUsageHistoryItem {
   id: string;
   date: Date;
+  branchId: string;
+  branchName: string;
+  branchCode: string;
   productName: string;
+  productCategory: ProductCategory;
   quantity: number;
   unit: string;
   staffName: string;
@@ -29,18 +36,24 @@ export class MaterialUsageHistoryService {
   async getMaterialUsageHistory(filters: MaterialUsageHistoryFilters) {
     const {
       branchId,
+      branchIds,
       staffId,
       staffGroupId,
       startDate,
       endDate,
       productName,
+      category,
     } = filters;
 
     // Build where clause
     const where: any = {};
 
     // Filter by branch through session
-    if (branchId) {
+    if (branchIds) {
+      where.session = {
+        branchId: { in: branchIds },
+      };
+    } else if (branchId) {
       where.session = {
         branchId,
       };
@@ -63,13 +76,16 @@ export class MaterialUsageHistoryService {
     }
 
     // Filter by product name
-    if (productName) {
+    if (productName || category) {
       where.inventoryItem = {
         masterProduct: {
-          name: {
-            contains: productName,
-            mode: 'insensitive',
-          },
+          ...(productName && {
+            name: {
+              contains: productName,
+              mode: 'insensitive',
+            },
+          }),
+          ...(category && { category }),
         },
       };
     }
@@ -152,7 +168,11 @@ export class MaterialUsageHistoryService {
       return {
         id: usage.id,
         date: usage.createdAt,
+        branchId: usage.session.branchId,
+        branchName: usage.session.branch.name,
+        branchCode: usage.session.branch.branchCode,
         productName: usage.inventoryItem.masterProduct.name,
+        productCategory: usage.inventoryItem.masterProduct.category,
         quantity: Number(usage.quantity),
         unit: usage.unit,
         staffName: staff?.name || 'Unknown',
@@ -169,7 +189,7 @@ export class MaterialUsageHistoryService {
   /**
    * Get list of staff members for filter dropdown
    */
-  async getStaffList(branchId?: string) {
+  async getStaffList(branchId?: string, allowedBranchIds?: string[]) {
     const where: any = {
       isActive: true,
       role: {
@@ -177,7 +197,12 @@ export class MaterialUsageHistoryService {
       },
     };
 
-    if (branchId) {
+    if (allowedBranchIds) {
+      where.OR = [
+        { branchId: { in: allowedBranchIds } },
+        { staffBranches: { some: { branchId: { in: allowedBranchIds } } } },
+      ];
+    } else if (branchId) {
       where.OR = [
         { branchId },
         { staffBranches: { some: { branchId } } },
@@ -220,10 +245,11 @@ export class MaterialUsageHistoryService {
   /**
    * Get list of branch groups for filter dropdown
    */
-  async getBranchGroups() {
+  async getBranchGroups(branchIds?: string[]) {
     const branches = await prisma.branch.findMany({
       where: {
         isActive: true,
+        ...(branchIds && { id: { in: branchIds } }),
       },
       orderBy: {
         name: 'asc',
