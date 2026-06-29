@@ -581,7 +581,7 @@ npm run db:seed
    - Pilih "Global" atau cabang tertentu
 
 4. **Cari baris booster yang belum lengkap**
-   - Misalnya baris "GT" (Glutathione) yang masih ada sel kosong "-"
+   - Misalnya baris "GT" (Gasotransmitter) yang masih ada sel kosong "-"
 
 5. **Klik tombol "Generate" pada baris tersebut**
    - Tombol kecil di sebelah kanan nama booster

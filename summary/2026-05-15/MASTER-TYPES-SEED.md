@@ -99,11 +99,11 @@ npx tsx prisma/seeds/master-types.seed.ts
 
 ### Booster Types (7 types):
 1. 🔵 **NO** - Nitric Oxide
-2. 💚 **GT** - Glutathione
+2. 💚 **GT** - Gasotransmitter
 3. 🔷 **MB** - Methylene Blue
 4. ⚪ **KCL** - Potassium Chloride
 5. 🟡 **H2S** - Hydrogen Sulfide
-6. 🔴 **HK** - Hypochlorous Acid
+6. 🔴 **HK** - H2O Konsentrat
 7. 🌀 **O3** - Ozone
 
 ### Service Types (5 types):

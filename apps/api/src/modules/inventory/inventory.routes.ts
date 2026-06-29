@@ -5,7 +5,7 @@ import { ShipmentController } from './shipment.controller';
 import { OverstockController } from './overstock.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
-import { uploadPaymentProof } from '../../middleware/upload';
+import { uploadPaymentProof, uploadShipmentReceipt } from '../../middleware/upload';
 import { Role } from '@prisma/client';
 
 const router = Router();
@@ -312,6 +312,7 @@ router.post(
   '/shipments/:shipmentId/receive',
   authenticate,
   authorize([Role.ADMIN_CABANG]),
+  uploadShipmentReceipt.single('receiptFile'),
   shipmentController.receiveShipment.bind(shipmentController)
 );
 

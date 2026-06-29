@@ -17,9 +17,9 @@ export async function seedMasterTypes() {
     },
     {
       code: 'GT',
-      name: 'Glutathione',
+      name: 'Gasotransmitter',
       icon: '💚',
-      description: 'Glutathione booster therapy',
+      description: 'GasoTransmitter booster therapy',
       sortOrder: 2,
       isActive: true,
     },
@@ -49,9 +49,9 @@ export async function seedMasterTypes() {
     },
     {
       code: 'HK',
-      name: 'Hypochlorous Acid',
+      name: 'H2O Konsentrat',
       icon: '🔴',
-      description: 'Hypochlorous Acid booster therapy',
+      description: 'H20 Konsentrat',
       sortOrder: 6,
       isActive: true,
     },

@@ -2,6 +2,9 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role, StockMutationType, DiscrepancyType } from '@prisma/client';
+import { uploadFile } from '../../../config/minio';
+import { env } from '../../../config/env';
+import { v4 as uuidv4 } from 'uuid';
 
 interface DiscrepancyItem {
   masterProductId: string;
@@ -20,6 +23,7 @@ interface ReceiveShipmentInput {
   }>;
   discrepancies?: DiscrepancyItem[];
   notes?: string;
+  receiptFile?: Express.Multer.File;
 }
 
 interface ReviewShipmentIssueInput {
@@ -298,6 +302,19 @@ export class ShipmentProcessingService {
       };
     }
 
+    if (!input.receiptFile) {
+      throw {
+        status: 400,
+        code: 'RECEIPT_FILE_REQUIRED',
+        message: 'File tanda terima wajib diupload',
+      };
+    }
+
+    const receiptExtension = input.receiptFile.mimetype === 'application/pdf' ? 'pdf' : 'jpg';
+    const receiptKey = `uploads/shipments/${shipmentId}/receipt-${uuidv4()}.${receiptExtension}`;
+    const receiptUpload = await uploadFile(input.receiptFile.buffer, receiptKey, input.receiptFile.mimetype);
+    const receiptFileUrl = `${env.API_PREFIX}/files/${receiptUpload.key}`;
+
     const hasDiscrepancies = input.discrepancies && input.discrepancies.length > 0;
     const newStatus = hasDiscrepancies ? 'RECEIVED_WITH_ISSUE' : 'RECEIVED';
     const requestStatus = hasDiscrepancies ? 'SHIPPED' : 'COMPLETED';
@@ -359,6 +376,10 @@ export class ShipmentProcessingService {
           status: newStatus,
           receivedAt: new Date(),
           receivedBy: userId,
+          receiptFileUrl,
+          receiptFileName: input.receiptFile.originalname,
+          receiptFileSize: input.receiptFile.size,
+          receiptMimeType: input.receiptFile.mimetype,
           notes: input.notes || shipment.notes,
         },
         include: {
@@ -492,6 +513,7 @@ export class ShipmentProcessingService {
         hasDiscrepancies,
         discrepancyCount: input.discrepancies?.length || 0,
         overstocksCreated: createdOverstocks.length,
+        receiptFileName: input.receiptFile.originalname,
       },
     });
 

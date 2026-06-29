@@ -371,11 +371,11 @@ Expected: 200 Success
 | Code | Name | SortOrder |
 |------|------|-----------|
 | NO | Nitric Oxide | 1 |
-| GT | Glutathione | 2 |
+| GT | Gasotransmitter | 2 |
 | MB | Methylene Blue | 3 |
 | KCL | Potassium Chloride | 4 |
 | H2S | Hydrogen Sulfide | 5 |
-| HK | Hypochlorous Acid | 6 |
+| HK | H2O Konsentrat | 6 |
 | O3 | Ozone | 7 |
 
 ### Service Types

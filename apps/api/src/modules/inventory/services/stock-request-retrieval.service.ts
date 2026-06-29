@@ -415,6 +415,10 @@ export class StockRequestRetrievalService {
         toBranchName: request.shipment.toBranch.name,
         status: request.shipment.status,
         notes: request.shipment.notes,
+        receiptFileUrl: request.shipment.receiptFileUrl,
+        receiptFileName: request.shipment.receiptFileName,
+        receiptFileSize: request.shipment.receiptFileSize,
+        receiptMimeType: request.shipment.receiptMimeType,
         items: request.shipment.items?.map((item: any) => ({
           id: item.id,
           masterProductId: item.masterProductId,

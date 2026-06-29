@@ -502,7 +502,7 @@ enum PackageStatus {
 `prisma
 enum BoosterType {
   NO    // Nitric Oxide
-  GT    // Glutathione
+  GT    // Gasotransmitter
   MB    // Methylene Blue
   KCL   // Potassium Chloride
   H2S   // Hydrogen Sulfide

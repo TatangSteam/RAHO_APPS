@@ -120,7 +120,7 @@ RAHO adalah sistem manajemen klinik untuk terapi infus dengan fokus pada:
 
 **B. BOOSTER Package**
 - NO (Nitric Oxide)
-- GT (Glutathione)
+- GT (Gasotransmitter)
 - MB (Methylene Blue)
 - KCL (Potassium Chloride)
 - H2S (Hydrogen Sulfide)

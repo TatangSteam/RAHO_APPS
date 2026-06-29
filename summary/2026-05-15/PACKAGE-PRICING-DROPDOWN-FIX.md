@@ -56,11 +56,11 @@ Added styling for `<option>` elements:
 1. Placeholder option
 2. **Hardcoded defaults** (always shown):
    - 🔵 NO - Nitric Oxide
-   - 💚 GT - Glutathione
+   - 💚 GT - Gasotransmitter
    - 🔷 MB - Methylene Blue
    - ⚪ KCL - Potassium Chloride
    - 🟡 H2S - Hydrogen Sulfide
-   - 🔴 HK - Hypochlorous Acid
+   - 🔴 HK - H2O Konsentrat
    - 🌀 O3 - Ozone
 3. **Additional from master data** (filtered to exclude duplicates)
 4. ➕ Tambah Tipe Booster Baru (when creating)
@@ -71,11 +71,11 @@ Added styling for `<option>` elements:
 
 {/* Hardcoded default options */}
 <option value="NO">🔵 NO - Nitric Oxide</option>
-<option value="GT">💚 GT - Glutathione</option>
+<option value="GT">💚 GT - Gasotransmitter</option>
 <option value="MB">🔷 MB - Methylene Blue</option>
 <option value="KCL">⚪ KCL - Potassium Chloride</option>
 <option value="H2S">🟡 H2S - Hydrogen Sulfide</option>
-<option value="HK">🔴 HK - Hypochlorous Acid</option>
+<option value="HK">🔴 HK - H2O Konsentrat</option>
 <option value="O3">🌀 O3 - Ozone</option>
 
 {/* Additional options from master data (if any) */}

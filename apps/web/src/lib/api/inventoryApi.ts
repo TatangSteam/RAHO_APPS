@@ -46,6 +46,7 @@ export interface ReceiveShipmentInput {
     photoUrl?: string;
   }>;
   notes?: string;
+  receiptFile: File;
 }
 
 export interface ShipShipmentInput {
@@ -214,6 +215,10 @@ export interface Shipment {
   notes?: string;
   shipmentPhotoUrl?: string;
   shipmentPhotoName?: string;
+  receiptFileUrl?: string;
+  receiptFileName?: string;
+  receiptFileSize?: number;
+  receiptMimeType?: string;
   itemCount?: number;
   totalItems?: number;
   hasDiscrepancies?: boolean;
@@ -500,7 +505,22 @@ export const inventoryApi = {
    * Receive shipment (Admin Cabang)
    */
   receiveShipment: (shipmentId: string, data: ReceiveShipmentInput) => {
-    return api.post(`/inventory/shipments/${shipmentId}/receive`, data);
+    const formData = new FormData();
+    formData.append('receiptFile', data.receiptFile);
+
+    if (data.receivedItems) {
+      formData.append('receivedItems', JSON.stringify(data.receivedItems));
+    }
+
+    if (data.discrepancies) {
+      formData.append('discrepancies', JSON.stringify(data.discrepancies));
+    }
+
+    if (data.notes) {
+      formData.append('notes', data.notes);
+    }
+
+    return api.post(`/inventory/shipments/${shipmentId}/receive`, formData);
   },
 
   /**

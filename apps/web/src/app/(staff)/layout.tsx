@@ -7,14 +7,21 @@ import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { ImpersonationProvider } from '@/contexts/ImpersonationContext';
 import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
+import { useManagerInventoryNotifications } from '@/hooks/useManagerInventoryNotifications';
+import { useAuthStore } from '@/stores/authStore';
 import { devLog } from '@/lib/logger';
 import { clsx } from 'clsx';
 
 export default function StaffLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { user, accessToken } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const managerNotifications = useManagerInventoryNotifications(
+    user?.role === 'ADMIN_MANAGER' && Boolean(accessToken),
+    { pollMs: 60000 },
+  );
 
   // Debug log (only in development)
   useEffect(() => {
@@ -81,6 +88,7 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
           onToggle={handleToggle}
           mobileOpen={mobileOpen}
           onMobileClose={handleMobileClose}
+          notificationCounts={managerNotifications.counts}
         />
         <div 
           className={clsx(
@@ -91,7 +99,10 @@ export default function StaffLayout({ children }: { children: React.ReactNode })
             collapsed && 'lg:ml-[72px]'
           )}
         >
-          <Header onMobileMenuToggle={handleMobileMenuToggle} />
+          <Header
+            onMobileMenuToggle={handleMobileMenuToggle}
+            unreadCount={managerNotifications.counts.total}
+          />
           <main className="flex-1 p-4 sm:p-6 animate-in fade-in duration-300">
             {children}
           </main>

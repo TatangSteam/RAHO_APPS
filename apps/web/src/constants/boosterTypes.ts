@@ -15,11 +15,11 @@ export const BOOSTER_TYPE_DISPLAY: Record<string, string> = {
 
 export const BOOSTER_TYPE_FULL_NAME: Record<string, string> = {
   'NO': 'Nitric Oxide',
-  'GT': 'Gasotransmitter', // Changed from Glutathione
+  'GT': 'Gasotransmitter', // Changed from Gasotransmitter
   'MB': 'Methylene Blue',
   'KCL': 'Potassium Chloride',
   'H2S': 'Hydrogen Sulfide',
-  'HK': 'Hypochlorous Acid',
+  'HK': 'H2O Konsentrrat',
   'O3': 'Ozone',
   'HHO': 'Hydrogen',
   'NO2': 'Nitric Oxide 2',

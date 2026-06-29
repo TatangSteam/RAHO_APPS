@@ -93,7 +93,8 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
         </button>
 
         {/* Notifications */}
-        <button 
+        <Link 
+          href="/notifications"
           className={clsx(
             'relative w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-200',
             'text-neutral-500 dark:text-neutral-400',
@@ -109,7 +110,7 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
               {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
-        </button>
+        </Link>
 
         {/* User Chip - Links to Profile */}
         <Link 

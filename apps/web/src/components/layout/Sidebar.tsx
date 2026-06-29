@@ -13,6 +13,10 @@ import { Role } from '@/types/auth';
 import { clsx } from 'clsx';
 import { useState } from 'react';
 import { devError } from '@/lib/logger';
+import {
+  formatNotificationBadge,
+  type ManagerNotificationCounts,
+} from '@/lib/api/managerNotificationsApi';
 
 // ── Menu Item Type ────────────────────────────────────────────
 
@@ -202,11 +206,18 @@ interface SidebarProps {
   onToggle: () => void;
   mobileOpen?: boolean;
   onMobileClose?: () => void;
+  notificationCounts?: ManagerNotificationCounts;
 }
 
 // ── Component ─────────────────────────────────────────────────
 
-export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({
+  collapsed,
+  onToggle,
+  mobileOpen,
+  onMobileClose,
+  notificationCounts,
+}: SidebarProps) {
   const pathname = usePathname();
   const { user, clearAuth } = useAuthStore();
   const [hoveredItem, setHoveredItem] = useState<string | null>(null);
@@ -217,6 +228,26 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
 
   // Don't render sidebar for MEMBER role
   if (role === 'MEMBER') return null;
+
+  const getItemBadge = (item: MenuItem) => {
+    if (role !== 'ADMIN_MANAGER' || !notificationCounts) {
+      return item.badge;
+    }
+
+    if (item.href === '/notifications' && notificationCounts.total > 0) {
+      return formatNotificationBadge(notificationCounts.total);
+    }
+
+    if (item.href === '/inventory/stock-requests' && notificationCounts.stockRequests > 0) {
+      return formatNotificationBadge(notificationCounts.stockRequests);
+    }
+
+    if (item.href === '/inventory/shipments' && notificationCounts.issueShipments > 0) {
+      return formatNotificationBadge(notificationCounts.issueShipments);
+    }
+
+    return item.badge;
+  };
 
   const handleLogout = async () => {
     try {
@@ -414,48 +445,57 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                 </p>
               )}
               {collapsed && gi > 0 && <div className="hidden lg:block h-px bg-neutral-200 dark:bg-neutral-800 my-2 mx-1" />}
-              {visibleItems.map((item) => (
-                <div 
-                  key={item.href}
-                  className="relative"
-                  onMouseEnter={() => collapsed && setHoveredItem(item.href)}
-                  onMouseLeave={() => collapsed && setHoveredItem(null)}
-                >
-                  <Link
-                    href={item.href}
-                    onClick={handleNavClick}
-                    className={clsx(
-                      'flex items-center gap-3 rounded-xl text-sm font-medium',
-                      'transition-all duration-200 relative select-none',
-                      collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
-                      isActive(item.href)
-                        ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
-                        : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
-                    )}
+              {visibleItems.map((item) => {
+                const badge = getItemBadge(item);
+
+                return (
+                  <div 
+                    key={item.href}
+                    className="relative"
+                    onMouseEnter={() => collapsed && setHoveredItem(item.href)}
+                    onMouseLeave={() => collapsed && setHoveredItem(null)}
                   >
-                    <span className="flex items-center justify-center flex-shrink-0">
-                      {item.icon}
-                    </span>
-                    <span className={clsx(collapsed ? 'lg:hidden' : '')}>
-                      {item.label}
-                    </span>
-                    {item.badge && !collapsed && (
-                      <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
-                        {item.badge}
+                    <Link
+                      href={item.href}
+                      onClick={handleNavClick}
+                      className={clsx(
+                        'flex items-center gap-3 rounded-xl text-sm font-medium',
+                        'transition-all duration-200 relative select-none',
+                        collapsed ? 'lg:justify-center lg:p-3 justify-start px-3 py-2.5' : 'px-3 py-2.5',
+                        isActive(item.href)
+                          ? 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 font-semibold'
+                          : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white'
+                      )}
+                    >
+                      <span className="flex items-center justify-center flex-shrink-0">
+                        {item.icon}
                       </span>
+                      <span className={clsx(collapsed ? 'lg:hidden' : '')}>
+                        {item.label}
+                      </span>
+                      {badge && !collapsed && (
+                        <span className="bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded-full ml-auto">
+                          {badge}
+                        </span>
+                      )}
+                      {badge && collapsed && (
+                        <span className="hidden lg:flex absolute right-1.5 top-1.5 min-w-[16px] h-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white">
+                          {badge}
+                        </span>
+                      )}
+                      {isActive(item.href) && (
+                        <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
+                      )}
+                    </Link>
+                    {collapsed && hoveredItem === item.href && (
+                      <Tooltip>
+                        {item.label}
+                        {badge && <span className="ml-1.5 text-[10px] opacity-80">({badge})</span>}
+                      </Tooltip>
                     )}
-                    {isActive(item.href) && (
-                      <span className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-[60%] bg-amber-500 rounded-r-full" />
-                    )}
-                  </Link>
-                  {collapsed && hoveredItem === item.href && (
-                    <Tooltip>
-                      {item.label}
-                      {item.badge && <span className="ml-1.5 text-[10px] opacity-80">({item.badge})</span>}
-                    </Tooltip>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           );
         })}

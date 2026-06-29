@@ -20,6 +20,7 @@ interface ReceiveShipmentInput {
     photoFileName?: string;
   }>;
   notes?: string;
+  receiptFile?: Express.Multer.File;
 }
 
 interface ReviewShipmentIssueInput {

@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type ChangeEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, PackageCheck, AlertTriangle, MessageSquare, RefreshCw, ChevronRight, CheckCircle2, Info, TrendingUp } from 'lucide-react';
+import { X, Package, PackageCheck, AlertTriangle, MessageSquare, RefreshCw, ChevronRight, CheckCircle2, Info, TrendingUp, Upload, FileCheck2, Trash2 } from 'lucide-react';
 import { Shipment, ReceiveShipmentInput } from '@/lib/api/inventoryApi';
 
 type DiscrepancyType = 'SHORTAGE' | 'DAMAGE' | 'WRONG_ITEM' | 'OTHER';
+const RECEIPT_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg'];
+const RECEIPT_MAX_SIZE = 10 * 1024 * 1024;
 
 interface ReceiveModalProps {
   shipment: Shipment;
@@ -26,6 +28,8 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
     notes: string;
   }>>([]);
   const [hasDiscrepancy, setHasDiscrepancy] = useState(false);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptError, setReceiptError] = useState('');
 
   useEffect(() => {
     setMounted(true);
@@ -49,6 +53,8 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
     );
     setDiscrepancies([]);
     setHasDiscrepancy(false);
+    setReceiptFile(null);
+    setReceiptError('');
   }, [shipment]);
 
   const updateReceivedQty = (masterProductId: string, qty: number) => {
@@ -100,10 +106,50 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
     );
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const handleReceiptChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    setReceiptError('');
+
+    if (!file) {
+      setReceiptFile(null);
+      return;
+    }
+
+    if (!RECEIPT_ALLOWED_TYPES.includes(file.type)) {
+      setReceiptFile(null);
+      setReceiptError('Format tanda terima harus PDF atau JPG.');
+      event.target.value = '';
+      return;
+    }
+
+    if (file.size > RECEIPT_MAX_SIZE) {
+      setReceiptFile(null);
+      setReceiptError('Ukuran tanda terima maksimal 10MB.');
+      event.target.value = '';
+      return;
+    }
+
+    setReceiptFile(file);
+  };
+
   const handleSubmit = async () => {
+    if (!receiptFile) {
+      setReceiptError('File tanda terima wajib diupload.');
+      return;
+    }
+
     const input: ReceiveShipmentInput = {
       receivedItems,
       notes: notes || undefined,
+      receiptFile,
     };
 
     if (hasDiscrepancy && discrepancies.length > 0) {
@@ -383,6 +429,75 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               </div>
             )}
 
+            {/* Receipt Upload */}
+            <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30">
+              <h3 className="text-sm font-semibold text-sky-400 mb-3 flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                Upload Tanda Terima <span className="text-red-400">*</span>
+              </h3>
+              <p className="text-xs text-sky-200/80 mb-3">
+                Wajib upload tanda terima penerimaan barang dalam format PDF atau JPG. Maksimal 10MB.
+              </p>
+
+              {receiptFile ? (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-sky-500/30 bg-sky-500/10 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-sky-500/20 text-sky-300">
+                      <FileCheck2 className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-neutral-700 dark:text-neutral-100">
+                        {receiptFile.name}
+                      </p>
+                      <p className="text-xs text-sky-300">
+                        {receiptFile.type === 'application/pdf' ? 'PDF' : 'JPG'} - {formatFileSize(receiptFile.size)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setReceiptFile(null);
+                      setReceiptError('');
+                    }}
+                    disabled={loading}
+                    className="rounded-lg p-2 text-red-400 hover:bg-red-500/10 hover:text-red-300 disabled:opacity-50"
+                    aria-label="Hapus tanda terima"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <label className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-6 text-center transition-all ${
+                  receiptError
+                    ? 'border-red-500/60 bg-red-500/10'
+                    : 'border-sky-500/40 bg-sky-500/5 hover:bg-sky-500/10'
+                }`}>
+                  <Upload className={`mb-2 h-6 w-6 ${receiptError ? 'text-red-400' : 'text-sky-300'}`} />
+                  <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-100">
+                    Pilih file tanda terima
+                  </span>
+                  <span className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                    PDF atau JPG/JPEG
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,application/pdf,image/jpeg"
+                    onChange={handleReceiptChange}
+                    disabled={loading}
+                    className="hidden"
+                  />
+                </label>
+              )}
+
+              {receiptError && (
+                <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-red-400">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {receiptError}
+                </p>
+              )}
+            </div>
+
             {/* Notes Section */}
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30">
               <h3 className="text-sm font-semibold text-amber-400 mb-3 flex items-center gap-2">
@@ -410,7 +525,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
             </button>
             <button
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || !receiptFile}
               className={`px-6 py-2.5 rounded-xl text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 ${
                 hasDiscrepancy 
                   ? 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30' 
