@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -14,6 +12,7 @@ import {
   MapPin, Phone, ChevronLeft, ChevronRight, RefreshCw, Eye, AlertTriangle
 } from 'lucide-react';
 import ForceDeleteBranchModal from '@/components/branches/ForceDeleteBranchModal';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 interface Branch {
   id: string;
@@ -337,10 +336,7 @@ export default function BranchesPage() {
       {/* Table */}
       <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 shadow-sm overflow-hidden">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <RefreshCw className="h-10 w-10 text-amber-500 animate-spin mb-4" />
-            <p className="text-neutral-500 dark:text-neutral-400">Memuat data cabang...</p>
-          </div>
+          <PageLoading text="Memuat data cabang" />
         ) : branches.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 mb-4">

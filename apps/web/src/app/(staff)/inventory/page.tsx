@@ -13,6 +13,7 @@ import {
   ClipboardList, Truck, Building2, RefreshCw, X, Edit3, ShoppingCart, MapPin,
   ArrowUpDown, Save
 } from 'lucide-react';
+import { PageLoading, ButtonLoading } from '@/components/ui/LoadingSpinner';
 
 interface InventoryItem {
   id: string;
@@ -463,7 +464,7 @@ export default function InventoryPage() {
                 className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {adjusting ? (
-                  <><RefreshCw className="h-4 w-4 animate-spin" /> Menyimpan...</>
+                  <ButtonLoading text="Menyimpan" />
                 ) : (
                   <><Save className="h-4 w-4" /> Simpan Perubahan</>
                 )}
@@ -670,10 +671,7 @@ export default function InventoryPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20">
-            <RefreshCw className="h-10 w-10 text-amber-500 animate-spin mb-4" />
-            <p className="text-neutral-500 dark:text-neutral-400">Memuat data inventori...</p>
-          </div>
+          <PageLoading text="Memuat data inventori" />
         ) : !selectedBranchId && canSelectBranch ? (
           <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800">
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800 mb-4">

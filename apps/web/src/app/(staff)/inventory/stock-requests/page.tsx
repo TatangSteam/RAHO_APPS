@@ -33,6 +33,7 @@ import ReviewModal from './components/ReviewModal';
 import CreateRequestModal from './components/CreateRequestModal';
 import UploadPaymentModal from './components/UploadPaymentModal';
 import EditRequestModal from './components/EditRequestModal';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 const filterOptions: { value: FilterType; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'ALL', label: 'Semua', icon: <ClipboardList className="w-4 h-4" />, color: 'bg-neutral-500' },
@@ -485,12 +486,7 @@ export default function StockRequestsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-500/20 flex items-center justify-center mb-4">
-            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
-          </div>
-          <p className="text-neutral-600 dark:text-neutral-400 font-medium">Memuat data...</p>
-        </div>
+        <PageLoading text="Memuat data request stok" />
       ) : requests.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-white dark:bg-neutral-800/50 rounded-2xl border border-neutral-200 dark:border-neutral-700">
           <div className="w-20 h-20 rounded-full bg-neutral-100 dark:bg-neutral-700 flex items-center justify-center mb-4">

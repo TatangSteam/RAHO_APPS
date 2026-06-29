@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { loginApi } from '@/lib/authApi';
 import { getApiErrorMessage, getApiErrorCode } from '@/lib/api';
 import { getDefaultRoute } from '@/types/auth';
+import { ButtonLoading } from '@/components/ui/LoadingSpinner';
 
 // ── Validation Schema ─────────────────────────────────────────
 
@@ -89,6 +90,32 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen w-full flex flex-col lg:flex-row bg-[#0a0a0a] overflow-hidden">
+      {/* Full Page Loading Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="flex flex-col items-center gap-4">
+            {/* Animated Logo or Spinner */}
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin" />
+              <div className="absolute inset-2 w-16 h-16 border-4 border-amber-400/30 border-b-amber-400 rounded-full animate-spin-slow" />
+              <div className="absolute inset-0 w-20 h-20 border-4 border-amber-500/10 rounded-full animate-ping" style={{ animationDuration: '2s' }} />
+            </div>
+            {/* Loading Text */}
+            <div className="text-center">
+              <p className="text-amber-400 font-semibold text-lg mb-1">Memproses Login</p>
+              <p className="text-neutral-400 text-sm flex items-center gap-1">
+                Mohon tunggu sebentar
+                <span className="inline-flex gap-0.5">
+                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1 h-1 bg-amber-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Left Side - Image with Premium Overlay */}
       <div className="hidden lg:block lg:w-[60%] xl:w-[65%] relative bg-[#0a0a0a] overflow-hidden">
         {/* Background Image */}
@@ -164,7 +191,11 @@ export default function LoginPage() {
           )}
 
           {/* Premium Glassmorphism Form Card */}
-          <div className="p-8 rounded-3xl bg-neutral-900/50 backdrop-blur-xl border border-neutral-800/50 shadow-2xl shadow-black/20">
+          <div className={`
+            p-8 rounded-3xl bg-neutral-900/50 backdrop-blur-xl border border-neutral-800/50 
+            shadow-2xl shadow-black/20 transition-all duration-300
+            ${isSubmitting ? 'opacity-75 pointer-events-none' : 'opacity-100'}
+          `}>
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
               {/* Email */}
               <div className="space-y-2">
@@ -242,7 +273,7 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {/* Premium Submit Button */}
+              {/* Premium Submit Button with Enhanced Loading Animation */}
               <button
                 type="submit"
                 id="btn-login"
@@ -251,27 +282,35 @@ export default function LoginPage() {
                   relative w-full flex items-center justify-center gap-3 
                   px-8 py-4 mt-8 rounded-xl
                   font-semibold text-base uppercase tracking-wider
-                  transition-all duration-300 overflow-hidden
+                  transition-all duration-300 overflow-hidden group
                   ${isSubmitting 
-                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed' 
+                    ? 'bg-gradient-to-r from-amber-600 via-amber-400 to-amber-600 bg-[length:200%_100%] animate-shimmer text-white cursor-wait shadow-lg shadow-amber-500/30 scale-[0.98]' 
                     : 'bg-gradient-to-r from-amber-500 via-amber-500 to-amber-600 text-black hover:from-amber-400 hover:via-amber-500 hover:to-amber-500 hover:shadow-xl hover:shadow-amber-500/25 hover:-translate-y-0.5 active:translate-y-0 active:shadow-lg'
                   }
                 `}
               >
-                {/* Button Shine Effect */}
+                {/* Button Shine Effect for Normal State */}
                 {!isSubmitting && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full hover:translate-x-full transition-transform duration-700" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                 )}
                 
-                {isSubmitting ? (
+                {/* Button Content */}
+                <div className="relative z-10 flex items-center justify-center gap-3">
+                  {isSubmitting ? (
+                    <ButtonLoading text="Memproses" />
+                  ) : (
+                    <>
+                      <LogIn size={20} className="transition-transform group-hover:translate-x-1" />
+                      <span>Masuk</span>
+                    </>
+                  )}
+                </div>
+                
+                {/* Pulsing Ring Effect for Loading */}
+                {isSubmitting && (
                   <>
-                    <Loader2 size={20} className="animate-spin" />
-                    <span>Memproses...</span>
-                  </>
-                ) : (
-                  <>
-                    <LogIn size={20} />
-                    <span>Masuk</span>
+                    <div className="absolute inset-0 rounded-xl border-2 border-white/20 animate-ping" style={{ animationDuration: '2s' }} />
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-white/5 via-white/10 to-white/5 animate-pulse" />
                   </>
                 )}
               </button>

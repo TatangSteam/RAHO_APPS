@@ -16,6 +16,7 @@ import { devError } from '@/lib/logger';
 
 import RevenueChart from '@/components/dashboard/RevenueChart';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -108,10 +109,7 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
-          <p className="text-neutral-500 dark:text-neutral-400">Memuat dashboard...</p>
-        </div>
+        <PageLoading text="Memuat dashboard" />
       </div>
     );
   }

@@ -12,6 +12,7 @@ import {
   Download, FileSpreadsheet, Users, Phone, Mail, Building2, 
   ChevronLeft, ChevronRight, Info, UserPlus, BarChart3, Loader2
 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 interface Branch {
   id: string;
@@ -270,10 +271,7 @@ export default function ReferralsPage() {
               {loading ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-16 text-center">
-                    <div className="flex flex-col items-center gap-3">
-                      <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
-                      <span className="text-neutral-500 dark:text-neutral-400">Memuat data...</span>
-                    </div>
+                    <PageLoading text="Memuat data referral" />
                   </td>
                 </tr>
               ) : referrals.length === 0 ? (

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { devError } from '@/lib/logger';
 import styles from './page.module.css';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // TYPES & INTERFACES
@@ -539,10 +540,7 @@ export default function MasterProductsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className={styles.loading}>
-          <div className={styles.loadingSpinner} />
-          <p>Memuat data produk...</p>
-        </div>
+        <PageLoading text="Memuat data produk" />
       ) : filteredProducts.length === 0 ? (
         <div className={styles.emptyState}>
           <div className={styles.emptyIcon}>{hasActiveFilters ? '🔍' : '📦'}</div>

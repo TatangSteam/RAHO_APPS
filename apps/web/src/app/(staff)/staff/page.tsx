@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import StaffCrudModal from '@/components/branches/StaffCrudModal';
 import styles from './page.module.css';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 interface Staff {
   id: string;
@@ -235,10 +236,7 @@ export default function StaffManagementPage() {
 
       {/* Content */}
       {loading ? (
-        <div className={styles.loadingState}>
-          <div className={styles.spinner} />
-          <p>Memuat data staff...</p>
-        </div>
+        <PageLoading text="Memuat data staff" />
       ) : filteredStaff.length === 0 ? (
         <div className={styles.emptyState}>
           <UserCog size={48} />

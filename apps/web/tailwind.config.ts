@@ -27,6 +27,8 @@ const config: Config = {
       animation: {
         'in': 'animateIn 0.5s ease-out',
         'shake': 'shake 0.5s ease-in-out',
+        'shimmer': 'shimmer 2s ease-in-out infinite',
+        'spin-slow': 'spin 1.5s linear infinite',
       },
       keyframes: {
         animateIn: {
@@ -37,6 +39,10 @@ const config: Config = {
           '0%, 100%': { transform: 'translateX(0)' },
           '25%': { transform: 'translateX(-5px)' },
           '75%': { transform: 'translateX(5px)' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
         },
       },
     },

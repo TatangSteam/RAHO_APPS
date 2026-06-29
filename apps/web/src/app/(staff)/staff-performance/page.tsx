@@ -13,6 +13,7 @@ import {
   Users, Calendar, Stethoscope, Heart, UserCog,
   TrendingUp, Filter, BarChart3
 } from 'lucide-react';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 interface Branch {
   id: string;
@@ -430,13 +431,7 @@ export default function StaffPerformancePage() {
                 {loading ? (
                   <tr>
                     <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
-                      <div className="flex flex-col items-center gap-4">
-                        <div className="relative">
-                          <div className="h-12 w-12 rounded-full border-4 border-neutral-200 dark:border-neutral-700"></div>
-                          <div className="absolute inset-0 h-12 w-12 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
-                        </div>
-                        <span className="text-sm text-neutral-500 dark:text-neutral-400">Memuat data kinerja...</span>
-                      </div>
+                      <PageLoading text="Memuat data kinerja" />
                     </td>
                   </tr>
                 ) : filteredStaff.length === 0 ? (

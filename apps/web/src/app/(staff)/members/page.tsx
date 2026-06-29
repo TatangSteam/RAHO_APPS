@@ -12,6 +12,7 @@ import { ColumnConfigModal } from '@/components/members/ColumnConfigModal';
 import { MemberTableCell } from '@/components/members/MemberTableCell';
 import { useMemberColumns } from '@/hooks/useMemberColumns';
 import { devLog, devError } from '@/lib/logger';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 export default function MembersPage() {
   const router = useRouter();
@@ -334,10 +335,7 @@ export default function MembersPage() {
     {/* Table */}
     <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
       {loading ? (
-        <div style={{ padding: '48px', textAlign: 'center' }}>
-          <div className="spinner" style={{ width: '48px', height: '48px', margin: '0 auto 16px' }}></div>
-        <p style={{ color: 'var(--text-secondary)' }}>Memuat data member...</p>
-      </div>
+        <PageLoading text="Memuat data member" />
     ) : members.length === 0 ? (
       <div style={{ padding: '48px', textAlign: 'center' }}>
         <div style={{ fontSize: '64px', marginBottom: '16px' }}>👥</div>

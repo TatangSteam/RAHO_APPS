@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import type { SessionDetail } from '@/types/session';
 import styles from './page.module.css';
 import { devError } from '@/lib/logger';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 // Types for filter options
 interface Branch {
@@ -1444,10 +1445,7 @@ export default function SessionsPage() {
 
       {/* Sessions Table */}
       {loading ? (
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Memuat data...</p>
-        </div>
+        <PageLoading text="Memuat data sesi terapi" />
       ) : sessions.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>💉</div>

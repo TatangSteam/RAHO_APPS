@@ -5,6 +5,7 @@ import { inventoryApi } from '@/lib/api/inventoryApi';
 import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
 import { Package, ArrowRight, Calendar, Building2, TrendingUp, Filter as FilterIcon, AlertTriangle } from 'lucide-react';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 type ShipmentStatus = 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE' | 'APPROVED';
 
@@ -264,15 +265,7 @@ export default function BranchTransfersPage() {
       </div>
 
       {loading ? (
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-20 text-center">
-          <div className="flex flex-col items-center gap-4">
-            <div className="relative">
-              <div className="h-12 w-12 rounded-full border-4 border-neutral-200 dark:border-neutral-700" />
-              <div className="absolute inset-0 h-12 w-12 rounded-full border-4 border-blue-500 border-t-transparent animate-spin" />
-            </div>
-            <span className="text-sm text-neutral-500 dark:text-neutral-400">Memuat data transfer...</span>
-          </div>
-        </div>
+        <PageLoading text="Memuat data transfer" />
       ) : shipments.length === 0 ? (
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-20 text-center">
           <div className="flex flex-col items-center gap-4">

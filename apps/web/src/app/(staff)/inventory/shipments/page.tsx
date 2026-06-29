@@ -8,6 +8,7 @@ import { devError } from '@/lib/logger';
 import { inventoryApi, type Shipment, type ReceiveShipmentInput, type ShipShipmentInput, type ShipmentIssueDecision, type UpdateShipmentInput } from '@/lib/api/inventoryApi';
 import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight, Edit3 } from 'lucide-react';
 import { ShipModal, ReceiveModal, DetailModal, NotesModal, SendShortageModal, EditShipmentModal } from './components';
+import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
 type ShipmentQueryParams = NonNullable<Parameters<typeof inventoryApi.getShipments>[0]>;
@@ -382,10 +383,7 @@ export default function ShipmentsPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <RefreshCw className="h-12 w-12 text-amber-500 animate-spin mb-4" />
-          <p className="text-neutral-500 dark:text-neutral-400">Memuat data...</p>
-        </div>
+        <PageLoading text="Memuat data pengiriman" />
       ) : shipments.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 px-4">
           <div className="w-20 h-20 rounded-full bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center mb-6">
