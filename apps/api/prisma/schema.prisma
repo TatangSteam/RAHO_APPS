@@ -74,11 +74,11 @@ enum PaymentPlanType {
 
 enum BoosterType {
   NO // Nitric Oxide
-  GT // Glutathione
+  GT // Gasotransmitter
   MB // Methylene Blue
   KCL // Potassium Chloride
   H2S // Hydrogen Sulfide
-  HK // Hypochlorous Acid
+  HK // H2O Konsentrat
   O3 // Ozone
   HHO // Hydrogen (legacy - keep for backward compatibility)
   NO2 // Nitric Oxide 2 (legacy - keep for backward compatibility)

@@ -404,7 +404,7 @@ npm run db:seed:testing
    - Produk: TNB-P10 (10 sesi)
 
 4. **Klik "Tambah Booster"**
-   - Pilih Booster: GT (Glutathione)
+   - Pilih Booster: GT (Gasotransmitter)
    - Layanan: PM
 
 5. **Verifikasi total bundle**

@@ -129,7 +129,7 @@ Setiap cabang memiliki **44 paket** yang terdiri dari:
 ### Paket BOOSTER (35 Paket)
 **5 Tipe Booster:**
 1. **VITAMIN_C** - Vitamin C Booster
-2. **GLUTATHIONE** - Glutathione Booster  
+2. **GLUTATHIONE** - Gasotransmitter Booster  
 3. **COLLAGEN** - Collagen Booster
 4. **DETOX** - Detox Booster
 5. **IMMUNE** - Immune Booster
@@ -145,7 +145,7 @@ Setiap cabang memiliki **44 paket** yang terdiri dari:
 
 **Contoh Kode Paket Booster:**
 - `VC1` = Vitamin C 1 Sesi
-- `GT3` = Glutathione 3 Sesi  
+- `GT3` = Gasotransmitter 3 Sesi  
 - `CL5` = Collagen 5 Sesi
 - `DT2` = Detox 2 Sesi
 - `IM7` = Immune 7 Sesi
@@ -211,7 +211,7 @@ Setiap cabang memiliki **44 paket** yang terdiri dari:
 | SKU | Nama Item | Kategori | Unit | Stok | Harga Satuan |
 |-----|-----------|----------|------|------|--------------|
 | INF001 | Vitamin C 1000mg | INFUSION_MATERIALS | Ampul | 100 | Rp 25,000 |
-| INF002 | Glutathione 600mg | INFUSION_MATERIALS | Ampul | 80 | Rp 45,000 |
+| INF002 | Gasotransmitter 600mg | INFUSION_MATERIALS | Ampul | 80 | Rp 45,000 |
 | INF003 | Collagen Peptide | INFUSION_MATERIALS | Vial | 60 | Rp 35,000 |
 | MED001 | Jarum Suntik 23G | MEDICAL_SUPPLIES | Pcs | 500 | Rp 2,500 |
 | MED002 | Selang Infus | MEDICAL_SUPPLIES | Set | 200 | Rp 15,000 |

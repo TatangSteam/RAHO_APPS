@@ -90,11 +90,11 @@ interface PricingFormState {
 
 const BOOSTER_FALLBACKS: MasterType[] = [
   { id: 'NO', code: 'NO', name: 'Nitric Oxide', isActive: true, sortOrder: 10 },
-  { id: 'GT', code: 'GT', name: 'Glutathione', isActive: true, sortOrder: 20 },
+  { id: 'GT', code: 'GT', name: 'GasoTransmitter', isActive: true, sortOrder: 20 },
   { id: 'MB', code: 'MB', name: 'Methylene Blue', isActive: true, sortOrder: 30 },
   { id: 'KCL', code: 'KCL', name: 'Potassium Chloride', isActive: true, sortOrder: 40 },
   { id: 'H2S', code: 'H2S', name: 'Hydrogen Sulfide', isActive: true, sortOrder: 50 },
-  { id: 'HK', code: 'HK', name: 'Hypochlorous Acid', isActive: true, sortOrder: 60 },
+  { id: 'HK', code: 'HK', name: 'H20Konsentrat', isActive: true, sortOrder: 60 },
   { id: 'O3', code: 'O3', name: 'Ozone', isActive: true, sortOrder: 70 },
 ];
 

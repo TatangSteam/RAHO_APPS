@@ -705,7 +705,7 @@ Daftar member yang perlu ditindaklanjuti:
 3. Klik tombol **"+ Assign Paket"**
 4. Pilih tipe paket:
    - **BASIC**: Paket dasar (B1-B9)
-   - **BOOSTER**: Paket tambahan (Vitamin C, Glutathione, dll)
+   - **BOOSTER**: Paket tambahan (Vitamin C, Gasotransmitter, dll)
 5. Pilih varian paket (jumlah sesi)
 6. Tambahkan **Add-On** jika diperlukan:
    - Air Nano (pilih ukuran)
@@ -1382,7 +1382,7 @@ Informasi kontak cabang:
 | Tipe | Kode | Deskripsi |
 |------|------|-----------|
 | VITAMIN_C | VC | Vitamin C Booster untuk imunitas |
-| GLUTATHIONE | GT | Glutathione Booster untuk detox & kulit |
+| GLUTATHIONE | GT | Gasotransmitter Booster untuk detox & kulit |
 | COLLAGEN | CL | Collagen Booster untuk kulit & sendi |
 | DETOX | DT | Detox Booster untuk pembersihan tubuh |
 | IMMUNE | IM | Immune Booster untuk sistem imun |
@@ -1415,7 +1415,7 @@ Informasi kontak cabang:
 
 | Kategori | Kode | Contoh Item |
 |----------|------|-------------|
-| Bahan Infus | INFUSION_MATERIALS | Vitamin C, Glutathione, NaCl |
+| Bahan Infus | INFUSION_MATERIALS | Vitamin C, Gasotransmitter, NaCl |
 | Perlengkapan Medis | MEDICAL_SUPPLIES | Jarum, Selang Infus, Plester |
 | Bahan Habis Pakai | CONSUMABLES | Kapas, Alkohol, Sarung Tangan |
 | Peralatan | EQUIPMENT | Timbangan, Tensimeter |

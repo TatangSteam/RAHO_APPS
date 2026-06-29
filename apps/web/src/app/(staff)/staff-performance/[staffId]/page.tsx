@@ -85,7 +85,7 @@ const getPackageLabel = (packageType: string, boosterType: string | null) => {
     const boosterLabels: Record<string, string> = {
       IFA_250: 'IFA 250',
       IFA_500: 'IFA 500',
-      GLUTATHIONE: 'Glutathione',
+      GLUTATHIONE: 'Gasotransmitter',
       VITAMIN_C: 'Vitamin C',
     };
     return boosterLabels[boosterType] || boosterType;
