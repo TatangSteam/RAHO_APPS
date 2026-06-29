@@ -3,11 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import rateLimit from 'express-rate-limit';
 
 import { env } from '@config/env';
 import { logger } from '@lib/logger';
 import { errorHandler } from '@middleware/errorHandler';
+import { apiRateLimiter } from '@middleware/rateLimiter';
 
 // ── Route Modules ─────────────────────────────────────────────
 import { authRouter } from '@modules/auth/auth.routes';
@@ -78,21 +78,7 @@ export function createApp(): Application {
   }
 
   // ── Global Rate Limiter ───────────────────────────────────
-  app.use(
-    rateLimit({
-      windowMs: env.RATE_LIMIT_WINDOW_MS,
-      max: env.RATE_LIMIT_MAX,
-      standardHeaders: true,
-      legacyHeaders: false,
-      message: {
-        success: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Terlalu banyak permintaan. Silakan coba lagi nanti.',
-        },
-      },
-    }),
-  );
+  app.use(apiRateLimiter);
 
   // ── Health Check ──────────────────────────────────────────
   app.get('/health', (_req: Request, res: Response) => {
