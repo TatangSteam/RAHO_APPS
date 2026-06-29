@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { doctorBranchApi, DoctorWithBranches, ManagedBranch } from '@/lib/api/doctorBranchApi';
-import { useAuthStore } from '@/stores/authStore';
 import styles from './page.module.css';
 
 export default function AdminManagerDoctorsPage() {
-  const { user } = useAuthStore();
   const [doctors, setDoctors] = useState<DoctorWithBranches[]>([]);
   const [branches, setBranches] = useState<ManagedBranch[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
@@ -26,7 +24,7 @@ export default function AdminManagerDoctorsPage() {
   const loadBranches = async () => {
     try {
       const data = await doctorBranchApi.getManagedBranches(false);
-      setBranches(data.branches);
+      setBranches(data);
     } catch (err: any) {
       console.error('Failed to load branches:', err);
       setError('Gagal memuat cabang');

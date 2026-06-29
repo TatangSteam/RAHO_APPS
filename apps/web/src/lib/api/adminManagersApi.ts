@@ -48,6 +48,14 @@ export interface AdminManagersResponse {
 
 export interface ImpersonateResponse {
   token: string;  // Backend returns 'token', not 'accessToken'
+  user?: {
+    id: string;
+    email: string;
+    role: string;
+    fullName: string;
+    branchId?: string | null;
+    branches?: string[];
+  };
   targetUser: {
     id: string;
     email: string;
@@ -69,6 +77,9 @@ export const adminManagersApi = {
   getAdminManagers: async (params?: {
     search?: string;
     isActive?: boolean;
+    status?: 'active' | 'inactive' | string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
     page?: number;
     limit?: number;
   }): Promise<AdminManagersResponse> => {
@@ -142,6 +153,14 @@ export const adminManagersApi = {
   startImpersonation: async (userId: string): Promise<ImpersonateResponse> => {
     const response = await api.post(`/admin/impersonate/${userId}`);
     // Backend returns { success: true, data: { token, targetUser, originalUser } }
+    return response.data.data;
+  },
+
+  impersonateUser: async (userId: string, targetRole?: string): Promise<ImpersonateResponse> => {
+    const response = await api.post(
+      `/admin/impersonate/${userId}`,
+      targetRole ? { targetRole } : undefined
+    );
     return response.data.data;
   },
 

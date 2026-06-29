@@ -117,8 +117,6 @@ export default function AssignPackageModal({
     return () => { document.body.style.overflow = ''; };
   }, [show]);
 
-  if (!show || !mounted) return null;
-
   const pricingsList = Array.isArray(pricings) ? pricings : [];
 
   const {
@@ -143,6 +141,8 @@ export default function AssignPackageModal({
     type: 'FULL_PAYMENT' as const,
     installmentCount: 2,
   };
+
+  if (!show || !mounted) return null;
 
   const updatePaymentPlanType = (type: 'FULL_PAYMENT' | 'INSTALLMENT') => {
     const installmentCount = paymentPlan.installmentCount || 2;

@@ -42,7 +42,7 @@ export interface CreateBranchData {
   isActive?: boolean;
 }
 
-export interface UpdateBranchData extends Partial<CreateBranchData> {}
+export type UpdateBranchData = Partial<CreateBranchData>;
 
 export interface AuditLogParams {
   page?: number;

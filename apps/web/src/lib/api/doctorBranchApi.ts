@@ -74,13 +74,10 @@ export const doctorBranchApi = {
    * Get managed branches for Admin Manager
    */
   async getManagedBranches(includeStats: boolean = false) {
-    const response = await api.get<ManagedBranch[]>('/admin-manager/branches', {
+    const response = await api.get<{ success?: boolean; data?: ManagedBranch[] } | ManagedBranch[]>('/admin-manager/branches', {
       params: { includeStats },
     });
-    // Backend sendSuccess returns: { success: true, data: [...branches...] }
-    // Axios returns: response.data = { success: true, data: [...branches...] }
-    // Caller needs to access response.data.data to get the array
-    return response.data;
+    return Array.isArray(response.data) ? response.data : response.data.data || [];
   },
 
   /**

@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { doctorBranchApi, ManagedBranch } from '@/lib/api/doctorBranchApi';
-import { branchesApi } from '@/lib/api/branchesApi';
+import { branchesApi, type Branch } from '@/lib/api/branchesApi';
 import styles from './page.module.css';
 
 export default function AdminManagerBranchesPage() {
   const [branches, setBranches] = useState<ManagedBranch[]>([]);
-  const [allBranches, setAllBranches] = useState<any[]>([]);
+  const [allBranches, setAllBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedBranchId, setSelectedBranchId] = useState('');
@@ -23,8 +23,9 @@ export default function AdminManagerBranchesPage() {
         doctorBranchApi.getManagedBranches(true),
         branchesApi.getAllBranches(),
       ]);
-      setBranches(managedData.branches);
-      setAllBranches(allData.branches || allData);
+      const branchPayload = allData.data?.data || allData.data;
+      setBranches(managedData);
+      setAllBranches(Array.isArray(branchPayload) ? branchPayload : branchPayload?.branches || []);
     } catch (err: any) {
       console.error('Failed to load branches:', err);
       alert('Gagal memuat data cabang');

@@ -212,8 +212,7 @@ export default function CreateRequestModal({
     setRequestItems(prev => prev.map(item => {
       if (item.masterProductId === masterProductId) {
         if (field === 'requestedQty') {
-          // Allow empty string or any number during typing
-          const numValue = value === '' ? '' : Number(value);
+          const numValue = value === '' ? 0 : Number(value);
           return { ...item, [field]: numValue };
         }
         return { ...item, [field]: value };
@@ -226,7 +225,7 @@ export default function CreateRequestModal({
     setRequestItems(prev => prev.map(item => {
       if (item.masterProductId === masterProductId) {
         // Ensure minimum value of 1 when user leaves the input
-        const qty = item.requestedQty === '' || item.requestedQty < 1 ? 1 : item.requestedQty;
+        const qty = item.requestedQty < 1 ? 1 : item.requestedQty;
         return { ...item, requestedQty: qty };
       }
       return item;

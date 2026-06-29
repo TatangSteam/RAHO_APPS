@@ -70,8 +70,6 @@ export default function EditPackageModal({
     return () => { document.body.style.overflow = ''; };
   }, [show]);
 
-  if (!show || !mounted) return null;
-
   const pricingsList = Array.isArray(pricings) ? pricings : [];
 
   const {
@@ -92,6 +90,8 @@ export default function EditPackageModal({
   } = usePackageSelection(editData, onEditDataChange, pricingsList);
 
   const preview = calculatePreview();
+
+  if (!show || !mounted) return null;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) onClose();
