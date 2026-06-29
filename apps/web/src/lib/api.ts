@@ -15,6 +15,17 @@ export const api: AxiosInstance = axios.create({
   timeout: 30_000,
 });
 
+async function refreshTokens(refreshToken: string): Promise<{
+  accessToken: string;
+  refreshToken: string;
+}> {
+  const { data } = await axios.post<{
+    data: { accessToken: string; refreshToken: string };
+  }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
+
+  return data.data;
+}
+
 // ── Token Expiry Checker ──────────────────────────────────────
 // Check token expiry periodically and logout if expired
 
@@ -104,11 +115,7 @@ export function startTokenExpiryCheck(): void {
         // Try to refresh token
         if (refreshToken) {
           try {
-            const { data } = await axios.post<{
-              data: { accessToken: string; refreshToken: string };
-            }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
-
-            const { accessToken: newAccess, refreshToken: newRefresh } = data.data;
+            const { accessToken: newAccess, refreshToken: newRefresh } = await refreshTokens(refreshToken);
             setAccessToken(newAccess, newRefresh);
             
             return; // Skip expiry check since we just refreshed
@@ -120,6 +127,17 @@ export function startTokenExpiryCheck(): void {
 
       // If token is expired, logout
       if (now >= expiryTime) {
+        if (refreshToken) {
+          try {
+            const { accessToken: newAccess, refreshToken: newRefresh } = await refreshTokens(refreshToken);
+            setAccessToken(newAccess, newRefresh);
+            lastActivityTime = Date.now();
+            return;
+          } catch (refreshError) {
+            // Refresh token is also no longer valid, continue to logout below.
+          }
+        }
+
         stopTokenExpiryCheck();
         
         // Clear auth and force redirect
@@ -153,10 +171,10 @@ export function stopTokenExpiryCheck(): void {
 }
 
 // ── Request Interceptor ───────────────────────────────────────
-// Attach Bearer token on every request and check if token is expired
+// Attach Bearer token on every request and refresh it first when possible
 
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const { accessToken, clearAuth } = useAuthStore.getState();
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  const { accessToken, refreshToken, setAccessToken } = useAuthStore.getState();
   
   // Set Content-Type based on data type
   if (config.data instanceof FormData) {
@@ -174,7 +192,18 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
       const isExpired = Date.now() >= payload.exp * 1000;
       
       if (isExpired) {
-        // Token expired, logout immediately
+        if (refreshToken) {
+          try {
+            const { accessToken: newAccess, refreshToken: newRefresh } = await refreshTokens(refreshToken);
+            setAccessToken(newAccess, newRefresh);
+            config.headers.Authorization = `Bearer ${newAccess}`;
+            return config;
+          } catch (refreshError) {
+            // Fall through to logout below if refresh also fails.
+          }
+        }
+
+        // Token expired and cannot be refreshed, logout immediately
         const { clearAuth } = useAuthStore.getState();
         clearAuth();
         
@@ -308,11 +337,7 @@ api.interceptors.response.use(
         }
 
         try {
-          const { data } = await axios.post<{
-            data: { accessToken: string; refreshToken: string };
-          }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
-
-          const { accessToken: newAccess, refreshToken: newRefresh } = data.data;
+          const { accessToken: newAccess, refreshToken: newRefresh } = await refreshTokens(refreshToken);
           setAccessToken(newAccess, newRefresh);
           processQueue(newAccess);
 
