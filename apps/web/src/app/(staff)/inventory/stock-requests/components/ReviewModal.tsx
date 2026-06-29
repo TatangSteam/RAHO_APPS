@@ -702,27 +702,6 @@ export default function ReviewModal({
                     </div>
                   </div>
                   
-                  {request.invoice.items && request.invoice.items.length > 0 && (
-                    <div className="space-y-2 mb-4">
-                      <h5 className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                        Detail Items
-                      </h5>
-                      {request.invoice.items.map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10"
-                        >
-                          <span className="text-sm text-neutral-700 dark:text-neutral-200">
-                            {item.productName} × {item.quantity}
-                          </span>
-                          <span className="font-semibold text-emerald-400">
-                            {formatCurrency(item.subtotal)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
                   <button
                     onClick={handleDownloadInvoice}
                     disabled={downloadingPdf}
