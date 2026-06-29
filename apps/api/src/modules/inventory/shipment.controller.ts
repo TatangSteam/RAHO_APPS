@@ -6,6 +6,26 @@ import { prisma } from '../../lib/prisma';
 
 const shipmentService = new ShipmentService();
 
+function parseJsonField<T>(value: unknown, fieldName: string): T | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+
+  if (typeof value !== 'string') {
+    return value as T;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    throw {
+      status: 400,
+      code: 'INVALID_JSON_FIELD',
+      message: `Field ${fieldName} harus berupa JSON yang valid`,
+    };
+  }
+}
+
 export class ShipmentController {
   /**
    * Ship shipment (Admin Manager / Super Admin)
@@ -43,19 +63,26 @@ export class ShipmentController {
    * Receive shipment (Admin Cabang)
    * POST /api/v1/inventory/shipments/:shipmentId/receive
    * 
-   * Body:
+   * Multipart body:
    * - receivedItems: Array of { masterProductId, receivedQty }
    * - discrepancies: Array of { masterProductId, expectedQty, receivedQty, discrepancyType, notes, photoUrl }
    * - notes: string
+   * - receiptFile: PDF/JPG tanda terima (required)
    */
   async receiveShipment(req: Request, res: Response, next: NextFunction) {
     try {
       const { shipmentId } = req.params;
-      const { receivedItems, discrepancies, notes } = req.body;
+      const receivedItems = parseJsonField<any[]>(req.body.receivedItems, 'receivedItems');
+      const discrepancies = parseJsonField<any[]>(req.body.discrepancies, 'discrepancies');
+      const { notes } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
+      }
+
+      if (!req.file) {
+        return sendError(res, 400, 'RECEIPT_FILE_REQUIRED', 'File tanda terima wajib diupload');
       }
 
       // Validate discrepancies if provided
@@ -77,6 +104,7 @@ export class ShipmentController {
         receivedItems,
         discrepancies,
         notes,
+        receiptFile: req.file,
       });
       return sendSuccess(res, result);
     } catch (err: any) {

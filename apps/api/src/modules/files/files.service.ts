@@ -177,6 +177,11 @@ export class FilesService {
       return;
     }
 
+    if (key.startsWith('uploads/shipments/')) {
+      await this.authorizeShipmentReceiptAccess(key, user);
+      return;
+    }
+
     if (key.startsWith('lab-results/')) {
       await this.authorizeLabResultAccess(key, user);
       return;
@@ -550,6 +555,51 @@ export class FilesService {
     // For ADMIN_CABANG, check if it's their branch
     const accessibleBranchIds = await this.getAccessibleBranchIds(user);
     if (accessibleBranchIds && accessibleBranchIds.includes(stockRequest.branchId)) {
+      return;
+    }
+
+    throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+  }
+
+  private async authorizeShipmentReceiptAccess(key: string, user: AuthUser): Promise<void> {
+    const match = key.match(/uploads\/shipments\/([^/]+)\//);
+    if (!match) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    const shipmentId = match[1];
+
+    const shipment = await prisma.shipment.findFirst({
+      where: {
+        id: shipmentId,
+        OR: [
+          { receiptFileUrl: key },
+          { receiptFileUrl: `${env.API_PREFIX}/files/${key}` },
+          { receiptFileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
+          { receiptFileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
+          { receiptFileUrl: { endsWith: key } },
+        ],
+      },
+      select: {
+        fromBranchId: true,
+        toBranchId: true,
+      },
+    });
+
+    if (!shipment) {
+      throw { status: 404, code: 'FILE_NOT_FOUND', message: 'File tidak ditemukan' };
+    }
+
+    if (user.role === 'MEMBER') {
+      throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
+    }
+
+    const accessibleBranchIds = await this.getAccessibleBranchIds(user);
+    if (!accessibleBranchIds) {
+      return;
+    }
+
+    if (accessibleBranchIds.includes(shipment.fromBranchId) || accessibleBranchIds.includes(shipment.toBranchId)) {
       return;
     }
 

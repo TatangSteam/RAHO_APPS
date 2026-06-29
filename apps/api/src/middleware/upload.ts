@@ -6,9 +6,11 @@ const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'
 const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp', 'application/pdf'] as const; // For PSP documents (images + PDF) and profile photos
 const PAYMENT_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // Accept all common image formats
 const LAB_RESULT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'] as const; // PDF and images for lab results
+const SHIPMENT_RECEIPT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg'] as const; // PDF and JPG/JPEG for shipment receipts
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_LAB_RESULT_SIZE = 10 * 1024 * 1024; // 10 MB for lab results
+const MAX_SHIPMENT_RECEIPT_SIZE = 10 * 1024 * 1024; // 10 MB for shipment receipts
 
 function fileFilter(
   _req: Request,
@@ -59,6 +61,18 @@ function labResultFileFilter(
   cb(null, true);
 }
 
+function shipmentReceiptFileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  if (!SHIPMENT_RECEIPT_MIME_TYPES.includes(file.mimetype as (typeof SHIPMENT_RECEIPT_MIME_TYPES)[number])) {
+    cb(new AppError(400, 'FILE_INVALID_TYPE', 'Tanda terima hanya menerima format PDF atau JPG.'));
+    return;
+  }
+  cb(null, true);
+}
+
 /**
  * Multer instance — stores files in memory (as Buffer).
  * Enforces: max 5 MB, only image/jpeg | image/png | image/webp.
@@ -99,13 +113,19 @@ export const uploadLabResult = multer({
   fileFilter: labResultFileFilter,
 });
 
+export const uploadShipmentReceipt = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SHIPMENT_RECEIPT_SIZE },
+  fileFilter: shipmentReceiptFileFilter,
+});
+
 /**
  * Multer error handler — maps MulterError to AppError for consistent response.
  */
 export function handleMulterError(err: unknown): never {
   if (err instanceof multer.MulterError) {
     if (err.code === 'LIMIT_FILE_SIZE') {
-      throw new AppError(400, 'FILE_TOO_LARGE', 'Ukuran file maksimal 5MB.');
+      throw new AppError(400, 'FILE_TOO_LARGE', 'Ukuran file melebihi batas maksimal.');
     }
     throw new AppError(400, 'UPLOAD_ERROR', `Upload error: ${err.message}`);
   }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info, CheckCircle2 } from 'lucide-react';
 import { Shipment, ShipmentIssueDecision } from '@/lib/api/inventoryApi';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
   PREPARING: {
@@ -74,6 +75,7 @@ interface DetailModalProps {
 
 export default function DetailModal({ shipment, onClose, onShip, onReceive, onReviewIssue, loading, detailLoading }: DetailModalProps) {
   const [mounted, setMounted] = useState(false);
+  const [loadingReceipt, setLoadingReceipt] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -98,6 +100,18 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive, onRe
     .split('\n')
     .map(line => line.trim())
     .filter(line => line.startsWith('[Review Admin Manager]'));
+
+  const handleViewReceipt = async () => {
+    if (!shipment.receiptFileUrl) return;
+
+    try {
+      setLoadingReceipt(true);
+      const blobUrl = await createAuthenticatedObjectUrl(shipment.receiptFileUrl);
+      window.open(blobUrl, '_blank', 'noopener,noreferrer');
+    } finally {
+      setLoadingReceipt(false);
+    }
+  };
 
   if (!mounted) return null;
 
@@ -244,6 +258,35 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive, onRe
                 </div>
               </div>
             </div>
+
+            {shipment.receiptFileUrl && (
+              <div className="p-4 rounded-xl bg-sky-500/10 border border-sky-500/30">
+                <h3 className="text-sm font-semibold text-sky-400 mb-3 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Tanda Terima
+                </h3>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-neutral-700 dark:text-neutral-100">
+                      {shipment.receiptFileName || 'Tanda terima penerimaan'}
+                    </p>
+                    <p className="text-xs text-sky-300">
+                      {shipment.receiptMimeType === 'application/pdf' ? 'PDF' : 'JPG'}
+                      {shipment.receiptFileSize ? ` - ${(shipment.receiptFileSize / (1024 * 1024)).toFixed(1)} MB` : ''}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleViewReceipt}
+                    disabled={loadingReceipt}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-sky-500 px-4 py-2 text-sm font-semibold text-white transition-all hover:bg-sky-600 disabled:opacity-50"
+                  >
+                    <FileText className="h-4 w-4" />
+                    {loadingReceipt ? 'Memuat...' : 'Lihat File'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Items Section */}
             <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30">

@@ -1466,8 +1466,12 @@ model Shipment {
   shipmentPhotoName String?
 
   // Receiving details
-  receivedAt DateTime?
-  receivedBy String?
+  receivedAt       DateTime?
+  receivedBy       String?
+  receiptFileUrl   String?
+  receiptFileName  String?
+  receiptFileSize  Int?
+  receiptMimeType  String?
 
   // Approval details
   approvedAt DateTime?
