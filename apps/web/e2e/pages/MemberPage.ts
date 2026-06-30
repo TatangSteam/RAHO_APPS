@@ -18,6 +18,7 @@ export class MemberPage {
   readonly addMemberButton: Locator;
   readonly searchInput: Locator;
   readonly memberTable: Locator;
+  private createdMemberUrls = new Map<string, string>();
 
   constructor(page: Page) {
     this.page = page;
@@ -82,6 +83,7 @@ export class MemberPage {
     await this.submitForm();
 
     await this.page.waitForURL(/\/members\/[^/]+$/, { timeout: 30000 });
+    this.createdMemberUrls.set(data.name, this.page.url());
     await this.goto();
   }
 
@@ -117,6 +119,13 @@ export class MemberPage {
    * Click view button for a member
    */
   async viewMember(memberName: string) {
+    const createdMemberUrl = this.createdMemberUrls.get(memberName);
+    if (createdMemberUrl) {
+      await this.page.goto(createdMemberUrl);
+      await waitForLoadingToFinish(this.page);
+      return;
+    }
+
     const row = this.getMemberRow(memberName);
     await row.click();
     await this.page.waitForURL(/\/members\/[^/]+$/);
