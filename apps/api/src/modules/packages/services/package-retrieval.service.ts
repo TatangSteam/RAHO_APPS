@@ -192,6 +192,7 @@ export class PackageRetrievalService {
       totalVerifiedPaid: pkg.totalVerifiedPaid ? Number(pkg.totalVerifiedPaid) : 0,
       paymentPlanStatus: pkg.paymentPlanStatus || undefined,
       boosterType: pkg.boosterType || undefined,
+      branchId: pkg.branchId,
       branchName: pkg.branch.name,
       assignedBy: userMap.get(pkg.assignedBy)?.profile?.fullName || 'Unknown',
       verifiedBy: pkg.verifiedBy ? userMap.get(pkg.verifiedBy)?.profile?.fullName : undefined,

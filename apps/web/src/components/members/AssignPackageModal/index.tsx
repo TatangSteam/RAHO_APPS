@@ -7,7 +7,6 @@ import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/t
 import { usePackageSelection } from './usePackageSelection';
 import BasicPackageSection from './BasicPackageSection';
 import BoosterPackageSection from './BoosterPackageSection';
-import AddOnSection from './AddOnSection';
 import DiscountSection from './DiscountSection';
 import PreviewSection from './PreviewSection';
 
@@ -129,10 +128,6 @@ export default function AssignPackageModal({
     toggleBooster,
     updateBoosterQty,
     updateBoosterServiceType,
-    isAddOnSelected,
-    getAddOnQuantity,
-    toggleAddOn,
-    updateAddOnQuantity,
     calculatePreview,
   } = usePackageSelection(assignData, onAssignDataChange, pricingsList);
 
@@ -226,14 +221,6 @@ export default function AssignPackageModal({
               toggleBooster={toggleBooster}
               updateBoosterQty={updateBoosterQty}
               updateBoosterServiceType={updateBoosterServiceType}
-            />
-
-            {/* ADD-ONS */}
-            <AddOnSection
-              isAddOnSelected={isAddOnSelected}
-              getAddOnQuantity={getAddOnQuantity}
-              toggleAddOn={toggleAddOn}
-              updateAddOnQuantity={updateAddOnQuantity}
             />
 
             {/* DISKON */}

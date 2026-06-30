@@ -47,7 +47,7 @@ export default function PreviewSection({
       <div className="text-sm space-y-2">
         {items.length === 0 ? (
           <p className="text-neutral-500 dark:text-neutral-500 text-center py-4">
-            Pilih minimal 1 paket atau add-on
+            Pilih minimal 1 paket
           </p>
         ) : (
           <>

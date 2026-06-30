@@ -162,7 +162,7 @@ export default function MemberDetailPage() {
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
-    setAssignData(data);
+    setAssignData({ ...data, selectedAddOns: [] });
   };
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -268,8 +268,8 @@ export default function MemberDetailPage() {
     devLog('assignData:', assignData);
     devLog('selectedPackages:', assignData.selectedPackages);
     
-    if (assignData.selectedPackages.length === 0 && assignData.selectedAddOns.length === 0) {
-      showToast.error('Pilih minimal 1 paket atau add-on');
+    if (assignData.selectedPackages.length === 0) {
+      showToast.error('Pilih minimal 1 paket');
       return;
     }
 
@@ -296,11 +296,6 @@ export default function MemberDetailPage() {
             }
           : { type: 'FULL_PAYMENT' },
       };
-      
-      // Add addOns if any selected
-      if (assignData.selectedAddOns.length > 0) {
-        payload.addOns = assignData.selectedAddOns;
-      }
       
       devLog('Sending payload:', payload);
       

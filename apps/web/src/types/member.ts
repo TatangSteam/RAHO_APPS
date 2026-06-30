@@ -170,6 +170,7 @@ export interface MemberPackage {
   remainingSessions: number;
   status: 'PENDING_PAYMENT' | 'WAITING_VERIFICATION' | 'ACTIVE' | 'EXPIRED' | 'CANCELLED' | 'INACTIVE';
   activatedAt: string | null;
+  branchId?: string;
   branchName: string;
   productCode?: string;
   serviceType?: string;

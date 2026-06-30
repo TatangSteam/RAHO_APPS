@@ -37,6 +37,7 @@ export interface TherapyPlanSubstance {
 // ============================================================
 
 export interface CreateSessionInput {
+  branchId?: string;
   memberId: string;
   memberPackageId: string;
   boosterPackageId?: string;

@@ -8,6 +8,7 @@ import {
   createInfusionSchema,
   createMaterialUsageSchema,
   createEvaluationSchema,
+  type CreateSessionInput,
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
 import { SessionExportService } from './services/session-export.service';
@@ -32,6 +33,97 @@ const parseQueryIdList = (value: unknown): string[] | undefined => {
 };
 
 export class SessionsController {
+  private async assertManagerCanAccessBranch(userId: string, branchId: string) {
+    const managedBranch = await prisma.managerBranch.findFirst({
+      where: {
+        userId,
+        branchId,
+        branch: { isActive: true },
+      },
+      select: { id: true },
+    });
+
+    if (!managedBranch) {
+      throw {
+        status: 403,
+        code: 'SESSION_BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses untuk membuat sesi pada cabang ini',
+      };
+    }
+  }
+
+  private async resolveCreateSessionBranchId(
+    data: CreateSessionInput,
+    user: Request['user']
+  ): Promise<string> {
+    if (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER) {
+      if (!user.branchId) {
+        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'User harus terikat dengan cabang' };
+      }
+
+      return user.branchId;
+    }
+
+    let branchId = data.branchId || user.branchId || undefined;
+
+    if (!branchId) {
+      const memberPackage = await prisma.memberPackage.findFirst({
+        where: {
+          id: data.memberPackageId,
+          memberId: data.memberId,
+        },
+        select: { branchId: true },
+      });
+      branchId = memberPackage?.branchId;
+    }
+
+    if (!branchId) {
+      throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Cabang sesi harus dipilih' };
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      await this.assertManagerCanAccessBranch(user.userId, branchId);
+    }
+
+    return branchId;
+  }
+
+  private async resolveSuggestedSessionBranchId(
+    memberId: string,
+    requestedBranchId: unknown,
+    user: Request['user']
+  ): Promise<string> {
+    if (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER) {
+      if (!user.branchId) {
+        throw { status: 403, code: 'BRANCH_REQUIRED', message: 'User harus terikat dengan cabang' };
+      }
+
+      return user.branchId;
+    }
+
+    let branchId = typeof requestedBranchId === 'string' && requestedBranchId
+      ? requestedBranchId
+      : user.branchId || undefined;
+
+    if (!branchId) {
+      const member = await prisma.member.findUnique({
+        where: { id: memberId },
+        select: { registrationBranchId: true },
+      });
+      branchId = member?.registrationBranchId;
+    }
+
+    if (!branchId) {
+      throw { status: 403, code: 'BRANCH_REQUIRED', message: 'Cabang sesi harus dipilih' };
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      await this.assertManagerCanAccessBranch(user.userId, branchId);
+    }
+
+    return branchId;
+  }
+
   private async getAuthorizedSessionBranchId(
     sessionId: string,
     user: Request['user']
@@ -80,10 +172,7 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
-      const branchId = req.user!.branchId;
-      if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
-      }
+      const branchId = await this.resolveCreateSessionBranchId(validation.data, req.user!);
 
       const result = await sessionsService.createSession(
         validation.data, 
@@ -103,10 +192,7 @@ export class SessionsController {
   async getSuggestedSessionNumbers(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId } = req.params;
-      const branchId = req.user!.branchId;
-      if (!branchId) {
-        return sendError(res, 403, 'BRANCH_REQUIRED', 'User harus terikat dengan cabang');
-      }
+      const branchId = await this.resolveSuggestedSessionBranchId(memberId, req.query.branchId, req.user!);
 
       const result = await sessionsService.getSuggestedSessionNumbers(memberId, branchId);
       return sendSuccess(res, result);

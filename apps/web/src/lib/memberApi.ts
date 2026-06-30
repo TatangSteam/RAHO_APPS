@@ -42,6 +42,7 @@ export interface MemberPackage {
   remainingSessions: number;
   status: string;
   activatedAt: string | null;
+  branchId?: string;
   branchName: string;
 }
 

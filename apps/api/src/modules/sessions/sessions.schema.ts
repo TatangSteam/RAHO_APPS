@@ -28,6 +28,7 @@ const ifaSubstanceSchema = z.object({
 // ============================================================
 
 export const createSessionSchema = z.object({
+  branchId: z.string().cuid().optional(),
   memberId: z.string().cuid(),
   memberPackageId: z.string().cuid(),
   boosterPackageId: z.string().cuid().optional(),

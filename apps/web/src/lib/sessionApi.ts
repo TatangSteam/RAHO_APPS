@@ -25,8 +25,10 @@ export const sessionApi = {
     return response.data.data;
   },
 
-  getSuggestedSessionNumbers: async (memberId: string): Promise<SuggestedSessionNumbers> => {
-    const response = await api.get(`/treatment-sessions/members/${memberId}/suggested-numbers`);
+  getSuggestedSessionNumbers: async (memberId: string, branchId?: string): Promise<SuggestedSessionNumbers> => {
+    const response = await api.get(`/treatment-sessions/members/${memberId}/suggested-numbers`, {
+      params: branchId ? { branchId } : undefined,
+    });
     return response.data.data;
   },
 

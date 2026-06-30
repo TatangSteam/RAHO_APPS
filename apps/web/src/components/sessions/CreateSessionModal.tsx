@@ -64,6 +64,7 @@ export default function CreateSessionModal({
   const [memberId, setMemberId] = useState(preselectedMemberId || '');
   const [memberNo, setMemberNo] = useState('');
   const [memberName, setMemberName] = useState('');
+  const [sessionBranchId, setSessionBranchId] = useState(user?.branchId || '');
   const [voucherCount, setVoucherCount] = useState(0);
   const [outstandingDebtSessions, setOutstandingDebtSessions] = useState(0);
   
@@ -123,9 +124,29 @@ export default function CreateSessionModal({
       loadMemberData(memberId);
       loadTherapyPlans(memberId);
       loadDiagnoses(memberId);
-      loadSuggestedSessionNumbers(memberId);
     }
   }, [memberId, user?.branchId]);
+
+  useEffect(() => {
+    const targetBranchId = sessionBranchId || user?.branchId;
+    if (memberId && targetBranchId) {
+      loadSuggestedSessionNumbers(memberId, targetBranchId);
+    }
+  }, [memberId, sessionBranchId, user?.branchId]);
+
+  useEffect(() => {
+    setSelectedAdminLayananId('');
+    setSelectedDoctorId('');
+    setSelectedNurseId('');
+  }, [sessionBranchId]);
+
+  useEffect(() => {
+    const selectedPkg = packages.find((pkg) => pkg.packageId === selectedPackageId);
+    const nextBranchId = selectedPkg?.branchId || sessionBranchId || user?.branchId || '';
+    if (nextBranchId && nextBranchId !== sessionBranchId) {
+      setSessionBranchId(nextBranchId);
+    }
+  }, [packages, selectedPackageId, sessionBranchId, user?.branchId]);
 
   useEffect(() => {
     const targetInfusKe = useManualNumbering && manualInfusKe ? Number(manualInfusKe) : calculatedGlobalInfusKe;
@@ -140,23 +161,35 @@ export default function CreateSessionModal({
 
   useEffect(() => {
     if (isOpen) {
-      loadStaff();
-      // Don't load infus set stock here - wait for member to be selected
-      // This prevents showing wrong stock for Admin Manager who doesn't have direct branchId
-      // Stock will be loaded when member is selected in loadMemberData
-      if (user?.branchId) {
-        loadInfusSetStock(user.branchId);
-      } else {
-        // For Admin Manager without direct branchId, set to null (unknown)
-        setInfusSetStock(null);
-      }
       const now = new Date();
       const localDateTime = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
         .toISOString()
         .slice(0, 16);
       setTreatmentDate(localDateTime);
     }
-  }, [isOpen, user?.branchId]);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const targetBranchId = sessionBranchId || user?.branchId || undefined;
+    const globalRoleNeedsBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+
+    if (!targetBranchId && globalRoleNeedsBranch) {
+      setAdminLayananList([]);
+      setDoctors([]);
+      setNurses([]);
+      setInfusSetStock(null);
+      return;
+    }
+
+    loadStaff(targetBranchId);
+    if (targetBranchId) {
+      loadInfusSetStock(targetBranchId);
+    } else {
+      setInfusSetStock(null);
+    }
+  }, [isOpen, sessionBranchId, user?.branchId, user?.role]);
 
   // Helper to get set key (matching MemberTherapyPlansTab logic)
   const getPlanSetKey = (plan: TherapyPlan): string => {
@@ -338,6 +371,7 @@ export default function CreateSessionModal({
       });
       
       if (memberBranchId) {
+        setSessionBranchId(memberBranchId);
         devLog('Loading infus set stock for member branch:', memberBranchId);
         await loadInfusSetStock(memberBranchId);
       } else {
@@ -405,6 +439,7 @@ export default function CreateSessionModal({
         usablePackages.find((p) => p.packageType === 'BASIC');
       if (basicPackage) {
         setSelectedPackageId(basicPackage.packageId);
+        setSessionBranchId(basicPackage.branchId || memberBranchId || user?.branchId || '');
       } else {
         setSelectedPackageId('');
       }
@@ -485,9 +520,9 @@ export default function CreateSessionModal({
     }
   };
 
-  const loadSuggestedSessionNumbers = async (id: string) => {
+  const loadSuggestedSessionNumbers = async (id: string, targetBranchId?: string) => {
     try {
-      const suggested = await sessionApi.getSuggestedSessionNumbers(id);
+      const suggested = await sessionApi.getSuggestedSessionNumbers(id, targetBranchId);
       setCalculatedGlobalInfusKe(suggested.globalInfusKe);
       setCalculatedBranchInfusKe(suggested.branchInfusKe);
     } catch (err: any) {
@@ -504,8 +539,8 @@ export default function CreateSessionModal({
             (max, session) => Math.max(max, Number(session.infusKe) || 0),
             0
           );
-          const branchSessions = user?.branchId
-            ? sessionRows.filter((session) => session.branchId === user.branchId)
+          const branchSessions = targetBranchId
+            ? sessionRows.filter((session) => session.branchId === targetBranchId)
             : [];
           const maxBranch = branchSessions.reduce(
             (max, session) => Math.max(max, Number(session.branchInfusKe) || 0),
@@ -526,29 +561,30 @@ export default function CreateSessionModal({
     }
   };
 
-  const loadStaff = async () => {
+  const loadStaff = async (targetBranchId?: string) => {
     try {
       const userRole = user?.role;
+      const branchFilter = targetBranchId || user?.branchId || undefined;
       if (userRole === 'DOCTOR') {
         const [adminList, nursesList] = await Promise.all([
-          usersApi.getAdminLayanan(user?.branchId || undefined),
-          usersApi.getNurses(user?.branchId || undefined),
+          usersApi.getAdminLayanan(branchFilter),
+          usersApi.getNurses(branchFilter),
         ]);
         setAdminLayananList(adminList);
         setNurses(nursesList);
       } else if (userRole === 'NURSE') {
         const [adminList, doctorsList] = await Promise.all([
-          usersApi.getAdminLayanan(user?.branchId || undefined),
-          usersApi.getDoctors(user?.branchId || undefined),
+          usersApi.getAdminLayanan(branchFilter),
+          usersApi.getDoctors(branchFilter),
         ]);
         setAdminLayananList(adminList);
         setDoctors(doctorsList);
-      } else if (userRole === 'ADMIN_CABANG') {
-        // ADMIN_CABANG can select all three: Admin Layanan, Doctor, and Nurse
+      } else if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(userRole || '')) {
+        // Global admins and ADMIN_CABANG can select all three: Admin Layanan, Doctor, and Nurse
         const [adminList, doctorsList, nursesList] = await Promise.all([
-          usersApi.getAdminLayanan(user?.branchId || undefined),
-          usersApi.getDoctors(user?.branchId || undefined),
-          usersApi.getNurses(user?.branchId || undefined),
+          usersApi.getAdminLayanan(branchFilter),
+          usersApi.getDoctors(branchFilter),
+          usersApi.getNurses(branchFilter),
         ]);
         setAdminLayananList(adminList);
         setDoctors(doctorsList);
@@ -556,8 +592,8 @@ export default function CreateSessionModal({
       } else {
         // ADMIN_LAYANAN - auto-assign as admin layanan, select doctor and nurse
         const [doctorsList, nursesList] = await Promise.all([
-          usersApi.getDoctors(user?.branchId || undefined),
-          usersApi.getNurses(user?.branchId || undefined),
+          usersApi.getDoctors(branchFilter),
+          usersApi.getNurses(branchFilter),
         ]);
         setDoctors(doctorsList);
         setNurses(nursesList);
@@ -572,9 +608,15 @@ export default function CreateSessionModal({
     e.preventDefault();
     setError(null);
     const userRole = user?.role;
+    const canSelectAllStaff = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(userRole || '');
+    const effectiveSessionBranchId = sessionBranchId || user?.branchId || '';
 
     if (!memberId) { setError('Member harus dipilih'); return; }
     if (!hasDiagnosis) { setError('Member belum memiliki diagnosa. Silakan buat diagnosa terlebih dahulu.'); return; }
+    if ((userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER') && !effectiveSessionBranchId) {
+      setError('Cabang sesi belum terdeteksi. Pilih paket member terlebih dahulu.');
+      return;
+    }
     
     // Note: Infus Set validation is done on backend - frontend only shows warning
     // Backend will reject if stock is not available
@@ -598,8 +640,8 @@ export default function CreateSessionModal({
     } else if (userRole === 'NURSE') {
       if (!selectedAdminLayananId) { setError('Admin Layanan harus dipilih'); return; }
       if (!selectedDoctorId) { setError('Dokter harus dipilih'); return; }
-    } else if (userRole === 'ADMIN_CABANG') {
-      // ADMIN_CABANG must select all three
+    } else if (canSelectAllStaff) {
+      // SUPER_ADMIN, ADMIN_MANAGER, and ADMIN_CABANG must select all three
       if (!selectedAdminLayananId) { setError('Admin Layanan harus dipilih'); return; }
       if (!selectedDoctorId) { setError('Dokter harus dipilih'); return; }
       if (!selectedNurseId) { setError('Nakes harus dipilih'); return; }
@@ -642,6 +684,7 @@ export default function CreateSessionModal({
     setLoading(true);
     try {
       const baseData = {
+        branchId: effectiveSessionBranchId || undefined,
         memberId,
         memberPackageId: selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
@@ -658,8 +701,8 @@ export default function CreateSessionModal({
         data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: user?.userId || '', nurseId: selectedNurseId };
       } else if (userRole === 'NURSE') {
         data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: selectedDoctorId, nurseId: user?.userId || '' };
-      } else if (userRole === 'ADMIN_CABANG') {
-        // ADMIN_CABANG selects all three positions
+      } else if (canSelectAllStaff) {
+        // SUPER_ADMIN, ADMIN_MANAGER, and ADMIN_CABANG select all three positions
         data = { ...baseData, adminLayananId: selectedAdminLayananId, doctorId: selectedDoctorId, nurseId: selectedNurseId };
       } else {
         // ADMIN_LAYANAN - auto-assign as admin layanan
@@ -684,6 +727,7 @@ export default function CreateSessionModal({
       setMemberId('');
       setMemberNo('');
       setMemberName('');
+      setSessionBranchId(user?.branchId || '');
       setVoucherCount(0);
       setOutstandingDebtSessions(0);
       setPackages([]);
@@ -733,6 +777,7 @@ export default function CreateSessionModal({
 
   const selectedPlan = therapyPlans.find(p => p.id === selectedTherapyPlanId);
   const selectedPackage = basicPackages.find(p => p.packageId === selectedPackageId);
+  const canSelectAllStaffForRole = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
 
   // Toggle accordion
   const toggleSet = (setKey: string) => {
@@ -1234,8 +1279,8 @@ export default function CreateSessionModal({
                   </>
                 )}
 
-                {/* ADMIN_CABANG: Must select all three - Admin Layanan, Dokter, Nakes */}
-                {user?.role === 'ADMIN_CABANG' && (
+                {/* SUPER_ADMIN / ADMIN_MANAGER / ADMIN_CABANG: Must select all three - Admin Layanan, Dokter, Nakes */}
+                {canSelectAllStaffForRole && (
                   <>
                     <div className="space-y-2">
                       <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
