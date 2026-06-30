@@ -1,10 +1,22 @@
 import { test, expect } from '../fixtures/base';
-import { MemberPage } from '../pages/MemberPage';
+import { MemberPage, type MemberData } from '../pages/MemberPage';
+
+function uniqueMember(overrides: Partial<MemberData> = {}): MemberData {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
+  return {
+    name: `Test Member ${suffix}`,
+    email: `test${suffix}@example.com`,
+    phone: `081${suffix.slice(-9).padStart(9, '0')}`,
+    address: 'Jl. Test No. 123',
+    birthDate: '1990-01-01',
+    gender: 'MALE',
+    ...overrides,
+  };
+}
 
 test.describe('Member CRUD', () => {
   let memberPage: MemberPage;
-  const testMemberName = `Test Member ${Date.now()}`;
-  const testMemberEmail = `test${Date.now()}@example.com`;
 
   test.beforeEach(async ({ loginAs }) => {
     // Login as admin who can manage members
@@ -14,24 +26,22 @@ test.describe('Member CRUD', () => {
   });
 
   test('should create a new member', async () => {
+    const member = uniqueMember();
+
     // Create member
-    await memberPage.createMember({
-      name: testMemberName,
-      email: testMemberEmail,
-      phone: '081234567890',
-      address: 'Jl. Test No. 123',
-      birthDate: '1990-01-01',
-      gender: 'MALE',
-    });
+    await memberPage.createMember(member);
 
     // Verify member appears in list
-    await memberPage.searchMember(testMemberName);
-    await memberPage.expectMemberExists(testMemberName);
+    await memberPage.searchMember(member.name);
+    await memberPage.expectMemberExists(member.name);
   });
 
   test('should search for a member', async () => {
+    const member = uniqueMember();
+    await memberPage.createMember(member);
+
     // Search for specific member
-    await memberPage.searchMember('Test');
+    await memberPage.searchMember(member.name);
     
     // Verify search results
     const count = await memberPage.getMemberCount();
@@ -39,38 +49,34 @@ test.describe('Member CRUD', () => {
   });
 
   test('should view member details', async ({ page }) => {
+    const member = uniqueMember();
+
     // Create a test member first
-    await memberPage.createMember({
-      name: testMemberName,
-      email: testMemberEmail,
-      phone: '081234567890',
-    });
+    await memberPage.createMember(member);
 
     // Search and view
-    await memberPage.searchMember(testMemberName);
-    await memberPage.viewMember(testMemberName);
+    await memberPage.searchMember(member.name);
+    await memberPage.viewMember(member.name);
 
     // Verify we're on detail page
     await expect(page).toHaveURL(/\/members\/[^/]+$/);
-    await expect(page.locator('h1, h2')).toContainText(testMemberName);
+    await expect(page.locator('h1, h2')).toContainText(member.name);
   });
 
   test('should edit member information', async ({ loginAs }) => {
+    const member = uniqueMember();
+
     // Create a test member first
-    await memberPage.createMember({
-      name: testMemberName,
-      email: testMemberEmail,
-      phone: '081234567890',
-    });
+    await memberPage.createMember(member);
 
     const page = await loginAs('SUPER_ADMIN');
     const superAdminMemberPage = new MemberPage(page);
     await superAdminMemberPage.goto();
-    await superAdminMemberPage.searchMember(testMemberName);
-    await superAdminMemberPage.editMember(testMemberName);
+    await superAdminMemberPage.searchMember(member.name);
+    await superAdminMemberPage.editMember(member.name);
 
     // Update name
-    const updatedName = `${testMemberName} Updated`;
+    const updatedName = `${member.name} Updated`;
     await page.locator('[name="fullName"]').fill(updatedName);
     await superAdminMemberPage.submitForm();
 
@@ -82,21 +88,18 @@ test.describe('Member CRUD', () => {
 
   test('should delete a member', async () => {
     test.fixme(true, 'Delete member action is not exposed in the current member list/detail UI.');
+    const member = uniqueMember();
 
     // Create a test member first
-    await memberPage.createMember({
-      name: testMemberName,
-      email: testMemberEmail,
-      phone: '081234567890',
-    });
+    await memberPage.createMember(member);
 
     // Delete member
-    await memberPage.searchMember(testMemberName);
-    await memberPage.deleteMember(testMemberName);
+    await memberPage.searchMember(member.name);
+    await memberPage.deleteMember(member.name);
 
     // Verify member is deleted
-    await memberPage.searchMember(testMemberName);
-    await memberPage.expectMemberNotExists(testMemberName);
+    await memberPage.searchMember(member.name);
+    await memberPage.expectMemberNotExists(member.name);
   });
 
   test('should validate required fields', async ({ page }) => {
@@ -167,24 +170,21 @@ test.describe('Member CRUD', () => {
 
 test.describe('Member Package Assignment', () => {
   let memberPage: MemberPage;
-  const testMemberName = `Test Member ${Date.now()}`;
+  let testMember: MemberData;
 
   test.beforeEach(async ({ loginAs }) => {
     const page = await loginAs('ADMIN_CABANG');
     memberPage = new MemberPage(page);
     await memberPage.goto();
+    testMember = uniqueMember();
 
     // Create a test member
-    await memberPage.createMember({
-      name: testMemberName,
-      email: `test${Date.now()}@example.com`,
-      phone: '081234567890',
-    });
+    await memberPage.createMember(testMember);
   });
 
   test('should assign therapy package to member', async () => {
     // Assign package
-    await memberPage.assignPackage(testMemberName, 'Basic Package');
+    await memberPage.assignPackage(testMember.name, 'Basic Package');
 
     // Verify package is assigned
     await memberPage.expectPackageAssigned('Basic Package');
@@ -192,11 +192,11 @@ test.describe('Member Package Assignment', () => {
 
   test('should assign multiple packages to member', async () => {
     // Assign first package
-    await memberPage.assignPackage(testMemberName, 'Basic Package');
+    await memberPage.assignPackage(testMember.name, 'Basic Package');
     await memberPage.expectPackageAssigned('Basic Package');
 
     // Assign second package
-    await memberPage.assignPackage(testMemberName, 'Premium Package');
+    await memberPage.assignPackage(testMember.name, 'Premium Package');
     await memberPage.expectPackageAssigned('Premium Package');
 
     // Verify both packages are visible
