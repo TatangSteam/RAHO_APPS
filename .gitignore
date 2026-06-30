@@ -151,6 +151,11 @@ coverage/
 htmlcov/
 .pytest_cache/
 .jest/
+playwright-report/
+test-results/
+apps/web/playwright-report/
+apps/web/test-results/
+apps/web/e2e/.auth/*.json
 
 # ═══════════════════════════════════════════════════════════════
 # Docker

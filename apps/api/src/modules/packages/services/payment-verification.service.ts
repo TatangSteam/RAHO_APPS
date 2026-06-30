@@ -2,7 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { VerifyPaymentInput } from '../packages.schema';
-import { PackageStatus, AuditAction } from '@prisma/client';
+import { PackageStatus } from '@prisma/client';
 import { InvoiceGenerationService } from './invoice-generation.service';
 
 /**
@@ -192,9 +192,12 @@ export class PaymentVerificationService {
 
     await logAudit({
       userId,
-      action: AuditAction.UPDATE,
+      action: 'VERIFY_PAYMENT',
       resource: 'MemberAddOn',
       resourceId: addOnId,
+      entityType: 'MemberAddOn',
+      entityId: addOnId,
+      description: 'Pembayaran add-on berhasil diverifikasi.',
       meta: { action: 'VERIFY_PAYMENT', status: 'ACTIVE', proofFile: data.proofFileName },
     });
 
@@ -298,9 +301,12 @@ export class PaymentVerificationService {
     for (const groupPkg of groupPackages) {
       await logAudit({
         userId,
-        action: AuditAction.UPDATE,
+        action: 'VERIFY_PAYMENT',
         resource: 'MemberPackage',
         resourceId: groupPkg.id,
+        entityType: 'MemberPackage',
+        entityId: groupPkg.id,
+        description: 'Pembayaran paket dalam grup berhasil diverifikasi.',
         meta: { 
           action: 'VERIFY_PAYMENT_GROUP', 
           status: 'ACTIVE', 
@@ -314,9 +320,12 @@ export class PaymentVerificationService {
     for (const groupAddOn of groupAddOns) {
       await logAudit({
         userId,
-        action: AuditAction.UPDATE,
+        action: 'VERIFY_PAYMENT',
         resource: 'MemberAddOn',
         resourceId: groupAddOn.id,
+        entityType: 'MemberAddOn',
+        entityId: groupAddOn.id,
+        description: 'Pembayaran add-on dalam grup berhasil diverifikasi.',
         meta: { 
           action: 'VERIFY_PAYMENT_GROUP', 
           status: 'ACTIVE', 
@@ -379,9 +388,12 @@ export class PaymentVerificationService {
 
     await logAudit({
       userId,
-      action: AuditAction.UPDATE,
+      action: 'VERIFY_PAYMENT',
       resource: 'MemberPackage',
       resourceId: pkg.id,
+      entityType: 'MemberPackage',
+      entityId: pkg.id,
+      description: 'Pembayaran paket berhasil diverifikasi.',
       meta: { action: 'VERIFY_PAYMENT', status: 'ACTIVE', proofFile: data.proofFileName },
     });
 
@@ -446,9 +458,12 @@ export class PaymentVerificationService {
 
     await logAudit({
       userId,
-      action: AuditAction.UPDATE,
+      action: 'REJECT_PAYMENT',
       resource: 'MemberAddOn',
       resourceId: addOnId,
+      entityType: 'MemberAddOn',
+      entityId: addOnId,
+      description: 'Pembayaran add-on ditolak.',
       meta: { action: 'REJECT_PAYMENT', status: 'PENDING_PAYMENT', rejectionReason },
     });
 
@@ -526,9 +541,12 @@ export class PaymentVerificationService {
     for (const groupPkg of groupPackages) {
       await logAudit({
         userId,
-        action: AuditAction.UPDATE,
+        action: 'REJECT_PAYMENT',
         resource: 'MemberPackage',
         resourceId: groupPkg.id,
+        entityType: 'MemberPackage',
+        entityId: groupPkg.id,
+        description: 'Pembayaran paket dalam grup ditolak.',
         meta: { 
           action: 'REJECT_PAYMENT_GROUP', 
           status: 'PENDING_PAYMENT', 
@@ -542,9 +560,12 @@ export class PaymentVerificationService {
     for (const groupAddOn of groupAddOns) {
       await logAudit({
         userId,
-        action: AuditAction.UPDATE,
+        action: 'REJECT_PAYMENT',
         resource: 'MemberAddOn',
         resourceId: groupAddOn.id,
+        entityType: 'MemberAddOn',
+        entityId: groupAddOn.id,
+        description: 'Pembayaran add-on dalam grup ditolak.',
         meta: { 
           action: 'REJECT_PAYMENT_GROUP', 
           status: 'PENDING_PAYMENT', 
@@ -593,9 +614,12 @@ export class PaymentVerificationService {
 
     await logAudit({
       userId,
-      action: AuditAction.UPDATE,
+      action: 'REJECT_PAYMENT',
       resource: 'MemberPackage',
       resourceId: pkg.id,
+      entityType: 'MemberPackage',
+      entityId: pkg.id,
+      description: 'Pembayaran paket ditolak.',
       meta: { action: 'REJECT_PAYMENT', status: 'PENDING_PAYMENT', rejectionReason },
     });
 

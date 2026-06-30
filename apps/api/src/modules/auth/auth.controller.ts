@@ -1,5 +1,4 @@
 import { Request, Response, NextFunction } from 'express';
-import { AuditAction } from '@prisma/client';
 import { sendSuccess } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { loginSchema, refreshSchema, logoutSchema } from './auth.schema';
@@ -45,9 +44,14 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
         await logAudit({
           userId: req.user.userId,
           branchId: shouldIncludeBranch ? req.user.branchId : null,
-          action: AuditAction.LOGOUT,
+          action: 'LOGOUT',
+          module: 'AUTH',
           resource: 'Auth',
           resourceId: req.user.userId,
+          entityType: 'User',
+          entityId: req.user.userId,
+          entityCode: req.user.email,
+          description: `${req.user.email} logout dari sistem.`,
           meta: {
             email: req.user.email,
             role: req.user.role,

@@ -18,7 +18,11 @@
     "type-check": "npm run type-check:api",
     "type-check:api": "npm run type-check --prefix apps/api",
     "type-check:web": "npm run type-check --prefix apps/web",
-    "type-check:all": "npm run type-check:api && npm run type-check:web"
+    "type-check:all": "npm run type-check:api && npm run type-check:web",
+    "e2e:web": "npm --prefix apps/web run e2e --",
+    "e2e:web:headed": "npm --prefix apps/web run e2e:headed --",
+    "e2e:web:ui": "npm --prefix apps/web run e2e:ui --",
+    "e2e:web:install": "npm --prefix apps/web run e2e:install --"
   },
   "workspaces": [
     "apps/api",

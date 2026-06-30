@@ -32,13 +32,15 @@ interface StaffActivity {
   action: string;
   resource: string;
   resourceId?: string;
+  userName?: string | null;
+  userRole?: string | null;
   createdAt: string;
-  user: {
+  user?: {
     staffCode: string;
     profile: {
       fullName: string;
     };
-  };
+  } | null;
 }
 
 export default function StaffManagementPage() {
@@ -102,6 +104,11 @@ export default function StaffManagementPage() {
   };
 
   const fetchActivities = async () => {
+    if (!['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '')) {
+      setActivities([]);
+      return;
+    }
+
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/audit-logs?limit=50`, {
         headers: {
@@ -115,7 +122,8 @@ export default function StaffManagementPage() {
       }
 
       const data = await response.json();
-      setActivities(data.data || []);
+      const payload = data.data;
+      setActivities(Array.isArray(payload) ? payload : payload?.logs || []);
     } catch (error: any) {
       devError('Error fetching activities:', error);
       showToast.error(error.message || 'Gagal memuat aktivitas');
@@ -314,7 +322,9 @@ export default function StaffManagementPage() {
                 </div>
                 <div className={styles.activityBody}>
                   <p className={styles.activityUser}>
-                    <strong>{activity.user.profile.fullName}</strong> ({activity.user.staffCode})
+                    <strong>{activity.user?.profile?.fullName || activity.userName || 'System'}</strong>
+                    {' '}
+                    ({activity.user?.staffCode || activity.userRole || '-'})
                   </p>
                   <p className={styles.activityDetail}>
                     {activity.action} {activity.resource}

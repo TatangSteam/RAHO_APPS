@@ -211,6 +211,19 @@ enum AuditAction {
   FAILED_LOGIN
   PASSWORD_CHANGE
   PASSWORD_RESET
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  VERIFY_PAYMENT
+  REJECT_PAYMENT
+  UPLOAD_FILE
+  STATUS_CHANGE
+  ASSIGN
+  CANCEL
+  COMPLETE
+  STOCK_REQUEST
+  SHIPMENT
+  RECEIVE_SHIPMENT
+  STOCK_ADJUSTMENT
 }
 
 enum OverstockStatus {
@@ -1740,16 +1753,28 @@ model ChatMessage {
 }
 
 model AuditLog {
-  id         String      @id @default(cuid())
-  userId     String?
-  branchId   String? // Branch where action occurred (null for SUPER_ADMIN/ADMIN_MANAGER)
-  action     AuditAction
-  resource   String
-  resourceId String
-  meta       Json?
-  ipAddress  String?
-  userAgent  String?
-  createdAt  DateTime    @default(now())
+  id            String      @id @default(cuid())
+  userId        String?
+  userName      String?
+  userRole      String?
+  branchId      String? // Branch where action occurred (null for global/system actions)
+  branchName    String?
+  action        AuditAction
+  module        String?
+  resource      String
+  resourceId    String
+  entityType    String?
+  entityId      String?
+  entityCode    String?
+  description   String?
+  meta          Json?
+  beforeData    Json?
+  afterData     Json?
+  changedFields Json?
+  metadata      Json?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime    @default(now())
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   branch Branch? @relation(fields: [branchId], references: [id])
@@ -1758,6 +1783,9 @@ model AuditLog {
   @@index([branchId, createdAt])
   @@index([resource, resourceId])
   @@index([action])
+  @@index([module])
+  @@index([entityType])
+  @@index([entityId])
   @@index([createdAt])
   @@map("audit_logs")
 }

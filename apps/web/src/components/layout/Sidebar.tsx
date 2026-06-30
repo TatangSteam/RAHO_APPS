@@ -160,7 +160,7 @@ const MENU_GROUPS: MenuGroup[] = [
     ],
   },
   {
-    title: 'Super Admin',
+    title: 'Manajemen Sistem',
     items: [
       {
         label: 'Admin Managers',
@@ -178,7 +178,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Audit Log',
         href: '/admin/audit-logs',
         icon: <ClipboardList size={20} />,
-        roles: ['SUPER_ADMIN'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
     ],
   },

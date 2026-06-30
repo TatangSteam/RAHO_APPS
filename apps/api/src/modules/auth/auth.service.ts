@@ -1,5 +1,4 @@
 import bcrypt from 'bcryptjs';
-import { AuditAction } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { generateTokenPair, verifyRefreshToken, JwtPayload } from '@lib/jwt';
 import { AppError, errors } from '@middleware/errorHandler';
@@ -33,9 +32,16 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     logAudit({
       userId: user?.id || null,
       branchId: user ? getAuditedBranchId(user) : null,
-      action: AuditAction.FAILED_LOGIN,
+      action: 'LOGIN_FAILED',
+      module: 'AUTH',
       resource: 'Auth',
       resourceId: user?.id || input.email,
+      entityType: 'User',
+      entityId: user?.id || null,
+      entityCode: input.email,
+      description: user && !user.isActive
+        ? `Percobaan login gagal untuk akun nonaktif ${input.email}.`
+        : `Percobaan login gagal untuk email tidak terdaftar ${input.email}.`,
       meta: {
         attemptedEmail: input.email,
         reason: user && !user.isActive ? 'Account inactive' : 'User not found',
@@ -52,9 +58,14 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     logAudit({
       userId: user.id,
       branchId: getAuditedBranchId(user),
-      action: AuditAction.FAILED_LOGIN,
+      action: 'LOGIN_FAILED',
+      module: 'AUTH',
       resource: 'Auth',
       resourceId: user.id,
+      entityType: 'User',
+      entityId: user.id,
+      entityCode: user.email,
+      description: `Percobaan login gagal untuk ${user.email}: password salah.`,
       meta: {
         attemptedEmail: input.email,
         reason: 'Invalid password',
@@ -74,9 +85,14 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     await logAudit({
       userId: user.id,
       branchId: getAuditedBranchId(user),
-      action: AuditAction.LOGIN,
+      action: 'LOGIN_SUCCESS',
+      module: 'AUTH',
       resource: 'Auth',
       resourceId: user.id,
+      entityType: 'User',
+      entityId: user.id,
+      entityCode: user.email,
+      description: `${user.profile?.fullName || user.email} berhasil login.`,
       meta: {
         email: user.email,
         role: user.role,
