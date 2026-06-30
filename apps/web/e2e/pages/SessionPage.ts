@@ -30,7 +30,7 @@ export interface TherapyPlanItem {
 }
 
 export class SessionPage {
-  constructor(private page: Page) {}
+  constructor(public page: Page) {}
 
   async goto() {
     await goToSessions(this.page);

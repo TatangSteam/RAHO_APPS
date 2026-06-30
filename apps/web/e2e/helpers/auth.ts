@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { E2ERole, E2EUser } from '../fixtures/test-users';
 
@@ -20,7 +21,7 @@ interface LoginResponse {
 const authStorageKey = 'auth-storage';
 
 export function apiBaseURL(): string {
-  return process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api/v1';
+  return process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 }
 
 export function storageStatePath(role: E2ERole): string {
@@ -62,7 +63,10 @@ export async function loginRequest(request: APIRequestContext, user: E2EUser): P
 }
 
 export async function persistAuthToBrowser(page: Page, result: LoginResponse): Promise<void> {
-  await page.goto('/');
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const currentUrl = page.url().startsWith('http') ? page.url() : process.env.E2E_BASE_URL || 'http://localhost:3000';
+  const cookieDomain = new URL(currentUrl).hostname;
+
   await page.evaluate(
     ({ key, value }) => {
       window.localStorage.setItem(key, JSON.stringify(value));
@@ -77,7 +81,7 @@ export async function persistAuthToBrowser(page: Page, result: LoginResponse): P
     {
       name: 'raho-auth-token',
       value: encodeAuthCookie({ role: result.user.role, userId: result.user.userId }),
-      url: new URL(page.url()).origin,
+      domain: cookieDomain,
       path: '/',
       sameSite: 'Lax',
       expires: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
@@ -85,10 +89,51 @@ export async function persistAuthToBrowser(page: Page, result: LoginResponse): P
   ]);
 }
 
+export async function restoreAuthFromStorageState(page: Page, role: E2ERole, expectedPath: string): Promise<boolean> {
+  const statePath = storageStatePath(role);
+
+  if (!fs.existsSync(statePath)) {
+    return false;
+  }
+
+  const rawState = fs.readFileSync(statePath, 'utf8');
+  const storageState = JSON.parse(rawState) as {
+    cookies?: Array<Record<string, unknown>>;
+    origins?: Array<{
+      origin: string;
+      localStorage?: Array<{ name: string; value: string }>;
+    }>;
+  };
+
+  await page.context().clearCookies();
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(() => window.localStorage.clear());
+
+  if (storageState.cookies?.length) {
+    await page.context().addCookies(storageState.cookies as never);
+  }
+
+  const currentOrigin = new URL(page.url()).origin;
+  const originState = storageState.origins?.find((origin) => origin.origin === currentOrigin) || storageState.origins?.[0];
+
+  if (originState?.localStorage?.length) {
+    await page.evaluate((entries) => {
+      for (const entry of entries) {
+        window.localStorage.setItem(entry.name, entry.value);
+      }
+    }, originState.localStorage);
+  }
+
+  await page.goto(expectedPath, { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(new RegExp(expectedPath.replace(/\//g, '\\/')));
+
+  return true;
+}
+
 export async function loginByApi(page: Page, request: APIRequestContext, user: E2EUser): Promise<LoginResponse> {
   const result = await loginRequest(request, user);
   await persistAuthToBrowser(page, result);
-  await page.goto(user.expectedPath);
+  await page.goto(user.expectedPath, { waitUntil: 'domcontentloaded' });
   await expect(page).toHaveURL(new RegExp(user.expectedPath.replace(/\//g, '\\/')));
   return result;
 }
@@ -96,7 +141,7 @@ export async function loginByApi(page: Page, request: APIRequestContext, user: E
 export async function loginByUi(page: Page, user: E2EUser): Promise<void> {
   await page.goto('/login');
   await page.getByLabel('Email').fill(user.email);
-  await page.getByLabel('Password').fill(user.password);
+  await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.locator('#btn-login').click();
   await expect(page).toHaveURL(new RegExp(user.expectedPath.replace(/\//g, '\\/')), { timeout: 30_000 });
   await expect(page.locator('body')).toBeVisible();

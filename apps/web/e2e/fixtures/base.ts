@@ -1,12 +1,12 @@
-import { test as base, expect } from '@playwright/test';
-import { loginByApi, loginByUi } from '../helpers/auth';
-import type { E2ERole, E2EUser } from './test-users';
+import { test as base, expect, type Page } from '@playwright/test';
+import { loginByApi, loginByUi, restoreAuthFromStorageState } from '../helpers/auth';
+import type { E2ERole } from './test-users';
 import { requireTestUser } from './test-users';
 
 type LoginMode = 'api' | 'ui';
 
 interface RahoFixtures {
-  loginAs: (role: E2ERole, options?: { mode?: LoginMode }) => Promise<E2EUser>;
+  loginAs: (role: E2ERole, options?: { mode?: LoginMode }) => Promise<Page>;
 }
 
 export const test = base.extend<RahoFixtures>({
@@ -17,11 +17,11 @@ export const test = base.extend<RahoFixtures>({
 
       if (mode === 'ui') {
         await loginByUi(page, user);
-      } else {
+      } else if (!(await restoreAuthFromStorageState(page, role, user.expectedPath))) {
         await loginByApi(page, request, user);
       }
 
-      return user;
+      return page;
     });
   },
 });

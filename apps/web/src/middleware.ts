@@ -14,7 +14,25 @@ const PUBLIC_ROUTES = ['/login'];
 const MEMBER_ROUTES = ['/me'];
 
 // Routes only for staff (not MEMBER)
-const STAFF_ROUTES = ['/dashboard', '/members', '/sessions', '/inventory', '/admin', '/chat', '/staff', '/branches', '/referrals'];
+const STAFF_ROUTES = [
+  '/dashboard',
+  '/members',
+  '/sessions',
+  '/inventory',
+  '/admin',
+  '/admin-manager',
+  '/cabang',
+  '/chat',
+  '/notifications',
+  '/payments',
+  '/profile',
+  '/reports',
+  '/service-dashboard',
+  '/staff',
+  '/staff-performance',
+  '/branches',
+  '/referrals',
+];
 
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;

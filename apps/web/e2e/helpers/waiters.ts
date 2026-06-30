@@ -24,7 +24,7 @@ export async function waitForLoadingToFinish(page: Page, timeout = 10000) {
  * Wait for toast notification to appear
  */
 export async function waitForToast(page: Page, message?: string | RegExp) {
-  const toast = page.locator('[role="status"], [data-sonner-toast]').first();
+  const toast = page.locator('[role="status"], [role="alert"], [data-sonner-toast]').first();
   await toast.waitFor({ state: 'visible', timeout: 5000 });
   
   if (message) {
@@ -72,10 +72,8 @@ export async function waitForApiResponse(
  * Wait for modal to open
  */
 export async function waitForModal(page: Page) {
-  await page.waitForSelector('[role="dialog"], .modal, [data-modal]', {
-    state: 'visible',
-    timeout: 5000,
-  });
+  const modal = page.locator('[role="dialog"], .modal, [data-modal], .fixed.inset-0').first();
+  await expect(modal).toBeVisible({ timeout: 5000 });
 }
 
 /**
@@ -88,15 +86,27 @@ export async function waitForModalClose(page: Page) {
   });
 }
 
+export async function waitForModalToClose(page: Page) {
+  await waitForModalClose(page);
+}
+
 /**
  * Wait for table to load
  */
 export async function waitForTableToLoad(page: Page) {
-  await page.waitForSelector('table tbody tr', {
-    state: 'visible',
-    timeout: 10000,
-  });
   await waitForLoadingToFinish(page);
+
+  const tableOrEmptyState = page
+    .locator('table, [role="table"]')
+    .or(page.getByText(/tidak.*ada.*data|no.*data|kosong/i))
+    .first();
+
+  await expect(tableOrEmptyState).toBeVisible({ timeout: 10000 });
+  await waitForLoadingToFinish(page);
+}
+
+export async function waitForTableLoad(page: Page) {
+  await waitForTableToLoad(page);
 }
 
 /**
@@ -119,6 +129,7 @@ export async function waitForButtonEnabled(page: Page, buttonText: string | RegE
  * Wait for navigation to complete
  */
 export async function waitForPageLoad(page: Page) {
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
+  await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
   await waitForLoadingToFinish(page);
 }

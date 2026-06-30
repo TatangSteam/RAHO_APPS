@@ -11,13 +11,12 @@ export class Navigation {
    * Navigate to a specific route and wait for it to load
    */
   async goto(path: string, options?: { waitForSelector?: string }) {
-    await this.page.goto(path);
+    await this.page.goto(path, { waitUntil: 'domcontentloaded' });
     
     if (options?.waitForSelector) {
       await this.page.waitForSelector(options.waitForSelector);
     } else {
-      // Wait for general page load
-      await this.page.waitForLoadState('networkidle');
+      await this.page.locator('body').waitFor({ state: 'visible' });
     }
   }
 
@@ -81,7 +80,7 @@ export class Navigation {
    * Wait for navigation to complete
    */
   async waitForNavigation() {
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
   }
 
   /**
@@ -119,51 +118,51 @@ export function createNavigation(page: Page) {
 import { waitForPageLoad } from './waiters';
 
 export async function goToDashboard(page: Page) {
-  await page.goto('/dashboard');
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToMembers(page: Page) {
-  await page.goto('/members');
+  await page.goto('/members', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToSessions(page: Page) {
-  await page.goto('/sessions');
+  await page.goto('/sessions', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToInventory(page: Page) {
-  await page.goto('/inventory');
+  await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToStockRequests(page: Page) {
-  await page.goto('/inventory/stock-requests');
+  await page.goto('/inventory/stock-requests', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToShipments(page: Page) {
-  await page.goto('/inventory/shipments');
+  await page.goto('/inventory/shipments', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToPayments(page: Page) {
-  await page.goto('/payments');
+  await page.goto('/payments', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToAuditLogs(page: Page) {
-  await page.goto('/admin/audit-logs');
+  await page.goto('/admin/audit-logs', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToReports(page: Page) {
-  await page.goto('/reports');
+  await page.goto('/reports', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }
 
 export async function goToProfile(page: Page) {
-  await page.goto('/profile');
+  await page.goto('/profile', { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
 }

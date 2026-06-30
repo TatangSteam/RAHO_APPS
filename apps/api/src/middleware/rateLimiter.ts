@@ -37,6 +37,7 @@ function formatWindow(windowMs: number): string {
 export const loginRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.AUTH_RATE_LIMIT_MAX,
+  skip: () => env.E2E_DISABLE_RATE_LIMIT,
   message: {
     success: false,
     error: {
@@ -59,6 +60,7 @@ export const loginRateLimiter = rateLimit({
 export const apiRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX,
+  skip: () => env.E2E_DISABLE_RATE_LIMIT,
   message: {
     success: false,
     error: {

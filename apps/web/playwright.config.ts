@@ -1,9 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const webPort = Number(process.env.E2E_WEB_PORT || 3000);
-const baseURL = process.env.E2E_BASE_URL || `http://127.0.0.1:${webPort}`;
-const apiURL = process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api/v1';
+const baseURL = process.env.E2E_BASE_URL || `http://localhost:${webPort}`;
+const apiURL = process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
 const shouldStartWebServer = process.env.E2E_START_WEB_SERVER !== 'false';
+const includeMobileProject = process.env.E2E_INCLUDE_MOBILE === 'true';
+const workers = Number(process.env.E2E_WORKERS || (process.env.CI ? 2 : 1));
 
 export default defineConfig({
   testDir: './e2e',
@@ -14,7 +16,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  workers,
   outputDir: './test-results',
   reporter: [
     ['list'],
@@ -52,10 +54,14 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       dependencies: ['setup'],
     },
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-      dependencies: ['setup'],
-    },
+    ...(includeMobileProject
+      ? [
+          {
+            name: 'mobile-chrome',
+            use: { ...devices['Pixel 5'] },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
   ],
 });

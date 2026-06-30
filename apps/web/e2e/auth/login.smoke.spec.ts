@@ -16,7 +16,7 @@ test.describe('auth smoke', () => {
   test('shows client validation for invalid login form', async ({ page }) => {
     await page.goto('/login');
     await page.getByLabel('Email').fill('invalid-email');
-    await page.getByLabel('Password').fill('123');
+    await page.getByLabel('Password', { exact: true }).fill('123');
     await page.locator('#btn-login').click();
 
     await expect(page.getByText('Format email tidak valid.')).toBeVisible();

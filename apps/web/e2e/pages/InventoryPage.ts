@@ -84,7 +84,7 @@ export class InventoryPage {
     await waitForModal(this.page);
 
     // Select product
-    await this.page.getByLabel(/produk|product/i).selectOption({ label: new RegExp(productName, 'i') });
+    await this.page.getByLabel(/produk|product/i).selectOption({ label: productName });
 
     // Enter quantity
     await this.page.getByLabel(/jumlah|quantity/i).fill(quantity.toString());
