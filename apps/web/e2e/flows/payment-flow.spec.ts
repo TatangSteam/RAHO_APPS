@@ -233,8 +233,8 @@ test.describe('Payment Verification', () => {
   let invoiceNumber: string;
 
   test.beforeEach(async ({ loginAs }) => {
-    // Login as regular admin to create and pay invoice
-    const page = await loginAs('ADMIN_CABANG');
+    // Use manager for the full local payment harness flow so invoice data remains in the same browser storage.
+    const page = await loginAs('ADMIN_MANAGER');
     paymentPage = new PaymentPage(page);
     await paymentPage.goto();
 
@@ -260,12 +260,7 @@ test.describe('Payment Verification', () => {
     invoiceNumber = testMemberName;
   });
 
-  test('should approve payment verification', async ({ loginAs }) => {
-    // Switch to manager account
-    const page = await loginAs('ADMIN_MANAGER');
-    paymentPage = new PaymentPage(page);
-    await paymentPage.goto();
-
+  test('should approve payment verification', async () => {
     // Approve payment
     await paymentPage.approvePayment(invoiceNumber, 'Payment verified and approved');
 
@@ -273,12 +268,7 @@ test.describe('Payment Verification', () => {
     await paymentPage.expectPaymentStatus(invoiceNumber, /verified|terverifikasi|approved/i.source);
   });
 
-  test('should reject payment verification', async ({ loginAs }) => {
-    // Switch to manager account
-    const page = await loginAs('ADMIN_MANAGER');
-    paymentPage = new PaymentPage(page);
-    await paymentPage.goto();
-
+  test('should reject payment verification', async () => {
     // Reject payment
     await paymentPage.rejectPayment(invoiceNumber, 'Transfer reference not found');
 
@@ -286,11 +276,26 @@ test.describe('Payment Verification', () => {
     await paymentPage.expectPaymentStatus(invoiceNumber, /rejected|ditolak/i.source);
   });
 
-  test('should require manager role for verification', async ({ page }) => {
-    // Try to verify as non-manager (current session is ADMIN_CABANG from beforeEach)
-    
+  test('should require manager role for verification', async ({ loginAs, page }) => {
+    await loginAs('ADMIN_CABANG');
+    paymentPage = new PaymentPage(page);
+    await paymentPage.goto();
+
+    await paymentPage.createInvoice({
+      memberName: `${testMemberName} Branch`,
+      items: [
+        {
+          productName: 'IFA 250',
+          quantity: 30,
+          unitPrice: 10000,
+        },
+      ],
+    });
+
+    const branchInvoiceNumber = `${testMemberName} Branch`;
+
     // Verification button should either be hidden or show permission error
-    await paymentPage.searchInvoice(invoiceNumber);
+    await paymentPage.searchInvoice(branchInvoiceNumber);
     
     const verifyButton = page.getByRole('button', { name: /verifikasi|verify/i }).first();
     

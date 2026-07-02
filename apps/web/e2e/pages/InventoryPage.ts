@@ -1,5 +1,6 @@
 import { Page, expect, Locator } from '@playwright/test';
 import { waitForLoadingToFinish, waitForSuccessToast, waitForTableToLoad, waitForModal } from '../helpers/waiters';
+import { searchInput, tableLocator, waitForDebounce } from '../helpers/selectors';
 
 export class InventoryPage {
   readonly page: Page;
@@ -9,16 +10,16 @@ export class InventoryPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.stockTable = page.locator('table').first();
+    this.stockTable = tableLocator(page);
     this.requestStockButton = page.getByRole('button', { name: /request.*stock|permintaan.*stok/i });
-    this.searchInput = page.getByPlaceholder(/cari|search/i);
+    this.searchInput = searchInput(page);
   }
 
   /**
    * Navigate to inventory page
    */
   async goto() {
-    await this.page.goto('/inventory');
+    await this.page.goto('/inventory', { waitUntil: 'domcontentloaded' });
     await waitForTableToLoad(this.page);
   }
 
@@ -26,7 +27,8 @@ export class InventoryPage {
    * Navigate to stock requests page
    */
   async gotoStockRequests() {
-    await this.page.goto('/inventory/stock-requests');
+    await this.page.goto('/inventory/stock-requests', { waitUntil: 'domcontentloaded' });
+    await expect(this.page.getByRole('heading', { name: 'Request Stok', exact: true })).toBeVisible({ timeout: 10000 });
     await waitForLoadingToFinish(this.page);
   }
 
@@ -34,7 +36,7 @@ export class InventoryPage {
    * Navigate to shipments page
    */
   async gotoShipments() {
-    await this.page.goto('/inventory/shipments');
+    await this.page.goto('/inventory/shipments', { waitUntil: 'domcontentloaded' });
     await waitForLoadingToFinish(this.page);
   }
 
@@ -43,7 +45,7 @@ export class InventoryPage {
    */
   async searchProduct(query: string) {
     await this.searchInput.fill(query);
-    await this.page.waitForTimeout(500); // Debounce
+    await waitForDebounce(this.page);
     await waitForLoadingToFinish(this.page);
   }
 

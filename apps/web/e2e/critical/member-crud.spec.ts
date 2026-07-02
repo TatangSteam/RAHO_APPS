@@ -60,44 +60,63 @@ test.describe('Member CRUD', () => {
 
     // Verify we're on detail page
     await expect(page).toHaveURL(/\/members\/[^/]+$/);
-    await expect(page.locator('h1, h2')).toContainText(member.name);
+    await expect(page.getByText(member.name).first()).toBeVisible();
   });
 
-  test('should edit member information', async ({ loginAs }) => {
+  test('should edit member information', async ({ page, loginAs }) => {
     const member = uniqueMember();
 
     // Create a test member first
     await memberPage.createMember(member);
+    await memberPage.viewMember(member.name);
+    const memberDetailPath = new URL(page.url()).pathname;
 
-    const page = await loginAs('SUPER_ADMIN');
-    const superAdminMemberPage = new MemberPage(page);
-    await superAdminMemberPage.goto();
-    await superAdminMemberPage.searchMember(member.name);
-    await superAdminMemberPage.editMember(member.name);
+    await loginAs('SUPER_ADMIN');
+    await page.goto(memberDetailPath);
+    await expect(page.getByText(member.name).first()).toBeVisible();
+    await page.getByRole('button', { name: /edit|ubah|sunting/i }).first().click();
+    await expect(page.locator('[name="fullName"]')).toBeVisible();
 
     // Update name
     const updatedName = `${member.name} Updated`;
     await page.locator('[name="fullName"]').fill(updatedName);
-    await superAdminMemberPage.submitForm();
+    const updateResponsePromise = page
+      .waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/members/') &&
+          response.request().method() === 'PATCH',
+        { timeout: 30000 },
+      )
+      .catch(() => undefined);
+
+    await page.getByRole('button', { name: /simpan perubahan/i }).click();
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse, 'Update member API response was not observed.').toBeTruthy();
+    expect(updateResponse!.ok(), `Update member API failed: ${updateResponse!.status()} ${await updateResponse!.text()}`).toBeTruthy();
 
     // Verify update
-    await superAdminMemberPage.goto();
-    await superAdminMemberPage.searchMember(updatedName);
-    await superAdminMemberPage.expectMemberExists(updatedName);
+    await page.goto(memberDetailPath, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(updatedName).first()).toBeVisible();
   });
 
-  test('should delete a member', async () => {
-    test.fixme(true, 'Delete member action is not exposed in the current member list/detail UI.');
+  test('should delete a member', async ({ page, loginAs }) => {
     const member = uniqueMember();
 
     // Create a test member first
     await memberPage.createMember(member);
+    await memberPage.viewMember(member.name);
+    const memberDetailPath = new URL(page.url()).pathname;
+    await expect(page.getByRole('button', { name: /hapus.*member/i })).toHaveCount(0);
 
-    // Delete member
-    await memberPage.searchMember(member.name);
+    // Delete member with authorized role
+    await loginAs('SUPER_ADMIN');
+    memberPage = new MemberPage(page);
+    await page.goto(memberDetailPath);
+    await expect(page.getByText(member.name).first()).toBeVisible();
     await memberPage.deleteMember(member.name);
 
     // Verify member is deleted
+    await memberPage.goto();
     await memberPage.searchMember(member.name);
     await memberPage.expectMemberNotExists(member.name);
   });
@@ -141,8 +160,6 @@ test.describe('Member CRUD', () => {
   });
 
   test('should handle duplicate email', async ({ page }) => {
-    test.fixme(true, 'Current member registration flow does not surface duplicate member-email validation in the UI.');
-
     const duplicateEmail = `duplicate${Date.now()}@example.com`;
 
     // Create first member
@@ -164,7 +181,10 @@ test.describe('Member CRUD', () => {
     await submitButton.click();
 
     // Verify error message
-    await expect(page.locator('text=/email.*sudah.*digunakan|email.*already.*exists/i').first()).toBeVisible();
+    await expect(
+      page.locator('text=/email.*sudah.*terdaftar|email.*sudah.*digunakan|email.*already.*exists/i').first(),
+    ).toBeVisible();
+    await expect(page.locator('[name="memberEmail"]')).toHaveAttribute('aria-invalid', 'true');
   });
 });
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
-import { Key, Upload } from 'lucide-react';
+import { Key, Loader2, Trash2, Upload } from 'lucide-react';
 import { devError } from '@/lib/logger';
 
 interface MemberHeaderProps {
@@ -11,11 +11,72 @@ interface MemberHeaderProps {
   onBack: () => void;
   onSendNotification: () => void;
   onEdit: () => void;
+  onDelete?: () => void;
   onManageCredentials?: () => void;
   onUploadDocuments?: () => void;
   isSuperAdmin: boolean;
+  canDelete?: boolean;
+  isDeleting?: boolean;
   canUploadDocuments?: boolean;
   hasDocuments?: boolean; // Indicates if member has any documents (PSP or Photo)
+}
+
+type HeaderActionTone = 'success' | 'warning' | 'danger';
+
+interface HeaderIconActionProps {
+  children: ReactNode;
+  icon: ReactNode;
+  onClick: () => void;
+  tone: HeaderActionTone;
+  disabled?: boolean;
+}
+
+const headerActionBaseStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '6px',
+};
+
+const headerActionToneStyles: Record<HeaderActionTone, CSSProperties> = {
+  success: {
+    background: 'linear-gradient(135deg, #10b98120, #06b6d420)',
+    borderColor: '#10b98150',
+    color: '#10b981',
+  },
+  warning: {
+    background: 'linear-gradient(135deg, #f59e0b20, #d9770620)',
+    borderColor: '#f59e0b50',
+    color: '#f59e0b',
+  },
+  danger: {
+    background: 'linear-gradient(135deg, #ef444420, #dc262620)',
+    borderColor: '#ef444450',
+    color: '#ef4444',
+  },
+};
+
+const disabledActionStyle: CSSProperties = {
+  opacity: 0.7,
+  cursor: 'not-allowed',
+};
+
+function HeaderIconAction({ children, icon, onClick, tone, disabled = false }: HeaderIconActionProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn btn-secondary member-detail-action-button"
+      style={{
+        ...headerActionBaseStyle,
+        ...headerActionToneStyles[tone],
+        ...(disabled ? disabledActionStyle : undefined),
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
 }
 
 export default function MemberHeader({ 
@@ -23,9 +84,12 @@ export default function MemberHeader({
   onBack, 
   onSendNotification, 
   onEdit, 
+  onDelete,
   onManageCredentials, 
   onUploadDocuments,
   isSuperAdmin,
+  canDelete = false,
+  isDeleting = false,
   canUploadDocuments = false,
   hasDocuments = false
 }: MemberHeaderProps) {
@@ -150,43 +214,37 @@ export default function MemberHeader({
             📧 Kirim Notifikasi
           </button>
           {canUploadDocuments && onUploadDocuments && (
-            <button 
+            <HeaderIconAction
               onClick={onUploadDocuments} 
-              className="btn btn-secondary member-detail-action-button"
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px',
-                background: 'linear-gradient(135deg, #10b98120, #06b6d420)',
-                borderColor: '#10b98150',
-                color: '#10b981'
-              }}
+              tone="success"
+              icon={<Upload size={16} />}
             >
-              <Upload size={16} />
               {hasDocuments ? 'Ganti Dokumen' : 'Upload Dokumen'}
-            </button>
+            </HeaderIconAction>
           )}
           {isSuperAdmin && onManageCredentials && (
-            <button 
+            <HeaderIconAction
               onClick={onManageCredentials} 
-              className="btn btn-secondary member-detail-action-button"
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '6px',
-                background: 'linear-gradient(135deg, #f59e0b20, #d9770620)',
-                borderColor: '#f59e0b50',
-                color: '#f59e0b'
-              }}
+              tone="warning"
+              icon={<Key size={16} />}
             >
-              <Key size={16} />
               Kredensial
-            </button>
+            </HeaderIconAction>
           )}
           {isSuperAdmin && (
             <button onClick={onEdit} className="btn btn-primary member-detail-action-button">
               ✏️ Edit
             </button>
+          )}
+          {canDelete && onDelete && (
+            <HeaderIconAction
+              onClick={onDelete} 
+              disabled={isDeleting}
+              tone="danger"
+              icon={isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            >
+              {isDeleting ? 'Menghapus...' : 'Hapus Member'}
+            </HeaderIconAction>
           )}
         </div>
       </div>

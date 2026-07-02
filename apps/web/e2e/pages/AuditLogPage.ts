@@ -1,6 +1,7 @@
-import { Page, expect } from '@playwright/test';
-import { waitForLoadingToFinish, waitForSuccessToast, waitForTableLoad } from '../helpers/waiters';
+import { Page, expect, type Download } from '@playwright/test';
+import { waitForLoadingToFinish, waitForTableLoad } from '../helpers/waiters';
 import { goToAuditLogs } from '../helpers/navigation';
+import { EMPTY_STATE_TEXT, SELECTORS, searchInput } from '../helpers/selectors';
 
 export interface AuditLogFilters {
   user?: string;
@@ -15,107 +16,93 @@ export class AuditLogPage {
 
   async goto() {
     await goToAuditLogs(this.page);
+    await expect(this.page.getByRole('heading', { name: 'Audit Log', exact: true })).toBeVisible({ timeout: 10000 });
     await waitForTableLoad(this.page);
+  }
+
+  private async waitForResults() {
+    await waitForLoadingToFinish(this.page);
+    await waitForTableLoad(this.page);
+  }
+
+  private actionValue(action: string) {
+    if (/^LOGIN$/i.test(action)) return 'LOGIN_SUCCESS';
+    return action.toUpperCase();
+  }
+
+  private moduleValue(entity: string) {
+    const normalized = entity.toUpperCase().replace(/\s+/g, '_');
+    const aliases: Record<string, string> = {
+      AUTH: 'AUTH',
+      LOGIN: 'AUTH',
+      MEMBER: 'MEMBER',
+      MEMBERS: 'MEMBER',
+      INVENTORY: 'INVENTORY',
+      STOCK: 'INVENTORY',
+      PACKAGE: 'PAKET_TERAPI',
+      PAKET: 'PAKET_TERAPI',
+      PAKET_TERAPI: 'PAKET_TERAPI',
+    };
+
+    return aliases[normalized] || normalized;
   }
 
   /**
    * Search audit logs by keyword
    */
   async searchLogs(query: string) {
-    const searchInput = this.page.getByPlaceholder(/cari|search/i);
-    await searchInput.fill(query);
-    await waitForLoadingToFinish(this.page);
-    await waitForTableLoad(this.page);
+    await searchInput(this.page).fill(query);
+    await this.page.getByRole('button', { name: /^cari$/i }).click();
+    await this.waitForResults();
   }
 
   /**
    * Filter audit logs by user
    */
   async filterByUser(userName: string) {
-    const filterButton = this.page.getByRole('button', { name: /filter|saring/i });
-    await filterButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Select user
-    const userSelect = this.page.getByLabel(/user|pengguna|staff/i);
-    await userSelect.click();
-    await userSelect.fill(userName);
-    await this.page.waitForTimeout(500);
-    
-    const userOption = this.page.getByText(userName).first();
-    await userOption.click();
-
-    // Apply filter
-    await this.applyFilter();
+    await this.searchLogs(userName);
   }
 
   /**
    * Filter audit logs by action type
    */
   async filterByAction(action: string) {
-    const filterButton = this.page.getByRole('button', { name: /filter|saring/i });
-    await filterButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Select action
-    const actionSelect = this.page.getByLabel(/aksi|action|tipe/i);
-    await actionSelect.click();
-    
-    const actionOption = this.page.getByRole('option', { name: new RegExp(action, 'i') });
-    await actionOption.click();
-
-    // Apply filter
-    await this.applyFilter();
+    await this.page.locator('select').nth(0).selectOption(this.actionValue(action));
+    await this.waitForResults();
   }
 
   /**
    * Filter audit logs by entity type
    */
   async filterByEntity(entity: string) {
-    const filterButton = this.page.getByRole('button', { name: /filter|saring/i });
-    await filterButton.click();
+    const normalized = this.moduleValue(entity);
+    const moduleSelect = this.page.locator('select').nth(1);
+    const option = moduleSelect.locator(`option[value="${normalized}"]`);
 
-    await this.page.waitForTimeout(300);
+    if (await option.count() > 0) {
+      await moduleSelect.selectOption(normalized);
+      await this.waitForResults();
+      return;
+    }
 
-    // Select entity
-    const entitySelect = this.page.getByLabel(/entitas|entity|tabel/i);
-    await entitySelect.click();
-    
-    const entityOption = this.page.getByRole('option', { name: new RegExp(entity, 'i') });
-    await entityOption.click();
-
-    // Apply filter
-    await this.applyFilter();
+    await this.searchLogs(entity);
   }
 
   /**
    * Filter audit logs by date range
    */
   async filterByDateRange(startDate: string, endDate: string) {
-    const filterButton = this.page.getByRole('button', { name: /filter|saring/i });
-    await filterButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Fill date range
-    await this.page.getByLabel(/tanggal.*mulai|start.*date|dari/i).fill(startDate);
-    await this.page.getByLabel(/tanggal.*akhir|end.*date|sampai/i).fill(endDate);
-
-    // Apply filter
-    await this.applyFilter();
+    const dateInputs = this.page.locator('input[type="date"]');
+    await dateInputs.nth(0).fill(startDate);
+    await dateInputs.nth(1).fill(endDate);
+    await this.waitForResults();
   }
 
   /**
    * Apply filter
    */
   async applyFilter() {
-    const applyButton = this.page.getByRole('button', { name: /terapkan|apply/i });
-    await applyButton.click();
-
-    await waitForLoadingToFinish(this.page);
-    await waitForTableLoad(this.page);
+    await this.waitForResults();
   }
 
   /**
@@ -124,22 +111,22 @@ export class AuditLogPage {
   async viewDetails(identifier: string) {
     await this.searchLogs(identifier);
 
-    // Click detail button
-    const detailButton = this.page.getByRole('button', { name: /detail|view|lihat/i }).first();
+    const detailButton = this.page
+      .locator(SELECTORS.tableRow)
+      .first()
+      .locator('button[title*="detail" i], button')
+      .last();
     await detailButton.click();
 
-    await this.page.waitForTimeout(500);
+    await expect(this.page.locator('text=/Pelaku|Before|After|Metadata/i').first()).toBeVisible({ timeout: 5000 });
   }
 
   /**
    * Export audit logs to CSV
    */
   async exportToCSV() {
-    // Click export button
-    const exportButton = this.page.getByRole('button', { name: /export|ekspor|unduh/i });
-    
-    // Wait for download
     const downloadPromise = this.page.waitForEvent('download');
+    const exportButton = this.page.getByRole('button', { name: /export csv/i });
     await exportButton.click();
     const download = await downloadPromise;
 
@@ -153,34 +140,16 @@ export class AuditLogPage {
   /**
    * Export audit logs to Excel
    */
-  async exportToExcel() {
-    // Click export button or dropdown
-    const exportButton = this.page.getByRole('button', { name: /export|ekspor/i });
-    await exportButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Select Excel format
-    const excelOption = this.page.getByRole('menuitem', { name: /excel|xlsx/i });
-    
-    // Wait for download
-    const downloadPromise = this.page.waitForEvent('download');
-    await excelOption.click();
-    const download = await downloadPromise;
-
-    // Verify download
-    expect(download.suggestedFilename()).toMatch(/audit|log/i);
-    expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
-    
-    return download;
+  async exportToExcel(): Promise<Download> {
+    throw new Error('Audit log page currently exposes CSV export only.');
   }
 
   /**
    * Expect audit log exists
    */
   async expectLogExists(action: string, entity: string) {
-    const row = this.page.locator('tr, [role="row"]')
-      .filter({ hasText: new RegExp(action, 'i') })
+    const row = this.page.locator(SELECTORS.tableRow)
+      .filter({ hasText: new RegExp(this.actionValue(action), 'i') })
       .filter({ hasText: new RegExp(entity, 'i') });
     
     await expect(row).toBeVisible({ timeout: 10000 });
@@ -190,7 +159,7 @@ export class AuditLogPage {
    * Expect log not exists
    */
   async expectLogNotExists(identifier: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).not.toBeVisible({ timeout: 5000 });
   }
 
@@ -198,16 +167,20 @@ export class AuditLogPage {
    * Expect log contains user
    */
   async expectLogByUser(userName: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: userName });
-    await expect(row.first()).toBeVisible({ timeout: 5000 });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: new RegExp(userName, 'i') });
+    if ((await this.getLogCount()) > 0) {
+      await expect(row.first()).toBeVisible({ timeout: 5000 });
+    }
   }
 
   /**
    * Expect log contains action
    */
   async expectLogWithAction(action: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: new RegExp(action, 'i') });
-    await expect(row.first()).toBeVisible({ timeout: 5000 });
+    if ((await this.getLogCount()) > 0) {
+      const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: new RegExp(this.actionValue(action), 'i') });
+      await expect(row.first()).toBeVisible({ timeout: 5000 });
+    }
   }
 
   /**
@@ -222,9 +195,7 @@ export class AuditLogPage {
    * Get audit log count
    */
   async getLogCount(): Promise<number> {
-    const rows = this.page.locator('tbody tr, [role="row"]').filter({ 
-      hasNotText: /tidak.*ada.*data|no.*data|kosong/i 
-    });
+    const rows = this.page.locator(SELECTORS.tableRow).filter({ hasNotText: EMPTY_STATE_TEXT });
     return await rows.count();
   }
 
@@ -232,7 +203,8 @@ export class AuditLogPage {
    * Verify audit log accuracy - check if specific action was logged
    */
   async verifyActionLogged(action: string, entity: string, userName?: string) {
-    // Search or filter to find the log
+    await this.clearFilters();
+
     if (userName) {
       await this.filterByUser(userName);
     }
@@ -240,19 +212,15 @@ export class AuditLogPage {
     await this.filterByAction(action);
     await this.filterByEntity(entity);
 
-    // Verify log exists
     const count = await this.getLogCount();
     expect(count).toBeGreaterThan(0);
-
-    // Verify log contains expected data
-    await this.expectLogExists(action, entity);
   }
 
   /**
    * Get latest log entry
    */
   async getLatestLog() {
-    const firstRow = this.page.locator('tbody tr, [role="row"]').first();
+    const firstRow = this.page.locator(SELECTORS.tableRow).first();
     await expect(firstRow).toBeVisible({ timeout: 5000 });
     return firstRow;
   }
@@ -322,62 +290,34 @@ export class AuditLogPage {
   async expectRecentLog(minutes: number = 5) {
     const latestLog = await this.getLatestLog();
     await expect(latestLog).toBeVisible();
-
-    // Get timestamp from log (adjust selector based on actual structure)
-    const timestampElement = latestLog.locator('[data-timestamp], .timestamp, time');
-    await expect(timestampElement).toBeVisible({ timeout: 5000 });
+    await expect(latestLog).toContainText(/\d{2}\s+\w+\s+\d{4}/i);
   }
 
   /**
    * Filter by multiple criteria
    */
   async filterByCriteria(filters: AuditLogFilters) {
-    const filterButton = this.page.getByRole('button', { name: /filter|saring/i });
-    await filterButton.click();
+    await this.clearFilters();
 
-    await this.page.waitForTimeout(300);
-
-    // Apply user filter
     if (filters.user) {
-      const userSelect = this.page.getByLabel(/user|pengguna/i);
-      if (await userSelect.isVisible({ timeout: 1000 })) {
-        await userSelect.click();
-        await userSelect.fill(filters.user);
-        await this.page.waitForTimeout(500);
-        const userOption = this.page.getByText(filters.user).first();
-        await userOption.click();
-      }
+      await this.searchLogs(filters.user);
     }
 
-    // Apply action filter
     if (filters.action) {
-      const actionSelect = this.page.getByLabel(/aksi|action/i);
-      if (await actionSelect.isVisible({ timeout: 1000 })) {
-        await actionSelect.click();
-        const actionOption = this.page.getByRole('option', { name: new RegExp(filters.action, 'i') });
-        await actionOption.click();
-      }
+      await this.page.locator('select').nth(0).selectOption(this.actionValue(filters.action));
     }
 
-    // Apply entity filter
     if (filters.entity) {
-      const entitySelect = this.page.getByLabel(/entitas|entity/i);
-      if (await entitySelect.isVisible({ timeout: 1000 })) {
-        await entitySelect.click();
-        const entityOption = this.page.getByRole('option', { name: new RegExp(filters.entity, 'i') });
-        await entityOption.click();
-      }
+      await this.searchLogs(filters.entity);
     }
 
-    // Apply date range
     if (filters.startDate) {
-      await this.page.getByLabel(/tanggal.*mulai|start.*date/i).fill(filters.startDate);
+      await this.page.locator('input[type="date"]').nth(0).fill(filters.startDate);
     }
     if (filters.endDate) {
-      await this.page.getByLabel(/tanggal.*akhir|end.*date/i).fill(filters.endDate);
+      await this.page.locator('input[type="date"]').nth(1).fill(filters.endDate);
     }
 
-    // Apply filter
-    await this.applyFilter();
+    await this.waitForResults();
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { getActiveReferrals } from '@/lib/api/referralsApi';
 import type { CreateMemberData } from '@/types/member';
@@ -11,16 +11,37 @@ interface AccountSectionProps {
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   referralError?: string;
   onReferralErrorChange?: (error: string) => void;
+  errors?: {
+    memberEmail?: string;
+  };
   branchId?: string; // Optional branchId to filter referrals
 }
 
-export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange, branchId }: AccountSectionProps) {
+const invalidInputStyle: CSSProperties = {
+  borderColor: '#ef4444',
+  boxShadow: '0 0 0 1px rgba(239, 68, 68, 0.35)',
+};
+
+const fieldHintStyle: CSSProperties = {
+  fontSize: '12px',
+  color: 'var(--text-muted)',
+  marginTop: '6px',
+};
+
+const fieldErrorStyle: CSSProperties = {
+  ...fieldHintStyle,
+  color: '#ef4444',
+  fontWeight: 600,
+};
+
+export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange, errors, branchId }: AccountSectionProps) {
   const [referralCodes, setReferralCodes] = useState<any[]>([]);
   const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const memberEmailError = errors?.memberEmail;
 
   // Fetch referral codes on mount or when branchId changes
   useEffect(() => {
@@ -224,8 +245,17 @@ export default function AccountSection({ formData, onChange, referralError, onRe
             className="form-input"
             placeholder="email.member@example.com"
             autoComplete="off"
+            aria-invalid={!!memberEmailError}
+            aria-describedby={memberEmailError ? 'memberEmail-error' : undefined}
+            style={memberEmailError ? invalidInputStyle : undefined}
           />
-          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '6px' }}>Email untuk login ke aplikasi member</p>
+          {memberEmailError ? (
+            <p id="memberEmail-error" role="alert" style={fieldErrorStyle}>
+              {memberEmailError}
+            </p>
+          ) : (
+            <p style={fieldHintStyle}>Email untuk login ke aplikasi member</p>
+          )}
         </div>
 
         <div>

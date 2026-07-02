@@ -168,9 +168,6 @@ test.describe('Report Export', () => {
   test('should print report', async () => {
     // Print report
     await reportPage.printReport();
-
-    // Verify print dialog opened (basic check)
-    await reportPage.page.waitForTimeout(1000);
   });
 });
 
@@ -357,7 +354,7 @@ test.describe('Report Access Control', () => {
     await reportPage.goto();
 
     // Verify manager can access reports
-    await expect(page.locator('h1, h2')).toContainText(/laporan|report/i);
+    await expect(page.getByRole('heading', { name: 'Laporan', exact: true })).toBeVisible();
   });
 
   test('should restrict report access for non-managers', async ({ loginAs, page }) => {

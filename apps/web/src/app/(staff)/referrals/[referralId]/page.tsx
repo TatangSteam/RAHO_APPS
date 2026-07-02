@@ -4,6 +4,16 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import * as referralsApi from '@/lib/api/referralsApi';
 import { devError } from '@/lib/logger';
+import { showToast } from '@/lib/toast';
+import {
+  datedExportFilename,
+  downloadBlob,
+  formatCurrency,
+  formatIncentive,
+  getReferrerTypeLabel,
+  REFERRER_TYPE_OPTIONS,
+  type ReferrerType,
+} from '@/lib/referralUtils';
 import styles from '@/styles/referral-detail.module.css';
 
 export default function ReferralDetailPage() {
@@ -32,7 +42,7 @@ export default function ReferralDetailPage() {
       setReferral(response.data.data);
     } catch (error) {
       devError('Error fetching referral:', error);
-      alert('Gagal memuat data referral');
+      showToast.error('Gagal memuat data referral');
       router.push('/referrals');
     } finally {
       setLoading(false);
@@ -52,68 +62,36 @@ export default function ReferralDetailPage() {
     }
   };
 
-  const formatIncentive = (type: string, value: number) => {
-    if (type === 'PERCENTAGE') {
-      return `${value}%`;
-    }
-    return `Rp ${value.toLocaleString('id-ID')}`;
-  };
-
-  const formatCurrency = (amount: number) => {
-    return `Rp ${amount.toLocaleString('id-ID')}`;
-  };
-
-  const getReferrerTypeLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      SALES: 'Sales',
-      DOKTER: 'Dokter',
-      MEMBER: 'Member',
-    };
-    return labels[type] || type;
-  };
-
   const totalPages = Math.ceil(total / limit);
 
-  const handleExportExcel = async () => {
+  const exportBlob = async (
+    request: () => Promise<{ data: BlobPart }>,
+    filename: string,
+    errorMessage: string,
+  ) => {
     try {
-      const response = await referralsApi.exportIncentivesExcel({
-        referralId: referralId,
-      });
-
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Insentif_${referral?.code}_${new Date().toISOString().split('T')[0]}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const response = await request();
+      downloadBlob(response.data, filename);
     } catch (error) {
-      devError('Error exporting to Excel:', error);
-      alert('Gagal export ke Excel');
+      devError(errorMessage, error);
+      showToast.error(errorMessage);
     }
+  };
+
+  const handleExportExcel = async () => {
+    await exportBlob(
+      () => referralsApi.exportIncentivesExcel({ referralId }),
+      datedExportFilename(`Insentif_${referral?.code}`, 'xlsx'),
+      'Gagal export ke Excel',
+    );
   };
 
   const handleExportPDF = async () => {
-    try {
-      const response = await referralsApi.exportIncentivesPDF({
-        referralId: referralId,
-      });
-
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Insentif_${referral?.code}_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      devError('Error exporting to PDF:', error);
-      alert('Gagal export ke PDF');
-    }
+    await exportBlob(
+      () => referralsApi.exportIncentivesPDF({ referralId }),
+      datedExportFilename(`Insentif_${referral?.code}`, 'pdf'),
+      'Gagal export ke PDF',
+    );
   };
 
   if (loading) {
@@ -319,7 +297,7 @@ function EditReferralModal({
       onSuccess();
     } catch (error) {
       devError('Error updating referral:', error);
-      alert('Gagal mengupdate kode referral');
+      showToast.error('Gagal mengupdate kode referral');
     } finally {
       setLoading(false);
     }
@@ -351,12 +329,14 @@ function EditReferralModal({
               <label>Tipe *</label>
               <select
                 value={formData.referrerType}
-                onChange={(e) => setFormData({ ...formData, referrerType: e.target.value as any })}
+                onChange={(e) => setFormData({ ...formData, referrerType: e.target.value as ReferrerType })}
                 required
               >
-                <option value="SALES">Sales</option>
-                <option value="DOKTER">Dokter</option>
-                <option value="MEMBER">Member</option>
+                {REFERRER_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
 

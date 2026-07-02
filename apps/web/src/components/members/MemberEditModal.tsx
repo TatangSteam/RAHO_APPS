@@ -154,13 +154,6 @@ export default function MemberEditModal({
         nextIncentiveValue: memberData.nextIncentiveValue || 0
       });
       
-      // Set referral search if exists
-      if (memberData.referralCodeId) {
-        const referral = referralCodes.find(ref => ref.id === memberData.referralCodeId);
-        if (referral) {
-          setReferralSearch(`${referral.code} - ${referral.referrerName}`);
-        }
-      }
     } else if (action === 'create') {
       // Reset form
       setFormData({
@@ -184,7 +177,16 @@ export default function MemberEditModal({
       });
       setReferralSearch('');
     }
-  }, [action, memberData, referralCodes]);
+  }, [action, memberData]);
+
+  useEffect(() => {
+    if (action !== 'edit' || !memberData?.referralCodeId) return;
+
+    const referral = referralCodes.find(ref => ref.id === memberData.referralCodeId);
+    if (referral) {
+      setReferralSearch(`${referral.code} - ${referral.referrerName}`);
+    }
+  }, [action, memberData?.referralCodeId, referralCodes]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;

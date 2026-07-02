@@ -21,6 +21,7 @@ const ALLSTAFF = [
 ];
 
 const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
+const MEMBER_DELETERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 
 // Roles that can edit therapy plans (SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR)
 const THERAPY_PLAN_EDITORS = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR];
@@ -194,7 +195,7 @@ router.patch(
 router.delete(
   '/:memberId',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize(MEMBER_DELETERS),
   assertBranchAccess,
   controller.deleteMember.bind(controller)
 );

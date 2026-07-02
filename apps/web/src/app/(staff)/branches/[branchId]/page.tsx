@@ -212,6 +212,8 @@ export default function BranchDetailPage() {
   const params = useParams();
   const branchId = params.branchId as string;
   const { user } = useAuthStore();
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canManageBranch = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -281,18 +283,18 @@ export default function BranchDetailPage() {
 
   // Check authorization
   useEffect(() => {
-    if (!user || !hasRole(user.role, MANAGER_ABOVE_ROLES)) {
+    if (!canManageBranch) {
       showToast.error('Anda tidak memiliki akses ke halaman ini');
       router.push('/dashboard');
       return;
     }
-  }, [user, router]);
+  }, [canManageBranch, router]);
 
   useEffect(() => {
-    if (user && hasRole(user.role, MANAGER_ABOVE_ROLES)) {
+    if (canManageBranch) {
       loadBranch();
     }
-  }, [branchId, user]);
+  }, [branchId, canManageBranch]);
 
   useEffect(() => {
     if (branch) {
@@ -400,6 +402,11 @@ export default function BranchDetailPage() {
   };
 
   const handleDeleteItem = async (type: 'member' | 'staff' | 'inventory', id: string, name: string) => {
+    if (type === 'member' && !canManageBranch) {
+      showToast.error('Hanya Admin Manager dan Super Admin yang dapat menghapus member');
+      return;
+    }
+
     const confirmed = await confirm.delete(name);
     if (!confirmed) return;
 
@@ -572,7 +579,7 @@ export default function BranchDetailPage() {
                 <Edit size={18} />
                 <span>Edit</span>
               </button>
-              {user && hasRole(user.role, MANAGER_ABOVE_ROLES) && (
+              {canManageBranch && (
                 <button
                   onClick={handleDelete}
                   className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-500/10 text-neutral-700 dark:text-neutral-200 hover:text-red-600 dark:hover:text-red-400 font-semibold rounded-lg border border-neutral-200 dark:border-neutral-700 hover:border-red-500/50 transition-all duration-200"
@@ -621,7 +628,7 @@ export default function BranchDetailPage() {
             <TabButton active={activeTab === 'inventory'} onClick={() => setActiveTab('inventory')} icon={<Package size={18} />} label="Stok" />
             <TabButton active={activeTab === 'staff'} onClick={() => setActiveTab('staff')} icon={<UserCog size={18} />} label="Staff" badge={branch.stats?.activeUsers} />
             <TabButton active={activeTab === 'managers'} onClick={() => setActiveTab('managers')} icon={<Shield size={18} />} label="Managers" />
-            {user?.role === 'SUPER_ADMIN' && (
+            {isSuperAdmin && (
               <TabButton active={activeTab === 'pricing'} onClick={() => setActiveTab('pricing')} icon={<DollarSign size={18} />} label="Harga Paket" />
             )}
           </div>
@@ -717,7 +724,8 @@ export default function BranchDetailPage() {
                   data={filteredMembers}
                   loading={tabLoading}
                   currentBranchCode={branch?.branchCode}
-                  showCredentialsButton={user?.role === 'SUPER_ADMIN'}
+                  showCredentialsButton={isSuperAdmin}
+                  showDeleteButton={canManageBranch}
                   onEdit={(member) => openCrudModal('member', 'edit', member)}
                   onDelete={(member) => handleDeleteItem('member', member.memberId, member.fullName)}
                   onAddMember={() => router.push(
@@ -792,8 +800,8 @@ export default function BranchDetailPage() {
                 <StaffTable
                   data={staff}
                   loading={tabLoading}
-                  showCredentialsButton={user?.role === 'SUPER_ADMIN'}
-                  showDeleteButton={!!(user && hasRole(user.role, MANAGER_ABOVE_ROLES))}
+                  showCredentialsButton={isSuperAdmin}
+                  showDeleteButton={canManageBranch}
                   onEdit={(staffUser) => openCrudModal('staff', 'edit', staffUser)}
                   onUnassignFromBranch={handleUnassignFromBranch}
                   onDeleteStaff={handleDeleteStaff}
@@ -822,7 +830,7 @@ export default function BranchDetailPage() {
                     <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Admin Managers</h2>
                     <p className="text-neutral-500 dark:text-neutral-400 text-sm mt-1">Daftar Admin Manager yang di-assign ke cabang ini</p>
                   </div>
-                  {user?.role === 'SUPER_ADMIN' && (
+                  {isSuperAdmin && (
                     <button 
                       onClick={() => setShowAssignManagerModal(true)}
                       className="inline-flex items-center gap-2 px-5 py-2.5 bg-purple-500 hover:bg-purple-600 text-white font-semibold rounded-lg transition-colors shadow-lg shadow-purple-500/20"
@@ -836,7 +844,7 @@ export default function BranchDetailPage() {
                 <ManagersTable
                   data={managers}
                   loading={tabLoading}
-                  canManage={user?.role === 'SUPER_ADMIN'}
+                  canManage={isSuperAdmin}
                   onUnassign={async (manager) => {
                     const confirmed = await confirm.warning(
                       'Hapus Manager dari Cabang',
@@ -884,7 +892,7 @@ export default function BranchDetailPage() {
             )}
 
             {/* Pricing Tab */}
-            {activeTab === 'pricing' && user?.role === 'SUPER_ADMIN' && (
+            {activeTab === 'pricing' && isSuperAdmin && (
               <div>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
                   <div>

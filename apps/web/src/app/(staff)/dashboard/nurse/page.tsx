@@ -5,11 +5,15 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Activity, Calendar, Clock, Package, CheckCircle2, 
-  PlayCircle, Loader2, RefreshCw, AlertCircle, ChevronRight,
-  Heart, Thermometer, AlertTriangle, Boxes
+  PlayCircle, ChevronRight,
+  Heart, AlertTriangle, Boxes
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { dashboardApi, type NurseDashboardData } from '@/lib/dashboardApi';
+import { getDashboardLoadErrorMessage } from '@/lib/dashboardPresentation';
+import { DashboardErrorState } from '@/components/dashboard/DashboardErrorState';
+import { DashboardLoadingState } from '@/components/dashboard/DashboardLoadingState';
+import { DashboardStatCard as StatCard } from '@/components/dashboard/DashboardStatCard';
 
 export default function NurseDashboardPage() {
   const { user } = useAuthStore();
@@ -25,8 +29,8 @@ export default function NurseDashboardPage() {
     try {
       const result = await dashboardApi.getNurseDashboard();
       setData(result);
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal memuat dashboard');
+    } catch (error) {
+      setError(getDashboardLoadErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -45,27 +49,11 @@ export default function NurseDashboardPage() {
   }, [user, router]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-      </div>
-    );
+    return <DashboardLoadingState color="amber" />;
   }
 
   if (error) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-neutral-500 mb-4">{error}</p>
-            <button onClick={fetchDashboard} className="px-4 py-2 bg-amber-500 text-black rounded-xl font-medium">
-              <RefreshCw className="h-4 w-4 inline mr-2" />Coba Lagi
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+    return <DashboardErrorState message={error} onRetry={fetchDashboard} actionColor="amber" />;
   }
 
   if (!data) return null;
@@ -278,42 +266,3 @@ export default function NurseDashboardPage() {
   );
 }
 
-// Stat Card Component
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  subtitle,
-  color 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string | number;
-  subtitle?: string;
-  color: 'blue' | 'emerald' | 'amber' | 'purple';
-}) {
-  const colors = {
-    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 text-blue-500',
-    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 text-emerald-500',
-    amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 text-amber-500',
-    purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 text-purple-500',
-  };
-
-  const bgColors = {
-    blue: 'bg-blue-500/20',
-    emerald: 'bg-emerald-500/20',
-    amber: 'bg-amber-500/20',
-    purple: 'bg-purple-500/20',
-  };
-
-  return (
-    <div className={`bg-gradient-to-br ${colors[color]} rounded-2xl p-5 border relative overflow-hidden`}>
-      <div className={`w-10 h-10 ${bgColors[color]} rounded-xl flex items-center justify-center mb-3`}>
-        {icon}
-      </div>
-      <div className="text-3xl font-bold text-neutral-900 dark:text-white mb-1">{value}</div>
-      <div className="text-sm text-neutral-600 dark:text-neutral-400">{label}</div>
-      {subtitle && <div className="text-xs text-neutral-500 mt-1">{subtitle}</div>}
-    </div>
-  );
-}

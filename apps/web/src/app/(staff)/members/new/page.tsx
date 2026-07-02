@@ -8,17 +8,25 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { devError } from '@/lib/logger';
+import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import NewMemberHeader from '@/components/members/new/NewMemberHeader';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
 import IncentiveSection from '@/components/members/new/IncentiveSection';
 import DocumentUploadSection from '@/components/members/new/DocumentUploadSection';
+import { ErrorAlert } from '@/components/ui/Alert';
 
 interface Branch {
   id: string;
   name: string;
   branchCode: string;
 }
+
+interface FormFieldErrors {
+  memberEmail?: string;
+}
+
+const DUPLICATE_EMAIL_MESSAGE = 'Email sudah terdaftar. Gunakan email lain untuk akun member.';
 
 export default function NewMemberPage() {
   const router = useRouter();
@@ -31,6 +39,8 @@ export default function NewMemberPage() {
       ? requestedReturnTo
       : null;
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<FormFieldErrors>({});
   const [referralError, setReferralError] = useState('');
   const [pspFile, setPspFile] = useState<File | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -39,8 +49,7 @@ export default function NewMemberPage() {
   // Branch selection for roles that are not attached to one branch account.
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const requiresBranchSelection =
-    user?.role === 'ADMIN_MANAGER' || user?.role === 'SUPER_ADMIN';
+  const requiresBranchSelection = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
   const isBranchLocked =
     requiresBranchSelection &&
     !!requestedBranchId &&
@@ -172,6 +181,13 @@ export default function NewMemberPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+
+    if (name === 'memberEmail') {
+      setFieldErrors((prev) => ({ ...prev, memberEmail: undefined }));
+      if (formError.toLowerCase().includes('email')) {
+        setFormError('');
+      }
+    }
     
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
@@ -231,6 +247,8 @@ export default function NewMemberPage() {
 
     // Clear previous errors
     setReferralError('');
+    setFormError('');
+    setFieldErrors({});
 
     // SUPER_ADMIN / ADMIN_MANAGER must select the registration branch.
     if (requiresBranchSelection && !formData.branchId) {
@@ -310,12 +328,21 @@ export default function NewMemberPage() {
     } catch (err: any) {
       const errorMessage = err.response?.data?.error?.message || 'Gagal mendaftarkan member';
       const errorCode = err.response?.data?.error?.code;
+      const status = err.response?.status;
       
       // Check if it's a referral code error
       if (errorCode === 'INVALID_REFERRAL_CODE') {
         setReferralError(errorMessage);
         showToast.error(errorMessage);
+      } else if (errorCode === 'EMAIL_EXISTS' || (status === 409 && /email/i.test(errorMessage))) {
+        setFormError(DUPLICATE_EMAIL_MESSAGE);
+        setFieldErrors({ memberEmail: DUPLICATE_EMAIL_MESSAGE });
+        showToast.error(DUPLICATE_EMAIL_MESSAGE);
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLInputElement>('[name="memberEmail"]')?.focus();
+        });
       } else {
+        setFormError(errorMessage);
         showToast.error(errorMessage);
       }
     } finally {
@@ -427,6 +454,12 @@ export default function NewMemberPage() {
       )}
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {formError && (
+          <ErrorAlert title="Error">
+            {formError}
+          </ErrorAlert>
+        )}
+
         {/* Branch Selection for SUPER_ADMIN / ADMIN_MANAGER */}
         {requiresBranchSelection && (
           <div className="card" style={{ padding: '20px' }}>
@@ -488,6 +521,7 @@ export default function NewMemberPage() {
           onChange={handleInputChange}
           referralError={referralError}
           onReferralErrorChange={setReferralError}
+          errors={fieldErrors}
           branchId={requiresBranchSelection ? formData.branchId : undefined}
         />
         

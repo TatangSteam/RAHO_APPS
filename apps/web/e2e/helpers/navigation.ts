@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { waitForPageLoad } from './waiters';
 
 /**
  * Navigation helpers for common app navigation patterns
@@ -114,55 +115,48 @@ export function createNavigation(page: Page) {
   return new Navigation(page);
 }
 
-// Standalone helper functions for direct use
-import { waitForPageLoad } from './waiters';
-
-export async function goToDashboard(page: Page) {
-  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+async function goTo(page: Page, path: string) {
+  await page.goto(path, { waitUntil: 'domcontentloaded' });
   await waitForPageLoad(page);
+}
+
+// Standalone helper functions for direct use
+export async function goToDashboard(page: Page) {
+  await goTo(page, '/dashboard');
 }
 
 export async function goToMembers(page: Page) {
-  await page.goto('/members', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/members');
 }
 
 export async function goToSessions(page: Page) {
-  await page.goto('/sessions', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/sessions');
 }
 
 export async function goToInventory(page: Page) {
-  await page.goto('/inventory', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/inventory');
 }
 
 export async function goToStockRequests(page: Page) {
-  await page.goto('/inventory/stock-requests', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/inventory/stock-requests');
 }
 
 export async function goToShipments(page: Page) {
-  await page.goto('/inventory/shipments', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/inventory/shipments');
 }
 
 export async function goToPayments(page: Page) {
-  await page.goto('/payments', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/payments');
 }
 
 export async function goToAuditLogs(page: Page) {
-  await page.goto('/admin/audit-logs', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/admin/audit-logs');
 }
 
 export async function goToReports(page: Page) {
-  await page.goto('/reports', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/reports');
 }
 
 export async function goToProfile(page: Page) {
-  await page.goto('/profile', { waitUntil: 'domcontentloaded' });
-  await waitForPageLoad(page);
+  await goTo(page, '/profile');
 }

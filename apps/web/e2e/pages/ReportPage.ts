@@ -1,6 +1,10 @@
-import { Page, expect } from '@playwright/test';
-import { waitForLoadingToFinish, waitForSuccessToast, waitForTableLoad } from '../helpers/waiters';
+import { type Download, type Locator, type Page, expect } from '@playwright/test';
+import { waitForLoadingToFinish, waitForSuccessToast } from '../helpers/waiters';
 import { goToReports } from '../helpers/navigation';
+import { EMPTY_STATE_TEXT, SELECTORS } from '../helpers/selectors';
+
+const REPORT_NON_DATA_ROW_TEXT = new RegExp(`${EMPTY_STATE_TEXT.source}|total`, 'i');
+type ReportType = 'Member' | 'Session' | 'Payment' | 'Inventory';
 
 export interface ReportFilters {
   reportType?: string;
@@ -17,444 +21,248 @@ export class ReportPage {
 
   async goto() {
     await goToReports(this.page);
+    await expect(this.page.getByRole('heading', { name: 'Laporan', exact: true })).toBeVisible({ timeout: 10000 });
     await waitForLoadingToFinish(this.page);
   }
 
-  /**
-   * Generate member report
-   */
   async generateMemberReport(filters?: ReportFilters) {
-    // Select report type
-    await this.selectReportType('Member');
-
-    // Apply filters if provided
-    if (filters) {
-      await this.applyFilters(filters);
-    }
-
-    // Generate report
-    await this.clickGenerate();
-    
-    // Wait for report to load
-    await waitForLoadingToFinish(this.page);
-    await this.page.waitForTimeout(1000);
+    await this.generateReport('Member', filters);
   }
 
-  /**
-   * Generate session report
-   */
   async generateSessionReport(filters?: ReportFilters) {
-    // Select report type
-    await this.selectReportType('Session');
-
-    // Apply filters if provided
-    if (filters) {
-      await this.applyFilters(filters);
-    }
-
-    // Generate report
-    await this.clickGenerate();
-    
-    // Wait for report to load
-    await waitForLoadingToFinish(this.page);
-    await this.page.waitForTimeout(1000);
+    await this.generateReport('Session', filters);
   }
 
-  /**
-   * Generate payment report
-   */
   async generatePaymentReport(filters?: ReportFilters) {
-    // Select report type
-    await this.selectReportType('Payment');
-
-    // Apply filters if provided
-    if (filters) {
-      await this.applyFilters(filters);
-    }
-
-    // Generate report
-    await this.clickGenerate();
-    
-    // Wait for report to load
-    await waitForLoadingToFinish(this.page);
-    await this.page.waitForTimeout(1000);
+    await this.generateReport('Payment', filters);
   }
 
-  /**
-   * Generate inventory report
-   */
   async generateInventoryReport(filters?: ReportFilters) {
-    // Select report type
-    await this.selectReportType('Inventory');
+    await this.generateReport('Inventory', filters);
+  }
 
-    // Apply filters if provided
+  private async generateReport(reportType: ReportType, filters?: ReportFilters) {
+    await this.selectReportType(reportType);
+
     if (filters) {
       await this.applyFilters(filters);
     }
 
-    // Generate report
     await this.clickGenerate();
-    
-    // Wait for report to load
     await waitForLoadingToFinish(this.page);
-    await this.page.waitForTimeout(1000);
+    await this.expectReportGenerated();
   }
 
-  /**
-   * Select report type
-   */
   async selectReportType(reportType: string) {
-    const reportSelect = this.page.getByLabel(/tipe.*laporan|report.*type|jenis/i);
-    await reportSelect.click();
-    
-    const option = this.page.getByRole('option', { name: new RegExp(reportType, 'i') });
-    await option.click();
-
-    await this.page.waitForTimeout(300);
+    await this.selectDropdownOption(/tipe.*laporan|report.*type|jenis/i, reportType);
   }
 
-  /**
-   * Apply filters to report
-   */
   async applyFilters(filters: ReportFilters) {
-    // Date range
     if (filters.startDate) {
       await this.page.getByLabel(/tanggal.*mulai|start.*date|dari/i).fill(filters.startDate);
     }
-    
+
     if (filters.endDate) {
       await this.page.getByLabel(/tanggal.*akhir|end.*date|sampai/i).fill(filters.endDate);
     }
 
-    // Branch
     if (filters.branch) {
-      const branchSelect = this.page.getByLabel(/cabang|branch/i);
-      if (await branchSelect.isVisible({ timeout: 1000 })) {
-        await branchSelect.click();
-        const branchOption = this.page.getByRole('option', { name: new RegExp(filters.branch, 'i') });
-        await branchOption.click();
-      }
+      await this.selectDropdownOption(/cabang|branch/i, filters.branch);
     }
 
-    // Status
     if (filters.status) {
-      const statusSelect = this.page.getByLabel(/status/i);
-      if (await statusSelect.isVisible({ timeout: 1000 })) {
-        await statusSelect.click();
-        const statusOption = this.page.getByRole('option', { name: new RegExp(filters.status, 'i') });
-        await statusOption.click();
-      }
+      await this.selectDropdownOption(/status/i, filters.status);
     }
 
-    // Member
     if (filters.member) {
-      const memberInput = this.page.getByLabel(/member|pasien/i);
-      if (await memberInput.isVisible({ timeout: 1000 })) {
-        await memberInput.fill(filters.member);
-        await this.page.waitForTimeout(500);
-        const memberOption = this.page.getByText(filters.member).first();
-        await memberOption.click();
-      }
+      await this.fillOptionalInput(/member|pasien/i, filters.member);
     }
 
-    // Doctor
     if (filters.doctor) {
-      const doctorInput = this.page.getByLabel(/dokter|doctor/i);
-      if (await doctorInput.isVisible({ timeout: 1000 })) {
-        await doctorInput.fill(filters.doctor);
-        await this.page.waitForTimeout(500);
-        const doctorOption = this.page.getByText(filters.doctor).first();
-        await doctorOption.click();
-      }
+      await this.fillOptionalInput(/dokter|doctor/i, filters.doctor);
     }
   }
 
-  /**
-   * Click generate button
-   */
   async clickGenerate() {
-    const generateButton = this.page.getByRole('button', { name: /generate|buat.*laporan|tampilkan/i });
-    await generateButton.click();
+    await this.page.getByRole('button', { name: /generate|buat.*laporan|tampilkan/i }).click();
   }
 
-  /**
-   * Filter report by date range
-   */
   async filterByDateRange(startDate: string, endDate: string) {
     await this.page.getByLabel(/tanggal.*mulai|start.*date|dari/i).fill(startDate);
     await this.page.getByLabel(/tanggal.*akhir|end.*date|sampai/i).fill(endDate);
-    
-    // Apply filter
+
     const applyButton = this.page.getByRole('button', { name: /terapkan|apply|filter/i });
-    if (await applyButton.isVisible({ timeout: 1000 })) {
+    if (await applyButton.isVisible({ timeout: 1000 }).catch(() => false)) {
       await applyButton.click();
       await waitForLoadingToFinish(this.page);
     }
   }
 
-  /**
-   * Filter report by branch
-   */
   async filterByBranch(branchName: string) {
-    const branchSelect = this.page.getByLabel(/cabang|branch/i);
-    await branchSelect.click();
-    
-    const branchOption = this.page.getByRole('option', { name: new RegExp(branchName, 'i') });
-    await branchOption.click();
-
+    await this.selectDropdownOption(/cabang|branch/i, branchName);
     await waitForLoadingToFinish(this.page);
   }
 
-  /**
-   * Export report to PDF
-   */
-  async exportToPDF() {
-    // Click export or PDF button
-    const exportButton = this.page.getByRole('button', { name: /export.*pdf|pdf|cetak/i });
-    
-    // Wait for download
-    const downloadPromise = this.page.waitForEvent('download');
-    await exportButton.click();
-    const download = await downloadPromise;
-
-    // Verify download
-    expect(download.suggestedFilename()).toMatch(/laporan|report/i);
-    expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
-    
-    return download;
+  async exportToPDF(): Promise<Download> {
+    return this.expectDownloadFrom(
+      this.page.getByRole('button', { name: /export.*pdf|pdf|cetak/i }),
+      /\.pdf$/i,
+    );
   }
 
-  /**
-   * Export report to Excel
-   */
-  async exportToExcel() {
-    // Click export button or dropdown
-    const exportButton = this.page.getByRole('button', { name: /export/i });
-    await exportButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Select Excel format
-    const excelOption = this.page.getByRole('menuitem', { name: /excel|xlsx/i });
-    
-    // Wait for download
-    const downloadPromise = this.page.waitForEvent('download');
-    await excelOption.click();
-    const download = await downloadPromise;
-
-    // Verify download
-    expect(download.suggestedFilename()).toMatch(/laporan|report/i);
-    expect(download.suggestedFilename()).toMatch(/\.xlsx$/i);
-    
-    return download;
+  async exportToExcel(): Promise<Download> {
+    await this.openExportMenu();
+    return this.expectDownloadFrom(
+      this.page.getByRole('menuitem', { name: /excel|xlsx/i }),
+      /\.xlsx$/i,
+    );
   }
 
-  /**
-   * Export report to CSV
-   */
-  async exportToCSV() {
-    // Click export button or dropdown
-    const exportButton = this.page.getByRole('button', { name: /export/i });
-    await exportButton.click();
-
-    await this.page.waitForTimeout(300);
-
-    // Select CSV format
-    const csvOption = this.page.getByRole('menuitem', { name: /csv/i });
-    
-    // Wait for download
-    const downloadPromise = this.page.waitForEvent('download');
-    await csvOption.click();
-    const download = await downloadPromise;
-
-    // Verify download
-    expect(download.suggestedFilename()).toMatch(/\.csv$/i);
-    
-    return download;
+  async exportToCSV(): Promise<Download> {
+    await this.openExportMenu();
+    return this.expectDownloadFrom(
+      this.page.getByRole('menuitem', { name: /csv/i }),
+      /\.csv$/i,
+    );
   }
 
-  /**
-   * Schedule report generation
-   */
   async scheduleReport(schedule: {
-    frequency: string; // Daily, Weekly, Monthly
+    frequency: string;
     time?: string;
     recipients?: string[];
   }) {
-    // Click schedule button
-    const scheduleButton = this.page.getByRole('button', { name: /jadwal|schedule/i });
-    await scheduleButton.click();
+    await this.page.getByRole('button', { name: /jadwal|schedule/i }).click();
 
-    await this.page.waitForTimeout(300);
+    const dialog = this.page.getByRole('dialog', { name: /jadwal laporan/i });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await this.selectDropdownOption(/frekuensi|frequency/i, schedule.frequency, dialog);
 
-    // Select frequency
-    const frequencySelect = this.page.getByLabel(/frekuensi|frequency/i);
-    await frequencySelect.click();
-    
-    const frequencyOption = this.page.getByRole('option', { name: new RegExp(schedule.frequency, 'i') });
-    await frequencyOption.click();
-
-    // Set time if provided
     if (schedule.time) {
-      await this.page.getByLabel(/waktu|time/i).fill(schedule.time);
+      await dialog.getByLabel(/waktu|time/i).fill(schedule.time);
     }
 
-    // Add recipients if provided
     if (schedule.recipients && schedule.recipients.length > 0) {
-      const recipientsInput = this.page.getByLabel(/penerima|recipients|email/i);
-      await recipientsInput.fill(schedule.recipients.join(', '));
+      await dialog.getByLabel(/penerima|recipients|email/i).fill(schedule.recipients.join(', '));
     }
 
-    // Save schedule
-    const saveButton = this.page.getByRole('button', { name: /simpan|save/i });
-    await saveButton.click();
-
+    await dialog.getByRole('button', { name: /simpan|save/i }).click();
     await waitForSuccessToast(this.page, /berhasil|success/i);
   }
 
-  /**
-   * Email report
-   */
   async emailReport(recipients: string[], subject?: string, message?: string) {
-    // Click email button
-    const emailButton = this.page.getByRole('button', { name: /email|kirim/i });
-    await emailButton.click();
+    await this.page.getByRole('button', { name: /email|kirim/i }).click();
 
-    await this.page.waitForTimeout(300);
+    const dialog = this.page.getByRole('dialog', { name: /email laporan/i });
+    await expect(dialog).toBeVisible({ timeout: 5000 });
+    await dialog.locator('#email-recipients').fill(recipients.join(', '));
 
-    // Fill recipients
-    const recipientsInput = this.page.getByLabel(/penerima|recipients|to/i);
-    await recipientsInput.fill(recipients.join(', '));
-
-    // Fill subject if provided
     if (subject) {
-      await this.page.getByLabel(/subject|judul/i).fill(subject);
+      await dialog.locator('#email-subject').fill(subject);
     }
 
-    // Fill message if provided
     if (message) {
-      await this.page.getByLabel(/pesan|message|body/i).fill(message);
+      await dialog.locator('#email-message').fill(message);
     }
 
-    // Send email
-    const sendButton = this.page.getByRole('button', { name: /kirim|send/i });
-    await sendButton.click();
-
+    await dialog.getByRole('button', { name: /kirim|send/i }).click();
     await waitForSuccessToast(this.page, /berhasil|success|terkirim/i);
   }
 
-  /**
-   * Expect report generated
-   */
   async expectReportGenerated() {
-    // Report should show data or chart
-    const reportContent = this.page.locator('[data-report-content], .report-content, table, canvas');
-    await expect(reportContent.first()).toBeVisible({ timeout: 10000 });
+    await expect(this.page.locator('[data-report-content], .report-content, table, canvas').first()).toBeVisible({ timeout: 10000 });
   }
 
-  /**
-   * Expect report contains data
-   */
   async expectReportHasData() {
-    // Check if report has rows/data
-    const hasData = await this.page.locator('tbody tr, [data-chart], canvas').count() > 0;
+    const hasData = (await this.page.locator(`${SELECTORS.tableRow}, [data-chart], canvas`).count()) > 0;
     expect(hasData).toBeTruthy();
   }
 
-  /**
-   * Expect report is empty
-   */
   async expectReportEmpty() {
-    const emptyMessage = this.page.locator('text=/tidak.*ada.*data|no.*data|empty|kosong/i');
-    await expect(emptyMessage).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator('text=/tidak.*ada.*data|no.*data|empty|kosong/i')).toBeVisible({ timeout: 5000 });
   }
 
-  /**
-   * Expect report total/summary
-   */
   async expectReportTotal(label: string, value: string) {
-    const totalElement = this.page.locator('text=' + label).locator('..').getByText(value);
-    await expect(totalElement).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator('text=' + label).locator('..').getByText(value)).toBeVisible({ timeout: 5000 });
   }
 
-  /**
-   * Get report row count
-   */
   async getReportRowCount(): Promise<number> {
-    const rows = this.page.locator('tbody tr, [data-row]').filter({ 
-      hasNotText: /tidak.*ada.*data|no.*data|total/i 
-    });
-    return await rows.count();
+    const rows = this.page.locator(`${SELECTORS.tableRow}, [data-row]`).filter({ hasNotText: REPORT_NON_DATA_ROW_TEXT });
+    return rows.count();
   }
 
-  /**
-   * Expect minimum row count
-   */
   async expectMinimumRows(minimumCount: number) {
-    const count = await this.getReportRowCount();
-    expect(count).toBeGreaterThanOrEqual(minimumCount);
+    expect(await this.getReportRowCount()).toBeGreaterThanOrEqual(minimumCount);
   }
 
-  /**
-   * Print report
-   */
   async printReport() {
-    // Click print button
-    const printButton = this.page.getByRole('button', { name: /print|cetak/i });
-    await printButton.click();
-
-    // Print dialog should open (can't fully test in automation)
-    await this.page.waitForTimeout(1000);
+    await this.page.getByRole('button', { name: /print|cetak/i }).click();
+    await expect(this.page.getByRole('status')).toContainText(/print/i);
   }
 
-  /**
-   * View report chart
-   */
   async expectChartVisible() {
-    const chart = this.page.locator('canvas, [data-chart], svg[class*="chart"]');
-    await expect(chart.first()).toBeVisible({ timeout: 5000 });
+    await expect(this.page.locator('canvas, [data-chart], svg[class*="chart"]').first()).toBeVisible({ timeout: 5000 });
   }
 
-  /**
-   * Switch between table and chart view
-   */
   async switchToChartView() {
     const chartViewButton = this.page.getByRole('button', { name: /chart|grafik|diagram/i });
-    if (await chartViewButton.isVisible({ timeout: 2000 })) {
+    if (await chartViewButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await chartViewButton.click();
-      await this.page.waitForTimeout(500);
+      await this.expectChartVisible();
     }
   }
 
   async switchToTableView() {
     const tableViewButton = this.page.getByRole('button', { name: /table|tabel|list/i });
-    if (await tableViewButton.isVisible({ timeout: 2000 })) {
+    if (await tableViewButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await tableViewButton.click();
-      await this.page.waitForTimeout(500);
+      await this.expectReportGenerated();
     }
   }
 
-  /**
-   * Refresh report
-   */
   async refreshReport() {
     const refreshButton = this.page.getByRole('button', { name: /refresh|reload|muat.*ulang/i });
-    
-    if (await refreshButton.isVisible({ timeout: 2000 })) {
+    if (await refreshButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await refreshButton.click();
       await waitForLoadingToFinish(this.page);
     }
   }
 
-  /**
-   * Clear filters
-   */
   async clearFilters() {
     const clearButton = this.page.getByRole('button', { name: /clear|hapus.*filter|reset/i });
-    
-    if (await clearButton.isVisible({ timeout: 2000 })) {
+    if (await clearButton.isVisible({ timeout: 2000 }).catch(() => false)) {
       await clearButton.click();
       await waitForLoadingToFinish(this.page);
     }
+  }
+
+  private async selectDropdownOption(label: RegExp, optionName: string, scope: Page | Locator = this.page) {
+    const dropdown = scope.getByLabel(label);
+    if (!(await dropdown.isVisible({ timeout: 1000 }).catch(() => false))) return;
+
+    await dropdown.click();
+    await this.page.getByRole('option', { name: new RegExp(optionName, 'i') }).click();
+  }
+
+  private async fillOptionalInput(label: RegExp, value: string) {
+    const input = this.page.getByLabel(label);
+    if (await input.isVisible({ timeout: 1000 }).catch(() => false)) {
+      await input.fill(value);
+    }
+  }
+
+  private async openExportMenu() {
+    await this.page.getByRole('button', { name: /export/i }).click();
+    await expect(this.page.getByRole('menu')).toBeVisible({ timeout: 5000 });
+  }
+
+  private async expectDownloadFrom(trigger: Locator, extension: RegExp): Promise<Download> {
+    const downloadPromise = this.page.waitForEvent('download');
+    await trigger.click();
+    const download = await downloadPromise;
+
+    expect(download.suggestedFilename()).toMatch(/laporan|report/i);
+    expect(download.suggestedFilename()).toMatch(extension);
+
+    return download;
   }
 }

@@ -8,27 +8,9 @@ import { useThemeStore } from '@/stores/themeStore';
 import { BranchSwitcher } from './BranchSwitcher';
 import { Role } from '@/types/auth';
 import { api } from '@/lib/api';
+import { formatNotificationBadge } from '@/lib/api/managerNotificationsApi';
+import { getRoleLabel, getRoleTextColor } from '@/lib/rolePresentation';
 import { clsx } from 'clsx';
-
-const ROLE_LABELS: Record<Role, string> = {
-  SUPER_ADMIN: 'Super Admin',
-  ADMIN_MANAGER: 'Admin Manager',
-  ADMIN_CABANG: 'Admin Cabang',
-  ADMIN_LAYANAN: 'Admin Layanan',
-  DOCTOR: 'Dokter',
-  NURSE: 'Nakes',
-  MEMBER: 'Member',
-};
-
-const ROLE_COLORS: Record<Role, string> = {
-  SUPER_ADMIN:   'text-rose-500 dark:text-rose-400',
-  ADMIN_MANAGER: 'text-purple-500 dark:text-purple-400',
-  ADMIN_CABANG:  'text-amber-600 dark:text-amber-400',
-  ADMIN_LAYANAN: 'text-emerald-500 dark:text-emerald-400',
-  DOCTOR:        'text-blue-500 dark:text-blue-400',
-  NURSE:         'text-cyan-500 dark:text-cyan-400',
-  MEMBER:        'text-slate-500 dark:text-slate-400',
-};
 
 interface HeaderProps {
   onMobileMenuToggle?: () => void;
@@ -107,7 +89,7 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
           <Bell size={20} />
           {unreadCount > 0 && (
             <span className="absolute top-1 right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-white dark:border-[#0a0a0a]">
-              {unreadCount > 99 ? '99+' : unreadCount}
+              {formatNotificationBadge(unreadCount)}
             </span>
           )}
         </Link>
@@ -134,8 +116,8 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
             <p className="text-sm font-semibold text-neutral-900 dark:text-white leading-tight truncate max-w-[120px] lg:max-w-[160px]">
               {user.fullName}
             </p>
-            <p className={clsx('text-xs leading-tight', ROLE_COLORS[role])}>
-              {ROLE_LABELS[role]}
+            <p className={clsx('text-xs leading-tight', getRoleTextColor(role))}>
+              {getRoleLabel(role)}
             </p>
           </div>
         </Link>

@@ -1,6 +1,7 @@
 import { Page, expect } from '@playwright/test';
 import { waitForLoadingToFinish, waitForSuccessToast, waitForModal, waitForModalToClose, waitForTableLoad } from '../helpers/waiters';
 import { goToSessions } from '../helpers/navigation';
+import { EMPTY_STATE_TEXT, SELECTORS, searchInput } from '../helpers/selectors';
 
 export interface SessionData {
   memberId?: string;
@@ -104,8 +105,7 @@ export class SessionPage {
    * Search for a session by member name or session ID
    */
   async searchSession(query: string) {
-    const searchInput = this.page.getByPlaceholder(/cari|search/i);
-    await searchInput.fill(query);
+    await searchInput(this.page).fill(query);
     await waitForLoadingToFinish(this.page);
     await waitForTableLoad(this.page);
   }
@@ -424,7 +424,7 @@ export class SessionPage {
    * Expect session exists in list
    */
   async expectSessionExists(identifier: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).toBeVisible({ timeout: 10000 });
   }
 
@@ -432,7 +432,7 @@ export class SessionPage {
    * Expect session not exists in list
    */
   async expectSessionNotExists(identifier: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).not.toBeVisible({ timeout: 5000 });
   }
 
@@ -442,7 +442,7 @@ export class SessionPage {
   async expectSessionStatus(identifier: string, status: string) {
     await this.searchSession(identifier);
     
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).toContainText(new RegExp(status, 'i'));
   }
 
@@ -490,7 +490,7 @@ export class SessionPage {
    * Get session count
    */
   async getSessionCount(): Promise<number> {
-    const rows = this.page.locator('tbody tr, [role="row"]').filter({ hasNotText: /tidak.*ada.*data|no.*data|kosong/i });
+    const rows = this.page.locator(SELECTORS.tableRow).filter({ hasNotText: EMPTY_STATE_TEXT });
     return await rows.count();
   }
 

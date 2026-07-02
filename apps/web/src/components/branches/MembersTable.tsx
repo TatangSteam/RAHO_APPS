@@ -36,6 +36,7 @@ interface MembersTableProps {
   onEdit: (member: Member) => void;
   onDelete: (member: Member) => void;
   onAddMember: () => void;
+  showDeleteButton?: boolean;
   showCredentialsButton?: boolean;
   onManageCredentials?: (member: Member) => void;
 }
@@ -51,6 +52,7 @@ export default function MembersTable({
   onEdit,
   onDelete,
   onAddMember,
+  showDeleteButton = false,
   showCredentialsButton = false,
   onManageCredentials,
 }: MembersTableProps) {
@@ -165,12 +167,14 @@ export default function MembersTable({
             title="Edit Member"
             variant="edit"
           />
-          <ActionButton
-            onClick={() => onDelete(member)}
-            icon={<Trash2 size={14} />}
-            title="Hapus Member"
-            variant="delete"
-          />
+          {showDeleteButton && (
+            <ActionButton
+              onClick={() => onDelete(member)}
+              icon={<Trash2 size={14} />}
+              title="Hapus Member"
+              variant="delete"
+            />
+          )}
         </ActionButtons>
       ),
     },

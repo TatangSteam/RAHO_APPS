@@ -1,4 +1,5 @@
 import { Page, expect } from '@playwright/test';
+import { EMPTY_STATE_TEXT, SELECTORS, modalLocator } from './selectors';
 
 /**
  * Common wait helpers for async operations
@@ -14,7 +15,7 @@ export async function waitForLoadingToFinish(page: Page, timeout = 10000) {
       state: 'hidden',
       timeout,
     });
-  } catch (error) {
+  } catch {
     // Loading might have finished before we checked
     // This is okay
   }
@@ -24,7 +25,10 @@ export async function waitForLoadingToFinish(page: Page, timeout = 10000) {
  * Wait for toast notification to appear
  */
 export async function waitForToast(page: Page, message?: string | RegExp) {
-  const toast = page.locator('[role="status"], [role="alert"], [data-sonner-toast]').first();
+  const toast = message
+    ? page.locator(SELECTORS.toast).filter({ hasText: message }).first()
+    : page.locator(SELECTORS.toast).filter({ hasText: /\S/ }).first();
+
   await toast.waitFor({ state: 'visible', timeout: 5000 });
   
   if (message) {
@@ -72,7 +76,7 @@ export async function waitForApiResponse(
  * Wait for modal to open
  */
 export async function waitForModal(page: Page) {
-  const modal = page.locator('[role="dialog"], .modal, [data-modal], .fixed.inset-0').first();
+  const modal = modalLocator(page).first();
   await expect(modal).toBeVisible({ timeout: 5000 });
 }
 
@@ -80,7 +84,7 @@ export async function waitForModal(page: Page) {
  * Wait for modal to close
  */
 export async function waitForModalClose(page: Page) {
-  await page.waitForSelector('[role="dialog"], .modal, [data-modal]', {
+  await page.waitForSelector(SELECTORS.modalCloseTarget, {
     state: 'hidden',
     timeout: 5000,
   });
@@ -97,8 +101,8 @@ export async function waitForTableToLoad(page: Page) {
   await waitForLoadingToFinish(page);
 
   const tableOrEmptyState = page
-    .locator('table, [role="table"]')
-    .or(page.getByText(/tidak.*ada.*data|no.*data|kosong/i))
+    .locator(SELECTORS.table)
+    .or(page.getByText(EMPTY_STATE_TEXT))
     .first();
 
   await expect(tableOrEmptyState).toBeVisible({ timeout: 10000 });

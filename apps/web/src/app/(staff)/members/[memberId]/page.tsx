@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
-import { getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
+import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
 import { packagesApi } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
 import type { Invoice } from '@/types/invoice';
+import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { useAuthStore } from '@/stores/authStore';
-import { showToast } from '@/lib/toast';
+import { confirm as confirmDialog, showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
 
 // Components
@@ -159,6 +160,7 @@ export default function MemberDetailPage() {
 
   // Edit member modal state
   const [showEditMemberModal, setShowEditMemberModal] = useState(false);
+  const [deletingMember, setDeletingMember] = useState(false);
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
@@ -166,6 +168,7 @@ export default function MemberDetailPage() {
   };
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const canDeleteMember = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
@@ -260,6 +263,30 @@ export default function MemberDetailPage() {
       showToast.error('Gagal memuat harga paket');
       // Set empty array as fallback
       setPricings([]);
+    }
+  };
+
+  const handleDeleteMember = async () => {
+    if (!member || !canDeleteMember || deletingMember) return;
+
+    const memberName = member.profile?.fullName || member.memberNo || 'member ini';
+    const confirmed = await confirmDialog.delete(memberName);
+    if (!confirmed) return;
+
+    try {
+      setDeletingMember(true);
+      await deleteMemberApi(memberId);
+      showToast.success('Member berhasil dihapus');
+      router.push('/members');
+    } catch (error: any) {
+      devError('Delete member error:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus member'
+      );
+    } finally {
+      setDeletingMember(false);
     }
   };
 
@@ -587,9 +614,12 @@ export default function MemberDetailPage() {
         onBack={() => router.back()}
         onSendNotification={() => setShowNotifModal(true)}
         onEdit={() => setShowEditMemberModal(true)}
+        onDelete={handleDeleteMember}
         onManageCredentials={() => setShowCredentialsModal(true)}
         onUploadDocuments={() => setShowUploadModal(true)}
         isSuperAdmin={isSuperAdmin}
+        canDelete={canDeleteMember}
+        isDeleting={deletingMember}
         canUploadDocuments={canUploadDocuments}
         hasDocuments={hasDocuments}
       />

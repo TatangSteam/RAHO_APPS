@@ -1,6 +1,7 @@
 import { Page, expect } from '@playwright/test';
 import { waitForLoadingToFinish, waitForSuccessToast, waitForModal, waitForModalToClose, waitForTableLoad } from '../helpers/waiters';
 import { goToPayments } from '../helpers/navigation';
+import { EMPTY_STATE_TEXT, SELECTORS, searchInput } from '../helpers/selectors';
 
 export interface InvoiceData {
   sessionId?: string;
@@ -115,8 +116,7 @@ export class PaymentPage {
    * Search invoice by invoice number or member name
    */
   async searchInvoice(query: string) {
-    const searchInput = this.page.getByPlaceholder(/cari|search/i);
-    await searchInput.fill(query);
+    await searchInput(this.page).fill(query);
     await waitForLoadingToFinish(this.page);
     await waitForTableLoad(this.page);
   }
@@ -206,21 +206,22 @@ export class PaymentPage {
     await this.searchInvoice(identifier);
 
     // Click approve button
-    const approveButton = this.page.getByRole('button', { name: /setuju|approve|terima/i }).first();
+    const approveButton = this.page.getByRole('button', { name: /^approve$|setuju|terima/i }).first();
     await approveButton.click();
 
     await waitForModal(this.page);
+    const dialog = this.page.getByRole('dialog');
 
     // Fill notes if provided
     if (notes) {
-      const notesField = this.page.getByLabel(/catatan|notes/i);
+      const notesField = dialog.getByLabel(/catatan|notes/i);
       if (await notesField.isVisible({ timeout: 1000 })) {
         await notesField.fill(notes);
       }
     }
 
     // Confirm approval
-    const confirmButton = this.page.getByRole('button', { name: /ya|yes|confirm|setuju/i });
+    const confirmButton = dialog.getByRole('button', { name: /ya.*setuju|setuju|approve/i });
     await confirmButton.click();
 
     await waitForSuccessToast(this.page, /berhasil|success/i);
@@ -234,17 +235,18 @@ export class PaymentPage {
     await this.searchInvoice(identifier);
 
     // Click reject button
-    const rejectButton = this.page.getByRole('button', { name: /tolak|reject/i }).first();
+    const rejectButton = this.page.getByRole('button', { name: /^reject$|tolak/i }).first();
     await rejectButton.click();
 
     await waitForModal(this.page);
+    const dialog = this.page.getByRole('dialog');
 
     // Fill rejection reason
-    const reasonField = this.page.getByLabel(/alasan|reason/i);
+    const reasonField = dialog.getByLabel(/alasan|reason/i);
     await reasonField.fill(reason);
 
     // Confirm rejection
-    const confirmButton = this.page.getByRole('button', { name: /ya|yes|confirm|tolak/i });
+    const confirmButton = dialog.getByRole('button', { name: /ya.*tolak|tolak|reject/i });
     await confirmButton.click();
 
     await waitForSuccessToast(this.page, /berhasil|success/i);
@@ -262,17 +264,18 @@ export class PaymentPage {
     await refundButton.click();
 
     await waitForModal(this.page);
+    const dialog = this.page.getByRole('dialog');
 
     // Fill refund amount
-    const amountField = this.page.getByLabel(/jumlah|amount/i);
+    const amountField = dialog.getByLabel(/jumlah|amount/i);
     await amountField.fill(amount.toString());
 
     // Fill reason
-    const reasonField = this.page.getByLabel(/alasan|reason/i);
+    const reasonField = dialog.getByLabel(/alasan|reason/i);
     await reasonField.fill(reason);
 
     // Confirm refund
-    const confirmButton = this.page.getByRole('button', { name: /ya|yes|confirm/i });
+    const confirmButton = dialog.getByRole('button', { name: /confirm refund|refund/i });
     await confirmButton.click();
 
     await waitForSuccessToast(this.page, /berhasil|success/i);
@@ -323,7 +326,7 @@ export class PaymentPage {
    * Expect invoice exists in list
    */
   async expectInvoiceExists(identifier: string) {
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).toBeVisible({ timeout: 10000 });
   }
 
@@ -333,7 +336,7 @@ export class PaymentPage {
   async expectPaymentStatus(identifier: string, status: string) {
     await this.searchInvoice(identifier);
     
-    const row = this.page.locator('tr, [role="row"]').filter({ hasText: identifier });
+    const row = this.page.locator(SELECTORS.tableRow).filter({ hasText: identifier });
     await expect(row).toContainText(new RegExp(status, 'i'));
   }
 
@@ -341,7 +344,8 @@ export class PaymentPage {
    * Expect total amount in invoice detail
    */
   async expectTotalAmount(amount: number) {
-    const totalElement = this.page.locator('text=/total|jumlah.*total/i').locator('..').getByText(amount.toString());
+    const detailDialog = this.page.getByRole('dialog');
+    const totalElement = detailDialog.getByText(new RegExp(`Total\\s+${amount}`, 'i'));
     await expect(totalElement).toBeVisible({ timeout: 5000 });
   }
 
@@ -349,7 +353,8 @@ export class PaymentPage {
    * Expect payment method displayed
    */
   async expectPaymentMethod(method: string) {
-    const methodElement = this.page.getByText(new RegExp(method, 'i'));
+    const detailDialog = this.page.getByRole('dialog');
+    const methodElement = detailDialog.getByText(new RegExp(method, 'i'));
     await expect(methodElement).toBeVisible({ timeout: 5000 });
   }
 
@@ -431,7 +436,7 @@ export class PaymentPage {
    * Get invoice count
    */
   async getInvoiceCount(): Promise<number> {
-    const rows = this.page.locator('tbody tr, [role="row"]').filter({ hasNotText: /tidak.*ada.*data|no.*data|kosong/i });
+    const rows = this.page.locator(SELECTORS.tableRow).filter({ hasNotText: EMPTY_STATE_TEXT });
     return await rows.count();
   }
 

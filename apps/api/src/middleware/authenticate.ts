@@ -3,6 +3,7 @@ import { JsonWebTokenError, TokenExpiredError } from 'jsonwebtoken';
 import { verifyAccessToken, JwtPayload } from '@lib/jwt';
 import { sendError } from '@utils/response';
 import { prisma } from '@lib/prisma';
+import { logger } from '@lib/logger';
 
 // Extend Express Request with authenticated user
 declare global {
@@ -59,6 +60,23 @@ function extractDeepestImpersonation(payload: JwtPayload): {
   return { deepest: current, chain };
 }
 
+function uniqueBranchIds(branchId: string, assignedBranchIds: string[]): string[] {
+  return [branchId, ...assignedBranchIds].filter((value, index, all) => all.indexOf(value) === index);
+}
+
+async function getAssignedBranchIds(userId: string, role: string, branchId?: string | null): Promise<string[]> {
+  if (role === 'MEMBER' || !branchId) {
+    return [];
+  }
+
+  const staffBranches = await prisma.staffBranch.findMany({
+    where: { userId },
+    select: { branchId: true },
+  });
+
+  return uniqueBranchIds(branchId, staffBranches.map((staffBranch) => staffBranch.branchId));
+}
+
 /**
  * Middleware — Verify JWT access token and attach user to request.
  * Must be applied before any route handler that requires authentication.
@@ -75,9 +93,6 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   const authHeader = req.headers.authorization;
 
   console.log('🔐 AUTHENTICATE MIDDLEWARE');
-  console.log('Method:', req.method);
-  console.log('Path:', req.path);
-  console.log('Auth Header:', authHeader ? `${authHeader.substring(0, 30)}...` : 'MISSING');
 
   if (!authHeader?.startsWith('Bearer ')) {
     console.error('❌ Token missing or invalid format');
@@ -86,15 +101,10 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
   }
 
   const token = authHeader.slice(7);
-  console.log('Token Length:', token.length);
 
   try {
     const payload = verifyAccessToken(token);
     console.log('✅ Token verified successfully');
-    console.log('User ID:', payload.userId);
-    console.log('User Role:', payload.role);
-    console.log('Branch ID:', payload.branchId);
-    console.log('Has Impersonation:', !!payload.impersonating);
     
     // Check if impersonating
     if (payload.impersonating) {

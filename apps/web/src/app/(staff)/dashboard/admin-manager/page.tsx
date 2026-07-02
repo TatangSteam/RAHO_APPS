@@ -4,9 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
-  Building2, Users, TrendingUp, TrendingDown, Package, 
-  CreditCard, Activity, ChevronRight, Loader2, RefreshCw, 
-  AlertCircle, MapPin, CheckCircle2, Clock, BarChart3,
+  Building2, Users, TrendingUp, TrendingDown,
+  Activity, ChevronRight, MapPin, BarChart3,
   UserCog, Crown, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -14,13 +13,21 @@ import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { formatCurrency, formatNumberWithDots } from '@/lib/formatNumber';
 import { dashboardApi, type AdminManagerDashboardData } from '@/lib/dashboardApi';
+import {
+  getDashboardDateRange,
+  getDashboardRangeLabel,
+  type DashboardDateRange,
+} from '@/lib/dashboardPresentation';
+import { DashboardDateRangeFilter } from '@/components/dashboard/DashboardDateRangeFilter';
+import { DashboardErrorState } from '@/components/dashboard/DashboardErrorState';
+import { DashboardLoadingState } from '@/components/dashboard/DashboardLoadingState';
 
 export default function AdminManagerDashboardPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [data, setData] = useState<AdminManagerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState<'month' | 'week' | 'today'>('month');
+  const [dateRange, setDateRange] = useState<DashboardDateRange>('month');
 
   useEffect(() => {
     if (!user) {
@@ -39,25 +46,14 @@ export default function AdminManagerDashboardPage() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      
-      if (dateRange === 'today') {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (dateRange === 'week') {
-        startDate.setDate(startDate.getDate() - 7);
-      } else {
-        startDate.setDate(1);
-      }
+      const { startDate, endDate } = getDashboardDateRange(dateRange);
 
       const result = await dashboardApi.getAdminManagerDashboard(
         startDate.toISOString(),
         endDate.toISOString()
       );
       setData(result);
-    } catch (error: any) {
+    } catch (error) {
       devError('Dashboard error:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
@@ -65,40 +61,17 @@ export default function AdminManagerDashboardPage() {
     }
   };
 
-  const getRangeName = () => {
-    if (dateRange === 'today') return 'Hari Ini';
-    if (dateRange === 'week') return '7 Hari Terakhir';
-    return 'Bulan Ini';
-  };
-
   if (loading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-violet-500" />
-          <p className="text-neutral-500 dark:text-neutral-400">Memuat dashboard...</p>
-        </div>
-      </div>
-    );
+    return <DashboardLoadingState text="Memuat dashboard..." color="violet" />;
   }
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-neutral-500 mb-4">Gagal memuat data dashboard</p>
-            <button 
-              onClick={loadDashboard} 
-              className="px-4 py-2 bg-violet-500 text-white rounded-xl font-medium hover:bg-violet-600 transition-colors"
-            >
-              <RefreshCw className="h-4 w-4 inline mr-2" />
-              Coba Lagi
-            </button>
-          </div>
-        </div>
-      </div>
+      <DashboardErrorState
+        message="Gagal memuat data dashboard"
+        onRetry={loadDashboard}
+        actionColor="violet"
+      />
     );
   }
 
@@ -121,44 +94,12 @@ export default function AdminManagerDashboardPage() {
                 Multi-Branch Dashboard
               </h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Overview {data.summary.totalBranches} cabang - {getRangeName()}
+                Overview {data.summary.totalBranches} cabang - {getDashboardRangeLabel(dateRange)}
               </p>
             </div>
           </div>
 
-          {/* Date Range Filter */}
-          <div className="flex gap-2 bg-white dark:bg-neutral-900 p-1 rounded-xl border border-neutral-200 dark:border-neutral-800">
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'today'
-                  ? 'bg-violet-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('today')}
-            >
-              Hari Ini
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'week'
-                  ? 'bg-violet-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('week')}
-            >
-              7 Hari
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'month'
-                  ? 'bg-violet-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('month')}
-            >
-              Bulan Ini
-            </button>
-          </div>
+          <DashboardDateRangeFilter value={dateRange} onChange={setDateRange} accent="violet" />
         </div>
 
         {/* Summary Cards - Aggregated from all branches */}

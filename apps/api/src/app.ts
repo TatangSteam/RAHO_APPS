@@ -52,7 +52,7 @@ export function createApp(): Application {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Branch-Id', 'Cache-Control'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Branch-Id', 'X-E2E-Test', 'Cache-Control'],
     }),
   );
 

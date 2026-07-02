@@ -1,6 +1,14 @@
 import fs from 'node:fs';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import type { E2ERole, E2EUser } from '../fixtures/test-users';
+import { E2E_API_HEADERS } from './selectors';
+
+type BrowserContext = ReturnType<Page['context']>;
+type StorageCookie = Parameters<BrowserContext['addCookies']>[0][number];
+type OriginStorage = {
+  origin: string;
+  localStorage?: Array<{ name: string; value: string }>;
+};
 
 interface LoginResponse {
   accessToken: string;
@@ -18,10 +26,12 @@ interface LoginResponse {
   };
 }
 
-const authStorageKey = 'auth-storage';
+const AUTH_STORAGE_KEY = 'auth-storage';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:4000/api/v1';
+const DEFAULT_WEB_BASE_URL = 'http://localhost:3000';
 
 export function apiBaseURL(): string {
-  return process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+  return process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE_URL;
 }
 
 export function storageStatePath(role: E2ERole): string {
@@ -50,6 +60,7 @@ function buildAuthStorageState(result: LoginResponse) {
 
 export async function loginRequest(request: APIRequestContext, user: E2EUser): Promise<LoginResponse> {
   const response = await request.post(`${apiBaseURL()}/auth/login`, {
+    headers: E2E_API_HEADERS,
     data: {
       email: user.email,
       password: user.password,
@@ -64,7 +75,7 @@ export async function loginRequest(request: APIRequestContext, user: E2EUser): P
 
 export async function persistAuthToBrowser(page: Page, result: LoginResponse): Promise<void> {
   await page.goto('/', { waitUntil: 'domcontentloaded' });
-  const currentUrl = page.url().startsWith('http') ? page.url() : process.env.E2E_BASE_URL || 'http://localhost:3000';
+  const currentUrl = page.url().startsWith('http') ? page.url() : process.env.E2E_BASE_URL || DEFAULT_WEB_BASE_URL;
   const cookieDomain = new URL(currentUrl).hostname;
 
   await page.evaluate(
@@ -72,7 +83,7 @@ export async function persistAuthToBrowser(page: Page, result: LoginResponse): P
       window.localStorage.setItem(key, JSON.stringify(value));
     },
     {
-      key: authStorageKey,
+      key: AUTH_STORAGE_KEY,
       value: buildAuthStorageState(result),
     },
   );
@@ -98,11 +109,8 @@ export async function restoreAuthFromStorageState(page: Page, role: E2ERole, exp
 
   const rawState = fs.readFileSync(statePath, 'utf8');
   const storageState = JSON.parse(rawState) as {
-    cookies?: Array<Record<string, unknown>>;
-    origins?: Array<{
-      origin: string;
-      localStorage?: Array<{ name: string; value: string }>;
-    }>;
+    cookies?: StorageCookie[];
+    origins?: OriginStorage[];
   };
 
   await page.context().clearCookies();
@@ -110,7 +118,7 @@ export async function restoreAuthFromStorageState(page: Page, role: E2ERole, exp
   await page.evaluate(() => window.localStorage.clear());
 
   if (storageState.cookies?.length) {
-    await page.context().addCookies(storageState.cookies as never);
+    await page.context().addCookies(storageState.cookies);
   }
 
   const currentOrigin = new URL(page.url()).origin;

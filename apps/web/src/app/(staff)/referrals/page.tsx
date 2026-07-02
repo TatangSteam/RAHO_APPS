@@ -1,18 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import * as referralsApi from '@/lib/api/referralsApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast, confirm } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { 
-  FileText, Plus, Search, Eye, Trash2, X, 
+  FileText, Plus, Search, Eye, Trash2,
   Download, FileSpreadsheet, Users, Phone, Mail, Building2, 
-  ChevronLeft, ChevronRight, Info, UserPlus, BarChart3, Loader2
+  ChevronLeft, ChevronRight, BarChart3
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
+import CreateReferralModal from '@/components/referrals/CreateReferralModal';
+import {
+  REFERRER_TYPE_OPTIONS,
+  datedExportFilename,
+  downloadBlob,
+  formatCurrency,
+  getReferrerTypeLabel,
+  type ReferrerType,
+} from '@/lib/referralUtils';
 
 interface Branch {
   id: string;
@@ -21,6 +30,7 @@ interface Branch {
 }
 
 export default function ReferralsPage() {
+  const router = useRouter();
   const user = useAuthStore((state) => state.user);
   const [referrals, setReferrals] = useState<referralsApi.ReferralCode[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -30,7 +40,7 @@ export default function ReferralsPage() {
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState<ReferrerType | ''>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -40,12 +50,7 @@ export default function ReferralsPage() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    fetchReferrals();
-    fetchBranches();
-  }, [page, search, branchFilter, typeFilter]);
-
-  const fetchReferrals = async () => {
+  const fetchReferrals = useCallback(async () => {
     try {
       setLoading(true);
       const response = await referralsApi.listReferrals({
@@ -53,7 +58,7 @@ export default function ReferralsPage() {
         limit,
         search: search || undefined,
         branchId: branchFilter || undefined,
-        referrerType: typeFilter as any || undefined,
+        referrerType: typeFilter || undefined,
         isActive: 'true',
       });
       setReferrals(response.data.data.referrals);
@@ -63,16 +68,24 @@ export default function ReferralsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchFilter, limit, page, search, typeFilter]);
 
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data);
     } catch (error) {
       devError('Error fetching branches:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchReferrals();
+  }, [fetchReferrals]);
+
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
 
   const handleDelete = async (id: string) => {
     const confirmed = await confirm.delete('kode referral ini');
@@ -87,67 +100,48 @@ export default function ReferralsPage() {
     }
   };
 
-  const handleExportExcel = async () => {
+  const exportFilters = {
+    branchId: branchFilter || undefined,
+    referrerType: typeFilter || undefined,
+  };
+
+  const exportBlob = async (
+    request: () => Promise<{ data: BlobPart }>,
+    filename: string,
+    errorMessage: string,
+  ) => {
     try {
-      const response = await referralsApi.exportIncentivesExcel({
-        branchId: branchFilter || undefined,
-        referrerType: typeFilter || undefined,
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Laporan_Insentif_${new Date().toISOString().split('T')[0]}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const response = await request();
+      downloadBlob(response.data, filename);
     } catch (error) {
-      devError('Error exporting to Excel:', error);
-      alert('Gagal export ke Excel');
+      devError(errorMessage, error);
+      showToast.error(errorMessage);
     }
+  };
+
+  const handleExportExcel = async () => {
+    await exportBlob(
+      () => referralsApi.exportIncentivesExcel(exportFilters),
+      datedExportFilename('Laporan_Insentif', 'xlsx'),
+      'Gagal export ke Excel',
+    );
   };
 
   const handleExportPDF = async () => {
-    try {
-      const response = await referralsApi.exportIncentivesPDF({
-        branchId: branchFilter || undefined,
-        referrerType: typeFilter || undefined,
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Laporan_Insentif_${new Date().toISOString().split('T')[0]}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      devError('Error exporting to PDF:', error);
-      alert('Gagal export ke PDF');
-    }
+    await exportBlob(
+      () => referralsApi.exportIncentivesPDF(exportFilters),
+      datedExportFilename('Laporan_Insentif', 'pdf'),
+      'Gagal export ke PDF',
+    );
   };
 
   const handleExportSummary = async () => {
-    try {
-      const response = await referralsApi.exportSummaryExcel({
-        branchId: branchFilter || undefined,
-        referrerType: typeFilter || undefined,
-      });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `Ringkasan_Insentif_${new Date().toISOString().split('T')[0]}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      devError('Error exporting summary:', error);
-      alert('Gagal export ringkasan');
-    }
+    await exportBlob(
+      () => referralsApi.exportSummaryExcel(exportFilters),
+      datedExportFilename('Ringkasan_Insentif', 'xlsx'),
+      'Gagal export ringkasan',
+    );
   };
-
-  const formatCurrency = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
 
   const getReferrerTypeStyle = (type: string) => {
     const styles: Record<string, { bg: string; text: string }> = {
@@ -156,11 +150,6 @@ export default function ReferralsPage() {
       MEMBER: { bg: 'bg-purple-100 dark:bg-purple-500/20', text: 'text-purple-700 dark:text-purple-400' },
     };
     return styles[type] || { bg: 'bg-neutral-100 dark:bg-neutral-500/20', text: 'text-neutral-700 dark:text-neutral-400' };
-  };
-
-  const getReferrerTypeLabel = (type: string) => {
-    const labels: Record<string, string> = { SALES: 'Sales', DOKTER: 'Dokter', MEMBER: 'Member' };
-    return labels[type] || type;
   };
 
   const totalPages = Math.ceil(total / limit);
@@ -241,13 +230,15 @@ export default function ReferralsPage() {
 
         <select
           value={typeFilter}
-          onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}
+          onChange={(e) => { setTypeFilter(e.target.value as ReferrerType | ''); setPage(1); }}
           className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all min-w-[160px]"
         >
           <option value="">Semua Tipe</option>
-          <option value="SALES">Sales</option>
-          <option value="DOKTER">Dokter</option>
-          <option value="MEMBER">Member</option>
+          {REFERRER_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -345,7 +336,7 @@ export default function ReferralsPage() {
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => window.location.href = `/referrals/${referral.id}`}
+                            onClick={() => router.push(`/referrals/${referral.id}`)}
                             className="p-2 rounded-lg text-neutral-500 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-500/10 transition-all"
                             title="Lihat Detail"
                           >
@@ -440,213 +431,3 @@ export default function ReferralsPage() {
   );
 }
 
-// CreateReferralModal Component
-interface CreateReferralModalProps {
-  branches: Branch[];
-  isAdminCabang: boolean;
-  userBranchId?: string;
-  onClose: () => void;
-  onSuccess: () => void;
-}
-
-function CreateReferralModal({ branches, isAdminCabang, userBranchId, onClose, onSuccess }: CreateReferralModalProps) {
-  const [formData, setFormData] = useState<referralsApi.CreateReferralInput>({
-    referrerName: '',
-    referrerType: 'SALES',
-    branchId: isAdminCabang && userBranchId ? userBranchId : '',
-    phone: '',
-    email: '',
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.referrerName.trim()) {
-      setError('Nama referrer harus diisi');
-      return;
-    }
-    if (!formData.branchId) {
-      setError('Cabang harus dipilih');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError('');
-      await referralsApi.createReferral({
-        ...formData,
-        phone: formData.phone || undefined,
-        email: formData.email || undefined,
-      });
-      onSuccess();
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Gagal membuat kode referral');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const modalContent = (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      
-      {/* Modal */}
-      <div className="relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-800">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 shadow-lg shadow-purple-500/30">
-              <UserPlus className="h-5 w-5 text-white" />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-neutral-900 dark:text-white">Tambah Kode Referral</h2>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">Buat kode referral baru untuk sales/dokter/member</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 rounded-lg text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-5">
-          {error && (
-            <div className="p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 text-red-700 dark:text-red-400 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* Nama Referrer */}
-          <div>
-            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-              Nama Referrer <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.referrerName}
-              onChange={(e) => setFormData({ ...formData, referrerName: e.target.value })}
-              placeholder="Masukkan nama referrer"
-              className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-            />
-          </div>
-
-          {/* Tipe & Cabang */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                Tipe Referrer <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.referrerType}
-                onChange={(e) => setFormData({ ...formData, referrerType: e.target.value as any })}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-              >
-                <option value="SALES">Sales</option>
-                <option value="DOKTER">Dokter</option>
-                <option value="MEMBER">Member</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                Cabang <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.branchId}
-                onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
-                disabled={isAdminCabang}
-                className="w-full px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <option value="">Pilih Cabang</option>
-                {branches.map((branch) => (
-                  <option key={branch.id} value={branch.id}>{branch.name}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Phone & Email */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                No. Telepon
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                <input
-                  type="tel"
-                  value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="08xxxxxxxxxx"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="email@example.com"
-                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Info Box */}
-          <div className="flex items-start gap-3 p-4 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30">
-            <Info className="h-5 w-5 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-purple-700 dark:text-purple-300">
-              <p className="font-medium mb-1">Informasi Insentif</p>
-              <p className="text-purple-600 dark:text-purple-400">
-                Kode referral akan otomatis di-generate. Insentif akan dihitung berdasarkan paket yang dibeli member menggunakan kode ini.
-              </p>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-200 dark:border-neutral-800">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-5 py-2.5 text-sm font-semibold rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all"
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:from-purple-600 hover:to-purple-700 shadow-lg shadow-purple-500/30 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Menyimpan...
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4" />
-                  Simpan
-                </>
-              )}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-
-  return createPortal(modalContent, document.body);
-}

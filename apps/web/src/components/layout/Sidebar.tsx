@@ -14,6 +14,7 @@ import { clsx } from 'clsx';
 import { MouseEvent, useEffect, useRef, useState } from 'react';
 import { devError } from '@/lib/logger';
 import { useLoading } from '@/contexts/LoadingContext';
+import { getRoleLabel, getRoleTextColor } from '@/lib/rolePresentation';
 import {
   formatNotificationBadge,
   type ManagerNotificationCounts,
@@ -197,26 +198,6 @@ const MENU_GROUPS: MenuGroup[] = [
 ];
 
 // ── Role Display ──────────────────────────────────────────────
-
-const ROLE_LABELS: Record<Role, string> = {
-  SUPER_ADMIN: 'Super Admin',
-  ADMIN_MANAGER: 'Admin Manager',
-  ADMIN_CABANG: 'Admin Cabang',
-  ADMIN_LAYANAN: 'Admin Layanan',
-  DOCTOR: 'Dokter',
-  NURSE: 'Nakes',
-  MEMBER: 'Member',
-};
-
-const ROLE_COLORS: Record<Role, string> = {
-  SUPER_ADMIN:   'text-rose-500 dark:text-rose-400',
-  ADMIN_MANAGER: 'text-purple-500 dark:text-purple-400',
-  ADMIN_CABANG:  'text-amber-600 dark:text-amber-400',
-  ADMIN_LAYANAN: 'text-emerald-500 dark:text-emerald-400',
-  DOCTOR:        'text-blue-500 dark:text-blue-400',
-  NURSE:         'text-cyan-500 dark:text-cyan-400',
-  MEMBER:        'text-slate-500 dark:text-slate-400',
-};
 
 // ── Props ─────────────────────────────────────────────────────
 
@@ -481,8 +462,8 @@ export function Sidebar({
             <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
               {user.fullName}
             </p>
-            <span className={clsx('text-xs font-medium', ROLE_COLORS[role])}>
-              {ROLE_LABELS[role]}
+            <span className={clsx('text-xs font-medium', getRoleTextColor(role))}>
+              {getRoleLabel(role)}
             </span>
             {user.branchCode && (
               <span className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -518,7 +499,7 @@ export function Sidebar({
           {hoveredItem === 'user-profile' && (
             <Tooltip>
               <div className="font-semibold mb-0.5">{user.fullName}</div>
-              <div className={clsx('text-xs', ROLE_COLORS[role])}>{ROLE_LABELS[role]}</div>
+              <div className={clsx('text-xs', getRoleTextColor(role))}>{getRoleLabel(role)}</div>
               {user.branchCode && <div className="text-[10px] text-neutral-500">Cab. {user.branchCode}</div>}
               <div className="text-[10px] text-amber-500 mt-1">Klik untuk lihat profil</div>
             </Tooltip>

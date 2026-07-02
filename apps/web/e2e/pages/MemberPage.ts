@@ -1,5 +1,18 @@
 import { Page, expect, Locator } from '@playwright/test';
 import { waitForLoadingToFinish, waitForSuccessToast, waitForModal, waitForModalClose, waitForTableToLoad } from '../helpers/waiters';
+import { CONFIRM_BUTTON_NAME, SELECTORS, activeModal, searchInput, tableLocator, waitForDebounce } from '../helpers/selectors';
+
+const memberDetailUrlPattern = /\/members\/(?!new(?:$|[?#]))[^/?#]+$/;
+
+async function waitForMemberDetailName(page: Page, memberName: string, timeout = 10000): Promise<boolean> {
+  await waitForLoadingToFinish(page);
+  return page
+    .getByText(memberName)
+    .first()
+    .waitFor({ state: 'visible', timeout })
+    .then(() => true)
+    .catch(() => false);
+}
 
 export interface MemberData {
   name: string;
@@ -23,8 +36,8 @@ export class MemberPage {
   constructor(page: Page) {
     this.page = page;
     this.addMemberButton = page.getByRole('button', { name: /daftarkan.*member|tambah.*member|add.*member/i });
-    this.searchInput = page.getByPlaceholder(/cari|search/i);
-    this.memberTable = page.locator('table').first();
+    this.searchInput = searchInput(page);
+    this.memberTable = tableLocator(page);
   }
 
   /**
@@ -80,10 +93,47 @@ export class MemberPage {
   async createMember(data: MemberData) {
     await this.clickAddMember();
     await this.fillMemberForm(data);
+
+    const createResponsePromise = this.page
+      .waitForResponse(
+        (response) =>
+          response.url().includes('/api/v1/members') &&
+          response.request().method() === 'POST',
+        { timeout: 30000 },
+      )
+      .catch(() => undefined);
+    const detailNavigationPromise = this.page
+      .waitForURL(memberDetailUrlPattern, { timeout: 30000 })
+      .catch(() => undefined);
+
     await this.submitForm();
 
-    await this.page.waitForURL(/\/members\/[^/]+$/, { timeout: 30000 });
-    this.createdMemberUrls.set(data.name, this.page.url());
+    const createResponse = await createResponsePromise;
+    if (!createResponse) {
+      throw new Error('Create member API response was not observed.');
+    }
+
+    if (!createResponse.ok()) {
+      throw new Error(`Create member API failed: ${createResponse.status()} ${await createResponse.text()}`);
+    }
+
+    const responseBody = await createResponse.json().catch(() => undefined);
+    const memberId =
+      responseBody?.data?.memberId ||
+      responseBody?.data?.data?.memberId ||
+      responseBody?.data?.member?.id ||
+      responseBody?.data?.data?.member?.id ||
+      responseBody?.memberId ||
+      responseBody?.member?.id;
+    if (memberId) {
+      this.createdMemberUrls.set(data.name, `/members/${memberId}`);
+    } else {
+      await detailNavigationPromise;
+      if (memberDetailUrlPattern.test(this.page.url())) {
+        this.createdMemberUrls.set(data.name, new URL(this.page.url()).pathname);
+      }
+    }
+
     await this.goto();
   }
 
@@ -92,7 +142,7 @@ export class MemberPage {
    */
   async searchMember(query: string) {
     await this.searchInput.fill(query);
-    await this.page.waitForTimeout(500); // Debounce
+    await waitForDebounce(this.page);
     await waitForLoadingToFinish(this.page);
   }
 
@@ -107,9 +157,12 @@ export class MemberPage {
    * Click edit button for a member
    */
   async editMember(memberName: string) {
-    const row = this.getMemberRow(memberName);
+    await this.goto();
+    await this.searchMember(memberName);
+    const row = this.getMemberRow(memberName).first();
+    await expect(row).toBeVisible();
     await row.click();
-    await this.page.waitForURL(/\/members\/[^/]+$/);
+    await this.page.waitForURL(memberDetailUrlPattern);
     await waitForLoadingToFinish(this.page);
     await this.page.getByRole('button', { name: /edit|ubah|sunting/i }).first().click();
     await waitForModal(this.page);
@@ -119,16 +172,26 @@ export class MemberPage {
    * Click view button for a member
    */
   async viewMember(memberName: string) {
-    const createdMemberUrl = this.createdMemberUrls.get(memberName);
-    if (createdMemberUrl) {
-      await this.page.goto(createdMemberUrl);
-      await waitForLoadingToFinish(this.page);
+    if (memberDetailUrlPattern.test(this.page.url()) && (await waitForMemberDetailName(this.page, memberName, 2000))) {
       return;
     }
 
-    const row = this.getMemberRow(memberName);
+    const createdMemberUrl = this.createdMemberUrls.get(memberName);
+    if (createdMemberUrl) {
+      await this.page.goto(createdMemberUrl);
+      if (memberDetailUrlPattern.test(this.page.url()) && (await waitForMemberDetailName(this.page, memberName))) {
+        return;
+      }
+    }
+
+    await this.goto();
+    await this.searchMember(memberName);
+
+    const row = this.getMemberRow(memberName).first();
+    await expect(row).toBeVisible();
     await row.click();
-    await this.page.waitForURL(/\/members\/[^/]+$/);
+    await this.page.waitForURL(memberDetailUrlPattern);
+    this.createdMemberUrls.set(memberName, this.page.url());
     await waitForLoadingToFinish(this.page);
   }
 
@@ -136,18 +199,18 @@ export class MemberPage {
    * Delete member
    */
   async deleteMember(memberName: string) {
-    const row = this.getMemberRow(memberName);
-    
-    // Click delete button
-    await row.getByRole('button', { name: /delete|hapus/i }).click();
+    await this.viewMember(memberName);
+    await this.page.getByRole('button', { name: /hapus.*member/i }).click();
     
     // Confirm deletion in dialog
     await waitForModal(this.page);
-    const confirmButton = this.page.getByRole('button', { name: /ya|yes|konfirmasi|confirm/i });
+    const dialog = activeModal(this.page);
+    const confirmButton = dialog.getByRole('button', { name: CONFIRM_BUTTON_NAME });
     await confirmButton.click();
     
     // Wait for success
     await waitForSuccessToast(this.page, /berhasil dihapus|deleted successfully/i);
+    await this.page.waitForURL(/\/members(?:$|[?#])/, { timeout: 10000 }).catch(() => undefined);
     await waitForLoadingToFinish(this.page);
   }
 
@@ -171,7 +234,7 @@ export class MemberPage {
    * Get member count
    */
   async getMemberCount(): Promise<number> {
-    const rows = await this.memberTable.locator('tbody tr').count();
+    const rows = await this.memberTable.locator(SELECTORS.tableRow).count();
     return rows;
   }
 
@@ -210,14 +273,12 @@ export class MemberPage {
   /**
    * Verify package is assigned
    */
-  async expectPackageAssigned(packageName: string) {
+  async expectPackageAssigned(_packageName: string) {
     await this.page.getByRole('button', { name: /paket/i }).first().click();
     await waitForLoadingToFinish(this.page);
 
-    const packageCard = this.page
-      .locator('[data-testid="package-card"], .package-item, .member-package-card, .card')
-      .filter({ hasText: /paket|invoice|menunggu|aktif|lunas|termin/i })
-      .first();
-    await expect(packageCard.or(this.page.getByText(/paket berhasil|paket member/i).first())).toBeVisible();
+    const packageSection = this.page.locator('.member-detail-tab-content');
+    await expect(packageSection).toContainText(/Paket Member/i);
+    await expect(packageSection).toContainText(/PKG-|Pending Payment|sesi/i);
   }
 }

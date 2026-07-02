@@ -28,6 +28,19 @@ function formatWindow(windowMs: number): string {
   return `${totalHours} jam`;
 }
 
+function shouldSkipRateLimit(req: Request): boolean {
+  if (env.E2E_DISABLE_RATE_LIMIT) {
+    return true;
+  }
+
+  if (env.NODE_ENV === 'production') {
+    return false;
+  }
+
+  const e2eHeader = req.headers['x-e2e-test'];
+  return e2eHeader === 'true' || (Array.isArray(e2eHeader) && e2eHeader.includes('true'));
+}
+
 /**
  * Rate limiter for login endpoint
  * Limits: AUTH_RATE_LIMIT_MAX attempts per RATE_LIMIT_WINDOW_MS per IP address
@@ -37,7 +50,7 @@ function formatWindow(windowMs: number): string {
 export const loginRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.AUTH_RATE_LIMIT_MAX,
-  skip: () => env.E2E_DISABLE_RATE_LIMIT,
+  skip: shouldSkipRateLimit,
   message: {
     success: false,
     error: {
@@ -60,7 +73,7 @@ export const loginRateLimiter = rateLimit({
 export const apiRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX,
-  skip: () => env.E2E_DISABLE_RATE_LIMIT,
+  skip: shouldSkipRateLimit,
   message: {
     success: false,
     error: {

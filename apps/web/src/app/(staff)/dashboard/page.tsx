@@ -6,24 +6,32 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, TrendingUp, TrendingDown, Package, Users, 
   CreditCard, CheckCircle2, Clock, UserPlus, UsersRound,
-  Loader2, RefreshCw, AlertCircle, ChevronRight, BarChart3
+  ChevronRight, BarChart3
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { dashboardApi, type DashboardStats } from '@/lib/dashboardApi';
+import {
+  getDashboardDateRange,
+  getDashboardRangeLabel,
+  type DashboardDateRange,
+} from '@/lib/dashboardPresentation';
 import { formatCurrency, formatNumberWithDots } from '@/lib/formatNumber';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 
+import { DashboardDateRangeFilter } from '@/components/dashboard/DashboardDateRangeFilter';
+import { DashboardErrorState } from '@/components/dashboard/DashboardErrorState';
+import { DashboardLoadingState } from '@/components/dashboard/DashboardLoadingState';
+import { DashboardStatCard as StatCard } from '@/components/dashboard/DashboardStatCard';
 import RevenueChart from '@/components/dashboard/RevenueChart';
 import RecentTransactions from '@/components/dashboard/RecentTransactions';
-import { PageLoading } from '@/components/ui/LoadingSpinner';
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState<'month' | 'week' | 'today'>('month');
+  const [dateRange, setDateRange] = useState<DashboardDateRange>('month');
 
   useEffect(() => {
     if (!user) {
@@ -71,18 +79,7 @@ export default function DashboardPage() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      
-      // Calculate date range
-      const endDate = new Date();
-      const startDate = new Date();
-      
-      if (dateRange === 'today') {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (dateRange === 'week') {
-        startDate.setDate(startDate.getDate() - 7);
-      } else {
-        startDate.setDate(1); // First day of month
-      }
+      const { startDate, endDate } = getDashboardDateRange(dateRange);
 
       // For ADMIN_MANAGER, backend will handle branch selection automatically
       const data = await dashboardApi.getBranchDashboard(
@@ -92,7 +89,7 @@ export default function DashboardPage() {
       );
       
       setStats(data);
-    } catch (error: any) {
+    } catch (error) {
       devError('Dashboard error:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
@@ -100,37 +97,17 @@ export default function DashboardPage() {
     }
   };
 
-  const getRangeName = () => {
-    if (dateRange === 'today') return 'Hari Ini';
-    if (dateRange === 'week') return '7 Hari Terakhir';
-    return 'Bulan Ini';
-  };
-
   if (loading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6 flex items-center justify-center">
-        <PageLoading text="Memuat dashboard" />
-      </div>
-    );
+    return <DashboardLoadingState text="Memuat dashboard" color="blue" />;
   }
 
   if (!stats) {
     return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
-        <div className="max-w-6xl mx-auto">
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <p className="text-neutral-500 mb-4">Gagal memuat data dashboard</p>
-            <button 
-              onClick={loadDashboard} 
-              className="px-4 py-2 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors"
-            >
-              <RefreshCw className="h-4 w-4 inline mr-2" />
-              Coba Lagi
-            </button>
-          </div>
-        </div>
-      </div>
+      <DashboardErrorState
+        message="Gagal memuat data dashboard"
+        onRetry={loadDashboard}
+        actionColor="blue"
+      />
     );
   }
 
@@ -148,44 +125,12 @@ export default function DashboardPage() {
                 Dashboard
               </h1>
               <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Ringkasan performa cabang - {getRangeName()}
+                Ringkasan performa cabang - {getDashboardRangeLabel(dateRange)}
               </p>
             </div>
           </div>
 
-          {/* Date Range Filter */}
-          <div className="flex gap-2 bg-white dark:bg-neutral-900 p-1 rounded-xl border border-neutral-200 dark:border-neutral-800">
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'today'
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('today')}
-            >
-              Hari Ini
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'week'
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('week')}
-            >
-              7 Hari
-            </button>
-            <button
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                dateRange === 'month'
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800'
-              }`}
-              onClick={() => setDateRange('month')}
-            >
-              Bulan Ini
-            </button>
-          </div>
+          <DashboardDateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
 
         {/* Revenue Card - Full Width */}
@@ -306,50 +251,3 @@ export default function DashboardPage() {
   );
 }
 
-// Stat Card Component
-function StatCard({ 
-  icon, 
-  label, 
-  value, 
-  subtitle,
-  color 
-}: { 
-  icon: React.ReactNode; 
-  label: string; 
-  value: string | number;
-  subtitle?: string;
-  color: 'blue' | 'emerald' | 'amber' | 'purple' | 'pink' | 'cyan' | 'rose' | 'indigo';
-}) {
-  const colors = {
-    blue: 'from-blue-500/10 to-blue-500/5 border-blue-500/20 text-blue-500',
-    emerald: 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 text-emerald-500',
-    amber: 'from-amber-500/10 to-amber-500/5 border-amber-500/20 text-amber-500',
-    purple: 'from-purple-500/10 to-purple-500/5 border-purple-500/20 text-purple-500',
-    pink: 'from-pink-500/10 to-pink-500/5 border-pink-500/20 text-pink-500',
-    cyan: 'from-cyan-500/10 to-cyan-500/5 border-cyan-500/20 text-cyan-500',
-    rose: 'from-rose-500/10 to-rose-500/5 border-rose-500/20 text-rose-500',
-    indigo: 'from-indigo-500/10 to-indigo-500/5 border-indigo-500/20 text-indigo-500',
-  };
-
-  const bgColors = {
-    blue: 'bg-blue-500/20',
-    emerald: 'bg-emerald-500/20',
-    amber: 'bg-amber-500/20',
-    purple: 'bg-purple-500/20',
-    pink: 'bg-pink-500/20',
-    cyan: 'bg-cyan-500/20',
-    rose: 'bg-rose-500/20',
-    indigo: 'bg-indigo-500/20',
-  };
-
-  return (
-    <div className={`bg-gradient-to-br ${colors[color]} rounded-2xl p-5 border relative overflow-hidden`}>
-      <div className={`w-10 h-10 ${bgColors[color]} rounded-xl flex items-center justify-center mb-3`}>
-        {icon}
-      </div>
-      <div className="text-2xl md:text-3xl font-bold text-neutral-900 dark:text-white mb-1">{value}</div>
-      <div className="text-sm text-neutral-600 dark:text-neutral-400">{label}</div>
-      {subtitle && <div className="text-xs text-neutral-500 mt-1">{subtitle}</div>}
-    </div>
-  );
-}
