@@ -5,6 +5,10 @@ import { AuditAction, DocumentType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { uploadFile } from '../../../config/minio';
 import { processFile } from '../../../utils/imageProcessor';
+import {
+  parseMemberBirthDate,
+  resolveMemberIdentityNumber,
+} from './member-registration.helpers';
 
 /**
  * Service for member registration
@@ -76,7 +80,7 @@ export class MemberRegistrationService {
 
     // Generate member number
     const memberNo = await this.generateMemberNumber(branch.branchCode);
-    const identityNumber = this.resolveIdentityNumber(data.identityType, data.nik, memberNo);
+    const identityNumber = resolveMemberIdentityNumber(data.identityType, data.nik, memberNo);
 
     if (identityNumber) {
       const existingIdentity = await prisma.member.findUnique({
@@ -195,7 +199,7 @@ export class MemberRegistrationService {
           isConsentToPhoto: data.isConsentToPhoto ?? true,
           nik: identityNumber,
           tempatLahir: data.birthPlace || null,
-          dateOfBirth: data.birthDate ? this.parseValidDate(data.birthDate) : null,
+          dateOfBirth: data.birthDate ? parseMemberBirthDate(data.birthDate) : null,
           jenisKelamin: data.gender as any || null,
           agama: data.religion || null,
           address: data.address || null,
@@ -339,35 +343,6 @@ export class MemberRegistrationService {
   }
 
   /**
-   * Parse and validate date string
-   */
-  private parseValidDate(dateString: string): Date | null {
-    try {
-      const date = new Date(dateString);
-      
-      // Check if date is valid
-      if (isNaN(date.getTime())) {
-        console.warn('Invalid date format:', dateString);
-        return null;
-      }
-      
-      // Check if year is reasonable (between 1900 and current year + 1)
-      const year = date.getFullYear();
-      const currentYear = new Date().getFullYear();
-      
-      if (year < 1900 || year > currentYear + 1) {
-        console.warn('Invalid date year:', year, 'from date:', dateString);
-        return null;
-      }
-      
-      return date;
-    } catch (error) {
-      console.error('Error parsing date:', dateString, error);
-      return null;
-    }
-  }
-
-  /**
    * Generate member number
    */
   private async generateMemberNumber(branchCode: string): Promise<string> {
@@ -392,40 +367,6 @@ export class MemberRegistrationService {
     }
 
     return `${prefix}-${sequence.toString().padStart(4, '0')}`;
-  }
-
-  private resolveIdentityNumber(identityType: string | undefined, rawIdentity: string | undefined, memberNo: string): string | null {
-    const type = identityType || (rawIdentity ? 'NIK' : 'NO_NIK');
-    const identity = rawIdentity?.trim();
-
-    if (['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'].includes(type)) {
-      const prefixMap: Record<string, string> = {
-        VIP: 'VIP',
-        SPECIAL: 'SPC',
-        FOREIGN_AUTO: 'MNA',
-        NO_NIK: 'AUTO',
-      };
-
-      return `${prefixMap[type]}-${memberNo}`;
-    }
-
-    if (!identity) {
-      throw {
-        status: 400,
-        code: 'IDENTITY_REQUIRED',
-        message: type === 'NIK' ? 'NIK wajib diisi' : 'Nomor identitas wajib diisi',
-      };
-    }
-
-    if (type === 'NIK' && !/^\d{16}$/.test(identity)) {
-      throw {
-        status: 400,
-        code: 'INVALID_NIK',
-        message: 'NIK harus 16 digit',
-      };
-    }
-
-    return identity;
   }
 
   /**

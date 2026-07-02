@@ -14,8 +14,14 @@ import type { CreateSessionInput, SessionType, Diagnosis, SessionDetail } from '
 import type { MemberPackage } from '@/types/member';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
-import TherapyPlanDoseTable from '@/components/therapy-plan/TherapyPlanDoseTable';
 import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
+import {
+  DEBT_SESSION_LIMIT,
+  getDebtRemainingSessions,
+  isDebtEligiblePackage,
+  isDebtPackageStatus,
+  isPackageUsableForSession,
+} from './sessionPackageEligibility';
 
 interface CreateSessionModalProps {
   isOpen: boolean;
@@ -23,31 +29,6 @@ interface CreateSessionModalProps {
   onSuccess: (sessionId: string) => void;
   preselectedMemberId?: string;
 }
-
-const DEBT_SESSION_LIMIT = 2;
-const DEBT_PACKAGE_STATUSES = ['PENDING_PAYMENT', 'WAITING_VERIFICATION'];
-
-const isDebtPackageStatus = (status: MemberPackage['status']) =>
-  DEBT_PACKAGE_STATUSES.includes(status);
-
-const getDebtRemainingSessions = (pkg: MemberPackage, outstandingDebtSessions: number) =>
-  Math.max(0, Math.min(pkg.remainingSessions, DEBT_SESSION_LIMIT - outstandingDebtSessions));
-
-const isDebtEligiblePackage = (pkg: MemberPackage, outstandingDebtSessions: number) =>
-  pkg.packageType === 'BASIC' &&
-  isDebtPackageStatus(pkg.status) &&
-  getDebtRemainingSessions(pkg, outstandingDebtSessions) > 0;
-
-const isPackageUsableForSession = (pkg: MemberPackage, outstandingDebtSessions: number) => {
-  if (pkg.packageType === 'BOOSTER') {
-    return pkg.status === 'ACTIVE' && pkg.remainingSessions > 0;
-  }
-
-  return (
-    (pkg.status === 'ACTIVE' && pkg.remainingSessions > 0) ||
-    isDebtEligiblePackage(pkg, outstandingDebtSessions)
-  );
-};
 
 export default function CreateSessionModal({
   isOpen,

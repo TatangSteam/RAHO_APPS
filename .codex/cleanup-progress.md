@@ -38,7 +38,11 @@ P0 bukan nama phase. P0 berarti prioritas paling tinggi / risiko paling besar. M
 - Batch 10 selesai: BE Inventory: Stock Request Approval Small Slice.
 - Batch 11 selesai: FE Payments / Invoices Small Slice.
 - Batch 12 selesai: BE Packages / Billing / Invoices Small Slice.
-- Lanjutan berikutnya: Batch 13: FE Members Small Slice.
+- Batch 13 selesai: FE Members Small Slice.
+- Batch 14 selesai: BE Members Small Slice.
+- Batch 15 selesai: FE Sessions / Therapy Plan Small Slice.
+- Batch 16 selesai: BE Sessions / Treatment Small Slice.
+- Lanjutan berikutnya: Batch 17: FE Sessions Step 2 / Therapy Plan Small Slice.
 
 Priority guide:
 - P0 Risiko Tinggi: data pasien/member, billing/payment/invoice, terapi/sesi, stok, auth/security.
@@ -47,12 +51,12 @@ Priority guide:
 
 | Modul | Jumlah File | Prioritas | Status | Catatan Awal |
 |-------|------------|-----------|--------|--------------|
-| BE Members / Patient Records | 20 (~7.1k LOC) | P0 Risiko Tinggi | Backlog | Data pasien/member. File panjang: `me.service.ts` ~1004 LOC, `members.controller.ts` ~645 LOC, `member-registration.service.ts` besar. Test backend terlihat minim: 1 test module. Cleanup harus batch kecil: retrieval, registration, documents, lab, therapy plan. |
-| FE Members / Patient Records | 67 (~21.4k LOC) | P0 Risiko Tinggi | Backlog | UI member paling besar dan menyentuh pasien, package, dokumen, lab, therapy plan. File panjang: detail member page ~882 LOC, member new page ~536 LOC, `MemberTherapyPlansTab.tsx` ~936 LOC, `BulkTherapyPlanModal.tsx` ~873 LOC, `PackageCard.tsx` ~846 LOC, `ExportMembersModal.tsx` ~792 LOC. Ada E2E member, tapi cleanup harus per subfitur. |
+| BE Members / Patient Records | 20 (~7.1k LOC) | P0 Risiko Tinggi | Batch 14 Complete | Data pasien/member tetap perlu cleanup bertahap. Batch 14 mengambil slice kecil registration: parsing tanggal lahir dan resolusi nomor identitas diekstrak dari service `@ts-nocheck` ke helper typed serta ditutup unit test tanpa menyentuh transaksi Prisma atau generation member number. |
+| FE Members / Patient Records | 67 (~21.4k LOC) | P0 Risiko Tinggi | Batch 13 Complete | UI member paling besar dan tetap perlu cleanup per subfitur. Batch 13 mengambil slice kecil `MemberStatusCards`: kalkulasi voucher BASIC/BOOSTER standalone dan grouped diekstrak ke helper pure serta ditutup unit test tanpa mengubah API, package assignment, edit member, atau dokumen. |
 | BE Packages / Billing / Invoices | 22 (~5.2k LOC) | P0 Risiko Tinggi | Batch 12 Complete | Menyentuh invoice, assignment paket, refund, cancel, payment verification. Batch 12 mengambil slice kecil di `invoice-generation.service.ts`: helper pure alokasi item invoice termin/installment diekstrak dan ditutup unit test contract. |
 | FE Packages / Billing / Invoices / Payments | 19 (~5.1k LOC) | P0 Risiko Tinggi | Batch 11 Complete | Payment page ~833 LOC, invoice rendering/CSS besar. Batch 11 mengambil slice kecil pada local payment harness `/payments`: helper presentasi/kalkulasi/filter invoice diekstrak dari page dan ditutup unit test + payment E2E. |
-| BE Sessions / Treatment / Diagnosis | 26 (~5.9k LOC) | P0 Risiko Tinggi | Backlog | Menyentuh terapi klinis dan diagnosis. Ada beberapa test backend. File panjang: `session-creation.service.ts` ~706 LOC, session retrieval/service besar. Banyak endpoint controller dengan `catch (err: any)` berulang. |
-| FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Backlog | Salah satu area FE paling kompleks. File panjang: sessions page ~1630 LOC, `CreateSessionModal.tsx` ~1462 LOC, sessions CSS ~1478 LOC, `Step5Infusion.tsx` ~1129 LOC. Cleanup perlu dipotong per step wizard. |
+| BE Sessions / Treatment / Diagnosis | 26 (~5.9k LOC) | P0 Risiko Tinggi | Batch 16 Complete | Menyentuh terapi klinis dan diagnosis sehingga tetap perlu cleanup bertahap. Batch 16 mengambil slice validasi paket utama session creation: mode ACTIVE/DEBT, urutan error, sisa sesi, dan allowance dua sesi utang diekstrak ke helper pure dengan contract test. |
+| FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 15 Complete | Area FE ini tetap perlu cleanup per step. Batch 15 mengambil slice kecil `CreateSessionModal`: aturan eligibility paket ACTIVE/utang BASIC/BOOSTER dan batas dua sesi utang diekstrak ke helper pure serta ditutup unit test tanpa mengubah API atau submit flow. |
 | BE Inventory / Stock / Shipments | 19 (~7.6k LOC) | P0 Risiko Tinggi | Batch 10 Complete | Stok dan shipment berdampak operasional/financial. Batch 10 mengambil slice kecil pada `stock-request-approval.service.ts`: helper pure invoice draft dan approval plan diekstrak, lalu ditutup unit test contract untuk mode FREE/DEBT/NORMAL dan invalid invoice item. |
 | FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 9 Complete | Banyak modal dan page stock request/shipment. Batch 9 mengambil slice kecil stock request list/page shell: helper presentasi aksi row dan format tanggal diekstrak. Targeted lint pass dengan warning existing `no-explicit-any`, `type-check:web` pass, dan E2E stock request flow `10 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
 | BE Auth / Middleware / Security | 14 (~2.0k LOC) | P0 Risiko Tinggi | Batch 8 Complete | Security/auth/branch access. Debug `console.log` di `authenticate.ts` dan `assertBranchAccess.ts` sudah dibersihkan, branch helper dipusatkan, dan coverage branch-access middleware ditambahkan. Backend type-check passed setelah query akses shipment receipt di `files.service.ts` tidak lagi memakai generated Prisma field yang stale. |
@@ -84,6 +88,10 @@ Priority guide:
 | 10 | BE Inventory: Stock Request Approval Small Slice | Complete | Ekstrak `stock-request-approval.helpers.ts` untuk validasi/snapshot item invoice dan rencana approval invoice FREE/DEBT/NORMAL; `createInvoice` memakai helper tersebut tanpa mengubah transaksi, shipment, audit, atau payment flow lain. | Helper unit tests `5 passed`; `type-check:api` passed. |
 | 11 | FE Payments / Invoices Small Slice | Complete | Ekstrak `paymentPresentation.ts` dari `/payments/page.tsx` untuk tipe local harness, constants, format currency, total/sisa invoice, product matching, filter invoice, parsing form item, validasi item, dan status payment. Tidak mengubah API, storage key, modal flow, atau E2E page object. | Helper unit tests `5 passed`; targeted lint passed; `type-check:web` passed; payment E2E `30 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
 | 12 | BE Packages / Billing / Invoices Small Slice | Complete | Ekstrak `invoice-generation.helpers.ts` untuk `allocateInvoiceItems` dan `cloneInvoiceItemsForAllocation`; `invoice-generation.service.ts` memakai helper tersebut pada invoice termin explicit, open installment payment, dan next installment invoice. Tidak mengubah Prisma transaction, invoice status, payment verification, atau assignment flow. | Helper unit tests `5 passed`; `type-check:api` passed. |
+| 13 | FE Members Small Slice | Complete | Ekstrak `memberStatusPresentation.ts` untuk total voucher aktif BASIC/BOOSTER dari paket standalone, grouped arrays, dan fallback singular; `MemberStatusCards` memakai satu helper tanpa mengubah render atau data source. | Helper unit tests `4 passed`; targeted lint passed; `type-check:web` passed; member CRUD/detail/assignment E2E non-delete `16 passed` memakai system Chrome. |
+| 14 | BE Members Small Slice | Complete | Ekstrak `member-registration.helpers.ts` untuk parsing tanggal lahir dan resolusi identitas NIK/PASSPORT/KITAS/VIP/SPECIAL/FOREIGN_AUTO/NO_NIK; registration service memakai helper tanpa mengubah transaksi atau response. | Helper + controller tests `13 passed`; `type-check:api` passed. Targeted ESLint unavailable karena config API tidak ditemukan. |
+| 15 | FE Sessions / Therapy Plan Small Slice | Complete | Ekstrak `sessionPackageEligibility.ts` untuk status paket utang, sisa kuota utang, eligibility BASIC, dan usability BASIC/BOOSTER; `CreateSessionModal` memakai helper dan import mati dihapus. | Helper unit tests `5 passed`; targeted lint tanpa error dengan warning existing; `type-check:web` passed; session E2E `16 passed`, `16 skipped`. |
+| 16 | BE Sessions / Treatment Small Slice | Complete | Ekstrak `session-creation.helpers.ts` untuk validasi paket BASIC, mode ACTIVE/DEBT, sisa sesi, dan allowance dua sesi utang; `session-creation.service.ts` tetap menangani query dan transaksi. | Helper + existing green session tests `15 passed`; `type-check:api` passed. Satu suite existing tetap gagal saat load karena Jest/ESM `nanoid`. |
 
 ## Next Execution Plan
 
@@ -101,9 +109,11 @@ Priority guide:
 | 10 | BE Inventory: Stock Request Approval Small Slice | P0 | Complete | Pecah service approval secara kecil, tambah/rapikan contract test sebelum refactor logic. | Done: helper unit tests `5 passed`; `type-check:api` passed. |
 | 11 | FE Payments / Invoices Small Slice | P0 | Complete | Rapikan payment/invoice UI yang punya E2E, mulai dari helper/page object/export states. | Done: helper unit tests `5 passed`; targeted lint; `type-check:web`; payment E2E `30 passed`. |
 | 12 | BE Packages / Billing / Invoices Small Slice | P0 | Complete | Rapikan service invoice/package assignment dengan test kontrak. | Done: helper unit tests `5 passed`; `type-check:api` passed. |
-| 13 | FE Members Small Slice | P0 | Next | Ambil subfitur kecil member, misalnya header/edit modal atau documents tab, bukan detail page penuh. | `type-check:web` + member CRUD/detail smoke. |
-| 14 | BE Members Small Slice | P0 | Planned | Rapikan retrieval/registration/documents secara bertahap dengan test. | Backend member tests/API smoke. |
-| 15 | FE Sessions / Therapy Plan Small Slice | P0 | Planned | Ambil satu step wizard/komponen terapi, jangan seluruh sessions page. | `type-check:web` + session therapy E2E slice. |
+| 13 | FE Members Small Slice | P0 | Complete | Ekstrak kalkulasi voucher aktif BASIC/BOOSTER dari `MemberStatusCards` ke helper pure, tanpa menyentuh workflow package/member lain. | Done: helper unit tests `4 passed`; targeted lint; `type-check:web`; member CRUD/detail/assignment E2E non-delete `16 passed`. |
+| 14 | BE Members Small Slice | P0 | Complete | Ekstrak normalisasi tanggal lahir dan nomor identitas registration ke helper typed dengan contract test. | Done: helper + controller tests `13 passed`; `type-check:api`. |
+| 15 | FE Sessions / Therapy Plan Small Slice | P0 | Complete | Ekstrak aturan eligibility paket sesi dan batas dua sesi utang dari `CreateSessionModal` ke helper pure. | Done: helper unit tests `5 passed`; targeted lint; `type-check:web`; session E2E `16 passed`, `16 skipped`. |
+| 16 | BE Sessions / Treatment Small Slice | P0 | Complete | Ekstrak validasi paket utama dan allowance utang dari session creation ke helper pure. | Done: helper + existing green session tests `15 passed`; `type-check:api`. |
+| 17 | FE Sessions Step 2 / Therapy Plan Small Slice | P0 | Next | Ambil helper presentasi/selection pure dari `Step2TherapyPlan`, bukan seluruh wizard. | Helper unit tests + targeted lint + `type-check:web` + session E2E smoke. |
 
 ## Batch 4 Detailed Plan
 
@@ -332,6 +342,107 @@ Status: Complete.
    - Done: package invoice allocation punya contract test kecil.
    - Done: backend type-check lulus.
    - Done: progress ditutup sebagai Batch 12 Complete; lanjutan masuk Batch 13.
+
+## Batch 13 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan page list/detail member, komponen header/edit/documents/status cards, tipe package, dan E2E member CRUD.
+   - Done: dipilih slice kalkulasi voucher di `MemberStatusCards` karena pure, terduplikasi, dan tidak menyentuh API atau mutasi data.
+
+2. Refactor Scope
+   - Done: tambah `memberStatusPresentation.ts` dengan `getMemberVoucherTotals`.
+   - Done: pertahankan contract paket standalone, grouped arrays, fallback singular, dan hanya hitung status `ACTIVE`.
+   - Done: `MemberStatusCards` memakai helper untuk nilai voucher BASIC dan BOOSTER.
+   - Tidak mengubah API, load member/package, package assignment, edit/delete member, documents, atau render status card lain.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/web -- --runInBand --runTestsByPath "src/components/members/memberStatusPresentation.test.ts"` => `4 passed`.
+   - Done: targeted lint untuk component/helper/test passed tanpa warning.
+   - Done: `npm.cmd run type-check:web` passed.
+   - Done: member E2E dengan system Chrome dan video sementara dimatikan karena cache FFmpeg tidak tersedia => `16 passed` (`7` setup + `9` test member CRUD/detail/assignment).
+   - Skipped: test `should delete a member` dikecualikan karena menghapus data melalui browser dan slice ini tidak menyentuh delete flow. Acceptable untuk Batch 13; test tetap tersedia untuk regression run penuh.
+
+4. Completion Criteria
+   - Done: kalkulasi voucher member punya contract test kecil dan tidak lagi terduplikasi di komponen.
+   - Done: lint targeted, type-check web, dan E2E member relevan lulus.
+   - Done: progress ditutup sebagai Batch 13 Complete; lanjutan masuk Batch 14.
+
+## Batch 14 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan service, controller, routes, schema, dan test BE Members.
+   - Done: baseline `members.create.controller.test.ts` lulus `2 passed`.
+   - Done: dipilih slice normalisasi registration karena pure dan terisolasi dari transaksi Prisma.
+
+2. Refactor Scope
+   - Done: tambah `member-registration.helpers.ts` dengan tipe identitas, `parseMemberBirthDate`, dan `resolveMemberIdentityNumber`.
+   - Done: tutup contract NIK 16 digit, PASSPORT/KITAS manual, identitas otomatis VIP/SPECIAL/FOREIGN_AUTO/NO_NIK, fallback type, serta rentang tahun tanggal lahir.
+   - Done: `member-registration.service.ts` memakai helper typed dan private method lama dihapus.
+   - Tidak mengubah Prisma transaction, duplicate lookup, generation member number, upload dokumen, audit, atau response shape.
+
+3. Verification
+   - Done: helper + existing controller tests => `13 passed`.
+   - Done: `npm.cmd run type-check:api` passed.
+   - Targeted ESLint tidak dapat dijalankan karena ESLint tidak menemukan configuration file untuk `apps/api`; tidak diperluas menjadi cleanup lint harness pada batch P0 ini.
+
+4. Completion Criteria
+   - Done: normalisasi input registrasi kritikal keluar dari service `@ts-nocheck` dan memiliki contract test typed.
+   - Done: test backend relevan dan type-check API lulus.
+   - Done: progress ditutup sebagai Batch 14 Complete; lanjutan masuk Batch 15.
+
+## Batch 15 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan sessions list/detail, wizard session, komponen therapy plan, dan E2E `session-therapy.spec.ts`.
+   - Done: dipilih aturan eligibility paket di `CreateSessionModal` karena pure dan terisolasi dari submit/API flow.
+
+2. Refactor Scope
+   - Done: tambah `sessionPackageEligibility.ts` untuk status utang, sisa kuota dua sesi, eligibility BASIC, dan usability BASIC/BOOSTER.
+   - Done: `CreateSessionModal` memakai helper tersebut dan import mati `TherapyPlanDoseTable` dihapus.
+   - Tidak mengubah API call, flatten package response, pemilihan therapy plan, validasi stok, assignment staff, atau submit session.
+
+3. Verification
+   - Done: helper unit tests => `5 passed`.
+   - Done: targeted lint passed tanpa error; warning hook dependency, `no-explicit-any`, dan unescaped entities existing tetap dicatat untuk cleanup terpisah.
+   - Done: `npm.cmd run type-check:web` passed.
+   - Done: `flows/session-therapy.spec.ts` dengan system Chrome => `16 passed`, `16 skipped`.
+   - Skipped E2E berasal dari `test.fixme` existing untuk create/detail/staff/vitals/diagnosis/therapy-plan/follow-up yang belum punya workflow atau seed deterministik; acceptable untuk slice helper eligibility ini, tetapi tetap backlog coverage fitur.
+
+4. Completion Criteria
+   - Done: aturan eligibility paket sesi kritikal memiliki contract test dan tidak lagi inline di modal besar.
+   - Done: lint targeted, type-check web, dan smoke sessions relevan lulus.
+   - Done: progress ditutup sebagai Batch 15 Complete; lanjutan masuk Batch 16.
+
+## Batch 16 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan session creation/retrieval, schema, controller, dan empat suite test sessions existing.
+   - Baseline: tiga suite lulus `6 passed`; `therapy-plan-session.service.test.ts` gagal sebelum test karena Jest tidak mentransform dependency ESM `nanoid` dari `codeGenerator.ts`.
+   - Done: dipilih validasi paket utama di session creation karena pure dan paralel dengan aturan eligibility FE Batch 15.
+
+2. Refactor Scope
+   - Done: tambah `session-creation.helpers.ts` untuk `getSessionPackageAvailability`, `getDebtSessionAllowance`, status debt, dan constants dua sesi utang.
+   - Done: pertahankan urutan contract error `INVALID_PACKAGE_TYPE`, `PACKAGE_SESSIONS_EXHAUSTED`, `PACKAGE_NOT_ACTIVE`, dan `PACKAGE_DEBT_LIMIT_REACHED`.
+   - Done: `session-creation.service.ts` memakai helper; query outstanding debt tetap dijalankan hanya untuk mode DEBT.
+   - Tidak mengubah branch/member access, Prisma transaction, session numbering, therapy plan selection, stock validation, atau audit.
+
+3. Verification
+   - Done: helper tests dan tiga suite sessions yang baseline-nya hijau => `15 passed`.
+   - Done: `npm.cmd run type-check:api` passed.
+   - Existing blocker: `therapy-plan-session.service.test.ts` tetap gagal saat suite load karena incompatibility Jest CommonJS dengan ESM `nanoid`; bukan regresi Batch 16 dan perlu batch test-harness terpisah.
+
+4. Completion Criteria
+   - Done: validasi paket session creation kritikal keluar dari service `@ts-nocheck` dan memiliki contract test typed.
+   - Done: test backend relevan yang runnable dan type-check API lulus.
+   - Done: progress ditutup sebagai Batch 16 Complete; lanjutan masuk Batch 17.
 
 ## Discovery Notes
 

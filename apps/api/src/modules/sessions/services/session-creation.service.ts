@@ -4,9 +4,11 @@ import { logAudit } from '../../../utils/auditLog';
 import { generateEncounterCode, generateSessionCode } from '../../../utils/codeGenerator';
 import type { CreateSessionInput } from '../sessions.schema';
 import { Role, AuditAction, PackageStatus, EncounterStatus } from '@prisma/client';
-
-const DEBT_SESSION_LIMIT = 2;
-const DEBT_PACKAGE_STATUSES = [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION];
+import {
+  DEBT_PACKAGE_STATUSES,
+  getDebtSessionAllowance,
+  getSessionPackageAvailability,
+} from './session-creation.helpers';
 
 /**
  * Service for session creation
@@ -242,53 +244,16 @@ export class SessionCreationService {
       };
     }
 
-    // IMPORTANT: Only BASIC packages can be used as main package for creating sessions
-    // BOOSTER packages should only be used as boosterPackageId (additional to existing session)
-    if (memberPackage.packageType !== 'BASIC') {
-      throw {
-        status: 422,
-        code: 'INVALID_PACKAGE_TYPE',
-        message: 'Paket yang dipilih adalah paket BOOSTER. Untuk membuat sesi terapi baru, pilih paket BASIC (contoh: NB7, NB14, dll). Paket BOOSTER dapat ditambahkan melalui checkbox "Gunakan Paket Booster" setelah memilih paket BASIC.',
-      };
-    }
+    const availability = getSessionPackageAvailability(memberPackage);
 
-    const remainingSessions = memberPackage.totalSessions - memberPackage.usedSessions;
-    if (remainingSessions < 1) {
-      throw {
-        status: 422,
-        code: 'PACKAGE_SESSIONS_EXHAUSTED',
-        message: 'Sesi paket sudah habis',
-      };
-    }
-
-    if (memberPackage.status === PackageStatus.ACTIVE) {
+    if (availability.mode === 'ACTIVE') {
       return memberPackage;
     }
 
-    if (DEBT_PACKAGE_STATUSES.includes(memberPackage.status)) {
-      const outstandingDebtSessions = await this.countOutstandingDebtSessions(memberPackage.memberId);
-      const debtRemaining = Math.min(
-        remainingSessions,
-        DEBT_SESSION_LIMIT - outstandingDebtSessions
-      );
+    const outstandingDebtSessions = await this.countOutstandingDebtSessions(memberPackage.memberId);
+    getDebtSessionAllowance(availability.remainingSessions, outstandingDebtSessions);
 
-      if (debtRemaining < 1) {
-        throw {
-          status: 422,
-          code: 'PACKAGE_DEBT_LIMIT_REACHED',
-          message:
-            'Paket belum dibayar. Sesi utang hanya bisa digunakan untuk 2 sesi pertama. Verifikasi pembayaran untuk membuat sesi berikutnya.',
-        };
-      }
-
-      return memberPackage;
-    }
-
-    throw {
-      status: 422,
-      code: 'PACKAGE_NOT_ACTIVE',
-      message: 'Paket tidak aktif atau belum dapat digunakan untuk sesi terapi',
-    };
+    return memberPackage;
   }
 
   private async countOutstandingDebtSessions(memberId: string) {
