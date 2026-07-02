@@ -19,7 +19,6 @@ import {
   CheckCheck, 
   XCircle,
   Package,
-  Loader2,
   RefreshCw
 } from 'lucide-react';
 import { 
@@ -34,6 +33,11 @@ import CreateRequestModal from './components/CreateRequestModal';
 import UploadPaymentModal from './components/UploadPaymentModal';
 import EditRequestModal from './components/EditRequestModal';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
+import {
+  formatStockRequestDate,
+  getStockRequestRowActions,
+  isStockRequestManager,
+} from './stockRequestPresentation';
 
 const filterOptions: { value: FilterType; label: string; icon: React.ReactNode; color: string }[] = [
   { value: 'ALL', label: 'Semua', icon: <ClipboardList className="w-4 h-4" />, color: 'bg-neutral-500' },
@@ -338,8 +342,7 @@ export default function StockRequestsPage() {
   };
 
   const handleUploadPayment = (request: StockRequest) => {
-    const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-    if (!isManager) {
+    if (!isStockRequestManager(user?.role)) {
       showToast.error('Hanya Admin Manager atau Super Admin yang dapat upload bukti pembayaran');
       return;
     }
@@ -349,8 +352,7 @@ export default function StockRequestsPage() {
   };
 
   const handleEditRequest = async (request: StockRequest) => {
-    const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-    if (!isManager || request.status !== 'PENDING') {
+    if (!isStockRequestManager(user?.role) || request.status !== 'PENDING') {
       showToast.error('Request stok hanya dapat diedit Admin Manager saat status pending');
       return;
     }
@@ -543,19 +545,12 @@ export default function StockRequestsPage() {
               <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">
                 {requests.map((request) => {
                   const statusConfig = filterOptions.find(f => f.value === request.status) || filterOptions[0];
-                  const isManager = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-                  const isDebtInvoice = request.invoice?.status === 'DEBT';
-                  const remainingAmount = request.invoice?.remainingAmount ?? Math.max(0, (request.invoice?.totalAmount ?? 0) - (request.invoice?.paidAmount ?? 0));
-                  const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
-                  const canReview = (
-                    (request.status === 'PENDING' && isManager) ||
-                    (request.status === 'PAYMENT_UPLOADED' && isManager)
-                  );
-                  const canEditRequest = isManager && request.status === 'PENDING';
-                  const canUploadPayment = isManager && !isFreeInvoice && (
-                    request.status === 'WAITING_PAYMENT' ||
-                    (isDebtInvoice && remainingAmount > 0)
-                  );
+                  const {
+                    isDebtInvoice,
+                    canReview,
+                    canEditRequest,
+                    canUploadPayment,
+                  } = getStockRequestRowActions(request, user?.role);
 
                   return (
                     <tr key={request.id} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
@@ -610,11 +605,7 @@ export default function StockRequestsPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm text-neutral-600 dark:text-neutral-400">
-                          {new Date(request.createdAt).toLocaleDateString('id-ID', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
+                          {formatStockRequestDate(request.createdAt)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">

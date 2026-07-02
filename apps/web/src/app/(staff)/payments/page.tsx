@@ -13,63 +13,26 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import {
+  INITIAL_INVOICES,
+  METHOD_FILTERS,
+  PAYMENT_METHODS,
+  STATUS_FILTERS,
+  STORAGE_KEY,
+  calculateTotal,
+  filterInvoices,
+  formatCurrency,
+  getPaymentStatus,
+  hasInvalidInvoiceItem,
+  matchingProducts,
+  parseInvoiceItemForms,
+  remainingAmount,
+  type Invoice,
+  type InvoiceItemForm,
+  type PaymentMethod,
+} from './paymentPresentation';
 
-type PaymentMethod = 'Cash' | 'Transfer' | 'QRIS';
 type ModalType = 'invoice' | 'detail' | 'payment' | 'verify' | 'approve' | 'reject' | 'refund' | null;
-
-interface InvoiceItem {
-  productName: string;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-}
-
-interface Invoice {
-  id: string;
-  memberName: string;
-  items: InvoiceItem[];
-  notes?: string;
-  status: string;
-  total: number;
-  paidAmount: number;
-  paymentMethods: PaymentMethod[];
-  references: string[];
-  refundAmount: number;
-  createdAt: string;
-}
-
-interface InvoiceItemForm {
-  productName: string;
-  quantity: string;
-  unitPrice: string;
-  discount: string;
-}
-
-const STORAGE_KEY = 'raho-e2e-payment-invoices';
-const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'Transfer', 'QRIS'];
-const STATUS_FILTERS = ['Semua Status', 'Menunggu Pembayaran', 'Partial', 'Lunas', 'Verified', 'Rejected', 'Refund'];
-const METHOD_FILTERS = ['Semua Metode', ...PAYMENT_METHODS];
-const PRODUCTS = [
-  { name: 'IFA 250', price: 10000 },
-  { name: 'Vitamin C', price: 5000 },
-  { name: 'Konsultasi Dokter', price: 100000 },
-  { name: 'Paket Terapi O3', price: 900000 },
-];
-
-const INITIAL_INVOICES: Invoice[] = [
-  {
-    id: 'INV-E2E-001',
-    memberName: 'Test Demo Member',
-    items: [{ productName: 'IFA 250', quantity: 30, unitPrice: 10000, discount: 0 }],
-    status: 'Menunggu Pembayaran',
-    total: 300000,
-    paidAmount: 0,
-    paymentMethods: [],
-    references: [],
-    refundAmount: 0,
-    createdAt: '2026-06-30',
-  },
-];
 
 function downloadFile(filename: string, mimeType: string, content: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -81,22 +44,6 @@ function downloadFile(filename: string, mimeType: string, content: string) {
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
-}
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
-function calculateTotal(items: InvoiceItem[]) {
-  return items.reduce((sum, item) => sum + item.quantity * item.unitPrice - item.discount, 0);
-}
-
-function remainingAmount(invoice: Invoice) {
-  return Math.max(invoice.total - invoice.paidAmount - invoice.refundAmount, 0);
 }
 
 function Dropdown<T extends string>({
@@ -214,22 +161,12 @@ export default function PaymentsPage() {
   );
 
   const filteredInvoices = useMemo(() => {
-    return invoices.filter((invoice) => {
-      const query = search.trim().toLowerCase();
-      const matchesSearch =
-        !query ||
-        invoice.memberName.toLowerCase().includes(query) ||
-        invoice.id.toLowerCase().includes(query);
-      const matchesStatus =
-        statusFilter === 'Semua Status' ||
-        invoice.status.toLowerCase().includes(statusFilter.toLowerCase());
-      const matchesMethod =
-        methodFilter === 'Semua Metode' ||
-        invoice.paymentMethods.some((method) => method.toLowerCase() === methodFilter.toLowerCase());
-      const matchesStart = !startDate || invoice.createdAt >= startDate;
-      const matchesEnd = !endDate || invoice.createdAt <= endDate;
-
-      return matchesSearch && matchesStatus && matchesMethod && matchesStart && matchesEnd;
+    return filterInvoices(invoices, {
+      search,
+      statusFilter,
+      methodFilter,
+      startDate,
+      endDate,
     });
   }, [endDate, invoices, methodFilter, search, startDate, statusFilter]);
 
@@ -262,22 +199,10 @@ export default function PaymentsPage() {
     }));
   };
 
-  const matchingProducts = (query: string) => {
-    const normalized = query.trim().toLowerCase();
-    if (!normalized) return PRODUCTS;
-    return PRODUCTS.filter((product) => product.name.toLowerCase().includes(normalized));
-  };
-
   const submitInvoice = () => {
-    const items = invoiceForm.items.map((item) => ({
-      productName: item.productName.trim(),
-      quantity: Number(item.quantity),
-      unitPrice: Number(item.unitPrice),
-      discount: Number(item.discount || 0),
-    }));
-    const hasInvalidItem = items.some((item) => !item.productName || item.quantity <= 0 || item.unitPrice < 0 || item.discount < 0);
+    const items = parseInvoiceItemForms(invoiceForm.items);
 
-    if (!invoiceForm.memberName.trim() || items.length === 0 || hasInvalidItem) {
+    if (!invoiceForm.memberName.trim() || items.length === 0 || hasInvalidInvoiceItem(items)) {
       setFormError('Member wajib diisi dan minimal satu item harus diisi.');
       return;
     }
@@ -316,12 +241,10 @@ export default function PaymentsPage() {
         if (invoice.id !== selectedInvoice.id) return invoice;
 
         const paidAmount = invoice.paidAmount + amount;
-        const status = paidAmount >= invoice.total ? 'Lunas Paid' : 'Partial';
-
         return {
           ...invoice,
           paidAmount,
-          status,
+          status: getPaymentStatus(invoice.total, paidAmount),
           paymentMethods: Array.from(new Set([...invoice.paymentMethods, paymentForm.method])),
           references: paymentForm.reference ? [...invoice.references, paymentForm.reference] : invoice.references,
         };

@@ -572,13 +572,6 @@ export class FilesService {
     const shipment = await prisma.shipment.findFirst({
       where: {
         id: shipmentId,
-        OR: [
-          { receiptFileUrl: key },
-          { receiptFileUrl: `${env.API_PREFIX}/files/${key}` },
-          { receiptFileUrl: `${env.API_URL}${env.API_PREFIX}/files/${key}` },
-          { receiptFileUrl: `${env.MINIO_PUBLIC_URL}/${env.MINIO_BUCKET}/${key}` },
-          { receiptFileUrl: { endsWith: key } },
-        ],
       },
       select: {
         fromBranchId: true,

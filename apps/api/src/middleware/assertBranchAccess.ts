@@ -1,19 +1,37 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { logger } from '@lib/logger';
 import { sendError } from '@utils/response';
 
+async function getAccessibleBranchIds(user: Request['user']): Promise<string[]> {
+  if (user.role === Role.DOCTOR || user.role === Role.NURSE) {
+    const staffBranches = await prisma.staffBranch.findMany({
+      where: { userId: user.userId },
+      select: { branchId: true },
+    });
+
+    const branchIds = staffBranches.map((staffBranch) => staffBranch.branchId);
+
+    if (user.branchId && !branchIds.includes(user.branchId)) {
+      branchIds.push(user.branchId);
+    }
+
+    return branchIds;
+  }
+
+  return user.branchId ? [user.branchId] : [];
+}
+
 /**
- * Middleware — Assert that the authenticated staff has access to the requested member.
+ * Assert that the authenticated staff has access to the requested member.
  *
- * Access is granted if ANY of these conditions is met:
- *   1. The member's registrationBranchId === staff's branchId
- *   2. A BranchMemberAccess record exists for (memberId, staff's branchId)
- *   3. Staff role is SUPER_ADMIN or ADMIN_MANAGER (global bypass)
- *   4. For DOCTOR/NURSE: member's branch is in their StaffBranch records
+ * Access is granted if any condition is met:
+ * 1. The member's registration branch is accessible to the staff.
+ * 2. A BranchMemberAccess record grants access to one of the staff branches.
+ * 3. The staff role is SUPER_ADMIN or ADMIN_MANAGER.
  *
- * Expects `req.params.memberId` to be set by the parent route.
- * Must be used AFTER `authenticate`.
+ * Expects req.params.memberId and must run after authenticate.
  */
 export async function assertBranchAccess(
   req: Request,
@@ -23,59 +41,27 @@ export async function assertBranchAccess(
   const { user } = req;
   const memberId = req.params.memberId;
 
-  console.log('🔐 [assertBranchAccess] Checking access');
-  console.log('  - memberId:', memberId);
-  console.log('  - user role:', user?.role);
-  console.log('  - user branchId:', user?.branchId);
-
   if (!memberId) {
-    console.log('⏭️  [assertBranchAccess] No memberId, skipping check');
     next();
     return;
   }
 
-  // Global roles bypass branch access check
   if (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_MANAGER) {
-    console.log('✅ [assertBranchAccess] Global role bypass:', user.role);
     next();
     return;
   }
 
   try {
-    console.time('assertBranchAccess-query');
-    
-    // For DOCTOR and NURSE, get all accessible branches from StaffBranch table
-    let accessibleBranchIds: string[] = [];
-    
-    if (user.role === Role.DOCTOR || user.role === Role.NURSE) {
-      // Get branches from StaffBranch table
-      const staffBranches = await prisma.staffBranch.findMany({
-        where: { userId: user.userId },
-        select: { branchId: true },
-      });
-      
-      accessibleBranchIds = staffBranches.map(sb => sb.branchId);
-      
-      // Also include primary branchId if exists
-      if (user.branchId && !accessibleBranchIds.includes(user.branchId)) {
-        accessibleBranchIds.push(user.branchId);
-      }
-      
-      console.log(`  - ${user.role} accessible branches:`, accessibleBranchIds);
-      
-      if (accessibleBranchIds.length === 0) {
-        console.log('❌ [assertBranchAccess] No branches assigned to staff');
-        sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda belum di-assign ke cabang manapun.');
-        return;
-      }
-    } else {
-      // For other roles (ADMIN_CABANG, ADMIN_LAYANAN), use primary branchId
-      if (!user.branchId) {
-        console.log('❌ [assertBranchAccess] No branchId for user');
-        sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda tidak memiliki akses ke member ini.');
-        return;
-      }
-      accessibleBranchIds = [user.branchId];
+    const accessibleBranchIds = await getAccessibleBranchIds(user);
+
+    if (accessibleBranchIds.length === 0) {
+      const message =
+        user.role === Role.DOCTOR || user.role === Role.NURSE
+          ? 'Anda belum di-assign ke cabang manapun.'
+          : 'Anda tidak memiliki akses ke member ini.';
+
+      sendError(res, 403, 'BRANCH_ACCESS_DENIED', message);
+      return;
     }
 
     const member = await prisma.member.findUnique({
@@ -88,35 +74,27 @@ export async function assertBranchAccess(
         },
       },
     });
-    console.timeEnd('assertBranchAccess-query');
 
     if (!member) {
-      console.log('❌ [assertBranchAccess] Member not found');
       sendError(res, 404, 'MEMBER_NOT_FOUND', 'Member tidak ditemukan.');
       return;
     }
 
-    // Check if member's registration branch is in accessible branches
-    const isRegistrationBranchAccessible = accessibleBranchIds.includes(member.registrationBranchId);
-    
-    // Check if member has granted access to any of the accessible branches
-    const hasGrantedAccess = member.branchAccesses.some(
-      access => accessibleBranchIds.includes(access.branchId)
+    const isRegistrationBranchAccessible = accessibleBranchIds.includes(
+      member.registrationBranchId,
+    );
+    const hasGrantedAccess = member.branchAccesses.some((access) =>
+      accessibleBranchIds.includes(access.branchId),
     );
 
-    console.log('  - isRegistrationBranchAccessible:', isRegistrationBranchAccessible);
-    console.log('  - hasGrantedAccess:', hasGrantedAccess);
-
     if (!isRegistrationBranchAccessible && !hasGrantedAccess) {
-      console.log('❌ [assertBranchAccess] Access denied');
       sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda tidak memiliki akses ke member ini.');
       return;
     }
 
-    console.log('✅ [assertBranchAccess] Access granted');
     next();
   } catch (error) {
-    console.error('❌ [assertBranchAccess] Error:', error);
+    logger.error('Branch access assertion failed', { error, memberId, userId: user.userId });
     sendError(res, 500, 'INTERNAL_ERROR', 'Terjadi kesalahan pada server.');
   }
 }

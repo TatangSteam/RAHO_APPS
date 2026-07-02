@@ -1,11 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import { authenticate } from '../authenticate';
-import { signAccessToken, JwtPayload } from '@lib/jwt';
+import { JwtPayload } from '@lib/jwt';
 import { sendError } from '@utils/response';
+import { prisma } from '@lib/prisma';
 
 // Mock dependencies
 jest.mock('@lib/jwt');
 jest.mock('@utils/response');
+jest.mock('@lib/prisma', () => ({
+  prisma: {
+    staffBranch: {
+      findMany: jest.fn(),
+    },
+  },
+}));
+jest.mock('@lib/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 describe('authenticate middleware - Token Validation', () => {
   let mockRequest: Partial<Request>;
@@ -21,10 +36,11 @@ describe('authenticate middleware - Token Validation', () => {
     mockResponse = {};
     mockNext = jest.fn();
     jest.clearAllMocks();
+    (prisma.staffBranch.findMany as jest.Mock).mockResolvedValue([]);
   });
 
   describe('Normal Authentication (No Impersonation)', () => {
-    it('should authenticate a normal user without impersonation', () => {
+    it('should authenticate a normal user without impersonation', async () => {
       const payload: JwtPayload = {
         userId: 'user-123',
         email: 'user@example.com',
@@ -41,12 +57,13 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRequest.user).toEqual({
         ...payload,
         id: payload.userId,
+        branches: ['branch-1'],
       });
       expect(mockRequest.isImpersonating).toBe(false);
       expect(mockRequest.originalUser).toBeUndefined();
@@ -55,7 +72,7 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Single Level Impersonation - Super Admin → Admin Manager', () => {
-    it('should correctly extract impersonation data for Admin Manager', () => {
+    it('should correctly extract impersonation data for Admin Manager', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -79,7 +96,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       
@@ -115,7 +132,7 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Single Level Impersonation - Admin Manager → Admin Cabang', () => {
-    it('should correctly extract impersonation data for Admin Cabang', () => {
+    it('should correctly extract impersonation data for Admin Cabang', async () => {
       const payload: JwtPayload = {
         userId: 'manager-456',
         email: 'manager@raho.id',
@@ -139,7 +156,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       
@@ -163,7 +180,7 @@ describe('authenticate middleware - Token Validation', () => {
         branchCode: null,
         fullName: 'Manager Name',
         staffCode: null,
-        branches: undefined,
+        branches: ['branch-1'],
       });
 
       expect(mockRequest.isImpersonating).toBe(true);
@@ -175,7 +192,7 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Nested Impersonation - Super Admin → Admin Manager → Admin Cabang', () => {
-    it('should correctly extract deepest impersonation level', () => {
+    it('should correctly extract deepest impersonation level', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -205,7 +222,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       
@@ -229,7 +246,7 @@ describe('authenticate middleware - Token Validation', () => {
         branchCode: null,
         fullName: 'Super Admin',
         staffCode: null,
-        branches: undefined,
+        branches: ['branch-1'],
       });
 
       expect(mockRequest.isImpersonating).toBe(true);
@@ -240,7 +257,7 @@ describe('authenticate middleware - Token Validation', () => {
       ]);
     });
 
-    it('should handle nested impersonation with multiple branches', () => {
+    it('should handle nested impersonation with multiple branches', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -270,7 +287,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRequest.user?.branchId).toBe('branch-3');
@@ -281,10 +298,10 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Error Handling', () => {
-    it('should return 401 when authorization header is missing', () => {
+    it('should return 401 when authorization header is missing', async () => {
       mockRequest.headers = {};
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(sendError).toHaveBeenCalledWith(
         mockResponse,
@@ -295,12 +312,12 @@ describe('authenticate middleware - Token Validation', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should return 401 when authorization header does not start with Bearer', () => {
+    it('should return 401 when authorization header does not start with Bearer', async () => {
       mockRequest.headers = {
         authorization: 'Basic some-token',
       };
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(sendError).toHaveBeenCalledWith(
         mockResponse,
@@ -311,7 +328,7 @@ describe('authenticate middleware - Token Validation', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should return 401 when token is expired', () => {
+    it('should return 401 when token is expired', async () => {
       mockRequest.headers = {
         authorization: 'Bearer expired-token',
       };
@@ -324,7 +341,7 @@ describe('authenticate middleware - Token Validation', () => {
         throw expiredError;
       });
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(sendError).toHaveBeenCalledWith(
         mockResponse,
@@ -335,7 +352,7 @@ describe('authenticate middleware - Token Validation', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should return 401 when token is invalid', () => {
+    it('should return 401 when token is invalid', async () => {
       mockRequest.headers = {
         authorization: 'Bearer invalid-token',
       };
@@ -348,7 +365,7 @@ describe('authenticate middleware - Token Validation', () => {
         throw invalidError;
       });
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(sendError).toHaveBeenCalledWith(
         mockResponse,
@@ -359,7 +376,7 @@ describe('authenticate middleware - Token Validation', () => {
       expect(mockNext).not.toHaveBeenCalled();
     });
 
-    it('should return 401 for generic token errors', () => {
+    it('should return 401 for generic token errors', async () => {
       mockRequest.headers = {
         authorization: 'Bearer malformed-token',
       };
@@ -368,7 +385,7 @@ describe('authenticate middleware - Token Validation', () => {
         throw new Error('Some other error');
       });
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(sendError).toHaveBeenCalledWith(
         mockResponse,
@@ -381,7 +398,7 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Edge Cases', () => {
-    it('should handle Admin Manager with empty branches array', () => {
+    it('should handle Admin Manager with empty branches array', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -405,13 +422,13 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRequest.user?.branches).toEqual([]);
     });
 
-    it('should handle Admin Cabang with null branchId', () => {
+    it('should handle Admin Cabang with null branchId', async () => {
       const payload: JwtPayload = {
         userId: 'manager-456',
         email: 'manager@raho.id',
@@ -434,13 +451,13 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRequest.user?.branchId).toBeNull();
     });
 
-    it('should preserve fullName from original user in impersonation', () => {
+    it('should preserve fullName from original user in impersonation', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -464,7 +481,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       expect(mockNext).toHaveBeenCalled();
       expect(mockRequest.user?.fullName).toBe('Super Admin Full Name');
@@ -472,7 +489,7 @@ describe('authenticate middleware - Token Validation', () => {
   });
 
   describe('Authorization Context', () => {
-    it('should set req.user to impersonated user for authorization checks', () => {
+    it('should set req.user to impersonated user for authorization checks', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -496,7 +513,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       // Verify that req.user contains the impersonated user's data
       // This is CRITICAL for authorization checks
@@ -509,7 +526,7 @@ describe('authenticate middleware - Token Validation', () => {
       expect(mockRequest.originalUser?.role).toBe('SUPER_ADMIN');
     });
 
-    it('should allow data filtering based on impersonated user branches', () => {
+    it('should allow data filtering based on impersonated user branches', async () => {
       const payload: JwtPayload = {
         userId: 'super-admin-123',
         email: 'superadmin@raho.id',
@@ -539,7 +556,7 @@ describe('authenticate middleware - Token Validation', () => {
 
       (require('@lib/jwt').verifyAccessToken as jest.Mock).mockReturnValue(payload);
 
-      authenticate(mockRequest as Request, mockResponse as Response, mockNext);
+      await authenticate(mockRequest as Request, mockResponse as Response, mockNext);
 
       // In nested impersonation, req.user should be the deepest level
       // This ensures data filtering works correctly
@@ -558,3 +575,4 @@ describe('authenticate middleware - Token Validation', () => {
     });
   });
 });
+

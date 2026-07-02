@@ -3,6 +3,10 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role, BranchType, StockRequestStatus, StockMutationType } from '@prisma/client';
 import { deleteFileByUrl } from '../../../config/minio';
+import {
+  buildStockRequestInvoiceDraft,
+  getStockRequestInvoiceApprovalPlan,
+} from './stock-request-approval.helpers';
 
 interface InvoiceItemInput {
   masterProductId: string;
@@ -255,39 +259,12 @@ export class StockRequestApprovalService {
       };
     }
 
-    // Validate invoice items match request items
-    const requestProductIds = request.items.map(i => i.masterProductId);
-    const invoiceProductIds = invoiceData.items.map(i => i.masterProductId);
-    
-    for (const productId of invoiceProductIds) {
-      if (!requestProductIds.includes(productId)) {
-        throw {
-          status: 400,
-          code: 'INVALID_INVOICE_ITEM',
-          message: 'Item invoice tidak sesuai dengan item permintaan',
-        };
-      }
-    }
-
-    // Calculate totals
-    let subtotal = 0;
-    const invoiceItems = invoiceData.items.map(item => {
-      const requestItem = request.items.find(ri => ri.masterProductId === item.masterProductId);
-      const itemSubtotal = item.quantity * item.pricePerUnit;
-      subtotal += itemSubtotal;
-      
-      return {
-        masterProductId: item.masterProductId,
-        sku: requestItem?.masterProduct.sku || null,
-        productName: requestItem?.masterProduct.name || 'Unknown',
-        description: requestItem?.masterProduct.description || null,
-        quantity: item.quantity,
-        pricePerUnit: item.pricePerUnit,
-        subtotal: itemSubtotal,
-      };
-    });
-    const isFreeRequest = subtotal <= 0;
-    const isDebtRequest = !isFreeRequest && invoiceData.paymentMode === 'DEBT';
+    const { items: invoiceItems, subtotal } = buildStockRequestInvoiceDraft(
+      request.items,
+      invoiceData.items
+    );
+    const approvalPlan = getStockRequestInvoiceApprovalPlan(subtotal, invoiceData.paymentMode);
+    const { isFreeRequest, isDebtRequest } = approvalPlan;
     const now = new Date();
     const senderBranch = (isFreeRequest || isDebtRequest) ? await this.getOrCreateExternalBranch() : null;
     const shipmentCode = (isFreeRequest || isDebtRequest)
@@ -307,18 +284,14 @@ export class StockRequestApprovalService {
           branchId: request.branchId,
           subtotal,
           totalAmount: subtotal,
-          paidAmount: isFreeRequest ? subtotal : 0,
-          remainingAmount: isFreeRequest ? 0 : subtotal,
-          status: isFreeRequest ? 'PAID' : isDebtRequest ? 'DEBT' : 'PENDING_PAYMENT',
-          paymentVerificationStatus: isFreeRequest ? 'VERIFIED' : 'PENDING',
-          verifiedBy: isFreeRequest ? userId : null,
-          verifiedAt: isFreeRequest ? now : null,
-          verificationNotes: isFreeRequest
-            ? 'Invoice gratis - tidak memerlukan bukti pembayaran'
-            : isDebtRequest
-              ? 'Pembayaran ditandai sebagai utang - bukti pembayaran wajib diupload kemudian'
-              : null,
-          paidAt: isFreeRequest ? now : null,
+          paidAmount: approvalPlan.paidAmount,
+          remainingAmount: approvalPlan.remainingAmount,
+          status: approvalPlan.invoiceStatus,
+          paymentVerificationStatus: approvalPlan.paymentVerificationStatus,
+          verifiedBy: approvalPlan.verifiedByUser ? userId : null,
+          verifiedAt: approvalPlan.verifiedByUser ? now : null,
+          verificationNotes: approvalPlan.verificationNotes,
+          paidAt: approvalPlan.paidAtNow ? now : null,
           notes: invoiceData.notes,
           createdBy: userId,
           items: {
@@ -338,16 +311,12 @@ export class StockRequestApprovalService {
       const updatedRequest = await tx.stockRequest.update({
         where: { id: requestId },
         data: {
-          status: (isFreeRequest || isDebtRequest) ? 'APPROVED' : 'WAITING_PAYMENT',
+          status: approvalPlan.requestStatus,
           reviewedBy: userId,
           reviewedAt: now,
-          paymentVerifiedBy: isFreeRequest ? userId : null,
-          paymentVerifiedAt: isFreeRequest ? now : null,
-          paymentVerificationNotes: isFreeRequest
-            ? 'Invoice gratis - tidak memerlukan bukti pembayaran'
-            : isDebtRequest
-              ? 'Pembayaran ditandai sebagai utang - bukti pembayaran wajib diupload kemudian'
-            : null,
+          paymentVerifiedBy: approvalPlan.verifiedByUser ? userId : null,
+          paymentVerifiedAt: approvalPlan.verifiedByUser ? now : null,
+          paymentVerificationNotes: approvalPlan.verificationNotes,
         },
         include: {
           items: {
@@ -409,8 +378,8 @@ export class StockRequestApprovalService {
         invoiceNumber,
         totalAmount: subtotal,
         branchType: request.branch.type,
-        paymentRequired: !isFreeRequest,
-        paymentMode: isDebtRequest ? 'DEBT' : isFreeRequest ? 'FREE' : 'NORMAL',
+        paymentRequired: approvalPlan.paymentRequired,
+        paymentMode: approvalPlan.paymentMode,
         shipmentId: result.shipment?.id,
       },
     });
@@ -418,11 +387,7 @@ export class StockRequestApprovalService {
     const response: any = {
       request: this.formatStockRequest(result.updatedRequest),
       invoice: this.formatInvoice(result.invoice),
-      message: isFreeRequest
-        ? 'Request gratis disetujui dan pengiriman telah dibuat tanpa bukti pembayaran.'
-        : isDebtRequest
-          ? 'Request disetujui sebagai utang. Pengiriman telah dibuat dan bukti pembayaran wajib diupload kemudian.'
-        : 'Invoice berhasil dibuat. Menunggu upload bukti pembayaran.',
+      message: approvalPlan.responseMessage,
     };
 
     if (result.shipment) {

@@ -1,5 +1,9 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import {
+  allocateInvoiceItems,
+  cloneInvoiceItemsForAllocation,
+} from './invoice-generation.helpers';
 
 type InvoiceTargetStatus = 'PENDING_PAYMENT' | 'PAID';
 type PaymentPlanConfig = {
@@ -161,10 +165,10 @@ export class InvoiceGenerationService {
 
     const paidInvoiceItems = isOpenInstallmentAmount
       ? (() => {
-          const sourceItems = this.cloneInvoiceItemsForAllocation(invoice.items || []);
+          const sourceItems = cloneInvoiceItemsForAllocation(invoice.items || []);
           const sourceTotal = sourceItems.reduce((sum, item) => sum + Number(item.totalAmount || 0), 0);
 
-          return this.allocateInvoiceItems(sourceItems, paidAmount, sourceTotal);
+          return allocateInvoiceItems(sourceItems, paidAmount, sourceTotal);
         })()
       : null;
 
@@ -281,7 +285,7 @@ export class InvoiceGenerationService {
       const hasExplicitInstallmentAmount = explicitInstallmentAmount > 0;
       const invoiceTotalAmount = isInstallmentInvoice ? explicitInstallmentAmount : totalAmount;
       const invoiceItemsForCreate = isInstallmentInvoice && hasExplicitInstallmentAmount
-        ? this.allocateInvoiceItems(invoiceItems, invoiceTotalAmount, subtotal)
+        ? allocateInvoiceItems(invoiceItems, invoiceTotalAmount, subtotal)
         : invoiceItems;
       const itemIds = [
         ...packages.map((pkg) => pkg.id),
@@ -469,53 +473,6 @@ export class InvoiceGenerationService {
     return items;
   }
 
-  private allocateInvoiceItems(items: any[], invoiceAmount: number, sourceTotal: number) {
-    if (items.length === 0) return [];
-
-    if (sourceTotal <= 0 || invoiceAmount <= 0) {
-      return items.map((item, index) => ({
-        ...item,
-        description: index === 0 ? `${item.description} - Termin` : item.description,
-        pricePerUnit: index === 0 ? invoiceAmount : 0,
-        subtotal: index === 0 ? invoiceAmount : 0,
-        totalAmount: index === 0 ? invoiceAmount : 0,
-        discountAmount: 0,
-      }));
-    }
-
-    let allocated = 0;
-
-    return items.map((item, index) => {
-      const isLast = index === items.length - 1;
-      const rawAmount = isLast
-        ? invoiceAmount - allocated
-        : Math.round((Number(item.totalAmount || item.subtotal || 0) / sourceTotal) * invoiceAmount);
-      allocated += rawAmount;
-
-      return {
-        ...item,
-        pricePerUnit: rawAmount,
-        subtotal: rawAmount,
-        discountAmount: 0,
-        totalAmount: rawAmount,
-      };
-    });
-  }
-
-  private cloneInvoiceItemsForAllocation(items: any[]) {
-    return items.map((item) => ({
-      itemType: item.itemType,
-      itemId: item.itemId,
-      code: item.code,
-      description: item.description,
-      quantity: item.quantity,
-      pricePerUnit: Number(item.pricePerUnit || 0),
-      subtotal: Number(item.subtotal || 0),
-      discountAmount: 0,
-      totalAmount: Number(item.totalAmount || 0),
-    }));
-  }
-
   private getPaymentGroupId(packages: any[], addOns: any[]) {
     return (
       packages[0]?.purchaseGroupId ||
@@ -698,9 +655,9 @@ export class InvoiceGenerationService {
     const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode);
     const sourceItems = previousInvoice.items || [];
     const sourceTotal = sourceItems.reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0);
-    const clonedSourceItems = this.cloneInvoiceItemsForAllocation(sourceItems);
+    const clonedSourceItems = cloneInvoiceItemsForAllocation(sourceItems);
     const nextItems = nextAmount > 0
-      ? this.allocateInvoiceItems(clonedSourceItems, nextAmount, sourceTotal)
+      ? allocateInvoiceItems(clonedSourceItems, nextAmount, sourceTotal)
       : clonedSourceItems;
 
     return prisma.invoice.create({

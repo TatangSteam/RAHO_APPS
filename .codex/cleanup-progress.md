@@ -33,7 +33,12 @@ P0 bukan nama phase. P0 berarti prioritas paling tinggi / risiko paling besar. M
 - Batch 5 selesai: FE Dashboard Supporting Cleanup.
 - Batch 6 selesai: FE Chat / Supporting Placeholder.
 - Batch 7 selesai: FE Auth / Layout / Sidebar.
-- Lanjutan masih ada. Batch berikutnya yang direkomendasikan adalah Batch 8: BE Auth / Middleware / Security.
+- Batch 8 selesai: BE Auth / Middleware / Security.
+- Batch 9 selesai: FE Inventory: Stock Requests Small Slice.
+- Batch 10 selesai: BE Inventory: Stock Request Approval Small Slice.
+- Batch 11 selesai: FE Payments / Invoices Small Slice.
+- Batch 12 selesai: BE Packages / Billing / Invoices Small Slice.
+- Lanjutan berikutnya: Batch 13: FE Members Small Slice.
 
 Priority guide:
 - P0 Risiko Tinggi: data pasien/member, billing/payment/invoice, terapi/sesi, stok, auth/security.
@@ -44,13 +49,13 @@ Priority guide:
 |-------|------------|-----------|--------|--------------|
 | BE Members / Patient Records | 20 (~7.1k LOC) | P0 Risiko Tinggi | Backlog | Data pasien/member. File panjang: `me.service.ts` ~1004 LOC, `members.controller.ts` ~645 LOC, `member-registration.service.ts` besar. Test backend terlihat minim: 1 test module. Cleanup harus batch kecil: retrieval, registration, documents, lab, therapy plan. |
 | FE Members / Patient Records | 67 (~21.4k LOC) | P0 Risiko Tinggi | Backlog | UI member paling besar dan menyentuh pasien, package, dokumen, lab, therapy plan. File panjang: detail member page ~882 LOC, member new page ~536 LOC, `MemberTherapyPlansTab.tsx` ~936 LOC, `BulkTherapyPlanModal.tsx` ~873 LOC, `PackageCard.tsx` ~846 LOC, `ExportMembersModal.tsx` ~792 LOC. Ada E2E member, tapi cleanup harus per subfitur. |
-| BE Packages / Billing / Invoices | 22 (~5.2k LOC) | P0 Risiko Tinggi | Backlog | Menyentuh invoice, assignment paket, refund, cancel, payment verification. Tidak terlihat test backend di folder ini. File panjang: `invoice-generation.service.ts` ~690 LOC, `package-assignment.service.ts` besar. Perlu contract test sebelum refactor. |
-| FE Packages / Billing / Invoices / Payments | 19 (~5.1k LOC) | P0 Risiko Tinggi | Backlog | Payment page ~833 LOC, invoice rendering/CSS besar. Ada E2E payment flow, namun UI package/payment tersebar antara member components, invoice components, dan API clients. |
+| BE Packages / Billing / Invoices | 22 (~5.2k LOC) | P0 Risiko Tinggi | Batch 12 Complete | Menyentuh invoice, assignment paket, refund, cancel, payment verification. Batch 12 mengambil slice kecil di `invoice-generation.service.ts`: helper pure alokasi item invoice termin/installment diekstrak dan ditutup unit test contract. |
+| FE Packages / Billing / Invoices / Payments | 19 (~5.1k LOC) | P0 Risiko Tinggi | Batch 11 Complete | Payment page ~833 LOC, invoice rendering/CSS besar. Batch 11 mengambil slice kecil pada local payment harness `/payments`: helper presentasi/kalkulasi/filter invoice diekstrak dari page dan ditutup unit test + payment E2E. |
 | BE Sessions / Treatment / Diagnosis | 26 (~5.9k LOC) | P0 Risiko Tinggi | Backlog | Menyentuh terapi klinis dan diagnosis. Ada beberapa test backend. File panjang: `session-creation.service.ts` ~706 LOC, session retrieval/service besar. Banyak endpoint controller dengan `catch (err: any)` berulang. |
 | FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Backlog | Salah satu area FE paling kompleks. File panjang: sessions page ~1630 LOC, `CreateSessionModal.tsx` ~1462 LOC, sessions CSS ~1478 LOC, `Step5Infusion.tsx` ~1129 LOC. Cleanup perlu dipotong per step wizard. |
-| BE Inventory / Stock / Shipments | 19 (~7.6k LOC) | P0 Risiko Tinggi | Backlog | Stok dan shipment berdampak operasional/financial. Tidak terlihat test backend di folder inventory. File panjang: `stock-request-approval.service.ts` ~1256 LOC, inventory controller/service besar. Perlu test sebelum split approval/shipment. |
-| FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Backlog | Banyak modal dan page stock request/shipment. File panjang: stock request review modal ~1160 LOC, stock request page/CSS >1000 LOC, inventory page ~855 LOC, shipments page ~806 LOC. Ada E2E inventory, tapi perlu batch per workflow. |
-| BE Auth / Middleware / Security | 14 (~2.0k LOC) | P0 Risiko Tinggi | Backlog | Security/auth/branch access. Ada test JWT/middleware, tapi banyak `console.log` di `authenticate.ts` dan `assertBranchAccess.ts`. Cleanup kecil tapi sensitif: logging, error shape, branch-access boundaries. |
+| BE Inventory / Stock / Shipments | 19 (~7.6k LOC) | P0 Risiko Tinggi | Batch 10 Complete | Stok dan shipment berdampak operasional/financial. Batch 10 mengambil slice kecil pada `stock-request-approval.service.ts`: helper pure invoice draft dan approval plan diekstrak, lalu ditutup unit test contract untuk mode FREE/DEBT/NORMAL dan invalid invoice item. |
+| FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 9 Complete | Banyak modal dan page stock request/shipment. Batch 9 mengambil slice kecil stock request list/page shell: helper presentasi aksi row dan format tanggal diekstrak. Targeted lint pass dengan warning existing `no-explicit-any`, `type-check:web` pass, dan E2E stock request flow `10 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
+| BE Auth / Middleware / Security | 14 (~2.0k LOC) | P0 Risiko Tinggi | Batch 8 Complete | Security/auth/branch access. Debug `console.log` di `authenticate.ts` dan `assertBranchAccess.ts` sudah dibersihkan, branch helper dipusatkan, dan coverage branch-access middleware ditambahkan. Backend type-check passed setelah query akses shipment receipt di `files.service.ts` tidak lagi memakai generated Prisma field yang stale. |
 | FE Auth / Layout / Impersonation | 22 (~3.4k LOC) | P1 Shared Access Control | Batch 7 Partial | Role presentation untuk header/sidebar dipusatkan di `rolePresentation`, duplikasi label/warna role dihapus, dan smoke E2E layout navigation ditambahkan. Sidebar menu config dan impersonation masih backlog karena lebih sensitif. |
 | BE Users / Staff / Admin / Impersonation | 33 (~13.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Banyak integration test admin/impersonation sudah ada. File panjang: `users.service.ts` ~1011 LOC, `admin.controller.ts` ~1003 LOC. Banyak logging debug. Cleanup dapat dimulai dari service boundaries yang sudah tertutup test. |
 | FE Branches / Staff / Admin | 87 (~27.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Modul FE terbesar. Banyak page/admin/branch/staff/modal. File panjang: branch detail page ~974 LOC, master-products page ~1134 LOC, beberapa CSS >900 LOC. Perlu pecah per halaman: branches list, branch detail, admin managers, master products. |
@@ -74,6 +79,11 @@ Priority guide:
 | 5 | FE Dashboard Supporting Cleanup | Complete | Menambahkan `dashboardPresentation`, `DashboardStatCard`, `DashboardDateRangeFilter`, `DashboardLoadingState`, dan `DashboardErrorState`; dashboard cabang/manager memakai helper date range shared; dashboard layanan/dokter/perawat memakai card/loading/error shared; `catch any` di dashboard role diganti error handler typed; smoke E2E dashboard role ditambahkan. | `type-check:web` passed; dashboard E2E `14 passed`. |
 | 6 | FE Chat / Supporting Placeholder | Complete | Placeholder `/chat` diganti ke Tailwind/lucide yang bersih, CSS module lama dihapus, dan page object + smoke E2E chat ditambahkan untuk route langsung serta link sidebar. | `type-check:web` passed; chat E2E `9 passed`. |
 | 7 | FE Auth / Layout / Sidebar | Complete | Menambahkan `rolePresentation` untuk label/warna role shared, menghubungkan `Header` dan `Sidebar` ke helper tersebut, menghapus duplikasi role display lokal, dan menambahkan smoke E2E layout navigation per role. | `type-check:web` passed; auth + layout E2E `18 passed`. |
+| 8 | BE Auth / Middleware / Security | Complete | Mengganti debug `console.*` auth/branch-access dengan logger, memusatkan helper assigned branch di `authenticate`, mengekstrak helper accessible branches di `assertBranchAccess`, memperbaiki test auth async + Prisma mock, menambah test branch-access middleware, dan memperbaiki blocker `files.service.ts` pada akses shipment receipt. | Middleware tests `24 passed`; `type-check:api` passed. |
+| 9 | FE Inventory: Stock Requests Small Slice | Complete | Ekstrak `stockRequestPresentation` untuk keputusan aksi row stock request dan format tanggal; page list memakai helper tersebut, dan import mati `Loader2` dihapus. Tidak menyentuh API, modal review, atau workflow approval/payment. | Targeted lint passed dengan warning existing `no-explicit-any`; `type-check:web` passed; inventory E2E stock request flow `10 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
+| 10 | BE Inventory: Stock Request Approval Small Slice | Complete | Ekstrak `stock-request-approval.helpers.ts` untuk validasi/snapshot item invoice dan rencana approval invoice FREE/DEBT/NORMAL; `createInvoice` memakai helper tersebut tanpa mengubah transaksi, shipment, audit, atau payment flow lain. | Helper unit tests `5 passed`; `type-check:api` passed. |
+| 11 | FE Payments / Invoices Small Slice | Complete | Ekstrak `paymentPresentation.ts` dari `/payments/page.tsx` untuk tipe local harness, constants, format currency, total/sisa invoice, product matching, filter invoice, parsing form item, validasi item, dan status payment. Tidak mengubah API, storage key, modal flow, atau E2E page object. | Helper unit tests `5 passed`; targeted lint passed; `type-check:web` passed; payment E2E `30 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
+| 12 | BE Packages / Billing / Invoices Small Slice | Complete | Ekstrak `invoice-generation.helpers.ts` untuk `allocateInvoiceItems` dan `cloneInvoiceItemsForAllocation`; `invoice-generation.service.ts` memakai helper tersebut pada invoice termin explicit, open installment payment, dan next installment invoice. Tidak mengubah Prisma transaction, invoice status, payment verification, atau assignment flow. | Helper unit tests `5 passed`; `type-check:api` passed. |
 
 ## Next Execution Plan
 
@@ -86,12 +96,12 @@ Priority guide:
 | 5 | FE Dashboard Supporting Cleanup | P2 | Complete | Rapikan dashboard cards/widgets/helper display untuk admin manager/cabang/super admin tanpa mengubah data source. | Done: `type-check:web`, dashboard E2E `14 passed`. |
 | 6 | FE Chat / Supporting Placeholder | P2 | Complete | Jika masih placeholder, hapus/rapikan CSS mati dan page sederhana; jika sudah ada fitur aktif, audit dulu sebelum refactor. | Done: `type-check:web`, chat E2E `9 passed`. |
 | 7 | FE Auth / Layout / Sidebar | P1 | Complete | Rapikan role navigation, sidebar badge, header/layout shared. Sensitif karena akses role, jadi lakukan setelah P2 stabil. | Done: `type-check:web`, auth + layout E2E `18 passed`. |
-| 8 | BE Auth / Middleware / Security | P0 | Next | Bersihkan logging debug, audit error shape, branch-access boundary. Tidak boleh ubah behavior auth tanpa test. | Backend type-check/test auth/middleware. |
-| 9 | FE Inventory: Stock Requests Small Slice | P0 | Planned | Masuk P0 pertama dari frontend. Ambil slice kecil, misalnya list/review modal shell, bukan seluruh inventory sekaligus. | `type-check:web` + inventory E2E slice. |
-| 10 | BE Inventory: Stock Request Approval Small Slice | P0 | Planned | Pecah service approval secara kecil, tambah/rapikan contract test sebelum refactor logic. | Backend test + API smoke terkait inventory. |
-| 11 | FE Payments / Invoices Small Slice | P0 | Planned | Rapikan payment/invoice UI yang punya E2E, mulai dari helper/page object/export states. | `type-check:web` + payment E2E. |
-| 12 | BE Packages / Billing / Invoices Small Slice | P0 | Planned | Rapikan service invoice/package assignment dengan test kontrak. | Backend test billing/package. |
-| 13 | FE Members Small Slice | P0 | Planned | Ambil subfitur kecil member, misalnya header/edit modal atau documents tab, bukan detail page penuh. | `type-check:web` + member CRUD/detail smoke. |
+| 8 | BE Auth / Middleware / Security | P0 | Complete | Bersihkan logging debug, audit error shape, branch-access boundary. Tidak boleh ubah behavior auth tanpa test. | Done: middleware tests `24 passed`; `type-check:api` passed. |
+| 9 | FE Inventory: Stock Requests Small Slice | P0 | Complete | Masuk P0 pertama dari frontend. Ambil slice kecil list/page shell, bukan seluruh inventory sekaligus. | Done: targeted lint, `type-check:web`, inventory E2E stock request flow `10 passed` di port 3000. |
+| 10 | BE Inventory: Stock Request Approval Small Slice | P0 | Complete | Pecah service approval secara kecil, tambah/rapikan contract test sebelum refactor logic. | Done: helper unit tests `5 passed`; `type-check:api` passed. |
+| 11 | FE Payments / Invoices Small Slice | P0 | Complete | Rapikan payment/invoice UI yang punya E2E, mulai dari helper/page object/export states. | Done: helper unit tests `5 passed`; targeted lint; `type-check:web`; payment E2E `30 passed`. |
+| 12 | BE Packages / Billing / Invoices Small Slice | P0 | Complete | Rapikan service invoice/package assignment dengan test kontrak. | Done: helper unit tests `5 passed`; `type-check:api` passed. |
+| 13 | FE Members Small Slice | P0 | Next | Ambil subfitur kecil member, misalnya header/edit modal atau documents tab, bukan detail page penuh. | `type-check:web` + member CRUD/detail smoke. |
 | 14 | BE Members Small Slice | P0 | Planned | Rapikan retrieval/registration/documents secara bertahap dengan test. | Backend member tests/API smoke. |
 | 15 | FE Sessions / Therapy Plan Small Slice | P0 | Planned | Ambil satu step wizard/komponen terapi, jangan seluruh sessions page. | `type-check:web` + session therapy E2E slice. |
 
@@ -199,27 +209,129 @@ Status: Complete.
 
 ## Batch 8 Detailed Plan
 
-Status: Next, belum dikerjakan.
+Status: Complete.
 
 1. Discovery
-   - Scan backend auth, middleware, rate limiter, branch-access guard, dan test yang tersedia.
-   - Cari logging debug yang keluar di production/test output.
-   - Cari error shape yang tidak konsisten di auth/middleware.
+   - Done: scan backend auth, middleware, rate limiter, branch-access guard, dan test yang tersedia.
+   - Done: ditemukan debug `console.log/error/time` paling banyak di `authenticate.ts` dan `assertBranchAccess.ts`.
+   - Done: baseline `authenticate.test.ts` gagal karena middleware async tidak di-`await` dan Prisma branch lookup tidak dimock.
 
 2. Refactor Scope
-   - Bersihkan logging debug hanya bila aman dan tidak mengubah behavior.
-   - Rapikan helper kecil untuk auth/middleware bila ada duplikasi nyata.
-   - Jangan ubah JWT/session semantics, branch access policy, atau role authorization tanpa test eksplisit.
+   - Done: bersihkan logging debug di `authenticate.ts` dan `assertBranchAccess.ts`.
+   - Done: gunakan `logger.warn/debug/error` untuk kejadian auth/branch-access yang masih perlu dicatat.
+   - Done: pusatkan helper assigned branch di `authenticate`.
+   - Done: ekstrak helper accessible branches di `assertBranchAccess`.
+   - Done: tidak mengubah JWT/session semantics, role bypass, response code, atau pesan error.
 
 3. Verification
-   - Jalankan backend type-check.
-   - Jalankan test backend auth/middleware yang tersedia.
-   - Jika test auth/middleware belum cukup, tambahkan test kecil sebelum refactor behavior-sensitive.
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/middleware/__tests__/authenticate.test.ts src/middleware/__tests__/assertBranchAccess.test.ts` => `24 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed setelah follow-up fix di `files.service.ts`.
+   - Done: `authenticate.test.ts` diperbaiki untuk `await` middleware async dan mock Prisma branch lookup.
+   - Done: `assertBranchAccess.test.ts` ditambahkan untuk global bypass, registration branch, staff branch assignment, granted branch access, denied access, not found, dan DB error.
 
 4. Completion Criteria
-   - Auth/middleware lebih bersih tanpa perubahan akses.
-   - Test backend relevan lulus atau gap dicatat dengan alasan konkret.
-   - `.codex/cleanup-progress.md` diupdate dengan Batch 8 `Complete`, `Partial`, atau `Blocked`.
+   - Done: auth/middleware lebih bersih tanpa perubahan akses yang disengaja.
+   - Done: test backend relevan lulus.
+   - Done: type-check backend lulus.
+   - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 8 `Complete`.
+
+## Batch 9 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan stock request page, components, hooks, API client, dan E2E inventory.
+   - Done: dipilih slice kecil di list/page shell agar tidak menyentuh modal review/payment besar.
+
+2. Refactor Scope
+   - Done: tambah `stockRequestPresentation.ts` untuk `isStockRequestManager`, format tanggal, dan keputusan aksi row.
+   - Done: `stock-requests/page.tsx` memakai helper tersebut untuk edit/review/upload state.
+   - Done: hapus import mati `Loader2`.
+   - Tidak mengubah API call, status workflow, modal review, modal payment, atau approval logic.
+
+3. Verification
+   - Done: `npm.cmd run lint --prefix apps/web -- --file 'src/app/(staff)/inventory/stock-requests/page.tsx' --file 'src/app/(staff)/inventory/stock-requests/stockRequestPresentation.ts'` passed dengan warning existing `no-explicit-any` di page.
+   - Done: `npm.cmd run type-check --prefix apps/web` passed setelah dependency Playwright tersedia.
+   - Done: `E2E_START_WEB_SERVER=false npm.cmd run e2e --prefix apps/web -- --project=chromium --reporter=line --workers=1 critical/inventory-flow.spec.ts -g "Inventory - Stock Request Flow"` memakai web server user di port 3000 dan API lokal di port 4000: `10 passed`.
+   - Notes: setelah user restart web server, verifikasi final berjalan di port 3000. Port 3001 tidak digunakan untuk verifikasi lanjutan.
+
+4. Completion Criteria
+   - Done: cleanup slice code selesai, lint targeted pass, `type-check:web` pass, dan E2E stock request flow pass.
+   - Done: progress ditutup sebagai Batch 9 Complete; lanjutan masuk Batch 10.
+
+## Batch 10 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan service inventory backend, terutama `stock-request-approval.service.ts`, controller/service stock request, schema Prisma invoice/shipment, dan test backend yang tersedia.
+   - Done: ditemukan belum ada test inventory lokal; service approval masih besar dan `// @ts-nocheck`, jadi slice dipilih dari logic pure di `createInvoice`.
+
+2. Refactor Scope
+   - Done: tambah `stock-request-approval.helpers.ts`.
+   - Done: ekstrak `buildStockRequestInvoiceDraft` untuk validasi item invoice terhadap item request, snapshot SKU/nama/deskripsi, dan subtotal.
+   - Done: ekstrak `getStockRequestInvoiceApprovalPlan` untuk status invoice/request, payment verification status, paid/remaining amount, notes, audit payment mode, dan response message pada mode FREE/DEBT/NORMAL.
+   - Done: `createInvoice` memakai helper tersebut.
+   - Tidak mengubah transaksi Prisma, audit log, shipment creation, upload/confirm/reject payment flow, atau endpoint/controller.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/modules/inventory/services/__tests__/stock-request-approval.helpers.test.ts` => `5 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed.
+
+4. Completion Criteria
+   - Done: approval invoice logic punya contract test kecil sebelum split lanjutan.
+   - Done: backend type-check lulus.
+   - Done: progress ditutup sebagai Batch 10 Complete; lanjutan masuk Batch 11.
+
+## Batch 11 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan payment/invoice FE files, `payment-flow.spec.ts`, `PaymentPage` page object, invoice API/types, dan `/payments/page.tsx`.
+   - Done: ditemukan `/payments` adalah local E2E harness berbasis browser storage; slice dipilih pada logic pure presentasi/kalkulasi agar tidak menyentuh transaksi backend.
+
+2. Refactor Scope
+   - Done: tambah `paymentPresentation.ts` di folder `/payments`.
+   - Done: pindahkan tipe local invoice/payment, constants storage/filter/product seed, `formatCurrency`, `calculateTotal`, `remainingAmount`, `matchingProducts`, `filterInvoices`, `parseInvoiceItemForms`, `hasInvalidInvoiceItem`, dan `getPaymentStatus`.
+   - Done: `/payments/page.tsx` memakai helper tersebut untuk filtering, invoice creation parsing/validation, product suggestions, dan status setelah payment.
+   - Tidak mengubah storage key, initial invoice data, modal flow, role access, E2E page object, API client, atau backend payment/invoice logic.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/web -- --runInBand --runTestsByPath "src/app/(staff)/payments/paymentPresentation.test.ts"` => `5 passed`.
+   - Done: `npm.cmd run lint --prefix apps/web -- --file 'src/app/(staff)/payments/page.tsx' --file 'src/app/(staff)/payments/paymentPresentation.ts' --file 'src/app/(staff)/payments/paymentPresentation.test.ts'` passed.
+   - Done: `npm.cmd run type-check --prefix apps/web` passed.
+   - Done: `E2E_START_WEB_SERVER=false npm.cmd run e2e --prefix apps/web -- --project=chromium --reporter=line --workers=1 flows/payment-flow.spec.ts` memakai web server user di port 3000 dan API lokal sementara di port 4000: `30 passed`.
+   - Notes: port 3001 tidak digunakan. API log masih menunjukkan warning audit schema existing (`userName` tidak dikenal), tetapi E2E tetap pass.
+
+4. Completion Criteria
+   - Done: payment page logic pure punya unit test kecil.
+   - Done: lint targeted, type-check web, dan payment E2E lulus.
+   - Done: progress ditutup sebagai Batch 11 Complete; lanjutan masuk Batch 12.
+
+## Batch 12 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan backend packages/invoices files, `invoice-generation.service.ts`, `package-assignment.service.ts`, `payment-verification.service.ts`, dan test backend yang tersedia.
+   - Done: belum ada test lokal untuk package billing; slice dipilih dari helper pure allocation di invoice generation agar contract bisa ditutup tanpa menyentuh database flow.
+
+2. Refactor Scope
+   - Done: tambah `invoice-generation.helpers.ts`.
+   - Done: ekstrak `allocateInvoiceItems` untuk membagi nominal termin/installment ke item invoice, termasuk fallback source total kosong dan rounding remainder ke item terakhir.
+   - Done: ekstrak `cloneInvoiceItemsForAllocation` untuk menormalisasi invoice item menjadi input numeric.
+   - Done: `invoice-generation.service.ts` memakai helper tersebut untuk explicit installment invoice, open installment paid invoice item allocation, dan next installment invoice.
+   - Tidak mengubah Prisma transaction, invoice status, payment verification, assignment flow, invoice numbering, atau payment recording.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/modules/packages/services/__tests__/invoice-generation.helpers.test.ts` => `5 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed.
+
+4. Completion Criteria
+   - Done: package invoice allocation punya contract test kecil.
+   - Done: backend type-check lulus.
+   - Done: progress ditutup sebagai Batch 12 Complete; lanjutan masuk Batch 13.
 
 ## Discovery Notes
 

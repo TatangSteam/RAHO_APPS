@@ -18,7 +18,7 @@ declare global {
         branchCode: string | null;
         fullName: string;
         staffCode: string | null;
-        branches?: string[]; // For Admin Manager (multiple branches)
+        branches?: string[];
       };
       originalUser?: {
         id: string;
@@ -29,42 +29,43 @@ declare global {
         fullName: string;
       };
       isImpersonating: boolean;
-      impersonationChain?: string[]; // Full chain of impersonation
+      impersonationChain?: string[];
     }
   }
 }
 
-/**
- * Helper function to extract the deepest impersonated user from nested impersonation
- */
 function extractDeepestImpersonation(payload: JwtPayload): {
   deepest: NonNullable<JwtPayload['impersonating']>;
   chain: string[];
 } {
   const chain: string[] = [payload.email];
   let current = payload.impersonating;
-  
+
   if (!current) {
     throw new Error('No impersonation data found');
   }
-  
-  // Traverse the impersonation chain to find the deepest level
+
   while (current.impersonating) {
     chain.push(current.email);
     current = current.impersonating;
   }
-  
-  // Add the deepest impersonated user to the chain
+
   chain.push(current.email);
-  
+
   return { deepest: current, chain };
 }
 
 function uniqueBranchIds(branchId: string, assignedBranchIds: string[]): string[] {
-  return [branchId, ...assignedBranchIds].filter((value, index, all) => all.indexOf(value) === index);
+  return [branchId, ...assignedBranchIds].filter(
+    (value, index, all) => all.indexOf(value) === index,
+  );
 }
 
-async function getAssignedBranchIds(userId: string, role: string, branchId?: string | null): Promise<string[]> {
+async function getAssignedBranchIds(
+  userId: string,
+  role: string,
+  branchId?: string | null,
+): Promise<string[]> {
   if (role === 'MEMBER' || !branchId) {
     return [];
   }
@@ -74,28 +75,23 @@ async function getAssignedBranchIds(userId: string, role: string, branchId?: str
     select: { branchId: true },
   });
 
-  return uniqueBranchIds(branchId, staffBranches.map((staffBranch) => staffBranch.branchId));
+  return uniqueBranchIds(
+    branchId,
+    staffBranches.map((staffBranch) => staffBranch.branchId),
+  );
 }
 
 /**
- * Middleware — Verify JWT access token and attach user to request.
- * Must be applied before any route handler that requires authentication.
- * 
- * Handles nested impersonation:
- * - Super Admin → Admin Manager → Admin Cabang
- * - Admin Manager → Admin Cabang
- * 
- * Sets req.user to the DEEPEST impersonated user (the one being acted as)
- * Sets req.originalUser to the ROOT user (the one who started impersonation)
- * Sets req.impersonationChain to the full chain of emails
+ * Verify JWT access token and attach the current authorization user to the request.
+ *
+ * For impersonation tokens, req.user is the deepest impersonated user so all
+ * authorization checks evaluate the actor currently being used.
  */
 export async function authenticate(req: Request, res: Response, next: NextFunction): Promise<void> {
   const authHeader = req.headers.authorization;
 
-  console.log('🔐 AUTHENTICATE MIDDLEWARE');
-
   if (!authHeader?.startsWith('Bearer ')) {
-    console.error('❌ Token missing or invalid format');
+    logger.warn('Authentication token missing or invalid format');
     sendError(res, 401, 'AUTH_TOKEN_MISSING', 'Token autentikasi diperlukan.');
     return;
   }
@@ -104,17 +100,21 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
   try {
     const payload = verifyAccessToken(token);
-    console.log('✅ Token verified successfully');
-    
-    // Check if impersonating
+
     if (payload.impersonating) {
-      // Extract the deepest level of impersonation and full chain
       const { deepest, chain } = extractDeepestImpersonation(payload);
-      
-      console.log('🎭 Impersonation Chain:', chain.join(' → '));
-      console.log('🎭 Acting as:', deepest.email, `(${deepest.role})`);
-      
-      // Set original user (root of chain - the one who started impersonation)
+      const assignedBranchIds = await getAssignedBranchIds(
+        deepest.userId,
+        deepest.role,
+        deepest.branchId,
+      );
+
+      logger.debug('Impersonation token authenticated', {
+        chain,
+        actingAs: deepest.email,
+        actingRole: deepest.role,
+      });
+
       req.originalUser = {
         id: payload.userId,
         userId: payload.userId,
@@ -123,68 +123,50 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         branchId: payload.branchId,
         fullName: payload.fullName,
       };
-      
-      // Load assigned branches for staff
-      let assignedBranchIds: string[] = [];
-      if (deepest.role !== 'MEMBER' && deepest.branchId) {
-        const staffBranches = await prisma.staffBranch.findMany({
-          where: { userId: deepest.userId },
-          select: { branchId: true },
-        });
-        assignedBranchIds = [
-          deepest.branchId,
-          ...staffBranches.map(sb => sb.branchId)
-        ].filter((v, i, a) => a.indexOf(v) === i); // unique
-      }
-      
-      // Set current user as the deepest impersonated user
-      // This is CRITICAL: All authorization checks must use req.user
+
       req.user = {
         id: deepest.userId,
         userId: deepest.userId,
         email: deepest.email,
         role: deepest.role,
         branchId: deepest.branchId || null,
-        branchCode: null, // Will be fetched if needed
-        fullName: payload.fullName, // Keep original for display purposes
+        branchCode: null,
+        fullName: payload.fullName,
         staffCode: null,
-        branches: deepest.branches || assignedBranchIds, // For Admin Manager (multiple branches) + staff multi-branch
+        branches: deepest.branches || assignedBranchIds,
       };
-      
+
       req.isImpersonating = true;
       req.impersonationChain = chain;
     } else {
-      // Load assigned branches for staff (normal authentication)
-      let assignedBranchIds: string[] = [];
-      if (payload.role !== 'MEMBER' && payload.branchId) {
-        const staffBranches = await prisma.staffBranch.findMany({
-          where: { userId: payload.userId },
-          select: { branchId: true },
-        });
-        assignedBranchIds = [
-          payload.branchId,
-          ...staffBranches.map(sb => sb.branchId)
-        ].filter((v, i, a) => a.indexOf(v) === i); // unique
-      }
-      
-      // Normal authentication (no impersonation)
+      const assignedBranchIds = await getAssignedBranchIds(
+        payload.userId,
+        payload.role,
+        payload.branchId,
+      );
+
       req.user = {
         ...payload,
         id: payload.userId,
-        branches: payload.branches || assignedBranchIds, // Include assigned branches
+        branches: payload.branches || assignedBranchIds,
       };
       req.isImpersonating = false;
     }
-    
+
     next();
   } catch (err) {
-    console.error('❌ Token verification failed:', err);
+    logger.warn('Authentication token verification failed', { err });
+
     if (err instanceof TokenExpiredError) {
       sendError(res, 401, 'AUTH_TOKEN_EXPIRED', 'Sesi Anda telah berakhir. Silakan login kembali.');
-    } else if (err instanceof JsonWebTokenError) {
-      sendError(res, 401, 'AUTH_TOKEN_INVALID', 'Token tidak valid.');
-    } else {
-      sendError(res, 401, 'AUTH_TOKEN_INVALID', 'Token tidak valid.');
+      return;
     }
+
+    if (err instanceof JsonWebTokenError) {
+      sendError(res, 401, 'AUTH_TOKEN_INVALID', 'Token tidak valid.');
+      return;
+    }
+
+    sendError(res, 401, 'AUTH_TOKEN_INVALID', 'Token tidak valid.');
   }
 }
