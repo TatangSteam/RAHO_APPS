@@ -1,7 +1,6 @@
 'use client';
 
-import { createPortal } from 'react-dom';
-import { useEffect } from 'react';
+import { PackageActionModal } from './PackageActionModal';
 import styles from './PackageActionModal.module.css';
 
 interface PackageCancelModalProps {
@@ -23,28 +22,28 @@ export default function PackageCancelModal({
   onReasonChange,
   onSubmit,
 }: PackageCancelModalProps) {
-  useEffect(() => {
-    if (show) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [show]);
-
   if (!show) return null;
 
-  const modalContent = (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2>❌ Batalkan Pembelian</h2>
-          <button onClick={onClose} className={styles.closeButton}>✕</button>
-        </div>
-
-        <div className={styles.modalBody}>
+  return (
+    <PackageActionModal
+      open={show}
+      title="❌ Batalkan Pembelian"
+      onClose={onClose}
+      footer={(
+        <>
+          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
+            Batal
+          </button>
+          <button
+            onClick={onSubmit}
+            className={styles.btnDanger}
+            disabled={submitting || !reason}
+          >
+            {submitting ? 'Memproses...' : 'Batalkan Pembelian'}
+          </button>
+        </>
+      )}
+    >
           <div className={styles.infoBox}>
             <p><strong>Kode Paket:</strong> {packageCode}</p>
           </div>
@@ -70,23 +69,6 @@ export default function PackageCancelModal({
               <li>Tindakan ini tidak dapat dibatalkan</li>
             </ul>
           </div>
-        </div>
-
-        <div className={styles.modalFooter}>
-          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
-            Batal
-          </button>
-          <button 
-            onClick={onSubmit} 
-            className={styles.btnDanger} 
-            disabled={submitting || !reason}
-          >
-            {submitting ? 'Memproses...' : 'Batalkan Pembelian'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PackageActionModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

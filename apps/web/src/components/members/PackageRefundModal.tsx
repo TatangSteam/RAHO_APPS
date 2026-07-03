@@ -1,7 +1,7 @@
 'use client';
 
-import { createPortal } from 'react-dom';
 import { useEffect, useState, useCallback } from 'react';
+import { PackageActionModal } from './PackageActionModal';
 import styles from './PackageActionModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
@@ -40,14 +40,8 @@ export default function PackageRefundModal({
 
   useEffect(() => {
     if (show) {
-      document.body.style.overflow = 'hidden';
       setCompressionInfo(null);
-    } else {
-      document.body.style.overflow = 'unset';
     }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
   }, [show]);
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,15 +80,26 @@ export default function PackageRefundModal({
 
   if (!show) return null;
 
-  const modalContent = (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2>💰 Refund Paket</h2>
-          <button onClick={onClose} className={styles.closeButton}>✕</button>
-        </div>
-
-        <div className={styles.modalBody}>
+  return (
+    <PackageActionModal
+      open={show}
+      title="💰 Refund Paket"
+      onClose={onClose}
+      footer={(
+        <>
+          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
+            Batal
+          </button>
+          <button
+            onClick={onSubmit}
+            className={styles.btnDanger}
+            disabled={submitting || compressing || !reason || reason.length < 8 || refundAmount <= 0}
+          >
+            {submitting ? 'Memproses...' : 'Refund Paket'}
+          </button>
+        </>
+      )}
+    >
           <div className={styles.infoBox}>
             <p><strong>Kode Paket:</strong> {packageCode}</p>
             <p><strong>Harga Paket:</strong> Rp {finalPrice.toLocaleString('id-ID')}</p>
@@ -171,23 +176,6 @@ export default function PackageRefundModal({
               <li>Tindakan ini tidak dapat dibatalkan</li>
             </ul>
           </div>
-        </div>
-
-        <div className={styles.modalFooter}>
-          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
-            Batal
-          </button>
-          <button 
-            onClick={onSubmit} 
-            className={styles.btnDanger} 
-            disabled={submitting || compressing || !reason || reason.length < 8 || refundAmount <= 0}
-          >
-            {submitting ? 'Memproses...' : 'Refund Paket'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PackageActionModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

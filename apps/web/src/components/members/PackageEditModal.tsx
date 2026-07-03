@@ -1,7 +1,6 @@
 'use client';
 
-import { createPortal } from 'react-dom';
-import { useEffect } from 'react';
+import { PackageActionModal } from './PackageActionModal';
 import styles from './PackageActionModal.module.css';
 
 interface PackageEditModalProps {
@@ -43,31 +42,31 @@ export default function PackageEditModal({
   onNotesChange,
   onSubmit,
 }: PackageEditModalProps) {
-  useEffect(() => {
-    if (show) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = 'unset';
-    }
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, [show]);
-
   if (!show) return null;
 
   const originalPrice = pricePerSession * quantity;
   const finalPrice = originalPrice - discount;
 
-  const modalContent = (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <h2>✏️ Edit Pembelian Paket</h2>
-          <button onClick={onClose} className={styles.closeButton}>✕</button>
-        </div>
-
-        <div className={styles.modalBody}>
+  return (
+    <PackageActionModal
+      open={show}
+      title="✏️ Edit Pembelian Paket"
+      onClose={onClose}
+      footer={(
+        <>
+          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
+            Batal
+          </button>
+          <button
+            onClick={onSubmit}
+            className={styles.btnPrimary}
+            disabled={submitting || quantity <= 0 || finalPrice <= 0}
+          >
+            {submitting ? 'Menyimpan...' : 'Simpan Perubahan'}
+          </button>
+        </>
+      )}
+    >
           <div className={styles.infoBox}>
             <p><strong>Kode Paket:</strong> {packageCode}</p>
             <p><strong>Harga per Sesi:</strong> Rp {pricePerSession.toLocaleString('id-ID')}</p>
@@ -140,23 +139,6 @@ export default function PackageEditModal({
               <span><strong>Rp {finalPrice.toLocaleString('id-ID')}</strong></span>
             </div>
           </div>
-        </div>
-
-        <div className={styles.modalFooter}>
-          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
-            Batal
-          </button>
-          <button 
-            onClick={onSubmit} 
-            className={styles.btnPrimary} 
-            disabled={submitting || quantity <= 0 || finalPrice <= 0}
-          >
-            {submitting ? 'Menyimpan...' : 'Simpan Perubahan'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </PackageActionModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

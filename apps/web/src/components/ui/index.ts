@@ -12,3 +12,7 @@ export type { AlertVariant, AlertProps } from './Alert';
 
 // Data table
 export { default as DataTable } from './DataTable';
+
+// Modal shell
+export { Modal } from './Modal';
+export type { ModalClassNames, ModalProps } from './Modal';
