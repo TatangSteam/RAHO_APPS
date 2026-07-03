@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { Prisma, PackageType } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { logger } from '@lib/logger';
 import { errors } from '@middleware/errorHandler';
 import {
   CreateBranchInput,
@@ -87,7 +88,6 @@ async function generateUniqueBranchCode(input: Pick<CreateBranchInput, 'regencyC
 
 // ── Helper: Create Default Package Pricing for Branch ─────────
 async function createDefaultPackagePricingForBranch(branchId: string) {
-  console.log(`📦 Creating default package pricings for branch: ${branchId}`);
   
   // Create therapy packages (BASIC)
   for (const pkg of DEFAULT_THERAPY_PACKAGES) {
@@ -104,7 +104,6 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
       },
     });
   }
-  console.log(`  ✅ Created ${DEFAULT_THERAPY_PACKAGES.length} therapy packages`);
 
   // Create booster packages (7 types × 5 service types = 35 packages)
   let boosterCount = 0;
@@ -129,7 +128,6 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
       boosterCount++;
     }
   }
-  console.log(`  ✅ Created ${boosterCount} booster packages`);
   
   return {
     therapyPackages: DEFAULT_THERAPY_PACKAGES.length,
@@ -140,7 +138,6 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
 
 // ── Helper: Auto-add Products to Branch Inventory ─────────────
 async function autoAddProductsToBranchInventory(branchId: string) {
-  console.log(`📦 Auto-adding products to branch inventory: ${branchId}`);
   
   // Find all products with isAutoAddedToBranch = true
   const autoAddProducts = await prisma.masterProduct.findMany({
@@ -169,7 +166,6 @@ async function autoAddProductsToBranchInventory(branchId: string) {
   }
 
   if (productsToAdd.length === 0) {
-    console.log(`  ℹ️ No products configured for auto-add to branch`);
     return { productsAdded: 0 };
   }
 
@@ -198,14 +194,9 @@ async function autoAddProductsToBranchInventory(branchId: string) {
           minThreshold: 10, // Default minimum threshold
         },
       });
-      console.log(`  ✅ Added ${product.name} with stock: ${initialStock} ${product.baseUnit}`);
       addedCount++;
-    } else {
-      console.log(`  ℹ️ ${product.name} already exists in branch inventory`);
     }
   }
-
-  console.log(`  ✅ Auto-added ${addedCount} products to branch inventory`);
   return { productsAdded: addedCount };
 }
 
@@ -350,7 +341,6 @@ export async function getBranchWithStatsService(branchId: string) {
 
 // ── Get All Branches with Stats ───────────────────────────────
 export async function getAllBranchesWithStatsService(userId?: string, userRole?: string) {
-  console.log('🔍 getAllBranchesWithStatsService called with:', { userId, userRole });
   
   // Build where clause - ADMIN_MANAGER only sees branches they manage via ManagerBranch
   const where: Prisma.BranchWhereInput = {
@@ -358,7 +348,6 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
   };
   
   if (userRole === 'ADMIN_MANAGER' && userId) {
-    console.log('✅ Applying ADMIN_MANAGER filter for userId:', userId);
     where.managerBranches = {
       some: {
         userId: userId
@@ -366,18 +355,9 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
     };
   }
 
-  console.log('📋 Where clause:', JSON.stringify(where, null, 2));
-
   // First, let's verify the ManagerBranch records exist
   if (userRole === 'ADMIN_MANAGER' && userId) {
-    const managerBranchRecords = await prisma.managerBranch.findMany({
-      where: { userId },
-      include: { branch: { select: { branchCode: true, name: true } } }
-    });
-    console.log(`📌 ManagerBranch records for user ${userId}:`, managerBranchRecords.map(mb => ({
-      branchCode: mb.branch.branchCode,
-      branchName: mb.branch.name
-    })));
+    logger.debug('[Branches] Applying manager branch visibility filter', { userId });
   }
 
   const branches = await prisma.branch.findMany({
@@ -388,8 +368,6 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
     },
     orderBy: { createdAt: 'desc' },
   });
-
-  console.log(`📊 Found ${branches.length} branches for role ${userRole}`);
 
   // Get stats for each branch
   const branchesWithStats = await Promise.all(
@@ -462,24 +440,21 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
         branchId: branch.id,
       },
     });
-    console.log(`✅ Auto-assigned ADMIN_MANAGER (${createdBy}) to branch ${branch.branchCode}`);
   }
 
   // Auto-create default package pricing for the new branch
   try {
-    const pricingResult = await createDefaultPackagePricingForBranch(branch.id);
-    console.log(`✅ Created ${pricingResult.total} default package pricings for branch ${branch.branchCode}`);
+    await createDefaultPackagePricingForBranch(branch.id);
   } catch (error) {
-    console.error(`⚠️ Failed to create default package pricings for branch ${branch.branchCode}:`, error);
+    logger.warn('[Branches] Branch side effect failed', { error });
     // Don't throw - branch creation should still succeed even if pricing creation fails
   }
 
   // Auto-add products with isAutoAddedToBranch flag to branch inventory
   try {
-    const inventoryResult = await autoAddProductsToBranchInventory(branch.id);
-    console.log(`✅ Auto-added ${inventoryResult.productsAdded} products to branch ${branch.branchCode} inventory`);
+    await autoAddProductsToBranchInventory(branch.id);
   } catch (error) {
-    console.error(`⚠️ Failed to auto-add products to branch ${branch.branchCode} inventory:`, error);
+    logger.warn('[Branches] Branch side effect failed', { error });
     // Don't throw - branch creation should still succeed even if inventory creation fails
   }
 
@@ -876,8 +851,6 @@ export async function forceDeleteBranchService(branchId: string) {
   
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
-  console.log(`🚨 FORCE DELETE initiated for branch: ${existing.branchCode} (${existing.name})`);
-
   // Count all data that will be deleted for logging
   const counts = await Promise.all([
     prisma.member.count({ where: { registrationBranchId: branchId } }),
@@ -894,7 +867,8 @@ export async function forceDeleteBranchService(branchId: string) {
     prisma.user.count({ where: { branchId } }),
   ]);
 
-  console.log(`📊 Data to be deleted:`, {
+  logger.warn('[Branches] Force delete data counts', {
+    branchId,
     members: counts[0],
     packages: counts[1],
     addOns: counts[2],
@@ -1172,9 +1146,6 @@ export async function forceDeleteBranchService(branchId: string) {
       detachedAuditLogs: detachedAuditLogs.count,
     };
   });
-
-  console.log(`✅ FORCE DELETE completed for branch: ${existing.branchCode}`);
-  console.log(`📊 Deleted data summary:`, deleted);
 
   return {
     message: 'Cabang dan semua data terkait berhasil dihapus permanen',

@@ -25,7 +25,7 @@ test.describe('Session Therapy List', () => {
   test('should open filter panel', async ({ page }) => {
     await page.getByRole('button', { name: /filter/i }).click();
 
-    await expect(page.getByText(/^Status$/)).toBeVisible();
+    await expect(page.locator('label').filter({ hasText: /^Status$/ })).toBeVisible();
     await expect(page.locator('select').first()).toBeVisible();
   });
 

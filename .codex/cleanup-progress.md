@@ -42,7 +42,11 @@ P0 bukan nama phase. P0 berarti prioritas paling tinggi / risiko paling besar. M
 - Batch 14 selesai: BE Members Small Slice.
 - Batch 15 selesai: FE Sessions / Therapy Plan Small Slice.
 - Batch 16 selesai: BE Sessions / Treatment Small Slice.
-- Lanjutan berikutnya: Batch 17: FE Sessions Step 2 / Therapy Plan Small Slice.
+- Batch 17 selesai: FE Sessions Step 2 / Therapy Plan Small Slice.
+- Batch 18 selesai: BE Core Utils / Audit Log Compatibility Small Slice.
+- Batch 19 selesai: BE Branches Debug Logging Small Slice.
+- Batch 20 selesai: BE Referrals Controller Logging Small Slice.
+- Lanjutan berikutnya: pilih slice P1 berikutnya.
 
 Priority guide:
 - P0 Risiko Tinggi: data pasien/member, billing/payment/invoice, terapi/sesi, stok, auth/security.
@@ -56,17 +60,17 @@ Priority guide:
 | BE Packages / Billing / Invoices | 22 (~5.2k LOC) | P0 Risiko Tinggi | Batch 12 Complete | Menyentuh invoice, assignment paket, refund, cancel, payment verification. Batch 12 mengambil slice kecil di `invoice-generation.service.ts`: helper pure alokasi item invoice termin/installment diekstrak dan ditutup unit test contract. |
 | FE Packages / Billing / Invoices / Payments | 19 (~5.1k LOC) | P0 Risiko Tinggi | Batch 11 Complete | Payment page ~833 LOC, invoice rendering/CSS besar. Batch 11 mengambil slice kecil pada local payment harness `/payments`: helper presentasi/kalkulasi/filter invoice diekstrak dari page dan ditutup unit test + payment E2E. |
 | BE Sessions / Treatment / Diagnosis | 26 (~5.9k LOC) | P0 Risiko Tinggi | Batch 16 Complete | Menyentuh terapi klinis dan diagnosis sehingga tetap perlu cleanup bertahap. Batch 16 mengambil slice validasi paket utama session creation: mode ACTIVE/DEBT, urutan error, sisa sesi, dan allowance dua sesi utang diekstrak ke helper pure dengan contract test. |
-| FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 15 Complete | Area FE ini tetap perlu cleanup per step. Batch 15 mengambil slice kecil `CreateSessionModal`: aturan eligibility paket ACTIVE/utang BASIC/BOOSTER dan batas dua sesi utang diekstrak ke helper pure serta ditutup unit test tanpa mengubah API atau submit flow. |
+| FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 17 Complete | Area FE ini tetap perlu cleanup per step. Batch 15 mengambil slice kecil `CreateSessionModal`: aturan eligibility paket ACTIVE/utang BASIC/BOOSTER dan batas dua sesi utang diekstrak ke helper pure. Batch 17 mengekstrak helper presentasi Step 2 therapy plan, memperbaiki selector smoke E2E filter session yang ambigu, dan menutupnya dengan unit/lint/type-check/E2E session hijau. |
 | BE Inventory / Stock / Shipments | 19 (~7.6k LOC) | P0 Risiko Tinggi | Batch 10 Complete | Stok dan shipment berdampak operasional/financial. Batch 10 mengambil slice kecil pada `stock-request-approval.service.ts`: helper pure invoice draft dan approval plan diekstrak, lalu ditutup unit test contract untuk mode FREE/DEBT/NORMAL dan invalid invoice item. |
 | FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 9 Complete | Banyak modal dan page stock request/shipment. Batch 9 mengambil slice kecil stock request list/page shell: helper presentasi aksi row dan format tanggal diekstrak. Targeted lint pass dengan warning existing `no-explicit-any`, `type-check:web` pass, dan E2E stock request flow `10 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
 | BE Auth / Middleware / Security | 14 (~2.0k LOC) | P0 Risiko Tinggi | Batch 8 Complete | Security/auth/branch access. Debug `console.log` di `authenticate.ts` dan `assertBranchAccess.ts` sudah dibersihkan, branch helper dipusatkan, dan coverage branch-access middleware ditambahkan. Backend type-check passed setelah query akses shipment receipt di `files.service.ts` tidak lagi memakai generated Prisma field yang stale. |
 | FE Auth / Layout / Impersonation | 22 (~3.4k LOC) | P1 Shared Access Control | Batch 7 Partial | Role presentation untuk header/sidebar dipusatkan di `rolePresentation`, duplikasi label/warna role dihapus, dan smoke E2E layout navigation ditambahkan. Sidebar menu config dan impersonation masih backlog karena lebih sensitif. |
 | BE Users / Staff / Admin / Impersonation | 33 (~13.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Banyak integration test admin/impersonation sudah ada. File panjang: `users.service.ts` ~1011 LOC, `admin.controller.ts` ~1003 LOC. Banyak logging debug. Cleanup dapat dimulai dari service boundaries yang sudah tertutup test. |
 | FE Branches / Staff / Admin | 87 (~27.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Modul FE terbesar. Banyak page/admin/branch/staff/modal. File panjang: branch detail page ~974 LOC, master-products page ~1134 LOC, beberapa CSS >900 LOC. Perlu pecah per halaman: branches list, branch detail, admin managers, master products. |
-| BE Branches | 5 (~1.8k LOC) | P1 Kompleksitas Tinggi | Backlog | File sedikit tapi `branches.service.ts` ~1190 LOC, termasuk create defaults, inventory auto-add, force delete. Ada 1 test delete. Risiko tinggi untuk delete/branch data, cleanup harus ekstra kecil. |
+| BE Branches | 5 (~1.8k LOC) | P1 Kompleksitas Tinggi | Batch 19 Complete | File sedikit tapi `branches.service.ts` ~1190 LOC, termasuk create defaults, inventory auto-add, force delete. Batch 19 membersihkan debug `console.*` di controller/service branch dan menggantinya dengan logger untuk warning/error yang masih perlu, tanpa mengubah query/delete/force-delete flow. |
 | Prisma Schema / Migrations / Seeds | 74 (~9.7k LOC) | P1 Data Model | Backlog | `schema.prisma` ~1567 LOC. Banyak seed variants dan migration history panjang, termasuk beberapa migration bernama mirip/duplikat. Cleanup sebaiknya mulai dari dokumentasi seed dan konsolidasi seed yang aman. |
-| BE Referrals / Non Therapy / Files / Dashboard / Audit | 20 (~4.8k LOC) | P1 Shared + Audit | Backlog | Banyak submodul tanpa test backend. `role-dashboard.service.ts` ~1032 LOC, `files.service.ts` ~582 LOC. Audit penting untuk ERP klinik; cleanup audit harus menjaga contract log resmi. |
-| BE Core Utils / Config | 16 (~2.6k LOC) | P1 Shared Foundation | Backlog | Shared utils/config/lib dipakai lintas modul. Ada `auditLog.test.ts` besar dan util audit memakai beberapa `as any`. Cleanup jangan dulu sebelum modul pengguna jelas. |
+| BE Referrals / Non Therapy / Files / Dashboard / Audit | 20 (~4.8k LOC) | P1 Shared + Audit | Batch 20 Partial | Banyak submodul tanpa test backend. Batch 20 mengambil slice kecil referrals controller: debug `console.*` diganti logger dan contract test list referrals ditambahkan. `role-dashboard.service.ts`, `files.service.ts`, dashboard, non-therapy, dan audit controller masih backlog terpisah. |
+| BE Core Utils / Config | 16 (~2.6k LOC) | P1 Shared Foundation | Batch 18 Complete | Shared utils/config/lib dipakai lintas modul. Batch 18 mengambil slice kecil `auditLog`: helper audit sekarang retry dengan payload legacy saat generated Prisma client belum mengenal kolom audit trail baru, test audit lama dirapikan menjadi contract test yang sesuai behavior sekarang, dan warning runtime `Unknown argument userName` tidak lagi memblokir audit log. |
 | FE Shared UI / Lib / Types | 71 (~12.0k LOC) | P1 Shared Foundation | Backlog | Banyak API client, UI primitive, types, CSS global. Indikasi: API clients/domain lib tersebar, beberapa `any` di types/API, file API panjang (`inventoryApi.ts`, `icdApi.ts`). Cleanup shared dilakukan setelah pola dari 1-2 modul domain terbukti. |
 | FE Reports / Dashboard / Notifications / Chat | 26 (~4.7k LOC) | P2 Quick Win / Supporting | Batch 6 Complete | Submodul Notifications, Reports, Dashboard, dan Chat selesai. Notifications: row/card/empty state diekstrak, utility label/date/severity dipusatkan, CSS placeholder mati dihapus. Reports: page orchestration dirapikan, dropdown/export/results/dialog diekstrak, utility report dipusatkan, page object E2E dirapikan. Dashboard: date range/helper/card/loading/error state dipusatkan dan smoke E2E role ditambahkan. Chat: placeholder dirapikan, CSS module mati dihapus, smoke E2E route/sidebar ditambahkan. |
 | FE Referrals / Incentives | 5 (~2.2k LOC) | P2 Quick Win | Batch 2 Complete | Modal create referral sudah diekstrak, formatting/export utility dipusatkan, fetch list/branch dipisah, alert diganti toast, type referrer dirapikan, dan smoke E2E referral ditambahkan. |
@@ -92,6 +96,10 @@ Priority guide:
 | 14 | BE Members Small Slice | Complete | Ekstrak `member-registration.helpers.ts` untuk parsing tanggal lahir dan resolusi identitas NIK/PASSPORT/KITAS/VIP/SPECIAL/FOREIGN_AUTO/NO_NIK; registration service memakai helper tanpa mengubah transaksi atau response. | Helper + controller tests `13 passed`; `type-check:api` passed. Targeted ESLint unavailable karena config API tidak ditemukan. |
 | 15 | FE Sessions / Therapy Plan Small Slice | Complete | Ekstrak `sessionPackageEligibility.ts` untuk status paket utang, sisa kuota utang, eligibility BASIC, dan usability BASIC/BOOSTER; `CreateSessionModal` memakai helper dan import mati dihapus. | Helper unit tests `5 passed`; targeted lint tanpa error dengan warning existing; `type-check:web` passed; session E2E `16 passed`, `16 skipped`. |
 | 16 | BE Sessions / Treatment Small Slice | Complete | Ekstrak `session-creation.helpers.ts` untuk validasi paket BASIC, mode ACTIVE/DEBT, sisa sesi, dan allowance dua sesi utang; `session-creation.service.ts` tetap menangani query dan transaksi. | Helper + existing green session tests `15 passed`; `type-check:api` passed. Satu suite existing tetap gagal saat load karena Jest/ESM `nanoid`. |
+| 17 | FE Sessions Step 2 / Therapy Plan Small Slice | Complete | Ekstrak `step2TherapyPlanPresentation.ts` untuk role editor, mapping plan ke table, sorting set plan, fallback list, dan subtitle therapy plan; `Step2TherapyPlan` memakai helper tanpa mengubah fetch, save, atau modal flow. Selector smoke E2E filter session dibuat spesifik ke label agar tidak bentrok dengan header tabel `Status`. | Helper unit tests `5 passed`; targeted lint passed; `type-check:web` passed; session E2E di port 3000/API 4000 `16 passed`, `16 skipped`. |
+| 18 | BE Core Utils / Audit Log Compatibility Small Slice | Complete | Tambah fallback `auditLog` untuk retry create dengan field legacy saat Prisma client/generated schema stale terhadap kolom audit trail baru; test audit lama diringkas menjadi contract test enrichment, request impersonation, sanitasi, non-blocking error, dan fallback legacy. | Audit utility tests `5 passed`; `type-check:api` passed. |
+| 19 | BE Branches Debug Logging Small Slice | Complete | Hapus debug `console.*` dari `branches.controller.ts` dan `branches.service.ts`; warning side-effect branch creation dan create-branch error memakai logger. Tidak mengubah validasi, query visibility manager, create defaults, inventory auto-add, delete, atau force-delete behavior. | Branch delete service tests `2 passed`; `type-check:api` passed. |
+| 20 | BE Referrals Controller Logging Small Slice | Complete | Ganti debug `console.*` pada `referrals.controller.ts` list endpoint ke logger; tambah unit test controller untuk user context dan error forwarding. Tidak mengubah service, export, schema, atau response shape. | Referrals controller tests `2 passed`; `type-check:api` passed. |
 
 ## Next Execution Plan
 
@@ -113,7 +121,10 @@ Priority guide:
 | 14 | BE Members Small Slice | P0 | Complete | Ekstrak normalisasi tanggal lahir dan nomor identitas registration ke helper typed dengan contract test. | Done: helper + controller tests `13 passed`; `type-check:api`. |
 | 15 | FE Sessions / Therapy Plan Small Slice | P0 | Complete | Ekstrak aturan eligibility paket sesi dan batas dua sesi utang dari `CreateSessionModal` ke helper pure. | Done: helper unit tests `5 passed`; targeted lint; `type-check:web`; session E2E `16 passed`, `16 skipped`. |
 | 16 | BE Sessions / Treatment Small Slice | P0 | Complete | Ekstrak validasi paket utama dan allowance utang dari session creation ke helper pure. | Done: helper + existing green session tests `15 passed`; `type-check:api`. |
-| 17 | FE Sessions Step 2 / Therapy Plan Small Slice | P0 | Next | Ambil helper presentasi/selection pure dari `Step2TherapyPlan`, bukan seluruh wizard. | Helper unit tests + targeted lint + `type-check:web` + session E2E smoke. |
+| 17 | FE Sessions Step 2 / Therapy Plan Small Slice | P0 | Complete | Ambil helper presentasi/selection pure dari `Step2TherapyPlan`, bukan seluruh wizard. | Done: helper unit tests `5 passed`, targeted lint, `type-check:web`, session E2E `16 passed`, `16 skipped` di port 3000/API 4000. |
+| 18 | BE Core Utils / Audit Log Compatibility Small Slice | P1 | Complete | Jaga audit utility tetap kompatibel dengan Prisma client lama/baru tanpa mengubah pemanggil domain. | Done: audit utility tests `5 passed`; `type-check:api`. |
+| 19 | BE Branches Debug Logging Small Slice | P1 | Complete | Bersihkan debug logging branch tanpa menyentuh transaksi/delete flow. | Done: branch delete service tests `2 passed`; `type-check:api`. |
+| 20 | BE Referrals Controller Logging Small Slice | P1 | Complete | Bersihkan debug logging referrals controller dan tambah contract test kecil. | Done: referrals controller tests `2 passed`; `type-check:api`. |
 
 ## Batch 4 Detailed Plan
 
@@ -443,6 +454,105 @@ Status: Complete.
    - Done: validasi paket session creation kritikal keluar dari service `@ts-nocheck` dan memiliki contract test typed.
    - Done: test backend relevan yang runnable dan type-check API lulus.
    - Done: progress ditutup sebagai Batch 16 Complete; lanjutan masuk Batch 17.
+
+## Batch 17 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan `Step2TherapyPlan`, tipe therapy plan, pola table, dan E2E sessions.
+   - Done: dipilih slice presentasi/selection murni agar tidak menyentuh fetch, save, modal, atau wizard flow.
+   - Ditemukan bahwa session E2E sensitif terhadap server/auth state, sehingga verifikasi akhir dijalankan ulang di port 3000 dengan API 4000 aktif.
+
+2. Refactor Scope
+   - Done: tambah `step2TherapyPlanPresentation.ts` untuk role editor, mapping plan ke table, sorting set plan, fallback table list, dan subtitle therapy plan.
+   - Done: `Step2TherapyPlan` memakai helper baru untuk `canEdit`, sort set plan, fallback single plan, list table, dan subtitle.
+   - Done: selector E2E filter session dibuat spesifik ke label `Status` agar tidak ambigu dengan header tabel.
+   - Tidak mengubah API call, submit/save plan, tab therapy plan, modal behavior, atau data source.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/web -- --runInBand --runTestsByPath src/components/sessions/step2TherapyPlanPresentation.test.ts` => `5 passed`.
+   - Done: targeted lint untuk `Step2TherapyPlan.tsx`, helper, dan test => passed.
+   - Done: `npm.cmd run type-check --prefix apps/web` passed.
+   - Done: `flows/session-therapy.spec.ts` dengan system Chrome di port 3000/API 4000 => `16 passed`, `16 skipped`.
+   - Catatan: port 3001 tidak dipakai. Beberapa percobaan awal gagal karena server/API state belum siap dan selector `Status` ambigu, lalu ditutup dengan rerun hijau.
+
+4. Completion Criteria
+   - Done: helper presentasi Step 2 keluar dari komponen besar dan punya unit test.
+   - Done: E2E session smoke hijau di port 3000/API 4000.
+   - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 17 `Complete`.
+
+## Batch 18 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: saat E2E session, API menulis warning audit runtime `Unknown argument userName` dari `auditLog.ts`.
+   - Done: scan `auditLog.ts`, `schema.prisma`, migration audit trail, audit controller, dan test audit existing.
+   - Ditemukan schema sudah punya kolom audit trail baru, tetapi generated Prisma client/runtime bisa stale sehingga `create` gagal sebelum log audit tersimpan.
+
+2. Refactor Scope
+   - Done: tambah adapter internal `createAuditLog` yang mencoba payload audit lengkap terlebih dahulu.
+   - Done: jika Prisma menolak field audit trail baru (`userName`, `userRole`, `branchName`, `module`, `entity*`, `description`, `beforeData`, `afterData`, `changedFields`, `metadata`), helper retry dengan shape legacy.
+   - Done: detail audit lengkap tetap disimpan di `meta` pada fallback legacy.
+   - Tidak mengubah pemanggil domain, route audit, enum action, atau schema/migration.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/utils/__tests__/auditLog.test.ts` => `5 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed.
+
+4. Completion Criteria
+   - Done: audit log tetap non-blocking dan kompatibel dengan Prisma client lama/baru.
+   - Done: test audit sesuai kontrak behavior sekarang dan tidak lagi gagal karena mock lama.
+   - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 18 `Complete`.
+
+## Batch 19 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan `branches.controller.ts`, `branches.service.ts`, logger shared, dan test branches existing.
+   - Ditemukan banyak debug `console.log` di controller/service branch, termasuk create branch, list stats, default pricing, inventory auto-add, dan force delete.
+   - Dipilih slice observability kecil karena BE Branches sensitif dan punya flow delete/force-delete besar.
+
+2. Refactor Scope
+   - Done: hapus debug `console.*` dari modul branches.
+   - Done: `createBranch` error di controller memakai `logger.error`.
+   - Done: side-effect gagal saat default pricing / inventory auto-add memakai `logger.warn`, tetap non-blocking seperti behavior lama.
+   - Tidak mengubah schema, query visibility, create branch, pricing creation, inventory auto-add, delete, force-delete, atau audit behavior.
+
+3. Verification
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/modules/branches/__tests__/branches.delete.service.test.ts` => `2 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed.
+   - Done: `rg -n "console\\." apps\\api\\src\\modules\\branches` tidak menemukan sisa console.
+
+4. Completion Criteria
+   - Done: branches module tidak lagi mengeluarkan debug console langsung.
+   - Done: test backend relevan dan type-check API lulus.
+   - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 19 `Complete`.
+
+## Batch 20 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan BE referrals module dan ditemukan debug `console.log/error` di `referrals.controller.ts`.
+   - Done: belum ada test backend referrals controller, sehingga ditambahkan contract test kecil untuk endpoint list.
+
+2. Refactor Scope
+   - Done: debug user context pada `listReferrals` memakai `logger.debug`.
+   - Done: error path `listReferrals` memakai `logger.error` lalu tetap meneruskan error ke `next`.
+   - Tidak mengubah referrals service, schema, export Excel/PDF, incentive calculation, atau response shape.
+
+3. Verification
+   - Done: `rg -n "console\\." apps\\api\\src\\modules\\referrals` tidak menemukan sisa console.
+   - Done: `npm.cmd test --prefix apps/api -- --runInBand src/modules/referrals/__tests__/referrals.controller.test.ts` => `2 passed`.
+   - Done: `npm.cmd run type-check --prefix apps/api` passed.
+
+4. Completion Criteria
+   - Done: referrals controller tidak lagi memakai console langsung.
+   - Done: contract test kecil menutup user context dan error forwarding.
+   - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 20 `Complete`.
 
 ## Discovery Notes
 

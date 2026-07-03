@@ -8,6 +8,13 @@ import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { useAuthStore } from '@/stores/authStore';
 import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
 import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
+import {
+  canEditSessionTherapyPlan,
+  getStep2TherapyPlansForTable,
+  getTherapyPlanSubtitle,
+  sortTherapyPlanSet,
+  toSessionTherapyPlanTablePlan,
+} from './step2TherapyPlanPresentation';
 import styles from './Step2TherapyPlan.module.css';
 
 interface Step2TherapyPlanProps {
@@ -16,39 +23,6 @@ interface Step2TherapyPlanProps {
   therapyPlan: SessionTherapyPlan | null;
   isLocked: boolean;
   onComplete: () => void;
-}
-
-const SESSION_THERAPY_PLAN_EDITORS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR'];
-
-function toTablePlan(plan: SessionTherapyPlan, sessionId: string): TherapyPlan {
-  return {
-    ...plan,
-    keterangan: plan.keterangan || '',
-    ifa250: plan.ifa250 ?? undefined,
-    ifa500: plan.ifa500 ?? undefined,
-    hho: plan.hho ?? undefined,
-    h2: plan.h2 ?? undefined,
-    no: plan.no ?? undefined,
-    gaso: plan.gaso ?? undefined,
-    o2: plan.o2 ?? undefined,
-    o3: plan.o3 ?? undefined,
-    edta: plan.edta ?? undefined,
-    mb: plan.mb ?? undefined,
-    h2s: plan.h2s ?? undefined,
-    kcl: plan.kcl ?? undefined,
-    jmlNb: plan.jmlNb ?? undefined,
-    isUsed: true,
-    usedInSession: {
-      id: sessionId,
-      sessionCode: '',
-      treatmentDate: plan.createdAt,
-      infusKe: plan.planNumber || 0,
-      branchName: '',
-      branchCode: '',
-      totalSessionsCount: plan.planNumber || 0,
-      branchSessionsCount: plan.planNumber || 0,
-    },
-  };
 }
 
 export default function Step2TherapyPlan({
@@ -64,9 +38,7 @@ export default function Step2TherapyPlan({
   const [loadingSet, setLoadingSet] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  const canEdit = Boolean(
-    user?.role && SESSION_THERAPY_PLAN_EDITORS.includes(user.role)
-  );
+  const canEdit = canEditSessionTherapyPlan(user?.role);
 
   const loadTherapyPlanSet = useCallback(async () => {
     if (!therapyPlan || !memberId) {
@@ -77,15 +49,10 @@ export default function Step2TherapyPlan({
     try {
       setLoadingSet(true);
       const sameSetPlans = await therapyPlanApi.getSessionTherapyPlanSet(sessionId);
-      setTherapyPlanSet(
-        sameSetPlans.sort(
-          (first, second) =>
-            (first.planNumber || 0) - (second.planNumber || 0)
-        )
-      );
+      setTherapyPlanSet(sortTherapyPlanSet(sameSetPlans));
     } catch (error) {
       console.error('Error loading therapy plan set:', error);
-      setTherapyPlanSet([toTablePlan(therapyPlan, sessionId)]);
+      setTherapyPlanSet([toSessionTherapyPlanTablePlan(therapyPlan, sessionId)]);
     } finally {
       setLoadingSet(false);
     }
@@ -96,12 +63,7 @@ export default function Step2TherapyPlan({
   }, [loadTherapyPlanSet]);
 
   const plansForTable = useMemo(
-    () =>
-      therapyPlanSet.length > 0
-        ? therapyPlanSet
-        : therapyPlan
-          ? [toTablePlan(therapyPlan, sessionId)]
-          : [],
+    () => getStep2TherapyPlansForTable(therapyPlanSet, therapyPlan, sessionId),
     [sessionId, therapyPlan, therapyPlanSet]
   );
 
@@ -155,9 +117,7 @@ export default function Step2TherapyPlan({
           <div className={`${styles.stepNumber} ${styles.completed}`}>OK</div>
           <div className={styles.headerContent}>
             <h3 className={styles.title}>Step 2: Acuan Therapy Plan</h3>
-            <p className={styles.subtitle}>
-              {therapyPlan.setName || `Set v${therapyPlan.setVersion || 1}`} · Terapi #{therapyPlan.planNumber || '-'}
-            </p>
+            <p className={styles.subtitle}>{getTherapyPlanSubtitle(therapyPlan)}</p>
           </div>
         </div>
 

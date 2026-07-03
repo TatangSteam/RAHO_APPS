@@ -11,6 +11,7 @@ import {
   exportIncentivesToPDF,
   exportReferralSummaryExcel,
 } from './referral-export.service';
+import { logger } from '@lib/logger';
 
 export class ReferralsController {
   // GET /api/v1/referrals - List referrals
@@ -21,9 +22,11 @@ export class ReferralsController {
       const userRole = req.user?.role;
       const userBranchId = req.user?.branchId;
 
-      console.log('[Referrals Controller] User ID:', userId);
-      console.log('[Referrals Controller] User Role:', userRole);
-      console.log('[Referrals Controller] Branch ID:', userBranchId);
+      logger.debug('[Referrals] listReferrals request', {
+        userId,
+        userRole,
+        userBranchId,
+      });
 
       const result = await referralService.listReferralsService(
         query,
@@ -34,7 +37,7 @@ export class ReferralsController {
 
       return sendSuccess(res, result);
     } catch (error) {
-      console.error('[Referrals Controller] Error:', error);
+      logger.error('[Referrals] listReferrals failed', { error });
       next(error);
     }
   }

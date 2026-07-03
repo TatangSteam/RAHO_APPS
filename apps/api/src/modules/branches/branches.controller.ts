@@ -20,6 +20,7 @@ import {
 } from './branches.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
+import { logger } from '@lib/logger';
 
 // ── List Branches ─────────────────────────────────────────────
 export async function listBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -42,9 +43,7 @@ export async function getAllBranchesWithStats(req: Request, res: Response, next:
   try {
     const userId = req.user?.userId;
     const userRole = req.user?.role;
-    console.log('🎯 getAllBranchesWithStats controller - userId:', userId, 'role:', userRole);
     const branches = await getAllBranchesWithStatsService(userId, userRole);
-    console.log('✅ Returning', branches.length, 'branches');
     sendSuccess(res, branches);
   } catch (err) {
     next(err);
@@ -55,11 +54,6 @@ export async function getAllBranchesWithStats(req: Request, res: Response, next:
 export async function getBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const branch = await getBranchWithStatsService(req.params.branchId);
-    console.log('📊 getBranch controller - Sending branch with stats:', {
-      branchId: branch.id,
-      branchCode: branch.branchCode,
-      stats: branch.stats
-    });
     sendSuccess(res, branch);
   } catch (err) {
     next(err);
@@ -69,17 +63,13 @@ export async function getBranch(req: Request, res: Response, next: NextFunction)
 // ── Create Branch ─────────────────────────────────────────────
 export async function createBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    console.log('📝 Create Branch Request Body:', JSON.stringify(req.body, null, 2));
     
     const input = createBranchSchema.parse(req.body);
-    console.log('✅ Validation passed:', JSON.stringify(input, null, 2));
     
     const createdBy = req.user.userId;
     const userRole = req.user.role;
-    console.log('👤 Created by:', createdBy, 'Role:', userRole);
     
     const branch = await createBranchService(input, createdBy, userRole);
-    console.log('✅ Branch created:', branch.id);
 
     await logAudit({
       userId: req.user.userId,
@@ -94,7 +84,7 @@ export async function createBranch(req: Request, res: Response, next: NextFuncti
 
     sendCreated(res, branch);
   } catch (err) {
-    console.error('❌ Create Branch Error:', err);
+    logger.error('[Branches] Create branch failed', { error: err });
     next(err);
   }
 }

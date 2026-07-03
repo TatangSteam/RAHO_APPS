@@ -4,6 +4,7 @@ import { logger } from '@lib/logger';
 
 type AuditActionValue = AuditAction | string;
 type JsonRecord = Record<string, unknown>;
+type AuditLogCreateData = Record<string, unknown>;
 
 export interface AuditChangedField {
   field: string;
@@ -204,6 +205,33 @@ function normalizeUserAgent(userAgent?: string | string[]): string | undefined {
   return userAgent;
 }
 
+function isUnknownAuditLogFieldError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Unknown argument `(userName|userRole|branchName|module|entityType|entityId|entityCode|description|beforeData|afterData|changedFields|metadata)`/.test(message);
+}
+
+function toLegacyAuditLogData(data: AuditLogCreateData): AuditLogCreateData {
+  return {
+    userId: data.userId,
+    branchId: data.branchId,
+    action: data.action,
+    resource: data.resource,
+    resourceId: data.resourceId,
+    meta: data.meta,
+    ipAddress: data.ipAddress,
+    userAgent: data.userAgent,
+  };
+}
+
+async function createAuditLog(data: AuditLogCreateData): Promise<void> {
+  try {
+    await (prisma.auditLog as any).create({ data });
+  } catch (error) {
+    if (!isUnknownAuditLogFieldError(error)) throw error;
+    await (prisma.auditLog as any).create({ data: toLegacyAuditLogData(data) });
+  }
+}
+
 async function getActorSnapshot(userId?: string | null): Promise<ActorSnapshot> {
   if (!isUsableUserId(userId)) return emptyActorSnapshot(userId);
 
@@ -295,29 +323,27 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
       metaData.note = payload.impersonating.note || `Action performed as ${payload.impersonating.email}`;
     }
 
-    await (prisma.auditLog as any).create({
-      data: {
-        userId: actorSnapshot.userId,
-        userName: payload.userName || actorSnapshot.fullName || actorSnapshot.email,
-        userRole: payload.userRole || actorSnapshot.role,
-        branchId,
-        branchName: payload.branchName || branchSnapshot.branchName,
-        action: payload.action,
-        module,
-        resource: payload.resource || entityType,
-        resourceId: payload.resourceId || entityId || 'unknown',
-        entityType,
-        entityId,
-        entityCode,
-        description: inferDescription(payload, entityType, entityCode),
-        meta: sanitizeAuditData(metaData) as object,
-        beforeData: sanitizeAuditData(payload.beforeData) as object,
-        afterData: sanitizeAuditData(payload.afterData) as object,
-        changedFields: sanitizeAuditData(changedFields) as object,
-        metadata: sanitizeAuditData(payload.metadata ?? metaData) as object,
-        ipAddress: payload.ipAddress,
-        userAgent: normalizeUserAgent(payload.userAgent),
-      },
+    await createAuditLog({
+      userId: actorSnapshot.userId,
+      userName: payload.userName || actorSnapshot.fullName || actorSnapshot.email,
+      userRole: payload.userRole || actorSnapshot.role,
+      branchId,
+      branchName: payload.branchName || branchSnapshot.branchName,
+      action: payload.action,
+      module,
+      resource: payload.resource || entityType,
+      resourceId: payload.resourceId || entityId || 'unknown',
+      entityType,
+      entityId,
+      entityCode,
+      description: inferDescription(payload, entityType, entityCode),
+      meta: sanitizeAuditData(metaData) as object,
+      beforeData: sanitizeAuditData(payload.beforeData) as object,
+      afterData: sanitizeAuditData(payload.afterData) as object,
+      changedFields: sanitizeAuditData(changedFields) as object,
+      metadata: sanitizeAuditData(payload.metadata ?? metaData) as object,
+      ipAddress: payload.ipAddress,
+      userAgent: normalizeUserAgent(payload.userAgent),
     });
   } catch (err) {
     logger.warn('[AuditLog] Failed to write audit log entry', {
