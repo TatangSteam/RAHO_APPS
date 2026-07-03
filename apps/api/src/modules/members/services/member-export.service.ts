@@ -99,7 +99,7 @@ const COLUMN_LABELS: Record<string, string> = {
   lifeStatus: 'Status Meninggal',
   registrationDate: 'Tanggal Registrasi',
   phone: 'Telepon',
-  email: 'Email',
+  email: 'Username Login',
   address: 'Alamat',
   postalCode: 'Kode Pos',
   emergencyContact: 'Kontak Darurat',

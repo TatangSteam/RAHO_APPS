@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Package, Search, Loader2, Check, CheckSquare, Square, Layers, Save } from 'lucide-react';
+import { Package, Search, Loader2, Check, CheckSquare, Square, Layers, Save } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { devError } from '@/lib/logger';
+import { CrudModal } from './CrudModal';
 import styles from '@/styles/crud-modal.module.css';
 
 interface InventoryBatchAddModalProps {
@@ -63,7 +64,6 @@ export default function InventoryBatchAddModal({
   existingProductIds = []
 }: InventoryBatchAddModalProps) {
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [masterProducts, setMasterProducts] = useState<MasterProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -71,10 +71,6 @@ export default function InventoryBatchAddModal({
   const [selectedProducts, setSelectedProducts] = useState<Map<string, SelectedProduct>>(new Map());
   const [defaultStock, setDefaultStock] = useState(0);
   const [defaultMinThreshold, setDefaultMinThreshold] = useState(10);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (isOpen) {
@@ -263,51 +259,17 @@ export default function InventoryBatchAddModal({
   const isAllFilteredSelected = filteredProducts.length > 0 && 
     filteredProducts.every(p => selectedProducts.has(p.id));
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen) return null;
 
-  const modalContent = (
-    <div 
-      className={styles.modalOverlay} 
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)'
-      }}
+  return (
+    <CrudModal
+      contentStyle={{ maxWidth: '900px' }}
+      icon={<Layers size={24} />}
+      open={isOpen}
+      title="Tambah Item Batch"
+      onClose={onClose}
     >
-      <div 
-        className={styles.modalContent} 
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          zIndex: 10000,
-          maxWidth: '900px',
-          width: '100%',
-          maxHeight: '90vh',
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
-      >
-        {/* Header */}
-        <div className={styles.modalHeader}>
-          <div className={styles.modalTitle}>
-            <Layers size={24} />
-            <h2>Tambah Item Batch</h2>
-          </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Content */}
+      {/* Content */}
         <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {/* Default Settings */}
           <div style={{
@@ -663,15 +625,17 @@ export default function InventoryBatchAddModal({
             )}
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
+            <Button
+              unstyled
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
               disabled={loading}
             >
               Batal
-            </button>
-            <button
+            </Button>
+            <Button
+              unstyled
               type="button"
               className={styles.saveButton}
               onClick={handleSubmit}
@@ -693,12 +657,9 @@ export default function InventoryBatchAddModal({
                   Tambah {selectedProducts.size} Item
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
-      </div>
-    </div>
+    </CrudModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

@@ -655,6 +655,7 @@ export class MemberRetrievalService {
       memberNo: member.memberNo,
       user: {
         email: member.user.email,
+        username: member.user.email,
         isActive: member.isActive,
       },
       profile: {
@@ -751,6 +752,7 @@ export class MemberRetrievalService {
       fullName: member.user?.profile?.fullName || '',
       phone: member.user?.profile?.phone || '',
       email: member.user?.email || '',
+      username: member.user?.email || '',
       age: calculateAge(member.dateOfBirth),
       voucherCount: member.voucherCount || 0,
       basicPackageCount: basicVoucherCount,

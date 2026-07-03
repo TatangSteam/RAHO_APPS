@@ -12,7 +12,7 @@ interface AccountSectionProps {
   referralError?: string;
   onReferralErrorChange?: (error: string) => void;
   errors?: {
-    memberEmail?: string;
+    memberUsername?: string;
   };
   branchId?: string; // Optional branchId to filter referrals
 }
@@ -41,7 +41,7 @@ export default function AccountSection({ formData, onChange, referralError, onRe
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const memberEmailError = errors?.memberEmail;
+  const memberUsernameError = errors?.memberUsername;
 
   // Fetch referral codes on mount or when branchId changes
   useEffect(() => {
@@ -233,28 +233,32 @@ export default function AccountSection({ formData, onChange, referralError, onRe
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
         <div>
-          <label className="form-label">
-            Email Login <span style={{ color: '#ef4444' }}>*</span>
+          <label className="form-label" htmlFor="memberUsername">
+            Username Login <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <input
-            type="email"
-            name="memberEmail"
-            value={formData.memberEmail}
+            type="text"
+            id="memberUsername"
+            name="memberUsername"
+            value={formData.memberUsername}
             onChange={onChange}
             required
             className="form-input"
-            placeholder="email.member@example.com"
-            autoComplete="off"
-            aria-invalid={!!memberEmailError}
-            aria-describedby={memberEmailError ? 'memberEmail-error' : undefined}
-            style={memberEmailError ? invalidInputStyle : undefined}
+            placeholder="contoh: budi.santoso"
+            autoComplete="username"
+            minLength={4}
+            maxLength={30}
+            pattern="[A-Za-z0-9._-]+"
+            aria-invalid={!!memberUsernameError}
+            aria-describedby={memberUsernameError ? 'memberUsername-error' : undefined}
+            style={memberUsernameError ? invalidInputStyle : undefined}
           />
-          {memberEmailError ? (
-            <p id="memberEmail-error" role="alert" style={fieldErrorStyle}>
-              {memberEmailError}
+          {memberUsernameError ? (
+            <p id="memberUsername-error" role="alert" style={fieldErrorStyle}>
+              {memberUsernameError}
             </p>
           ) : (
-            <p style={fieldHintStyle}>Email untuk login ke aplikasi member</p>
+            <p style={fieldHintStyle}>4-30 karakter: huruf, angka, titik, _ atau -</p>
           )}
         </div>
 

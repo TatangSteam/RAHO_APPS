@@ -86,6 +86,24 @@ async function generateUniqueBranchCode(input: Pick<CreateBranchInput, 'regencyC
   );
 }
 
+/**
+ * Validate and check if branch code is unique
+ * Used for manual branch code updates by super admin
+ */
+async function validateBranchCodeUnique(branchCode: string, excludeBranchId?: string): Promise<void> {
+  const existing = await prisma.branch.findUnique({
+    where: { branchCode },
+    select: { id: true },
+  });
+
+  if (existing && existing.id !== excludeBranchId) {
+    throw errors.badRequest(
+      'BRANCH_CODE_ALREADY_EXISTS',
+      `Kode cabang ${branchCode} sudah digunakan oleh cabang lain.`
+    );
+  }
+}
+
 // ── Helper: Create Default Package Pricing for Branch ─────────
 async function createDefaultPackagePricingForBranch(branchId: string) {
   
@@ -464,19 +482,60 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
 // ── Update Branch ─────────────────────────────────────────────
 export async function updateBranchService(
   branchId: string,
-  input: UpdateBranchInput
+  input: UpdateBranchInput,
+  userRole: string
 ) {
   const existing = await prisma.branch.findUnique({ where: { id: branchId } });
   if (!existing) throw errors.notFound('Cabang tidak ditemukan.');
 
   const {
     provinceCode: _provinceCode,
-    regencyCode: _regencyCode,
+    regencyCode,
+    branchCode,
+    autoGenerateBranchCode,
     ...branchInput
   } = input;
+
+  const requestsBranchCodeChange =
+    branchCode !== undefined || autoGenerateBranchCode === true;
+
+  if (requestsBranchCodeChange && userRole !== 'SUPER_ADMIN') {
+    throw errors.forbidden('Hanya Super Admin yang dapat mengubah kode cabang.');
+  }
+
+  // Handle branch code changes (SUPER_ADMIN only)
+  let newBranchCode = existing.branchCode;
+
+  if (autoGenerateBranchCode) {
+    if (!regencyCode) {
+      throw errors.badRequest(
+        'REGENCY_CODE_REQUIRED',
+        'Kabupaten/kota wajib dipilih untuk membuat kode cabang otomatis.'
+      );
+    }
+
+    newBranchCode = await generateUniqueBranchCode({ regencyCode });
+    logger.info('[Branches] Auto-generated branch code', {
+      branchId,
+      previousBranchCode: existing.branchCode,
+      newBranchCode,
+    });
+  } else if (branchCode && branchCode !== existing.branchCode) {
+    await validateBranchCodeUnique(branchCode, branchId);
+    newBranchCode = branchCode;
+    logger.info('[Branches] Manually updated branch code', {
+      branchId,
+      previousBranchCode: existing.branchCode,
+      newBranchCode,
+    });
+  }
+
   const branch = await prisma.branch.update({
     where: { id: branchId },
-    data: branchInput,
+    data: {
+      ...branchInput,
+      ...(newBranchCode !== existing.branchCode ? { branchCode: newBranchCode } : {}),
+    },
     select: branchSelect,
   });
 

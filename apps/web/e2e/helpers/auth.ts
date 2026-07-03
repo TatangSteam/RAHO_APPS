@@ -62,7 +62,7 @@ export async function loginRequest(request: APIRequestContext, user: E2EUser): P
   const response = await request.post(`${apiBaseURL()}/auth/login`, {
     headers: E2E_API_HEADERS,
     data: {
-      email: user.email,
+      identifier: user.email,
       password: user.password,
     },
   });
@@ -148,7 +148,7 @@ export async function loginByApi(page: Page, request: APIRequestContext, user: E
 
 export async function loginByUi(page: Page, user: E2EUser): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(user.email);
+  await page.getByLabel('Username atau Email').fill(user.email);
   await page.getByLabel('Password', { exact: true }).fill(user.password);
   await page.locator('#btn-login').click();
   await expect(page).toHaveURL(new RegExp(user.expectedPath.replace(/\//g, '\\/')), { timeout: 30_000 });

@@ -1,36 +1,42 @@
 import { prisma } from '../lib/prisma';
+import { generateInvoiceNumber as formatInvoiceNumber } from './codeGenerator';
 
 /**
  * Generate unique invoice number
- * Format: INV-{BRANCH_CODE}-{YYMM}-{SEQUENCE}
- * Example: INV-PST-2604-00001
+ * Format: {SEQUENCE:05}-{BRANCH_CODE}-{MM}-{YYYY}
+ * Example: 00001-PST-07-2026
  */
-export async function generateInvoiceNumber(branchCode: string): Promise<string> {
-  const date = new Date();
-  const year = date.getFullYear().toString().slice(-2);
+export async function generateInvoiceNumber(
+  branchCode: string,
+  date = new Date()
+): Promise<string> {
+  const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  const prefix = `INV-${branchCode}-${year}${month}`;
+  const suffix = `-${branchCode}-${month}-${year}`;
 
-  // Get last invoice with this prefix
   const lastInvoice = await prisma.invoice.findFirst({
     where: {
       invoiceNumber: {
-        startsWith: prefix,
+        endsWith: suffix,
       },
     },
     orderBy: {
       invoiceNumber: 'desc',
     },
+    select: {
+      invoiceNumber: true,
+    },
   });
 
   let sequence = 1;
   if (lastInvoice) {
-    // Extract sequence from last invoice number
-    const lastSequence = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
-    sequence = lastSequence + 1;
+    const lastSequence = Number.parseInt(lastInvoice.invoiceNumber.split('-', 1)[0], 10);
+    if (Number.isFinite(lastSequence)) {
+      sequence = lastSequence + 1;
+    }
   }
 
-  return `${prefix}-${sequence.toString().padStart(5, '0')}`;
+  return formatInvoiceNumber(branchCode, sequence, date);
 }
 
 /**

@@ -16,7 +16,7 @@ import { ButtonLoading } from '@/components/ui/LoadingSpinner';
 // ── Validation Schema ─────────────────────────────────────────
 
 const loginSchema = z.object({
-  email: z.string().email('Format email tidak valid.'),
+  identifier: z.string().trim().min(3, 'Username atau email minimal 3 karakter.'),
   password: z.string().min(6, 'Password minimal 6 karakter.'),
 });
 
@@ -56,7 +56,7 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginForm) => {
     setServerError(null);
     try {
-      const result = await loginApi(data.email, data.password);
+      const result = await loginApi(data.identifier, data.password);
 
       // Persist auth state
       setAuth(result.user, {
@@ -197,36 +197,36 @@ export default function LoginPage() {
             ${isSubmitting ? 'opacity-75 pointer-events-none' : 'opacity-100'}
           `}>
             <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-6">
-              {/* Email */}
+              {/* Username / Email */}
               <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-medium text-neutral-300">
-                  Email
+                <label htmlFor="identifier" className="block text-sm font-medium text-neutral-300">
+                  Username atau Email
                 </label>
                 <div className="relative group">
                   <input
-                    id="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="nama@raho.id"
+                    id="identifier"
+                    type="text"
+                    autoComplete="username"
+                    placeholder="username member / nama@raho.id"
                     className={`
                       w-full px-5 py-4 rounded-xl
                       bg-neutral-800/50 border
                       text-white placeholder-neutral-500
                       transition-all duration-300
                       focus:outline-none focus:ring-2 focus:ring-amber-500/50
-                      ${errors.email 
+                      ${errors.identifier
                         ? 'border-red-500/50 focus:border-red-500' 
                         : 'border-neutral-700/50 hover:border-neutral-600 focus:border-amber-500'
                       }
                     `}
-                    {...register('email')}
+                    {...register('identifier')}
                   />
                   <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-amber-500/0 via-amber-500/0 to-amber-500/0 group-focus-within:from-amber-500/5 group-focus-within:via-amber-500/10 group-focus-within:to-amber-500/5 transition-all duration-500 pointer-events-none" />
                 </div>
-                {errors.email && (
+                {errors.identifier && (
                   <p className="flex items-center gap-1.5 text-xs text-red-400 mt-1">
                     <AlertCircle size={12} />
-                    {errors.email.message}
+                    {errors.identifier.message}
                   </p>
                 )}
               </div>

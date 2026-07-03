@@ -42,7 +42,10 @@ export interface CreateBranchData {
   isActive?: boolean;
 }
 
-export type UpdateBranchData = Partial<CreateBranchData>;
+export interface UpdateBranchData extends Partial<CreateBranchData> {
+  branchCode?: string;
+  autoGenerateBranchCode?: boolean;
+}
 
 export interface AuditLogParams {
   page?: number;

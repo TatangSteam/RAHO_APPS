@@ -7,7 +7,7 @@ const router = Router();
 
 /**
  * @route  POST /auth/login
- * @desc   Login with email + password — returns access + refresh tokens
+ * @desc   Login with member username or staff email + password
  * @access Public
  * @rateLimit 5 requests per 15 minutes per IP
  */

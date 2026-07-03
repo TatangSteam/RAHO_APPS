@@ -3,7 +3,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { meApi, MemberProfile } from '@/lib/api/meApi'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/stores/authStore'
-import { User, MapPin, Phone, Mail, Calendar, CreditCard, Building2, Camera, Loader2, Check } from 'lucide-react'
+import { User, MapPin, Phone, Calendar, CreditCard, Building2, Camera, Loader2, Check } from 'lucide-react'
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor'
 import { devLog, devError } from '@/lib/logger'
 
@@ -244,7 +244,7 @@ export default function MemberProfilePage() {
               <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-1">
                 {profile.fullName}
               </h2>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">{profile.email}</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-3">@{profile.username || profile.email}</p>
               <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                 <span className="text-xs font-semibold px-3 py-1 rounded-full bg-blue-500/15 text-blue-400">
                   No. Member: {profile.memberNo}
@@ -279,7 +279,7 @@ export default function MemberProfilePage() {
           <div className="space-y-4">
             <InfoRow icon={<User size={14} />} label="Nama Lengkap" value={profile.fullName} />
             <InfoRow icon={<Phone size={14} />} label="No. Telepon" value={profile.phone} />
-            <InfoRow icon={<Mail size={14} />} label="Email" value={profile.email} />
+            <InfoRow icon={<User size={14} />} label="Username Login" value={profile.username || profile.email} />
             <InfoRow icon={<Calendar size={14} />} label="Tanggal Lahir" value={formatDate(profile.dateOfBirth)} />
             <InfoRow icon={<Calendar size={14} />} label="Umur" value={age !== null ? `${age} tahun` : '--'} />
             <InfoRow icon={<User size={14} />} label="Jenis Kelamin" value={profile.jenisKelamin === 'L' ? 'Laki-laki' : profile.jenisKelamin === 'P' ? 'Perempuan' : '—'} />

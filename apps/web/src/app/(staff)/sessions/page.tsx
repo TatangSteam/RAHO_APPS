@@ -339,7 +339,7 @@ export default function SessionsPage() {
         { key: 'memberNo', label: 'No. Member' },
         { key: 'memberName', label: 'Nama Member' },
         { key: 'memberPhone', label: 'Telepon Member' },
-        { key: 'memberEmail', label: 'Email Member' },
+        { key: 'memberEmail', label: 'Username Member' },
         { key: 'packageCode', label: 'Kode Paket' },
       ],
     },

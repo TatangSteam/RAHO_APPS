@@ -6,6 +6,16 @@ const GenderEnum = z.enum(['L', 'P']);
 // Incentive type enum
 const IncentiveTypeEnum = z.enum(['PERCENTAGE', 'FIXED_AMOUNT']);
 const IdentityTypeEnum = z.enum(['NIK', 'PASSPORT', 'KITAS', 'VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK']);
+export const memberUsernameSchema = z
+  .string()
+  .trim()
+  .min(4, 'Username minimal 4 karakter')
+  .max(30, 'Username maksimal 30 karakter')
+  .regex(
+    /^[a-zA-Z0-9._-]+$/,
+    'Username hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung'
+  )
+  .transform((value) => value.toLowerCase());
 const booleanFromFormSchema = z.union([z.boolean(), z.string()]).transform((val) => {
   if (typeof val === 'string') {
     return val === 'true' || val === '1';
@@ -154,7 +164,7 @@ export const createMemberSchema = z.object({
   isDeceased: booleanFromFormSchema.default(false),
 
   // Section B - Akun Member
-  memberEmail: z.string().email('Format email tidak valid'),
+  memberUsername: memberUsernameSchema,
   memberPassword: z.string().min(8, 'Password minimal 8 karakter'),
   referralCode: z.string().optional().transform((val) => {
     // Trim whitespace and convert empty string to undefined
@@ -197,6 +207,8 @@ export const updateMemberSchema = z.object({
   gender: GenderEnum.optional(),
   religion: z.string().optional(), // Agama
   phone: z.string().min(10).optional(),
+  username: memberUsernameSchema.optional(),
+  // Backward compatibility for existing clients editing legacy email-based accounts.
   email: z.string().email().optional(),
   address: z.string().optional(),
   occupation: z.string().optional(),

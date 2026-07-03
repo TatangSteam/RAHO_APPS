@@ -259,6 +259,7 @@ export default function BranchesPage() {
         <EditBranchModal
           show={!!editingBranch}
           branch={editingBranch}
+          canEditBranchCode={user?.role === 'SUPER_ADMIN'}
           onClose={() => setEditingBranch(null)}
           onSuccess={() => {
             setEditingBranch(null);

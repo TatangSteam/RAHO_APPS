@@ -59,4 +59,25 @@ describe('Modal', () => {
 
     expect(onClose).toHaveBeenCalledTimes(3);
   });
+
+  it('blocks close interactions while close is disabled', () => {
+    const onClose = jest.fn();
+    render(
+      <Modal
+        open
+        closeDisabled
+        title="Edit Paket"
+        onClose={onClose}
+        classNames={classNames}
+      >
+        Konten modal
+      </Modal>,
+    );
+
+    expect(screen.getByRole('button', { name: 'Tutup modal' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('dialog').parentElement as HTMLElement);
+    fireEvent.keyDown(window, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

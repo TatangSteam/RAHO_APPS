@@ -24,6 +24,7 @@ export class MemberUpdateService {
       gender?: string;
       religion?: string;
       phone?: string;
+      username?: string;
       email?: string;
       address?: string;
       occupation?: string;
@@ -75,20 +76,22 @@ export class MemberUpdateService {
       }
     }
 
-    // Check if email is being changed and already exists
-    if (data.email && data.email !== member.user.email) {
-      const existingEmail = await prisma.user.findFirst({
+    const requestedLogin = data.username ?? data.email;
+
+    // The User.email column stores either a staff email or member username.
+    if (requestedLogin && requestedLogin !== member.user.email) {
+      const existingLogin = await prisma.user.findFirst({
         where: { 
-          email: data.email,
+          email: requestedLogin,
           id: { not: member.userId }
         },
       });
 
-      if (existingEmail) {
+      if (existingLogin) {
         throw {
           status: 409,
-          code: 'EMAIL_EXISTS',
-          message: 'Email sudah terdaftar',
+          code: data.username ? 'USERNAME_EXISTS' : 'EMAIL_EXISTS',
+          message: data.username ? 'Username sudah digunakan' : 'Email sudah terdaftar',
         };
       }
     }
@@ -109,11 +112,11 @@ export class MemberUpdateService {
 
     // Update in transaction
     const updated = await prisma.$transaction(async (tx) => {
-      // Update User table (email)
-      if (data.email !== undefined) {
+      // Keep using the existing User.email database column for the login identifier.
+      if (requestedLogin !== undefined) {
         await tx.user.update({
           where: { id: member.userId },
-          data: { email: data.email }
+          data: { email: requestedLogin }
         });
       }
 
@@ -300,7 +303,7 @@ export class MemberUpdateService {
       },
     });
 
-    return { 
+    return {
       message: 'Member dan file terkait berhasil dihapus permanen',
       filesDeleted,
     };
@@ -318,6 +321,7 @@ export class MemberUpdateService {
       jenisKelamin: member.jenisKelamin,
       phone: member.user?.profile?.phone,
       email: member.user?.email,
+      username: member.user?.email,
       address: member.address,
       emergencyContact: member.emergencyContact,
       voucherCount: member.voucherCount,
@@ -336,6 +340,7 @@ export class MemberUpdateService {
       })) || [],
       userId: member.userId,
       userEmail: member.user?.email,
+      userUsername: member.user?.email,
       createdAt: member.createdAt.toISOString(),
       updatedAt: member.updatedAt.toISOString(),
     };
@@ -376,12 +381,58 @@ export class MemberUpdateService {
       memberNo: member.memberNo,
       userId: member.userId,
       email: member.user.email,
+      username: member.user.email,
       fullName: member.user.profile?.fullName || '',
       phone: member.user.profile?.phone || '',
       isActive: member.isActive,
       createdAt: member.createdAt.toISOString(),
       lastLoginAt: member.user.lastLoginAt?.toISOString() || null,
       registrationBranch: member.registrationBranch,
+    };
+  }
+
+  /**
+   * Update member username while retaining the existing database column.
+   */
+  async updateMemberUsername(memberId: string, newUsername: string, adminUserId: string) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: { user: true },
+    });
+
+    if (!member) {
+      throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email: newUsername } });
+    if (existingUser && existingUser.id !== member.userId) {
+      throw { status: 409, code: 'USERNAME_EXISTS', message: 'Username sudah digunakan' };
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: member.userId },
+      data: { email: newUsername },
+      select: { id: true, email: true },
+    });
+
+    await logAudit({
+      userId: adminUserId,
+      branchId: member.registrationBranchId,
+      action: AuditAction.UPDATE,
+      resource: 'MemberCredentials',
+      resourceId: memberId,
+      meta: {
+        action: 'update_username',
+        oldUsername: member.user.email,
+        newUsername,
+        memberNo: member.memberNo,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'Username berhasil diubah',
+      username: updatedUser.email,
     };
   }
 

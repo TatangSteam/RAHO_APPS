@@ -6,7 +6,7 @@ function uniqueMember(overrides: Partial<MemberData> = {}): MemberData {
 
   return {
     name: `Test Member ${suffix}`,
-    email: `test${suffix}@example.com`,
+    username: `test${suffix}`,
     phone: `081${suffix.slice(-9).padStart(9, '0')}`,
     address: 'Jl. Test No. 123',
     birthDate: '1990-01-01',
@@ -34,6 +34,38 @@ test.describe('Member CRUD', () => {
     // Verify member appears in list
     await memberPage.searchMember(member.name);
     await memberPage.expectMemberExists(member.name);
+  });
+
+  test('member baru dapat login menggunakan username', async ({ page }) => {
+    const member = uniqueMember({ password: 'Member123!' });
+
+    await memberPage.createMember(member);
+
+    await page.context().clearCookies();
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+    await page.goto('/login');
+
+    await page.getByLabel('Username atau Email').fill(member.username);
+    await page.getByLabel('Password', { exact: true }).fill(member.password!);
+
+    const loginResponsePromise = page.waitForResponse(
+      (response) =>
+        response.url().includes('/api/v1/auth/login') &&
+        response.request().method() === 'POST',
+    );
+    await page.locator('#btn-login').click();
+
+    const loginResponse = await loginResponsePromise;
+    expect(loginResponse.ok(), `Login member gagal: ${loginResponse.status()} ${await loginResponse.text()}`).toBeTruthy();
+    expect(loginResponse.request().postDataJSON()).toMatchObject({
+      identifier: member.username,
+      password: member.password,
+    });
+    await expect(page).toHaveURL(/\/me\/dashboard(?:$|[?#])/);
+    await expect(page.getByText(/Portal Member RAHO Premier Club/i)).toBeVisible();
   });
 
   test('should search for a member', async () => {
@@ -135,10 +167,10 @@ test.describe('Member CRUD', () => {
     expect(fullNameMissing).toBe(true);
   });
 
-  test('should validate email format', async ({ page }) => {
+  test('should validate username format', async ({ page }) => {
     await memberPage.clickAddMember();
 
-    // Fill with invalid email
+    // Fill with invalid username
     await page.locator('[name="fullName"]').fill('Test User');
     await page.locator('[name="nik"]').fill(`32${Date.now()}`.slice(0, 16).padEnd(16, '0'));
     await page.locator('[name="phone"]').fill('081234567890');
@@ -146,34 +178,34 @@ test.describe('Member CRUD', () => {
     await page.locator('[name="birthDate"]').fill('1990-01-01');
     await page.locator('[name="gender"]').selectOption('L');
     await page.locator('[name="address"]').fill('Jl. Test No. 123');
-    await page.locator('[name="memberEmail"]').fill('invalid-email');
+    await page.locator('[name="memberUsername"]').fill('invalid username!');
     await page.locator('[name="memberPassword"]').fill('Member123!');
 
     // Submit
     const submitButton = page.getByRole('button', { name: /daftarkan.*member|simpan|save/i });
     await submitButton.click();
 
-    const emailTypeMismatch = await page.locator('[name="memberEmail"]').evaluate((element) => {
-      return (element as HTMLInputElement).validity.typeMismatch;
+    const usernamePatternMismatch = await page.locator('[name="memberUsername"]').evaluate((element) => {
+      return (element as HTMLInputElement).validity.patternMismatch;
     });
-    expect(emailTypeMismatch).toBe(true);
+    expect(usernamePatternMismatch).toBe(true);
   });
 
-  test('should handle duplicate email', async ({ page }) => {
-    const duplicateEmail = `duplicate${Date.now()}@example.com`;
+  test('should handle duplicate username', async ({ page }) => {
+    const duplicateUsername = `duplicate${Date.now()}`;
 
     // Create first member
     await memberPage.createMember({
       name: 'First Member',
-      email: duplicateEmail,
+      username: duplicateUsername,
       phone: '081234567890',
     });
 
-    // Try to create second member with same email
+    // Try to create second member with same username
     await memberPage.clickAddMember();
     await memberPage.fillMemberForm({
       name: 'Second Member',
-      email: duplicateEmail,
+      username: duplicateUsername,
       phone: '081234567891',
     });
 
@@ -182,9 +214,9 @@ test.describe('Member CRUD', () => {
 
     // Verify error message
     await expect(
-      page.locator('text=/email.*sudah.*terdaftar|email.*sudah.*digunakan|email.*already.*exists/i').first(),
+      page.locator('text=/username.*sudah.*digunakan|username.*already.*exists/i').first(),
     ).toBeVisible();
-    await expect(page.locator('[name="memberEmail"]')).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.locator('[name="memberUsername"]')).toHaveAttribute('aria-invalid', 'true');
   });
 });
 

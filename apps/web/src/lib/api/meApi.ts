@@ -158,6 +158,7 @@ export interface MemberDiagnosis {
 export interface MemberProfile {
   userId: string
   email: string
+  username: string
   fullName: string
   phone: string
   avatarUrl: string | null

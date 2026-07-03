@@ -162,9 +162,16 @@ export function generateShipmentCode(fromCode: string, toCode: string): string {
 // ── Invoice ───────────────────────────────────────────────────
 
 /**
- * Generate invoice number: INV-{BRANCH}-{YYMM}-{SEQ:05}
- * @example INV-PST-2604-00001
+ * Generate invoice number: {SEQ:05}-{BRANCH}-{MM}-{YYYY}
+ * Format baru: Nomor-KodeCabang-Bulan-Tahun
+ * @example 00001-PST-07-2026
  */
-export function generateInvoiceNumber(branchCode: string, sequence: number): string {
-  return `INV-${branchCode}-${getYYMM()}-${pad(sequence)}`;
+export function generateInvoiceNumber(
+  branchCode: string,
+  sequence: number,
+  date = new Date()
+): string {
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return `${pad(sequence)}-${branchCode}-${mm}-${yyyy}`;
 }

@@ -114,7 +114,7 @@ export class MembersService {
       infoSource?: string;
       postalCode?: string;
       isDeceased?: boolean;
-      memberEmail: string;
+      memberUsername: string;
       memberPassword: string;
       referralCode?: string;
       isConsentToPhoto?: boolean;
@@ -282,6 +282,10 @@ export class MembersService {
    */
   async getMemberCredentials(memberId: string) {
     return await this.updateService.getMemberCredentials(memberId);
+  }
+
+  async updateMemberUsername(memberId: string, username: string, adminUserId: string) {
+    return await this.updateService.updateMemberUsername(memberId, username, adminUserId);
   }
 
   /**

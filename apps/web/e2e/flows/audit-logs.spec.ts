@@ -7,7 +7,7 @@ function uniqueMember(overrides: Partial<MemberData> = {}): MemberData {
 
   return {
     name: `Audit Member ${suffix}`,
-    email: `audit${suffix}@example.com`,
+    username: `audit${suffix}`,
     phone: `081${suffix.slice(-9).padStart(9, '0')}`,
     address: 'Jl. Audit Test No. 123',
     birthDate: '1990-01-01',

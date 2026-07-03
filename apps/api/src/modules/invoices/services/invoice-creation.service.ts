@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { generateInvoiceNumber } from '../../../utils/codeGenerator';
+import { generateInvoiceNumber } from '../../../utils/invoiceGenerator';
 import type { CreateInvoiceInput } from '../invoices.schema';
 
 /**
@@ -206,31 +206,9 @@ export class InvoiceCreationService {
 
   /**
    * Generate invoice number with auto-increment
+   * New format: {SEQ:05}-{BRANCH}-{MM}-{YYYY}
    */
   private async generateInvoiceNumber(branchCode: string): Promise<string> {
-    const yymm = new Date().toISOString().slice(2, 7).replace('-', '');
-    const prefix = `INV-${branchCode}-${yymm}-`;
-    
-    const lastInvoice = await (prisma as any).invoice.findFirst({
-      where: {
-        invoiceNumber: {
-          startsWith: prefix,
-        },
-      },
-      orderBy: {
-        invoiceNumber: 'desc',
-      },
-      select: {
-        invoiceNumber: true,
-      },
-    });
-
-    let sequence = 1;
-    if (lastInvoice) {
-      const lastSeq = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
-      sequence = lastSeq + 1;
-    }
-
-    return generateInvoiceNumber(branchCode, sequence);
+    return generateInvoiceNumber(branchCode);
   }
 }

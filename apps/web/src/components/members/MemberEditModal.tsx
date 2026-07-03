@@ -20,7 +20,7 @@ interface MemberEditModalProps {
 
 interface MemberFormData {
   fullName: string;
-  memberEmail: string;
+  memberUsername: string;
   memberPassword: string;
   phone: string;
   email?: string;
@@ -57,7 +57,7 @@ export default function MemberEditModal({
   
   const [formData, setFormData] = useState<MemberFormData>({
     fullName: '',
-    memberEmail: '',
+    memberUsername: '',
     memberPassword: '',
     phone: '',
     email: '',
@@ -135,7 +135,7 @@ export default function MemberEditModal({
       });
       setFormData({
         fullName: memberData.profile?.fullName || memberData.fullName || '',
-        memberEmail: memberData.user?.email || memberData.email || '',
+        memberUsername: memberData.user?.username || memberData.username || memberData.user?.email || memberData.email || '',
         memberPassword: '',
         phone: memberData.user?.phone || memberData.phone || memberData.profile?.phone || '',
         email: memberData.user?.email || memberData.email || '',
@@ -158,7 +158,7 @@ export default function MemberEditModal({
       // Reset form
       setFormData({
         fullName: '',
-        memberEmail: '',
+        memberUsername: '',
         memberPassword: '',
         phone: '',
         email: '',
@@ -224,7 +224,7 @@ export default function MemberEditModal({
         const createData: any = {
           branchId: branchId,
           fullName: formData.fullName,
-          memberEmail: formData.memberEmail,
+          memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
           phone: formData.phone,
           isConsentToPhoto: formData.isConsentToPhoto,
@@ -257,8 +257,7 @@ export default function MemberEditModal({
 
         if (formData.phone) updateData.phone = formData.phone;
         if (formData.memberPassword) updateData.memberPassword = formData.memberPassword;
-        // Always include email in update payload (even if empty) so SUPER_ADMIN can update/clear it
-        updateData.email = formData.memberEmail || formData.email || '';
+        updateData.username = formData.memberUsername;
         if (formData.address) updateData.address = formData.address;
         if (formData.birthPlace) updateData.birthPlace = formData.birthPlace;
         if (formData.birthDate) updateData.birthDate = formData.birthDate;
@@ -355,7 +354,7 @@ export default function MemberEditModal({
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-2">
-                    Email Member {action === 'create' && <span className="text-red-500">*</span>}
+                    Username Member {action === 'create' && <span className="text-red-500">*</span>}
                     {userRole === 'SUPER_ADMIN' && action === 'edit' && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-500/30 rounded-full">
                         <Mail className="w-3 h-3" />
@@ -364,9 +363,9 @@ export default function MemberEditModal({
                     )}
                   </label>
                   <input
-                    type="email"
-                    name="memberEmail"
-                    value={formData.memberEmail}
+                    type="text"
+                    name="memberUsername"
+                    value={formData.memberUsername}
                     onChange={handleInputChange}
                     required={action === 'create'}
                     className={`w-full px-4 py-3 text-sm rounded-xl border ${
@@ -374,11 +373,14 @@ export default function MemberEditModal({
                         ? 'border-blue-400 dark:border-blue-600/60 bg-blue-50/50 dark:bg-blue-500/5 focus:ring-blue-500 dark:focus:ring-blue-500/50 focus:border-blue-500 shadow-sm shadow-blue-200/50 dark:shadow-blue-500/10'
                         : 'border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 focus:ring-amber-500 focus:border-transparent'
                     } text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 transition-all`}
-                    placeholder="email@example.com"
+                    placeholder="contoh: budi.santoso"
+                    minLength={4}
+                    maxLength={30}
+                    pattern="[A-Za-z0-9._-]+"
                   />
                   {userRole === 'SUPER_ADMIN' && action === 'edit' && (
                     <p className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                      <span className="font-medium">ℹ️ Super Admin:</span> Anda dapat mengedit email member ini
+                      <span className="font-medium">ℹ️ Super Admin:</span> Anda dapat mengedit username member ini
                     </p>
                   )}
                 </div>

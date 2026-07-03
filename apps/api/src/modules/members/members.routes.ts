@@ -304,6 +304,14 @@ router.patch(
   controller.updateMemberEmail.bind(controller)
 );
 
+// PATCH /api/v1/members/:memberId/username - Update member login username
+router.patch(
+  '/:memberId/username',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  controller.updateMemberUsername.bind(controller)
+);
+
 // POST /api/v1/members/:memberId/reset-password - Reset member password
 router.post(
   '/:memberId/reset-password',

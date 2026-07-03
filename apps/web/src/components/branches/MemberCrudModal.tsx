@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, User, Mail, Phone, MapPin, Calendar, Save, Loader2, Tag } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Calendar, Save, Loader2, Tag } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { createMemberApi, updateMemberApi } from '@/lib/membersApi';
 import { getActiveReferrals } from '@/lib/api/referralsApi';
 import { devLog, devError } from '@/lib/logger';
+import { CrudModal } from './CrudModal';
 import styles from '@/styles/crud-modal.module.css';
 
 interface MemberCrudModalProps {
@@ -20,7 +22,7 @@ interface MemberCrudModalProps {
 
 interface MemberFormData {
   fullName: string;
-  memberEmail: string;
+  memberUsername: string;
   memberPassword: string;
   phone: string;
   email?: string;
@@ -55,7 +57,7 @@ export default function MemberCrudModal({
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [formData, setFormData] = useState<MemberFormData>({
     fullName: '',
-    memberEmail: '',
+    memberUsername: '',
     memberPassword: '',
     phone: '',
     email: '',
@@ -129,10 +131,10 @@ export default function MemberCrudModal({
       devLog('🔍 [MemberCrudModal] Setting form data from memberData:', memberData);
       setFormData({
         fullName: memberData.fullName || '',
-        memberEmail: memberData.email || '', // Email is at top level
+        memberUsername: memberData.username || memberData.email || '',
         memberPassword: '', // Don't populate password for edit
         phone: memberData.phone || '', // Phone is at top level
-        email: memberData.email || '', // Alternative email (same as memberEmail for now)
+        email: memberData.contactEmail || '',
         address: memberData.address || '',
         birthPlace: memberData.tempatLahir || '',
         birthDate: memberData.dateOfBirth ? memberData.dateOfBirth.split('T')[0] : '',
@@ -196,7 +198,7 @@ export default function MemberCrudModal({
         // Prepare data - explicitly build the object to avoid spreading unwanted fields
         const createData: any = {
           fullName: formData.fullName,
-          memberEmail: formData.memberEmail,
+          memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
           phone: formData.phone,
           isConsentToPhoto: formData.isConsentToPhoto,
@@ -237,8 +239,8 @@ export default function MemberCrudModal({
           emergencyContactName: formData.emergencyContact,
         };
         
-        // Always include email in update payload so SUPER_ADMIN can update it
-        updateData.email = formData.memberEmail || formData.email || '';
+        // Member login identifiers are stored in the existing User.email column.
+        updateData.username = formData.memberUsername;
         
         // Include incentive fields in update
         if (formData.firstIncentiveType) {
@@ -269,19 +271,13 @@ export default function MemberCrudModal({
   if (!isOpen) return null;
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
-      <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-        <div className={styles.modalHeader}>
-          <div className={styles.modalTitle}>
-            <User size={24} />
-            <h2>{action === 'create' ? 'Tambah Member Baru' : 'Edit Member'}</h2>
-          </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.modalForm}>
+    <CrudModal
+      icon={<User size={24} />}
+      open={isOpen}
+      title={action === 'create' ? 'Tambah Member Baru' : 'Edit Member'}
+      onClose={onClose}
+    >
+      <form onSubmit={handleSubmit} className={styles.modalForm}>
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <label htmlFor="fullName">
@@ -316,10 +312,10 @@ export default function MemberCrudModal({
             </div>
 
             <div className={styles.formGroup}>
-              <label htmlFor="memberEmail" className="flex items-center gap-2 flex-wrap">
+              <label htmlFor="memberUsername" className="flex items-center gap-2 flex-wrap">
                 <span className="flex items-center gap-1">
                   <Mail size={16} />
-                  Email Member *
+                  Username Member *
                 </span>
                 {userRole === 'SUPER_ADMIN' && action === 'edit' && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-300 dark:border-blue-500/30 rounded-full">
@@ -329,21 +325,24 @@ export default function MemberCrudModal({
                 )}
               </label>
               <input
-                type="email"
-                id="memberEmail"
-                name="memberEmail"
-                value={formData.memberEmail}
+                type="text"
+                id="memberUsername"
+                name="memberUsername"
+                value={formData.memberUsername}
                 onChange={handleInputChange}
                 required
                 disabled={action === 'edit' && userRole !== 'SUPER_ADMIN'}
-                placeholder="member@example.com"
+                placeholder="contoh: budi.santoso"
+                minLength={4}
+                maxLength={30}
+                pattern="[A-Za-z0-9._-]+"
                 className={userRole === 'SUPER_ADMIN' && action === 'edit' 
                   ? 'border-blue-400 dark:border-blue-600/60 bg-blue-50/50 dark:bg-blue-500/5 focus:ring-blue-500 dark:focus:ring-blue-500/50 focus:border-blue-500 shadow-sm shadow-blue-200/50 dark:shadow-blue-500/10'
                   : ''}
               />
               {userRole === 'SUPER_ADMIN' && action === 'edit' && (
                 <small className="block mt-1 text-xs text-blue-600 dark:text-blue-400 font-medium">
-                  ℹ️ Super Admin: Anda dapat mengedit email member ini
+                  ℹ️ Super Admin: Anda dapat mengedit username member ini
                 </small>
               )}
             </div>
@@ -620,15 +619,17 @@ export default function MemberCrudModal({
           </div>
 
           <div className={styles.modalActions}>
-            <button
+            <Button
+              unstyled
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
               disabled={loading}
             >
               Batal
-            </button>
-            <button
+            </Button>
+            <Button
+              unstyled
               type="submit"
               className={styles.saveButton}
               disabled={loading}
@@ -644,10 +645,9 @@ export default function MemberCrudModal({
                   {action === 'create' ? 'Tambah Member' : 'Simpan Perubahan'}
                 </>
               )}
-            </button>
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </CrudModal>
   );
 }

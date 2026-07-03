@@ -54,6 +54,7 @@ interface MemberPackage {
 interface MemberProfile {
   userId: string;
   email: string;
+  username: string;
   fullName: string | null;
   phone: string | null;
   avatarUrl: string | null;
@@ -357,6 +358,7 @@ export async function getMemberProfileService(userId: string): Promise<MemberPro
   return {
     userId: user.id,
     email: user.email,
+    username: user.email,
     fullName: user.profile?.fullName ?? null,
     phone: user.profile?.phone ?? null,
     avatarUrl: user.profile?.avatarUrl ?? null,

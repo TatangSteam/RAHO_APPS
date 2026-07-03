@@ -1,22 +1,38 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { branchesApi, type Branch, type UpdateBranchData } from '@/lib/api/branchesApi';
+import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
+import { getApiErrorMessage } from '@/lib/api';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { BranchModal } from './BranchModal';
 import styles from './BranchModal.module.css';
 
 interface Props {
   show: boolean;
   branch: Branch;
+  canEditBranchCode?: boolean;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function EditBranchModal({ show, branch, onClose, onSuccess }: Props) {
-  const [mounted, setMounted] = useState(false);
+export default function EditBranchModal({
+  show,
+  branch,
+  canEditBranchCode = false,
+  onClose,
+  onSuccess,
+}: Props) {
   const [loading, setLoading] = useState(false);
+  const [manualBranchCode, setManualBranchCode] = useState(branch.branchCode);
+  const [autoGenerateBranchCode, setAutoGenerateBranchCode] = useState(false);
+  const [provinceCode, setProvinceCode] = useState('');
+  const [regencyCode, setRegencyCode] = useState('');
+  const [provinces, setProvinces] = useState<WilayahItem[]>([]);
+  const [regencies, setRegencies] = useState<WilayahItem[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingRegencies, setLoadingRegencies] = useState(false);
   const [formData, setFormData] = useState<UpdateBranchData>({
     name: branch.name,
     address: branch.address,
@@ -29,13 +45,7 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  useEffect(() => {
     if (show) {
-      document.body.style.overflow = 'hidden';
       // Reset form with branch data
       setFormData({
         name: branch.name,
@@ -46,16 +56,56 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
         operatingHours: branch.operatingHours || '',
         isActive: branch.isActive,
       });
+      setManualBranchCode(branch.branchCode);
+      setAutoGenerateBranchCode(false);
+      setProvinceCode('');
+      setRegencyCode('');
+      setRegencies([]);
       setErrors({});
-    } else {
-      document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [show, branch]);
 
-  if (!show || !mounted) return null;
+  useEffect(() => {
+    if (show && canEditBranchCode && autoGenerateBranchCode && provinces.length === 0) {
+      loadProvinces();
+    }
+  }, [show, canEditBranchCode, autoGenerateBranchCode, provinces.length]);
+
+  useEffect(() => {
+    if (!show || !autoGenerateBranchCode || !provinceCode) {
+      setRegencies([]);
+      return;
+    }
+
+    loadRegencies(provinceCode);
+  }, [show, autoGenerateBranchCode, provinceCode]);
+
+  if (!show) return null;
+
+  async function loadProvinces() {
+    try {
+      setLoadingProvinces(true);
+      setProvinces(await wilayahApi.getProvinces());
+    } catch (error) {
+      devError('Error loading provinces:', error);
+      showToast.error('Gagal memuat data provinsi');
+    } finally {
+      setLoadingProvinces(false);
+    }
+  }
+
+  async function loadRegencies(selectedProvinceCode: string) {
+    try {
+      setLoadingRegencies(true);
+      setRegencies(await wilayahApi.getRegencies(selectedProvinceCode));
+    } catch (error) {
+      devError('Error loading regencies:', error);
+      setRegencies([]);
+      showToast.error('Gagal memuat data kota/kabupaten');
+    } finally {
+      setLoadingRegencies(false);
+    }
+  }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -66,6 +116,20 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
 
     if (formData.phone && !/^[0-9+\-\s()]+$/.test(formData.phone)) {
       newErrors.phone = 'Format nomor telepon tidak valid';
+    }
+
+    if (canEditBranchCode) {
+      if (autoGenerateBranchCode) {
+        if (!provinceCode) newErrors.provinceCode = 'Provinsi harus dipilih';
+        if (!regencyCode) newErrors.regencyCode = 'Kabupaten/kota harus dipilih';
+      } else {
+        const normalizedCode = manualBranchCode.trim();
+        if (normalizedCode.length < 3 || normalizedCode.length > 20) {
+          newErrors.branchCode = 'Kode cabang harus 3-20 karakter';
+        } else if (!/^[a-zA-Z0-9]+$/.test(normalizedCode)) {
+          newErrors.branchCode = 'Kode cabang hanya boleh berisi huruf dan angka';
+        }
+      }
     }
 
     setErrors(newErrors);
@@ -82,52 +146,61 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
 
     try {
       setLoading(true);
-      await branchesApi.updateBranch(branch.id, formData);
+      const payload: UpdateBranchData = { ...formData };
+
+      if (canEditBranchCode) {
+        if (autoGenerateBranchCode) {
+          payload.autoGenerateBranchCode = true;
+          payload.provinceCode = provinceCode;
+          payload.regencyCode = regencyCode;
+        } else {
+          const normalizedCode = manualBranchCode.trim().toUpperCase();
+          if (normalizedCode !== branch.branchCode) {
+            payload.branchCode = normalizedCode;
+          }
+        }
+      }
+
+      await branchesApi.updateBranch(branch.id, payload);
       showToast.success(`Cabang ${formData.name} berhasil diupdate`);
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
       devError('Error updating branch:', error);
-      showToast.error(error.message || 'Gagal mengupdate cabang');
+      showToast.error(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
-      onClose();
-    }
-  };
-
-  const modalContent = (
-    <div className={styles.modalBackdrop} onClick={handleBackdropClick}>
-      <div className={styles.modalContainer}>
-        <div className={styles.modalHeader}>
-          <div>
-            <h3 className={styles.modalTitle}>✏️ Edit Cabang</h3>
-            <p className={styles.modalSubtitle}>{branch.branchCode} - {branch.name}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className={styles.closeButton}
-            disabled={loading}
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.modalBody}>
+  return (
+    <BranchModal
+      open={show}
+      title="✏️ Edit Cabang"
+      subtitle={`${branch.branchCode} - ${branch.name}`}
+      submitting={loading}
+      submitText="✓ Simpan Perubahan"
+      submittingText="⏳ Menyimpan..."
+      onClose={onClose}
+      onSubmit={handleSubmit}
+    >
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
-              <label className={styles.label}>Kode Cabang</label>
+              <label className={styles.label} htmlFor="edit-branch-code">Kode Cabang</label>
               <input
+                id="edit-branch-code"
                 type="text"
-                value={branch.branchCode}
-                className={styles.input}
-                disabled
-                style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                value={canEditBranchCode ? manualBranchCode : branch.branchCode}
+                onChange={(event) => setManualBranchCode(event.target.value)}
+                className={`${styles.input} ${errors.branchCode ? styles.inputError : ''}`}
+                disabled={loading || !canEditBranchCode || autoGenerateBranchCode}
+                maxLength={20}
               />
-              <span className={styles.hint}>Kode cabang tidak dapat diubah</span>
+              {errors.branchCode && <span className={styles.errorText}>{errors.branchCode}</span>}
+              <span className={styles.hint}>
+                {canEditBranchCode
+                  ? 'Gunakan 3-20 huruf/angka, atau aktifkan pembuatan otomatis.'
+                  : 'Hanya Super Admin yang dapat mengubah kode cabang.'}
+              </span>
             </div>
 
             <div className={styles.formGroup}>
@@ -143,6 +216,85 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
                 <option value="PARTNERSHIP">Partnership</option>
               </select>
             </div>
+
+            {canEditBranchCode && (
+              <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                <label className={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={autoGenerateBranchCode}
+                    onChange={(event) => {
+                      setAutoGenerateBranchCode(event.target.checked);
+                      setProvinceCode('');
+                      setRegencyCode('');
+                      setErrors((current) => ({
+                        ...current,
+                        branchCode: '',
+                        provinceCode: '',
+                        regencyCode: '',
+                      }));
+                    }}
+                    disabled={loading}
+                  />
+                  <span>Buat kode otomatis sesuai kode wilayah baru</span>
+                </label>
+              </div>
+            )}
+
+            {canEditBranchCode && autoGenerateBranchCode && (
+              <>
+                <div className={styles.formGroup}>
+                  <label className={styles.label} htmlFor="edit-branch-province">Provinsi</label>
+                  <select
+                    id="edit-branch-province"
+                    value={provinceCode}
+                    onChange={(event) => {
+                      setProvinceCode(event.target.value);
+                      setRegencyCode('');
+                    }}
+                    className={`${styles.input} ${errors.provinceCode ? styles.inputError : ''}`}
+                    disabled={loading || loadingProvinces}
+                  >
+                    <option value="">
+                      {loadingProvinces ? 'Memuat provinsi...' : 'Pilih provinsi'}
+                    </option>
+                    {provinces.map((province) => (
+                      <option key={province.code} value={province.code}>{province.name}</option>
+                    ))}
+                  </select>
+                  {errors.provinceCode && <span className={styles.errorText}>{errors.provinceCode}</span>}
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label className={styles.label} htmlFor="edit-branch-regency">Kabupaten/Kota</label>
+                  <select
+                    id="edit-branch-regency"
+                    value={regencyCode}
+                    onChange={(event) => setRegencyCode(event.target.value)}
+                    className={`${styles.input} ${errors.regencyCode ? styles.inputError : ''}`}
+                    disabled={loading || loadingRegencies || !provinceCode}
+                  >
+                    <option value="">
+                      {loadingRegencies ? 'Memuat kabupaten/kota...' : 'Pilih kabupaten/kota'}
+                    </option>
+                    {regencies.map((regency) => (
+                      <option key={regency.code} value={regency.code}>{regency.name}</option>
+                    ))}
+                  </select>
+                  {errors.regencyCode && <span className={styles.errorText}>{errors.regencyCode}</span>}
+                </div>
+
+                <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
+                  <label className={styles.label}>Pratinjau Kode Otomatis</label>
+                  <div className={styles.autoCodeCard}>
+                    <span className={styles.hint}>Kode wilayah + urutan cabang</span>
+                    <span className={styles.autoCodeValue}>
+                      {regencyCode ? `${regencyCode.replace(/\D/g, '')}xx` : 'Pilih kota'}
+                    </span>
+                  </div>
+                </div>
+              </>
+            )}
 
             <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
               <label className={styles.label}>Nama Cabang</label>
@@ -215,28 +367,6 @@ export default function EditBranchModal({ show, branch, onClose, onSuccess }: Pr
               </label>
             </div>
           </div>
-
-          <div className={styles.modalFooter}>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`${styles.btn} ${styles.btnSecondary}`}
-              disabled={loading}
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              disabled={loading}
-            >
-              {loading ? '⏳ Menyimpan...' : '✓ Simpan Perubahan'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </BranchModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

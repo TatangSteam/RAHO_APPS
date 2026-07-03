@@ -45,7 +45,7 @@ export class SessionExportService {
       memberNo: { label: 'No. Member', getter: (s) => s.encounter?.member?.memberNo || '-' },
       memberName: { label: 'Nama Member', getter: (s) => s.encounter?.member?.user?.profile?.fullName || '-' },
       memberPhone: { label: 'Telepon Member', getter: (s) => s.encounter?.member?.user?.profile?.phone || '-' },
-      memberEmail: { label: 'Email Member', getter: (s) => s.encounter?.member?.user?.email || '-' },
+      memberEmail: { label: 'Username Member', getter: (s) => s.encounter?.member?.user?.email || '-' },
       packageCode: { label: 'Kode Paket', getter: (s) => s.encounter?.memberPackage?.packageCode || '-' },
       adminLayanan: { label: 'Admin Layanan', getter: (s) => s.adminLayanan?.profile?.fullName || '-' },
       doctorName: { label: 'Nama Dokter Utama', getter: (s) => s.doctor?.profile?.fullName || '-' },

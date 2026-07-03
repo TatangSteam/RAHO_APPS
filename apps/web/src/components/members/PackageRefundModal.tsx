@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { PackageActionModal } from './PackageActionModal';
+import { Button } from '@/components/ui/Button';
 import styles from './PackageActionModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
@@ -87,16 +88,17 @@ export default function PackageRefundModal({
       onClose={onClose}
       footer={(
         <>
-          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
+          <Button unstyled onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
             Batal
-          </button>
-          <button
+          </Button>
+          <Button
+            unstyled
             onClick={onSubmit}
             className={styles.btnDanger}
             disabled={submitting || compressing || !reason || reason.length < 8 || refundAmount <= 0}
           >
             {submitting ? 'Memproses...' : 'Refund Paket'}
-          </button>
+          </Button>
         </>
       )}
     >

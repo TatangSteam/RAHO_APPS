@@ -46,7 +46,11 @@ P0 bukan nama phase. P0 berarti prioritas paling tinggi / risiko paling besar. M
 - Batch 18 selesai: BE Core Utils / Audit Log Compatibility Small Slice.
 - Batch 19 selesai: BE Branches Debug Logging Small Slice.
 - Batch 20 selesai: BE Referrals Controller Logging Small Slice.
-- Lanjutan berikutnya: pilih slice P1 berikutnya.
+- Batch 21 selesai: FE Shared UI Modal Reuse Small Slice.
+- Batch 22 selesai: FE Shared Button Adoption Small Slice.
+- Batch 23 selesai: FE Branch Modal Reuse Small Slice.
+- Batch 24 selesai: FE CRUD + Shipment Modal Consolidation Wave 1.
+- Lanjutan berikutnya: Batch 25: FE Modal Consolidation Wave 2 (Invoices + Stock Requests).
 
 Priority guide:
 - P0 Risiko Tinggi: data pasien/member, billing/payment/invoice, terapi/sesi, stok, auth/security.
@@ -62,16 +66,16 @@ Priority guide:
 | BE Sessions / Treatment / Diagnosis | 26 (~5.9k LOC) | P0 Risiko Tinggi | Batch 16 Complete | Menyentuh terapi klinis dan diagnosis sehingga tetap perlu cleanup bertahap. Batch 16 mengambil slice validasi paket utama session creation: mode ACTIVE/DEBT, urutan error, sisa sesi, dan allowance dua sesi utang diekstrak ke helper pure dengan contract test. |
 | FE Sessions / Treatment / Therapy Plan | 29 (~15.3k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 17 Complete | Area FE ini tetap perlu cleanup per step. Batch 15 mengambil slice kecil `CreateSessionModal`: aturan eligibility paket ACTIVE/utang BASIC/BOOSTER dan batas dua sesi utang diekstrak ke helper pure. Batch 17 mengekstrak helper presentasi Step 2 therapy plan, memperbaiki selector smoke E2E filter session yang ambigu, dan menutupnya dengan unit/lint/type-check/E2E session hijau. |
 | BE Inventory / Stock / Shipments | 19 (~7.6k LOC) | P0 Risiko Tinggi | Batch 10 Complete | Stok dan shipment berdampak operasional/financial. Batch 10 mengambil slice kecil pada `stock-request-approval.service.ts`: helper pure invoice draft dan approval plan diekstrak, lalu ditutup unit test contract untuk mode FREE/DEBT/NORMAL dan invalid invoice item. |
-| FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 9 Complete | Banyak modal dan page stock request/shipment. Batch 9 mengambil slice kecil stock request list/page shell: helper presentasi aksi row dan format tanggal diekstrak. Targeted lint pass dengan warning existing `no-explicit-any`, `type-check:web` pass, dan E2E stock request flow `10 passed` di port 3000 dengan `E2E_START_WEB_SERVER=false`. |
+| FE Inventory / Stock / Shipments | 38 (~13.9k LOC) | P0 Risiko Tinggi + Kompleksitas Tinggi | Batch 24 Partial | Batch 9 membersihkan stock request list helper. Batch 24 menambah `ShipmentModal` dan memigrasikan Detail, Notes, Receive, Send Shortage, serta Ship modal ke satu portal/header shell; workflow shipment dan isi form tidak diubah. E2E shipment masih `fixme`, sehingga area ini tetap memerlukan regression coverage lanjutan. |
 | BE Auth / Middleware / Security | 14 (~2.0k LOC) | P0 Risiko Tinggi | Batch 8 Complete | Security/auth/branch access. Debug `console.log` di `authenticate.ts` dan `assertBranchAccess.ts` sudah dibersihkan, branch helper dipusatkan, dan coverage branch-access middleware ditambahkan. Backend type-check passed setelah query akses shipment receipt di `files.service.ts` tidak lagi memakai generated Prisma field yang stale. |
 | FE Auth / Layout / Impersonation | 22 (~3.4k LOC) | P1 Shared Access Control | Batch 7 Partial | Role presentation untuk header/sidebar dipusatkan di `rolePresentation`, duplikasi label/warna role dihapus, dan smoke E2E layout navigation ditambahkan. Sidebar menu config dan impersonation masih backlog karena lebih sensitif. |
 | BE Users / Staff / Admin / Impersonation | 33 (~13.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Banyak integration test admin/impersonation sudah ada. File panjang: `users.service.ts` ~1011 LOC, `admin.controller.ts` ~1003 LOC. Banyak logging debug. Cleanup dapat dimulai dari service boundaries yang sudah tertutup test. |
-| FE Branches / Staff / Admin | 87 (~27.9k LOC) | P1 Kompleksitas Tinggi | Backlog | Modul FE terbesar. Banyak page/admin/branch/staff/modal. File panjang: branch detail page ~974 LOC, master-products page ~1134 LOC, beberapa CSS >900 LOC. Perlu pecah per halaman: branches list, branch detail, admin managers, master products. |
+| FE Branches / Staff / Admin | 87 (~27.9k LOC) | P1 Kompleksitas Tinggi | Batch 24 Partial | Batch 23 menggabungkan shell Create/Edit Branch. Batch 24 menambah `CrudModal` untuk `MemberCrudModal`, `InventoryCrudModal`, dan `InventoryBatchAddModal` yang berbagi `crud-modal.module.css`. Staff, force-delete, branch detail, admin managers, dan master products masih backlog per cluster. |
 | BE Branches | 5 (~1.8k LOC) | P1 Kompleksitas Tinggi | Batch 19 Complete | File sedikit tapi `branches.service.ts` ~1190 LOC, termasuk create defaults, inventory auto-add, force delete. Batch 19 membersihkan debug `console.*` di controller/service branch dan menggantinya dengan logger untuk warning/error yang masih perlu, tanpa mengubah query/delete/force-delete flow. |
 | Prisma Schema / Migrations / Seeds | 74 (~9.7k LOC) | P1 Data Model | Backlog | `schema.prisma` ~1567 LOC. Banyak seed variants dan migration history panjang, termasuk beberapa migration bernama mirip/duplikat. Cleanup sebaiknya mulai dari dokumentasi seed dan konsolidasi seed yang aman. |
 | BE Referrals / Non Therapy / Files / Dashboard / Audit | 20 (~4.8k LOC) | P1 Shared + Audit | Batch 20 Partial | Banyak submodul tanpa test backend. Batch 20 mengambil slice kecil referrals controller: debug `console.*` diganti logger dan contract test list referrals ditambahkan. `role-dashboard.service.ts`, `files.service.ts`, dashboard, non-therapy, dan audit controller masih backlog terpisah. |
 | BE Core Utils / Config | 16 (~2.6k LOC) | P1 Shared Foundation | Batch 18 Complete | Shared utils/config/lib dipakai lintas modul. Batch 18 mengambil slice kecil `auditLog`: helper audit sekarang retry dengan payload legacy saat generated Prisma client belum mengenal kolom audit trail baru, test audit lama dirapikan menjadi contract test yang sesuai behavior sekarang, dan warning runtime `Unknown argument userName` tidak lagi memblokir audit log. |
-| FE Shared UI / Lib / Types | 71 (~12.0k LOC) | P1 Shared Foundation | Backlog | Banyak API client, UI primitive, types, CSS global. Indikasi: API clients/domain lib tersebar, beberapa `any` di types/API, file API panjang (`inventoryApi.ts`, `icdApi.ts`). Cleanup shared dilakukan setelah pola dari 1-2 modul domain terbukti. |
+| FE Shared UI / Lib / Types | 71 (~12.0k LOC) | P1 Shared Foundation | Batch 24 Partial | Batch 21-24 membangun primitive modal/button shared dan wrapper domain package, branch, CRUD, serta shipment. Batch 24 mempercepat adopsi pada delapan modal consumer; file dengan `createPortal` langsung turun `34` ke `27` dan raw `<button>` turun `732` ke `711`. |
 | FE Reports / Dashboard / Notifications / Chat | 26 (~4.7k LOC) | P2 Quick Win / Supporting | Batch 6 Complete | Submodul Notifications, Reports, Dashboard, dan Chat selesai. Notifications: row/card/empty state diekstrak, utility label/date/severity dipusatkan, CSS placeholder mati dihapus. Reports: page orchestration dirapikan, dropdown/export/results/dialog diekstrak, utility report dipusatkan, page object E2E dirapikan. Dashboard: date range/helper/card/loading/error state dipusatkan dan smoke E2E role ditambahkan. Chat: placeholder dirapikan, CSS module mati dihapus, smoke E2E route/sidebar ditambahkan. |
 | FE Referrals / Incentives | 5 (~2.2k LOC) | P2 Quick Win | Batch 2 Complete | Modal create referral sudah diekstrak, formatting/export utility dipusatkan, fetch list/branch dipisah, alert diganti toast, type referrer dirapikan, dan smoke E2E referral ditambahkan. |
 | E2E Test Harness | 27 (~5.8k LOC) | P2 Test Infrastructure | Batch 1 Complete | Page objects dan flow specs sudah ada. Batch 1 merapikan helper auth/waiters/navigation serta selector convention tanpa mengubah kode aplikasi. |
@@ -100,6 +104,10 @@ Priority guide:
 | 18 | BE Core Utils / Audit Log Compatibility Small Slice | Complete | Tambah fallback `auditLog` untuk retry create dengan field legacy saat Prisma client/generated schema stale terhadap kolom audit trail baru; test audit lama diringkas menjadi contract test enrichment, request impersonation, sanitasi, non-blocking error, dan fallback legacy. | Audit utility tests `5 passed`; `type-check:api` passed. |
 | 19 | BE Branches Debug Logging Small Slice | Complete | Hapus debug `console.*` dari `branches.controller.ts` dan `branches.service.ts`; warning side-effect branch creation dan create-branch error memakai logger. Tidak mengubah validasi, query visibility manager, create defaults, inventory auto-add, delete, atau force-delete behavior. | Branch delete service tests `2 passed`; `type-check:api` passed. |
 | 20 | BE Referrals Controller Logging Small Slice | Complete | Ganti debug `console.*` pada `referrals.controller.ts` list endpoint ke logger; tambah unit test controller untuk user context dan error forwarding. Tidak mengubah service, export, schema, atau response shape. | Referrals controller tests `2 passed`; `type-check:api` passed. |
+| 21 | FE Shared UI Modal Reuse Small Slice | Complete | Tambah primitive `ui/Modal` dan wrapper style `PackageActionModal`; modal edit, cancel, dan refund paket memakai shell reusable untuk portal, scroll lock, backdrop, dialog semantics, header, close icon, body, dan footer. | Modal unit tests `3 passed`; targeted lint tanpa error dengan satu warning image existing; `type-check:web` passed. |
+| 22 | FE Shared Button Adoption Small Slice | Complete | Tambah mode `unstyled` pada `ui/Button`, export dari barrel UI, lalu gunakan pada close control modal dan enam tombol footer package action agar CSS module domain tetap identik. | Button + Modal unit tests `5 passed`; targeted lint tanpa error dengan satu warning image existing; `type-check:web` passed. |
+| 23 | FE Branch Modal Reuse Small Slice | Complete | Tambah wrapper `BranchModal`; Create/Edit Branch memakai satu shell untuk portal, scroll lock, dialog semantics, title/subtitle, close guard, form, dan footer. Primitive `Modal` ditambah dukungan subtitle, close-disabled, dan body wrapper opsional. | Button + Modal + BranchModal unit tests `8 passed`; targeted lint tanpa error dengan empat warning `any` existing; `type-check:web` passed. |
+| 24 | FE CRUD + Shipment Modal Consolidation Wave 1 | Complete | Tambah `CrudModal` untuk tiga consumer shared CSS dan `ShipmentModal` untuk lima consumer shipment. Mounted guard, direct portal, body scroll lock, backdrop, dialog semantics, header, ikon, close control, dan tombol aksi konsisten dipusatkan tanpa memindahkan fetch/submit domain. | Shared modal tests `10 passed`; targeted lint tanpa error dengan warning `any` existing; `type-check:web` passed; shipment E2E tetap `fixme`. |
 
 ## Next Execution Plan
 
@@ -125,6 +133,11 @@ Priority guide:
 | 18 | BE Core Utils / Audit Log Compatibility Small Slice | P1 | Complete | Jaga audit utility tetap kompatibel dengan Prisma client lama/baru tanpa mengubah pemanggil domain. | Done: audit utility tests `5 passed`; `type-check:api`. |
 | 19 | BE Branches Debug Logging Small Slice | P1 | Complete | Bersihkan debug logging branch tanpa menyentuh transaksi/delete flow. | Done: branch delete service tests `2 passed`; `type-check:api`. |
 | 20 | BE Referrals Controller Logging Small Slice | P1 | Complete | Bersihkan debug logging referrals controller dan tambah contract test kecil. | Done: referrals controller tests `2 passed`; `type-check:api`. |
+| 21 | FE Shared UI Modal Reuse Small Slice | P1 | Complete | Konsolidasikan satu cluster modal package action ke primitive modal reusable tanpa mengubah form/API. | Done: modal unit tests `3 passed`; targeted lint; `type-check:web`. |
+| 22 | FE Shared Button Adoption Small Slice | P1 | Complete | Buat shared Button aman untuk CSS domain dan adopsi pada cluster package action. | Done: Button + Modal unit tests `5 passed`; targeted lint; `type-check:web`. |
+| 23 | FE Branch Modal Reuse Small Slice | P1 | Complete | Konsolidasikan shell `CreateBranchModal`/`EditBranchModal` yang berbagi `BranchModal.module.css`. | Done: unit tests `8 passed`; targeted lint; `type-check:web`. Tidak ada E2E branch khusus yang tersedia. |
+| 24 | FE CRUD + Shipment Modal Consolidation Wave 1 | P1 | Complete | Konsolidasikan tiga modal shared CSS dan lima modal shipment dalam dua wrapper domain. | Done: shared modal tests `10 passed`; targeted lint; `type-check:web`; audit counts. Shipment E2E existing masih `fixme`. |
+| 25 | FE Modal Consolidation Wave 2: Invoices + Stock Requests | P1 | Next | Audit dan migrasikan beberapa modal invoice/stock-request yang kompatibel dalam satu batch besar, bukan satu file per batch. | Targeted unit/lint + `type-check:web` + inventory/payment smoke runnable. |
 
 ## Batch 4 Detailed Plan
 
@@ -553,6 +566,112 @@ Status: Complete.
    - Done: referrals controller tidak lagi memakai console langsung.
    - Done: contract test kecil menutup user context dan error forwarding.
    - Done: `.codex/cleanup-progress.md` diupdate dengan Batch 20 `Complete`.
+
+## Batch 21 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: scan primitive `components/ui`, seluruh file modal/dialog, pemakaian `createPortal`, dan tombol JSX frontend.
+   - Ditemukan `36` file masih memakai `createPortal` langsung dan sekitar `753` elemen `<button>`.
+   - Ditemukan `ui/Button.tsx` belum dipakai oleh consumer frontend, sehingga standardisasi tombol belum benar-benar berjalan.
+   - Dipilih cluster modal edit/cancel/refund paket karena ketiganya memakai CSS dan shell identik.
+
+2. Refactor Scope
+   - Done: tambah `ui/Modal.tsx` untuk portal, mounted guard, body scroll lock, backdrop close, Escape close, ARIA dialog, header, close icon, body, dan footer.
+   - Done: tambah `PackageActionModal.tsx` untuk mapping CSS package action sekali.
+   - Done: `PackageEditModal`, `PackageCancelModal`, dan `PackageRefundModal` memakai shell reusable.
+   - Tidak mengubah field form, validasi submit, image compression, callback/API, atau visual CSS package action.
+
+3. Verification
+   - Done: `Modal.test.tsx` => `3 passed`.
+   - Done: targeted lint passed tanpa error; warning existing `<img>` preview refund tetap dicatat.
+   - Done: `npm.cmd run type-check:web` passed.
+
+4. Completion Criteria
+   - Done: satu cluster modal tidak lagi menggandakan portal/backdrop/header/body/footer shell.
+   - Partial repo-wide: modal dan button redundancy lain tetap backlog dan harus dikerjakan per cluster.
+   - Done: progress ditutup sebagai Batch 21 Complete; lanjutan masuk Batch 22.
+
+## Batch 22 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: audit `ui/Button.tsx`, barrel export, dan tombol package action setelah Batch 21.
+   - Ditemukan Button memiliki visual style bawaan yang akan bentrok dengan CSS module domain dan sebelumnya tidak memiliki consumer.
+
+2. Refactor Scope
+   - Done: tambah prop `unstyled` agar Button dapat menyediakan primitive/behavior tanpa menambahkan class visual shared.
+   - Done: hapus import `Loader2` yang tidak dipakai dan export Button dari `components/ui/index.ts`.
+   - Done: `ui/Modal` memakai Button untuk close control; modal edit/cancel/refund paket memakai Button untuk enam tombol footer.
+   - Tidak mengubah label, disabled condition, callback, CSS class, atau loading text package action.
+
+3. Verification
+   - Done: Button + Modal unit tests => `5 passed`.
+   - Done: targeted lint passed tanpa error; warning existing `<img>` preview refund tetap dicatat.
+   - Done: `npm.cmd run type-check:web` passed.
+   - Audit count: raw `<button>` turun dari sekitar `753` ke `746`; adopsi repo-wide masih backlog.
+
+4. Completion Criteria
+   - Done: shared Button memiliki consumer nyata tanpa visual regression pada cluster package action.
+   - Partial repo-wide: standardisasi tombol tetap dilakukan per domain/cluster, bukan mechanical rewrite seluruh repo.
+   - Done: progress ditutup sebagai Batch 22 Complete; lanjutan masuk Batch 23.
+
+## Batch 23 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: audit `CreateBranchModal`, `EditBranchModal`, `BranchModal.module.css`, dan coverage E2E branch.
+   - Ditemukan kedua modal menggandakan mounted guard, portal, body scroll lock, backdrop, header, close control, form shell, dan footer.
+   - Tidak ditemukan E2E khusus branch yang dapat dipakai sebagai smoke test batch ini.
+
+2. Refactor Scope
+   - Done: tambah `BranchModal.tsx` untuk mapping CSS dan shell form/action Create/Edit Branch.
+   - Done: primitive `ui/Modal` mendukung subtitle, close-disabled saat submit, class title/subtitle, dan body wrapper opsional.
+   - Done: `CreateBranchModal` dan `EditBranchModal` memakai wrapper shared; lifecycle portal dan scroll lock lokal dihapus.
+   - Tidak mengubah field form, data province/regency, validasi, request/callback, label aksi, atau CSS visual branch.
+
+3. Verification
+   - Done: Button + Modal + BranchModal unit tests => `8 passed`.
+   - Done: targeted lint passed tanpa error; empat warning `no-explicit-any` existing pada Create/Edit Branch tetap dicatat.
+   - Done: `npm.cmd run type-check:web` passed.
+   - Done: `git diff --check` tidak menemukan whitespace error; hanya peringatan line-ending Windows existing.
+   - Audit count: file dengan `createPortal` langsung turun dari `36` ke `34`; raw `<button>` sekarang `732`.
+
+4. Completion Criteria
+   - Done: shell modal Create/Edit Branch tidak lagi terduplikasi dan memiliki contract test kecil.
+   - Partial repo-wide: modal branch/staff/inventory lain tetap backlog per shared CSS cluster.
+   - Done: progress ditutup sebagai Batch 23 Complete; lanjutan masuk Batch 24.
+
+## Batch 24 Detailed Plan
+
+Status: Complete.
+
+1. Discovery
+   - Done: audit seluruh pemakai `crud-modal.module.css` dan modal shipment yang memakai `createPortal` langsung.
+   - Ditemukan tiga consumer CRUD berbagi CSS dan lima modal shipment menggandakan mounted guard, portal, body scroll lock, backdrop, dialog/header, serta close control.
+   - Scope diperbesar menjadi dua cluster kohesif agar cleanup lebih cepat tetapi tetap dapat diverifikasi bersama.
+
+2. Refactor Scope
+   - Done: tambah `CrudModal` dan migrasikan Member CRUD, Inventory CRUD, serta Inventory Batch Add.
+   - Done: tambah `ShipmentModal` dan migrasikan Detail, Notes, Receive, Send Shortage, serta Ship modal.
+   - Done: footer utama cluster memakai `ui/Button` tanpa menimpa CSS domain; primitive `Modal` mendukung icon/title container dan content style.
+   - Tidak mengubah fetch/API, payload submit, validasi quantity/discrepancy, upload receipt, keputusan issue, atau isi form domain.
+
+3. Verification
+   - Done: Button + Modal + BranchModal + CrudModal + ShipmentModal tests => `10 passed`.
+   - Done: targeted lint seluruh file Batch 24 passed tanpa error; warning `no-explicit-any` existing tetap dicatat.
+   - Done: `npm.cmd run type-check:web` passed.
+   - Done: `git diff --check` tidak menemukan whitespace error; hanya peringatan line-ending Windows existing.
+   - Audit count: file dengan `createPortal` langsung turun `34` ke `27`; raw `<button>` turun `732` ke `711`.
+   - Shipment E2E tersedia di `inventory-flow.spec.ts`, tetapi suite masih `test.describe.fixme`; ini tetap backlog coverage fitur.
+
+4. Completion Criteria
+   - Done: delapan modal consumer memakai dua shell reusable tanpa memindahkan logika bisnis.
+   - Done: laju cleanup dinaikkan dari satu pasangan menjadi beberapa cluster terverifikasi per batch.
+   - Done: progress ditutup sebagai Batch 24 Complete; lanjutan masuk Batch 25.
 
 ## Discovery Notes
 

@@ -152,8 +152,8 @@ export default function MemberProfileTab({
             <p style={{ fontWeight: '600' }}>📞 {member.profile.phone}</p>
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
-            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Email</p>
-            <p style={{ fontWeight: '600', wordBreak: 'break-all' }}>📧 {member.user.email}</p>
+            <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Username Login</p>
+            <p style={{ fontWeight: '600', wordBreak: 'break-all' }}>👤 {member.user.username || member.user.email}</p>
           </div>
           <div style={{ padding: '12px', background: 'rgba(148,163,184,0.05)', borderRadius: 'var(--radius-md)' }}>
             <p style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px' }}>Pekerjaan</p>

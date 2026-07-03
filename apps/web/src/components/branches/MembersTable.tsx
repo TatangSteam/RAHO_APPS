@@ -80,7 +80,7 @@ export default function MembersTable({
     },
     {
       key: 'email',
-      header: 'Email',
+      header: 'Username',
       width: '180px',
       render: (member) => (
         <span className="text-neutral-600 dark:text-neutral-400 text-sm truncate block max-w-[160px]">{member.email}</span>

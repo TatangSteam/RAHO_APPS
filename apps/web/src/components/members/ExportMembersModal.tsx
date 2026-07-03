@@ -76,7 +76,7 @@ const EXPORT_COLUMNS: ExportColumn[] = [
   { key: 'registrationDate', label: 'Tanggal Registrasi', category: 'basic' },
   // Kontak
   { key: 'phone', label: 'Telepon', category: 'contact' },
-  { key: 'email', label: 'Email', category: 'contact' },
+  { key: 'email', label: 'Username Login', category: 'contact' },
   { key: 'address', label: 'Alamat', category: 'contact' },
   { key: 'postalCode', label: 'Kode Pos', category: 'contact' },
   { key: 'emergencyContact', label: 'Kontak Darurat', category: 'contact' },

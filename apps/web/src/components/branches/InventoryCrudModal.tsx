@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
+import { Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { devLog, devError } from '@/lib/logger';
+import { CrudModal } from './CrudModal';
 import styles from '@/styles/crud-modal.module.css';
 
 interface InventoryCrudModalProps {
@@ -84,7 +85,6 @@ export default function InventoryCrudModal({
   existingProductIds = []
 }: InventoryCrudModalProps) {
   const [loading, setLoading] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [masterProducts, setMasterProducts] = useState<MasterProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -117,10 +117,6 @@ export default function InventoryCrudModal({
     storageLocation: '',
     conversionFactor: 1
   });
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (isOpen && action === 'create') {
@@ -322,48 +318,20 @@ export default function InventoryCrudModal({
     }
   };
 
-  if (!isOpen || !mounted) return null;
+  if (!isOpen) return null;
 
-  const modalContent = (
-    <div 
-      className={styles.modalOverlay} 
-      onClick={onClose}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.75)'
+  return (
+    <CrudModal
+      contentStyle={{
+        maxWidth: action === 'create' ? '750px' : '600px',
+        overflow: 'auto',
       }}
+      icon={<Package size={24} />}
+      open={isOpen}
+      title={action === 'create' ? 'Tambah Item Inventori' : 'Edit Item Inventori'}
+      onClose={onClose}
     >
-      <div 
-        className={styles.modalContent} 
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          position: 'relative',
-          zIndex: 10000,
-          maxWidth: action === 'create' ? '750px' : '600px',
-          width: '100%',
-          maxHeight: '90vh',
-          overflow: 'auto'
-        }}
-      >
-        <div className={styles.modalHeader}>
-          <div className={styles.modalTitle}>
-            <Package size={24} />
-            <h2>{action === 'create' ? 'Tambah Item Inventori' : 'Edit Item Inventori'}</h2>
-          </div>
-          <button className={styles.closeButton} onClick={onClose}>
-            <X size={20} />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.modalForm}>
+      <form onSubmit={handleSubmit} className={styles.modalForm}>
           {action === 'create' ? (
             <>
               {/* Product Selection - Improved UI */}
@@ -920,15 +888,17 @@ export default function InventoryCrudModal({
           )}
 
           <div className={styles.modalActions}>
-            <button
+            <Button
+              unstyled
               type="button"
               className={styles.cancelButton}
               onClick={onClose}
               disabled={loading}
             >
               Batal
-            </button>
-            <button
+            </Button>
+            <Button
+              unstyled
               type="submit"
               className={styles.saveButton}
               disabled={loading || (action === 'create' && !selectedProduct)}
@@ -944,12 +914,9 @@ export default function InventoryCrudModal({
                   {action === 'create' ? 'Tambah Item' : 'Simpan Perubahan'}
                 </>
               )}
-            </button>
+            </Button>
           </div>
-        </form>
-      </div>
-    </div>
+      </form>
+    </CrudModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

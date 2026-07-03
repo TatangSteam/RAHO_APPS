@@ -135,22 +135,22 @@ async function main(): Promise<void> {
 
 async function generateInvoiceNumber(branchCode: string): Promise<string> {
   const date = new Date();
-  const year = date.getFullYear().toString().slice(-2);
+  const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
-  
-  const prefix = `INV-${branchCode}-${year}${month}`;
+
+  const suffix = `-${branchCode}-${month}-${year}`;
   const lastInvoice = await prisma.invoice.findFirst({
-    where: { invoiceNumber: { startsWith: prefix } },
+    where: { invoiceNumber: { endsWith: suffix } },
     orderBy: { invoiceNumber: 'desc' },
   });
 
   let sequence = 1;
   if (lastInvoice) {
-    const lastSeq = parseInt(lastInvoice.invoiceNumber.split('-').pop() || '0');
+    const lastSeq = parseInt(lastInvoice.invoiceNumber.split('-', 1)[0] || '0');
     sequence = lastSeq + 1;
   }
 
-  return `${prefix}-${sequence.toString().padStart(4, '0')}`;
+  return `${sequence.toString().padStart(5, '0')}-${branchCode}-${month}-${year}`;
 }
 
 async function generateMissingInvoices(prisma: PrismaClient): Promise<number> {

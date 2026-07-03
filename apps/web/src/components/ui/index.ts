@@ -16,3 +16,7 @@ export { default as DataTable } from './DataTable';
 // Modal shell
 export { Modal } from './Modal';
 export type { ModalClassNames, ModalProps } from './Modal';
+
+// Buttons
+export { Button } from './Button';
+export type { ButtonProps } from './Button';

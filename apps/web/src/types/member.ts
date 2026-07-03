@@ -4,6 +4,7 @@ export interface Member {
   fullName: string;
   phone: string;
   email: string;
+  username?: string;
   age?: number | null;
   voucherCount: number;
   basicPackageCount: number;
@@ -24,6 +25,7 @@ export interface MemberDetail {
   memberNo: string;
   user: {
     email: string;
+    username?: string;
     isActive: boolean;
   };
   profile: {
@@ -87,6 +89,7 @@ export interface MemberLookup {
   fullName: string;
   phone: string;
   email: string;
+  username?: string;
   registrationBranch: string;
   registrationBranchId: string;
   isRegistrationBranch: boolean;
@@ -118,7 +121,7 @@ export interface CreateMemberData {
   isDeceased?: boolean;
 
   // Section B - Akun Member
-  memberEmail: string;
+  memberUsername: string;
   memberPassword: string;
   referralCode?: string;
   referralCodeId?: string;

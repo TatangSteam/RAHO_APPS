@@ -1,6 +1,7 @@
 'use client';
 
 import { PackageActionModal } from './PackageActionModal';
+import { Button } from '@/components/ui/Button';
 import styles from './PackageActionModal.module.css';
 
 interface PackageEditModalProps {
@@ -54,16 +55,17 @@ export default function PackageEditModal({
       onClose={onClose}
       footer={(
         <>
-          <button onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
+          <Button unstyled onClick={onClose} className={styles.btnSecondary} disabled={submitting}>
             Batal
-          </button>
-          <button
+          </Button>
+          <Button
+            unstyled
             onClick={onSubmit}
             className={styles.btnPrimary}
             disabled={submitting || quantity <= 0 || finalPrice <= 0}
           >
             {submitting ? 'Menyimpan...' : 'Simpan Perubahan'}
-          </button>
+          </Button>
         </>
       )}
     >

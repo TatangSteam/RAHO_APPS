@@ -36,7 +36,7 @@ export class MemberRegistrationService {
       infoSource?: string;
       postalCode?: string;
       isDeceased?: boolean;
-      memberEmail: string;
+      memberUsername: string;
       memberPassword: string;
       referralCode?: string;
       referralCodeId?: string;
@@ -54,19 +54,17 @@ export class MemberRegistrationService {
     branchId: string,
     userId: string
   ) {
-    // Check if email already exists (if provided)
-    if (data.memberEmail) {
-      const existingEmail = await prisma.user.findUnique({
-        where: { email: data.memberEmail },
-      });
+    // The existing User.email column stores member usernames without a DB migration.
+    const existingUsername = await prisma.user.findUnique({
+      where: { email: data.memberUsername },
+    });
 
-      if (existingEmail) {
-        throw {
-          status: 409,
-          code: 'EMAIL_EXISTS',
-          message: 'Email sudah terdaftar',
-        };
-      }
+    if (existingUsername) {
+      throw {
+        status: 409,
+        code: 'USERNAME_EXISTS',
+        message: 'Username sudah digunakan',
+      };
     }
 
     // Get branch for member number generation
@@ -173,7 +171,7 @@ export class MemberRegistrationService {
       // Create user account
       const user = await tx.user.create({
         data: {
-          email: data.memberEmail,
+          email: data.memberUsername,
           password: hashedPassword,
           role: 'MEMBER',
           profile: {
@@ -381,6 +379,7 @@ export class MemberRegistrationService {
       gender: member.jenisKelamin,
       phone: member.user?.profile?.phone,
       email: member.user?.email,
+      username: member.user?.email,
       address: member.address,
       postalCode: member.postalCode,
       emergencyContact: member.emergencyContact,
@@ -393,6 +392,7 @@ export class MemberRegistrationService {
       } : null,
       userId: member.userId,
       userEmail: member.user?.email,
+      userUsername: member.user?.email,
       createdAt: member.createdAt.toISOString(),
       updatedAt: member.updatedAt.toISOString(),
     };

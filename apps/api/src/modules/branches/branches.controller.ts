@@ -93,7 +93,8 @@ export async function createBranch(req: Request, res: Response, next: NextFuncti
 export async function updateBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const input = updateBranchSchema.parse(req.body);
-    const branch = await updateBranchService(req.params.branchId, input);
+    const userRole = req.user.role;
+    const branch = await updateBranchService(req.params.branchId, input, userRole);
 
     await logAudit({
       userId: req.user.userId,
@@ -101,7 +102,12 @@ export async function updateBranch(req: Request, res: Response, next: NextFuncti
       action: 'UPDATE',
       resource: 'Branch',
       resourceId: branch.id,
-      meta: { changes: input },
+      meta: {
+        changes: input,
+        ...(input.branchCode !== undefined || input.autoGenerateBranchCode
+          ? { resultingBranchCode: branch.branchCode }
+          : {}),
+      },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });

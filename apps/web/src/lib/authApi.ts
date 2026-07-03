@@ -3,9 +3,9 @@ import { LoginResponse, TokenPair } from '@/types/auth';
 
 // ── Auth API calls ────────────────────────────────────────────
 
-export async function loginApi(email: string, password: string): Promise<LoginResponse> {
+export async function loginApi(identifier: string, password: string): Promise<LoginResponse> {
   const { data } = await api.post<{ data: LoginResponse }>('/auth/login', {
-    email,
+    identifier,
     password,
   });
   return data.data;

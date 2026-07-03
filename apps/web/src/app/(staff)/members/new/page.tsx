@@ -23,10 +23,10 @@ interface Branch {
 }
 
 interface FormFieldErrors {
-  memberEmail?: string;
+  memberUsername?: string;
 }
 
-const DUPLICATE_EMAIL_MESSAGE = 'Email sudah terdaftar. Gunakan email lain untuk akun member.';
+const DUPLICATE_USERNAME_MESSAGE = 'Username sudah digunakan. Gunakan username lain untuk akun member.';
 
 export default function NewMemberPage() {
   const router = useRouter();
@@ -79,7 +79,7 @@ export default function NewMemberPage() {
     isDeceased: false,
     
     // Section B - Akun Member
-    memberEmail: '',
+    memberUsername: '',
     memberPassword: '',
     referralCode: '',
     referralCodeId: '',
@@ -108,6 +108,7 @@ export default function NewMemberPage() {
 
         setFormData({
           ...savedFormData,
+          memberUsername: savedFormData.memberUsername || savedFormData.memberEmail || '',
           branchId: requestedBranchId || savedFormData.branchId || '',
           isDeceased: savedFormData.isDeceased === true || savedFormData.isDeceased === 'true',
         });
@@ -182,9 +183,9 @@ export default function NewMemberPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
 
-    if (name === 'memberEmail') {
-      setFieldErrors((prev) => ({ ...prev, memberEmail: undefined }));
-      if (formError.toLowerCase().includes('email')) {
+    if (name === 'memberUsername') {
+      setFieldErrors((prev) => ({ ...prev, memberUsername: undefined }));
+      if (formError.toLowerCase().includes('username')) {
         setFormError('');
       }
     }
@@ -295,8 +296,12 @@ export default function NewMemberPage() {
     }
     
     // Validation for account section
-    if (!formData.memberEmail) {
-      showToast.error('Email member wajib diisi');
+    if (!formData.memberUsername) {
+      showToast.error('Username member wajib diisi');
+      return;
+    }
+    if (!/^[a-zA-Z0-9._-]{4,30}$/.test(formData.memberUsername)) {
+      showToast.error('Username harus 4-30 karakter dan hanya boleh berisi huruf, angka, titik, _ atau -');
       return;
     }
     if (!formData.memberPassword || formData.memberPassword.length < 8) {
@@ -334,12 +339,12 @@ export default function NewMemberPage() {
       if (errorCode === 'INVALID_REFERRAL_CODE') {
         setReferralError(errorMessage);
         showToast.error(errorMessage);
-      } else if (errorCode === 'EMAIL_EXISTS' || (status === 409 && /email/i.test(errorMessage))) {
-        setFormError(DUPLICATE_EMAIL_MESSAGE);
-        setFieldErrors({ memberEmail: DUPLICATE_EMAIL_MESSAGE });
-        showToast.error(DUPLICATE_EMAIL_MESSAGE);
+      } else if (errorCode === 'USERNAME_EXISTS' || (status === 409 && /username/i.test(errorMessage))) {
+        setFormError(DUPLICATE_USERNAME_MESSAGE);
+        setFieldErrors({ memberUsername: DUPLICATE_USERNAME_MESSAGE });
+        showToast.error(DUPLICATE_USERNAME_MESSAGE);
         requestAnimationFrame(() => {
-          document.querySelector<HTMLInputElement>('[name="memberEmail"]')?.focus();
+          document.querySelector<HTMLInputElement>('[name="memberUsername"]')?.focus();
         });
       } else {
         setFormError(errorMessage);
@@ -373,7 +378,7 @@ export default function NewMemberPage() {
         infoSource: '',
         postalCode: '',
         isDeceased: false,
-        memberEmail: '',
+        memberUsername: '',
         memberPassword: '',
         referralCode: '',
         referralCodeId: '',

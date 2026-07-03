@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info, CheckCircle2 } from 'lucide-react';
+import { useState } from 'react';
+import { Package, Truck, PackageCheck, AlertTriangle, Calendar, FileText, ChevronRight, MessageSquare, Info, CheckCircle2 } from 'lucide-react';
 import { Shipment, ShipmentIssueDecision } from '@/lib/api/inventoryApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
+import { ShipmentModal } from './ShipmentModal';
 
 const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; bgColor: string; textColor: string; borderColor: string }> = {
   PREPARING: {
@@ -74,20 +74,7 @@ interface DetailModalProps {
 }
 
 export default function DetailModal({ shipment, onClose, onShip, onReceive, onReviewIssue, loading, detailLoading }: DetailModalProps) {
-  const [mounted, setMounted] = useState(false);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
 
   const statusConfig = STATUS_CONFIG[shipment.status] || STATUS_CONFIG.PREPARING;
   const discrepancies = shipment.discrepancies || [];
@@ -113,49 +100,16 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive, onRe
     }
   };
 
-  if (!mounted) return null;
-
-  const modalContent = (
-    <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-        onClick={onClose}
-        aria-hidden="true"
-      />
-
-      {/* Modal Container */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 shadow-lg shadow-slate-500/30">
-                <Package className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                  Detail Pengiriman
-                </h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  {shipment.shipmentCode}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
+  return (
+    <ShipmentModal
+      icon={<Package className="h-6 w-6 text-white" />}
+      iconClassName="from-slate-400 to-slate-600 shadow-slate-500/30"
+      open
+      subtitle={shipment.shipmentCode}
+      title="Detail Pengiriman"
+      wrapBody={false}
+      onClose={onClose}
+    >
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Shipment Info Card */}
@@ -596,10 +550,6 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive, onRe
               Tutup
             </button>
           </div>
-        </div>
-      </div>
-    </div>
+    </ShipmentModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

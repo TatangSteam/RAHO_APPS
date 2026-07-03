@@ -1,11 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { branchesApi, type CreateBranchData } from '@/lib/api/branchesApi';
 import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { BranchModal } from './BranchModal';
 import styles from './BranchModal.module.css';
 
 interface Props {
@@ -15,7 +15,6 @@ interface Props {
 }
 
 export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
-  const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<CreateBranchData>({
     name: '',
@@ -34,13 +33,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  useEffect(() => {
     if (show) {
-      document.body.style.overflow = 'hidden';
       // Reset form
       setFormData({
         name: '',
@@ -54,12 +47,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       });
       setErrors({});
       loadProvinces();
-    } else {
-      document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
   }, [show]);
 
   useEffect(() => {
@@ -71,7 +59,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     loadRegencies(formData.provinceCode);
   }, [show, formData.provinceCode]);
 
-  if (!show || !mounted) return null;
+  if (!show) return null;
 
   async function loadProvinces() {
     try {
@@ -152,12 +140,6 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
-      onClose();
-    }
-  };
-
   const handleProvinceChange = (provinceCode: string) => {
     setFormData({
       ...formData,
@@ -180,24 +162,17 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
     ? `${formData.regencyCode.replace(/\D/g, '')}xx`
     : 'Pilih kota';
 
-  const modalContent = (
-    <div className={styles.modalBackdrop} onClick={handleBackdropClick}>
-      <div className={styles.modalContainer}>
-        <div className={styles.modalHeader}>
-          <div>
-            <h3 className={styles.modalTitle}>🏢 Tambah Cabang Baru</h3>
-            <p className={styles.modalSubtitle}>Buat cabang baru</p>
-          </div>
-          <button
-            onClick={onClose}
-            className={styles.closeButton}
-            disabled={loading}
-          >
-            ✕
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className={styles.modalBody}>
+  return (
+    <BranchModal
+      open={show}
+      title="🏢 Tambah Cabang Baru"
+      subtitle="Buat cabang baru"
+      submitting={loading}
+      submitText="✓ Buat Cabang"
+      submittingText="⏳ Membuat..."
+      onClose={onClose}
+      onSubmit={handleSubmit}
+    >
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <label className={styles.label}>Kode Cabang</label>
@@ -322,28 +297,6 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
               />
             </div>
           </div>
-
-          <div className={styles.modalFooter}>
-            <button
-              type="button"
-              onClick={onClose}
-              className={`${styles.btn} ${styles.btnSecondary}`}
-              disabled={loading}
-            >
-              Batal
-            </button>
-            <button
-              type="submit"
-              className={`${styles.btn} ${styles.btnPrimary}`}
-              disabled={loading}
-            >
-              {loading ? '⏳ Membuat...' : '✓ Buat Cabang'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </BranchModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

@@ -16,7 +16,7 @@ async function waitForMemberDetailName(page: Page, memberName: string, timeout =
 
 export interface MemberData {
   name: string;
-  email: string;
+  username: string;
   phone: string;
   nik?: string;
   address?: string;
@@ -71,7 +71,7 @@ export class MemberPage {
     await this.page.locator('[name="birthDate"]').fill(data.birthDate || '1990-01-01');
     await this.page.locator('[name="gender"]').selectOption(gender);
     await this.page.locator('[name="address"]').fill(data.address || 'Jl. Test No. 123');
-    await this.page.locator('[name="memberEmail"]').fill(data.email);
+    await this.page.locator('[name="memberUsername"]').fill(data.username);
     await this.page.locator('[name="memberPassword"]').fill(data.password || 'Member123!');
   }
 

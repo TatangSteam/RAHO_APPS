@@ -5,6 +5,7 @@ import {
   updateMemberSchema,
   grantAccessSchema,
   sendNotificationSchema,
+  memberUsernameSchema,
 } from './members.schema';
 import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
@@ -622,6 +623,19 @@ export class MembersController {
       }
 
       const result = await membersService.updateMemberEmail(memberId, email, userId);
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateMemberUsername(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId } = req.params;
+      const username = memberUsernameSchema.parse(req.body.username);
+      const { userId } = req.user!;
+
+      const result = await membersService.updateMemberUsername(memberId, username, userId);
       sendSuccess(res, result);
     } catch (error) {
       next(error);

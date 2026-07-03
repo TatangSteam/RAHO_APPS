@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { branchesApi } from '@/lib/api/branchesApi';
+import { branchesApi, type UpdateBranchData } from '@/lib/api/branchesApi';
+import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
+import { getApiErrorMessage } from '@/lib/api';
+import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { Building2, ArrowLeft, Save } from 'lucide-react';
@@ -23,9 +26,19 @@ export default function EditBranchPage() {
   const router = useRouter();
   const params = useParams();
   const branchId = params.branchId as string;
+  const { user } = useAuthStore();
+  const canEditBranchCode = user?.role === 'SUPER_ADMIN';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [originalBranchCode, setOriginalBranchCode] = useState('');
+  const [autoGenerateBranchCode, setAutoGenerateBranchCode] = useState(false);
+  const [provinceCode, setProvinceCode] = useState('');
+  const [regencyCode, setRegencyCode] = useState('');
+  const [provinces, setProvinces] = useState<WilayahItem[]>([]);
+  const [regencies, setRegencies] = useState<WilayahItem[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = useState(false);
+  const [loadingRegencies, setLoadingRegencies] = useState(false);
   const [formData, setFormData] = useState({
     branchCode: '',
     name: '',
@@ -41,11 +54,27 @@ export default function EditBranchPage() {
     loadBranch();
   }, [branchId]);
 
+  useEffect(() => {
+    if (canEditBranchCode && autoGenerateBranchCode && provinces.length === 0) {
+      loadProvinces();
+    }
+  }, [canEditBranchCode, autoGenerateBranchCode, provinces.length]);
+
+  useEffect(() => {
+    if (!autoGenerateBranchCode || !provinceCode) {
+      setRegencies([]);
+      return;
+    }
+
+    loadRegencies(provinceCode);
+  }, [autoGenerateBranchCode, provinceCode]);
+
   const loadBranch = async () => {
     try {
       setLoading(true);
       const response = await branchesApi.getBranch(branchId);
       const branch: Branch = response.data.data;
+      setOriginalBranchCode(branch.branchCode);
       
       setFormData({
         branchCode: branch.branchCode,
@@ -66,18 +95,58 @@ export default function EditBranchPage() {
     }
   };
 
+  const loadProvinces = async () => {
+    try {
+      setLoadingProvinces(true);
+      setProvinces(await wilayahApi.getProvinces());
+    } catch (error) {
+      devError('Error loading provinces:', error);
+      showToast.error('Gagal memuat data provinsi');
+    } finally {
+      setLoadingProvinces(false);
+    }
+  };
+
+  const loadRegencies = async (selectedProvinceCode: string) => {
+    try {
+      setLoadingRegencies(true);
+      setRegencies(await wilayahApi.getRegencies(selectedProvinceCode));
+    } catch (error) {
+      devError('Error loading regencies:', error);
+      setRegencies([]);
+      showToast.error('Gagal memuat data kota/kabupaten');
+    } finally {
+      setLoadingRegencies(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     try {
       setSaving(true);
       const { branchCode, ...updateData } = formData;
-      await branchesApi.updateBranch(branchId, updateData);
+      const payload: UpdateBranchData = updateData;
+
+      if (canEditBranchCode) {
+        if (autoGenerateBranchCode) {
+          payload.autoGenerateBranchCode = true;
+          payload.provinceCode = provinceCode;
+          payload.regencyCode = regencyCode;
+        } else {
+          const normalizedCode = branchCode.trim().toUpperCase();
+          if (normalizedCode !== originalBranchCode) {
+            payload.branchCode = normalizedCode;
+          }
+        }
+      }
+
+      await branchesApi.updateBranch(branchId, payload);
       showToast.success('Cabang berhasil diperbarui');
       router.push(`/branches/${branchId}`);
-    } catch (error: any) {
+    } catch (error) {
       devError('Error updating branch:', error);
-      showToast.error(error.response?.data?.message || 'Gagal memperbarui cabang');
+      showToast.error(getApiErrorMessage(error));
     } finally {
       setSaving(false);
     }
@@ -155,10 +224,17 @@ export default function EditBranchPage() {
                 onChange={handleChange}
                 placeholder="Contoh: JKT01"
                 required
-                disabled
+                minLength={3}
+                maxLength={20}
+                pattern="[A-Za-z0-9]+"
+                disabled={!canEditBranchCode || autoGenerateBranchCode || saving}
                 className="form-input"
               />
-              <span className="form-hint">Kode cabang tidak dapat diubah</span>
+              <span className="form-hint">
+                {canEditBranchCode
+                  ? 'Gunakan 3-20 huruf/angka, atau aktifkan pembuatan otomatis.'
+                  : 'Hanya Super Admin yang dapat mengubah kode cabang.'}
+              </span>
             </div>
 
             <div className="form-group">
@@ -179,6 +255,80 @@ export default function EditBranchPage() {
               </select>
             </div>
           </div>
+
+          {canEditBranchCode && (
+            <div className="form-group auto-code-section">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={autoGenerateBranchCode}
+                  onChange={(event) => {
+                    setAutoGenerateBranchCode(event.target.checked);
+                    setProvinceCode('');
+                    setRegencyCode('');
+                  }}
+                  disabled={saving}
+                />
+                <span>Buat kode otomatis sesuai kode wilayah baru</span>
+              </label>
+
+              {autoGenerateBranchCode && (
+                <>
+                  <div className="form-row auto-code-fields">
+                    <div className="form-group">
+                      <label htmlFor="provinceCode">
+                        Provinsi <span className="required">*</span>
+                      </label>
+                      <select
+                        id="provinceCode"
+                        value={provinceCode}
+                        onChange={(event) => {
+                          setProvinceCode(event.target.value);
+                          setRegencyCode('');
+                        }}
+                        required
+                        disabled={saving || loadingProvinces}
+                        className="form-input"
+                      >
+                        <option value="">
+                          {loadingProvinces ? 'Memuat provinsi...' : 'Pilih provinsi'}
+                        </option>
+                        {provinces.map((province) => (
+                          <option key={province.code} value={province.code}>{province.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="regencyCode">
+                        Kabupaten/Kota <span className="required">*</span>
+                      </label>
+                      <select
+                        id="regencyCode"
+                        value={regencyCode}
+                        onChange={(event) => setRegencyCode(event.target.value)}
+                        required
+                        disabled={saving || loadingRegencies || !provinceCode}
+                        className="form-input"
+                      >
+                        <option value="">
+                          {loadingRegencies ? 'Memuat kabupaten/kota...' : 'Pilih kabupaten/kota'}
+                        </option>
+                        {regencies.map((regency) => (
+                          <option key={regency.code} value={regency.code}>{regency.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="auto-code-preview">
+                    <span>Kode wilayah + urutan cabang</span>
+                    <strong>{regencyCode ? `${regencyCode.replace(/\D/g, '')}xx` : 'Pilih kota'}</strong>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="form-group">
             <label htmlFor="name">
@@ -443,6 +593,39 @@ export default function EditBranchPage() {
         .form-hint {
           font-size: 12px;
           color: var(--text-muted);
+        }
+
+        .auto-code-section {
+          margin-top: 20px;
+          padding: 16px;
+          border: 1px solid var(--surface-border);
+          border-radius: var(--radius-md);
+          background: var(--surface-input);
+        }
+
+        .auto-code-fields {
+          margin-top: 16px;
+        }
+
+        .auto-code-preview {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-top: 16px;
+          padding: 12px 16px;
+          border: 1px solid rgba(245, 158, 11, 0.35);
+          border-radius: var(--radius-md);
+          background: rgba(245, 158, 11, 0.08);
+          color: var(--text-muted);
+          font-size: 13px;
+        }
+
+        .auto-code-preview strong {
+          color: #f59e0b;
+          font-size: 15px;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
         }
 
         .checkbox-label {

@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { createPortal } from 'react-dom';
-import { X, Package, Send, AlertTriangle, ChevronRight, Calendar, FileText, Info } from 'lucide-react';
+import { Package, Send, AlertTriangle, ChevronRight, Calendar, FileText, Info } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
 import { Shipment } from '@/lib/api/inventoryApi';
+import { ShipmentModal } from './ShipmentModal';
 
 interface SendShortageItem {
   productId: string;
@@ -27,20 +28,6 @@ export function SendShortageModal({
   onSubmit,
   loading = false,
 }: SendShortageModalProps) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, []);
-
   const shortageItems = useMemo<SendShortageItem[]>(() => {
     const currentShortageItems = shipment.items
       .filter(item => item.receivedQty !== undefined && Number(item.receivedQty) < Number(item.sentQty))
@@ -149,56 +136,17 @@ export function SendShortageModal({
     await onSubmit({ items, notes });
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !loading) {
-      onClose();
-    }
-  };
-
-  if (!mounted) return null;
-
-  const modalContent = (
-    <div className="fixed inset-0 z-[9999] overflow-hidden">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm transition-opacity"
-        onClick={handleBackdropClick}
-        aria-hidden="true"
-      />
-
-      {/* Modal Container */}
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div
-          className="relative w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all max-h-[90vh] flex flex-col"
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-700 flex-shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg shadow-blue-500/30">
-                <Send className="h-6 w-6 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                  Kirim Kekurangan Barang
-                </h2>
-                <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  {shipment.shipmentCode}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              className="rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
+  return (
+    <ShipmentModal
+      closeDisabled={loading}
+      icon={<Send className="h-6 w-6 text-white" />}
+      iconClassName="from-blue-400 to-blue-600 shadow-blue-500/30"
+      open
+      subtitle={shipment.shipmentCode}
+      title="Kirim Kekurangan Barang"
+      wrapBody={false}
+      onClose={onClose}
+    >
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-6 space-y-5">
             {/* Shipment Info Card */}
@@ -400,14 +348,16 @@ export function SendShortageModal({
 
           {/* Footer */}
           <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900/50 flex-shrink-0">
-            <button
+            <Button
+              unstyled
               onClick={onClose}
               disabled={loading}
               className="px-6 py-2.5 rounded-xl font-semibold text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-all disabled:opacity-50"
             >
               Batal
-            </button>
-            <button
+            </Button>
+            <Button
+              unstyled
               onClick={handleSubmit}
               disabled={loading || items.length === 0}
               className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-semibold hover:from-blue-600 hover:to-blue-700 transition-all shadow-lg shadow-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -423,12 +373,8 @@ export function SendShortageModal({
                   Kirim Kekurangan
                 </>
               )}
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
-    </div>
+    </ShipmentModal>
   );
-
-  return createPortal(modalContent, document.body);
 }

@@ -20,8 +20,10 @@ function getAuditedBranchId(user: { role: string; branchId: string | null }) {
 }
 
 export async function loginService(input: LoginInput, ipAddress?: string, userAgent?: string) {
+  const identifier = input.identifier;
   const user = await prisma.user.findUnique({
-    where: { email: input.email },
+    // The existing email column stores staff emails and member usernames.
+    where: { email: identifier },
     include: {
       profile: { select: { fullName: true, avatarUrl: true } },
       branch: { select: { id: true, branchCode: true } },
@@ -35,22 +37,22 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
       action: 'LOGIN_FAILED',
       module: 'AUTH',
       resource: 'Auth',
-      resourceId: user?.id || input.email,
+      resourceId: user?.id || identifier,
       entityType: 'User',
       entityId: user?.id || null,
-      entityCode: input.email,
+      entityCode: identifier,
       description: user && !user.isActive
-        ? `Percobaan login gagal untuk akun nonaktif ${input.email}.`
-        : `Percobaan login gagal untuk email tidak terdaftar ${input.email}.`,
+        ? `Percobaan login gagal untuk akun nonaktif ${identifier}.`
+        : `Percobaan login gagal untuk username/email tidak terdaftar ${identifier}.`,
       meta: {
-        attemptedEmail: input.email,
+        attemptedIdentifier: identifier,
         reason: user && !user.isActive ? 'Account inactive' : 'User not found',
       },
       ipAddress: ipAddress || 'unknown',
       userAgent: userAgent || 'unknown',
     }).catch(() => void 0);
 
-    throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
+    throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Username/email atau password salah.');
   }
 
   const isPasswordValid = await bcrypt.compare(input.password, user.password);
@@ -67,14 +69,14 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
       entityCode: user.email,
       description: `Percobaan login gagal untuk ${user.email}: password salah.`,
       meta: {
-        attemptedEmail: input.email,
+        attemptedIdentifier: identifier,
         reason: 'Invalid password',
       },
       ipAddress: ipAddress || 'unknown',
       userAgent: userAgent || 'unknown',
     }).catch(() => void 0);
 
-    throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Email atau password salah.');
+    throw new AppError(401, 'AUTH_INVALID_CREDENTIALS', 'Username/email atau password salah.');
   }
 
   prisma.user

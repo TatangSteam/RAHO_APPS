@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, Eye, EyeOff, Key, Mail, Building2, Copy, Check, RefreshCw } from 'lucide-react';
+import { X, Eye, EyeOff, Key, UserRound, Building2, Copy, Check, RefreshCw } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
 import { devError } from '@/lib/logger';
@@ -14,7 +14,7 @@ interface MemberCredentials {
   id: string;
   memberNo: string;
   userId: string;
-  email: string;
+  username: string;
   fullName: string;
   phone: string;
   isActive: boolean;
@@ -77,9 +77,9 @@ export default function MemberCredentialsModal({
   const [credentials, setCredentials] = useState<MemberCredentials | null>(null);
   
   // Edit states
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [newEmail, setNewEmail] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [savingUsername, setSavingUsername] = useState(false);
   
   // Password reset states
   const [showPasswordReset, setShowPasswordReset] = useState(false);
@@ -88,7 +88,7 @@ export default function MemberCredentialsModal({
   const [savingPassword, setSavingPassword] = useState(false);
   
   // Copy states
-  const [copiedEmail, setCopiedEmail] = useState(false);
+  const [copiedUsername, setCopiedUsername] = useState(false);
   const [copiedPassword, setCopiedPassword] = useState(false);
 
   useEffect(() => {
@@ -100,7 +100,7 @@ export default function MemberCredentialsModal({
   useEffect(() => {
     if (!isOpen) {
       // Reset states when modal closes
-      setEditingEmail(false);
+      setEditingUsername(false);
       setShowPasswordReset(false);
       setNewPassword('');
       setShowPassword(false);
@@ -112,7 +112,7 @@ export default function MemberCredentialsModal({
       setLoading(true);
       const response = await api.get(`/members/${memberId}/credentials`);
       setCredentials(response.data.data);
-      setNewEmail(response.data.data.email);
+      setNewUsername(response.data.data.username || response.data.data.email);
     } catch (error: any) {
       devError('Error loading credentials:', error);
       showToast.error('Gagal memuat data kredensial');
@@ -122,30 +122,30 @@ export default function MemberCredentialsModal({
     }
   };
 
-  const handleSaveEmail = async () => {
-    if (!newEmail.trim()) {
-      showToast.error('Email tidak boleh kosong');
+  const handleSaveUsername = async () => {
+    const normalizedUsername = newUsername.trim().toLowerCase();
+    if (!normalizedUsername) {
+      showToast.error('Username tidak boleh kosong');
       return;
     }
 
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newEmail)) {
-      showToast.error('Format email tidak valid');
+    if (!/^[a-zA-Z0-9._-]{4,30}$/.test(normalizedUsername)) {
+      showToast.error('Username harus 4-30 karakter dan hanya boleh berisi huruf, angka, titik, _ atau -');
       return;
     }
 
     try {
-      setSavingEmail(true);
-      await api.patch(`/members/${memberId}/email`, { email: newEmail });
-      showToast.success('Email berhasil diubah');
-      setEditingEmail(false);
+      setSavingUsername(true);
+      await api.patch(`/members/${memberId}/username`, { username: normalizedUsername });
+      showToast.success('Username berhasil diubah');
+      setEditingUsername(false);
       await loadCredentials();
       onSuccess?.();
     } catch (error: any) {
-      devError('Error updating email:', error);
-      showToast.error(error.response?.data?.error?.message || 'Gagal mengubah email');
+      devError('Error updating username:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal mengubah username');
     } finally {
-      setSavingEmail(false);
+      setSavingUsername(false);
     }
   };
 
@@ -180,17 +180,17 @@ export default function MemberCredentialsModal({
     setShowPassword(true);
   };
 
-  const copyToClipboard = async (text: string, type: 'email' | 'password') => {
+  const copyToClipboard = async (text: string, type: 'username' | 'password') => {
     try {
       await navigator.clipboard.writeText(text);
-      if (type === 'email') {
-        setCopiedEmail(true);
-        setTimeout(() => setCopiedEmail(false), 2000);
+      if (type === 'username') {
+        setCopiedUsername(true);
+        setTimeout(() => setCopiedUsername(false), 2000);
       } else {
         setCopiedPassword(true);
         setTimeout(() => setCopiedPassword(false), 2000);
       }
-      showToast.success(`${type === 'email' ? 'Email' : 'Password'} disalin ke clipboard`);
+      showToast.success(`${type === 'username' ? 'Username' : 'Password'} disalin ke clipboard`);
     } catch (error) {
       showToast.error('Gagal menyalin ke clipboard');
     }
@@ -279,45 +279,45 @@ export default function MemberCredentialsModal({
                 )}
               </div>
 
-              {/* Email Section */}
+              {/* Username Section */}
               <div className="space-y-2 sm:space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                    <Mail size={14} className="sm:hidden text-amber-500" />
-                    <Mail size={16} className="hidden sm:block text-amber-500" />
-                    Email
+                    <UserRound size={14} className="sm:hidden text-amber-500" />
+                    <UserRound size={16} className="hidden sm:block text-amber-500" />
+                    Username
                   </label>
-                  {!editingEmail && (
+                  {!editingUsername && (
                     <button
-                      onClick={() => setEditingEmail(true)}
+                      onClick={() => setEditingUsername(true)}
                       className="text-[10px] sm:text-xs text-amber-600 dark:text-amber-400 hover:underline font-medium"
                     >
-                      Ubah Email
+                      Ubah Username
                     </button>
                   )}
                 </div>
                 
-                {editingEmail ? (
+                {editingUsername ? (
                   <div className="space-y-2 sm:space-y-3">
                     <input
-                      type="email"
-                      value={newEmail}
-                      onChange={(e) => setNewEmail(e.target.value)}
+                      type="text"
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
                       className="w-full px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white text-sm focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none transition-all"
-                      placeholder="email@example.com"
+                      placeholder="contoh: budi.santoso"
                     />
                     <div className="flex gap-2">
                       <button
-                        onClick={handleSaveEmail}
-                        disabled={savingEmail}
+                        onClick={handleSaveUsername}
+                        disabled={savingUsername}
                         className="flex-1 px-3 sm:px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
                       >
-                        {savingEmail ? 'Menyimpan...' : 'Simpan'}
+                        {savingUsername ? 'Menyimpan...' : 'Simpan'}
                       </button>
                       <button
                         onClick={() => {
-                          setEditingEmail(false);
-                          setNewEmail(credentials.email);
+                          setEditingUsername(false);
+                          setNewUsername(credentials.username);
                         }}
                         className="px-3 sm:px-4 py-2 bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 text-neutral-700 dark:text-neutral-200 text-sm font-medium rounded-lg transition-colors"
                       >
@@ -328,15 +328,15 @@ export default function MemberCredentialsModal({
                 ) : (
                   <div className="flex items-center gap-2">
                     <div className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 text-neutral-900 dark:text-white font-mono text-xs sm:text-sm truncate">
-                      {credentials.email}
+                      {credentials.username}
                     </div>
                     <button
-                      onClick={() => copyToClipboard(credentials.email, 'email')}
+                      onClick={() => copyToClipboard(credentials.username, 'username')}
                       className="p-2 sm:p-2.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 transition-colors flex-shrink-0"
-                      title="Salin email"
+                      title="Salin username"
                     >
-                      {copiedEmail ? <Check size={16} className="sm:hidden text-emerald-500" /> : <Copy size={16} className="sm:hidden" />}
-                      {copiedEmail ? <Check size={18} className="hidden sm:block text-emerald-500" /> : <Copy size={18} className="hidden sm:block" />}
+                      {copiedUsername ? <Check size={16} className="sm:hidden text-emerald-500" /> : <Copy size={16} className="sm:hidden" />}
+                      {copiedUsername ? <Check size={18} className="hidden sm:block text-emerald-500" /> : <Copy size={18} className="hidden sm:block" />}
                     </button>
                   </div>
                 )}
