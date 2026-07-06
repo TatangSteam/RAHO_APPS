@@ -145,11 +145,13 @@ export const createMemberSchema = z.object({
   branchId: z.string().optional(),
   
   // Section A - Data Pribadi
-  fullName: z.string().min(3, 'Nama lengkap minimal 3 karakter'),
+  fullName: z.string().trim().min(3, 'Nama lengkap minimal 3 karakter'),
   identityType: IdentityTypeEnum.optional().default('NIK'),
   nik: z.string().optional(),
   birthPlace: z.string().optional(),
-  birthDate: z.string().optional(), // ISO date string
+  birthDate: z.string()
+    .min(1, 'Tanggal lahir wajib diisi')
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid'),
   gender: GenderEnum.optional(),
   religion: z.string().optional(), // Agama
   phone: z.string().min(10, 'Nomor telepon minimal 10 digit'),

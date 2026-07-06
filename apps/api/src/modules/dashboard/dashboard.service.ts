@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../lib/prisma';
+import { summarizeDashboardPackages } from './dashboard-statistics.helpers';
 
 /**
  * Service for dashboard statistics
@@ -148,55 +149,20 @@ export class DashboardService {
    * Get package statistics
    */
   private async getPackageStats(branchId: string, startDate: Date, endDate: Date) {
-    // Packages sold in period
-    const packagesSold = await prisma.memberPackage.count({
+    const packages = await prisma.memberPackage.findMany({
       where: {
         branchId,
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
+      },
+      select: {
+        id: true,
+        purchaseGroupId: true,
+        packageType: true,
+        status: true,
+        createdAt: true,
       },
     });
 
-    // Active packages
-    const activePackages = await prisma.memberPackage.count({
-      where: {
-        branchId,
-        status: 'ACTIVE',
-      },
-    });
-
-    // Pending payment packages (include WAITING_VERIFICATION)
-    const pendingPayment = await prisma.memberPackage.count({
-      where: {
-        branchId,
-        status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] },
-      },
-    });
-
-    // Package types breakdown
-    const packagesByType = await prisma.memberPackage.groupBy({
-      by: ['packageType'],
-      where: {
-        branchId,
-        createdAt: {
-          gte: startDate,
-          lte: endDate,
-        },
-      },
-      _count: true,
-    });
-
-    return {
-      packagesSold,
-      activePackages,
-      pendingPayment,
-      byType: packagesByType.map((p) => ({
-        type: p.packageType,
-        count: p._count,
-      })),
-    };
+    return summarizeDashboardPackages(packages, startDate, endDate);
   }
 
   /**

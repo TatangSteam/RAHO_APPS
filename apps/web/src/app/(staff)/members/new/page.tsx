@@ -24,6 +24,9 @@ interface Branch {
 
 interface FormFieldErrors {
   memberUsername?: string;
+  fullName?: string;
+  nik?: string;
+  birthDate?: string;
 }
 
 const DUPLICATE_USERNAME_MESSAGE = 'Username sudah digunakan. Gunakan username lain untuk akun member.';
@@ -183,11 +186,29 @@ export default function NewMemberPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
 
+    if (name === 'memberUsername' || name === 'fullName' || name === 'nik' || name === 'birthDate') {
+      setFieldErrors((prev) => ({ ...prev, [name]: undefined }));
+    }
+
+    if (name === 'identityType') {
+      setFieldErrors((prev) => ({ ...prev, nik: undefined }));
+    }
+
     if (name === 'memberUsername') {
-      setFieldErrors((prev) => ({ ...prev, memberUsername: undefined }));
       if (formError.toLowerCase().includes('username')) {
         setFormError('');
       }
+    }
+
+    if (
+      (name === 'fullName' || name === 'birthDate') &&
+      formError.toLowerCase().includes('nama dan tanggal lahir')
+    ) {
+      setFormError('');
+    }
+
+    if ((name === 'nik' || name === 'identityType') && /nik|nomor identitas/i.test(formError)) {
+      setFormError('');
     }
     
     if (type === 'checkbox') {
@@ -345,6 +366,20 @@ export default function NewMemberPage() {
         showToast.error(DUPLICATE_USERNAME_MESSAGE);
         requestAnimationFrame(() => {
           document.querySelector<HTMLInputElement>('[name="memberUsername"]')?.focus();
+        });
+      } else if (errorCode === 'NIK_EXISTS' || errorCode === 'IDENTITY_EXISTS') {
+        setFormError(errorMessage);
+        setFieldErrors({ nik: errorMessage });
+        showToast.error(errorMessage);
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLInputElement>('[name="nik"]')?.focus();
+        });
+      } else if (errorCode === 'MEMBER_NAME_BIRTH_DATE_EXISTS') {
+        setFormError(errorMessage);
+        setFieldErrors({ fullName: errorMessage, birthDate: errorMessage });
+        showToast.error(errorMessage);
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLInputElement>('[name="fullName"]')?.focus();
         });
       } else {
         setFormError(errorMessage);
@@ -519,7 +554,7 @@ export default function NewMemberPage() {
           </div>
         )}
 
-        <PersonalDataSection formData={formData} onChange={handleInputChange} />
+        <PersonalDataSection formData={formData} onChange={handleInputChange} errors={fieldErrors} />
         
         <AccountSection 
           formData={formData} 

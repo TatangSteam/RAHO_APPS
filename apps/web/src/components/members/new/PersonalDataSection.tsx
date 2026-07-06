@@ -1,11 +1,29 @@
 'use client';
 
+import type { CSSProperties } from 'react';
 import type { CreateMemberData } from '@/types/member';
 
 interface PersonalDataSectionProps {
   formData: CreateMemberData;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
+  errors?: {
+    fullName?: string;
+    nik?: string;
+    birthDate?: string;
+  };
 }
+
+const invalidInputStyle: CSSProperties = {
+  borderColor: '#ef4444',
+  boxShadow: '0 0 0 1px rgba(239, 68, 68, 0.35)',
+};
+
+const fieldErrorStyle: CSSProperties = {
+  marginTop: '6px',
+  fontSize: '12px',
+  color: '#ef4444',
+  fontWeight: 600,
+};
 
 function calculateAge(birthDate?: string): string {
   if (!birthDate) return '';
@@ -24,7 +42,7 @@ function calculateAge(birthDate?: string): string {
   return age >= 0 ? `${age} tahun` : '';
 }
 
-export default function PersonalDataSection({ formData, onChange }: PersonalDataSectionProps) {
+export default function PersonalDataSection({ formData, onChange, errors }: PersonalDataSectionProps) {
   const identityType = formData.identityType || 'NIK';
   const autoIdentityTypes = ['VIP', 'SPECIAL', 'FOREIGN_AUTO', 'NO_NIK'];
   const isAutoIdentity = autoIdentityTypes.includes(identityType);
@@ -77,7 +95,11 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
             required
             className="form-input"
             placeholder="Masukkan nama lengkap"
+            aria-invalid={!!errors?.fullName}
+            aria-describedby={errors?.fullName ? 'fullName-error' : undefined}
+            style={errors?.fullName ? invalidInputStyle : undefined}
           />
+          {errors?.fullName && <p id="fullName-error" style={fieldErrorStyle}>{errors.fullName}</p>}
         </div>
 
         {/* Jenis Identitas - 6 cols on desktop, full on mobile */}
@@ -117,7 +139,11 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
             className="form-input"
             placeholder={isAutoIdentity ? 'Akan dibuat otomatis saat member disimpan' : identityPlaceholder}
             maxLength={identityType === 'NIK' ? 16 : 32}
+            aria-invalid={!!errors?.nik}
+            aria-describedby={errors?.nik ? 'nik-error' : undefined}
+            style={errors?.nik ? invalidInputStyle : undefined}
           />
+          {errors?.nik && <p id="nik-error" style={fieldErrorStyle}>{errors.nik}</p>}
           <p style={{ marginTop: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
             {isAutoIdentity
               ? 'Sistem akan mengisi kode unik otomatis di database, tidak memengaruhi nomor member.'
@@ -172,7 +198,11 @@ export default function PersonalDataSection({ formData, onChange }: PersonalData
             onChange={onChange}
             required
             className="form-input"
+            aria-invalid={!!errors?.birthDate}
+            aria-describedby={errors?.birthDate ? 'birthDate-error' : undefined}
+            style={errors?.birthDate ? invalidInputStyle : undefined}
           />
+          {errors?.birthDate && <p id="birthDate-error" style={fieldErrorStyle}>{errors.birthDate}</p>}
         </div>
 
         {/* Umur - otomatis dari tanggal lahir */}

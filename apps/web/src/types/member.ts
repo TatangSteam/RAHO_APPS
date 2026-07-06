@@ -106,7 +106,7 @@ export interface CreateMemberData {
   identityType?: 'NIK' | 'PASSPORT' | 'KITAS' | 'VIP' | 'SPECIAL' | 'FOREIGN_AUTO' | 'NO_NIK';
   nik?: string;
   birthPlace?: string;
-  birthDate?: string;
+  birthDate: string;
   gender?: 'L' | 'P'; // L = Laki-laki, P = Perempuan
   religion?: string; // Agama
   phone: string;

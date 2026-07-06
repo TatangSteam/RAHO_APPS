@@ -4,6 +4,11 @@ import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { deleteFileByUrl } from '../../../config/minio';
+import {
+  cleanMemberName,
+  hasMatchingMemberName,
+  parseMemberBirthDate,
+} from './member-registration.helpers';
 
 const HASH_ROUNDS = 12;
 
@@ -58,6 +63,53 @@ export class MemberUpdateService {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
     }
 
+    const requestedFullName = cleanMemberName(
+      data.fullName ?? member.user.profile?.fullName ?? '',
+    );
+    const requestedBirthDate =
+      data.birthDate !== undefined
+        ? parseMemberBirthDate(data.birthDate)
+        : member.dateOfBirth;
+
+    if (data.birthDate !== undefined && !requestedBirthDate) {
+      throw {
+        status: 400,
+        code: 'INVALID_BIRTH_DATE',
+        message: 'Tanggal lahir wajib diisi dengan tanggal yang valid',
+      };
+    }
+
+    if (requestedBirthDate && (data.fullName !== undefined || data.birthDate !== undefined)) {
+      const membersWithSameBirthDate = await prisma.member.findMany({
+        where: {
+          id: { not: memberId },
+          dateOfBirth: requestedBirthDate,
+        },
+        select: {
+          user: {
+            select: {
+              profile: {
+                select: { fullName: true },
+              },
+            },
+          },
+        },
+      });
+
+      if (
+        hasMatchingMemberName(
+          requestedFullName,
+          membersWithSameBirthDate.map((candidate) => candidate.user.profile?.fullName),
+        )
+      ) {
+        throw {
+          status: 409,
+          code: 'MEMBER_NAME_BIRTH_DATE_EXISTS',
+          message: 'Member dengan nama dan tanggal lahir yang sama sudah terdaftar',
+        };
+      }
+    }
+
     // Check if phone number is being changed and already exists
     if (data.phone && data.phone !== member.user.profile?.phone) {
       const existingPhone = await prisma.userProfile.findFirst({
@@ -104,8 +156,8 @@ export class MemberUpdateService {
       if (existingIdentity) {
         throw {
           status: 409,
-          code: 'IDENTITY_EXISTS',
-          message: 'Nomor identitas sudah terdaftar',
+          code: 'NIK_EXISTS',
+          message: 'NIK atau nomor identitas sudah terdaftar pada member lain',
         };
       }
     }
@@ -125,7 +177,7 @@ export class MemberUpdateService {
         await tx.userProfile.update({
           where: { userId: member.userId },
           data: {
-            ...(data.fullName !== undefined && { fullName: data.fullName }),
+            ...(data.fullName !== undefined && { fullName: requestedFullName }),
             ...(data.phone !== undefined && { phone: data.phone })
           }
         });
@@ -135,7 +187,7 @@ export class MemberUpdateService {
       const memberUpdateData: any = {};
       if (data.nik !== undefined) memberUpdateData.nik = data.nik || null;
       if (data.birthPlace !== undefined) memberUpdateData.tempatLahir = data.birthPlace || null;
-      if (data.birthDate !== undefined) memberUpdateData.dateOfBirth = data.birthDate ? new Date(data.birthDate) : null;
+      if (data.birthDate !== undefined) memberUpdateData.dateOfBirth = requestedBirthDate;
       if (data.gender !== undefined) memberUpdateData.jenisKelamin = data.gender || null;
       if (data.religion !== undefined) memberUpdateData.agama = data.religion || null;
       if (data.address !== undefined) memberUpdateData.address = data.address || null;

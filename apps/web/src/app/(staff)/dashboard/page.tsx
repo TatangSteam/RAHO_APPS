@@ -163,7 +163,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <StatCard 
             icon={<Package className="h-5 w-5" />}
             label="Paket Terjual"
@@ -188,7 +188,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Secondary Stats Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard 
             icon={<CheckCircle2 className="h-5 w-5" />}
             label="Sesi Selesai"

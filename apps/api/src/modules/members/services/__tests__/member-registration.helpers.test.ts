@@ -1,9 +1,24 @@
 import {
+  cleanMemberName,
+  hasMatchingMemberName,
+  normalizeMemberName,
   parseMemberBirthDate,
   resolveMemberIdentityNumber,
 } from '../member-registration.helpers';
 
 describe('member registration helpers', () => {
+  describe('member name matching', () => {
+    it('normalizes casing and repeated whitespace', () => {
+      expect(cleanMemberName('  Budi   Santoso  ')).toBe('Budi Santoso');
+      expect(normalizeMemberName('  BUDI   Santoso  ')).toBe('budi santoso');
+    });
+
+    it('matches an existing member name regardless of casing and whitespace', () => {
+      expect(hasMatchingMemberName('Budi Santoso', ['budi   santoso'])).toBe(true);
+      expect(hasMatchingMemberName('Budi Santoso', ['Budi Hartono', null])).toBe(false);
+    });
+  });
+
   describe('parseMemberBirthDate', () => {
     it('parses valid dates within the supported year range', () => {
       expect(parseMemberBirthDate('1990-01-15', 2026)?.toISOString()).toBe(
@@ -16,6 +31,7 @@ describe('member registration helpers', () => {
 
     it('rejects malformed dates and years outside the supported range', () => {
       expect(parseMemberBirthDate('not-a-date', 2026)).toBeNull();
+      expect(parseMemberBirthDate('1990-02-31', 2026)).toBeNull();
       expect(parseMemberBirthDate('1899-12-31', 2026)).toBeNull();
       expect(parseMemberBirthDate('2028-01-01', 2026)).toBeNull();
     });

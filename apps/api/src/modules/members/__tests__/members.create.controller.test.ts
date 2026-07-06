@@ -47,6 +47,7 @@ describe('MembersController.createMember', () => {
       body: {
         branchId: 'branch-1',
         fullName: 'Member Test',
+        birthDate: '1990-01-15',
         phone: '081234567890',
         memberUsername: 'member.test',
         memberPassword: 'password123',
@@ -92,6 +93,7 @@ describe('MembersController.createMember', () => {
       body: {
         branchId: 'missing-branch',
         fullName: 'Member Test',
+        birthDate: '1990-01-15',
         phone: '081234567890',
         memberUsername: 'member.test',
         memberPassword: 'password123',

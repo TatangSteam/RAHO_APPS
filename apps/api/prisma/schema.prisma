@@ -432,6 +432,7 @@ model Member {
   @@index([registrationBranchId, isActive])
   @@index([referralCodeId])
   @@index([nik])
+  @@index([dateOfBirth])
   @@index([voucherCount])
   @@map("members")
 }

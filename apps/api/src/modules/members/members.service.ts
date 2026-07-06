@@ -102,7 +102,7 @@ export class MembersService {
       fullName: string;
       nik?: string;
       birthPlace?: string;
-      birthDate?: string;
+      birthDate: string;
       gender?: string;
       phone: string;
       email?: string;

@@ -28,17 +28,18 @@ function formatWindow(windowMs: number): string {
   return `${totalHours} jam`;
 }
 
-function shouldSkipRateLimit(req: Request): boolean {
+function shouldSkipRateLimit(_req: Request): boolean {
   if (env.E2E_DISABLE_RATE_LIMIT) {
     return true;
   }
 
-  if (env.NODE_ENV === 'production') {
-    return false;
+  // The application dashboard legitimately performs many parallel API calls.
+  // Do not let the shared in-memory limiter interrupt local development/tests.
+  if (env.NODE_ENV !== 'production') {
+    return true;
   }
 
-  const e2eHeader = req.headers['x-e2e-test'];
-  return e2eHeader === 'true' || (Array.isArray(e2eHeader) && e2eHeader.includes('true'));
+  return false;
 }
 
 /**

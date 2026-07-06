@@ -6,6 +6,8 @@ import bcrypt from 'bcryptjs';
 import { uploadFile } from '../../../config/minio';
 import { processFile } from '../../../utils/imageProcessor';
 import {
+  cleanMemberName,
+  hasMatchingMemberName,
   parseMemberBirthDate,
   resolveMemberIdentityNumber,
 } from './member-registration.helpers';
@@ -23,7 +25,7 @@ export class MemberRegistrationService {
       identityType?: string;
       nik?: string;
       birthPlace?: string;
-      birthDate?: string;
+      birthDate: string;
       gender?: string;
       religion?: string;
       phone: string;
@@ -54,6 +56,17 @@ export class MemberRegistrationService {
     branchId: string,
     userId: string
   ) {
+    const fullName = cleanMemberName(data.fullName);
+    const birthDate = data.birthDate ? parseMemberBirthDate(data.birthDate) : null;
+
+    if (!birthDate) {
+      throw {
+        status: 400,
+        code: 'INVALID_BIRTH_DATE',
+        message: 'Tanggal lahir wajib diisi dengan tanggal yang valid',
+      };
+    }
+
     // The existing User.email column stores member usernames without a DB migration.
     const existingUsername = await prisma.user.findUnique({
       where: { email: data.memberUsername },
@@ -88,10 +101,39 @@ export class MemberRegistrationService {
       if (existingIdentity) {
         throw {
           status: 409,
-          code: 'IDENTITY_EXISTS',
-          message: 'Nomor identitas sudah terdaftar',
+          code: data.identityType === 'NIK' ? 'NIK_EXISTS' : 'IDENTITY_EXISTS',
+          message:
+            data.identityType === 'NIK'
+              ? 'NIK sudah terdaftar pada member lain'
+              : 'Nomor identitas sudah terdaftar pada member lain',
         };
       }
+    }
+
+    const membersWithSameBirthDate = await prisma.member.findMany({
+      where: { dateOfBirth: birthDate },
+      select: {
+        user: {
+          select: {
+            profile: {
+              select: { fullName: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (
+      hasMatchingMemberName(
+        fullName,
+        membersWithSameBirthDate.map((member) => member.user.profile?.fullName),
+      )
+    ) {
+      throw {
+        status: 409,
+        code: 'MEMBER_NAME_BIRTH_DATE_EXISTS',
+        message: 'Member dengan nama dan tanggal lahir yang sama sudah terdaftar',
+      };
     }
 
     // Validate referral code if provided and set incentive values
@@ -176,7 +218,7 @@ export class MemberRegistrationService {
           role: 'MEMBER',
           profile: {
             create: {
-              fullName: data.fullName,
+              fullName,
               phone: data.phone,
             },
           },
@@ -197,7 +239,7 @@ export class MemberRegistrationService {
           isConsentToPhoto: data.isConsentToPhoto ?? true,
           nik: identityNumber,
           tempatLahir: data.birthPlace || null,
-          dateOfBirth: data.birthDate ? parseMemberBirthDate(data.birthDate) : null,
+          dateOfBirth: birthDate,
           jenisKelamin: data.gender as any || null,
           agama: data.religion || null,
           address: data.address || null,
@@ -235,7 +277,7 @@ export class MemberRegistrationService {
         userId: result.user.id,
         type: 'INFO',
         title: 'Selamat Datang di Raho ERP',
-        body: `Halo ${data.fullName}, akun Anda telah berhasil dibuat. Member No: ${memberNo}`,
+        body: `Halo ${fullName}, akun Anda telah berhasil dibuat. Member No: ${memberNo}`,
         status: 'UNREAD',
       },
     });
