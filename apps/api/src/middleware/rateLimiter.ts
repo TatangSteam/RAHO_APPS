@@ -15,16 +15,16 @@ function getClientIp(req: Request): string {
 function formatWindow(windowMs: number): string {
   const totalSeconds = Math.ceil(windowMs / 1000);
 
-  if (totalSeconds < 60) {
+  if (totalSeconds < 30) {
     return `${totalSeconds} detik`;
   }
 
-  const totalMinutes = Math.ceil(totalSeconds / 60);
-  if (totalMinutes < 60) {
+  const totalMinutes = Math.ceil(totalSeconds / 30);
+  if (totalMinutes < 30) {
     return `${totalMinutes} menit`;
   }
 
-  const totalHours = Math.ceil(totalMinutes / 60);
+  const totalHours = Math.ceil(totalMinutes / 30);
   return `${totalHours} jam`;
 }
 
