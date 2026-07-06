@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { getAggregatePackageStatus } from './package-retrieval.helpers';
 
 /**
  * Service for retrieving package data
@@ -132,7 +133,7 @@ export class PackageRetrievalService {
           totalPrice: group.reduce((sum, item) => {
             return sum + (item.finalPrice || item.totalPrice || 0);
           }, 0),
-          status: group[0]?.status,
+          status: getAggregatePackageStatus(group) || group[0]?.status,
           createdAt: group[0]?.createdAt,
         };
       });

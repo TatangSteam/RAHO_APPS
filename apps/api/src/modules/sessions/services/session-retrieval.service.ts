@@ -70,13 +70,6 @@ export class SessionRetrievalService {
       throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
     }
 
-    // Calculate branch-specific infusKe
-    const branchInfusKe = await this.calculateBranchInfusKe(
-      session.encounter.memberId,
-      session.branchId,
-      session.infusKe
-    );
-
     // Get branch info
     const branch = await prisma.branch.findUnique({
       where: { id: session.branchId },
@@ -87,7 +80,7 @@ export class SessionRetrievalService {
     const steps = this.calculateStepCompletion(session, diagnosis);
 
     return {
-      session: this.formatSessionData(session, branchInfusKe, branch),
+      session: this.formatSessionData(session, session.branchInfusKe, branch),
       memberId: session.encounter.memberId, // Add memberId at top level for frontend
       diagnosis,
       therapyPlan: session.therapyPlan,
@@ -330,13 +323,6 @@ export class SessionRetrievalService {
       sessions.map(async (session) => {
         const diagnosis = session.encounter.diagnoses[0];
 
-        // Calculate branch-specific infusKe
-        const branchInfusKe = await this.calculateBranchInfusKe(
-          session.encounter.memberId,
-          session.branchId,
-          session.infusKe
-        );
-
         // Get branch info
         const branch = await prisma.branch.findUnique({
           where: { id: session.branchId },
@@ -371,11 +357,11 @@ export class SessionRetrievalService {
         // Calculate session count per branch
         const branchSessionCounts = await Promise.all(
           memberBranches.map(async (mb) => {
-            const count = await prisma.treatmentSession.count({
+            const latestBranchSession = await prisma.treatmentSession.findFirst({
               where: {
+                branchId: mb.branchId,
                 encounter: {
                   memberId: session.encounter.memberId,
-                  branchId: mb.branchId,
                   memberPackage: {
                     packageType: 'BASIC',
                   },
@@ -384,13 +370,15 @@ export class SessionRetrievalService {
                   lte: session.infusKe,
                 },
               },
+              select: { branchInfusKe: true },
+              orderBy: { branchInfusKe: 'desc' },
             });
 
             return {
               branchId: mb.branchId,
               branchName: mb.branch.name,
               branchCode: mb.branch.branchCode,
-              sessionCount: count,
+              sessionCount: latestBranchSession?.branchInfusKe || 0,
             };
           })
         );
@@ -402,7 +390,7 @@ export class SessionRetrievalService {
             encounterId: session.encounterId,
             encounterCode: session.encounter.encounterCode,
             infusKe: session.infusKe, // Total therapy count (global)
-            branchInfusKe: branchInfusKe, // Therapy count at current branch
+            branchInfusKe: session.branchInfusKe, // Persisted therapy number at current branch
             branchId: session.branchId,
             branchName: branch?.name || 'Unknown',
             branchCode: branch?.branchCode || 'UNK',
@@ -465,34 +453,6 @@ export class SessionRetrievalService {
     );
 
     return formattedSessions;
-  }
-
-  /**
-   * Calculate branch-specific infusKe
-   * Only counts sessions from BASIC packages
-   */
-  private async calculateBranchInfusKe(
-    memberId: string,
-    branchId: string,
-    currentInfusKe: number
-  ): Promise<number> {
-    const branchSessions = await prisma.treatmentSession.findMany({
-      where: {
-        encounter: {
-          memberId,
-          branchId,
-          memberPackage: {
-            packageType: 'BASIC',
-          },
-        },
-        infusKe: {
-          lte: currentInfusKe,
-        },
-      },
-      orderBy: { infusKe: 'asc' },
-    });
-
-    return branchSessions.length;
   }
 
   /**

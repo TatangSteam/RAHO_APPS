@@ -129,6 +129,7 @@ export class TherapyPlanService {
             sessionCode: true,
             treatmentDate: true,
             infusKe: true,
+            branchInfusKe: true,
             branch: {
               select: {
                 name: true,
@@ -184,7 +185,7 @@ export class TherapyPlanService {
             branchName: plan.session.branch.name,
             branchCode: plan.session.branch.branchCode,
             totalSessionsCount: plan.session.infusKe,
-            branchSessionsCount: plan.session.infusKe,
+            branchSessionsCount: plan.session.branchInfusKe,
           }
         : undefined,
       createdAt: plan.createdAt.toISOString(),

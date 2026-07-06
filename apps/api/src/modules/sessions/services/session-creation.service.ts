@@ -70,8 +70,11 @@ export class SessionCreationService {
         `✍️ [SESSION-NUMBER] Manual mode - User set Global: ${globalInfusKe}, Branch: ${branchInfusKe}`
       );
       
-      // Validate that this global infusKe is not already used for this member
-      await this.validateManualInfusKe(sessionData.memberId, globalInfusKe);
+      // Validate that neither manual number is already used in its scope.
+      await Promise.all([
+        this.validateManualInfusKe(sessionData.memberId, globalInfusKe),
+        this.validateManualBranchInfusKe(sessionData.memberId, branchId, branchInfusKe),
+      ]);
     } else {
       // AUTOMATIC MODE: Calculate based on existing sessions
       const calculated = await this.calculateInfusKe(sessionData.memberId, branchId);
@@ -96,6 +99,7 @@ export class SessionCreationService {
       branchId,
       branch,
       globalInfusKe,
+      branchInfusKe,
       memberPackage
     );
 
@@ -361,26 +365,19 @@ export class SessionCreationService {
 
   /**
    * Resolve therapy plan for this session.
-   * If no plan is selected, choose active set plan by the member's global session number.
+   *
+   * planNumber is the plan's order inside a therapy-plan set, while infusKe is
+   * the member's global session number. They normally progress together, but
+   * they can differ when a member's session history starts with a manual number.
    */
   private async resolveTherapyPlanForSession(therapyPlanId: string | undefined, memberId: string, infusKe: number) {
     if (therapyPlanId) {
-      const selectedPlan = await this.validateTherapyPlan(therapyPlanId, memberId);
-      if (selectedPlan.planNumber && selectedPlan.planNumber !== infusKe) {
-        throw {
-          status: 422,
-          code: 'THERAPY_PLAN_NUMBER_MISMATCH',
-          message: `Therapy plan yang dipilih adalah Terapi #${selectedPlan.planNumber}, sedangkan sesi ini Terapi #${infusKe}. Pilih plan yang sesuai.`,
-        };
-      }
-
-      return selectedPlan;
+      return this.validateTherapyPlan(therapyPlanId, memberId);
     }
 
     const therapyPlan = await prisma.therapyPlan.findFirst({
       where: {
         memberId,
-        planNumber: infusKe,
         treatmentSessionId: null,
         supersededById: null,
         therapyPlanSet: {
@@ -390,14 +387,17 @@ export class SessionCreationService {
       include: {
         therapyPlanSet: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [
+        { planNumber: 'asc' },
+        { createdAt: 'asc' },
+      ],
     });
 
     if (!therapyPlan) {
       throw {
         status: 422,
         code: 'THERAPY_PLAN_AUTO_SELECT_FAILED',
-        message: `Tidak ada therapy plan aktif untuk Terapi #${infusKe}. Buat set therapy plan bulk dengan baris #${infusKe} terlebih dahulu.`,
+        message: `Tidak ada therapy plan aktif yang belum digunakan untuk sesi Terapi #${infusKe}. Tambahkan therapy plan baru terlebih dahulu.`,
       };
     }
 
@@ -578,39 +578,71 @@ export class SessionCreationService {
   }
 
   /**
+   * Validate a manual branch session number within one member and branch.
+   */
+  private async validateManualBranchInfusKe(
+    memberId: string,
+    branchId: string,
+    branchInfusKe: number
+  ) {
+    const existingSession = await prisma.treatmentSession.findFirst({
+      where: {
+        branchId,
+        branchInfusKe,
+        encounter: { memberId },
+      },
+      select: {
+        sessionCode: true,
+        treatmentDate: true,
+      },
+    });
+
+    if (existingSession) {
+      throw {
+        status: 422,
+        code: 'BRANCH_INFUS_KE_ALREADY_USED',
+        message: `Nomor sesi cabang ${branchInfusKe} sudah digunakan untuk sesi ${existingSession.sessionCode} pada ${new Date(existingSession.treatmentDate).toLocaleDateString('id-ID')}. Silakan pilih nomor lain.`,
+      };
+    }
+  }
+
+  /**
    * Calculate global and branch-specific infusKe
    * Only counts sessions from BASIC packages
    */
   private async calculateInfusKe(memberId: string, branchId: string) {
-    // Get all sessions for this member across all branches (BASIC only)
-    const allMemberSessions = await prisma.treatmentSession.findMany({
-      where: {
-        encounter: {
-          memberId,
-          memberPackage: {
-            packageType: 'BASIC',
+    const [latestGlobalSession, latestBranchSession] = await Promise.all([
+      // Highest global number for this member across all branches.
+      prisma.treatmentSession.findFirst({
+        where: {
+          encounter: {
+            memberId,
+            memberPackage: {
+              packageType: 'BASIC',
+            },
           },
         },
-      },
-      orderBy: { infusKe: 'desc' },
-      take: 1,
-    });
-
-    // Count sessions for this member in current branch only (BASIC only)
-    const branchSessionCount = await prisma.treatmentSession.count({
-      where: {
-        encounter: {
-          memberId,
+        select: { infusKe: true },
+        orderBy: { infusKe: 'desc' },
+      }),
+      // Highest persisted branch number so a manual starting number continues.
+      prisma.treatmentSession.findFirst({
+        where: {
           branchId,
-          memberPackage: {
-            packageType: 'BASIC',
+          encounter: {
+            memberId,
+            memberPackage: {
+              packageType: 'BASIC',
+            },
           },
         },
-      },
-    });
+        select: { branchInfusKe: true },
+        orderBy: { branchInfusKe: 'desc' },
+      }),
+    ]);
 
-    const globalInfusKe = allMemberSessions.length > 0 ? allMemberSessions[0].infusKe + 1 : 1;
-    const branchInfusKe = branchSessionCount + 1;
+    const globalInfusKe = latestGlobalSession ? latestGlobalSession.infusKe + 1 : 1;
+    const branchInfusKe = latestBranchSession ? latestBranchSession.branchInfusKe + 1 : 1;
 
     return { globalInfusKe, branchInfusKe };
   }
@@ -623,6 +655,7 @@ export class SessionCreationService {
     branchId: string,
     branch: any,
     globalInfusKe: number,
+    branchInfusKe: number,
     memberPackage: any
   ) {
     return await prisma.$transaction(async (tx) => {
@@ -660,6 +693,7 @@ export class SessionCreationService {
           encounterId: encounter.id,
           branchId,
           infusKe: globalInfusKe,
+          branchInfusKe,
           pelaksanaan: data.pelaksanaan,
           treatmentDate: new Date(data.treatmentDate),
           adminLayananId: data.adminLayananId,

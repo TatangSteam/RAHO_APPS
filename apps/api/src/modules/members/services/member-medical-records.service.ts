@@ -242,6 +242,7 @@ export class MemberMedicalRecordsService {
             sessionCode: true,
             treatmentDate: true,
             infusKe: true,
+            branchInfusKe: true,
             branchId: true,
             branch: {
               select: {
@@ -263,37 +264,6 @@ export class MemberMedicalRecordsService {
         let sessionInfo = null;
 
         if (plan.session) {
-          // Get total sessions count (global) up to this session
-          const totalSessionsCount = await prisma.treatmentSession.count({
-            where: {
-              encounter: {
-                memberId,
-                memberPackage: {
-                  packageType: 'BASIC',
-                },
-              },
-              infusKe: {
-                lte: plan.session.infusKe,
-              },
-            },
-          });
-
-          // Get branch-specific sessions count up to this session
-          const branchSessionsCount = await prisma.treatmentSession.count({
-            where: {
-              encounter: {
-                memberId,
-                branchId: plan.session.branchId,
-                memberPackage: {
-                  packageType: 'BASIC',
-                },
-              },
-              infusKe: {
-                lte: plan.session.infusKe,
-              },
-            },
-          });
-
           sessionInfo = {
             id: plan.session.id,
             sessionCode: plan.session.sessionCode,
@@ -302,8 +272,8 @@ export class MemberMedicalRecordsService {
             branchName: plan.session.branch.name,
             branchCode: plan.session.branch.branchCode,
             // Session counts
-            totalSessionsCount, // Terapi ke-X (global)
-            branchSessionsCount, // Terapi ke-X di cabang ini
+            totalSessionsCount: plan.session.infusKe, // Terapi ke-X (global)
+            branchSessionsCount: plan.session.branchInfusKe, // Terapi ke-X di cabang ini
           };
         }
 

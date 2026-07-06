@@ -984,6 +984,7 @@ model TreatmentSession {
   encounterId      String
   branchId         String
   infusKe          Int
+  branchInfusKe    Int
   pelaksanaan      SessionType
   treatmentDate    DateTime
   isCompleted      Boolean     @default(false)
@@ -1017,6 +1018,7 @@ model TreatmentSession {
 
   @@index([encounterId])
   @@index([branchId, treatmentDate])
+  @@index([branchId, branchInfusKe])
   @@index([doctorId, treatmentDate])
   @@index([isCompleted])
   @@map("treatment_sessions")

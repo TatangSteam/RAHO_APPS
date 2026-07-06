@@ -2,12 +2,28 @@ import type {
   GroupedPackage,
   MemberPackage,
   PackageDisplay,
+  PackageStatus,
   PackageType,
 } from '@/types/package';
 
 export interface MemberVoucherTotals {
   basic: number;
   booster: number;
+}
+
+const AGGREGATE_STATUS_PRIORITY: PackageStatus[] = [
+  'ACTIVE',
+  'WAITING_VERIFICATION',
+  'PENDING_PAYMENT',
+  'EXPIRED',
+  'CANCELLED',
+];
+
+export function getAggregatePackageStatus(
+  items: ReadonlyArray<{ status?: PackageStatus }>,
+): PackageStatus | undefined {
+  const statuses = new Set(items.map((item) => item.status).filter(Boolean));
+  return AGGREGATE_STATUS_PRIORITY.find((status) => statuses.has(status));
 }
 
 function getActiveRemainingSessions(memberPackage: MemberPackage | undefined): number {

@@ -61,6 +61,7 @@ export interface CreateSessionResponse {
   encounterId: string;
   encounterCode: string;
   infusKe: number;
+  branchInfusKe: number;
   message: string;
 }
 

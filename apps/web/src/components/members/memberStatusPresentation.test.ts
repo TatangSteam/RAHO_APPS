@@ -4,7 +4,10 @@ import type {
   PackageDisplay,
   StandalonePackage,
 } from '@/types/package';
-import { getMemberVoucherTotals } from './memberStatusPresentation';
+import {
+  getAggregatePackageStatus,
+  getMemberVoucherTotals,
+} from './memberStatusPresentation';
 
 function createMemberPackage(
   packageType: MemberPackage['packageType'],
@@ -37,6 +40,24 @@ function createGroup(overrides: Partial<GroupedPackage> = {}): GroupedPackage {
 }
 
 describe('memberStatusPresentation', () => {
+  it('keeps a bundle active while at least one package is still active', () => {
+    const packages = [
+      createMemberPackage('BASIC', { status: 'EXPIRED', usedSessions: 1, remainingSessions: 0 }),
+      createMemberPackage('BASIC', { status: 'ACTIVE', usedSessions: 0, remainingSessions: 1 }),
+    ];
+
+    expect(getAggregatePackageStatus(packages)).toBe('ACTIVE');
+  });
+
+  it('expires a bundle after all packages are expired', () => {
+    const packages = [
+      createMemberPackage('BASIC', { status: 'EXPIRED', remainingSessions: 0 }),
+      createMemberPackage('BASIC', { status: 'EXPIRED', remainingSessions: 0 }),
+    ];
+
+    expect(getAggregatePackageStatus(packages)).toBe('EXPIRED');
+  });
+
   it('totals active standalone basic and booster vouchers', () => {
     const packages: PackageDisplay[] = [
       createMemberPackage('BASIC', { remainingSessions: 7 }),

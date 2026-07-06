@@ -132,12 +132,17 @@ export default function CreateSessionModal({
   useEffect(() => {
     const targetInfusKe = useManualNumbering && manualInfusKe ? Number(manualInfusKe) : calculatedGlobalInfusKe;
     if (!therapyPlans.length || !targetInfusKe) return;
-    const planForSessionNumber = therapyPlans.find((plan) => plan.planNumber === targetInfusKe);
-    if (planForSessionNumber) {
-      setSelectedTherapyPlanId(planForSessionNumber.id);
-    } else {
-      setSelectedTherapyPlanId('');
-    }
+    setSelectedTherapyPlanId((currentPlanId) => {
+      const currentPlanIsAvailable = therapyPlans.some((plan) => plan.id === currentPlanId);
+      if (useManualNumbering) {
+        return currentPlanIsAvailable ? currentPlanId : therapyPlans[0].id;
+      }
+
+      const planForSessionNumber = therapyPlans.find((plan) => plan.planNumber === targetInfusKe);
+      if (planForSessionNumber) return planForSessionNumber.id;
+
+      return currentPlanIsAvailable ? currentPlanId : therapyPlans[0].id;
+    });
   }, [therapyPlans, calculatedGlobalInfusKe, useManualNumbering, manualInfusKe]);
 
   useEffect(() => {
@@ -606,13 +611,15 @@ export default function CreateSessionModal({
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }
     // Validasi IFA - therapy plan harus memiliki IFA 250 atau IFA 500
     const selectedPlanForValidation = therapyPlans.find(p => p.id === selectedTherapyPlanId);
-    if (selectedPlanForValidation) {
-      const hasIfa = (selectedPlanForValidation.ifa250 && selectedPlanForValidation.ifa250 > 0) || 
-                     (selectedPlanForValidation.ifa500 && selectedPlanForValidation.ifa500 > 0);
-      if (!hasIfa) {
-        setError('Therapy plan harus memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau buat ulang set therapy plan melalui bulk.');
-        return;
-      }
+    if (!selectedPlanForValidation) {
+      setError('Therapy plan harus dipilih');
+      return;
+    }
+    const hasIfa = (selectedPlanForValidation.ifa250 && selectedPlanForValidation.ifa250 > 0) ||
+                   (selectedPlanForValidation.ifa500 && selectedPlanForValidation.ifa500 > 0);
+    if (!hasIfa) {
+      setError('Therapy plan harus memiliki IFA (IFA 250ml atau IFA 500ml). Silakan pilih therapy plan lain atau buat ulang set therapy plan melalui bulk.');
+      return;
     }
 
     if (userRole === 'DOCTOR') {

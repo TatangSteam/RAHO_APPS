@@ -5,6 +5,7 @@ import type { PackageDisplay, MemberPackage } from '@/types/package';
 import ViewInvoiceButton from '../invoices/ViewInvoiceButton';
 import ViewPaymentProofButton from './ViewPaymentProofButton';
 import { formatNumberWithDots, formatCurrency } from '@/lib/formatNumber';
+import { getAggregatePackageStatus } from './memberStatusPresentation';
 import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
@@ -307,7 +308,10 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     const basics = pkg.basics || (pkg.basic ? [pkg.basic] : []);
     const boosters = pkg.boosters || (pkg.booster ? [pkg.booster] : []);
     const groupAddOns = pkg.addOns || [];
-    const groupStatus = basics[0]?.status || boosters[0]?.status || groupAddOns[0]?.status;
+    const groupStatus = getAggregatePackageStatus([...basics, ...boosters, ...groupAddOns]);
+    const basicStatus = getAggregatePackageStatus(basics);
+    const boosterStatus = getAggregatePackageStatus(boosters);
+    const addOnStatus = getAggregatePackageStatus(groupAddOns);
     const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
     const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item: any) => (
@@ -369,7 +373,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                     </div>
                     <div className={styles.packageCode}>{basics[0].packageCode}{basics.length > 1 && ` (+${basics.length - 1} lainnya)`}</div>
                   </div>
-                  {getStatusBadge(basics[0].status)}
+                  {getStatusBadge(basicStatus || basics[0].status)}
                 </div>
                 
                 <div className={styles.sessionInfo}>
@@ -400,7 +404,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                       {boosters[0].packageCode}{boosters.length > 1 && ` (+${boosters.length - 1} lainnya)`}
                     </div>
                   </div>
-                  {getStatusBadge(boosters[0].status)}
+                  {getStatusBadge(boosterStatus || boosters[0].status)}
                 </div>
                 
                 <div className={styles.sessionInfo}>
@@ -431,7 +435,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                       {groupAddOns.map((a: any) => a.addOnCode).join(', ')}
                     </div>
                   </div>
-                  {getStatusBadge(groupAddOns[0].status)}
+                  {getStatusBadge(addOnStatus || groupAddOns[0].status)}
                 </div>
                 
                 <div className={styles.sessionInfo}>
