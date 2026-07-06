@@ -454,7 +454,8 @@ export default function Step5Infusion({
         borderRadius: 'var(--radius-lg)',
         marginBottom: '24px'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '20px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{
             width: '48px',
             height: '48px',
@@ -478,6 +479,26 @@ export default function Step5Infusion({
               Infus aktual telah dicatat
             </p>
           </div>
+          </div>
+          {(onEditTherapyPlanSet || memberId) && (
+            <button
+              type="button"
+              onClick={handleEditTherapyPlan}
+              style={{
+                padding: '8px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid rgba(251,191,36,0.45)',
+                background: 'rgba(251,191,36,0.18)',
+                color: '#fbbf24',
+                fontSize: '12px',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                cursor: 'pointer',
+              }}
+            >
+              Edit Therapy Plan
+            </button>
+          )}
         </div>
 
         <div style={{

@@ -335,35 +335,37 @@ export class MemberTherapyPlanSetEditService {
 
       let sessionTherapyPlanId: string | null = null;
 
-      if (editableSessionPlan && options.editableTreatmentSessionId) {
-        const editablePair = copiedPlans.find(
-          (pair) => pair.oldPlan?.id === editableSessionPlan.id
-        );
-
-        if (!editablePair) {
-          throw {
-            status: 500,
-            code: 'SESSION_THERAPY_PLAN_COPY_MISSING',
-            message: 'Gagal membuat versi baru therapy plan sesi',
-          };
+      for (const pair of copiedPlans) {
+        if (!pair.oldPlan?.treatmentSessionId) {
+          continue;
         }
 
         await tx.therapyPlan.update({
-          where: { id: editableSessionPlan.id },
+          where: { id: pair.oldPlan.id },
           data: { treatmentSessionId: null },
         });
 
         await tx.therapyPlan.update({
-          where: { id: editablePair.copiedPlan.id },
-          data: { treatmentSessionId: options.editableTreatmentSessionId },
+          where: { id: pair.copiedPlan.id },
+          data: { treatmentSessionId: pair.oldPlan.treatmentSessionId },
         });
 
         await tx.infusionExecution.updateMany({
-          where: { treatmentSessionId: options.editableTreatmentSessionId },
-          data: { therapyPlanId: editablePair.copiedPlan.id },
+          where: { treatmentSessionId: pair.oldPlan.treatmentSessionId },
+          data: { therapyPlanId: pair.copiedPlan.id },
         });
 
-        sessionTherapyPlanId = editablePair.copiedPlan.id;
+        if (pair.oldPlan.treatmentSessionId === options.editableTreatmentSessionId) {
+          sessionTherapyPlanId = pair.copiedPlan.id;
+        }
+      }
+
+      if (editableSessionPlan && options.editableTreatmentSessionId && !sessionTherapyPlanId) {
+        throw {
+          status: 500,
+          code: 'SESSION_THERAPY_PLAN_COPY_MISSING',
+          message: 'Gagal membuat versi baru therapy plan sesi',
+        };
       }
 
       return { newSet, copiedPlans, sessionTherapyPlanId };

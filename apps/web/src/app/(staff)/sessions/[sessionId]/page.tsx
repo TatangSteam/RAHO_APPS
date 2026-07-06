@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
+import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import type { SessionDetail } from '@/types/session';
@@ -15,6 +16,7 @@ import Step7Photo from '@/components/sessions/Step7Photo';
 import Step8VitalAfter from '@/components/sessions/Step8VitalAfter';
 import Step8ComplaintsRecommendations from '@/components/sessions/Step8ComplaintsRecommendations';
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
+import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
 
 export default function SessionDetailPage() {
   const params = useParams();
@@ -32,6 +34,9 @@ export default function SessionDetailPage() {
   const [activeStep, setActiveStep] = useState<number>(1);
   const [completing, setCompleting] = useState(false);
   const [showStaffInfo, setShowStaffInfo] = useState(false);
+  const [showTherapyPlanEditModal, setShowTherapyPlanEditModal] = useState(false);
+  const [therapyPlanSetForEdit, setTherapyPlanSetForEdit] = useState<TherapyPlan[]>([]);
+  const [loadingTherapyPlanEdit, setLoadingTherapyPlanEdit] = useState(false);
 
   useEffect(() => {
     loadSessionDetail();
@@ -67,6 +72,40 @@ export default function SessionDetailPage() {
 
   const handleStepComplete = async () => {
     await loadSessionDetail();
+  };
+
+  const openTherapyPlanEditModal = async () => {
+    if (loadingTherapyPlanEdit) return;
+
+    if (!session?.therapyPlan?.therapyPlanSetId) {
+      showToast.error('Therapy plan sesi ini belum berada dalam set yang bisa diedit');
+      return;
+    }
+
+    try {
+      setLoadingTherapyPlanEdit(true);
+      const therapyPlanSet = await therapyPlanApi.getSessionTherapyPlanSet(sessionId);
+      if (therapyPlanSet.length === 0) {
+        showToast.error('Set therapy plan sesi ini tidak ditemukan');
+        return;
+      }
+
+      setTherapyPlanSetForEdit(therapyPlanSet);
+      setShowTherapyPlanEditModal(true);
+    } catch (error: any) {
+      devError('Error loading therapy plan set for edit:', error);
+      const errorMessage = error.response?.data?.error?.message || 'Gagal memuat set therapy plan';
+      showToast.error(errorMessage);
+    } finally {
+      setLoadingTherapyPlanEdit(false);
+    }
+  };
+
+  const handleTherapyPlanEditSuccess = async () => {
+    setShowTherapyPlanEditModal(false);
+    setTherapyPlanSetForEdit([]);
+    await loadSessionDetail();
+    setActiveStep(4);
   };
 
   const handleCompleteSession = async () => {
@@ -528,6 +567,7 @@ export default function SessionDetailPage() {
             isLocked={!canAccessStep(4)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(5)}
+            onEditTherapyPlanSet={openTherapyPlanEditModal}
           />
         )}
         
@@ -631,6 +671,20 @@ export default function SessionDetailPage() {
             ← Kembali ke Profil Member
           </button>
         </div>
+      )}
+
+      {showTherapyPlanEditModal && therapyPlanSetForEdit.length > 0 && (
+        <EditTherapyPlanSetModal
+          isOpen={showTherapyPlanEditModal}
+          onClose={() => {
+            setShowTherapyPlanEditModal(false);
+            setTherapyPlanSetForEdit([]);
+          }}
+          memberId={session.memberId}
+          therapyPlans={therapyPlanSetForEdit}
+          editableSessionId={sessionId}
+          onSuccess={handleTherapyPlanEditSuccess}
+        />
       )}
 
       {/* Floating Sticky Button - Always visible when scrolling */}

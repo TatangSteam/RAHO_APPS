@@ -40,11 +40,18 @@ describe('session therapy plan set editing', () => {
       ifaSubstances: null,
       ifaSubstanceTotalMl: null,
     };
+    const otherUsedPlan = {
+      ...currentPlan,
+      id: 'plan-other-used',
+      planCode: 'TP-SET-02',
+      planNumber: 2,
+      treatmentSessionId: 'session-2',
+    };
     const futurePlan = {
       ...currentPlan,
       id: 'plan-future',
-      planCode: 'TP-SET-02',
-      planNumber: 2,
+      planCode: 'TP-SET-03',
+      planNumber: 3,
       treatmentSessionId: null,
     };
 
@@ -56,12 +63,13 @@ describe('session therapy plan set editing', () => {
       version: 1,
       status: 'ACTIVE',
       createdBy: 'doctor-1',
-      plans: [currentPlan, futurePlan],
+      plans: [currentPlan, otherUsedPlan, futurePlan],
     });
 
     const therapyPlanCreate = jest
       .fn()
       .mockResolvedValueOnce({ id: 'plan-current-v2' })
+      .mockResolvedValueOnce({ id: 'plan-other-used-v2' })
       .mockResolvedValueOnce({ id: 'plan-future-v2' });
     const therapyPlanUpdate = jest.fn().mockResolvedValue({});
     const infusionUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
@@ -115,6 +123,18 @@ describe('session therapy plan set editing', () => {
     expect(infusionUpdateMany).toHaveBeenCalledWith({
       where: { treatmentSessionId: 'session-1' },
       data: { therapyPlanId: 'plan-current-v2' },
+    });
+    expect(therapyPlanUpdate).toHaveBeenCalledWith({
+      where: { id: 'plan-other-used' },
+      data: { treatmentSessionId: null },
+    });
+    expect(therapyPlanUpdate).toHaveBeenCalledWith({
+      where: { id: 'plan-other-used-v2' },
+      data: { treatmentSessionId: 'session-2' },
+    });
+    expect(infusionUpdateMany).toHaveBeenCalledWith({
+      where: { treatmentSessionId: 'session-2' },
+      data: { therapyPlanId: 'plan-other-used-v2' },
     });
     expect(result.data.sessionTherapyPlanId).toBe('plan-current-v2');
     expect(result.data.version).toBe(2);
