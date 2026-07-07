@@ -73,6 +73,14 @@ router.get(
   controller.getSessionById.bind(controller)
 );
 
+// Delete session (Super Admin or Admin Cabang for their own branch)
+router.delete(
+  '/:sessionId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_CABANG]),
+  controller.deleteSession.bind(controller)
+);
+
 // ============================================================
 // STEP 1: DIAGNOSIS
 // ============================================================

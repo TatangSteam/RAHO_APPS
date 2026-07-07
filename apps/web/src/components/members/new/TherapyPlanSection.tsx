@@ -2,22 +2,24 @@
 
 import { useState } from 'react';
 
+type DoseInputValue = number | string | undefined;
+
 export interface TherapyPlanData {
   infusKe: number;
   keterangan?: string;
-  ifa250?: number; // IFA + NO 2,5ml (satuan: Botol)
-  ifa500?: number; // IFA 500ml (satuan: Botol)
-  hho?: number;
-  h2?: number;
-  no?: number;
-  gaso?: number;
-  o2?: number;
-  o3?: number;
-  edta?: number;
-  mb?: number;
-  h2s?: number;
-  kcl?: number;
-  jmlNb?: number;
+  ifa250?: DoseInputValue; // IFA + NO 2,5ml (satuan: Botol)
+  ifa500?: DoseInputValue; // IFA 500ml (satuan: Botol)
+  hho?: DoseInputValue;
+  h2?: DoseInputValue;
+  no?: DoseInputValue;
+  gaso?: DoseInputValue;
+  o2?: DoseInputValue;
+  o3?: DoseInputValue;
+  edta?: DoseInputValue;
+  mb?: DoseInputValue;
+  h2s?: DoseInputValue;
+  kcl?: DoseInputValue;
+  jmlNb?: DoseInputValue;
 }
 
 interface TherapyPlanSectionProps {
@@ -43,6 +45,14 @@ const MANUAL_FIELDS = [
   { key: 'h2', label: 'H2', unit: 'ml', product: 'Hydrogen' },
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', product: '' },
 ];
+
+const decimalPattern = /^\d*\.?\d*$/;
+
+const parseDoseInput = (value: DoseInputValue): number | undefined => {
+  if (value === undefined || value === '') return undefined;
+  const parsed = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
 
 export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPlanSectionProps) {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(therapyPlans.length > 0 ? 0 : null);
@@ -90,8 +100,8 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
   };
 
   const handleNumberChange = (index: number, field: keyof TherapyPlanData, value: string) => {
-    const numValue = value === '' ? undefined : parseFloat(value);
-    handleFieldChange(index, field, numValue);
+    if (!decimalPattern.test(value)) return;
+    handleFieldChange(index, field, value === '' ? undefined : value);
   };
 
   const handleIfaTypeChange = (index: number, type: 'ifa250' | 'ifa500') => {
@@ -262,15 +272,15 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                         alignItems: 'center', 
                         gap: '12px',
                         padding: '12px 16px',
-                        background: plan.ifa250 && plan.ifa250 > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
+                        background: (parseDoseInput(plan.ifa250) || 0) > 0 ? 'rgba(34,197,94,0.2)' : 'rgba(255,255,255,0.05)',
                         borderRadius: '8px',
-                        border: plan.ifa250 && plan.ifa250 > 0 ? '2px solid #4ade80' : '1px solid rgba(148,163,184,0.3)',
+                        border: (parseDoseInput(plan.ifa250) || 0) > 0 ? '2px solid #4ade80' : '1px solid rgba(148,163,184,0.3)',
                         cursor: 'pointer'
                       }}>
                         <input
                           type="radio"
                           name={`ifaType-${index}`}
-                          checked={plan.ifa250 !== undefined && plan.ifa250 > 0}
+                          checked={(parseDoseInput(plan.ifa250) || 0) > 0}
                           onChange={() => handleIfaTypeChange(index, 'ifa250')}
                           style={{ width: '18px', height: '18px', accentColor: '#4ade80' }}
                         />
@@ -282,13 +292,13 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                             Default - Wajib 1 botol per terapi
                           </span>
                         </div>
-                        {plan.ifa250 && plan.ifa250 > 0 && (
+                        {(parseDoseInput(plan.ifa250) || 0) > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <input
                               type="number"
                               min="1"
-                              value={plan.ifa250}
-                              onChange={(e) => handleFieldChange(index, 'ifa250', parseInt(e.target.value) || 1)}
+                              value={plan.ifa250 ?? ''}
+                              onChange={(e) => handleNumberChange(index, 'ifa250', e.target.value)}
                               onClick={(e) => e.stopPropagation()}
                               className="form-input"
                               style={{ width: '70px', textAlign: 'center', padding: '8px' }}
@@ -304,15 +314,15 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                         alignItems: 'center', 
                         gap: '12px',
                         padding: '12px 16px',
-                        background: plan.ifa500 && plan.ifa500 > 0 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)',
+                        background: (parseDoseInput(plan.ifa500) || 0) > 0 ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.05)',
                         borderRadius: '8px',
-                        border: plan.ifa500 && plan.ifa500 > 0 ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
+                        border: (parseDoseInput(plan.ifa500) || 0) > 0 ? '2px solid #fbbf24' : '1px solid rgba(148,163,184,0.3)',
                         cursor: 'pointer'
                       }}>
                         <input
                           type="radio"
                           name={`ifaType-${index}`}
-                          checked={plan.ifa500 !== undefined && plan.ifa500 > 0}
+                          checked={(parseDoseInput(plan.ifa500) || 0) > 0}
                           onChange={() => handleIfaTypeChange(index, 'ifa500')}
                           style={{ width: '18px', height: '18px', accentColor: '#fbbf24' }}
                         />
@@ -324,13 +334,13 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                             Special case - Pengganti IFA + NO 2,5ml
                           </span>
                         </div>
-                        {plan.ifa500 && plan.ifa500 > 0 && (
+                        {(parseDoseInput(plan.ifa500) || 0) > 0 && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <input
                               type="number"
                               min="1"
-                              value={plan.ifa500}
-                              onChange={(e) => handleFieldChange(index, 'ifa500', parseInt(e.target.value) || 1)}
+                              value={plan.ifa500 ?? ''}
+                              onChange={(e) => handleNumberChange(index, 'ifa500', e.target.value)}
                               onClick={(e) => e.stopPropagation()}
                               className="form-input"
                               style={{ width: '70px', textAlign: 'center', padding: '8px' }}
@@ -369,7 +379,7 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                               type="number"
                               step="0.01"
                               min="0"
-                              value={plan[key as keyof TherapyPlanData] as number || ''}
+                              value={plan[key as keyof TherapyPlanData] as DoseInputValue ?? ''}
                               onChange={(e) => handleNumberChange(index, key as keyof TherapyPlanData, e.target.value)}
                               className="form-input"
                               placeholder="0.00"
@@ -416,7 +426,7 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
                               type="number"
                               step="0.01"
                               min="0"
-                              value={plan[key as keyof TherapyPlanData] as number || ''}
+                              value={plan[key as keyof TherapyPlanData] as DoseInputValue ?? ''}
                               onChange={(e) => handleNumberChange(index, key as keyof TherapyPlanData, e.target.value)}
                               className="form-input"
                               placeholder="0.00"

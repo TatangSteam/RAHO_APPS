@@ -38,6 +38,16 @@ export const sessionApi = {
     return response.data.data;
   },
 
+  deleteSession: async (sessionId: string): Promise<{
+    sessionId: string;
+    sessionCode: string;
+    restoredStockItems: number;
+    message: string;
+  }> => {
+    const response = await api.delete(`/treatment-sessions/${sessionId}`);
+    return response.data.data;
+  },
+
   // ============================================================
   // STEP 1: DIAGNOSIS
   // ============================================================

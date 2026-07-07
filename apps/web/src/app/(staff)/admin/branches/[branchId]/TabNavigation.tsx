@@ -1,11 +1,12 @@
 import styles from './page.module.css';
 
 interface TabNavigationProps {
-  activeTab: 'overview' | 'users' | 'members' | 'stock';
+  activeTab: 'overview' | 'users' | 'members' | 'stock' | 'sessions';
   usersCount: number;
   membersCount: number;
   stockCount: number;
-  onTabChange: (tab: 'overview' | 'users' | 'members' | 'stock') => void;
+  sessionsCount: number;
+  onTabChange: (tab: 'overview' | 'users' | 'members' | 'stock' | 'sessions') => void;
 }
 
 export default function TabNavigation({
@@ -13,6 +14,7 @@ export default function TabNavigation({
   usersCount,
   membersCount,
   stockCount,
+  sessionsCount,
   onTabChange,
 }: TabNavigationProps) {
   return (
@@ -40,6 +42,12 @@ export default function TabNavigation({
         onClick={() => onTabChange('stock')}
       >
         Stok ({stockCount})
+      </button>
+      <button
+        className={`${styles.tab} ${activeTab === 'sessions' ? styles.active : ''}`}
+        onClick={() => onTabChange('sessions')}
+      >
+        Sesi Terapi ({sessionsCount})
       </button>
     </div>
   );

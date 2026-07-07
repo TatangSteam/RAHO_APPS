@@ -309,6 +309,20 @@ export class SessionsController {
     }
   }
 
+  async deleteSession(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      const result = await sessionsService.deleteSession(sessionId, req.user!.userId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
   // ============================================================
   // STEP 1: CREATE DIAGNOSIS
   // ============================================================

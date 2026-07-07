@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
-import { showToast } from '@/lib/toast';
+import { confirm, showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { api } from '@/lib/api';
@@ -312,6 +312,7 @@ export default function SessionsPage() {
   });
 
   const [tableFields, setTableFields] = useState<Record<string, boolean>>({ ...DEFAULT_TABLE_FIELDS });
+  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_CABANG';
 
   // Field categories for UI grouping
   const fieldCategories = [
@@ -1032,6 +1033,31 @@ export default function SessionsPage() {
     router.push(`/sessions/${sessionId}`);
   };
 
+  const handleDeleteSession = async (sessionDetail: SessionDetail) => {
+    const confirmed = await confirm.show({
+      title: 'Hapus Sesi Terapi',
+      message: `Hapus sesi ${sessionDetail.session.sessionCode} milik ${sessionDetail.session.member.fullName}? Stok yang tercatat dipakai oleh sesi ini akan dikembalikan.`,
+      variant: 'danger',
+      confirmText: 'Hapus Sesi',
+      cancelText: 'Batal',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await sessionApi.deleteSession(sessionDetail.session.sessionId);
+      showToast.success('Sesi terapi berhasil dihapus');
+      await loadSessions();
+    } catch (error: any) {
+      devError('Error deleting session:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus sesi terapi'
+      );
+    }
+  };
+
   // Count active filters
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
     if (key === 'status' || key === 'pelaksanaan') return value !== 'all';
@@ -1476,11 +1502,17 @@ export default function SessionsPage() {
                     {group.label}
                   </th>
                 ))}
+                {canDeleteSessions && (
+                  <th className={styles.groupHeaderCell} scope="colgroup">
+                    Aksi
+                  </th>
+                )}
               </tr>
               <tr>
                 {visibleTableFieldKeys.map((key) => (
                   <th key={key} scope="col">{tableFieldLabelByKey[key] || key}</th>
                 ))}
+                {canDeleteSessions && <th scope="col">Aksi</th>}
               </tr>
             </thead>
             <tbody>
@@ -1506,6 +1538,20 @@ export default function SessionsPage() {
                       {getTableFieldValue(sessionDetail, key)}
                     </td>
                   ))}
+                  {canDeleteSessions && (
+                    <td className={styles.actionCell} data-label="Aksi">
+                      <button
+                        type="button"
+                        className={styles.deleteSessionBtn}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDeleteSession(sessionDetail);
+                        }}
+                      >
+                        Hapus
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

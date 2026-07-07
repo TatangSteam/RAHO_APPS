@@ -40,6 +40,14 @@ interface ValidationError {
   message: string;
 }
 
+const decimalPattern = /^\d*\.?\d*$/;
+
+const parseDoseInput = (value: unknown): number | undefined => {
+  if (value === undefined || value === null || value === '') return undefined;
+  const parsed = typeof value === 'number' ? value : parseFloat(String(value));
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
 export default function BulkTherapyPlanModal({
   memberId,
   onClose,
@@ -379,6 +387,15 @@ export default function BulkTherapyPlanModal({
     );
   };
 
+  const updateDoseField = (
+    rowId: string,
+    field: keyof CreateTherapyPlanInput,
+    value: string
+  ) => {
+    if (!decimalPattern.test(value)) return;
+    updateTherapyPlan(rowId, field, value === '' ? undefined : value as any);
+  };
+
   const copyToNextRow = (rowId: string) => {
     const currentIndex = therapyPlans.findIndex((p) => p.rowId === rowId);
     if (currentIndex === -1 || currentIndex === therapyPlans.length - 1) return;
@@ -456,19 +473,19 @@ export default function BulkTherapyPlanModal({
     therapyPlans.forEach((plan) => {
       // Check that at least one dose field is filled
       const hasDoseData =
-        plan.ifa250 ||
-        plan.ifa500 ||
-        plan.hho ||
-        plan.h2 ||
-        plan.no ||
-        plan.gaso ||
-        plan.o2 ||
-        plan.o3 ||
-        plan.edta ||
-        plan.mb ||
-        plan.h2s ||
-        plan.kcl ||
-        plan.jmlNb;
+        parseDoseInput(plan.ifa250) ||
+        parseDoseInput(plan.ifa500) ||
+        parseDoseInput(plan.hho) ||
+        parseDoseInput(plan.h2) ||
+        parseDoseInput(plan.no) ||
+        parseDoseInput(plan.gaso) ||
+        parseDoseInput(plan.o2) ||
+        parseDoseInput(plan.o3) ||
+        parseDoseInput(plan.edta) ||
+        parseDoseInput(plan.mb) ||
+        parseDoseInput(plan.h2s) ||
+        parseDoseInput(plan.kcl) ||
+        parseDoseInput(plan.jmlNb);
 
       if (!hasDoseData) {
         errors.push({
@@ -479,7 +496,7 @@ export default function BulkTherapyPlanModal({
       }
 
       // Validate IFA mutual exclusivity
-      if (plan.ifa250 && plan.ifa500) {
+      if (parseDoseInput(plan.ifa250) && parseDoseInput(plan.ifa500)) {
         errors.push({
           rowId: plan.rowId,
           field: 'ifa',
@@ -503,19 +520,19 @@ export default function BulkTherapyPlanModal({
 
       const plansToSubmit: CreateTherapyPlanInput[] = therapyPlans.map((plan) => ({
         keterangan: plan.keterangan,
-        ifa250: plan.ifa250,
-        ifa500: plan.ifa500,
-        hho: plan.hho,
-        h2: plan.h2,
-        no: plan.no,
-        gaso: plan.gaso,
-        o2: plan.o2,
-        o3: plan.o3,
-        edta: plan.edta,
-        mb: plan.mb,
-        h2s: plan.h2s,
-        kcl: plan.kcl,
-        jmlNb: plan.jmlNb,
+        ifa250: parseDoseInput(plan.ifa250),
+        ifa500: parseDoseInput(plan.ifa500),
+        hho: parseDoseInput(plan.hho),
+        h2: parseDoseInput(plan.h2),
+        no: parseDoseInput(plan.no),
+        gaso: parseDoseInput(plan.gaso),
+        o2: parseDoseInput(plan.o2),
+        o3: parseDoseInput(plan.o3),
+        edta: parseDoseInput(plan.edta),
+        mb: parseDoseInput(plan.mb),
+        h2s: parseDoseInput(plan.h2s),
+        kcl: parseDoseInput(plan.kcl),
+        jmlNb: parseDoseInput(plan.jmlNb),
         ...prepareIfaSubstancePayload(plan.ifaSubstances),
       }));
 
@@ -839,13 +856,9 @@ export default function BulkTherapyPlanModal({
                                         type="number"
                                         min={0}
                                         step={0.1}
-                                        value={plan[field.key] || ''}
+                                        value={plan[field.key] ?? ''}
                                         onChange={(e) =>
-                                          updateTherapyPlan(
-                                            plan.rowId,
-                                            field.key,
-                                            e.target.value ? parseFloat(e.target.value) : undefined
-                                          )
+                                          updateDoseField(plan.rowId, field.key, e.target.value)
                                         }
                                         disabled={submitting}
                                         className="w-full px-1 py-1 text-xs text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white"

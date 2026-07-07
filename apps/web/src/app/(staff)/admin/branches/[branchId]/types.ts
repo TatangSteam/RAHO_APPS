@@ -65,3 +65,24 @@ export interface BranchInventoryItem {
   isLowStock: boolean;
   storageLocation?: string;
 }
+
+export interface BranchSession {
+  id: string;
+  sessionCode: string;
+  date: string;
+  status: string;
+  member: {
+    id: string;
+    fullName: string;
+    memberNo: string;
+  } | null;
+  doctor: {
+    fullName: string;
+  } | null;
+  nurse: {
+    fullName: string;
+  } | null;
+  package: {
+    name: string;
+  } | null;
+}

@@ -7,7 +7,7 @@ import { inventoryApi } from '@/lib/api/inventoryApi';
 import { api } from '@/lib/api';
 import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
-import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
+import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
   Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope
@@ -213,7 +213,10 @@ export default function BranchDetailPage() {
   const branchId = params.branchId as string;
   const { user } = useAuthStore();
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isAdminCabang = user?.role === 'ADMIN_CABANG';
+  const canAccessBranch = !!user && hasRole(user.role, ADMIN_ABOVE_ROLES);
   const canManageBranch = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
+  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_CABANG';
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -283,18 +286,23 @@ export default function BranchDetailPage() {
 
   // Check authorization
   useEffect(() => {
-    if (!canManageBranch) {
+    if (!canAccessBranch) {
       showToast.error('Anda tidak memiliki akses ke halaman ini');
       router.push('/dashboard');
       return;
     }
-  }, [canManageBranch, router]);
+  }, [canAccessBranch, router]);
 
   useEffect(() => {
-    if (canManageBranch) {
+    if (canAccessBranch) {
+      if (isAdminCabang && user?.branchId && user.branchId !== branchId) {
+        showToast.error('Anda hanya dapat membuka cabang sendiri');
+        router.push(`/branches/${user.branchId}`);
+        return;
+      }
       loadBranch();
     }
-  }, [branchId, canManageBranch]);
+  }, [branchId, canAccessBranch, isAdminCabang, user?.branchId]);
 
   useEffect(() => {
     if (branch) {
@@ -887,6 +895,8 @@ export default function BranchDetailPage() {
                   data={sessions}
                   loading={tabLoading}
                   returnTo={`/branches/${branchId}`}
+                  canDelete={canDeleteSessions}
+                  onDeleted={loadTabData}
                 />
               </div>
             )}

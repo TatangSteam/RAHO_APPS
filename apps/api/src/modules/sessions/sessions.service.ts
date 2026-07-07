@@ -22,6 +22,7 @@ import { EvaluationService } from './services/evaluation.service';
 import { SessionCompletionService } from './services/session-completion.service';
 import { BoosterService } from './services/booster.service';
 import { PhotoService } from './services/photo.service';
+import { SessionDeletionService } from './services/session-deletion.service';
 
 /**
  * Main Sessions Service - Orchestrates all session-related operations
@@ -52,6 +53,7 @@ export class SessionsService {
   private completionService: SessionCompletionService;
   private boosterService: BoosterService;
   private photoService: PhotoService;
+  private deletionService: SessionDeletionService;
 
   constructor() {
     this.creationService = new SessionCreationService();
@@ -65,6 +67,7 @@ export class SessionsService {
     this.completionService = new SessionCompletionService();
     this.boosterService = new BoosterService();
     this.photoService = new PhotoService();
+    this.deletionService = new SessionDeletionService();
   }
 
   // ============================================================
@@ -103,6 +106,10 @@ export class SessionsService {
     pelaksanaan?: string;
   }) {
     return this.retrievalService.getAllSessions(params);
+  }
+
+  async deleteSession(sessionId: string, deletedBy: string) {
+    return this.deletionService.deleteSession(sessionId, deletedBy);
   }
 
   // ============================================================

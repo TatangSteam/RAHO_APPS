@@ -7,6 +7,8 @@ import { showToast } from '../ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
 import { THERAPY_PLAN_EDITORS, hasRole } from '@/types/auth';
 
+type DoseInputValue = number | string | null;
+
 interface EditTherapyPlanSetModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -19,21 +21,34 @@ interface EditTherapyPlanSetModalProps {
 interface EditableRow {
   planNumber: number;
   keterangan: string;
-  ifa250: number | null;
-  ifa500: number | null;
-  hho: number | null;
-  h2: number | null;
-  no: number | null;
-  gaso: number | null;
-  o2: number | null;
-  o3: number | null;
-  edta: number | null;
-  mb: number | null;
-  h2s: number | null;
-  kcl: number | null;
-  jmlNb: number | null;
+  ifa250: DoseInputValue;
+  ifa500: DoseInputValue;
+  hho: DoseInputValue;
+  h2: DoseInputValue;
+  no: DoseInputValue;
+  gaso: DoseInputValue;
+  o2: DoseInputValue;
+  o3: DoseInputValue;
+  edta: DoseInputValue;
+  mb: DoseInputValue;
+  h2s: DoseInputValue;
+  kcl: DoseInputValue;
+  jmlNb: DoseInputValue;
   isLocked: boolean; // Plan sudah digunakan, tidak bisa diedit
 }
+
+const decimalPattern = /^\d*\.?\d*$/;
+
+const parseDoseInput = (value: DoseInputValue): number | null => {
+  if (value === null || value === '') return null;
+  const parsed = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const toDosePayload = (value: DoseInputValue): number | null => {
+  const parsed = parseDoseInput(value);
+  return parsed === 0 ? null : parsed;
+};
 
 export default function EditTherapyPlanSetModal({
   isOpen,
@@ -61,13 +76,14 @@ export default function EditTherapyPlanSetModal({
   const draftKey = `therapy-plan-edit-draft-${therapyPlans[0]?.therapyPlanSetId || memberId}${editableSessionId ? `-${editableSessionId}` : ''}`;
 
   // Helper function to normalize values: treat 0 as null (no meaningful dose)
-  const normalizeValue = (value: number | null): number | null => {
-    if (value === 0 || value === null) return null;
-    return value;
+  const normalizeValue = (value: DoseInputValue): number | null => {
+    const parsed = parseDoseInput(value);
+    if (parsed === 0 || parsed === null) return null;
+    return parsed;
   };
 
   // Helper function to check if two values are meaningfully different
-  const hasValueChanged = (oldValue: number | null, newValue: number | null): boolean => {
+  const hasValueChanged = (oldValue: DoseInputValue, newValue: DoseInputValue): boolean => {
     return normalizeValue(oldValue) !== normalizeValue(newValue);
   };
 
@@ -272,13 +288,15 @@ export default function EditTherapyPlanSetModal({
     if (field === 'keterangan') {
       newRows[index][field] = value;
     } else if (field !== 'planNumber' && field !== 'isLocked') {
-      const numValue = value === '' ? null : parseFloat(value);
+      if (!decimalPattern.test(value)) return;
+      const numValue = value === '' ? null : value;
       // Prevent negative numbers
-      if (numValue !== null && numValue < 0) {
+      const parsedValue = parseDoseInput(numValue);
+      if (parsedValue !== null && parsedValue < 0) {
         showToast.error('Tidak boleh mengisi angka negatif');
         return;
       }
-      newRows[index][field] = isNaN(numValue as number) ? null : numValue;
+      newRows[index][field] = numValue;
     }
     setRows(newRows);
   };
@@ -286,19 +304,19 @@ export default function EditTherapyPlanSetModal({
   const validateRow = (row: EditableRow): string | null => {
     // Check if at least one dose field is > 0 (not just filled with 0)
     const hasMeaningfulDose = !!(
-      (row.ifa250 && row.ifa250 > 0) ||
-      (row.ifa500 && row.ifa500 > 0) ||
-      (row.hho && row.hho > 0) ||
-      (row.h2 && row.h2 > 0) ||
-      (row.no && row.no > 0) ||
-      (row.gaso && row.gaso > 0) ||
-      (row.o2 && row.o2 > 0) ||
-      (row.o3 && row.o3 > 0) ||
-      (row.edta && row.edta > 0) ||
-      (row.mb && row.mb > 0) ||
-      (row.h2s && row.h2s > 0) ||
-      (row.kcl && row.kcl > 0) ||
-      (row.jmlNb && row.jmlNb > 0)
+      (parseDoseInput(row.ifa250) || 0) > 0 ||
+      (parseDoseInput(row.ifa500) || 0) > 0 ||
+      (parseDoseInput(row.hho) || 0) > 0 ||
+      (parseDoseInput(row.h2) || 0) > 0 ||
+      (parseDoseInput(row.no) || 0) > 0 ||
+      (parseDoseInput(row.gaso) || 0) > 0 ||
+      (parseDoseInput(row.o2) || 0) > 0 ||
+      (parseDoseInput(row.o3) || 0) > 0 ||
+      (parseDoseInput(row.edta) || 0) > 0 ||
+      (parseDoseInput(row.mb) || 0) > 0 ||
+      (parseDoseInput(row.h2s) || 0) > 0 ||
+      (parseDoseInput(row.kcl) || 0) > 0 ||
+      (parseDoseInput(row.jmlNb) || 0) > 0
     );
 
     if (!hasMeaningfulDose) {
@@ -306,7 +324,7 @@ export default function EditTherapyPlanSetModal({
     }
 
     // Check IFA mutual exclusivity
-    if (row.ifa250 && row.ifa250 > 0 && row.ifa500 && row.ifa500 > 0) {
+    if ((parseDoseInput(row.ifa250) || 0) > 0 && (parseDoseInput(row.ifa500) || 0) > 0) {
       return `Row ${row.planNumber}: IFA 250ml dan IFA 500ml tidak boleh diisi bersamaan`;
     }
 
@@ -315,7 +333,10 @@ export default function EditTherapyPlanSetModal({
       row.ifa250, row.ifa500, row.hho, row.h2, row.no,
       row.gaso, row.o2, row.o3, row.edta, row.mb,
       row.h2s, row.kcl, row.jmlNb
-    ].some(val => val !== null && val < 0);
+    ].some(val => {
+      const parsed = parseDoseInput(val);
+      return parsed !== null && parsed < 0;
+    });
 
     if (hasNegative) {
       return `Row ${row.planNumber}: Tidak boleh ada nilai negatif`;
@@ -395,19 +416,19 @@ export default function EditTherapyPlanSetModal({
         plans: editedUnlockedPlans.map(row => ({
           planNumber: row.planNumber,
           keterangan: row.keterangan,
-          ifa250: row.ifa250,
-          ifa500: row.ifa500,
-          hho: row.hho,
-          h2: row.h2,
-          no: row.no,
-          gaso: row.gaso,
-          o2: row.o2,
-          o3: row.o3,
-          edta: row.edta,
-          mb: row.mb,
-          h2s: row.h2s,
-          kcl: row.kcl,
-          jmlNb: row.jmlNb,
+          ifa250: toDosePayload(row.ifa250),
+          ifa500: toDosePayload(row.ifa500),
+          hho: toDosePayload(row.hho),
+          h2: toDosePayload(row.h2),
+          no: toDosePayload(row.no),
+          gaso: toDosePayload(row.gaso),
+          o2: toDosePayload(row.o2),
+          o3: toDosePayload(row.o3),
+          edta: toDosePayload(row.edta),
+          mb: toDosePayload(row.mb),
+          h2s: toDosePayload(row.h2s),
+          kcl: toDosePayload(row.kcl),
+          jmlNb: toDosePayload(row.jmlNb),
         })),
       };
 

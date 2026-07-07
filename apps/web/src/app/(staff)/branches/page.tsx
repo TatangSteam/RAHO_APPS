@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
-import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
+import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { devError } from '@/lib/logger';
 import { 
   Building2, Plus, Search, Filter, Edit, Trash2, Users, 
@@ -51,6 +51,8 @@ export default function BranchesPage() {
   const [summary, setSummary] = useState<BranchSummary>({ total: 0, active: 0, inactive: 0 });
   const [forceDeleteBranch, setForceDeleteBranch] = useState<Branch | null>(null);
   const limit = 10;
+  const isAdminCabang = user?.role === 'ADMIN_CABANG';
+  const canCreateOrEditBranches = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
 
   // Check authorization
   useEffect(() => {
@@ -59,24 +61,45 @@ export default function BranchesPage() {
       return;
     }
     
-    if (!hasRole(user.role, MANAGER_ABOVE_ROLES)) {
-      showToast.error(`Akses ditolak. Role Anda: ${user.role}. Diperlukan: SUPER_ADMIN atau ADMIN_MANAGER`);
+    if (!hasRole(user.role, ADMIN_ABOVE_ROLES)) {
+      showToast.error(`Akses ditolak. Role Anda: ${user.role}.`);
       router.push('/dashboard');
       return;
     }
   }, [user, router]);
 
   useEffect(() => {
-    if (user && hasRole(user.role, MANAGER_ABOVE_ROLES)) {
+    if (user && hasRole(user.role, ADMIN_ABOVE_ROLES)) {
       loadBranches();
     }
   }, [page, search, typeFilter, statusFilter, user]);
 
   const loadBranches = async () => {
-    if (!user || !hasRole(user.role, MANAGER_ABOVE_ROLES)) return;
+    if (!user || !hasRole(user.role, ADMIN_ABOVE_ROLES)) return;
 
     try {
       setLoading(true);
+
+      if (isAdminCabang) {
+        if (!user.branchId) {
+          setBranches([]);
+          setSummary({ total: 0, active: 0, inactive: 0 });
+          setTotal(0);
+          return;
+        }
+
+        const response = await branchesApi.getBranch(user.branchId);
+        const branch = response.data.data;
+        setBranches([branch]);
+        setTotal(1);
+        setSummary({
+          total: 1,
+          active: branch.isActive ? 1 : 0,
+          inactive: branch.isActive ? 0 : 1,
+        });
+        return;
+      }
+
       const params: any = { page, limit };
       
       if (search) params.search = search;
@@ -194,7 +217,7 @@ export default function BranchesPage() {
   }
 
   // Check if user has access
-  if (!hasRole(user.role, MANAGER_ABOVE_ROLES)) {
+  if (!hasRole(user.role, ADMIN_ABOVE_ROLES)) {
     return (
       <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex items-center justify-center p-6">
         <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 max-w-md text-center">
@@ -204,7 +227,7 @@ export default function BranchesPage() {
           <h2 className="text-xl font-bold text-neutral-900 dark:text-white mb-2">Akses Ditolak</h2>
           <p className="text-neutral-500 dark:text-neutral-400 mb-4">Anda tidak memiliki akses ke halaman ini.</p>
           <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-1"><strong>Role Anda:</strong> {user.role}</p>
-          <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-6"><strong>Role yang Diperlukan:</strong> SUPER_ADMIN atau ADMIN_MANAGER</p>
+          <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-6"><strong>Role yang Diperlukan:</strong> SUPER_ADMIN, ADMIN_MANAGER, atau ADMIN_CABANG</p>
           <button 
             onClick={() => router.push('/dashboard')}
             className="px-6 py-2.5 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
@@ -230,13 +253,15 @@ export default function BranchesPage() {
               <p className="text-sm text-neutral-500 dark:text-neutral-400">Kelola semua cabang dengan mudah dan efisien</p>
             </div>
           </div>
-          <button 
-            onClick={() => router.push('/branches/create')}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
-          >
-            <Plus className="h-5 w-5" />
-            Tambah Cabang
-          </button>
+          {canCreateOrEditBranches && (
+            <button 
+              onClick={() => router.push('/branches/create')}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all"
+            >
+              <Plus className="h-5 w-5" />
+              Tambah Cabang
+            </button>
+          )}
         </div>
       </div>
 
@@ -344,13 +369,15 @@ export default function BranchesPage() {
             </div>
             <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2">Belum Ada Cabang</h3>
             <p className="text-sm text-neutral-500 dark:text-neutral-400 mb-4">Mulai dengan menambahkan cabang pertama Anda.</p>
-            <button 
-              onClick={() => router.push('/branches/create')}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
-            >
-              <Plus className="h-4 w-4" />
-              Tambah Cabang
-            </button>
+            {canCreateOrEditBranches && (
+              <button 
+                onClick={() => router.push('/branches/create')}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl bg-amber-500 text-white hover:bg-amber-600 transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                Tambah Cabang
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -425,13 +452,15 @@ export default function BranchesPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </button>
-                            <button
-                              onClick={() => router.push(`/branches/${branch.id}/edit`)}
-                              title="Edit"
-                              className="p-2 rounded-lg text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
+                            {canCreateOrEditBranches && (
+                              <button
+                                onClick={() => router.push(`/branches/${branch.id}/edit`)}
+                                title="Edit"
+                                className="p-2 rounded-lg text-neutral-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10 transition-all"
+                              >
+                                <Edit className="h-4 w-4" />
+                              </button>
+                            )}
                             {user?.role === 'SUPER_ADMIN' && (
                               <>
                                 <button

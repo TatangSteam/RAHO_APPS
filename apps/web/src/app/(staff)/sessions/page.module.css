@@ -1659,6 +1659,34 @@
   color: var(--color-primary-400);
 }
 
+.actionCell {
+  width: 96px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.deleteSessionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 72px;
+  min-height: 34px;
+  padding: 0.45rem 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.deleteSessionBtn:hover {
+  background: rgba(239, 68, 68, 0.18);
+  border-color: rgba(239, 68, 68, 0.55);
+}
+
 /* Export Actions */
 .exportActions {
   margin-top: auto;

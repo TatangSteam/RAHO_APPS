@@ -1,7 +1,10 @@
 'use client';
 
-import { Calendar, User, Stethoscope, Eye, FileText, Pencil } from 'lucide-react';
+import { Calendar, User, Stethoscope, Eye, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { sessionApi } from '@/lib/sessionApi';
+import { confirm, showToast } from '@/lib/toast';
+import { devError } from '@/lib/logger';
 
 interface Session {
   id: string;
@@ -12,25 +15,27 @@ interface Session {
     id: string;
     fullName: string;
     memberNo: string;
-  };
+  } | null;
   doctor: {
     fullName: string;
-  };
+  } | null;
   nurse: {
     fullName: string;
-  };
+  } | null;
   package: {
     name: string;
-  };
+  } | null;
 }
 
 interface SessionsTableProps {
   data: Session[];
   loading: boolean;
   returnTo?: string;
+  canDelete?: boolean;
+  onDeleted?: () => void;
 }
 
-export default function SessionsTable({ data, loading, returnTo }: SessionsTableProps) {
+export default function SessionsTable({ data, loading, returnTo, canDelete = false, onDeleted }: SessionsTableProps) {
   const router = useRouter();
 
   const openSession = (sessionId: string) => {
@@ -38,6 +43,31 @@ export default function SessionsTable({ data, loading, returnTo }: SessionsTable
       ? `?returnTo=${encodeURIComponent(returnTo)}`
       : '';
     router.push(`/sessions/${sessionId}${returnQuery}`);
+  };
+
+  const deleteSession = async (session: Session) => {
+    const confirmed = await confirm.show({
+      title: 'Hapus Sesi Terapi',
+      message: `Hapus sesi ${session.sessionCode}${session.member?.fullName ? ` milik ${session.member.fullName}` : ''}? Stok yang tercatat dipakai oleh sesi ini akan dikembalikan.`,
+      variant: 'danger',
+      confirmText: 'Hapus Sesi',
+      cancelText: 'Batal',
+    });
+
+    if (!confirmed) return;
+
+    try {
+      await sessionApi.deleteSession(session.id);
+      showToast.success('Sesi terapi berhasil dihapus');
+      onDeleted?.();
+    } catch (error: any) {
+      devError('Error deleting session:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus sesi terapi'
+      );
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -128,23 +158,23 @@ export default function SessionsTable({ data, loading, returnTo }: SessionsTable
               <td className="px-6 py-4">
                 <div>
                   <div className="font-medium text-sm text-neutral-900 dark:text-white">
-                    {session.member.fullName}
+                    {session.member?.fullName || 'N/A'}
                   </div>
                   <div className="text-xs text-neutral-500 dark:text-neutral-400">
-                    {session.member.memberNo}
+                    {session.member?.memberNo || '-'}
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
                   <Stethoscope size={16} className="text-blue-500" />
-                  {session.doctor.fullName}
+                  {session.doctor?.fullName || 'N/A'}
                 </div>
               </td>
               <td className="px-6 py-4">
                 <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
                   <User size={16} className="text-emerald-500" />
-                  {session.nurse.fullName}
+                  {session.nurse?.fullName || 'N/A'}
                 </div>
               </td>
               <td className="px-6 py-4">
@@ -160,6 +190,16 @@ export default function SessionsTable({ data, loading, returnTo }: SessionsTable
                     {session.status === 'COMPLETED' ? <Eye size={17} /> : <Pencil size={17} />}
                     <span>{session.status === 'COMPLETED' ? 'Detail' : 'Detail & Edit'}</span>
                   </button>
+                  {canDelete && (
+                    <button
+                      onClick={() => deleteSession(session)}
+                      className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="Hapus sesi terapi"
+                    >
+                      <Trash2 size={17} />
+                      <span>Hapus</span>
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

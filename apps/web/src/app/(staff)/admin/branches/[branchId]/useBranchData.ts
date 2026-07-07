@@ -1,13 +1,14 @@
 import { useState, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
-import { BranchDetail, User, BranchMember, BranchInventoryItem } from './types';
+import { BranchDetail, User, BranchMember, BranchInventoryItem, BranchSession } from './types';
 
 export function useBranchData(branchId: string, accessToken: string) {
   const [branch, setBranch] = useState<BranchDetail | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [members, setMembers] = useState<BranchMember[]>([]);
   const [inventory, setInventory] = useState<BranchInventoryItem[]>([]);
+  const [sessions, setSessions] = useState<BranchSession[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadBranchDetail = useCallback(async () => {
@@ -114,6 +115,29 @@ export function useBranchData(branchId: string, accessToken: string) {
     }
   }, [branchId, accessToken]);
 
+  const loadBranchSessions = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/branches/${branchId}/sessions?limit=100`,
+        {
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error('Gagal memuat data sesi terapi');
+
+      const result = await response.json();
+      const sessionsData = result.data?.sessions || [];
+      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+    } catch (error: any) {
+      devError('Error loading branch sessions:', error);
+      showToast.error(error.message || 'Gagal memuat data sesi terapi');
+      setSessions([]);
+    }
+  }, [branchId, accessToken]);
+
   const toggleUserActive = useCallback(async (userId: string, currentStatus: boolean) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users/${userId}`, {
@@ -141,11 +165,13 @@ export function useBranchData(branchId: string, accessToken: string) {
     users,
     members,
     inventory,
+    sessions,
     loading,
     loadBranchDetail,
     loadBranchUsers,
     loadBranchMembers,
     loadBranchInventory,
+    loadBranchSessions,
     toggleUserActive,
   };
 }

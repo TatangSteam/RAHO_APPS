@@ -14,22 +14,30 @@ interface EditTherapyPlanModalProps {
 }
 
 interface EditFormData {
-  ifa250: number;
-  ifa500: number;
-  hho: number;
-  h2: number;
-  no: number;
-  gaso: number;
-  o2: number;
-  o3: number;
-  edta: number;
-  mb: number;
-  h2s: number;
-  kcl: number;
-  jmlNb: number;
+  ifa250: number | string;
+  ifa500: number | string;
+  hho: number | string;
+  h2: number | string;
+  no: number | string;
+  gaso: number | string;
+  o2: number | string;
+  o3: number | string;
+  edta: number | string;
+  mb: number | string;
+  h2s: number | string;
+  kcl: number | string;
+  jmlNb: number | string;
   keterangan: string;
   ifaSubstances: Array<{ name: string; amount: number; unit: string; keterangan?: string }>;
 }
+
+const decimalPattern = /^\d*\.?\d*$/;
+
+const parseDoseInput = (value: number | string): number => {
+  if (value === '') return 0;
+  const parsed = typeof value === 'number' ? value : parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 export default function EditTherapyPlanModal({ plan, memberId, onClose, onSuccess }: EditTherapyPlanModalProps) {
   const [loading, setLoading] = useState(false);
@@ -56,7 +64,22 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
     
     try {
       setLoading(true);
-      await therapyPlanApi.editTherapyPlan(memberId, plan.id, formData);
+      await therapyPlanApi.editTherapyPlan(memberId, plan.id, {
+        ...formData,
+        ifa250: parseDoseInput(formData.ifa250),
+        ifa500: parseDoseInput(formData.ifa500),
+        hho: parseDoseInput(formData.hho),
+        h2: parseDoseInput(formData.h2),
+        no: parseDoseInput(formData.no),
+        gaso: parseDoseInput(formData.gaso),
+        o2: parseDoseInput(formData.o2),
+        o3: parseDoseInput(formData.o3),
+        edta: parseDoseInput(formData.edta),
+        mb: parseDoseInput(formData.mb),
+        h2s: parseDoseInput(formData.h2s),
+        kcl: parseDoseInput(formData.kcl),
+        jmlNb: parseDoseInput(formData.jmlNb),
+      });
       showToast.success('Therapy plan berhasil diedit. Set baru versi ' + ((plan.setVersion || plan.version || 1) + 1) + ' telah dibuat.');
       onSuccess();
     } catch (error: any) {
@@ -67,8 +90,8 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
   };
 
   const handleNumberChange = (field: keyof EditFormData, value: string) => {
-    const numValue = parseFloat(value) || 0;
-    setFormData((prev) => ({ ...prev, [field]: numValue }));
+    if (!decimalPattern.test(value)) return;
+    setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
   return (

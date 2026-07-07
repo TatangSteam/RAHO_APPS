@@ -138,7 +138,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Pengaturan Cabang',
         href: '/branches',
         icon: <Building2 size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
       },
       {
         label: 'Kelola Staff',
