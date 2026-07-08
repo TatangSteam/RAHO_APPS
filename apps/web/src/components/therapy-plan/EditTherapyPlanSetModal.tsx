@@ -38,6 +38,7 @@ interface EditableRow {
 }
 
 const decimalPattern = /^\d*\.?\d*$/;
+const maxTherapyPlansPerSet = 50;
 
 const parseDoseInput = (value: DoseInputValue): number | null => {
   if (value === null || value === '') return null;
@@ -66,6 +67,7 @@ export default function EditTherapyPlanSetModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
+  const [addRowCount, setAddRowCount] = useState('1');
 
   // Check if user has permission to edit set name and add plans
   const canEditSetNameAndAddPlans = user
@@ -158,23 +160,6 @@ export default function EditTherapyPlanSetModal({
     return () => clearTimeout(timeoutId);
   }, [rows, isOpen]);
 
-  // Load draft on mount
-  useEffect(() => {
-    if (isOpen && initialRows.length > 0 && !rows.length) {
-      const draft = loadDraft();
-      if (draft && draft.length === initialRows.length) {
-        // Verify draft matches initial structure (same plan numbers)
-        const draftValid = draft.every((draftRow, index) => 
-          draftRow.planNumber === initialRows[index].planNumber
-        );
-        if (draftValid) {
-          setRows(draft);
-          showToast.info('Draft ditemukan dan dipulihkan');
-        }
-      }
-    }
-  }, [isOpen, initialRows]);
-
   // Initialize rows and set name from therapy plans
   useEffect(() => {
     if (isOpen && therapyPlans.length > 0) {
@@ -200,7 +185,18 @@ export default function EditTherapyPlanSetModal({
             ? plan.usedInSession?.id !== editableSessionId
             : plan.isUsed,
         }));
-      setRows(initialRowsData);
+
+      const draft = loadDraft();
+      const draftValid = Boolean(
+        draft &&
+        draft.length >= initialRowsData.length &&
+        initialRowsData.every((initialRow, index) => draft[index]?.planNumber === initialRow.planNumber)
+      );
+
+      setRows(draftValid ? draft! : initialRowsData);
+      if (draftValid) {
+        showToast.info('Draft ditemukan dan dipulihkan');
+      }
       // Create a deep copy for initialRows to avoid reference issues
       setInitialRows(initialRowsData.map(row => ({ ...row })));
       
@@ -241,38 +237,69 @@ export default function EditTherapyPlanSetModal({
     });
   };
 
-  // Add new empty therapy plan row
-  const addNewRow = () => {
+  const createEmptyRow = (planNumber: number): EditableRow => ({
+    planNumber,
+    keterangan: '',
+    ifa250: null,
+    ifa500: null,
+    hho: null,
+    h2: null,
+    no: null,
+    gaso: null,
+    o2: null,
+    o3: null,
+    edta: null,
+    mb: null,
+    h2s: null,
+    kcl: null,
+    jmlNb: null,
+    isLocked: false,
+  });
+
+  const handleAddRowCountChange = (value: string) => {
+    if (!/^\d{0,2}$/.test(value)) return;
+    setAddRowCount(value);
+  };
+
+  // Add new empty therapy plan rows
+  const addNewRows = () => {
     if (!canEditSetNameAndAddPlans) {
       showToast.error('Anda tidak memiliki izin untuk menambah terapi baru');
       return;
     }
-    
+
+    const count = parseInt(addRowCount, 10);
+    if (!Number.isFinite(count) || count < 1) {
+      showToast.error('Jumlah terapi yang ditambahkan minimal 1');
+      return;
+    }
+
+    const remainingSlots = maxTherapyPlansPerSet - rows.length;
+    if (remainingSlots <= 0) {
+      showToast.error(`Maksimal ${maxTherapyPlansPerSet} terapi dalam satu set`);
+      return;
+    }
+
+    if (count > remainingSlots) {
+      showToast.error(`Jumlah terlalu banyak. Sisa slot terapi: ${remainingSlots}`);
+      return;
+    }
+
     // Find the highest plan number
     const maxPlanNumber = Math.max(...rows.map(r => r.planNumber), 0);
-    const newPlanNumber = maxPlanNumber + 1;
-    
-    const newRow: EditableRow = {
-      planNumber: newPlanNumber,
-      keterangan: '',
-      ifa250: null,
-      ifa500: null,
-      hho: null,
-      h2: null,
-      no: null,
-      gaso: null,
-      o2: null,
-      o3: null,
-      edta: null,
-      mb: null,
-      h2s: null,
-      kcl: null,
-      jmlNb: null,
-      isLocked: false,
-    };
-    
-    setRows([...rows, newRow]);
-    showToast.success(`Terapi #${newPlanNumber} ditambahkan`);
+    const newRows = Array.from({ length: count }, (_, index) =>
+      createEmptyRow(maxPlanNumber + index + 1)
+    );
+
+    setRows([...rows, ...newRows]);
+
+    const firstPlanNumber = newRows[0].planNumber;
+    const lastPlanNumber = newRows[newRows.length - 1].planNumber;
+    showToast.success(
+      count === 1
+        ? `Terapi #${firstPlanNumber} ditambahkan`
+        : `${count} terapi ditambahkan (#${firstPlanNumber}-#${lastPlanNumber})`
+    );
   };
 
   const changesDetected = hasChanges();
@@ -282,6 +309,7 @@ export default function EditTherapyPlanSetModal({
   const setCode = therapyPlans[0]?.setCode || '';
   const setName = therapyPlans[0]?.setName || '';
   const setId = therapyPlans[0]?.therapyPlanSetId || '';
+  const remainingAddableRows = Math.max(0, maxTherapyPlansPerSet - rows.length);
 
   const handleInputChange = (index: number, field: keyof EditableRow, value: string) => {
     const newRows = [...rows];
@@ -551,12 +579,31 @@ export default function EditTherapyPlanSetModal({
                   placeholder="Masukkan nama set (opsional)"
                 />
               </div>
-              <div className="flex items-end">
+              <div className="flex items-end gap-2">
+                <div className="w-24">
+                  <label className="block text-xs font-medium text-amber-900 dark:text-amber-100 mb-1">
+                    Jumlah
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max={remainingAddableRows || 1}
+                    value={addRowCount}
+                    onChange={(e) => handleAddRowCountChange(e.target.value)}
+                    disabled={isSubmitting || remainingAddableRows <= 0}
+                    className="w-full px-3 py-2 text-sm text-center border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    aria-label="Jumlah terapi yang ditambahkan"
+                  />
+                </div>
                 <button
-                  onClick={addNewRow}
-                  disabled={isSubmitting}
+                  onClick={addNewRows}
+                  disabled={isSubmitting || remainingAddableRows <= 0}
                   className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-green-500 to-emerald-600 border border-transparent rounded-lg hover:from-green-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md"
-                  title="Tambah terapi baru ke set ini"
+                  title={
+                    remainingAddableRows <= 0
+                      ? `Maksimal ${maxTherapyPlansPerSet} terapi dalam satu set`
+                      : 'Tambah terapi baru ke set ini'
+                  }
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -565,6 +612,11 @@ export default function EditTherapyPlanSetModal({
                 </button>
               </div>
             </div>
+            {remainingAddableRows <= 0 && (
+              <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                Maksimal {maxTherapyPlansPerSet} terapi dalam satu set sudah tercapai.
+              </p>
+            )}
           </div>
         )}
 
