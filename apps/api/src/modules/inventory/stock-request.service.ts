@@ -64,11 +64,11 @@ export class StockRequestService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Super Admin atau Admin Manager yang dapat mengedit request stok',
+        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mengedit request stok',
       };
     }
 

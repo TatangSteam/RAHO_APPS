@@ -37,7 +37,7 @@ interface MenuGroup {
 
 // ── Menu Config ───────────────────────────────────────────────
 
-const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'];
+const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'];
 
 const MENU_GROUPS: MenuGroup[] = [
   {
@@ -46,7 +46,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Dashboard',
         href: '/dashboard',
         icon: <LayoutDashboard size={20} />,
-        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Dashboard',
@@ -63,19 +63,19 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Member',
         href: '/members',
         icon: <Users size={20} />,
-        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Sesi Terapi',
         href: '/sessions',
         icon: <Activity size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Pembayaran',
         href: '/payments',
         icon: <CreditCard size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK'],
       },
     ],
   },
@@ -104,13 +104,13 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Request Stok',
         href: '/inventory/stock-requests',
         icon: <ClipboardList size={20} />,
-        roles: ['ADMIN_MANAGER', 'ADMIN_CABANG'],
+        roles: ['ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
       {
         label: 'Pengiriman',
         href: '/inventory/shipments',
         icon: <Truck size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
     ],
   },
@@ -191,7 +191,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Audit Log',
         href: '/admin/audit-logs',
         icon: <ClipboardList size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
       },
     ],
   },

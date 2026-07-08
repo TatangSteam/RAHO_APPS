@@ -69,11 +69,11 @@ export class StockRequestApprovalService {
       select: { role: true },
     });
 
-    if (!user || (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER)) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Super Admin atau Admin Manager yang dapat memproses permintaan stok',
+        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat memproses permintaan stok',
       };
     }
 
@@ -623,11 +623,11 @@ export class StockRequestApprovalService {
       select: { role: true, branchId: true },
     });
 
-    if (!user || (user.role !== Role.ADMIN_MANAGER && user.role !== Role.SUPER_ADMIN)) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Admin Manager atau Super Admin yang dapat mengupload bukti pembayaran',
+        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mengupload bukti pembayaran',
       };
     }
 

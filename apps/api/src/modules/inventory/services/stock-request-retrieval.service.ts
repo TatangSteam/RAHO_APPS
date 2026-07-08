@@ -22,6 +22,7 @@ export class StockRequestRetrievalService {
    * 
    * Access rules:
    * - SUPER_ADMIN: Can see all requests
+   * - ADMIN_LOGISTIK: Can see all requests
    * - ADMIN_MANAGER: Can see requests from branches they manage
    * - ADMIN_CABANG: Can see requests from their own branch
    */
@@ -148,6 +149,10 @@ export class StockRequestRetrievalService {
         select: { branchId: true },
       });
       branchIds = managedBranches.map(mb => mb.branchId);
+
+      if (branchIds.length === 0) {
+        return [];
+      }
     }
 
     const where: any = {

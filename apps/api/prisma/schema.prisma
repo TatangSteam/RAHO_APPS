@@ -22,6 +22,7 @@ enum Role {
   ADMIN_MANAGER
   ADMIN_CABANG
   ADMIN_LAYANAN
+  ADMIN_LOGISTIK
   DOCTOR
   NURSE
   MEMBER
@@ -232,6 +233,74 @@ enum OverstockStatus {
   FULLY_USED // Sudah habis terpakai
 }
 
+enum HomecareBagStatus {
+  ACTIVE
+  INACTIVE
+  IN_CHECKING
+  DAMAGED
+  LOST
+}
+
+enum HomecareTeamMemberRole {
+  ADMIN_LAYANAN
+  DOCTOR
+  NURSE
+  DRIVER
+  OTHER
+}
+
+enum HomecareBagRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+  PREPARING
+  SHIPPED
+  RECEIVED
+  RECEIVED_WITH_ISSUE
+  COMPLETED
+  CANCELLED
+}
+
+enum HomecareBagUsageStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum HomecareBagOpnameStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum LogisticLocationType {
+  CENTRAL_STOCK
+  BRANCH_STOCK
+  HOMECARE_BAG
+}
+
+enum LogisticTransactionType {
+  STOCK_IN
+  STOCK_OUT
+  TRANSFER
+  ADJUSTMENT
+  REQUEST_APPROVAL
+  SHIPMENT
+  RECEIVE_SHIPMENT
+  BAG_USAGE
+  BAG_RETURN
+  STOCK_OPNAME
+}
+
+enum LogisticTransactionStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
 // ============================================================
 // CORE DOMAIN
 // ============================================================
@@ -399,7 +468,7 @@ model Member {
   tempatLahir      String?
   dateOfBirth      DateTime?
   jenisKelamin     Gender?
-  agama            String?   // Religion field
+  agama            String? // Religion field
   address          String?
   pekerjaan        String?
   statusNikah      String?
@@ -591,30 +660,30 @@ model PackagePricing {
 }
 
 model MemberPackage {
-  id               String        @id @default(cuid())
-  packageCode      String        @unique
-  memberId         String
-  branchId         String
-  packagePricingId String?
-  packageType      PackageType
-  productCode      String? // e.g., TNB-P7-HC, BST-NO-P1-HC
-  totalSessions    Int
-  usedSessions     Int           @default(0)
-  finalPrice       Decimal       @db.Decimal(12, 2)
-  discountPercent  Decimal?      @db.Decimal(5, 2)
-  discountAmount   Decimal?      @db.Decimal(12, 2)
-  discountNote     String?
-  notes            String?
-  status           PackageStatus @default(PENDING_PAYMENT)
-  paymentPlanType  PaymentPlanType @default(FULL_PAYMENT)
-  installmentTotal Int?
+  id                  String          @id @default(cuid())
+  packageCode         String          @unique
+  memberId            String
+  branchId            String
+  packagePricingId    String?
+  packageType         PackageType
+  productCode         String? // e.g., TNB-P7-HC, BST-NO-P1-HC
+  totalSessions       Int
+  usedSessions        Int             @default(0)
+  finalPrice          Decimal         @db.Decimal(12, 2)
+  discountPercent     Decimal?        @db.Decimal(5, 2)
+  discountAmount      Decimal?        @db.Decimal(12, 2)
+  discountNote        String?
+  notes               String?
+  status              PackageStatus   @default(PENDING_PAYMENT)
+  paymentPlanType     PaymentPlanType @default(FULL_PAYMENT)
+  installmentTotal    Int?
   installmentSchedule Json?
-  totalVerifiedPaid Decimal @default(0) @db.Decimal(12, 2)
-  paymentPlanStatus String?
-  boosterType      String?
-  serviceType      String? // HC, PS, PHC, PTY, PDA
-  purchaseGroupId  String? // Group BASIC + BOOSTER purchased together
-  upgradedFromId   String? // Track if this is an upgrade from another package
+  totalVerifiedPaid   Decimal         @default(0) @db.Decimal(12, 2)
+  paymentPlanStatus   String?
+  boosterType         String?
+  serviceType         String? // HC, PS, PHC, PTY, PDA
+  purchaseGroupId     String? // Group BASIC + BOOSTER purchased together
+  upgradedFromId      String? // Track if this is an upgrade from another package
 
   // Payment proof (bukti pembayaran)
   paymentProofUrl      String?
@@ -632,17 +701,17 @@ model MemberPackage {
   refundedBy          String?
   refundedAt          DateTime?
 
-  assignedBy  String
-  verifiedBy  String?
-  rejectedBy  String?
-  paidAt      DateTime?
-  verifiedAt  DateTime?
-  rejectedAt  DateTime?
+  assignedBy      String
+  verifiedBy      String?
+  rejectedBy      String?
+  paidAt          DateTime?
+  verifiedAt      DateTime?
+  rejectedAt      DateTime?
   rejectionReason String?
-  activatedAt DateTime?
-  expiredAt   DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  activatedAt     DateTime?
+  expiredAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   member           Member                    @relation(fields: [memberId], references: [id])
   branch           Branch                    @relation(fields: [branchId], references: [id])
@@ -670,22 +739,22 @@ model MemberPackage {
 }
 
 model MemberAddOn {
-  id           String        @id @default(cuid())
-  addOnCode    String        @unique
-  memberId     String
-  branchId     String
-  packageId    String? // Optional: link to package if purchased together
-  addOnType    AddOnType
-  quantity     Int           @default(1)
-  pricePerUnit Decimal       @db.Decimal(12, 2)
-  totalPrice   Decimal       @db.Decimal(12, 2)
-  status       PackageStatus @default(PENDING_PAYMENT)
-  paymentPlanType  PaymentPlanType @default(FULL_PAYMENT)
-  installmentTotal Int?
+  id                  String          @id @default(cuid())
+  addOnCode           String          @unique
+  memberId            String
+  branchId            String
+  packageId           String? // Optional: link to package if purchased together
+  addOnType           AddOnType
+  quantity            Int             @default(1)
+  pricePerUnit        Decimal         @db.Decimal(12, 2)
+  totalPrice          Decimal         @db.Decimal(12, 2)
+  status              PackageStatus   @default(PENDING_PAYMENT)
+  paymentPlanType     PaymentPlanType @default(FULL_PAYMENT)
+  installmentTotal    Int?
   installmentSchedule Json?
-  totalVerifiedPaid Decimal @default(0) @db.Decimal(12, 2)
-  paymentPlanStatus String?
-  notes        String?
+  totalVerifiedPaid   Decimal         @default(0) @db.Decimal(12, 2)
+  paymentPlanStatus   String?
+  notes               String?
 
   // Payment proof (bukti pembayaran)
   paymentProofUrl      String?
@@ -693,15 +762,15 @@ model MemberAddOn {
   paymentProofFileSize Int?
   paymentProofMimeType String?
 
-  assignedBy String
-  verifiedBy String?
-  rejectedBy String?
-  paidAt     DateTime?
-  verifiedAt DateTime?
-  rejectedAt DateTime?
+  assignedBy      String
+  verifiedBy      String?
+  rejectedBy      String?
+  paidAt          DateTime?
+  verifiedAt      DateTime?
+  rejectedAt      DateTime?
   rejectionReason String?
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   member         Member         @relation(fields: [memberId], references: [id])
   branch         Branch         @relation(fields: [branchId], references: [id])
@@ -806,23 +875,23 @@ model Invoice {
   totalAmount     Decimal  @db.Decimal(12, 2)
 
   // Status and dates
-  status      InvoiceStatus @default(DRAFT)
-  paymentPlanType PaymentPlanType @default(FULL_PAYMENT)
-  paymentGroupId String?
-  installmentNumber Int?
-  installmentTotal Int?
-  installmentSchedule Json?
-  totalPurchaseAmount Decimal? @db.Decimal(12, 2)
-  installmentAmount Decimal? @db.Decimal(12, 2)
-  carryOverAmount Decimal? @default(0) @db.Decimal(12, 2)
-  creditAmount Decimal? @default(0) @db.Decimal(12, 2)
-  actualPaidAmount Decimal? @db.Decimal(12, 2)
+  status                    InvoiceStatus             @default(DRAFT)
+  paymentPlanType           PaymentPlanType           @default(FULL_PAYMENT)
+  paymentGroupId            String?
+  installmentNumber         Int?
+  installmentTotal          Int?
+  installmentSchedule       Json?
+  totalPurchaseAmount       Decimal?                  @db.Decimal(12, 2)
+  installmentAmount         Decimal?                  @db.Decimal(12, 2)
+  carryOverAmount           Decimal?                  @default(0) @db.Decimal(12, 2)
+  creditAmount              Decimal?                  @default(0) @db.Decimal(12, 2)
+  actualPaidAmount          Decimal?                  @db.Decimal(12, 2)
   paymentVerificationStatus PaymentVerificationStatus @default(PENDING)
-  paymentRejectionReason String?
-  isAdjustment Boolean @default(false)
-  dueDate     DateTime?
-  paidAt      DateTime?
-  cancelledAt DateTime?
+  paymentRejectionReason    String?
+  isAdjustment              Boolean                   @default(false)
+  dueDate                   DateTime?
+  paidAt                    DateTime?
+  cancelledAt               DateTime?
 
   // Payment details
   paymentMethod    PaymentMethod?
@@ -1004,14 +1073,14 @@ model TreatmentSession {
   nurse          User           @relation("SessionNurse", fields: [nurseId], references: [id])
   boosterPackage MemberPackage? @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
 
-  therapyPlan       TherapyPlan?
-  vitalSigns        VitalSign[]
-  infusion          InfusionExecution?
-  materials         MaterialUsage[]
-  photo             SessionPhoto?
-  supportingPhotos  SessionSupportingPhoto[]
-  emrNotes          EMRNote[]
-  evaluation        DoctorEvaluation?
+  therapyPlan      TherapyPlan?
+  vitalSigns       VitalSign[]
+  infusion         InfusionExecution?
+  materials        MaterialUsage[]
+  photo            SessionPhoto?
+  supportingPhotos SessionSupportingPhoto[]
+  emrNotes         EMRNote[]
+  evaluation       DoctorEvaluation?
 
   // Multiple doctors and nurses support
   sessionDoctors SessionDoctor[]
@@ -1112,48 +1181,48 @@ model TherapyPlanSet {
 }
 
 model TherapyPlan {
-  id                 String   @id @default(cuid())
-  planCode           String   @unique
-  memberId           String? // NEW: For preparation (before session)
-  therapyPlanSetId   String?
-  planNumber         Int?
-  treatmentSessionId String?  @unique // Make optional
-  keterangan         String?  @db.Text
+  id                  String    @id @default(cuid())
+  planCode            String    @unique
+  memberId            String? // NEW: For preparation (before session)
+  therapyPlanSetId    String?
+  planNumber          Int?
+  treatmentSessionId  String?   @unique // Make optional
+  keterangan          String?   @db.Text
   // IFA fields - IFA A + MG (pilih salah satu: 500ml atau 250ml)
-  ifa250             Decimal? @db.Decimal(10, 2) // IFA A + MG 250ml (satuan: Botol)
-  ifa500             Decimal? @db.Decimal(10, 2) // IFA A + MG 500ml (satuan: Botol)
-  hho                Decimal? @db.Decimal(10, 2)
-  h2                 Decimal? @db.Decimal(10, 2)
-  no                 Decimal? @db.Decimal(10, 2)
-  gaso               Decimal? @db.Decimal(10, 2)
-  o2                 Decimal? @db.Decimal(10, 2)
-  o3                 Decimal? @db.Decimal(10, 2)
-  edta               Decimal? @db.Decimal(10, 2)
-  mb                 Decimal? @db.Decimal(10, 2)
-  h2s                Decimal? @db.Decimal(10, 2)
-  kcl                Decimal? @db.Decimal(10, 2)
-  jmlNb              Decimal? @db.Decimal(10, 2)
-  noInIfa            Decimal? @default(2.5) @db.Decimal(10, 2) // Default NO di IFA 2,5ml
-  ifaSubstances      Json?    @map("ifa_substances") // Zat yang terkandung di IFA, hanya pencatatan therapy plan
-  ifaSubstanceTotalMl Decimal? @map("ifa_substance_total_ml") @db.Decimal(10, 2)
+  ifa250              Decimal?  @db.Decimal(10, 2) // IFA A + MG 250ml (satuan: Botol)
+  ifa500              Decimal?  @db.Decimal(10, 2) // IFA A + MG 500ml (satuan: Botol)
+  hho                 Decimal?  @db.Decimal(10, 2)
+  h2                  Decimal?  @db.Decimal(10, 2)
+  no                  Decimal?  @db.Decimal(10, 2)
+  gaso                Decimal?  @db.Decimal(10, 2)
+  o2                  Decimal?  @db.Decimal(10, 2)
+  o3                  Decimal?  @db.Decimal(10, 2)
+  edta                Decimal?  @db.Decimal(10, 2)
+  mb                  Decimal?  @db.Decimal(10, 2)
+  h2s                 Decimal?  @db.Decimal(10, 2)
+  kcl                 Decimal?  @db.Decimal(10, 2)
+  jmlNb               Decimal?  @db.Decimal(10, 2)
+  noInIfa             Decimal?  @default(2.5) @db.Decimal(10, 2) // Default NO di IFA 2,5ml
+  ifaSubstances       Json?     @map("ifa_substances") // Zat yang terkandung di IFA, hanya pencatatan therapy plan
+  ifaSubstanceTotalMl Decimal?  @map("ifa_substance_total_ml") @db.Decimal(10, 2)
   // Versioning fields
-  version            Int      @default(1) // Version number (1, 2, 3, ...)
-  supersededById     String?  // ID of the therapy plan that supersedes this one
-  supersededAt       DateTime? // When was this version superseded
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  version             Int       @default(1) // Version number (1, 2, 3, ...)
+  supersededById      String? // ID of the therapy plan that supersedes this one
+  supersededAt        DateTime? // When was this version superseded
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
-  member         Member?           @relation(fields: [memberId], references: [id])
-  therapyPlanSet TherapyPlanSet?   @relation(fields: [therapyPlanSetId], references: [id])
-  session        TreatmentSession? @relation(fields: [treatmentSessionId], references: [id])
-  supersededBy   TherapyPlan?      @relation("TherapyPlanVersioning", fields: [supersededById], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  supersedes     TherapyPlan[]     @relation("TherapyPlanVersioning")
+  member         Member?             @relation(fields: [memberId], references: [id])
+  therapyPlanSet TherapyPlanSet?     @relation(fields: [therapyPlanSetId], references: [id])
+  session        TreatmentSession?   @relation(fields: [treatmentSessionId], references: [id])
+  supersededBy   TherapyPlan?        @relation("TherapyPlanVersioning", fields: [supersededById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supersedes     TherapyPlan[]       @relation("TherapyPlanVersioning")
   infusions      InfusionExecution[]
 
+  @@unique([therapyPlanSetId, planNumber])
   @@index([memberId])
   @@index([therapyPlanSetId])
   @@index([supersededById])
-  @@unique([therapyPlanSetId, planNumber])
   @@map("therapy_plans")
 }
 
@@ -1482,12 +1551,12 @@ model Shipment {
   shipmentPhotoName String?
 
   // Receiving details
-  receivedAt       DateTime?
-  receivedBy       String?
-  receiptFileUrl   String?
-  receiptFileName  String?
-  receiptFileSize  Int?
-  receiptMimeType  String?
+  receivedAt      DateTime?
+  receivedBy      String?
+  receiptFileUrl  String?
+  receiptFileName String?
+  receiptFileSize Int?
+  receiptMimeType String?
 
   // Approval details
   approvedAt DateTime?
@@ -1537,8 +1606,8 @@ model StockRequestInvoice {
   branchId       String
 
   // Pricing
-  subtotal    Decimal @db.Decimal(12, 2)
-  totalAmount Decimal @db.Decimal(12, 2)
+  subtotal        Decimal @db.Decimal(12, 2)
+  totalAmount     Decimal @db.Decimal(12, 2)
   paidAmount      Decimal @default(0) @db.Decimal(12, 2)
   remainingAmount Decimal @default(0) @db.Decimal(12, 2)
 
@@ -1567,7 +1636,7 @@ model StockRequestInvoice {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  stockRequest StockRequest              @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+  stockRequest StockRequest                 @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
   items        StockRequestInvoiceItem[]
   payments     StockRequestInvoicePayment[]
 
@@ -1702,6 +1771,457 @@ model OverstockUsage {
 }
 
 // ============================================================
+// HOMECARE BAG LOGISTICS DOMAIN
+// ============================================================
+
+model HomecareTeam {
+  id          String  @id @default(cuid())
+  teamCode    String  @unique
+  name        String
+  branchId    String
+  description String? @db.Text
+  isActive    Boolean @default(true)
+
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members       HomecareTeamMember[]
+  bags          HomecareBag[]
+  stockRequests HomecareBagStockRequest[]
+
+  @@index([branchId, isActive])
+  @@index([teamCode])
+  @@map("homecare_teams")
+}
+
+model HomecareTeamMember {
+  id       String                 @id @default(cuid())
+  teamId   String
+  userId   String
+  role     HomecareTeamMemberRole
+  isActive Boolean                @default(true)
+
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+  notes    String?   @db.Text
+
+  team HomecareTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, userId])
+  @@index([teamId])
+  @@index([userId])
+  @@index([role])
+  @@map("homecare_team_members")
+}
+
+model HomecareBag {
+  id       String            @id @default(cuid())
+  bagCode  String            @unique
+  name     String
+  teamId   String
+  branchId String
+  status   HomecareBagStatus @default(ACTIVE)
+  isActive Boolean           @default(true)
+
+  notes     String?  @db.Text
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team HomecareTeam @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  stocks        HomecareBagStock[]
+  stockRequests HomecareBagStockRequest[]
+  shipments     HomecareBagShipment[]
+  usages        HomecareBagUsage[]
+  returns       HomecareBagReturn[]
+  opnames       HomecareBagOpname[]
+  mutations     LogisticStockMutation[]
+
+  @@index([teamId])
+  @@index([branchId])
+  @@index([status])
+  @@index([isActive])
+  @@map("homecare_bags")
+}
+
+model HomecareBagStock {
+  id              String @id @default(cuid())
+  bagId           String
+  masterProductId String
+
+  stock        Decimal @default(0) @db.Decimal(10, 4)
+  minThreshold Decimal @default(0) @db.Decimal(10, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bag HomecareBag @relation(fields: [bagId], references: [id], onDelete: Cascade)
+
+  @@unique([bagId, masterProductId])
+  @@index([bagId])
+  @@index([masterProductId])
+  @@index([bagId, stock])
+  @@map("homecare_bag_stocks")
+}
+
+model HomecareBagStockRequest {
+  id          String                   @id @default(cuid())
+  requestCode String                   @unique
+  teamId      String
+  bagId       String
+  branchId    String
+  requestedBy String
+  status      HomecareBagRequestStatus @default(PENDING)
+
+  priority     String @default("NORMAL")
+  requestNotes String @db.Text
+
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  reviewNotes     String?   @db.Text
+  rejectionReason String?   @db.Text
+  preparedBy      String?
+  preparedAt      DateTime?
+  shippedBy       String?
+  shippedAt       DateTime?
+  receivedBy      String?
+  receivedAt      DateTime?
+  receivingNotes  String?   @db.Text
+
+  supportFileUrl      String?
+  supportFileName     String?
+  supportFileSize     Int?
+  supportFileMimeType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team     HomecareTeam                  @relation(fields: [teamId], references: [id])
+  bag      HomecareBag                   @relation(fields: [bagId], references: [id])
+  items    HomecareBagStockRequestItem[]
+  shipment HomecareBagShipment?
+
+  @@index([teamId, status])
+  @@index([bagId, status])
+  @@index([branchId, status])
+  @@index([requestedBy])
+  @@index([createdAt])
+  @@map("homecare_bag_stock_requests")
+}
+
+model HomecareBagStockRequestItem {
+  id              String @id @default(cuid())
+  requestId       String
+  masterProductId String
+
+  requestedQty Decimal  @db.Decimal(10, 4)
+  approvedQty  Decimal? @db.Decimal(10, 4)
+  finalQty     Decimal? @db.Decimal(10, 4)
+  notes        String?  @db.Text
+
+  request HomecareBagStockRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@index([requestId])
+  @@index([masterProductId])
+  @@map("homecare_bag_stock_request_items")
+}
+
+model HomecareBagShipment {
+  id           String @id @default(cuid())
+  shipmentCode String @unique
+  requestId    String @unique
+
+  fromBranchId String
+  toBagId      String
+  status       ShipmentStatus @default(PREPARING)
+
+  shippedBy String?
+  shippedAt DateTime?
+
+  shipmentPhotoUrl  String?
+  shipmentPhotoName String?
+
+  receivedAt     DateTime?
+  receivedUserId String?
+
+  receiptFileUrl  String?
+  receiptFileName String?
+  receiptFileSize Int?
+  receiptMimeType String?
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  request HomecareBagStockRequest   @relation(fields: [requestId], references: [id])
+  bag     HomecareBag               @relation(fields: [toBagId], references: [id])
+  items   HomecareBagShipmentItem[]
+
+  @@index([fromBranchId])
+  @@index([toBagId, status])
+  @@index([status])
+  @@index([shippedAt])
+  @@map("homecare_bag_shipments")
+}
+
+model HomecareBagShipmentItem {
+  id              String @id @default(cuid())
+  shipmentId      String
+  masterProductId String
+
+  sentQty     Decimal  @db.Decimal(10, 4)
+  receivedQty Decimal? @db.Decimal(10, 4)
+
+  discrepancyType  DiscrepancyType?
+  discrepancyNotes String?          @db.Text
+  photoUrl         String?
+  photoFileName    String?
+
+  shipment HomecareBagShipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+
+  @@index([shipmentId])
+  @@index([masterProductId])
+  @@index([discrepancyType])
+  @@map("homecare_bag_shipment_items")
+}
+
+model HomecareBagUsage {
+  id        String @id @default(cuid())
+  usageCode String @unique
+  bagId     String
+  teamId    String
+
+  treatmentSessionId String?
+  usedBy             String
+  status             HomecareBagUsageStatus @default(COMPLETED)
+  usageDate          DateTime               @default(now())
+  notes              String                 @db.Text
+
+  supportFileUrl      String?
+  supportFileName     String?
+  supportFileSize     Int?
+  supportFileMimeType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bag   HomecareBag            @relation(fields: [bagId], references: [id])
+  items HomecareBagUsageItem[]
+
+  @@index([bagId])
+  @@index([teamId])
+  @@index([usedBy])
+  @@index([treatmentSessionId])
+  @@index([usageDate])
+  @@map("homecare_bag_usages")
+}
+
+model HomecareBagUsageItem {
+  id              String  @id @default(cuid())
+  usageId         String
+  masterProductId String
+  quantity        Decimal @db.Decimal(10, 4)
+  unit            String?
+  notes           String? @db.Text
+
+  usage HomecareBagUsage @relation(fields: [usageId], references: [id], onDelete: Cascade)
+
+  @@index([usageId])
+  @@index([masterProductId])
+  @@map("homecare_bag_usage_items")
+}
+
+model HomecareBagReturn {
+  id         String @id @default(cuid())
+  returnCode String @unique
+  bagId      String
+  teamId     String
+  toBranchId String
+
+  returnedBy String
+  receivedBy String?
+  returnedAt DateTime  @default(now())
+  receivedAt DateTime?
+  notes      String    @db.Text
+
+  supportFileUrl      String?
+  supportFileName     String?
+  supportFileSize     Int?
+  supportFileMimeType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bag   HomecareBag             @relation(fields: [bagId], references: [id])
+  items HomecareBagReturnItem[]
+
+  @@index([bagId])
+  @@index([teamId])
+  @@index([toBranchId])
+  @@index([returnedBy])
+  @@index([receivedAt])
+  @@map("homecare_bag_returns")
+}
+
+model HomecareBagReturnItem {
+  id              String  @id @default(cuid())
+  returnId        String
+  masterProductId String
+  quantity        Decimal @db.Decimal(10, 4)
+  isReusable      Boolean @default(true)
+  condition       String?
+  notes           String? @db.Text
+
+  bagReturn HomecareBagReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId])
+  @@index([masterProductId])
+  @@map("homecare_bag_return_items")
+}
+
+model HomecareBagOpname {
+  id         String                  @id @default(cuid())
+  opnameCode String                  @unique
+  bagId      String
+  teamId     String
+  status     HomecareBagOpnameStatus @default(DRAFT)
+  checkedBy  String
+  checkedAt  DateTime                @default(now())
+  notes      String                  @db.Text
+
+  supportFileUrl      String?
+  supportFileName     String?
+  supportFileSize     Int?
+  supportFileMimeType String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  bag   HomecareBag             @relation(fields: [bagId], references: [id])
+  items HomecareBagOpnameItem[]
+
+  @@index([bagId])
+  @@index([teamId])
+  @@index([checkedBy])
+  @@index([checkedAt])
+  @@map("homecare_bag_opnames")
+}
+
+model HomecareBagOpnameItem {
+  id              String @id @default(cuid())
+  opnameId        String
+  masterProductId String
+
+  systemQty         Decimal @db.Decimal(10, 4)
+  physicalQty       Decimal @db.Decimal(10, 4)
+  difference        Decimal @db.Decimal(10, 4)
+  adjustmentCreated Boolean @default(false)
+  notes             String? @db.Text
+
+  opname HomecareBagOpname @relation(fields: [opnameId], references: [id], onDelete: Cascade)
+
+  @@index([opnameId])
+  @@index([masterProductId])
+  @@map("homecare_bag_opname_items")
+}
+
+model LogisticStockTransaction {
+  id              String                    @id @default(cuid())
+  transactionCode String                    @unique
+  type            LogisticTransactionType
+  status          LogisticTransactionStatus @default(COMPLETED)
+
+  sourceType LogisticLocationType?
+  sourceId   String?
+
+  destinationType LogisticLocationType?
+  destinationId   String?
+
+  referenceType String?
+  referenceId   String?
+
+  reason String?
+  notes  String  @db.Text
+
+  supportFileUrl      String?
+  supportFileName     String?
+  supportFileSize     Int?
+  supportFileMimeType String?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items LogisticStockTransactionItem[]
+
+  @@index([type])
+  @@index([status])
+  @@index([sourceType, sourceId])
+  @@index([destinationType, destinationId])
+  @@index([referenceType, referenceId])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("logistic_stock_transactions")
+}
+
+model LogisticStockTransactionItem {
+  id              String  @id @default(cuid())
+  transactionId   String
+  masterProductId String
+  quantity        Decimal @db.Decimal(10, 4)
+
+  sourceStockBefore Decimal? @db.Decimal(10, 4)
+  sourceStockAfter  Decimal? @db.Decimal(10, 4)
+
+  destinationStockBefore Decimal? @db.Decimal(10, 4)
+  destinationStockAfter  Decimal? @db.Decimal(10, 4)
+  notes                  String?  @db.Text
+
+  transaction LogisticStockTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([transactionId])
+  @@index([masterProductId])
+  @@map("logistic_stock_transaction_items")
+}
+
+model LogisticStockMutation {
+  id           String @id @default(cuid())
+  mutationCode String @unique
+
+  locationType LogisticLocationType
+  locationId   String
+
+  homecareBagId   String?
+  masterProductId String
+  type            LogisticTransactionType
+
+  quantity    Decimal @db.Decimal(10, 4)
+  stockBefore Decimal @db.Decimal(10, 4)
+  stockAfter  Decimal @db.Decimal(10, 4)
+
+  referenceType String?
+  referenceId   String?
+  notes         String  @db.Text
+
+  createdBy String
+  createdAt DateTime @default(now())
+
+  homecareBag HomecareBag? @relation(fields: [homecareBagId], references: [id], onDelete: SetNull)
+
+  @@index([locationType, locationId])
+  @@index([homecareBagId])
+  @@index([masterProductId])
+  @@index([type])
+  @@index([referenceType, referenceId])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("logistic_stock_mutations")
+}
+
+// ============================================================
 // COMMUNICATION DOMAIN
 // ============================================================
 
@@ -1798,24 +2318,24 @@ model AuditLog {
 // ============================================================
 
 model LabResult {
-  id          String   @id @default(cuid())
-  memberId    String
-  member      Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  
-  fileName    String   // Original filename
-  fileUrl     String   // MinIO URL
-  fileType    String   // MIME type: application/pdf, image/jpeg, image/png
-  fileSize    Int      // File size in bytes
-  
-  description String?  @db.Text // Keterangan hasil lab
+  id       String @id @default(cuid())
+  memberId String
+  member   Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  fileName String // Original filename
+  fileUrl  String // MinIO URL
+  fileType String // MIME type: application/pdf, image/jpeg, image/png
+  fileSize Int // File size in bytes
+
+  description String?   @db.Text // Keterangan hasil lab
   labDate     DateTime? // Tanggal hasil lab (optional)
-  
-  uploadedBy  String   // User ID yang upload
-  uploadedByUser User  @relation(fields: [uploadedBy], references: [id])
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+
+  uploadedBy     String // User ID yang upload
+  uploadedByUser User   @relation(fields: [uploadedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([memberId])
   @@index([uploadedBy])
   @@map("lab_results")

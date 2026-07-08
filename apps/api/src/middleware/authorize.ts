@@ -37,6 +37,7 @@ export const ALLSTAFF: Role[] = [
   Role.ADMIN_MANAGER,
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
+  Role.ADMIN_LOGISTIK,
   Role.DOCTOR,
   Role.NURSE,
 ];
@@ -44,9 +45,10 @@ export const ALLSTAFF: Role[] = [
 export const ADMIN_ABOVE: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
+  Role.ADMIN_LOGISTIK,
   Role.ADMIN_CABANG,
 ];
 
-export const MANAGER_ABOVE: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER];
+export const MANAGER_ABOVE: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
 
 export const SUPER_ADMIN_ONLY: Role[] = [Role.SUPER_ADMIN];

@@ -273,8 +273,8 @@ export class StockRequestController {
 
       let result;
 
-      if (userRole === Role.SUPER_ADMIN) {
-        // Super Admin can see all requests
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_LOGISTIK) {
+        // Super Admin and Admin Logistik can see all requests
         result = await stockRequestService.getRequests({
           branchId: branchId as string,
           status: status as StockRequestStatus,
@@ -324,8 +324,8 @@ export class StockRequestController {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
       }
 
-      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER) {
-        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Super Admin atau Admin Manager yang dapat melihat request pending');
+      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER && userRole !== Role.ADMIN_LOGISTIK) {
+        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat melihat request pending');
       }
 
       const result = await stockRequestService.getPendingReviewRequests(userId, userRole);

@@ -4,6 +4,7 @@ import { InventoryExportService } from './services/inventory-export.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
 import { BranchType, ProductCategory, Role, StockMutationType } from '@prisma/client';
+import { centralStockVisibleRoles } from './logistics.access';
 
 const inventoryService = new InventoryService();
 const exportService = new InventoryExportService(prisma);
@@ -17,6 +18,25 @@ import { MaterialUsageHistoryService } from './services/material-usage-history.s
 const materialUsageHistoryService = new MaterialUsageHistoryService();
 
 export class InventoryController {
+  private async canReadInventoryBranch(req: Request, res: Response, branchId: string): Promise<boolean> {
+    const branch = await prisma.branch.findUnique({
+      where: { id: branchId },
+      select: { type: true },
+    });
+
+    if (!branch) {
+      sendError(res, 404, 'BRANCH_NOT_FOUND', 'Cabang tidak ditemukan');
+      return false;
+    }
+
+    if (branch.type === BranchType.PUSAT && !centralStockVisibleRoles.has(req.user?.role as Role)) {
+      sendError(res, 403, 'CENTRAL_STOCK_HIDDEN', 'Anda tidak memiliki akses melihat jumlah stok pusat');
+      return false;
+    }
+
+    return true;
+  }
+
   private async getAccessibleMaterialUsageBranchIds(req: Request): Promise<string[] | undefined> {
     const userRole = req.user?.role;
     const userId = req.user?.userId;
@@ -211,6 +231,10 @@ export class InventoryController {
         return sendError(res, 400, 'BRANCH_ID_REQUIRED', 'Branch ID is required');
       }
 
+      if (!(await this.canReadInventoryBranch(req, res, branchId))) {
+        return;
+      }
+
       const items = await materialUsageService.getAvailableInventoryItems(branchId);
       return sendSuccess(res, items);
     } catch (err: any) {
@@ -230,6 +254,10 @@ export class InventoryController {
         return sendError(res, 400, 'BRANCH_ID_REQUIRED', 'Branch ID is required');
       }
 
+      if (!(await this.canReadInventoryBranch(req, res, targetBranchId))) {
+        return;
+      }
+
       const items = await inventoryService.getInventoryItems(targetBranchId);
       return sendSuccess(res, items);
     } catch (err: any) {
@@ -244,6 +272,10 @@ export class InventoryController {
 
       if (!item) {
         return sendError(res, 404, 'ITEM_NOT_FOUND', 'Inventory item not found');
+      }
+
+      if (item.branch?.id && !(await this.canReadInventoryBranch(req, res, item.branch.id))) {
+        return;
       }
 
       return sendSuccess(res, item);
@@ -262,6 +294,10 @@ export class InventoryController {
 
       if (!branchId) {
         return sendError(res, 400, 'BRANCH_ID_REQUIRED', 'Branch ID is required');
+      }
+
+      if (!(await this.canReadInventoryBranch(req, res, branchId))) {
+        return;
       }
 
       // Get inventory items with stock below minimum threshold
@@ -315,8 +351,8 @@ export class InventoryController {
       const userId = req.user!.userId;
       const userRole = req.user!.role;
 
-      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER) {
-        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Admin Manager atau Super Admin yang dapat mengedit stok');
+      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER && userRole !== Role.ADMIN_LOGISTIK) {
+        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mengedit stok');
       }
 
       // Validate input
@@ -384,8 +420,8 @@ export class InventoryController {
       const { conversionFactor } = req.body;
       const userRole = req.user!.role;
 
-      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER) {
-        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Admin Manager atau Super Admin yang dapat mengubah konversi stok');
+      if (userRole !== Role.SUPER_ADMIN && userRole !== Role.ADMIN_MANAGER && userRole !== Role.ADMIN_LOGISTIK) {
+        return sendError(res, 403, 'INSUFFICIENT_PERMISSIONS', 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mengubah konversi stok');
       }
 
       // Validate input
@@ -426,12 +462,16 @@ export class InventoryController {
       // Determine target branch
       let targetBranchId: string | undefined;
       
-      if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER') {
+      if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER' || userRole === 'ADMIN_LOGISTIK') {
         // Super admin and manager can export all branches or specific branch
         targetBranchId = branchId as string | undefined;
       } else {
         // Other roles can only export their own branch
         targetBranchId = userBranchId;
+      }
+
+      if (targetBranchId && !(await this.canReadInventoryBranch(req, res, targetBranchId))) {
+        return;
       }
 
       const csvContent = await exportService.exportToCSV(targetBranchId);
@@ -482,12 +522,16 @@ export class InventoryController {
       // Determine target branch
       let targetBranchId: string | undefined;
       
-      if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER') {
+      if (userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER' || userRole === 'ADMIN_LOGISTIK') {
         // Super admin and manager can export all branches or specific branch
         targetBranchId = branchId as string | undefined;
       } else {
         // Other roles can only export their own branch
         targetBranchId = userBranchId;
+      }
+
+      if (targetBranchId && !(await this.canReadInventoryBranch(req, res, targetBranchId))) {
+        return;
       }
 
       const excelBuffer = await exportService.exportToExcel(targetBranchId);
@@ -640,8 +684,8 @@ export class InventoryController {
       // Determine which branches to query based on role
       let targetBranchIds: string[] | undefined;
 
-      if (userRole === Role.SUPER_ADMIN) {
-        // Super Admin sees all mutations (no branch filter)
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_LOGISTIK) {
+        // Super Admin and Admin Logistik see all mutations (no branch filter)
         targetBranchIds = branchId ? [branchId as string] : undefined;
       } else if (userRole === Role.ADMIN_MANAGER && userId) {
         // Admin Manager sees mutations from branches they manage
@@ -675,6 +719,19 @@ export class InventoryController {
         targetBranchIds = [userBranchId];
       } else {
         return sendError(res, 403, 'ACCESS_DENIED', 'User tidak memiliki akses cabang');
+      }
+
+      if (targetBranchIds && targetBranchIds.length > 0 && !centralStockVisibleRoles.has(userRole as Role)) {
+        const centralBranchCount = await prisma.branch.count({
+          where: {
+            id: { in: targetBranchIds },
+            type: BranchType.PUSAT,
+          },
+        });
+
+        if (centralBranchCount > 0) {
+          return sendError(res, 403, 'CENTRAL_STOCK_HIDDEN', 'Anda tidak memiliki akses melihat mutasi stok pusat');
+        }
       }
 
       const result = await inventoryService.getStockMutations({

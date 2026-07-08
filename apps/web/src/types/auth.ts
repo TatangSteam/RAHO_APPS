@@ -7,6 +7,7 @@ export type Role =
   | 'ADMIN_MANAGER'
   | 'ADMIN_CABANG'
   | 'ADMIN_LAYANAN'
+  | 'ADMIN_LOGISTIK'
   | 'DOCTOR'
   | 'NURSE'
   | 'MEMBER';
@@ -39,12 +40,13 @@ export const STAFF_ROLES: Role[] = [
   'ADMIN_MANAGER',
   'ADMIN_CABANG',
   'ADMIN_LAYANAN',
+  'ADMIN_LOGISTIK',
   'DOCTOR',
   'NURSE',
 ];
 
-export const ADMIN_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'];
-export const MANAGER_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER'];
+export const ADMIN_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'];
+export const MANAGER_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'];
 export const SUPER_ADMIN_ONLY: Role[] = ['SUPER_ADMIN'];
 
 // Roles that can edit therapy plans
@@ -67,7 +69,7 @@ export function getDefaultRoute(role: Role): string {
   if (role === 'MEMBER') return '/me/dashboard';
   
   // All staff roles get main dashboard
-  if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(role)) {
+  if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'].includes(role)) {
     return '/dashboard';
   }
   

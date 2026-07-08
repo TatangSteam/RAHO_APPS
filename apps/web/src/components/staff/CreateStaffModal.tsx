@@ -16,6 +16,8 @@ interface Props {
   userRole: string;
 }
 
+type CreatableStaffRole = 'ADMIN_LOGISTIK' | 'ADMIN_CABANG' | 'DOCTOR' | 'NURSE' | 'ADMIN_LAYANAN';
+
 export default function CreateStaffModal({ show, onClose, onSuccess, accessToken, branchId, userRole }: Props) {
   const [mounted, setMounted] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -25,7 +27,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
     email: '',
     password: '',
     confirmPassword: '',
-    role: 'NURSE' as 'ADMIN_CABANG' | 'DOCTOR' | 'NURSE' | 'ADMIN_LAYANAN',
+    role: 'NURSE' as CreatableStaffRole,
     fullName: '',
     phone: '',
     selectedBranchId: branchId || '',
@@ -34,19 +36,20 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const isAdminManager = userRole === 'ADMIN_MANAGER';
+  const canSelectBranch = userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN';
+  const showBranchSelection = canSelectBranch && formData.role !== 'ADMIN_LOGISTIK';
 
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
   }, []);
 
-  // Fetch branches for ADMIN_MANAGER
+  // Fetch branches for global staff creators
   useEffect(() => {
-    if (show && isAdminManager) {
+    if (show && canSelectBranch) {
       loadBranches();
     }
-  }, [show, isAdminManager]);
+  }, [show, canSelectBranch]);
 
   const loadBranches = async () => {
     try {
@@ -77,7 +80,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         email: '',
         password: '',
         confirmPassword: '',
-        role: isAdminManager ? 'ADMIN_CABANG' : 'NURSE',
+        role: canSelectBranch ? 'ADMIN_CABANG' : 'NURSE',
         fullName: '',
         phone: '',
         selectedBranchId: branchId || '',
@@ -89,15 +92,14 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
     return () => {
       document.body.style.overflow = '';
     };
-  }, [show, branchId, isAdminManager]);
+  }, [show, branchId, canSelectBranch]);
 
   if (!show || !mounted) return null;
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    // Branch validation for ADMIN_MANAGER
-    if (isAdminManager && !formData.selectedBranchId) {
+    if (showBranchSelection && !formData.selectedBranchId) {
       newErrors.selectedBranchId = 'Cabang harus dipilih';
     }
 
@@ -157,7 +159,11 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         role: formData.role,
         fullName: formData.fullName,
         phone: formData.phone || undefined,
-        branchId: isAdminManager ? formData.selectedBranchId : branchId,
+        branchId: formData.role === 'ADMIN_LOGISTIK'
+          ? null
+          : canSelectBranch
+            ? formData.selectedBranchId
+            : branchId,
       };
 
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/users`, {
@@ -194,6 +200,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
   const getRoleLabel = (role: string) => {
     const roleMap: Record<string, string> = {
+      ADMIN_LOGISTIK: 'Admin Logistik',
       ADMIN_CABANG: 'Admin Cabang',
       DOCTOR: 'Dokter',
       NURSE: 'Perawat',
@@ -204,6 +211,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
   const getRoleDescription = (role: string) => {
     const descMap: Record<string, string> = {
+      ADMIN_LOGISTIK: 'Mengelola stok pusat, pengiriman, dan proses logistik',
       ADMIN_CABANG: 'Mengelola cabang, staff, dan operasional cabang',
       DOCTOR: 'Dapat melakukan diagnosis, evaluasi, dan mengelola terapi pasien',
       NURSE: 'Dapat melakukan vital signs, infusion, dan material usage',
@@ -213,7 +221,10 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
   };
 
   const getAvailableRoles = () => {
-    if (isAdminManager) {
+    if (userRole === 'SUPER_ADMIN') {
+      return ['ADMIN_LOGISTIK', 'ADMIN_CABANG', 'DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
+    }
+    if (userRole === 'ADMIN_MANAGER') {
       return ['ADMIN_CABANG', 'DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
     }
     return ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
@@ -242,7 +253,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         <form onSubmit={handleSubmit} className={styles.modalBody}>
           {/* Role Selection */}
           <div className={styles.section}>
-            <h4 className={styles.sectionTitle}>1. Pilih Role {isAdminManager ? 'User' : 'Staff'}</h4>
+            <h4 className={styles.sectionTitle}>1. Pilih Role {canSelectBranch ? 'User' : 'Staff'}</h4>
             <div className={styles.roleGrid}>
               {getAvailableRoles().map((role) => (
                 <div
@@ -265,8 +276,8 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
             </div>
           </div>
 
-          {/* Branch Selection for ADMIN_MANAGER */}
-          {isAdminManager && (
+          {/* Branch Selection for branch-scoped roles */}
+          {showBranchSelection && (
             <div className={styles.section}>
               <h4 className={styles.sectionTitle}>2. Pilih Cabang</h4>
               <div className={styles.formGroup}>
@@ -294,7 +305,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
           {/* Personal Information */}
           <div className={styles.section}>
-            <h4 className={styles.sectionTitle}>{isAdminManager ? '3' : '2'}. Informasi Personal</h4>
+            <h4 className={styles.sectionTitle}>{showBranchSelection ? '3' : '2'}. Informasi Personal</h4>
             <div className={styles.formGrid}>
               <div className={styles.formGroup}>
                 <label className={styles.label}>
@@ -328,7 +339,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
           {/* Account Information */}
           <div className={styles.section}>
-            <h4 className={styles.sectionTitle}>{isAdminManager ? '4' : '3'}. Informasi Akun</h4>
+            <h4 className={styles.sectionTitle}>{showBranchSelection ? '4' : '3'}. Informasi Akun</h4>
             <div className={styles.formGrid}>
               <div className={styles.formGroup} style={{ gridColumn: '1 / -1' }}>
                 <label className={styles.label}>

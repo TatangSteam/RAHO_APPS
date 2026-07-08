@@ -173,16 +173,15 @@ export default function PersonalDataSection({ formData, onChange, errors }: Pers
         {/* Tempat Lahir - 4 cols on desktop */}
         <div className="form-col-4">
           <label className="form-label">
-            Tempat Lahir <span style={{ color: '#ef4444' }}>*</span>
+            Tempat Lahir
           </label>
           <input
             type="text"
             name="birthPlace"
             value={formData.birthPlace || ''}
             onChange={onChange}
-            required
             className="form-input"
-            placeholder="Kota kelahiran"
+            placeholder="Opsional"
           />
         </div>
 

@@ -299,10 +299,6 @@ export default function NewMemberPage() {
       showToast.error('Nomor telepon minimal 10 digit');
       return;
     }
-    if (!formData.birthPlace) {
-      showToast.error('Tempat lahir wajib diisi');
-      return;
-    }
     if (!formData.birthDate) {
       showToast.error('Tanggal lahir wajib diisi');
       return;

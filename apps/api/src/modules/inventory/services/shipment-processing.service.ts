@@ -57,17 +57,17 @@ export class ShipmentProcessingService {
       }>;
     }
   ) {
-    // Validate user is SUPER_ADMIN or ADMIN_MANAGER
+    // Validate user can ship stock
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Super Admin atau Admin Manager yang dapat mengirim barang',
+        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mengirim barang',
       };
     }
 
@@ -540,11 +540,11 @@ export class ShipmentProcessingService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER].includes(user.role)) {
+    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Super Admin atau Admin Manager yang dapat mereview masalah pengiriman',
+        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat mereview masalah pengiriman',
       };
     }
 

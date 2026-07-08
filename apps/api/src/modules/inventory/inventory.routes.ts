@@ -3,28 +3,59 @@ import { InventoryController } from './inventory.controller';
 import { StockRequestController } from './stock-request.controller';
 import { ShipmentController } from './shipment.controller';
 import { OverstockController } from './overstock.controller';
+import { LogisticsController } from './logistics.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
+import { validate, validateQuery } from '../../middleware/validate';
 import { uploadPaymentProof, uploadShipmentReceipt } from '../../middleware/upload';
 import { Role } from '@prisma/client';
+import {
+  canManageCentralStock,
+  canReceiveBranchStock,
+  canRequestBagStock,
+  canShipStock,
+  logisticStaffRoles,
+} from './logistics.access';
+import {
+  addHomecareTeamMemberSchema,
+  approveBagStockRequestSchema,
+  approveStockRequestSchema,
+  createBagOpnameSchema,
+  createBagStockRequestSchema,
+  createBranchStockRequestSchema,
+  createHomecareBagSchema,
+  createHomecareTeamSchema,
+  getCentralStockQuerySchema,
+  receiveBagShipmentSchema,
+  receiveShipmentSchema,
+  rejectBagStockRequestSchema,
+  rejectStockRequestSchema,
+  removeHomecareTeamMemberSchema,
+  returnBagStockSchema,
+  shipBagStockSchema,
+  shipStockSchema,
+  useBagStockSchema,
+} from './logistics.schema';
 
 const router = Router();
 const inventoryController = new InventoryController();
 const stockRequestController = new StockRequestController();
 const shipmentController = new ShipmentController();
 const overstockController = new OverstockController();
+const logisticsController = new LogisticsController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
+  Role.ADMIN_LOGISTIK,
   Role.DOCTOR,
   Role.NURSE,
 ];
 
-const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
-const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER];
+const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK, Role.ADMIN_CABANG];
+const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
 
 // ============================================================
 // MASTER PRODUCTS (for inventory modal)
@@ -160,6 +191,161 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   inventoryController.exportStockMutations.bind(inventoryController)
+);
+
+// ============================================================
+// LOGISTICS - CENTRAL STOCK, BRANCH REQUESTS, HOMECARE BAGS
+// ============================================================
+
+router.get(
+  '/logistics/central-stock',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validateQuery(getCentralStockQuerySchema),
+  logisticsController.getCentralStock.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/branch-requests',
+  authenticate,
+  authorize([Role.ADMIN_CABANG]),
+  validate(createBranchStockRequestSchema),
+  logisticsController.createBranchStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/branch-requests/:requestId/approve',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(approveStockRequestSchema),
+  logisticsController.approveBranchStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/branch-requests/:requestId/reject',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(rejectStockRequestSchema),
+  logisticsController.rejectBranchStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/branch-shipments/:shipmentId/ship',
+  authenticate,
+  authorize(canShipStock),
+  validate(shipStockSchema),
+  logisticsController.shipBranchShipment.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/branch-shipments/:shipmentId/receive',
+  authenticate,
+  authorize(canReceiveBranchStock),
+  validate(receiveShipmentSchema),
+  logisticsController.receiveBranchShipment.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-teams',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(createHomecareTeamSchema),
+  logisticsController.createHomecareTeam.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-teams/:teamId/members',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(addHomecareTeamMemberSchema),
+  logisticsController.addHomecareTeamMember.bind(logisticsController)
+);
+
+router.delete(
+  '/logistics/homecare-teams/:teamId/members/:userId',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(removeHomecareTeamMemberSchema),
+  logisticsController.removeHomecareTeamMember.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bags',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(createHomecareBagSchema),
+  logisticsController.createHomecareBag.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-bags/:bagId/stock',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.getBagStock.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-requests',
+  authenticate,
+  authorize(canRequestBagStock),
+  validate(createBagStockRequestSchema),
+  logisticsController.createBagStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-requests/:requestId/approve',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(approveBagStockRequestSchema),
+  logisticsController.approveBagStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-requests/:requestId/reject',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(rejectBagStockRequestSchema),
+  logisticsController.rejectBagStockRequest.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-shipments/:shipmentId/ship',
+  authenticate,
+  authorize(canShipStock),
+  validate(shipBagStockSchema),
+  logisticsController.shipBagShipment.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-shipments/:shipmentId/receive',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(receiveBagShipmentSchema),
+  logisticsController.receiveBagShipment.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-usages',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(useBagStockSchema),
+  logisticsController.useBagStock.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-returns',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(returnBagStockSchema),
+  logisticsController.returnBagStock.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-bag-opnames',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(createBagOpnameSchema),
+  logisticsController.createBagOpname.bind(logisticsController)
 );
 
 // ============================================================

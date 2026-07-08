@@ -19,6 +19,34 @@ const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
   Role.NURSE,
 ];
 
+const STAFF_CREATION_ROLES: Record<string, readonly Role[]> = {
+  [Role.SUPER_ADMIN]: [
+    Role.ADMIN_LOGISTIK,
+    Role.ADMIN_CABANG,
+    Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
+    Role.NURSE,
+  ],
+  [Role.ADMIN_MANAGER]: [
+    Role.ADMIN_CABANG,
+    Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
+    Role.NURSE,
+  ],
+  [Role.ADMIN_CABANG]: [
+    Role.ADMIN_LAYANAN,
+    Role.DOCTOR,
+    Role.NURSE,
+  ],
+};
+
+function assertCanManageStaffRole(callerRole: Role, targetRole: Role) {
+  const allowedRoles = STAFF_CREATION_ROLES[callerRole] || [];
+  if (!allowedRoles.includes(targetRole)) {
+    throw errors.forbidden(`Role ${callerRole} tidak dapat membuat atau mengubah user menjadi ${targetRole}.`);
+  }
+}
+
 // ── Shared User Select ───────────────────────────────────────
 
 const userSelect = {
@@ -174,6 +202,8 @@ export async function createUserService(
   console.log('🔍 [UserService] Caller role:', callerRole);
   console.log('🔍 [UserService] Caller branchId:', callerBranchId);
 
+  assertCanManageStaffRole(callerRole, input.role);
+
   // Check email uniqueness (only check active users)
   // Inactive users are soft-deleted and their emails can be reused
   const existing = await prisma.user.findFirst({ 
@@ -188,7 +218,7 @@ export async function createUserService(
   }
 
   // If caller is ADMIN_CABANG, enforce branch assignment to their branch
-  let branchId = input.branchId ?? null;
+  let branchId = input.role === Role.ADMIN_LOGISTIK ? null : input.branchId ?? null;
   if (callerRole === Role.ADMIN_CABANG) {
     if (!callerBranchId) {
       throw errors.badRequest('BRANCH_REQUIRED', 'Admin cabang harus memiliki branch.');
@@ -252,6 +282,14 @@ export async function updateUserService(
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) throw errors.notFound('User tidak ditemukan.');
 
+  if (input.role !== undefined && input.role !== existing.role) {
+    if (!callerRole) {
+      throw errors.forbidden('Role pembuat perubahan tidak ditemukan.');
+    }
+    assertCanManageStaffRole(callerRole, input.role);
+    assertCanManageStaffRole(callerRole, existing.role);
+  }
+
   const hasCredentialUpdate = input.email !== undefined || input.password !== undefined;
   if (hasCredentialUpdate) {
     if (callerRole !== Role.SUPER_ADMIN && callerRole !== Role.ADMIN_MANAGER) {
@@ -294,7 +332,11 @@ export async function updateUserService(
       ...(input.email !== undefined ? { email: input.email } : {}),
       ...(hashedPassword !== undefined ? { password: hashedPassword } : {}),
       ...(input.role !== undefined ? { role: input.role } : {}),
-      ...(input.branchId !== undefined ? { branchId: input.branchId } : {}),
+      ...(input.role === Role.ADMIN_LOGISTIK
+        ? { branchId: null }
+        : input.branchId !== undefined
+          ? { branchId: input.branchId }
+          : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(Object.keys(profileUpdate).length > 0
         ? {

@@ -168,8 +168,8 @@ export class ShipmentController {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak terautentikasi');
       }
 
-      // ADMIN_MANAGER and SUPER_ADMIN can have null branchId
-      if (!branchId && !['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(userRole || '')) {
+      // ADMIN_MANAGER, ADMIN_LOGISTIK, and SUPER_ADMIN can have null branchId
+      if (!branchId && !['ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'SUPER_ADMIN'].includes(userRole || '')) {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak memiliki cabang');
       }
 
@@ -194,8 +194,8 @@ export class ShipmentController {
       // Determine which branches to filter by
       let targetBranchIds: string[] | undefined;
       
-      if (userRole === Role.SUPER_ADMIN) {
-        // SUPER_ADMIN can see all shipments
+      if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_LOGISTIK) {
+        // SUPER_ADMIN and ADMIN_LOGISTIK can see all shipments
         targetBranchIds = branchId ? [branchId as string] : undefined;
       } else if (userRole === Role.ADMIN_MANAGER && userId) {
         // ADMIN_MANAGER can only see shipments for active branches they manage
