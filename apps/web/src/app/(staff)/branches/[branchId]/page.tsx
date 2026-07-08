@@ -127,13 +127,16 @@ interface Session {
   };
   doctor: {
     fullName: string;
-  };
+  } | null;
+  adminLayanan: {
+    fullName: string;
+  } | null;
   nurse: {
     fullName: string;
-  };
+  } | null;
   package: {
     name: string;
-  };
+  } | null;
 }
 
 type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing' | 'sessions';

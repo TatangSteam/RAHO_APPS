@@ -215,6 +215,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                           
                           {/* Session Count Information */}
                           <SessionCountDisplay session={sessionDetail.session} />
+                          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                            Admin Layanan: <strong style={{ color: 'var(--text-primary)' }}>{sessionDetail.session.adminLayanan?.fullName || '-'}</strong>
+                          </p>
                         </div>
                         <span
                           className={`badge ${
@@ -340,6 +343,9 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
                           
                           {/* Session Count Information */}
                           <SessionCountDisplay session={sessionDetail.session} />
+                          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
+                            Admin Layanan: <strong style={{ color: 'var(--text-primary)' }}>{sessionDetail.session.adminLayanan?.fullName || '-'}</strong>
+                          </p>
                         </div>
                         <span
                           className={`badge ${

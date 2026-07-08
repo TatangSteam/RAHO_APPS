@@ -19,6 +19,9 @@ interface Session {
   doctor: {
     fullName: string;
   } | null;
+  adminLayanan: {
+    fullName: string;
+  } | null;
   nurse: {
     fullName: string;
   } | null;
@@ -121,6 +124,9 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
               Member
             </th>
             <th className="px-6 py-4 text-left text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">
+              Admin Layanan
+            </th>
+            <th className="px-6 py-4 text-left text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">
               Dokter
             </th>
             <th className="px-6 py-4 text-left text-xs font-bold text-neutral-700 dark:text-neutral-300 uppercase tracking-wider">
@@ -163,6 +169,12 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
                   <div className="text-xs text-neutral-500 dark:text-neutral-400">
                     {session.member?.memberNo || '-'}
                   </div>
+                </div>
+              </td>
+              <td className="px-6 py-4">
+                <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
+                  <User size={16} className="text-purple-500" />
+                  {session.adminLayanan?.fullName || 'N/A'}
                 </div>
               </td>
               <td className="px-6 py-4">

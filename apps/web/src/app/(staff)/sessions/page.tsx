@@ -95,7 +95,7 @@ const DIAGNOSIS_CATEGORY_OPTIONS = [
   { id: 'LAINNYA', name: 'Lainnya' },
 ];
 
-const TABLE_COLUMNS_STORAGE_VERSION = 1;
+const TABLE_COLUMNS_STORAGE_VERSION = 2;
 
 const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
   memberName: true,
@@ -111,7 +111,7 @@ const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
   branchName: false,
   branchCode: false,
   boosterType: false,
-  adminLayanan: false,
+  adminLayanan: true,
   allDoctors: false,
   allNurses: false,
   sistolBefore: true,
@@ -242,7 +242,7 @@ export default function SessionsPage() {
     packageCode: false,
     
     // Staff Info
-    adminLayanan: false,
+    adminLayanan: true,
     doctorName: true,
     doctorCode: false,
     nurseName: true,

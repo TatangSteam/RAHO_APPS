@@ -1285,6 +1285,15 @@ export async function getBranchSessionsService(
             },
           },
         },
+        adminLayanan: {
+          select: {
+            profile: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
         nurse: {
           select: {
             profile: {
@@ -1314,6 +1323,9 @@ export async function getBranchSessionsService(
     } : null,
     doctor: s.doctor ? {
       fullName: s.doctor.profile?.fullName || 'N/A',
+    } : null,
+    adminLayanan: s.adminLayanan ? {
+      fullName: s.adminLayanan.profile?.fullName || 'N/A',
     } : null,
     nurse: s.nurse ? {
       fullName: s.nurse.profile?.fullName || 'N/A',

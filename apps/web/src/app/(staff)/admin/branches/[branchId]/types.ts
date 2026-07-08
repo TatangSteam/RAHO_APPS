@@ -79,6 +79,9 @@ export interface BranchSession {
   doctor: {
     fullName: string;
   } | null;
+  adminLayanan: {
+    fullName: string;
+  } | null;
   nurse: {
     fullName: string;
   } | null;
