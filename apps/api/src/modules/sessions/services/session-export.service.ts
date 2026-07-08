@@ -30,6 +30,106 @@ function getVitalValue(vitalSigns: any[], pencatatan: string, waktuCatat: string
 }
 
 export class SessionExportService {
+  private normalizeExportFields(fields: Record<string, boolean>): Record<string, boolean> {
+    const normalized = { ...fields };
+    const categoryFields: Record<string, string[]> = {
+      basicInfo: [
+        'sessionCode',
+        'treatmentDate',
+        'treatmentTime',
+        'status',
+        'pelaksanaan',
+        'infusKe',
+        'branchName',
+        'branchCode',
+        'boosterType',
+      ],
+      memberInfo: [
+        'memberNo',
+        'memberName',
+        'memberPhone',
+        'memberEmail',
+        'packageCode',
+      ],
+      staffInfo: [
+        'adminLayanan',
+        'doctorName',
+        'doctorCode',
+        'nurseName',
+        'nurseCode',
+        'allDoctors',
+        'allNurses',
+      ],
+      vitalSigns: [
+        'sistolBefore',
+        'diastolBefore',
+        'hrBefore',
+        'saturasiBefore',
+        'piBefore',
+        'sistolAfter',
+        'diastolAfter',
+        'hrAfter',
+        'saturasiAfter',
+        'piAfter',
+      ],
+      therapyPlan: [
+        'planIfa250',
+        'planIfa500',
+        'planHho',
+        'planH2',
+        'planNo',
+        'planGaso',
+        'planO2',
+        'planO3',
+        'planEdta',
+        'planMb',
+        'planH2s',
+        'planKcl',
+        'planJmlNb',
+        'planKeterangan',
+      ],
+      infusion: [
+        'aktualIfa250',
+        'aktualIfa500',
+        'aktualHho',
+        'aktualH2',
+        'aktualNo',
+        'aktualGaso',
+        'aktualO2',
+        'aktualO3',
+        'aktualEdta',
+        'aktualMb',
+        'aktualH2s',
+        'aktualKcl',
+        'aktualJmlNb',
+        'bottleType',
+        'jenisCairan',
+        'volumeCarrier',
+        'jumlahJarum',
+        'deviationNotes',
+      ],
+      materials: ['materialsSummary'],
+      evaluation: [
+        'keluhan',
+        'rekomendasi',
+        'subjective',
+        'objective',
+        'assessment',
+        'plan',
+        'generalNotes',
+      ],
+    };
+
+    Object.entries(categoryFields).forEach(([category, fieldKeys]) => {
+      if (!fields[category]) return;
+      fieldKeys.forEach((fieldKey) => {
+        normalized[fieldKey] = true;
+      });
+    });
+
+    return normalized;
+  }
+
   // Field mapping for export
   private getFieldMapping(): Record<string, { label: string; getter: (session: any) => any }> {
     return {
@@ -305,7 +405,8 @@ export class SessionExportService {
       'keluhan', 'rekomendasi', 'subjective', 'objective', 'assessment', 'plan', 'generalNotes',
     ];
     
-    const selectedFields = fieldOrder.filter(key => options.fields[key] && fieldMapping[key]);
+    const normalizedFields = this.normalizeExportFields(options.fields || {});
+    const selectedFields = fieldOrder.filter(key => normalizedFields[key] && fieldMapping[key]);
 
     // Transform data based on selected fields
     const exportData = sessions.map((session) => {

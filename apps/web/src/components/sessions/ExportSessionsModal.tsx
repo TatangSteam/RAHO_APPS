@@ -30,7 +30,7 @@ export default function ExportSessionsModal({
   const [fields, setFields] = useState({
     basicInfo: true,
     memberInfo: true,
-    staffInfo: false,
+    staffInfo: true,
     vitalSigns: false,
     therapyPlan: false,
     infusion: false,

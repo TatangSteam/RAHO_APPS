@@ -779,7 +779,7 @@ export class SessionsController {
       const fields = req.body.fields || {
         basicInfo: true,
         memberInfo: true,
-        staffInfo: false,
+        staffInfo: true,
         vitalSigns: false,
         therapyPlan: false,
         infusion: false,
