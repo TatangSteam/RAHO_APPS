@@ -165,6 +165,10 @@ export class PackageRetrievalService {
       ? pkg.incentiveRecords[0] 
       : null;
 
+    const productBoosterType = typeof pkg.productCode === 'string'
+      ? pkg.productCode.match(/^BST-([^-]+)-/)?.[1]
+      : undefined;
+
     // Calculate quantity from pricing if available
     const baseSessions = pkg.packagePricing?.totalSessions || pkg.totalSessions;
     const purchaseQuantity = baseSessions > 0 ? Math.round(pkg.totalSessions / baseSessions) : 1;
@@ -192,7 +196,7 @@ export class PackageRetrievalService {
       installmentTotal: pkg.installmentTotal || undefined,
       totalVerifiedPaid: pkg.totalVerifiedPaid ? Number(pkg.totalVerifiedPaid) : 0,
       paymentPlanStatus: pkg.paymentPlanStatus || undefined,
-      boosterType: pkg.boosterType || undefined,
+      boosterType: productBoosterType || pkg.boosterType || undefined,
       branchId: pkg.branchId,
       branchName: pkg.branch.name,
       assignedBy: userMap.get(pkg.assignedBy)?.profile?.fullName || 'Unknown',

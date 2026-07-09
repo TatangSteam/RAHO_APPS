@@ -47,6 +47,82 @@ function isMemberDetailTab(value: string | null): value is MemberDetailTab {
   return Boolean(value && MEMBER_DETAIL_TABS.includes(value as MemberDetailTab));
 }
 
+function getBoosterTypeFromProductCode(productCode?: string | null): ExtendedBoosterType | undefined {
+  const match = productCode?.match(/^BST-([^-]+)-/);
+  return match?.[1] as ExtendedBoosterType | undefined;
+}
+
+function getServiceTypeFromProductCode(productCode?: string | null): ServiceType | undefined {
+  const parts = productCode?.split('-') || [];
+  const serviceCode = parts[0] === 'BST' ? parts[3] : parts[2];
+  return serviceCode as ServiceType | undefined;
+}
+
+function resolvePackagePricing(pkg: any, pricings: PackagePricing[]): PackagePricing | undefined {
+  if (pkg.productCode) {
+    const productCodeMatch = pricings.find((pricing) => pricing.productCode === pkg.productCode);
+    if (productCodeMatch) return productCodeMatch;
+  }
+
+  const boosterType = getBoosterTypeFromProductCode(pkg.productCode) || pkg.boosterType;
+  const serviceType = getServiceTypeFromProductCode(pkg.productCode) || pkg.serviceType;
+
+  if (pkg.packageType === 'BOOSTER' && boosterType) {
+    const boosterMatch = pricings.find((pricing) =>
+      pricing.packageType === 'BOOSTER' &&
+      pricing.boosterType === boosterType &&
+      (!serviceType || pricing.serviceType === serviceType)
+    );
+    if (boosterMatch) return boosterMatch;
+  }
+
+  if (pkg.packageType === 'BASIC') {
+    const basicMatch = pricings.find((pricing) =>
+      pricing.packageType === 'BASIC' &&
+      (!serviceType || pricing.serviceType === serviceType) &&
+      (pricing.totalSessions === pkg.baseSessions || pricing.totalSessions === pkg.totalSessions)
+    );
+    if (basicMatch) return basicMatch;
+  }
+
+  return pricings.find((pricing) => pricing.id === pkg.packagePricingId);
+}
+
+function buildEditPackageSelections(packages: any[], pricings: PackagePricing[]) {
+  const selections = new Map<string, {
+    pricingId: string;
+    quantity: number;
+    boosterType?: ExtendedBoosterType;
+    serviceType?: ServiceType;
+  }>();
+
+  packages.forEach((pkg: any) => {
+    const pricing = resolvePackagePricing(pkg, pricings);
+    const pricingId = pricing?.id || pkg.packagePricingId || '';
+    if (!pricingId) return;
+
+    const boosterType = (getBoosterTypeFromProductCode(pkg.productCode) || pricing?.boosterType || pkg.boosterType) as ExtendedBoosterType | undefined;
+    const serviceType = (getServiceTypeFromProductCode(pkg.productCode) || pricing?.serviceType || pkg.serviceType) as ServiceType | undefined;
+    const quantity = Number(pkg.purchaseQuantity || 1);
+    const key = [pricingId, boosterType || '', serviceType || ''].join('|');
+    const existing = selections.get(key);
+
+    if (existing) {
+      existing.quantity += quantity;
+      return;
+    }
+
+    selections.set(key, {
+      pricingId,
+      quantity,
+      boosterType,
+      serviceType,
+    });
+  });
+
+  return Array.from(selections.values());
+}
+
 export default function MemberDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -746,12 +822,7 @@ export default function MemberDetailPage() {
                 canEditVerified={canEditVerifiedPackage}
                 onEditPackage={canEditPackage ? (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
                   // Load existing package data into edit modal
-                  const selectedPackages = packages.map((pkg: any) => ({
-                    pricingId: pkg.packagePricingId || '',
-                    quantity: pkg.purchaseQuantity || 1, // Use calculated quantity
-                    boosterType: pkg.boosterType as ExtendedBoosterType,
-                    serviceType: pkg.serviceType as ServiceType
-                  })).filter((p: any) => p.pricingId); // Only include packages with pricingId
+                  const selectedPackages = buildEditPackageSelections(packages, pricings);
                   
                   const selectedAddOns = addOns.map((addon: any) => ({
                     type: addon.addOnType as AddOnType,

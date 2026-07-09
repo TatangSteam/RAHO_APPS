@@ -75,12 +75,12 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
   // ── BOOSTER helpers ────────────────────────────────────────
   const isBoosterSelected = (pricingId: string, boosterType: ExtendedBoosterType) =>
     assignData.selectedPackages.some(
-      p => p.pricingId === pricingId && p.boosterType === boosterType
+      p => p.boosterType === boosterType
     );
 
   const getBoosterSelection = (pricingId: string, boosterType: ExtendedBoosterType) =>
     assignData.selectedPackages.find(
-      p => p.pricingId === pricingId && p.boosterType === boosterType
+      p => p.boosterType === boosterType
     );
 
   const toggleBooster = (pricingId: string, boosterType: ExtendedBoosterType) => {
@@ -88,7 +88,7 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
       onAssignDataChange({
         ...assignData,
         selectedPackages: assignData.selectedPackages.filter(
-          p => !(p.pricingId === pricingId && p.boosterType === boosterType)
+          p => p.boosterType !== boosterType
         ),
       });
     } else {
@@ -109,7 +109,7 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
     onAssignDataChange({
       ...assignData,
       selectedPackages: assignData.selectedPackages.map(p =>
-        p.pricingId === pricingId && p.boosterType === boosterType
+        p.boosterType === boosterType
           ? { ...p, quantity: Math.max(1, quantity) }
           : p
       ),
@@ -117,11 +117,17 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
   };
 
   const updateBoosterServiceType = (pricingId: string, boosterType: ExtendedBoosterType, serviceType: ServiceType) => {
+    const matchedPricing = pricingsList.find(p =>
+      p.packageType === 'BOOSTER' &&
+      p.boosterType === boosterType &&
+      p.serviceType === serviceType
+    );
+
     onAssignDataChange({
       ...assignData,
       selectedPackages: assignData.selectedPackages.map(p =>
-        p.pricingId === pricingId && p.boosterType === boosterType
-          ? { ...p, serviceType }
+        p.boosterType === boosterType
+          ? { ...p, pricingId: matchedPricing?.id || p.pricingId, serviceType }
           : p
       ),
     });
@@ -193,9 +199,17 @@ export function usePackageSelection<TAssignData extends PackageSelectionData>(
       }
 
       subtotal += totalPrice;
+      const sessionSource = pricing.packageType === 'BOOSTER'
+        ? (pricingsList.find(p =>
+            p.packageType === 'BOOSTER' &&
+            p.boosterType === selection.boosterType &&
+            p.serviceType === (selection.serviceType || pricing.serviceType || 'PM')
+          ) || pricing)
+        : pricing;
+
       items.push({
         name: itemName,
-        sessions: pricing.totalSessions * selection.quantity,
+        sessions: sessionSource.totalSessions * selection.quantity,
         price: totalPrice,
         type: pricing.packageType,
         details,

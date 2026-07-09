@@ -69,7 +69,7 @@ export interface MemberPackage {
   installmentTotal?: number;
   totalVerifiedPaid?: number;
   paymentPlanStatus?: string;
-  boosterType?: BoosterType;
+  boosterType?: ExtendedBoosterType | string;
   serviceType?: string;
   branchName?: string;
   assignedBy: string;

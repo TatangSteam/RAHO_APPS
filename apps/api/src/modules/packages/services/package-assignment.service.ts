@@ -486,7 +486,7 @@ export class PackageAssignmentService {
               installmentSchedule: params.paymentPlan.installments || null,
               totalVerifiedPaid: 0,
               paymentPlanStatus: params.paymentPlan.type === 'INSTALLMENT' ? 'PENDING_FIRST_PAYMENT' : null,
-              boosterType: detail.boosterType ? (detail.boosterType === 'NO' ? 'NO2' : 'HHO') : null,
+              boosterType: detail.boosterType || null,
               notes: params.notes,
               assignedBy: params.userId,
               purchaseGroupId: params.purchaseGroupId,
