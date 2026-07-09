@@ -653,7 +653,7 @@ model PackagePricing {
   branch         Branch?         @relation(fields: [branchId], references: [id])
   memberPackages MemberPackage[]
 
-  @@unique([branchId, packageType, boosterType, serviceType, totalSessions])
+  @@unique([branchId, packageType, boosterType, serviceType, totalSessions, productCode], map: "package_pricing_identity_unique")
   @@index([branchId, isActive])
   @@index([packageType])
   @@map("package_pricings")

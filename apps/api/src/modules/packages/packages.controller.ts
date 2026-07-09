@@ -377,12 +377,13 @@ export class PackagesController {
       
       const userId = req.user?.userId;
       const branchId = req.user?.branchId || null;
+      const userRole = req.user?.role;
 
       if (!userId) {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      const result = await packagesService.editPackage(packageId, data, userId, branchId);
+      const result = await packagesService.editPackage(packageId, data, userId, branchId, userRole);
       return sendSuccess(res, result);
     } catch (error) {
       console.error('editPackage controller error:', error);

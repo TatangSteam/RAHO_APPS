@@ -8,7 +8,12 @@ import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
 import type { Invoice } from '@/types/invoice';
-import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
+import {
+  hasRole,
+  MANAGER_ABOVE_ROLES,
+  PACKAGE_MANAGEMENT_ROLES,
+  PACKAGE_WAITING_VERIFICATION_EDIT_ROLES,
+} from '@/types/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { confirm as confirmDialog, showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
@@ -170,6 +175,8 @@ export default function MemberDetailPage() {
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const canDeleteMember = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
+  const canEditPackage = !!user && hasRole(user.role, PACKAGE_MANAGEMENT_ROLES);
+  const canEditWaitingVerificationPackage = !!user && hasRole(user.role, PACKAGE_WAITING_VERIFICATION_EDIT_ROLES);
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditDiagnosis = [
@@ -733,7 +740,8 @@ export default function MemberDetailPage() {
                   setRefundDetailData(refundData);
                   setShowRefundDetailModal(true);
                 }}
-                onEditPackage={(purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
+                canEditWaitingVerification={canEditWaitingVerificationPackage}
+                onEditPackage={canEditPackage ? (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
                   // Load existing package data into edit modal
                   const selectedPackages = packages.map((pkg: any) => ({
                     pricingId: pkg.packagePricingId || '',
@@ -783,7 +791,7 @@ export default function MemberDetailPage() {
                     notes: notes || ''
                   });
                   setShowEditModal(true);
-                }}
+                } : undefined}
               />
             </div>
           )}

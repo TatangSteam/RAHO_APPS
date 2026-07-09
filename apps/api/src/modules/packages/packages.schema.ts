@@ -123,6 +123,9 @@ export const verifyPaymentSchema = z.object({
 
 export const createPackagePricingSchema = z.object({
   packageType: PackageTypeEnum,
+  boosterType: z.string().trim().min(1).nullable().optional(),
+  serviceType: z.string().trim().min(1).nullable().optional(),
+  productCode: z.string().trim().min(1).nullable().optional(),
   name: z.string().min(3, 'Nama paket minimal 3 karakter'),
   totalSessions: z.number().int().min(1, 'Jumlah sesi minimal 1'),
   price: z.number().min(0, 'Harga tidak boleh negatif'),
@@ -131,7 +134,12 @@ export const createPackagePricingSchema = z.object({
 });
 
 export const updatePackagePricingSchema = z.object({
+  packageType: PackageTypeEnum.optional(),
+  boosterType: z.string().trim().min(1).nullable().optional(),
+  serviceType: z.string().trim().min(1).nullable().optional(),
+  productCode: z.string().trim().min(1).nullable().optional(),
   name: z.string().min(3).optional(),
+  totalSessions: z.number().int().min(1, 'Jumlah sesi minimal 1').optional(),
   price: z.number().min(0).optional(),
   description: z.string().optional(),
   isActive: z.boolean().optional(),

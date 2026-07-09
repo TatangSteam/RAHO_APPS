@@ -14,6 +14,7 @@ interface PackageCardProps {
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
+  canEditWaitingVerification?: boolean;
   onViewRefundDetail?: (refundData: {
     packageCode: string;
     refundAmount: number;
@@ -106,7 +107,15 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
   return packageCode;
 };
 
-export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onCancelPackage, onEditPackage, onViewRefundDetail }: PackageCardProps) {
+export default function PackageCard({
+  pkg,
+  onVerifyPayment,
+  onRefundPackage,
+  onCancelPackage,
+  onEditPackage,
+  canEditWaitingVerification = false,
+  onViewRefundDetail,
+}: PackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getStatusBadge = (status: string) => {
@@ -182,6 +191,10 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
 
   const isGroup = 'isGroup' in pkg && pkg.isGroup;
   const isAddOn = 'isAddOn' in pkg && pkg.isAddOn;
+  const canEditPackageStatus = (status?: string) => (
+    status === 'PENDING_PAYMENT' ||
+    (canEditWaitingVerification && status === 'WAITING_VERIFICATION')
+  );
 
   // Helper to calculate original price (before discount)
   const getOriginalPrice = (pkg: MemberPackage) => {
@@ -317,6 +330,8 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
     const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item: any) => (
       item?.paymentPlanType === 'INSTALLMENT' && item?.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
     ));
+    const editablePackages = [...basics, ...boosters].filter(Boolean) as MemberPackage[];
+    const canEditGroup = editablePackages.length > 0 && editablePackages.every((item) => canEditPackageStatus(item.status));
     
     // Calculate total prices for all packages and add-ons
     const totalBasicPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
@@ -565,7 +580,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
                 >
                   ✅ Verify Payment (Bundle)
                 </button>
-                {onEditPackage && (basics.length > 0 || boosters.length > 0) && (
+                {onEditPackage && canEditGroup && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -658,6 +673,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
   const memberPkg = pkg as MemberPackage;
   const standaloneOriginalPrice = getOriginalPrice(memberPkg);
   const standaloneFinalPrice = memberPkg.finalPrice;
+  const canEditStandalonePackage = canEditPackageStatus(memberPkg.status);
   
   return (
     <div className={styles.packageCard}>
@@ -789,7 +805,7 @@ export default function PackageCard({ pkg, onVerifyPayment, onRefundPackage, onC
               >
                 ✅ Verify Payment
               </button>
-              {onEditPackage && (
+              {onEditPackage && canEditStandalonePackage && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

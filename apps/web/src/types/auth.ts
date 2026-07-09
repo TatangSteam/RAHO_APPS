@@ -48,6 +48,13 @@ export const STAFF_ROLES: Role[] = [
 export const ADMIN_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'];
 export const MANAGER_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'];
 export const SUPER_ADMIN_ONLY: Role[] = ['SUPER_ADMIN'];
+export const PACKAGE_MANAGEMENT_ROLES: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_CABANG',
+  'ADMIN_LAYANAN',
+];
+export const PACKAGE_WAITING_VERIFICATION_EDIT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER'];
 
 // Roles that can edit therapy plans and add rows to active therapy plan sets
 export const THERAPY_PLAN_EDITORS: Role[] = [

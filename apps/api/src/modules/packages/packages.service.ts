@@ -161,14 +161,15 @@ export class PackagesService {
   // ============================================================
 
   /**
-   * Edit a PENDING_PAYMENT package
+   * Edit an editable pending package
    */
   async editPackage(
     packageId: string,
     data: { quantity?: number; discount?: number; discountNote?: string; notes?: string },
     userId: string,
-    branchId: string | null
+    branchId: string | null,
+    userRole?: string
   ) {
-    return await this.editService.editPackage(packageId, data, userId, branchId);
+    return await this.editService.editPackage(packageId, data, userId, branchId, userRole);
   }
 }

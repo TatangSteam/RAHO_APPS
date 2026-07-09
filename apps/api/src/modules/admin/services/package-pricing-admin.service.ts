@@ -9,6 +9,43 @@ function normalizeNullableString(value: string | null | undefined) {
   return trimmed ? trimmed : null;
 }
 
+function buildPricingIdentityWhere(params: {
+  branchId: string | null;
+  packageType: PackageType;
+  boosterType: string | null;
+  serviceType: string | null;
+  totalSessions: number;
+  productCode: string | null;
+  excludeId?: string;
+}) {
+  const where: any = {
+    packageType: params.packageType,
+    boosterType: params.boosterType,
+    serviceType: params.serviceType,
+    totalSessions: params.totalSessions,
+    branchId: params.branchId,
+    productCode: params.productCode,
+  };
+
+  if (params.excludeId) {
+    where.id = { not: params.excludeId };
+  }
+
+  return where;
+}
+
+function getPricingDuplicateMessage(branchId: string | null, productCode: string | null) {
+  if (productCode) {
+    return branchId
+      ? `Kode produk ${productCode} sudah ada untuk kombinasi paket ini di cabang ini`
+      : `Kode produk ${productCode} sudah ada untuk kombinasi paket global ini`;
+  }
+
+  return branchId
+    ? 'Harga paket dengan tipe, layanan, jumlah sesi, dan kode produk kosong ini sudah ada untuk cabang ini'
+    : 'Harga paket global dengan tipe, layanan, jumlah sesi, dan kode produk kosong ini sudah ada';
+}
+
 /**
  * Service for admin package pricing management
  */
@@ -183,22 +220,21 @@ export class PackagePricingAdminService {
 
     // Check if pricing already exists
     const existing = await prisma.packagePricing.findFirst({
-      where: {
+      where: buildPricingIdentityWhere({
         packageType: data.packageType,
         boosterType: boosterType || null,
         serviceType: serviceType || null,
         totalSessions: data.totalSessions,
         branchId: branchId || null,
-      },
+        productCode: productCode || null,
+      }),
     });
 
     if (existing) {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: branchId 
-          ? 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini'
-          : 'Harga paket global dengan tipe dan jumlah sesi ini sudah ada',
+        message: getPricingDuplicateMessage(branchId || null, productCode || null),
       };
     }
 
@@ -300,6 +336,9 @@ export class PackagePricingAdminService {
       data.serviceType !== undefined ? normalizeNullableString(data.serviceType) : pricing.serviceType;
     const normalizedProductCode =
       data.productCode !== undefined ? normalizeNullableString(data.productCode) : undefined;
+    const effectiveProductCode = data.productCode !== undefined
+      ? normalizedProductCode || null
+      : pricing.productCode;
     const newTotalSessions = data.totalSessions ?? pricing.totalSessions;
 
     if (newPackageType === 'BOOSTER') {
@@ -321,14 +360,15 @@ export class PackagePricingAdminService {
     }
 
     const duplicate = await prisma.packagePricing.findFirst({
-      where: {
-        id: { not: pricingId },
+      where: buildPricingIdentityWhere({
         packageType: newPackageType,
         boosterType: normalizedBoosterType || null,
         serviceType: normalizedServiceType || null,
         totalSessions: newTotalSessions,
         branchId: pricing.branchId || null,
-      },
+        productCode: effectiveProductCode || null,
+        excludeId: pricingId,
+      }),
       select: { id: true },
     });
 
@@ -336,9 +376,7 @@ export class PackagePricingAdminService {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: pricing.branchId
-          ? 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini'
-          : 'Harga paket global dengan tipe dan jumlah sesi ini sudah ada',
+        message: getPricingDuplicateMessage(pricing.branchId || null, effectiveProductCode || null),
       };
     }
 
