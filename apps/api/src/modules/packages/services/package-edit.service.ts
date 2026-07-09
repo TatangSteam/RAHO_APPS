@@ -153,10 +153,22 @@ export class PackageEditService {
 
     const usedPackages = packagesInEditScope.filter(pkg => pkg.usedSessions > 0);
     if (usedPackages.length > 0) {
+      if (hasPrivilegedEditAccess && replacementStatus === PackageStatus.ACTIVE) {
+        return await this.editUsedActivePackage({
+          packageIdOrGroupId,
+          data,
+          userId,
+          memberPackage,
+          packagesInEditScope,
+          purchaseGroupId,
+          memberId,
+        });
+      }
+
       throw {
         status: 422,
         code: 'PACKAGE_ALREADY_USED',
-        message: `Paket ${usedPackages.map(pkg => pkg.packageCode).join(', ')} sudah dipakai untuk sesi utang dan tidak bisa diedit. Verifikasi pembayaran untuk melanjutkan.`,
+        message: `Paket ${usedPackages.map(pkg => pkg.packageCode).join(', ')} sudah memiliki sesi terpakai. Paket terpakai hanya bisa diedit oleh Super Admin/Admin Manager setelah status paket ACTIVE.`,
       };
     }
 
@@ -401,5 +413,349 @@ export class PackageEditService {
       packages: createdPackages,
       invoice: invoice ? { id: invoice.id, invoiceNumber: invoice.invoiceNumber } : null
     };
+  }
+
+  private async editUsedActivePackage(params: {
+    packageIdOrGroupId: string;
+    data: EditPackageInput;
+    userId: string;
+    memberPackage: any;
+    packagesInEditScope: Array<{ id: string; packageCode: string; usedSessions: number }>;
+    purchaseGroupId: string | null;
+    memberId: string;
+  }) {
+    const {
+      packageIdOrGroupId,
+      data,
+      userId,
+      memberPackage,
+      packagesInEditScope,
+      purchaseGroupId,
+      memberId,
+    } = params;
+
+    const packageIdsToKeepOrReplace = packagesInEditScope.map(pkg => pkg.id);
+    const currentPackages = await prisma.memberPackage.findMany({
+      where: { id: { in: packageIdsToKeepOrReplace } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const pricingIds = Array.from(new Set(data.packages.map(pkg => pkg.pricingId).filter(Boolean)));
+    const pricings = pricingIds.length > 0
+      ? await prisma.packagePricing.findMany({ where: { id: { in: pricingIds } } })
+      : [];
+    const pricingById = new Map(pricings.map(pricing => [pricing.id, pricing]));
+
+    const selectedPackages = data.packages.map(selection => ({
+      selection,
+      pricing: pricingById.get(selection.pricingId),
+    })).filter((item): item is { selection: PackageSelection; pricing: NonNullable<typeof item.pricing> } => Boolean(item.pricing));
+
+    if (selectedPackages.length === 0) {
+      throw {
+        status: 400,
+        code: 'PACKAGE_SELECTION_REQUIRED',
+        message: 'Pilih minimal 1 paket untuk edit paket aktif',
+      };
+    }
+
+    const willHaveGroup = selectedPackages.length > 1 || (data.addOns && data.addOns.length > 0);
+    const targetPurchaseGroupId = willHaveGroup
+      ? purchaseGroupId || `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+      : null;
+    const remainingSelections = [...selectedPackages];
+    const updatedPackages: any[] = [];
+    const packageIdsToDelete: string[] = [];
+
+    for (const currentPackage of currentPackages) {
+      const matchIndex = remainingSelections.findIndex(({ selection, pricing }) => {
+        if (currentPackage.packagePricingId && selection.pricingId === currentPackage.packagePricingId) {
+          return true;
+        }
+
+        return (
+          pricing.packageType === currentPackage.packageType &&
+          (selection.boosterType || pricing.boosterType || null) === (currentPackage.boosterType || null) &&
+          (selection.serviceType || pricing.serviceType || null) === (currentPackage.serviceType || null)
+        );
+      });
+
+      if (matchIndex === -1) {
+        if (currentPackage.usedSessions > 0) {
+          throw {
+            status: 422,
+            code: 'USED_PACKAGE_CANNOT_BE_REMOVED',
+            message: `Paket ${currentPackage.packageCode} sudah memiliki ${currentPackage.usedSessions} sesi terpakai, sehingga tidak bisa dihapus atau diganti tipe paketnya. Tambah jumlah sesi atau edit harga/catatan saja.`,
+          };
+        }
+
+        packageIdsToDelete.push(currentPackage.id);
+        continue;
+      }
+
+      const [{ selection, pricing }] = remainingSelections.splice(matchIndex, 1);
+      const newTotalSessions = pricing.totalSessions * selection.quantity;
+
+      if (newTotalSessions < currentPackage.usedSessions) {
+        throw {
+          status: 422,
+          code: 'TOTAL_SESSIONS_BELOW_USED',
+          message: `Jumlah sesi paket ${currentPackage.packageCode} tidak boleh lebih kecil dari ${currentPackage.usedSessions} sesi yang sudah terpakai.`,
+        };
+      }
+
+      const updatedPackage = await prisma.memberPackage.update({
+        where: { id: currentPackage.id },
+        data: {
+          packagePricingId: pricing.id,
+          packageType: pricing.packageType,
+          productCode: pricing.productCode,
+          totalSessions: newTotalSessions,
+          finalPrice: Number(pricing.price) * selection.quantity,
+          discountPercent: null,
+          discountAmount: null,
+          discountNote: null,
+          boosterType: selection.boosterType || pricing.boosterType,
+          serviceType: selection.serviceType || pricing.serviceType,
+          purchaseGroupId: targetPurchaseGroupId,
+          notes: data.notes,
+        },
+      });
+
+      updatedPackages.push(updatedPackage);
+    }
+
+    const sourcePaymentData = {
+      paidAt: memberPackage.paidAt,
+      verifiedBy: memberPackage.verifiedBy,
+      verifiedAt: memberPackage.verifiedAt,
+      activatedAt: memberPackage.activatedAt,
+      paymentProofUrl: memberPackage.paymentProofUrl,
+      paymentProofFileName: memberPackage.paymentProofFileName,
+      paymentProofFileSize: memberPackage.paymentProofFileSize,
+      paymentProofMimeType: memberPackage.paymentProofMimeType,
+      paymentPlanStatus: memberPackage.paymentPlanStatus,
+      totalVerifiedPaid: memberPackage.totalVerifiedPaid,
+    };
+
+    for (const { selection, pricing } of remainingSelections) {
+      const newPackage = await prisma.memberPackage.create({
+        data: {
+          packageCode: `PKG-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          memberId,
+          branchId: memberPackage.branchId,
+          packagePricingId: pricing.id,
+          packageType: pricing.packageType,
+          productCode: pricing.productCode,
+          totalSessions: pricing.totalSessions * selection.quantity,
+          usedSessions: 0,
+          finalPrice: Number(pricing.price) * selection.quantity,
+          status: PackageStatus.ACTIVE,
+          paymentPlanType: memberPackage.paymentPlanType,
+          installmentTotal: memberPackage.installmentTotal,
+          installmentSchedule: memberPackage.installmentSchedule as any,
+          totalVerifiedPaid: sourcePaymentData.totalVerifiedPaid || 0,
+          paymentPlanStatus: sourcePaymentData.paymentPlanStatus || null,
+          boosterType: selection.boosterType || pricing.boosterType,
+          serviceType: selection.serviceType || pricing.serviceType,
+          purchaseGroupId: targetPurchaseGroupId,
+          assignedBy: userId,
+          paidAt: sourcePaymentData.paidAt || null,
+          verifiedBy: sourcePaymentData.verifiedBy || null,
+          verifiedAt: sourcePaymentData.verifiedAt || null,
+          activatedAt: sourcePaymentData.activatedAt || null,
+          paymentProofUrl: sourcePaymentData.paymentProofUrl || null,
+          paymentProofFileName: sourcePaymentData.paymentProofFileName || null,
+          paymentProofFileSize: sourcePaymentData.paymentProofFileSize || null,
+          paymentProofMimeType: sourcePaymentData.paymentProofMimeType || null,
+          notes: data.notes,
+        },
+      });
+
+      updatedPackages.push(newPackage);
+    }
+
+    const oldAddOns = await prisma.memberAddOn.findMany({
+      where: { packageId: { in: packageIdsToKeepOrReplace } },
+      select: { id: true },
+    });
+    const oldInvoiceItemIds = [
+      ...packageIdsToKeepOrReplace,
+      ...oldAddOns.map(addOn => addOn.id),
+    ];
+
+    if (packageIdsToDelete.length > 0) {
+      await prisma.referralIncentiveRecord.deleteMany({
+        where: { memberPackageId: { in: packageIdsToDelete } },
+      });
+      await prisma.memberAddOn.deleteMany({
+        where: { packageId: { in: packageIdsToDelete } },
+      });
+      await prisma.memberPackage.deleteMany({
+        where: { id: { in: packageIdsToDelete } },
+      });
+    }
+
+    await prisma.memberAddOn.deleteMany({
+      where: { packageId: { in: packageIdsToKeepOrReplace } },
+    });
+
+    let packageRecords = [...updatedPackages];
+    let createdAddOns: any[] = [];
+
+    if (data.addOns && data.addOns.length > 0) {
+      for (const addon of data.addOns) {
+        const createdAddOn = await prisma.memberAddOn.create({
+          data: {
+            addOnCode: `ADO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            memberId,
+            branchId: memberPackage.branchId,
+            packageId: packageRecords[0]?.id,
+            addOnType: addon.type as any,
+            quantity: addon.quantity,
+            pricePerUnit: addon.price,
+            totalPrice: addon.price * addon.quantity,
+            status: PackageStatus.ACTIVE,
+            paymentPlanType: memberPackage.paymentPlanType,
+            installmentTotal: memberPackage.installmentTotal,
+            installmentSchedule: memberPackage.installmentSchedule as any,
+            totalVerifiedPaid: sourcePaymentData.totalVerifiedPaid || 0,
+            paymentPlanStatus: sourcePaymentData.paymentPlanStatus || null,
+            paidAt: sourcePaymentData.paidAt || null,
+            verifiedBy: sourcePaymentData.verifiedBy || null,
+            verifiedAt: sourcePaymentData.verifiedAt || null,
+            paymentProofUrl: sourcePaymentData.paymentProofUrl || null,
+            paymentProofFileName: sourcePaymentData.paymentProofFileName || null,
+            paymentProofFileSize: sourcePaymentData.paymentProofFileSize || null,
+            paymentProofMimeType: sourcePaymentData.paymentProofMimeType || null,
+            notes: addon.name,
+            assignedBy: userId,
+          },
+        });
+
+        createdAddOns.push(createdAddOn);
+      }
+    }
+
+    if (packageRecords.length > 0) {
+      await prisma.memberPackage.updateMany({
+        where: { id: { in: packageRecords.map(pkg => pkg.id) } },
+        data: {
+          discountAmount: null,
+          discountPercent: null,
+          discountNote: null,
+        },
+      });
+
+      if (data.discountAmount || data.discountPercent) {
+        const addOnsTotal = createdAddOns.reduce((sum, addon) => sum + Number(addon.totalPrice || 0), 0);
+        const totalOriginalPrice = packageRecords.reduce((sum, pkg) => sum + Number(pkg.finalPrice || 0), 0) + addOnsTotal;
+        const percentDiscountValue = data.discountPercent && data.discountPercent > 0
+          ? (totalOriginalPrice * data.discountPercent) / 100
+          : 0;
+        const totalDiscount = percentDiscountValue + (data.discountAmount || 0);
+        const firstPackage = packageRecords[0];
+
+        const updatedFirstPackage = await prisma.memberPackage.update({
+          where: { id: firstPackage.id },
+          data: {
+            discountAmount: totalDiscount,
+            discountPercent: data.discountPercent,
+            discountNote: data.discountNote,
+            finalPrice: Math.max(0, Number(firstPackage.finalPrice) - totalDiscount),
+          },
+        });
+
+        packageRecords = [updatedFirstPackage, ...packageRecords.slice(1)];
+      }
+    }
+
+    const invoice = oldInvoiceItemIds.length > 0
+      ? await prisma.invoice.findFirst({
+          where: {
+            memberId,
+            status: { in: [InvoiceStatus.DRAFT, InvoiceStatus.PENDING_PAYMENT, InvoiceStatus.PAID] },
+            items: {
+              some: {
+                itemId: { in: oldInvoiceItemIds },
+              },
+            },
+          },
+        })
+      : null;
+
+    if (invoice) {
+      await this.rebuildInvoiceItems(invoice, packageRecords, createdAddOns);
+    }
+
+    await logAudit({
+      userId,
+      action: 'UPDATE',
+      resource: 'MemberPackage',
+      resourceId: packageIdOrGroupId,
+      meta: {
+        action: 'EDIT_ACTIVE_USED',
+        packagesCount: packageRecords.length,
+        addOnsCount: createdAddOns.length,
+        memberNo: memberPackage.member.memberNo,
+        memberName: memberPackage.member.user.profile?.fullName,
+      },
+    });
+
+    return {
+      packages: packageRecords,
+      invoice: invoice ? { id: invoice.id, invoiceNumber: invoice.invoiceNumber } : null,
+    };
+  }
+
+  private async rebuildInvoiceItems(invoice: any, packages: any[], addOns: any[]) {
+    await prisma.invoiceItem.deleteMany({
+      where: { invoiceId: invoice.id },
+    });
+
+    let invoiceTotal = 0;
+
+    for (const pkg of packages) {
+      await prisma.invoiceItem.create({
+        data: {
+          invoiceId: invoice.id,
+          itemType: 'PACKAGE',
+          itemId: pkg.id,
+          code: pkg.packageCode,
+          description: `${pkg.packageType} Package - ${pkg.totalSessions} sessions`,
+          quantity: 1,
+          pricePerUnit: pkg.finalPrice,
+          subtotal: pkg.finalPrice,
+          totalAmount: pkg.finalPrice,
+        },
+      });
+      invoiceTotal += Number(pkg.finalPrice);
+    }
+
+    for (const addOn of addOns) {
+      await prisma.invoiceItem.create({
+        data: {
+          invoiceId: invoice.id,
+          itemType: 'ADDON',
+          itemId: addOn.id,
+          code: addOn.addOnCode,
+          description: addOn.notes || addOn.addOnType,
+          quantity: addOn.quantity,
+          pricePerUnit: addOn.pricePerUnit,
+          subtotal: addOn.totalPrice,
+          totalAmount: addOn.totalPrice,
+        },
+      });
+      invoiceTotal += Number(addOn.totalPrice);
+    }
+
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        subtotal: invoiceTotal,
+        totalAmount: invoiceTotal,
+        actualPaidAmount: invoice.status === InvoiceStatus.PAID ? invoiceTotal : invoice.actualPaidAmount,
+      },
+    });
   }
 }
