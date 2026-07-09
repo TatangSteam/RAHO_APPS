@@ -54,15 +54,15 @@ export interface CreateReferralInput {
   referrerName: string;
   referrerType: 'SALES' | 'DOKTER' | 'MEMBER';
   branchId: string;
-  phone?: string;
-  email?: string;
+  phone?: string | null;
+  email?: string | null;
 }
 
 export interface UpdateReferralInput {
   referrerName?: string;
   referrerType?: 'SALES' | 'DOKTER' | 'MEMBER';
-  phone?: string;
-  email?: string;
+  phone?: string | null;
+  email?: string | null;
   isActive?: boolean;
 }
 

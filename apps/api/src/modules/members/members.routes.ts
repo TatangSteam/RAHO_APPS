@@ -269,6 +269,15 @@ router.put(
   controller.bulkEditTherapyPlanSet.bind(controller)
 );
 
+// DELETE /api/v1/members/:memberId/therapy-plan-sets/:setId - Delete unused therapy plan set
+router.delete(
+  '/:memberId/therapy-plan-sets/:setId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  assertBranchAccess,
+  controller.deleteTherapyPlanSet.bind(controller)
+);
+
 // GET /api/v1/members/:memberId/therapy-plans/:therapyPlanId/history - Get therapy plan history
 router.get(
   '/:memberId/therapy-plans/:therapyPlanId/history',

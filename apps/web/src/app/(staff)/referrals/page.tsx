@@ -8,12 +8,13 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast, confirm } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { 
-  FileText, Plus, Search, Eye, Trash2,
+  Edit2, FileText, Plus, Search, Eye, Trash2,
   Download, FileSpreadsheet, Users, Phone, Mail, Building2, 
   ChevronLeft, ChevronRight, BarChart3
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 import CreateReferralModal from '@/components/referrals/CreateReferralModal';
+import EditReferralModal from '@/components/referrals/EditReferralModal';
 import {
   REFERRER_TYPE_OPTIONS,
   datedExportFilename,
@@ -42,6 +43,7 @@ export default function ReferralsPage() {
   const [branchFilter, setBranchFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState<ReferrerType | ''>('');
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingReferral, setEditingReferral] = useState<referralsApi.ReferralCode | null>(null);
   const [mounted, setMounted] = useState(false);
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
@@ -343,6 +345,13 @@ export default function ReferralsPage() {
                             <Eye className="h-4 w-4" />
                           </button>
                           <button
+                            onClick={() => setEditingReferral(referral)}
+                            className="p-2 rounded-lg text-neutral-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          <button
                             onClick={() => handleDelete(referral.id)}
                             className="p-2 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all"
                             title="Hapus"
@@ -423,6 +432,18 @@ export default function ReferralsPage() {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
+            fetchReferrals();
+          }}
+        />
+      )}
+
+      {mounted && editingReferral && (
+        <EditReferralModal
+          referral={editingReferral}
+          onClose={() => setEditingReferral(null)}
+          onSuccess={() => {
+            setEditingReferral(null);
+            showToast.success('Kode referral berhasil diperbarui');
             fetchReferrals();
           }}
         />

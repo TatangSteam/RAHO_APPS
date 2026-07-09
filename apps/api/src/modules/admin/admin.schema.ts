@@ -1,6 +1,14 @@
 import { z } from 'zod';
 import { Role, BranchType, PackageType } from '@prisma/client';
 
+const emptyStringToNull = (value: unknown) => {
+  if (typeof value === 'string' && value.trim() === '') return null;
+  return value;
+};
+
+const nullableTrimmedString = (schema: z.ZodString) =>
+  z.preprocess(emptyStringToNull, schema.trim().nullable().optional());
+
 // ============================================================
 // BRANCH SCHEMAS
 // ============================================================
@@ -128,14 +136,12 @@ export const createStockRequestSchema = z.object({
 
 export const createPackagePricingSchema = z.object({
   packageType: z.nativeEnum(PackageType),
-  boosterType: z.string()
+  boosterType: nullableTrimmedString(z.string()
     .min(1, 'Tipe booster minimal 1 karakter')
-    .max(50, 'Tipe booster maksimal 50 karakter')
-    .optional(), // Required for BOOSTER packages
-  serviceType: z.string()
+    .max(50, 'Tipe booster maksimal 50 karakter')), // Required for BOOSTER packages
+  serviceType: nullableTrimmedString(z.string()
     .min(2, 'Tipe layanan minimal 2 karakter')
-    .max(50, 'Tipe layanan maksimal 50 karakter')
-    .optional(), // Required for BOOSTER packages
+    .max(50, 'Tipe layanan maksimal 50 karakter')), // Required for BOOSTER packages
   name: z.string()
     .min(3, 'Nama paket minimal 3 karakter')
     .max(100, 'Nama paket maksimal 100 karakter'),
@@ -146,26 +152,22 @@ export const createPackagePricingSchema = z.object({
   price: z.number()
     .min(0, 'Harga tidak boleh negatif')
     .max(100000000, 'Harga maksimal 100 juta'),
-  productCode: z.string()
+  productCode: nullableTrimmedString(z.string()
     .min(2, 'Kode produk minimal 2 karakter')
-    .max(50, 'Kode produk maksimal 50 karakter')
-    .optional(),
+    .max(50, 'Kode produk maksimal 50 karakter')),
   isActive: z.boolean().optional(),
-  branchId: z.string()
-    .min(1, 'ID cabang tidak valid')
-    .optional() // Optional: null/undefined = global pricing
+  branchId: nullableTrimmedString(z.string()
+    .min(1, 'ID cabang tidak valid')) // Optional: null/undefined = global pricing
 });
 
 export const updatePackagePricingSchema = z.object({
   packageType: z.enum(['BASIC', 'BOOSTER']).optional(),
-  boosterType: z.string()
+  boosterType: nullableTrimmedString(z.string()
     .min(1, 'Tipe booster minimal 1 karakter')
-    .max(50, 'Tipe booster maksimal 50 karakter')
-    .optional(),
-  serviceType: z.string()
+    .max(50, 'Tipe booster maksimal 50 karakter')),
+  serviceType: nullableTrimmedString(z.string()
     .min(2, 'Tipe layanan minimal 2 karakter')
-    .max(50, 'Tipe layanan maksimal 50 karakter')
-    .optional(),
+    .max(50, 'Tipe layanan maksimal 50 karakter')),
   name: z.string()
     .min(3, 'Nama paket minimal 3 karakter')
     .max(100, 'Nama paket maksimal 100 karakter')
@@ -175,10 +177,9 @@ export const updatePackagePricingSchema = z.object({
     .min(1, 'Jumlah sesi minimal 1')
     .max(100, 'Jumlah sesi maksimal 100')
     .optional(),
-  productCode: z.string()
+  productCode: nullableTrimmedString(z.string()
     .min(2, 'Kode produk minimal 2 karakter')
-    .max(50, 'Kode produk maksimal 50 karakter')
-    .optional(),
+    .max(50, 'Kode produk maksimal 50 karakter')),
   price: z.number()
     .min(0, 'Harga tidak boleh negatif')
     .max(100000000, 'Harga maksimal 100 juta')

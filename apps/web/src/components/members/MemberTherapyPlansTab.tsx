@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import TherapyPlanListTable from '@/components/therapy-plan/TherapyPlanListTable';
@@ -339,6 +339,35 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
     loadTherapyPlans();
   };
 
+  const handleDeleteSetClick = async (setId: string, setName: string) => {
+    const setPlans = therapyPlans.filter((plan) => getPlanSetKey(plan) === setId);
+    const actualSetId = setPlans[0]?.therapyPlanSetId;
+
+    if (!actualSetId) {
+      showToast.error('Set therapy plan lama tidak dapat dihapus dari tampilan ini');
+      return;
+    }
+
+    const usedCount = setPlans.filter((plan) => plan.isUsed).length;
+    const historyCount = setPlans.filter((plan) => getPlanStatusKey(plan) === 'superseded').length;
+
+    if (usedCount > 0 || historyCount > 0) {
+      showToast.error('Set yang sudah digunakan atau memiliki history tidak dapat dihapus');
+      return;
+    }
+
+    const confirmed = window.confirm(`Hapus set therapy plan "${setName}"? Tindakan ini tidak dapat dibatalkan.`);
+    if (!confirmed) return;
+
+    try {
+      const result = await therapyPlanApi.deleteTherapyPlanSet(memberId, actualSetId);
+      showToast.success(result.message || 'Set therapy plan berhasil dihapus');
+      await loadTherapyPlans();
+    } catch (error: any) {
+      showToast.error(error.response?.data?.error?.message || 'Gagal menghapus set therapy plan');
+    }
+  };
+
   const toggleSetCollapse = (setId: string) => {
     setCollapsedSets((prev) => {
       const newSet = new Set(prev);
@@ -649,6 +678,11 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                 used: setPlans.filter((p) => getPlanStatusKey(p) === 'used').length,
                 history: setPlans.filter((p) => getPlanStatusKey(p) === 'superseded').length,
               };
+              const canDeleteSet =
+                user?.role === 'SUPER_ADMIN' &&
+                setStats.used === 0 &&
+                setStats.history === 0 &&
+                Boolean(set.firstPlan.therapyPlanSetId);
 
               return (
                 <div
@@ -661,8 +695,16 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                   }}
                 >
                   {/* Set Header */}
-                  <button
+                  <div
+                    role="button"
+                    tabIndex={0}
                     onClick={() => toggleSetCollapse(set.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        toggleSetCollapse(set.id);
+                      }
+                    }}
                     style={{
                       width: '100%',
                       display: 'flex',
@@ -817,7 +859,42 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         {user?.role === 'SUPER_ADMIN' && '⚡ '}Edit Set
                       </button>
                     )}
-                  </button>
+                    {canDeleteSet && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSetClick(set.id, set.name);
+                        }}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          fontWeight: '700',
+                          borderRadius: '6px',
+                          border: '1px solid rgba(239,68,68,0.4)',
+                          background: 'rgba(239,68,68,0.10)',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          flexShrink: 0,
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(239,68,68,0.18)';
+                          e.currentTarget.style.borderColor = 'rgba(239,68,68,0.6)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(239,68,68,0.10)';
+                          e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
+                        }}
+                        title="Hapus set therapy plan yang belum digunakan"
+                      >
+                        <Trash2 size={14} />
+                        Hapus Set
+                      </button>
+                    )}
+                  </div>
 
                   {/* Set Content */}
                   {!isCollapsed && (

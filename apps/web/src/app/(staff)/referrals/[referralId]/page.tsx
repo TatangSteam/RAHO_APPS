@@ -14,6 +14,7 @@ import {
   REFERRER_TYPE_OPTIONS,
   type ReferrerType,
 } from '@/lib/referralUtils';
+import SharedEditReferralModal from '@/components/referrals/EditReferralModal';
 import styles from '@/styles/referral-detail.module.css';
 
 export default function ReferralDetailPage() {
@@ -257,11 +258,12 @@ export default function ReferralDetailPage() {
 
       {/* Edit Modal */}
       {showEditModal && (
-        <EditReferralModal
+        <SharedEditReferralModal
           referral={referral}
           onClose={() => setShowEditModal(false)}
           onSuccess={() => {
             setShowEditModal(false);
+            showToast.success('Kode referral berhasil diperbarui');
             fetchReferral();
           }}
         />
@@ -344,7 +346,7 @@ function EditReferralModal({
               <label>Phone</label>
               <input
                 type="text"
-                value={formData.phone}
+                value={formData.phone || ''}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               />
             </div>
@@ -354,7 +356,7 @@ function EditReferralModal({
             <label>Email</label>
             <input
               type="email"
-              value={formData.email}
+              value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
           </div>

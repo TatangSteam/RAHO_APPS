@@ -184,6 +184,14 @@ export const therapyPlanApi = {
     return response.data;
   },
 
+  deleteTherapyPlanSet: async (
+    memberId: string,
+    setId: string
+  ): Promise<{ message: string; data: { setId: string; deletedPlans: number } }> => {
+    const response = await api.delete(`/members/${memberId}/therapy-plan-sets/${setId}`);
+    return response.data.data;
+  },
+
   getSessionTherapyPlanSet: async (sessionId: string): Promise<TherapyPlan[]> => {
     const response = await api.get(`/treatment-sessions/${sessionId}/therapy-plan-set`);
     return response.data.data;

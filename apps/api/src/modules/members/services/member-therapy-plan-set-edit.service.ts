@@ -84,6 +84,90 @@ function generateEditedSetName(originalName: string | null, setCode: string): st
 }
 
 export class MemberTherapyPlanSetEditService {
+  async deleteTherapyPlanSet(memberId: string, setId: string) {
+    const set = await prisma.therapyPlanSet.findUnique({
+      where: { id: setId },
+      include: {
+        plans: {
+          select: {
+            id: true,
+            planCode: true,
+            planNumber: true,
+            treatmentSessionId: true,
+            supersededById: true,
+            _count: {
+              select: {
+                infusions: true,
+              },
+            },
+          },
+        },
+        supersedes: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!set || set.memberId !== memberId) {
+      throw { status: 404, code: 'THERAPY_PLAN_SET_NOT_FOUND', message: 'Set therapy plan tidak ditemukan' };
+    }
+
+    if (set.supersededById || set.supersedes.length > 0) {
+      throw {
+        status: 409,
+        code: 'THERAPY_PLAN_SET_HAS_HISTORY',
+        message: 'Set therapy plan yang memiliki riwayat versi tidak dapat dihapus',
+      };
+    }
+
+    const usedPlan = set.plans.find((plan) => plan.treatmentSessionId || plan._count.infusions > 0);
+    if (usedPlan) {
+      throw {
+        status: 409,
+        code: 'THERAPY_PLAN_SET_IN_USE',
+        message: `Terapi #${usedPlan.planNumber || usedPlan.planCode} sudah digunakan dalam sesi dan tidak dapat dihapus`,
+      };
+    }
+
+    const planIds = set.plans.map((plan) => plan.id);
+    if (planIds.length > 0) {
+      const supersedingPlanCount = await prisma.therapyPlan.count({
+        where: {
+          supersededById: { in: planIds },
+        },
+      });
+
+      if (supersedingPlanCount > 0 || set.plans.some((plan) => plan.supersededById)) {
+        throw {
+          status: 409,
+          code: 'THERAPY_PLAN_SET_HAS_HISTORY',
+          message: 'Set therapy plan yang memiliki riwayat versi tidak dapat dihapus',
+        };
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.therapyPlan.deleteMany({
+        where: {
+          therapyPlanSetId: setId,
+          memberId,
+        },
+      });
+
+      await tx.therapyPlanSet.delete({
+        where: { id: setId },
+      });
+    });
+
+    return {
+      message: 'Set therapy plan berhasil dihapus',
+      data: {
+        setId,
+        deletedPlans: set.plans.length,
+      },
+    };
+  }
+
   async bulkEditTherapyPlanSet(
     setId: string,
     input: BulkEditSetInput,

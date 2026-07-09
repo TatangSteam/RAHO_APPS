@@ -407,6 +407,31 @@ export class MembersController {
     }
   }
 
+  async deleteTherapyPlanSet(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, setId } = req.params;
+      const userId = req.user!.userId;
+      const result = await membersService.deleteTherapyPlanSet(memberId, setId, userId);
+
+      await logAudit({
+        userId,
+        action: 'DELETE',
+        resource: 'TherapyPlanSet',
+        resourceId: setId,
+        meta: {
+          type: 'therapy_plan_set_delete',
+          memberId,
+          deletedPlans: result.data.deletedPlans,
+          details: `Deleted unused therapy plan set with ${result.data.deletedPlans} plans`,
+        },
+      });
+
+      return sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // Get Therapy Plan History (all versions)
   async getTherapyPlanHistory(req: Request, res: Response, next: NextFunction) {
     try {

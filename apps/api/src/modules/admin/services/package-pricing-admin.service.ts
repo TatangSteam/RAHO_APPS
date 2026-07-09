@@ -2,6 +2,13 @@
 import { prisma } from '../../../lib/prisma';
 import { PackageType } from '@prisma/client';
 
+function normalizeNullableString(value: string | null | undefined) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
 /**
  * Service for admin package pricing management
  */
@@ -142,17 +149,22 @@ export class PackagePricingAdminService {
    */
   async createPackagePricing(data: {
     packageType: PackageType;
-    boosterType?: string;
-    serviceType?: string;
+    boosterType?: string | null;
+    serviceType?: string | null;
     name: string;
     totalSessions: number;
     price: number;
-    productCode?: string;
+    productCode?: string | null;
     isActive?: boolean;
-    branchId?: string; // Optional: null/undefined = global pricing
+    branchId?: string | null; // Optional: null/undefined = global pricing
   }) {
+    const boosterType = normalizeNullableString(data.boosterType);
+    const serviceType = normalizeNullableString(data.serviceType);
+    const productCode = normalizeNullableString(data.productCode);
+    const branchId = normalizeNullableString(data.branchId);
+
     // Validate boosterType for BOOSTER packages
-    if (data.packageType === 'BOOSTER' && !data.boosterType) {
+    if (data.packageType === 'BOOSTER' && !boosterType) {
       throw {
         status: 400,
         code: 'BOOSTER_TYPE_REQUIRED',
@@ -161,7 +173,7 @@ export class PackagePricingAdminService {
     }
 
     // Validate serviceType for BOOSTER packages
-    if (data.packageType === 'BOOSTER' && !data.serviceType) {
+    if (data.packageType === 'BOOSTER' && !serviceType) {
       throw {
         status: 400,
         code: 'SERVICE_TYPE_REQUIRED',
@@ -173,10 +185,10 @@ export class PackagePricingAdminService {
     const existing = await prisma.packagePricing.findFirst({
       where: {
         packageType: data.packageType,
-        boosterType: data.boosterType || null,
-        serviceType: data.serviceType || null,
+        boosterType: boosterType || null,
+        serviceType: serviceType || null,
         totalSessions: data.totalSessions,
-        branchId: data.branchId || null,
+        branchId: branchId || null,
       },
     });
 
@@ -184,16 +196,16 @@ export class PackagePricingAdminService {
       throw {
         status: 409,
         code: 'PRICING_EXISTS',
-        message: data.branchId 
+        message: branchId 
           ? 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini'
           : 'Harga paket global dengan tipe dan jumlah sesi ini sudah ada',
       };
     }
 
     // Validate branch if branchId is provided
-    if (data.branchId) {
+    if (branchId) {
       const branch = await prisma.branch.findUnique({
-        where: { id: data.branchId },
+        where: { id: branchId },
       });
 
       if (!branch) {
@@ -208,14 +220,14 @@ export class PackagePricingAdminService {
     const pricing = await prisma.packagePricing.create({
       data: {
         packageType: data.packageType,
-        boosterType: data.boosterType || null,
-        serviceType: data.serviceType || null,
+        boosterType: boosterType || null,
+        serviceType: serviceType || null,
         name: data.name,
         totalSessions: data.totalSessions,
         price: data.price,
-        productCode: data.productCode,
+        productCode,
         isActive: data.isActive ?? true,
-        branchId: data.branchId || null,
+        branchId: branchId || null,
       },
       include: {
         branch: {
@@ -258,11 +270,11 @@ export class PackagePricingAdminService {
     pricingId: string,
     data: {
       packageType?: PackageType;
-      boosterType?: string;
-      serviceType?: string;
+      boosterType?: string | null;
+      serviceType?: string | null;
       name?: string;
       totalSessions?: number;
-      productCode?: string;
+      productCode?: string | null;
       price?: number;
       isActive?: boolean;
     }
@@ -281,9 +293,17 @@ export class PackagePricingAdminService {
 
     // Validate boosterType for BOOSTER packages
     const newPackageType = data.packageType ?? pricing.packageType;
+    const normalizedBoosterType = newPackageType === 'BOOSTER'
+      ? (data.boosterType !== undefined ? normalizeNullableString(data.boosterType) : pricing.boosterType)
+      : null;
+    const normalizedServiceType =
+      data.serviceType !== undefined ? normalizeNullableString(data.serviceType) : pricing.serviceType;
+    const normalizedProductCode =
+      data.productCode !== undefined ? normalizeNullableString(data.productCode) : undefined;
+    const newTotalSessions = data.totalSessions ?? pricing.totalSessions;
+
     if (newPackageType === 'BOOSTER') {
-      const newBoosterType = data.boosterType ?? pricing.boosterType;
-      if (!newBoosterType) {
+      if (!normalizedBoosterType) {
         throw {
           status: 400,
           code: 'BOOSTER_TYPE_REQUIRED',
@@ -291,8 +311,7 @@ export class PackagePricingAdminService {
         };
       }
 
-      const newServiceType = data.serviceType ?? pricing.serviceType;
-      if (!newServiceType) {
+      if (!normalizedServiceType) {
         throw {
           status: 400,
           code: 'SERVICE_TYPE_REQUIRED',
@@ -301,14 +320,36 @@ export class PackagePricingAdminService {
       }
     }
 
+    const duplicate = await prisma.packagePricing.findFirst({
+      where: {
+        id: { not: pricingId },
+        packageType: newPackageType,
+        boosterType: normalizedBoosterType || null,
+        serviceType: normalizedServiceType || null,
+        totalSessions: newTotalSessions,
+        branchId: pricing.branchId || null,
+      },
+      select: { id: true },
+    });
+
+    if (duplicate) {
+      throw {
+        status: 409,
+        code: 'PRICING_EXISTS',
+        message: pricing.branchId
+          ? 'Harga paket dengan tipe dan jumlah sesi ini sudah ada untuk cabang ini'
+          : 'Harga paket global dengan tipe dan jumlah sesi ini sudah ada',
+      };
+    }
+
     // Build update data object (only include fields that are provided)
     const updateData: any = {};
     if (data.packageType !== undefined) updateData.packageType = data.packageType;
-    if (data.boosterType !== undefined) updateData.boosterType = data.boosterType;
-    if (data.serviceType !== undefined) updateData.serviceType = data.serviceType;
+    if (data.boosterType !== undefined || newPackageType === 'BASIC') updateData.boosterType = normalizedBoosterType;
+    if (data.serviceType !== undefined) updateData.serviceType = normalizedServiceType;
     if (data.name !== undefined) updateData.name = data.name;
     if (data.totalSessions !== undefined) updateData.totalSessions = data.totalSessions;
-    if (data.productCode !== undefined) updateData.productCode = data.productCode;
+    if (data.productCode !== undefined) updateData.productCode = normalizedProductCode;
     if (data.price !== undefined) updateData.price = data.price;
     if (data.isActive !== undefined) updateData.isActive = data.isActive;
 

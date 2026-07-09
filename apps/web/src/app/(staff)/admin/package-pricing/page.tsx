@@ -185,10 +185,10 @@ function buildUpdatePayload(form: PricingFormState) {
     totalSessions: form.totalSessions,
     price: form.price,
     isActive: form.isActive,
+    productCode: form.productCode.trim() || null,
+    serviceType: form.serviceType.trim() || null,
   };
 
-  if (form.productCode.trim()) payload.productCode = form.productCode.trim();
-  if (form.serviceType.trim()) payload.serviceType = form.serviceType.trim();
   if (form.packageType === 'BOOSTER' && form.boosterType.trim()) {
     payload.boosterType = form.boosterType.trim();
   }
@@ -968,7 +968,7 @@ function PricingModal({
                       <option value="">Pilih booster</option>
                       {boosterTypes.map((booster) => (
                         <option key={booster.id} value={booster.code}>
-                          {booster.code} - {booster.name}
+                          {booster.code}
                         </option>
                       ))}
                     </select>

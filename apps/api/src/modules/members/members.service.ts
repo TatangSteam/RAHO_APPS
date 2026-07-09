@@ -267,6 +267,13 @@ export class MembersService {
   }
 
   /**
+   * Delete an unused therapy plan set.
+   */
+  async deleteTherapyPlanSet(memberId: string, setId: string, _userId: string) {
+    return await this.therapyPlanSetEditService.deleteTherapyPlanSet(memberId, setId);
+  }
+
+  /**
    * Get therapy plan history (all versions)
    */
   async getTherapyPlanHistory(therapyPlanId: string) {
