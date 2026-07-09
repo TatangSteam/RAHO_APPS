@@ -26,7 +26,7 @@ interface EditPackageInput {
   notes?: string;
 }
 
-const WAITING_VERIFICATION_EDIT_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
+const PRIVILEGED_PACKAGE_EDIT_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
 
 /**
  * Package Edit Service
@@ -37,7 +37,7 @@ export class PackageEditService {
   /**
    * Edit a package or bundle before payment is finalized
    * - Branch roles can edit PENDING_PAYMENT packages
-   * - SUPER_ADMIN and ADMIN_MANAGER can also edit WAITING_VERIFICATION packages
+   * - SUPER_ADMIN and ADMIN_MANAGER can also edit WAITING_VERIFICATION and ACTIVE packages
    * - Can update packages, add-ons, discount, notes
    * - Invoice amount also updated
    * - Audit log created
@@ -56,8 +56,9 @@ export class PackageEditService {
     console.log('branchId:', branchId);
     console.log('userRole:', userRole);
 
-    const editableStatuses: PackageStatus[] = WAITING_VERIFICATION_EDIT_ROLES.has(userRole || '')
-      ? [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION]
+    const hasPrivilegedEditAccess = PRIVILEGED_PACKAGE_EDIT_ROLES.has(userRole || '');
+    const editableStatuses: PackageStatus[] = hasPrivilegedEditAccess
+      ? [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION, PackageStatus.ACTIVE]
       : [PackageStatus.PENDING_PAYMENT];
     
     // 1. Find the package or bundle
@@ -114,14 +115,30 @@ export class PackageEditService {
       throw {
         status: 400,
         code: 'INVALID_STATUS',
-        message: WAITING_VERIFICATION_EDIT_ROLES.has(userRole || '')
-          ? 'Hanya paket dengan status PENDING_PAYMENT atau WAITING_VERIFICATION yang bisa diedit'
+        message: hasPrivilegedEditAccess
+          ? 'Hanya paket dengan status PENDING_PAYMENT, WAITING_VERIFICATION, atau ACTIVE yang bisa diedit'
           : 'Hanya paket dengan status PENDING_PAYMENT yang bisa diedit'
       };
     }
 
     const purchaseGroupId = memberPackage.purchaseGroupId;
     const memberId = memberPackage.memberId;
+    const replacementStatus = memberPackage.status;
+    const shouldPreservePaymentData = replacementStatus !== PackageStatus.PENDING_PAYMENT;
+    const sourcePaymentData = shouldPreservePaymentData
+      ? {
+          paidAt: memberPackage.paidAt,
+          verifiedBy: memberPackage.verifiedBy,
+          verifiedAt: memberPackage.verifiedAt,
+          activatedAt: memberPackage.activatedAt,
+          paymentProofUrl: memberPackage.paymentProofUrl,
+          paymentProofFileName: memberPackage.paymentProofFileName,
+          paymentProofFileSize: memberPackage.paymentProofFileSize,
+          paymentProofMimeType: memberPackage.paymentProofMimeType,
+          paymentPlanStatus: memberPackage.paymentPlanStatus,
+          totalVerifiedPaid: memberPackage.totalVerifiedPaid,
+        }
+      : null;
 
     const packagesInEditScope = await prisma.memberPackage.findMany({
       where: purchaseGroupId
@@ -200,11 +217,24 @@ export class PackageEditService {
           totalSessions: pricing.totalSessions * pkgSelection.quantity,
           usedSessions: 0,
           finalPrice,
-          status: 'PENDING_PAYMENT',
+          status: replacementStatus,
+          paymentPlanType: memberPackage.paymentPlanType,
+          installmentTotal: memberPackage.installmentTotal,
+          installmentSchedule: memberPackage.installmentSchedule as any,
+          totalVerifiedPaid: sourcePaymentData?.totalVerifiedPaid || 0,
+          paymentPlanStatus: sourcePaymentData?.paymentPlanStatus || null,
           boosterType: pkgSelection.boosterType as any,
           serviceType: pkgSelection.serviceType,
           purchaseGroupId: data.packages.length > 1 || (data.addOns && data.addOns.length > 0) ? newPurchaseGroupId : null,
           assignedBy: userId,
+          paidAt: sourcePaymentData?.paidAt || null,
+          verifiedBy: sourcePaymentData?.verifiedBy || null,
+          verifiedAt: sourcePaymentData?.verifiedAt || null,
+          activatedAt: sourcePaymentData?.activatedAt || null,
+          paymentProofUrl: sourcePaymentData?.paymentProofUrl || null,
+          paymentProofFileName: sourcePaymentData?.paymentProofFileName || null,
+          paymentProofFileSize: sourcePaymentData?.paymentProofFileSize || null,
+          paymentProofMimeType: sourcePaymentData?.paymentProofMimeType || null,
           notes: data.notes
         }
       });
@@ -264,7 +294,19 @@ export class PackageEditService {
             quantity: addon.quantity,
             pricePerUnit: addon.price,
             totalPrice: addon.price * addon.quantity,
-            status: 'PENDING_PAYMENT',
+            status: replacementStatus,
+            paymentPlanType: memberPackage.paymentPlanType,
+            installmentTotal: memberPackage.installmentTotal,
+            installmentSchedule: memberPackage.installmentSchedule as any,
+            totalVerifiedPaid: sourcePaymentData?.totalVerifiedPaid || 0,
+            paymentPlanStatus: sourcePaymentData?.paymentPlanStatus || null,
+            paidAt: sourcePaymentData?.paidAt || null,
+            verifiedBy: sourcePaymentData?.verifiedBy || null,
+            verifiedAt: sourcePaymentData?.verifiedAt || null,
+            paymentProofUrl: sourcePaymentData?.paymentProofUrl || null,
+            paymentProofFileName: sourcePaymentData?.paymentProofFileName || null,
+            paymentProofFileSize: sourcePaymentData?.paymentProofFileSize || null,
+            paymentProofMimeType: sourcePaymentData?.paymentProofMimeType || null,
             notes: addon.name,
             assignedBy: userId
           }
@@ -278,7 +320,7 @@ export class PackageEditService {
       ? await prisma.invoice.findFirst({
           where: {
             memberId,
-            status: { in: [InvoiceStatus.DRAFT, InvoiceStatus.PENDING_PAYMENT] },
+            status: { in: [InvoiceStatus.DRAFT, InvoiceStatus.PENDING_PAYMENT, InvoiceStatus.PAID] },
             items: {
               some: {
                 itemId: { in: oldInvoiceItemIds }

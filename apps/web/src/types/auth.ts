@@ -55,6 +55,7 @@ export const PACKAGE_MANAGEMENT_ROLES: Role[] = [
   'ADMIN_LAYANAN',
 ];
 export const PACKAGE_WAITING_VERIFICATION_EDIT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER'];
+export const PACKAGE_VERIFIED_EDIT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER'];
 
 // Roles that can edit therapy plans and add rows to active therapy plan sets
 export const THERAPY_PLAN_EDITORS: Role[] = [

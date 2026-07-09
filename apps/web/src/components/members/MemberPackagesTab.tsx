@@ -13,6 +13,7 @@ interface Props {
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
   canEditWaitingVerification?: boolean;
+  canEditVerified?: boolean;
   onViewRefundDetail?: (refundData: {
     packageCode: string;
     refundAmount: number;
@@ -34,6 +35,7 @@ export default function MemberPackagesTab({
   onCancelPackage,
   onEditPackage,
   canEditWaitingVerification = false,
+  canEditVerified = false,
   onViewRefundDetail,
 }: Props) {
   const [currentPage, setCurrentPage] = useState(1);
@@ -139,6 +141,7 @@ export default function MemberPackagesTab({
               onCancelPackage={onCancelPackage}
               onEditPackage={onEditPackage}
               canEditWaitingVerification={canEditWaitingVerification}
+              canEditVerified={canEditVerified}
               onViewRefundDetail={onViewRefundDetail}
             />
           );

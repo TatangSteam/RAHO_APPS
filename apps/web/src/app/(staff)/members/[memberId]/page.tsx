@@ -12,6 +12,7 @@ import {
   hasRole,
   MANAGER_ABOVE_ROLES,
   PACKAGE_MANAGEMENT_ROLES,
+  PACKAGE_VERIFIED_EDIT_ROLES,
   PACKAGE_WAITING_VERIFICATION_EDIT_ROLES,
 } from '@/types/auth';
 import { useAuthStore } from '@/stores/authStore';
@@ -177,6 +178,7 @@ export default function MemberDetailPage() {
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
   const canEditPackage = !!user && hasRole(user.role, PACKAGE_MANAGEMENT_ROLES);
   const canEditWaitingVerificationPackage = !!user && hasRole(user.role, PACKAGE_WAITING_VERIFICATION_EDIT_ROLES);
+  const canEditVerifiedPackage = !!user && hasRole(user.role, PACKAGE_VERIFIED_EDIT_ROLES);
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditDiagnosis = [
@@ -741,6 +743,7 @@ export default function MemberDetailPage() {
                   setShowRefundDetailModal(true);
                 }}
                 canEditWaitingVerification={canEditWaitingVerificationPackage}
+                canEditVerified={canEditVerifiedPackage}
                 onEditPackage={canEditPackage ? (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
                   // Load existing package data into edit modal
                   const selectedPackages = packages.map((pkg: any) => ({

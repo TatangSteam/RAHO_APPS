@@ -15,6 +15,7 @@ interface PackageCardProps {
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
   canEditWaitingVerification?: boolean;
+  canEditVerified?: boolean;
   onViewRefundDetail?: (refundData: {
     packageCode: string;
     refundAmount: number;
@@ -114,6 +115,7 @@ export default function PackageCard({
   onCancelPackage,
   onEditPackage,
   canEditWaitingVerification = false,
+  canEditVerified = false,
   onViewRefundDetail,
 }: PackageCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -193,7 +195,8 @@ export default function PackageCard({
   const isAddOn = 'isAddOn' in pkg && pkg.isAddOn;
   const canEditPackageStatus = (status?: string) => (
     status === 'PENDING_PAYMENT' ||
-    (canEditWaitingVerification && status === 'WAITING_VERIFICATION')
+    (canEditWaitingVerification && status === 'WAITING_VERIFICATION') ||
+    (canEditVerified && status === 'ACTIVE')
   );
 
   // Helper to calculate original price (before discount)
@@ -646,6 +649,27 @@ export default function PackageCard({
                     ✅ Verify Termin Berikutnya
                   </button>
                 )}
+                {onEditPackage && canEditGroup && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const allPackages = [...basics, ...boosters];
+                      const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
+                      onEditPackage(
+                        pkg.purchaseGroupId || '',
+                        allPackages,
+                        groupAddOns,
+                        totalDiscount,
+                        discountPercent,
+                        basics[0]?.discountNote || boosters[0]?.discountNote || '',
+                        basics[0]?.notes || boosters[0]?.notes || ''
+                      );
+                    }}
+                    className={styles.editButton}
+                  >
+                    âœï¸ Edit
+                  </button>
+                )}
                 {onRefundPackage && basics[0] && (
                   <button
                     onClick={(e) => {
@@ -861,6 +885,25 @@ export default function PackageCard({
                   style={{ marginTop: 0 }}
                 >
                   ✅ Verify Termin Berikutnya
+                </button>
+              )}
+              {onEditPackage && canEditStandalonePackage && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEditPackage(
+                      memberPkg.purchaseGroupId || memberPkg.packageId,
+                      [memberPkg],
+                      [],
+                      Number(memberPkg.discountAmount || 0),
+                      Number(memberPkg.discountPercent || 0),
+                      memberPkg.discountNote || '',
+                      memberPkg.notes || ''
+                    );
+                  }}
+                  className={styles.editButton}
+                >
+                  âœï¸ Edit
                 </button>
               )}
               {onRefundPackage && (
