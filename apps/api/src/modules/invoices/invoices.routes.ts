@@ -13,6 +13,13 @@ router.use(authenticate);
 // INVOICE ROUTES
 // ============================================================
 
+// Get invoices (ADMIN, STAFF)
+router.get(
+  '/',
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN]),
+  invoiceController.getInvoices
+);
+
 // Create invoice (ADMIN, STAFF)
 router.post(
   '/',

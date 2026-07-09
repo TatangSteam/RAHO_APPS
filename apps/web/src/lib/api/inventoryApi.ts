@@ -18,6 +18,8 @@ export interface CreateStockRequestInput {
 export interface UpdateStockRequestInput {
   notes?: string;
   items?: StockRequestItem[];
+  invoiceItems?: InvoiceItemInput[];
+  invoiceTotalAmount?: number;
 }
 
 export interface InvoiceItemInput {
@@ -28,6 +30,7 @@ export interface InvoiceItemInput {
 
 export interface CreateInvoiceInput {
   items: InvoiceItemInput[];
+  totalAmount?: number;
   notes?: string;
   paymentMode?: 'NORMAL' | 'DEBT';
 }
@@ -186,9 +189,24 @@ export interface StockRequest {
   invoice?: {
     id: string;
     invoiceNumber: string;
+    subtotal?: number;
     totalAmount: number;
+    paidAmount?: number;
+    remainingAmount?: number;
     status: string;
     paymentVerificationStatus: string;
+    paymentProofUrl?: string;
+    paymentUploadedAt?: string;
+    items?: Array<{
+      id: string;
+      masterProductId: string;
+      sku?: string;
+      productName: string;
+      description?: string;
+      quantity: number;
+      pricePerUnit: number;
+      subtotal: number;
+    }>;
   };
   shipment?: {
     id: string;

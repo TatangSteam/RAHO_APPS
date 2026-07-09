@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Edit3, Package, Save, X } from 'lucide-react';
+import { Calculator, CreditCard, Edit3, Package, Save, X } from 'lucide-react';
 import type { UpdateStockRequestInput } from '@/lib/api/inventoryApi';
 import type { StockRequest } from '../types';
 
@@ -12,12 +12,23 @@ interface EditRequestModalProps {
   loading?: boolean;
 }
 
+function formatCurrency(amount: number) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency',
+    currency: 'IDR',
+    minimumFractionDigits: 0,
+  }).format(amount || 0);
+}
+
 export default function EditRequestModal({
   request,
   onClose,
   onSubmit,
   loading = false,
 }: EditRequestModalProps) {
+  const canEditRequestItems = request.status === 'PENDING';
+  const canEditInvoiceItems = request.status === 'WAITING_PAYMENT' && Boolean(request.invoice);
+
   const [notes, setNotes] = useState(request.notes || '');
   const [items, setItems] = useState(
     request.items.map((item) => ({
@@ -28,7 +39,19 @@ export default function EditRequestModal({
       notes: item.notes || '',
     }))
   );
+  const [invoiceTotalAmount, setInvoiceTotalAmount] = useState(String(request.invoice?.totalAmount ?? 0));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const invoiceTotal = Number(invoiceTotalAmount) || 0;
+  const invoiceDisplayItems = (request.invoice?.items?.length ? request.invoice.items : request.items).map((item) => {
+    const requestItem = request.items.find((stockItem) => stockItem.masterProductId === item.masterProductId);
+
+    return {
+      masterProductId: item.masterProductId,
+      productName: item.productName || requestItem?.productName || 'Item',
+      quantity: Number('quantity' in item ? item.quantity : requestItem?.requestedQty || 0),
+      unit: requestItem?.unit || '',
+    };
+  });
 
   const updateQty = (masterProductId: string, value: string) => {
     const qty = Number(value);
@@ -54,25 +77,40 @@ export default function EditRequestModal({
   const handleSubmit = async () => {
     const nextErrors: Record<string, string> = {};
 
-    items.forEach((item) => {
-      if (!item.requestedQty || item.requestedQty <= 0) {
-        nextErrors[item.masterProductId] = 'Jumlah harus lebih dari 0';
+    if (canEditRequestItems) {
+      items.forEach((item) => {
+        if (!item.requestedQty || item.requestedQty <= 0) {
+          nextErrors[`qty-${item.masterProductId}`] = 'Jumlah harus lebih dari 0';
+        }
+      });
+    }
+
+    if (canEditInvoiceItems) {
+      if (!Number.isFinite(invoiceTotal) || invoiceTotal < 0) {
+        nextErrors.invoiceTotalAmount = 'Total harga tidak boleh negatif';
       }
-    });
+    }
 
     if (Object.keys(nextErrors).length > 0) {
       setErrors(nextErrors);
       return;
     }
 
-    await onSubmit({
-      notes,
-      items: items.map((item) => ({
+    const payload: UpdateStockRequestInput = { notes };
+
+    if (canEditRequestItems) {
+      payload.items = items.map((item) => ({
         masterProductId: item.masterProductId,
         requestedQty: item.requestedQty,
         notes: item.notes.trim() || undefined,
-      })),
-    });
+      }));
+    }
+
+    if (canEditInvoiceItems) {
+      payload.invoiceTotalAmount = invoiceTotal;
+    }
+
+    await onSubmit(payload);
   };
 
   return (
@@ -95,6 +133,7 @@ export default function EditRequestModal({
               onClick={onClose}
               disabled={loading}
               className="rounded-xl p-2 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 disabled:opacity-50 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+              aria-label="Tutup"
             >
               <X className="h-5 w-5" />
             </button>
@@ -141,11 +180,11 @@ export default function EditRequestModal({
                         min="1"
                         value={item.requestedQty}
                         onChange={(event) => updateQty(item.masterProductId, event.target.value)}
-                        disabled={loading}
+                        disabled={loading || !canEditRequestItems}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                       />
-                      {errors[item.masterProductId] && (
-                        <p className="mt-1 text-xs font-medium text-red-500">{errors[item.masterProductId]}</p>
+                      {errors[`qty-${item.masterProductId}`] && (
+                        <p className="mt-1 text-xs font-medium text-red-500">{errors[`qty-${item.masterProductId}`]}</p>
                       )}
                     </div>
 
@@ -157,7 +196,7 @@ export default function EditRequestModal({
                         type="text"
                         value={item.notes}
                         onChange={(event) => updateItemNotes(item.masterProductId, event.target.value)}
-                        disabled={loading}
+                        disabled={loading || !canEditRequestItems}
                         className="w-full rounded-xl border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:opacity-50 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white"
                         placeholder="Opsional"
                       />
@@ -166,6 +205,59 @@ export default function EditRequestModal({
                 </div>
               ))}
             </div>
+
+            {canEditInvoiceItems && (
+              <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+                    <CreditCard className="h-4 w-4" />
+                    Total Harga Invoice
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm font-bold text-emerald-700 shadow-sm dark:bg-neutral-950 dark:text-emerald-300">
+                    <Calculator className="h-4 w-4" />
+                    {formatCurrency(invoiceTotal)}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold uppercase text-neutral-500 dark:text-neutral-400">
+                    Total
+                  </label>
+                  <div className="flex items-center rounded-xl border border-neutral-300 bg-white focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 dark:border-neutral-700 dark:bg-neutral-950">
+                    <span className="border-r border-neutral-200 px-3 text-sm font-semibold text-neutral-500 dark:border-neutral-700">
+                      Rp
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={invoiceTotalAmount}
+                      onChange={(event) => setInvoiceTotalAmount(event.target.value)}
+                      disabled={loading}
+                      className="min-w-0 flex-1 rounded-r-xl bg-transparent px-3 py-2 text-sm font-semibold text-neutral-900 outline-none disabled:opacity-50 dark:text-white"
+                    />
+                  </div>
+                  {errors.invoiceTotalAmount && (
+                    <p className="mt-1 text-xs font-medium text-red-500">{errors.invoiceTotalAmount}</p>
+                  )}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {invoiceDisplayItems.map((item) => (
+                    <div
+                      key={item.masterProductId}
+                      className="flex items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-white px-4 py-3 dark:bg-neutral-950/70"
+                    >
+                      <span className="min-w-0 truncate text-sm font-semibold text-neutral-900 dark:text-white">
+                        {item.productName}
+                      </span>
+                      <span className="shrink-0 text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                        {item.quantity} {item.unit}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-end gap-3 border-t border-neutral-200 px-6 py-4 dark:border-neutral-700">

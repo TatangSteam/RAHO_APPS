@@ -228,11 +228,12 @@ export default function StockRequestsPage() {
     requestId: string,
     items: InvoiceItemInput[],
     notes?: string,
-    paymentMode?: 'NORMAL' | 'DEBT'
+    paymentMode?: 'NORMAL' | 'DEBT',
+    totalAmount?: number
   ) => {
     try {
       setActionLoading(true);
-      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes, paymentMode });
+      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes, paymentMode, totalAmount });
       const message = response.data?.data?.message || 'Invoice berhasil dibuat';
       showToast.success(message);
       setShowModal(false);
@@ -352,8 +353,10 @@ export default function StockRequestsPage() {
   };
 
   const handleEditRequest = async (request: StockRequest) => {
-    if (!isStockRequestManager(user?.role) || request.status !== 'PENDING') {
-      showToast.error('Request stok hanya dapat diedit Admin Manager saat status pending');
+    const { canEditRequest } = getStockRequestRowActions(request, user?.role);
+
+    if (!canEditRequest) {
+      showToast.error('Request stok hanya dapat diedit saat pending atau invoice masih menunggu pembayaran');
       return;
     }
 
@@ -380,7 +383,11 @@ export default function StockRequestsPage() {
       setSelectedRequest(null);
       fetchRequests();
     } catch (error: any) {
-      showToast.error(error.response?.data?.message || 'Gagal memperbarui request stok');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal memperbarui request stok'
+      );
     } finally {
       setActionLoading(false);
     }

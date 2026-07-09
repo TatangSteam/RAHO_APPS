@@ -46,7 +46,12 @@ import {
 import { getAllDoctors } from '../users/users.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
+import { uploadSpreadsheet } from '../../middleware/upload';
 import { validate, validateQuery, validateParams } from '../../middleware/validate';
+import {
+  dryRunMemberHistoricalImport,
+  executeMemberHistoricalImport,
+} from './member-historical-import.controller';
 import {
   createPackagePricingSchema,
   updatePackagePricingSchema,
@@ -71,6 +76,19 @@ router.use(authenticate);
 router.get('/branches',
   authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG']),
   getBranches
+);
+
+// Historical member import from RAHO Excel template
+router.post('/member-import/dry-run',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  uploadSpreadsheet.single('file'),
+  dryRunMemberHistoricalImport
+);
+
+router.post('/member-import/execute',
+  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER']),
+  uploadSpreadsheet.single('file'),
+  executeMemberHistoricalImport
 );
 
 // ============================================================

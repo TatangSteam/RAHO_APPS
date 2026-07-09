@@ -51,7 +51,8 @@ export interface StockRequestInvoiceApprovalPlan {
 
 export function buildStockRequestInvoiceDraft(
   requestItems: StockRequestItemForInvoice[],
-  invoiceItems: InvoiceItemInput[]
+  invoiceItems: InvoiceItemInput[],
+  totalAmountOverride?: number
 ): StockRequestInvoiceDraft {
   const requestProductIds = requestItems.map((item) => item.masterProductId);
   const invalidInvoiceItem = invoiceItems.find((item) => !requestProductIds.includes(item.masterProductId));
@@ -83,7 +84,7 @@ export function buildStockRequestInvoiceDraft(
     };
   });
 
-  return { items, subtotal };
+  return { items, subtotal: totalAmountOverride ?? subtotal };
 }
 
 export function getStockRequestInvoiceApprovalPlan(

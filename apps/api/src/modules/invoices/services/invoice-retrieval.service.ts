@@ -4,7 +4,7 @@ import { extractKeyFromUrl, s3Client } from '../../../config/minio';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '../../../config/env';
 import { Readable } from 'stream';
-import { Role } from '@prisma/client';
+import { InvoiceStatus, Role } from '@prisma/client';
 import { createReadStream, existsSync, statSync } from 'fs';
 import path from 'path';
 
@@ -12,28 +12,179 @@ import path from 'path';
  * Service for invoice retrieval
  */
 export class InvoiceRetrievalService {
+  private getInvoiceInclude() {
+    return {
+      member: {
+        include: {
+          referralCode: true,
+          user: {
+            include: {
+              profile: true,
+            },
+          },
+        },
+      },
+      branch: true,
+      createdByUser: {
+        include: {
+          profile: true,
+        },
+      },
+      verifiedByUser: {
+        include: {
+          profile: true,
+        },
+      },
+      items: true,
+      payments: {
+        include: {
+          receivedByUser: {
+            include: {
+              profile: true,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  private async getAccessibleBranchIds(user: { userId: string; role: string; branchId: string | null }) {
+    if (user.role === Role.SUPER_ADMIN) {
+      return undefined;
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      const managerBranches = await prisma.managerBranch.findMany({
+        where: { userId: user.userId },
+        select: { branchId: true },
+      });
+
+      return managerBranches.map((branch) => branch.branchId);
+    }
+
+    const branchIds = new Set<string>();
+    if (user.branchId) {
+      branchIds.add(user.branchId);
+    }
+
+    const staffBranches = await prisma.staffBranch.findMany({
+      where: { userId: user.userId },
+      select: { branchId: true },
+    });
+
+    staffBranches.forEach((branch) => branchIds.add(branch.branchId));
+    return Array.from(branchIds);
+  }
+
+  /**
+   * Get invoices for payment dashboard
+   */
+  async getInvoices(
+    user: { userId: string; role: string; branchId: string | null },
+    options: { search?: string; status?: string; page?: number; limit?: number } = {}
+  ) {
+    const page = Math.max(1, Number(options.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(options.limit || 50)));
+    const skip = (page - 1) * limit;
+    const branchIds = await this.getAccessibleBranchIds(user);
+
+    if (Array.isArray(branchIds) && branchIds.length === 0) {
+      return {
+        data: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0,
+        },
+      };
+    }
+
+    const where: any = {};
+    if (Array.isArray(branchIds)) {
+      where.branchId = { in: branchIds };
+    }
+
+    if (options.status && Object.values(InvoiceStatus).includes(options.status as InvoiceStatus)) {
+      where.status = options.status;
+    }
+
+    const search = options.search?.trim();
+    if (search) {
+      where.OR = [
+        { invoiceNumber: { contains: search, mode: 'insensitive' } },
+        {
+          member: {
+            is: {
+              memberNo: { contains: search, mode: 'insensitive' },
+            },
+          },
+        },
+        {
+          member: {
+            is: {
+              user: {
+                is: {
+                  email: { contains: search, mode: 'insensitive' },
+                },
+              },
+            },
+          },
+        },
+        {
+          member: {
+            is: {
+              user: {
+                is: {
+                  profile: {
+                    is: {
+                      fullName: { contains: search, mode: 'insensitive' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        {
+          branch: {
+            is: {
+              name: { contains: search, mode: 'insensitive' },
+            },
+          },
+        },
+      ];
+    }
+
+    const [invoices, total] = await Promise.all([
+      (prisma as any).invoice.findMany({
+        where,
+        include: this.getInvoiceInclude(),
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: limit,
+      }),
+      (prisma as any).invoice.count({ where }),
+    ]);
+
+    return {
+      data: await Promise.all(invoices.map((invoice: any) => this.formatInvoice(invoice))),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
   /**
    * Get invoice by ID
    */
   async getInvoiceById(invoiceId: string) {
     const invoice = await (prisma as any).invoice.findUnique({
       where: { id: invoiceId },
-      include: {
-        member: {
-          include: {
-            referralCode: true,
-          },
-        },
-        branch: true,
-        createdByUser: true,
-        verifiedByUser: true,
-        items: true,
-        payments: {
-          include: {
-            receivedByUser: true,
-          },
-        },
-      },
+      include: this.getInvoiceInclude(),
     });
 
     if (!invoice) {
@@ -55,22 +206,7 @@ export class InvoiceRetrievalService {
           },
         },
       },
-      include: {
-        member: {
-          include: {
-            referralCode: true,
-          },
-        },
-        branch: true,
-        createdByUser: true,
-        verifiedByUser: true,
-        items: true,
-        payments: {
-          include: {
-            receivedByUser: true,
-          },
-        },
-      },
+      include: this.getInvoiceInclude(),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -87,22 +223,7 @@ export class InvoiceRetrievalService {
   async getMemberInvoices(memberId: string) {
     const invoices = await (prisma as any).invoice.findMany({
       where: { memberId },
-      include: {
-        member: {
-          include: {
-            referralCode: true,
-          },
-        },
-        branch: true,
-        createdByUser: true,
-        verifiedByUser: true,
-        items: true,
-        payments: {
-          include: {
-            receivedByUser: true,
-          },
-        },
-      },
+      include: this.getInvoiceInclude(),
       orderBy: { createdAt: 'desc' },
     });
 
@@ -245,7 +366,11 @@ export class InvoiceRetrievalService {
             },
           },
           include: {
-            receivedByUser: true,
+            receivedByUser: {
+              include: {
+                profile: true,
+              },
+            },
           },
           orderBy: {
             receivedAt: 'asc',
@@ -308,15 +433,29 @@ export class InvoiceRetrievalService {
       Number(invoice.totalAmount || 0) === 0 &&
       Number(invoice.subtotal || 0) === 0 &&
       displaySubtotal > 0;
+
+    const memberName =
+      invoice.member?.user?.profile?.fullName ||
+      invoice.member?.user?.email ||
+      invoice.member?.memberNo ||
+      'Member';
+    const createdByName =
+      invoice.createdByUser?.profile?.fullName ||
+      invoice.createdByUser?.email ||
+      '-';
+    const verifiedByName =
+      invoice.verifiedByUser?.profile?.fullName ||
+      invoice.verifiedByUser?.email ||
+      undefined;
     
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
       memberId: invoice.memberId,
-      memberName: invoice.member.fullName,
-      memberNo: invoice.member.memberNo,
+      memberName,
+      memberNo: invoice.member?.memberNo,
       branchId: invoice.branchId,
-      branchName: invoice.branch.name,
+      branchName: invoice.branch?.name,
       
       // Financial
       subtotal: shouldUseDisplaySubtotal ? displaySubtotal : Number(invoice.subtotal),
@@ -351,9 +490,9 @@ export class InvoiceRetrievalService {
       // Metadata
       notes: invoice.notes || undefined,
       createdBy: invoice.createdBy,
-      createdByName: invoice.createdByUser.fullName,
+      createdByName,
       verifiedBy: invoice.verifiedBy || undefined,
-      verifiedByName: invoice.verifiedByUser?.fullName,
+      verifiedByName,
       verifiedAt: invoice.verifiedAt?.toISOString(),
       createdAt: invoice.createdAt.toISOString(),
       updatedAt: invoice.updatedAt.toISOString(),
@@ -371,7 +510,10 @@ export class InvoiceRetrievalService {
         proofFileSize: payment.proofFileSize || undefined,
         proofMimeType: payment.proofMimeType || undefined,
         receivedBy: payment.receivedBy,
-        receivedByName: payment.receivedByUser.fullName,
+        receivedByName:
+          payment.receivedByUser?.profile?.fullName ||
+          payment.receivedByUser?.email ||
+          '-',
         receivedAt: payment.receivedAt.toISOString(),
       })),
     };

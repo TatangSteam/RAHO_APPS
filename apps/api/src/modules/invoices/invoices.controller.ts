@@ -16,6 +16,26 @@ import { logger } from '../../lib/logger';
 
 export const invoiceController = {
   /**
+   * Get invoices
+   * GET /api/v1/invoices
+   */
+  async getInvoices(req: Request, res: Response) {
+    try {
+      const invoices = await invoiceService.getInvoices(req.user, {
+        search: req.query.search as string | undefined,
+        status: req.query.status as string | undefined,
+        page: req.query.page ? Number(req.query.page) : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+      });
+
+      return sendSuccess(res, invoices);
+    } catch (error: any) {
+      logger.error('Get invoices error:', error);
+      return sendError(res, error.status || 400, error.code || 'GET_INVOICES_ERROR', error.message);
+    }
+  },
+
+  /**
    * Create a new invoice
    * POST /api/v1/invoices
    */

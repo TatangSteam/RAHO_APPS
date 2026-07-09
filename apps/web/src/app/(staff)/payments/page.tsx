@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   CreditCard,
@@ -13,16 +13,20 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { getApiErrorMessage } from '@/lib/api';
+import { invoiceApi } from '@/lib/invoiceApi';
+import type {
+  Invoice as ApiInvoice,
+  InvoiceStatus as ApiInvoiceStatus,
+  PaymentMethod as ApiPaymentMethod,
+} from '@/types/invoice';
 import {
-  INITIAL_INVOICES,
   METHOD_FILTERS,
   PAYMENT_METHODS,
   STATUS_FILTERS,
-  STORAGE_KEY,
   calculateTotal,
   filterInvoices,
   formatCurrency,
-  getPaymentStatus,
   hasInvalidInvoiceItem,
   matchingProducts,
   parseInvoiceItemForms,
@@ -33,6 +37,79 @@ import {
 } from './paymentPresentation';
 
 type ModalType = 'invoice' | 'detail' | 'payment' | 'verify' | 'approve' | 'reject' | 'refund' | null;
+
+const PAYMENT_METHOD_LABEL: Record<ApiPaymentMethod, PaymentMethod> = {
+  CASH: 'Cash',
+  TRANSFER: 'Transfer',
+  QRIS: 'QRIS',
+  DEBIT: 'Debit',
+  CREDIT: 'Credit',
+  OTHER: 'Other',
+};
+
+const PAYMENT_METHOD_VALUE: Record<PaymentMethod, ApiPaymentMethod> = {
+  Cash: 'CASH',
+  Transfer: 'TRANSFER',
+  QRIS: 'QRIS',
+  Debit: 'DEBIT',
+  Credit: 'CREDIT',
+  Other: 'OTHER',
+};
+
+const INVOICE_STATUS_LABEL: Record<ApiInvoiceStatus, string> = {
+  DRAFT: 'Draft',
+  PENDING_PAYMENT: 'Menunggu Pembayaran',
+  PAID: 'Lunas',
+  DEBT: 'Utang',
+  CANCELLED: 'Dibatalkan',
+  OVERDUE: 'Jatuh Tempo',
+};
+
+function toPaymentStatus(invoice: ApiInvoice, paidAmount: number, total: number) {
+  if (invoice.status === 'PENDING_PAYMENT' && paidAmount > 0 && paidAmount < total) {
+    return 'Partial';
+  }
+
+  if (invoice.status === 'DEBT' && paidAmount > 0 && paidAmount < total) {
+    return 'Partial';
+  }
+
+  return INVOICE_STATUS_LABEL[invoice.status] || invoice.status;
+}
+
+function toPaymentInvoice(invoice: ApiInvoice): Invoice {
+  const total = Number(invoice.totalAmount || invoice.subtotal || 0);
+  const payments = invoice.payments || [];
+  const paymentTotal = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const paidAmount = paymentTotal || Number(invoice.actualPaidAmount || 0);
+  const paymentMethods = Array.from(
+    new Set(
+      payments.map((payment) => PAYMENT_METHOD_LABEL[payment.paymentMethod]).filter(Boolean),
+    ),
+  );
+
+  return {
+    id: invoice.id,
+    invoiceNumber: invoice.invoiceNumber,
+    memberName: invoice.memberName || invoice.memberNo || '-',
+    items: (invoice.items || []).map((item) => ({
+      productName: item.description || item.code || item.itemType,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.pricePerUnit || 0),
+      discount: Number(item.discountAmount || 0),
+    })),
+    notes: invoice.notes,
+    status: toPaymentStatus(invoice, paidAmount, total),
+    total,
+    paidAmount,
+    paymentMethods,
+    references: payments
+      .map((payment) => payment.paymentReference)
+      .filter((reference): reference is string => Boolean(reference)),
+    refundAmount: 0,
+    createdAt: invoice.createdAt?.slice(0, 10) || '',
+  };
+}
 
 function downloadFile(filename: string, mimeType: string, content: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -102,10 +179,11 @@ export default function PaymentsPage() {
   const { user } = useAuthStore();
   const role = user?.role;
   const canAccess = role === 'SUPER_ADMIN' || role === 'ADMIN_MANAGER' || role === 'ADMIN_CABANG' || role === 'ADMIN_LAYANAN';
-  const canVerify = role === 'SUPER_ADMIN' || role === 'ADMIN_MANAGER';
 
-  const [hydrated, setHydrated] = useState(false);
-  const [invoices, setInvoices] = useState<Invoice[]>(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [statusFilter, setStatusFilter] = useState('Semua Status');
@@ -133,27 +211,29 @@ export default function PaymentsPage() {
     amount: '',
   });
 
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored) as Invoice[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setInvoices(parsed);
-        }
-      }
-    } catch {
-      setInvoices(INITIAL_INVOICES);
-    } finally {
-      setHydrated(true);
+  const fetchInvoices = useCallback(async () => {
+    if (!canAccess) {
+      setLoading(false);
+      return;
     }
-  }, []);
+
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const result = await invoiceApi.getInvoices({ limit: 100 });
+      setInvoices(result.data.map(toPaymentInvoice));
+    } catch (error) {
+      setInvoices([]);
+      setLoadError(getApiErrorMessage(error));
+    } finally {
+      setLoading(false);
+    }
+  }, [canAccess]);
 
   useEffect(() => {
-    if (hydrated) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
-    }
-  }, [hydrated, invoices]);
+    void fetchInvoices();
+  }, [fetchInvoices]);
 
   const selectedInvoice = useMemo(
     () => invoices.find((invoice) => invoice.id === selectedInvoiceId) || null,
@@ -171,16 +251,14 @@ export default function PaymentsPage() {
   }, [endDate, invoices, methodFilter, search, startDate, statusFilter]);
 
   const openCreateInvoice = () => {
-    setInvoiceForm({ memberName: '', notes: '', items: [] });
-    setFormError('');
-    setSelectedInvoiceId(null);
-    setModal('invoice');
+    setToast('Invoice dibuat otomatis dari pembelian paket, add-on, atau produk non-terapi.');
   };
 
   const openInvoiceModal = (invoice: Invoice, nextModal: ModalType) => {
+    const balance = Math.max(invoice.total - invoice.paidAmount - invoice.refundAmount, 0);
     setSelectedInvoiceId(invoice.id);
     setFormError('');
-    setPaymentForm({ method: 'Cash', amount: '', reference: '', notes: '' });
+    setPaymentForm({ method: 'Cash', amount: balance > 0 ? String(balance) : '', reference: '', notes: '' });
     setReasonForm({ notes: '', reason: '', amount: '' });
     setModal(nextModal);
   };
@@ -227,7 +305,7 @@ export default function PaymentsPage() {
     setModal(null);
   };
 
-  const submitPayment = () => {
+  const submitPayment = async () => {
     if (!selectedInvoice) return;
 
     const amount = Number(paymentForm.amount);
@@ -236,22 +314,31 @@ export default function PaymentsPage() {
       return;
     }
 
-    setInvoices((current) =>
-      current.map((invoice) => {
-        if (invoice.id !== selectedInvoice.id) return invoice;
+    const balance = Math.max(selectedInvoice.total - selectedInvoice.paidAmount - selectedInvoice.refundAmount, 0);
+    if (balance > 0 && amount > balance) {
+      setFormError('Jumlah pembayaran tidak boleh melebihi sisa tagihan.');
+      return;
+    }
 
-        const paidAmount = invoice.paidAmount + amount;
-        return {
-          ...invoice,
-          paidAmount,
-          status: getPaymentStatus(invoice.total, paidAmount),
-          paymentMethods: Array.from(new Set([...invoice.paymentMethods, paymentForm.method])),
-          references: paymentForm.reference ? [...invoice.references, paymentForm.reference] : invoice.references,
-        };
-      }),
-    );
-    setToast('Pembayaran berhasil diproses');
-    setModal(null);
+    setSubmittingPayment(true);
+    setFormError('');
+
+    try {
+      await invoiceApi.recordPayment(selectedInvoice.id, {
+        amount,
+        paymentMethod: PAYMENT_METHOD_VALUE[paymentForm.method],
+        paymentReference: paymentForm.reference.trim() || undefined,
+        notes: paymentForm.notes.trim() || undefined,
+      });
+
+      await fetchInvoices();
+      setToast('Pembayaran berhasil diproses');
+      setModal(null);
+    } catch (error) {
+      setFormError(getApiErrorMessage(error));
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
   const updateInvoiceStatus = (status: string, message: string) => {
@@ -405,7 +492,19 @@ export default function PaymentsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInvoices.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-8 text-center text-neutral-500">
+                      Memuat invoice...
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={7} className="px-5 py-8 text-center text-red-600 dark:text-red-400">
+                      {loadError}
+                    </td>
+                  </tr>
+                ) : filteredInvoices.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-5 py-8 text-center text-neutral-500">
                       Tidak ada data invoice.
@@ -414,36 +513,25 @@ export default function PaymentsPage() {
                 ) : (
                   filteredInvoices.map((invoice) => (
                     <tr key={invoice.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                      <td className="px-5 py-4 font-semibold">{invoice.id}</td>
+                      <td className="px-5 py-4 font-semibold">{invoice.invoiceNumber || invoice.id}</td>
                       <td className="px-5 py-4">{invoice.memberName}</td>
                       <td className="px-5 py-4">{invoice.status}</td>
                       <td className="px-5 py-4">{invoice.paymentMethods.join(', ') || '-'}</td>
                       <td className="px-5 py-4 text-right font-semibold">{formatCurrency(invoice.total)}</td>
-                      <td className="px-5 py-4 text-right">{remainingAmount(invoice)}</td>
+                      <td className="px-5 py-4 text-right">{formatCurrency(remainingAmount(invoice))}</td>
                       <td className="px-5 py-4">
                         <div className="flex flex-wrap gap-2">
                           <button type="button" onClick={() => openInvoiceModal(invoice, 'detail')} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 dark:border-neutral-700">
                             Detail
                           </button>
-                          <button type="button" onClick={() => openInvoiceModal(invoice, 'payment')} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 dark:border-neutral-700">
+                          <button
+                            type="button"
+                            onClick={() => openInvoiceModal(invoice, 'payment')}
+                            disabled={remainingAmount(invoice) <= 0 || invoice.status === 'Dibatalkan'}
+                            className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
+                          >
                             Bayar
                           </button>
-                          {canVerify && (
-                            <>
-                              <button type="button" onClick={() => openInvoiceModal(invoice, 'verify')} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 dark:border-neutral-700">
-                                Verifikasi
-                              </button>
-                              <button type="button" onClick={() => openInvoiceModal(invoice, 'approve')} className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-500/10">
-                                Approve
-                              </button>
-                              <button type="button" onClick={() => openInvoiceModal(invoice, 'reject')} className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 dark:border-red-500/40 dark:text-red-300 dark:hover:bg-red-500/10">
-                                Reject
-                              </button>
-                              <button type="button" onClick={() => openInvoiceModal(invoice, 'refund')} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 dark:border-neutral-700">
-                                Refund
-                              </button>
-                            </>
-                          )}
                         </div>
                       </td>
                     </tr>
@@ -586,18 +674,18 @@ export default function PaymentsPage() {
           <div className="grid gap-4">
             <div className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
               <p className="text-sm text-neutral-500">Invoice</p>
-              <p className="font-bold">{selectedInvoice.id}</p>
+              <p className="font-bold">{selectedInvoice.invoiceNumber || selectedInvoice.id}</p>
               <p className="mt-2 font-semibold">{selectedInvoice.memberName}</p>
               <p className="mt-2">Status: {selectedInvoice.status}</p>
-              <p>Total {selectedInvoice.total}</p>
-              <p>Sisa {remainingAmount(selectedInvoice)}</p>
+              <p>Total {formatCurrency(selectedInvoice.total)}</p>
+              <p>Sisa {formatCurrency(remainingAmount(selectedInvoice))}</p>
             </div>
             <div>
               <h3 className="mb-2 text-sm font-bold">Items</h3>
               {selectedInvoice.items.map((item) => (
                 <div key={`${item.productName}-${item.quantity}`} className="flex justify-between border-b border-neutral-100 py-2 text-sm dark:border-neutral-800">
                   <span>{item.productName} x {item.quantity}</span>
-                  <span>{item.quantity * item.unitPrice - item.discount}</span>
+                  <span>{formatCurrency(item.quantity * item.unitPrice - item.discount)}</span>
                 </div>
               ))}
             </div>
@@ -609,7 +697,7 @@ export default function PaymentsPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => downloadFile(`invoice-${selectedInvoice.id}.pdf`, 'application/pdf', `Invoice ${selectedInvoice.id}`)}
+                onClick={() => downloadFile(`invoice-${selectedInvoice.invoiceNumber || selectedInvoice.id}.pdf`, 'application/pdf', `Invoice ${selectedInvoice.invoiceNumber || selectedInvoice.id}`)}
                 className="inline-flex h-10 items-center gap-2 rounded-lg bg-neutral-900 px-4 text-sm font-semibold text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-950"
               >
                 <Download size={16} />
@@ -670,10 +758,11 @@ export default function PaymentsPage() {
             <button
               type="button"
               onClick={submitPayment}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400"
+              disabled={submittingPayment}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 text-sm font-bold text-black hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               <CreditCard size={16} />
-              Proses Pembayaran
+              {submittingPayment ? 'Memproses...' : 'Proses Pembayaran'}
             </button>
           </div>
         </Modal>

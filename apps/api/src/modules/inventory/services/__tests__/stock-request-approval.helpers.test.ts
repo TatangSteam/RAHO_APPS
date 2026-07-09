@@ -66,6 +66,31 @@ describe('stock request approval helpers', () => {
         })
       );
     });
+
+    it('supports an aggregate total amount without distributing prices to items', () => {
+      const draft = buildStockRequestInvoiceDraft(
+        requestItems,
+        [
+          { masterProductId: 'product-1', quantity: 2, pricePerUnit: 0 },
+          { masterProductId: 'product-2', quantity: 3, pricePerUnit: 0 },
+        ],
+        125000
+      );
+
+      expect(draft.subtotal).toBe(125000);
+      expect(draft.items).toEqual([
+        expect.objectContaining({
+          masterProductId: 'product-1',
+          pricePerUnit: 0,
+          subtotal: 0,
+        }),
+        expect.objectContaining({
+          masterProductId: 'product-2',
+          pricePerUnit: 0,
+          subtotal: 0,
+        }),
+      ]);
+    });
   });
 
   describe('getStockRequestInvoiceApprovalPlan', () => {

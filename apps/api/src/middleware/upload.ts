@@ -7,10 +7,14 @@ const DOCUMENT_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg
 const PAYMENT_PROOF_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/gif', 'image/bmp'] as const; // Accept all common image formats
 const LAB_RESULT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/jpg'] as const; // PDF and images for lab results
 const SHIPMENT_RECEIPT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/jpg'] as const; // PDF and JPG/JPEG for shipment receipts
+const SPREADSHEET_MIME_TYPES = [
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+] as const;
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_PAYMENT_PROOF_SIZE = 10 * 1024 * 1024; // 10 MB
 const MAX_LAB_RESULT_SIZE = 10 * 1024 * 1024; // 10 MB for lab results
 const MAX_SHIPMENT_RECEIPT_SIZE = 10 * 1024 * 1024; // 10 MB for shipment receipts
+const MAX_SPREADSHEET_SIZE = 30 * 1024 * 1024; // 30 MB for historical imports
 
 function fileFilter(
   _req: Request,
@@ -73,6 +77,24 @@ function shipmentReceiptFileFilter(
   cb(null, true);
 }
 
+function spreadsheetFileFilter(
+  _req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback,
+): void {
+  const fileName = file.originalname.toLowerCase();
+  const hasAllowedExtension = fileName.endsWith('.xlsx');
+
+  if (
+    !SPREADSHEET_MIME_TYPES.includes(file.mimetype as (typeof SPREADSHEET_MIME_TYPES)[number]) &&
+    !hasAllowedExtension
+  ) {
+    cb(new AppError(400, 'FILE_INVALID_TYPE', 'Import historis hanya menerima file Excel .xlsx.'));
+    return;
+  }
+  cb(null, true);
+}
+
 /**
  * Multer instance — stores files in memory (as Buffer).
  * Enforces: max 5 MB, only image/jpeg | image/png | image/webp.
@@ -117,6 +139,12 @@ export const uploadShipmentReceipt = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_SHIPMENT_RECEIPT_SIZE },
   fileFilter: shipmentReceiptFileFilter,
+});
+
+export const uploadSpreadsheet = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_SPREADSHEET_SIZE },
+  fileFilter: spreadsheetFileFilter,
 });
 
 /**

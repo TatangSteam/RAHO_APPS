@@ -23,8 +23,15 @@ const ALLSTAFF = [
 const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 const MEMBER_DELETERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 
-// Roles that can edit therapy plans (SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, ADMIN_LAYANAN, DOCTOR)
-const THERAPY_PLAN_EDITORS = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR];
+// Roles that can edit therapy plans and add rows to active therapy plan sets.
+const THERAPY_PLAN_EDITORS = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+  Role.DOCTOR,
+  Role.NURSE,
+];
 
 // GET /api/v1/members - List members
 router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(controller));
@@ -242,7 +249,7 @@ router.post(
 );
 
 // PUT /api/v1/members/:memberId/therapy-plans/:therapyPlanId - Edit one row by creating a new set version
-// Only SUPER_ADMIN, ADMIN_MANAGER, ADMIN_CABANG, DOCTOR can edit therapy plans
+// Only configured therapy plan editors can edit therapy plans
 router.put(
   '/:memberId/therapy-plans/:therapyPlanId',
   authenticate,

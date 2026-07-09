@@ -1,4 +1,4 @@
-export type PaymentMethod = 'Cash' | 'Transfer' | 'QRIS';
+export type PaymentMethod = 'Cash' | 'Transfer' | 'QRIS' | 'Debit' | 'Credit' | 'Other';
 
 export interface InvoiceItem {
   productName: string;
@@ -9,6 +9,7 @@ export interface InvoiceItem {
 
 export interface Invoice {
   id: string;
+  invoiceNumber?: string;
   memberName: string;
   items: InvoiceItem[];
   notes?: string;
@@ -29,8 +30,8 @@ export interface InvoiceItemForm {
 }
 
 export const STORAGE_KEY = 'raho-e2e-payment-invoices';
-export const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'Transfer', 'QRIS'];
-export const STATUS_FILTERS = ['Semua Status', 'Menunggu Pembayaran', 'Partial', 'Lunas', 'Verified', 'Rejected', 'Refund'];
+export const PAYMENT_METHODS: PaymentMethod[] = ['Cash', 'Transfer', 'QRIS', 'Debit', 'Credit', 'Other'];
+export const STATUS_FILTERS = ['Semua Status', 'Draft', 'Menunggu Pembayaran', 'Partial', 'Lunas', 'Utang', 'Jatuh Tempo', 'Dibatalkan'];
 export const METHOD_FILTERS = ['Semua Metode', ...PAYMENT_METHODS];
 export const PRODUCTS = [
   { name: 'IFA 250', price: 10000 },
@@ -91,7 +92,8 @@ export function filterInvoices(
     const matchesSearch =
       !query ||
       invoice.memberName.toLowerCase().includes(query) ||
-      invoice.id.toLowerCase().includes(query);
+      invoice.id.toLowerCase().includes(query) ||
+      (invoice.invoiceNumber || '').toLowerCase().includes(query);
     const matchesStatus =
       filters.statusFilter === 'Semua Status' ||
       invoice.status.toLowerCase().includes(filters.statusFilter.toLowerCase());
@@ -119,5 +121,5 @@ export function hasInvalidInvoiceItem(items: InvoiceItem[]) {
 }
 
 export function getPaymentStatus(total: number, paidAmount: number) {
-  return paidAmount >= total ? 'Lunas Paid' : 'Partial';
+  return paidAmount >= total ? 'Lunas' : 'Partial';
 }

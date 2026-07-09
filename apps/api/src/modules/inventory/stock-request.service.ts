@@ -1,11 +1,12 @@
 // @ts-nocheck
-import { StockRequestStatus, Role, AuditAction } from '@prisma/client';
+import { StockRequestStatus, Role, AuditAction, InvoiceStatus, PaymentVerificationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
 import { StockRequestCreationService, type CreateStockRequestInput } from './services/stock-request-creation.service';
 import { StockRequestApprovalService } from './services/stock-request-approval.service';
 import { StockRequestRetrievalService } from './services/stock-request-retrieval.service';
 import { OverstockService } from './services/overstock.service';
+import { buildStockRequestInvoiceDraft } from './services/stock-request-approval.helpers';
 
 /**
  * Main Stock Request Service - Orchestrates stock request operations
@@ -57,6 +58,12 @@ export class StockRequestService {
         requestedQty: number;
         notes?: string;
       }>;
+      invoiceItems?: Array<{
+        masterProductId: string;
+        quantity: number;
+        pricePerUnit: number;
+      }>;
+      invoiceTotalAmount?: number;
     }
   ) {
     const user = await prisma.user.findUnique({
@@ -76,8 +83,16 @@ export class StockRequestService {
       where: { id: requestId },
       include: {
         branch: true,
-        items: true,
-        invoice: true,
+        items: {
+          include: {
+            masterProduct: true,
+          },
+        },
+        invoice: {
+          include: {
+            items: true,
+          },
+        },
         shipment: true,
       },
     });
@@ -90,11 +105,11 @@ export class StockRequestService {
       };
     }
 
-    if (request.status !== StockRequestStatus.PENDING) {
+    if (![StockRequestStatus.PENDING, StockRequestStatus.WAITING_PAYMENT].includes(request.status)) {
       throw {
         status: 422,
         code: 'REQUEST_NOT_EDITABLE',
-        message: 'Request stok hanya dapat diedit saat status masih PENDING',
+        message: 'Request stok hanya dapat diedit saat status PENDING atau WAITING_PAYMENT',
       };
     }
 
@@ -116,6 +131,25 @@ export class StockRequestService {
     }
 
     const itemUpdates = Array.isArray(data.items) ? data.items : undefined;
+    const invoiceItemUpdates = Array.isArray(data.invoiceItems) ? data.invoiceItems : undefined;
+    const shouldUpdateInvoice = Boolean(invoiceItemUpdates || data.invoiceTotalAmount !== undefined);
+
+    if (itemUpdates && request.status !== StockRequestStatus.PENDING) {
+      throw {
+        status: 422,
+        code: 'REQUEST_ITEMS_NOT_EDITABLE',
+        message: 'Item request hanya dapat diedit saat status masih PENDING',
+      };
+    }
+
+    if (shouldUpdateInvoice && request.status !== StockRequestStatus.WAITING_PAYMENT) {
+      throw {
+        status: 422,
+        code: 'INVOICE_NOT_EDITABLE',
+        message: 'Harga invoice hanya dapat diedit saat request menunggu pembayaran',
+      };
+    }
+
     if (itemUpdates) {
       if (itemUpdates.length === 0) {
         throw {
@@ -157,6 +191,114 @@ export class StockRequestService {
       }
     }
 
+    if (shouldUpdateInvoice) {
+      if (!request.invoice) {
+        throw {
+          status: 422,
+          code: 'INVOICE_NOT_FOUND',
+          message: 'Invoice belum dibuat untuk request stok ini',
+        };
+      }
+
+      if (request.invoice.status !== InvoiceStatus.PENDING_PAYMENT) {
+        throw {
+          status: 422,
+          code: 'INVOICE_STATUS_NOT_EDITABLE',
+          message: 'Harga invoice hanya dapat diedit saat invoice masih menunggu pembayaran',
+        };
+      }
+
+      if (request.shipment) {
+        throw {
+          status: 422,
+          code: 'SHIPMENT_ALREADY_EXISTS',
+          message: 'Harga invoice tidak dapat diedit karena pengiriman sudah dibuat',
+        };
+      }
+
+      if (
+        request.paymentProofUrl ||
+        request.paymentUploadedAt ||
+        request.invoice.paymentProofUrl ||
+        request.invoice.paymentUploadedAt ||
+        Number(request.invoice.paidAmount || 0) > 0
+      ) {
+        throw {
+          status: 422,
+          code: 'PAYMENT_ALREADY_STARTED',
+          message: 'Harga invoice tidak dapat diedit karena bukti atau pembayaran sudah tercatat',
+        };
+      }
+
+      if (data.invoiceTotalAmount !== undefined && (!Number.isFinite(Number(data.invoiceTotalAmount)) || Number(data.invoiceTotalAmount) < 0)) {
+        throw {
+          status: 400,
+          code: 'INVALID_TOTAL_AMOUNT',
+          message: 'Total harga invoice tidak boleh negatif',
+        };
+      }
+
+      if (invoiceItemUpdates && invoiceItemUpdates.length === 0) {
+        throw {
+          status: 400,
+          code: 'INVOICE_ITEMS_REQUIRED',
+          message: 'Minimal satu item invoice harus dikirim untuk update harga',
+        };
+      }
+
+      if (invoiceItemUpdates && invoiceItemUpdates.length !== request.invoice.items.length) {
+        throw {
+          status: 400,
+          code: 'INVOICE_ITEMS_MISMATCH',
+          message: 'Semua item invoice harus dikirim saat update harga',
+        };
+      }
+
+      if (invoiceItemUpdates) {
+        const existingInvoiceProductIds = new Set(request.invoice.items.map(item => item.masterProductId));
+        const seenInvoiceProductIds = new Set<string>();
+
+        for (const item of invoiceItemUpdates) {
+          if (!item.masterProductId || !existingInvoiceProductIds.has(item.masterProductId)) {
+            throw {
+              status: 400,
+              code: 'INVALID_INVOICE_ITEM',
+              message: 'Item invoice yang diedit harus berasal dari invoice request stok ini',
+            };
+          }
+
+          if (seenInvoiceProductIds.has(item.masterProductId)) {
+            throw {
+              status: 400,
+              code: 'DUPLICATE_INVOICE_ITEM',
+              message: 'Item invoice tidak boleh duplikat',
+            };
+          }
+
+          const quantity = Number(item.quantity);
+          const pricePerUnit = Number(item.pricePerUnit);
+
+          if (!Number.isFinite(quantity) || quantity <= 0) {
+            throw {
+              status: 400,
+              code: 'INVALID_INVOICE_QUANTITY',
+              message: 'Quantity invoice harus lebih dari 0',
+            };
+          }
+
+          if (!Number.isFinite(pricePerUnit) || pricePerUnit < 0) {
+            throw {
+              status: 400,
+              code: 'INVALID_INVOICE_PRICE',
+              message: 'Harga invoice tidak boleh negatif',
+            };
+          }
+
+          seenInvoiceProductIds.add(item.masterProductId);
+        }
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.stockRequest.update({
         where: { id: requestId },
@@ -165,76 +307,131 @@ export class StockRequestService {
         },
       });
 
-      if (!itemUpdates) {
-        return;
-      }
-
-      const usages = await tx.overstockUsage.findMany({
-        where: { stockRequestId: requestId },
-        include: { overstock: true },
-      });
-
-      for (const usage of usages) {
-        const restoredQty = Math.min(
-          Number(usage.overstock.originalQty),
-          Number(usage.overstock.quantity) + Number(usage.quantityUsed)
-        );
-        const status = restoredQty <= 0
-          ? 'FULLY_USED'
-          : restoredQty >= Number(usage.overstock.originalQty)
-            ? 'AVAILABLE'
-            : 'PARTIALLY_USED';
-
-        await tx.branchOverstock.update({
-          where: { id: usage.overstockId },
-          data: {
-            quantity: restoredQty,
-            status,
-          },
+      if (itemUpdates) {
+        const usages = await tx.overstockUsage.findMany({
+          where: { stockRequestId: requestId },
+          include: { overstock: true },
         });
-      }
 
-      await tx.overstockUsage.deleteMany({
-        where: { stockRequestId: requestId },
-      });
+        for (const usage of usages) {
+          const restoredQty = Math.min(
+            Number(usage.overstock.originalQty),
+            Number(usage.overstock.quantity) + Number(usage.quantityUsed)
+          );
+          const status = restoredQty <= 0
+            ? 'FULLY_USED'
+            : restoredQty >= Number(usage.overstock.originalQty)
+              ? 'AVAILABLE'
+              : 'PARTIALLY_USED';
 
-      await tx.stockRequestItem.updateMany({
-        where: { stockRequestId: requestId },
-        data: {
-          approvedQty: null,
-          overstockDeducted: 0,
-          finalQty: null,
-        },
-      });
+          await tx.branchOverstock.update({
+            where: { id: usage.overstockId },
+            data: {
+              quantity: restoredQty,
+              status,
+            },
+          });
+        }
 
-      for (const item of itemUpdates) {
-        const existingItem = request.items.find(i => i.masterProductId === item.masterProductId);
-        await tx.stockRequestItem.update({
-          where: { id: existingItem.id },
+        await tx.overstockUsage.deleteMany({
+          where: { stockRequestId: requestId },
+        });
+
+        await tx.stockRequestItem.updateMany({
+          where: { stockRequestId: requestId },
           data: {
-            requestedQty: item.requestedQty,
             approvedQty: null,
             overstockDeducted: 0,
-            finalQty: item.requestedQty,
-            notes: item.notes?.trim() || null,
+            finalQty: null,
           },
         });
+
+        for (const item of itemUpdates) {
+          const existingItem = request.items.find(i => i.masterProductId === item.masterProductId);
+          await tx.stockRequestItem.update({
+            where: { id: existingItem.id },
+            data: {
+              requestedQty: item.requestedQty,
+              approvedQty: null,
+              overstockDeducted: 0,
+              finalQty: item.requestedQty,
+              notes: item.notes?.trim() || null,
+            },
+          });
+        }
+
+        const currentItems = await tx.stockRequestItem.findMany({
+          where: { stockRequestId: requestId },
+        });
+
+        for (const item of currentItems) {
+          await this.overstockService.applyOverstockDeduction(
+            request.branchId,
+            item.masterProductId,
+            Number(item.requestedQty),
+            requestId,
+            item.id,
+            userId,
+            tx
+          );
+        }
       }
 
-      const currentItems = await tx.stockRequestItem.findMany({
-        where: { stockRequestId: requestId },
-      });
-
-      for (const item of currentItems) {
-        await this.overstockService.applyOverstockDeduction(
-          request.branchId,
-          item.masterProductId,
-          Number(item.requestedQty),
-          requestId,
-          item.id,
-          userId,
-          tx
+      if (shouldUpdateInvoice && request.invoice) {
+        const normalizedInvoiceItems = invoiceItemUpdates
+          ? invoiceItemUpdates.map((item) => ({
+              masterProductId: item.masterProductId,
+              quantity: Number(item.quantity),
+              pricePerUnit: Number(item.pricePerUnit),
+            }))
+          : request.invoice.items.map((item) => ({
+              masterProductId: item.masterProductId,
+              quantity: Number(item.quantity),
+              pricePerUnit: 0,
+            }));
+        const invoiceTotalAmount = data.invoiceTotalAmount !== undefined
+          ? Number(data.invoiceTotalAmount)
+          : undefined;
+        const invoiceDraft = buildStockRequestInvoiceDraft(
+          request.items,
+          normalizedInvoiceItems,
+          invoiceTotalAmount
         );
+
+        await tx.stockRequestInvoice.update({
+          where: { id: request.invoice.id },
+          data: {
+            subtotal: invoiceDraft.subtotal,
+            totalAmount: invoiceDraft.subtotal,
+            paidAmount: 0,
+            remainingAmount: invoiceDraft.subtotal,
+            status: InvoiceStatus.PENDING_PAYMENT,
+            paymentVerificationStatus: PaymentVerificationStatus.PENDING,
+            verifiedBy: null,
+            verifiedAt: null,
+            verificationNotes: null,
+            rejectionReason: null,
+            paidAt: null,
+          },
+        });
+
+        for (const item of invoiceDraft.items) {
+          const existingInvoiceItem = request.invoice.items.find(
+            (invoiceItem) => invoiceItem.masterProductId === item.masterProductId
+          );
+
+          await tx.stockRequestInvoiceItem.update({
+            where: { id: existingInvoiceItem.id },
+            data: {
+              sku: item.sku,
+              productName: item.productName,
+              description: item.description,
+              quantity: item.quantity,
+              pricePerUnit: item.pricePerUnit,
+              subtotal: item.subtotal,
+            },
+          });
+        }
       }
     });
 
@@ -245,9 +442,11 @@ export class StockRequestService {
       resource: 'StockRequest',
       resourceId: requestId,
       meta: {
-        action: 'UPDATE_PENDING_REQUEST',
+        action: shouldUpdateInvoice ? 'UPDATE_STOCK_REQUEST_INVOICE' : 'UPDATE_STOCK_REQUEST',
         requestCode: request.requestCode,
         itemCount: itemUpdates?.length,
+        invoiceItemCount: invoiceItemUpdates?.length,
+        invoiceTotalAmount: data.invoiceTotalAmount,
       },
     });
 
@@ -277,6 +476,7 @@ export class StockRequestService {
         quantity: number;
         pricePerUnit: number;
       }>;
+      totalAmount?: number;
       notes?: string;
       paymentMode?: 'NORMAL' | 'DEBT';
     }
@@ -297,6 +497,7 @@ export class StockRequestService {
         quantity: number;
         pricePerUnit: number;
       }>;
+      totalAmount?: number;
       notes?: string;
       paymentMode?: 'NORMAL' | 'DEBT';
     }

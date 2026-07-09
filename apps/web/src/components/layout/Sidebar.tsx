@@ -7,6 +7,7 @@ import {
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -169,6 +170,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/admin/package-pricing',
         icon: <Package size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Import Data',
+        href: '/admin/member-import',
+        icon: <FileSpreadsheet size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
     ],
   },

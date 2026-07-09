@@ -49,8 +49,15 @@ export const ADMIN_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN
 export const MANAGER_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'];
 export const SUPER_ADMIN_ONLY: Role[] = ['SUPER_ADMIN'];
 
-// Roles that can edit therapy plans
-export const THERAPY_PLAN_EDITORS: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR'];
+// Roles that can edit therapy plans and add rows to active therapy plan sets
+export const THERAPY_PLAN_EDITORS: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_CABANG',
+  'ADMIN_LAYANAN',
+  'DOCTOR',
+  'NURSE',
+];
 
 export function isStaff(role: Role): boolean {
   return STAFF_ROLES.includes(role);

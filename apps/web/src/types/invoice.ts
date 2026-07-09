@@ -1,4 +1,4 @@
-export type InvoiceStatus = 'DRAFT' | 'PENDING_PAYMENT' | 'PAID' | 'CANCELLED' | 'OVERDUE';
+export type InvoiceStatus = 'DRAFT' | 'PENDING_PAYMENT' | 'PAID' | 'DEBT' | 'CANCELLED' | 'OVERDUE';
 export type PaymentMethod = 'CASH' | 'TRANSFER' | 'DEBIT' | 'CREDIT' | 'QRIS' | 'OTHER';
 
 export interface InvoiceItem {

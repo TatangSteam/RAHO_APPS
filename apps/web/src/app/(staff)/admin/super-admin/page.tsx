@@ -11,7 +11,7 @@ import {
   UsersRound, DollarSign, Stethoscope, Shield,
   BarChart3, RefreshCw, Plus, Loader2, Clock,
   CheckCircle2, ArrowRight, LogIn, LogOut,
-  UserPlus, Edit, Trash2, Eye
+  UserPlus, Edit, Trash2, Eye, FileSpreadsheet
 } from 'lucide-react';
 import { AdminManagersTab } from '@/components/admin/AdminManagersTab';
 
@@ -365,6 +365,12 @@ export default function SuperAdminPage() {
                         icon={<Building2 className="h-5 w-5" />}
                         title="Manajemen Cabang"
                         description="Kelola semua cabang RAHO"
+                      />
+                      <ActionLink
+                        href="/admin/member-import"
+                        icon={<FileSpreadsheet className="h-5 w-5" />}
+                        title="Import Data Historis"
+                        description="Import member dan sesi terapi dari template Excel"
                       />
                     </div>
                   </div>

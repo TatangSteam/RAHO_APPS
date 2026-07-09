@@ -153,16 +153,13 @@ export default function UploadPaymentModal({
       let invoiceItems = request.invoice.items;
       
       if (!invoiceItems || invoiceItems.length === 0) {
-        const totalQty = request.items.reduce((sum, i) => sum + i.requestedQty, 0);
-        const pricePerUnit = totalQty > 0 ? Math.round(request.invoice.totalAmount / totalQty) : 0;
-        
         invoiceItems = request.items.map(item => ({
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.productName,
           quantity: item.requestedQty,
-          pricePerUnit: pricePerUnit,
-          subtotal: pricePerUnit * item.requestedQty,
+          pricePerUnit: 0,
+          subtotal: 0,
         }));
       }
       

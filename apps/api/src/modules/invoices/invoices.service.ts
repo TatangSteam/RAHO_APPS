@@ -38,6 +38,16 @@ export const invoiceService = {
   },
 
   /**
+   * Get invoices
+   */
+  async getInvoices(
+    user: { userId: string; role: string; branchId: string | null },
+    options: { search?: string; status?: string; page?: number; limit?: number } = {}
+  ) {
+    return this.retrievalService.getInvoices(user, options);
+  },
+
+  /**
    * Get invoice by ID
    */
   async getInvoiceById(invoiceId: string) {

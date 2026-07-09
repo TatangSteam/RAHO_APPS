@@ -20,6 +20,7 @@ const ALLSTAFF: Role[] = [
 ];
 
 const SESSION_CREATORS: Role[] = ALLSTAFF.filter((role) => role !== Role.DOCTOR);
+const MEDICAL_STAFF: Role[] = [Role.DOCTOR, Role.NURSE];
 
 // ============================================================
 // SESSION ROUTES
@@ -102,7 +103,7 @@ router.get(
 router.patch(
   '/encounters/:encounterId/diagnoses',
   authenticate,
-  authorize([Role.DOCTOR]),
+  authorize(MEDICAL_STAFF),
   controller.updateDiagnosis.bind(controller)
 );
 
@@ -134,7 +135,7 @@ router.get(
 router.put(
   '/:sessionId/therapy-plan-set',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.DOCTOR]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, ...MEDICAL_STAFF]),
   validate(bulkEditTherapyPlanSetSchema),
   controller.updateTherapyPlanSet.bind(controller)
 );

@@ -7,6 +7,8 @@ import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
 import { Role, AuditAction } from '@prisma/client';
 
+const DIAGNOSIS_EDITORS = [Role.DOCTOR, Role.NURSE];
+
 export class DiagnosisService {
   /**
    * Create a session-specific diagnosis copy for an encounter.
@@ -124,7 +126,7 @@ export class DiagnosisService {
   /**
    * Update an existing diagnosis linked to an encounter.
    * Only allows updating certain fields, doktorPemeriksa cannot be changed.
-   * Only doctors can update diagnoses.
+   * Only medical staff can update diagnoses.
    */
   async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
     // Check if diagnosis exists for this encounter
@@ -141,16 +143,16 @@ export class DiagnosisService {
       };
     }
 
-    // Verify that the user is a doctor
+    // Verify that the user is medical staff
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
 
-    if (!user || user.role !== Role.DOCTOR) {
+    if (!user || !DIAGNOSIS_EDITORS.includes(user.role)) {
       throw {
         status: 403,
         code: 'FORBIDDEN',
-        message: 'Hanya dokter yang dapat mengedit diagnosa',
+        message: 'Hanya dokter atau perawat yang dapat mengedit diagnosa',
       };
     }
 

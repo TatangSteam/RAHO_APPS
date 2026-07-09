@@ -10,6 +10,7 @@ import { hasAdditionalIfaSubstances } from '@/lib/therapyPlanSubstances';
 import BulkTherapyPlanModal from './BulkTherapyPlanModal';
 import EditTherapyPlanSetModal from '../therapy-plan/EditTherapyPlanSetModal';
 import { useAuthStore } from '@/stores/authStore';
+import { THERAPY_PLAN_EDITORS, hasRole } from '@/types/auth';
 
 interface MemberTherapyPlansTabProps {
   memberId: string;
@@ -303,6 +304,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   }, [therapyPlans, setFamilies]);
 
   const summary = useMemo(() => getSetSummary(therapyPlans), [therapyPlans]);
+  const canEditTherapyPlans = Boolean(user && hasRole(user.role, THERAPY_PLAN_EDITORS));
   const hasActiveFilters = Boolean(
     filters.search.trim() ||
     filters.status !== 'all' ||
@@ -764,10 +766,10 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                         )}
                       </div>
                     </div>
-                    {/* Show Edit Set button for:
+                    {/* Show Edit Set button for therapy plan editors:
                         - SUPER_ADMIN: always (can edit any active set, even if used or has history)
                         - Other roles: only if no history and (available > 0 or used === 0) */}
-                    {(
+                    {canEditTherapyPlans && (
                       user?.role === 'SUPER_ADMIN' ||
                       (setStats.history === 0 && (setStats.available > 0 || setStats.used === 0))
                     ) && (

@@ -69,7 +69,7 @@ export class StockRequestController {
   async createPartnershipInvoice(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
-      const { items, notes, paymentMode } = req.body;
+      const { items, notes, paymentMode, totalAmount } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -97,8 +97,13 @@ export class StockRequestController {
         return sendError(res, 400, 'INVALID_PAYMENT_MODE', 'Mode pembayaran harus NORMAL atau DEBT');
       }
 
+      if (totalAmount !== undefined && (!Number.isFinite(Number(totalAmount)) || Number(totalAmount) < 0)) {
+        return sendError(res, 400, 'INVALID_TOTAL_AMOUNT', 'Total harga invoice tidak boleh negatif');
+      }
+
       const result = await stockRequestService.createPartnershipInvoice(requestId, userId, {
         items,
+        totalAmount: totalAmount !== undefined ? Number(totalAmount) : undefined,
         notes,
         paymentMode,
       });
@@ -380,7 +385,7 @@ export class StockRequestController {
   async updateRequest(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
-      const { notes, items } = req.body;
+      const { notes, items, invoiceItems, invoiceTotalAmount } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -391,9 +396,22 @@ export class StockRequestController {
         return sendError(res, 400, 'INVALID_ITEMS', 'Items harus berupa array');
       }
 
+      if (invoiceItems !== undefined && !Array.isArray(invoiceItems)) {
+        return sendError(res, 400, 'INVALID_INVOICE_ITEMS', 'Item invoice harus berupa array');
+      }
+
+      if (
+        invoiceTotalAmount !== undefined &&
+        (!Number.isFinite(Number(invoiceTotalAmount)) || Number(invoiceTotalAmount) < 0)
+      ) {
+        return sendError(res, 400, 'INVALID_TOTAL_AMOUNT', 'Total harga invoice tidak boleh negatif');
+      }
+
       const result = await stockRequestService.updateRequest(requestId, userId, {
         notes,
         items,
+        invoiceItems,
+        invoiceTotalAmount: invoiceTotalAmount !== undefined ? Number(invoiceTotalAmount) : undefined,
       });
 
       return sendSuccess(res, result);

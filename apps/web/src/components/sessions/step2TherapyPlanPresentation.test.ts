@@ -47,7 +47,7 @@ describe('step2TherapyPlanPresentation', () => {
     expect(canEditSessionTherapyPlan('SUPER_ADMIN')).toBe(true);
     expect(canEditSessionTherapyPlan('ADMIN_MANAGER')).toBe(true);
     expect(canEditSessionTherapyPlan('DOCTOR')).toBe(true);
-    expect(canEditSessionTherapyPlan('NURSE')).toBe(false);
+    expect(canEditSessionTherapyPlan('NURSE')).toBe(true);
     expect(canEditSessionTherapyPlan(null)).toBe(false);
   });
 

@@ -16,6 +16,7 @@ interface InvoiceItemInput {
 
 interface CreateInvoiceInput {
   items: InvoiceItemInput[];
+  totalAmount?: number;
   notes?: string;
   paymentMode?: 'NORMAL' | 'DEBT';
 }
@@ -259,9 +260,20 @@ export class StockRequestApprovalService {
       };
     }
 
+    const totalAmount = invoiceData.totalAmount;
+
+    if (totalAmount !== undefined && (!Number.isFinite(Number(totalAmount)) || Number(totalAmount) < 0)) {
+      throw {
+        status: 400,
+        code: 'INVALID_TOTAL_AMOUNT',
+        message: 'Total harga invoice tidak boleh negatif',
+      };
+    }
+
     const { items: invoiceItems, subtotal } = buildStockRequestInvoiceDraft(
       request.items,
-      invoiceData.items
+      invoiceData.items,
+      totalAmount !== undefined ? Number(totalAmount) : undefined
     );
     const approvalPlan = getStockRequestInvoiceApprovalPlan(subtotal, invoiceData.paymentMode);
     const { isFreeRequest, isDebtRequest } = approvalPlan;

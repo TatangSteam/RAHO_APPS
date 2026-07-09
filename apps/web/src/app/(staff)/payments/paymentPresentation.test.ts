@@ -26,7 +26,7 @@ const invoices: Invoice[] = [
     id: 'INV-002',
     memberName: 'Budi Santoso',
     items: [{ productName: 'Vitamin C', quantity: 2, unitPrice: 5000, discount: 1000 }],
-    status: 'Lunas Paid',
+    status: 'Lunas',
     total: 9000,
     paidAmount: 9000,
     paymentMethods: ['Transfer'],
@@ -77,6 +77,6 @@ describe('paymentPresentation', () => {
 
   it('returns partial or paid payment status', () => {
     expect(getPaymentStatus(300000, 150000)).toBe('Partial');
-    expect(getPaymentStatus(300000, 300000)).toBe('Lunas Paid');
+    expect(getPaymentStatus(300000, 300000)).toBe('Lunas');
   });
 });

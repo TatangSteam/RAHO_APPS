@@ -172,7 +172,14 @@ export default function MemberDetailPage() {
   const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canEditDiagnosis = ['DOCTOR', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
+  const canEditDiagnosis = [
+    'DOCTOR',
+    'NURSE',
+    'ADMIN_LAYANAN',
+    'ADMIN_CABANG',
+    'ADMIN_MANAGER',
+    'SUPER_ADMIN',
+  ].includes(user?.role || '');
   
   // Check if member has any documents (PSP or Profile Photo)
   const hasDocuments = member ? (

@@ -20,13 +20,22 @@ export function getStockRequestRowActions(request: StockRequest, role?: Role) {
     request.invoice?.remainingAmount ??
     Math.max(0, (request.invoice?.totalAmount ?? 0) - (request.invoice?.paidAmount ?? 0));
   const isFreeInvoice = Boolean(request.invoice) && (request.invoice?.totalAmount ?? 0) <= 0;
+  const hasActivePaymentProof = Boolean(request.paymentProofUrl || request.paymentUploadedAt || request.invoice?.paymentProofUrl);
+  const hasShipment = Boolean(request.shipment);
+  const canEditPendingRequest = isManager && request.status === 'PENDING';
+  const canEditWaitingInvoice =
+    isManager &&
+    request.status === 'WAITING_PAYMENT' &&
+    Boolean(request.invoice) &&
+    !hasActivePaymentProof &&
+    !hasShipment;
 
   return {
     isDebtInvoice,
     canReview:
       (request.status === 'PENDING' && isManager) ||
       (request.status === 'PAYMENT_UPLOADED' && isManager),
-    canEditRequest: isManager && request.status === 'PENDING',
+    canEditRequest: canEditPendingRequest || canEditWaitingInvoice,
     canUploadPayment:
       isManager &&
       !isFreeInvoice &&

@@ -21,7 +21,8 @@ interface ReviewModalProps {
     requestId: string,
     items: InvoiceItemInput[],
     notes?: string,
-    paymentMode?: 'NORMAL' | 'DEBT'
+    paymentMode?: 'NORMAL' | 'DEBT',
+    totalAmount?: number
   ) => Promise<void>;
   onMarkPaymentAsDebt: (requestId: string, notes?: string) => Promise<void>;
   onConfirmPayment: (requestId: string, verificationNotes?: string) => Promise<void>;
@@ -182,23 +183,19 @@ export default function ReviewModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, fetchPaymentProof, paymentHistoryKey]);
 
-  // Build invoice items from total amount (distribute evenly)
+  // Build invoice items as stock lines only. The payment amount lives on the invoice total.
   const buildInvoiceItems = (): InvoiceItemInput[] => {
-    const total = parseFloat(totalInvoiceAmount) || 0;
-    
-    const totalQty = request.items.reduce((sum, item) => sum + item.requestedQty, 0);
-    const pricePerUnit = totalQty > 0 ? Math.round(total / totalQty) : 0;
-    
     return request.items.map(item => ({
       masterProductId: item.masterProductId,
       quantity: item.requestedQty,
-      pricePerUnit: pricePerUnit,
+      pricePerUnit: 0,
     }));
   };
 
   const handleApprove = async () => {
     const invoiceItems = buildInvoiceItems();
-    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes);
+    const total = parseFloat(totalInvoiceAmount) || 0;
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, undefined, total);
   };
 
   const handleApproveDebt = async () => {
@@ -209,7 +206,7 @@ export default function ReviewModal({
     }
 
     const invoiceItems = buildInvoiceItems();
-    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, 'DEBT');
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, 'DEBT', total);
   };
 
   const handleMarkDebt = async () => {
@@ -265,16 +262,13 @@ export default function ReviewModal({
       let invoiceItems = request.invoice.items;
       
       if (!invoiceItems || invoiceItems.length === 0) {
-        const totalQty = request.items.reduce((sum, i) => sum + i.requestedQty, 0);
-        const pricePerUnit = totalQty > 0 ? Math.round(request.invoice.totalAmount / totalQty) : 0;
-        
         invoiceItems = request.items.map(item => ({
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.productName,
           quantity: item.requestedQty,
-          pricePerUnit: pricePerUnit,
-          subtotal: pricePerUnit * item.requestedQty,
+          pricePerUnit: 0,
+          subtotal: 0,
         }));
       }
       
