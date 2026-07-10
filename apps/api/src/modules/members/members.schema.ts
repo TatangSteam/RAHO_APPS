@@ -112,6 +112,7 @@ export const editTherapyPlanSchema = z.object({
 // Bulk edit therapy plan set schema (for editing multiple plans in a set at once)
 export const bulkEditTherapyPlanSetSchema = z.object({
   newSetName: z.string().trim().max(120).optional(), // Optional custom set name (only for authorized users)
+  sessionPlanNumber: z.number().int().min(1, 'Nomor terapi sesi harus positif').optional(),
   plans: z.array(
     z.object({
       planNumber: z.number().int().min(1, 'Plan number harus positif'),
@@ -132,8 +133,7 @@ export const bulkEditTherapyPlanSetSchema = z.object({
       ifaSubstances: z.array(ifaSubstanceSchema).nullable().optional(),
       ifaSubstanceTotalMl: z.number().min(0).nullable().optional(),
     })
-  ).min(1, 'Minimal 1 therapy plan harus diedit')
-    .max(50, 'Maksimal 50 therapy plans dapat diedit sekaligus'),
+  ).max(50, 'Maksimal 50 therapy plans dapat diedit sekaligus').default([]),
 });
 
 // ============================================================

@@ -68,6 +68,8 @@ export default function EditTherapyPlanSetModal({
   const [mounted, setMounted] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [addRowCount, setAddRowCount] = useState('1');
+  const [sessionPlanNumber, setSessionPlanNumber] = useState<number | null>(null);
+  const [initialSessionPlanNumber, setInitialSessionPlanNumber] = useState<number | null>(null);
 
   // Check if user has permission to edit set name and add plans
   const canEditSetNameAndAddPlans = user
@@ -199,6 +201,13 @@ export default function EditTherapyPlanSetModal({
       }
       // Create a deep copy for initialRows to avoid reference issues
       setInitialRows(initialRowsData.map(row => ({ ...row })));
+
+      const currentSessionPlan = editableSessionId
+        ? therapyPlans.find((plan) => plan.usedInSession?.id === editableSessionId)
+        : null;
+      const currentPlanNumber = currentSessionPlan?.planNumber || null;
+      setSessionPlanNumber(currentPlanNumber);
+      setInitialSessionPlanNumber(currentPlanNumber);
       
       // Initialize set name
       const currentSetName = therapyPlans[0]?.setName || '';
@@ -211,6 +220,14 @@ export default function EditTherapyPlanSetModal({
   const hasChanges = () => {
     // Check if set name changed (only if user has permission)
     if (canEditSetNameAndAddPlans && editableSetName.trim() !== initialSetName.trim()) {
+      return true;
+    }
+
+    if (
+      editableSessionId &&
+      sessionPlanNumber !== null &&
+      sessionPlanNumber !== initialSessionPlanNumber
+    ) {
       return true;
     }
     
@@ -433,8 +450,13 @@ export default function EditTherapyPlanSetModal({
       // Check if set name changed (only include if user has permission)
       const setNameChanged = canEditSetNameAndAddPlans && 
         editableSetName.trim() !== initialSetName.trim();
+      const sessionPlanNumberChanged = Boolean(
+        editableSessionId &&
+        sessionPlanNumber !== null &&
+        sessionPlanNumber !== initialSessionPlanNumber
+      );
 
-      if (editedUnlockedPlans.length === 0 && !setNameChanged) {
+      if (editedUnlockedPlans.length === 0 && !setNameChanged && !sessionPlanNumberChanged) {
         showToast.error('Tidak ada perubahan pada plan yang tidak terkunci atau nama set');
         setIsSubmitting(false);
         return;
@@ -465,6 +487,10 @@ export default function EditTherapyPlanSetModal({
         payload.newSetName = editableSetName.trim() || undefined;
       }
 
+      if (sessionPlanNumberChanged && sessionPlanNumber !== null) {
+        payload.sessionPlanNumber = sessionPlanNumber;
+      }
+
       const response = editableSessionId
         ? await therapyPlanApi.bulkEditSessionTherapyPlanSet(editableSessionId, payload)
         : await therapyPlanApi.bulkEditTherapyPlanSet(memberId, setId, payload);
@@ -472,9 +498,13 @@ export default function EditTherapyPlanSetModal({
       // Clear draft after successful submission
       clearDraft();
       
-      showToast.success(
-        `Berhasil mengedit set therapy plan. ${response.data.editedPlans} dari ${response.data.totalPlans} plan diedit. Versi baru: ${response.data.version}`
-      );
+      if (sessionPlanNumberChanged && editedUnlockedPlans.length === 0 && !setNameChanged) {
+        showToast.success(response.message || `Sesi dipindahkan ke Terapi #${sessionPlanNumber}`);
+      } else {
+        showToast.success(
+          `Berhasil mengedit set therapy plan. ${response.data.editedPlans} dari ${response.data.totalPlans} plan diedit. Versi baru: ${response.data.version}`
+        );
+      }
       
       onSuccess();
       onClose();
@@ -551,6 +581,45 @@ export default function EditTherapyPlanSetModal({
             >
               Buang Draft
             </button>
+          </div>
+        )}
+
+        {/* Session therapy number control */}
+        {editableSessionId && (
+          <div className="mx-6 mt-4 mb-3 p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <label className="block text-xs font-semibold text-blue-900 dark:text-blue-100 mb-2">
+              Terapi Sesi Ini
+            </label>
+            <select
+              value={sessionPlanNumber ?? ''}
+              onChange={(e) => setSessionPlanNumber(e.target.value ? Number(e.target.value) : null)}
+              disabled={isSubmitting}
+              className="w-full sm:max-w-md px-3 py-2 text-sm border border-blue-300 dark:border-blue-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="" disabled>Pilih terapi</option>
+              {rows.map((row) => {
+                const sourcePlan = therapyPlans.find((plan) => plan.planNumber === row.planNumber);
+                const usedByOtherSession = Boolean(
+                  sourcePlan?.usedInSession?.id &&
+                  sourcePlan.usedInSession.id !== editableSessionId
+                );
+                const suffix = usedByOtherSession
+                  ? ` - terkunci (${sourcePlan?.usedInSession?.sessionCode || 'sesi lain'})`
+                  : row.keterangan
+                    ? ` - ${row.keterangan}`
+                    : '';
+
+                return (
+                  <option
+                    key={row.planNumber}
+                    value={row.planNumber}
+                    disabled={usedByOtherSession}
+                  >
+                    Terapi #{row.planNumber}{suffix}
+                  </option>
+                );
+              })}
+            </select>
           </div>
         )}
 
@@ -645,7 +714,7 @@ export default function EditTherapyPlanSetModal({
               </thead>
               <tbody className="bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-700">
                 {rows.map((row, index) => (
-                  <tr key={row.planNumber} className={`${row.isLocked ? 'bg-neutral-100 dark:bg-neutral-800/30 opacity-60' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'}`}>
+                  <tr key={row.planNumber} className={`${row.planNumber === sessionPlanNumber ? 'bg-blue-50 dark:bg-blue-900/20' : row.isLocked ? 'bg-neutral-100 dark:bg-neutral-800/30 opacity-60' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'}`}>
                     <td className="px-3 py-2 text-sm text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-700 font-medium">
                       <div className="flex items-center gap-1">
                         {row.isLocked && (

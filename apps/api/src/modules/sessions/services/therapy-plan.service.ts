@@ -5,6 +5,7 @@ import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import type { CreateTherapyPlanInput } from '../sessions.schema';
 import { AuditAction } from '@prisma/client';
 import { MemberTherapyPlanSetEditService } from '../../members/services/member-therapy-plan-set-edit.service';
+import { syncSessionInfusionToTherapyPlan } from './infusion-material-sync.service';
 
 export class TherapyPlanService {
   private therapyPlanSetEditService = new MemberTherapyPlanSetEditService();
@@ -196,7 +197,8 @@ export class TherapyPlanService {
     sessionId: string,
     data: {
       newSetName?: string;
-      plans: Array<Record<string, unknown>>;
+      sessionPlanNumber?: number;
+      plans?: Array<Record<string, unknown>>;
     },
     userId: string
   ) {
@@ -229,6 +231,20 @@ export class TherapyPlanService {
           therapyPlanSetId: true,
           supersededById: true,
           treatmentSessionId: true,
+          ifa250: true,
+          ifa500: true,
+          hho: true,
+          h2: true,
+          no: true,
+          gaso: true,
+          o2: true,
+          o3: true,
+          edta: true,
+          mb: true,
+          h2s: true,
+          kcl: true,
+          jmlNb: true,
+          ifaSubstances: true,
         },
       });
 
@@ -258,6 +274,8 @@ export class TherapyPlanService {
       };
     }
 
+    let movedSessionPlanNumber: number | null = null;
+
     if (editablePlan.id !== therapyPlan.id) {
       await prisma.$transaction(async (tx) => {
         await tx.therapyPlan.update({
@@ -275,10 +293,132 @@ export class TherapyPlanService {
       });
     }
 
+    if (
+      data.sessionPlanNumber &&
+      data.sessionPlanNumber !== editablePlan.planNumber
+    ) {
+      const targetPlan = await prisma.therapyPlan.findFirst({
+        where: {
+          therapyPlanSetId: editablePlan.therapyPlanSetId,
+          planNumber: data.sessionPlanNumber,
+        },
+        select: {
+          id: true,
+          planNumber: true,
+          therapyPlanSetId: true,
+          supersededById: true,
+          treatmentSessionId: true,
+          ifa250: true,
+          ifa500: true,
+          hho: true,
+          h2: true,
+          no: true,
+          gaso: true,
+          o2: true,
+          o3: true,
+          edta: true,
+          mb: true,
+          h2s: true,
+          kcl: true,
+          jmlNb: true,
+          ifaSubstances: true,
+        },
+      });
+
+      if (!targetPlan) {
+        throw {
+          status: 404,
+          code: 'SESSION_TARGET_THERAPY_PLAN_NOT_FOUND',
+          message: `Terapi #${data.sessionPlanNumber} tidak ditemukan pada set therapy plan sesi ini`,
+        };
+      }
+
+      if (
+        targetPlan.treatmentSessionId &&
+        targetPlan.treatmentSessionId !== sessionId
+      ) {
+        throw {
+          status: 409,
+          code: 'SESSION_TARGET_THERAPY_PLAN_USED',
+          message: `Terapi #${data.sessionPlanNumber} sudah digunakan oleh sesi lain`,
+        };
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.therapyPlan.update({
+          where: { id: editablePlan.id },
+          data: { treatmentSessionId: null },
+        });
+        await tx.therapyPlan.update({
+          where: { id: targetPlan.id },
+          data: { treatmentSessionId: sessionId },
+        });
+        await tx.infusionExecution.updateMany({
+          where: { treatmentSessionId: sessionId },
+          data: { therapyPlanId: targetPlan.id },
+        });
+        await syncSessionInfusionToTherapyPlan(tx, {
+          sessionId,
+          therapyPlan: targetPlan,
+          userId,
+        });
+      });
+
+      editablePlan = targetPlan;
+      movedSessionPlanNumber = targetPlan.planNumber;
+    }
+
+    const plans = data.plans || [];
+
+    if (plans.length === 0) {
+      if (!movedSessionPlanNumber) {
+        throw {
+          status: 400,
+          code: 'NO_THERAPY_PLAN_CHANGES',
+          message: 'Tidak ada perubahan therapy plan sesi',
+        };
+      }
+
+      const [set, totalPlans] = await Promise.all([
+        prisma.therapyPlanSet.findUnique({
+          where: { id: editablePlan.therapyPlanSetId },
+          select: { id: true, version: true },
+        }),
+        prisma.therapyPlan.count({
+          where: { therapyPlanSetId: editablePlan.therapyPlanSetId },
+        }),
+      ]);
+
+      await logAudit({
+        userId,
+        action: AuditAction.UPDATE,
+        resource: 'TherapyPlan',
+        resourceId: editablePlan.id,
+        meta: {
+          sessionId,
+          therapyPlanSetId: editablePlan.therapyPlanSetId,
+          sessionPlanNumber: movedSessionPlanNumber,
+        },
+      });
+
+      return {
+        success: true,
+        message: `Sesi berhasil dipindahkan ke Terapi #${movedSessionPlanNumber}`,
+        data: {
+          setId: editablePlan.therapyPlanSetId,
+          originalSetId: editablePlan.therapyPlanSetId,
+          version: set?.version || 1,
+          totalPlans,
+          editedPlans: 0,
+          sessionTherapyPlanId: editablePlan.id,
+        },
+      };
+    }
+
     const result = await this.therapyPlanSetEditService.bulkEditTherapyPlanSet(
       editablePlan.therapyPlanSetId,
-      data as any,
-      { editableTreatmentSessionId: sessionId }
+      { ...data, plans } as any,
+      { editableTreatmentSessionId: sessionId, updatedBy: userId }
     );
 
     await logAudit({

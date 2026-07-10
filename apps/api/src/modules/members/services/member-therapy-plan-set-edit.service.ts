@@ -5,6 +5,7 @@
 
 import { prisma } from '../../../lib/prisma';
 import { normalizeIfaSubstances, type TherapyPlanSubstance } from '../../../utils/therapyPlanSubstances';
+import { syncSessionInfusionToTherapyPlan } from '../../sessions/services/infusion-material-sync.service';
 
 interface EditPlanInput {
   planNumber: number;
@@ -33,6 +34,7 @@ interface BulkEditSetInput {
 
 interface BulkEditSetOptions {
   editableTreatmentSessionId?: string;
+  updatedBy?: string;
 }
 
 function padSequence(value: number, size = 2) {
@@ -441,6 +443,13 @@ export class MemberTherapyPlanSetEditService {
 
         if (pair.oldPlan.treatmentSessionId === options.editableTreatmentSessionId) {
           sessionTherapyPlanId = pair.copiedPlan.id;
+          if (options.updatedBy) {
+            await syncSessionInfusionToTherapyPlan(tx, {
+              sessionId: pair.oldPlan.treatmentSessionId,
+              therapyPlan: pair.copiedPlan,
+              userId: options.updatedBy,
+            });
+          }
         }
       }
 
