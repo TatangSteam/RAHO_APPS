@@ -81,6 +81,13 @@ describe('staff performance service', () => {
 
     expect(result.total).toBe(3);
     expect(result.staff.map((item) => item.id)).toEqual(['zulu', 'middle']);
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          isCompleted: true,
+        }),
+      }),
+    );
   });
 
   it('limits Admin Manager staff history to the selected managed branch', async () => {
@@ -109,6 +116,42 @@ describe('staff performance service', () => {
       expect.objectContaining({
         where: expect.objectContaining({
           branchId: 'branch-1',
+        }),
+      }),
+    );
+  });
+
+  it('includes unfinished sessions in staff history queries', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('doctor-1', 'Doctor One'),
+      branch: {
+        id: 'branch-1',
+        branchCode: 'BR1',
+        name: 'Branch 1',
+      },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(0 as any);
+
+    await getStaffSessionHistoryService(
+      'doctor-1',
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          isCompleted: true,
+        }),
+      }),
+    );
+    expect(mockPrisma.treatmentSession.count).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.not.objectContaining({
+          isCompleted: true,
         }),
       }),
     );

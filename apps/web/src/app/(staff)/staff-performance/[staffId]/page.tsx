@@ -316,10 +316,15 @@ export default function StaffPerformanceDetailPage() {
                       <span className="text-sm text-neutral-500 dark:text-neutral-400">
                         Infus ke-{session.infusKe}
                       </span>
-                      {session.isCompleted && (
+                      {session.isCompleted ? (
                         <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           <CheckCircle2 size={12} />
                           Selesai
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                          <Clock size={12} />
+                          Belum Selesai
                         </span>
                       )}
                     </div>

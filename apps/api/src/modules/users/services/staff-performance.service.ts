@@ -235,7 +235,6 @@ export async function getStaffPerformanceSummaryService(
 
   const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(staffIds, {
     ...sessionBranchFilter,
-    isCompleted: true,
     ...dateFilter,
   });
 
@@ -415,7 +414,6 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
-        isCompleted: true,
       },
       select: {
         id: true,
@@ -478,7 +476,6 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
-        isCompleted: true,
       },
     }),
   ]);
@@ -529,7 +526,6 @@ export async function getStaffSessionHistoryService(
           { sessionDoctors: { some: { doctorId: staffId } } },
         ],
         ...sessionBranchFilter,
-        isCompleted: true,
         ...dateFilter,
       },
     }),
@@ -540,7 +536,6 @@ export async function getStaffSessionHistoryService(
           { sessionNurses: { some: { nurseId: staffId } } },
         ],
         ...sessionBranchFilter,
-        isCompleted: true,
         ...dateFilter,
       },
     }),
@@ -548,7 +543,6 @@ export async function getStaffSessionHistoryService(
       where: {
         adminLayananId: staffId,
         ...sessionBranchFilter,
-        isCompleted: true,
         ...dateFilter,
       },
     }),
