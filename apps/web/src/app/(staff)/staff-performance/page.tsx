@@ -110,15 +110,8 @@ export default function StaffPerformancePage() {
       // Admin Manager uses dedicated managed branches API
       if (isAdminManager) {
         console.log('📞 Calling doctorBranchApi.getManagedBranches...');
-        const response = await doctorBranchApi.getManagedBranches(false);
-        console.log('✅ API response:', response);
-        
-        // Backend returns: { success: true, data: [...branches...] }
-        // Axios returns it as: response.data = { success: true, data: [...branches...] }
-        // So we need: response.data.data to get the array
-        const wrappedResponse = response as any;
-        const branchesArray = wrappedResponse.data || [];
-        console.log('� Extracted branches array:', branchesArray);
+        const branchesArray = await doctorBranchApi.getManagedBranches(false);
+        console.log('✅ Managed branches:', branchesArray);
         
         setBranches(Array.isArray(branchesArray) ? branchesArray.map((b: ManagedBranch) => ({
           id: b.branchId,
@@ -170,7 +163,13 @@ export default function StaffPerformancePage() {
   };
 
   const handleViewDetail = (staffId: string) => {
-    router.push(`/staff-performance/${staffId}`);
+    const params = new URLSearchParams();
+    if (branchFilter) params.set('branchId', branchFilter);
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+
+    const queryString = params.toString();
+    router.push(`/staff-performance/${staffId}${queryString ? `?${queryString}` : ''}`);
   };
 
   // Filter staff by search

@@ -517,11 +517,12 @@ export async function getStaffPerformanceSummary(req: Request, res: Response, ne
 export async function getStaffSessionHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { staffId } = req.params;
-    const { position, startDate, endDate, page, limit } = req.query;
+    const { branchId, position, startDate, endDate, page, limit } = req.query;
     
     const result = await getStaffSessionHistoryService(
       staffId,
       {
+        branchId: branchId as string | undefined,
         position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
@@ -530,6 +531,7 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
       },
       req.user.role as Role,
       req.user.branchId,
+      req.user.userId,
     );
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));

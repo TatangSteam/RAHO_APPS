@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { usersApi, StaffSessionHistoryResponse, StaffSessionHistoryItem } from '@/lib/usersApi';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
@@ -101,24 +101,27 @@ const getPackageLabel = (packageType: string, boosterType: string | null) => {
 export default function StaffPerformanceDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const staffId = params.staffId as string;
+  const branchId = searchParams.get('branchId') || undefined;
   
   const [data, setData] = useState<StaffSessionHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'nurse' | 'adminLayanan'>('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
+  const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
 
   useEffect(() => {
     fetchHistory();
-  }, [staffId, page, positionFilter, startDate, endDate]);
+  }, [staffId, branchId, page, positionFilter, startDate, endDate]);
 
   const fetchHistory = async () => {
     try {
       setLoading(true);
       const result = await usersApi.getStaffSessionHistory(staffId, {
+        branchId,
         position: positionFilter,
         startDate: startDate || undefined,
         endDate: endDate || undefined,

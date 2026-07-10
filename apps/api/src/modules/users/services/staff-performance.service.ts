@@ -17,11 +17,122 @@ interface StaffPerformanceQuery {
 }
 
 interface StaffSessionHistoryQuery {
+  branchId?: string;
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
   startDate?: string;
   endDate?: string;
   page?: number;
   limit?: number;
+}
+
+const STAFF_PERFORMANCE_ROLES: Role[] = [
+  Role.ADMIN_CABANG,
+  Role.ADMIN_LAYANAN,
+  Role.DOCTOR,
+  Role.NURSE,
+];
+
+function parseDateBoundary(value: string, boundary: 'start' | 'end') {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}`);
+  }
+
+  return new Date(value);
+}
+
+function buildDateFilter(startDate?: string, endDate?: string): Prisma.TreatmentSessionWhereInput {
+  if (!startDate && !endDate) return {};
+
+  const treatmentDateFilter: Prisma.DateTimeFilter = {};
+  if (startDate) {
+    treatmentDateFilter.gte = parseDateBoundary(startDate, 'start');
+  }
+  if (endDate) {
+    treatmentDateFilter.lte = parseDateBoundary(endDate, 'end');
+  }
+
+  return { treatmentDate: treatmentDateFilter };
+}
+
+function buildBranchFilter(branchIds?: string[]): Prisma.TreatmentSessionWhereInput {
+  if (!branchIds || branchIds.length === 0) return {};
+  return branchIds.length === 1
+    ? { branchId: branchIds[0] }
+    : { branchId: { in: branchIds } };
+}
+
+function buildStaffBranchWhere(branchIds?: string[]): Prisma.UserWhereInput {
+  if (!branchIds || branchIds.length === 0) return {};
+
+  const branchFilter = branchIds.length === 1
+    ? { branchId: branchIds[0] }
+    : { branchId: { in: branchIds } };
+
+  return {
+    OR: [
+      branchFilter,
+      { staffBranches: { some: branchFilter } },
+    ],
+  };
+}
+
+function incrementCount(map: Map<string, number>, userId: string) {
+  map.set(userId, (map.get(userId) || 0) + 1);
+}
+
+async function getPositionCountMaps(
+  staffIds: string[],
+  sessionWhere: Prisma.TreatmentSessionWhereInput,
+) {
+  const staffIdSet = new Set(staffIds);
+  const doctorMap = new Map<string, number>();
+  const nurseMap = new Map<string, number>();
+  const adminMap = new Map<string, number>();
+
+  if (staffIds.length === 0) {
+    return { doctorMap, nurseMap, adminMap };
+  }
+
+  const sessions = await prisma.treatmentSession.findMany({
+    where: {
+      ...sessionWhere,
+      OR: [
+        { doctorId: { in: staffIds } },
+        { nurseId: { in: staffIds } },
+        { adminLayananId: { in: staffIds } },
+        { sessionDoctors: { some: { doctorId: { in: staffIds } } } },
+        { sessionNurses: { some: { nurseId: { in: staffIds } } } },
+      ],
+    },
+    select: {
+      doctorId: true,
+      nurseId: true,
+      adminLayananId: true,
+      sessionDoctors: { select: { doctorId: true } },
+      sessionNurses: { select: { nurseId: true } },
+    },
+  });
+
+  for (const session of sessions) {
+    const doctorIds = new Set<string>();
+    const nurseIds = new Set<string>();
+
+    if (staffIdSet.has(session.doctorId)) doctorIds.add(session.doctorId);
+    if (staffIdSet.has(session.nurseId)) nurseIds.add(session.nurseId);
+    if (staffIdSet.has(session.adminLayananId)) incrementCount(adminMap, session.adminLayananId);
+
+    session.sessionDoctors.forEach(({ doctorId }) => {
+      if (staffIdSet.has(doctorId)) doctorIds.add(doctorId);
+    });
+    session.sessionNurses.forEach(({ nurseId }) => {
+      if (staffIdSet.has(nurseId)) nurseIds.add(nurseId);
+    });
+
+    doctorIds.forEach((doctorId) => incrementCount(doctorMap, doctorId));
+    nurseIds.forEach((nurseId) => incrementCount(nurseMap, nurseId));
+  }
+
+  return { doctorMap, nurseMap, adminMap };
 }
 
 /**
@@ -48,6 +159,7 @@ export async function getStaffPerformanceSummaryService(
   if (callerRole === Role.ADMIN_CABANG) {
     // ADMIN_CABANG can only see their own branch
     targetBranchId = callerBranchId || undefined;
+    allowedBranchIds = targetBranchId ? [targetBranchId] : undefined;
   } else if (callerRole === Role.ADMIN_MANAGER && callerUserId) {
     // ADMIN_MANAGER can only see branches they manage
     const managerBranches = await prisma.managerBranch.findMany({
@@ -67,10 +179,14 @@ export async function getStaffPerformanceSummaryService(
     }
     
     targetBranchId = branchId;
+    allowedBranchIds = [branchId];
   } else if (callerRole === Role.SUPER_ADMIN && branchId === 'all') {
     // SUPER_ADMIN can see all branches
     isAllBranches = true;
     targetBranchId = undefined;
+    allowedBranchIds = undefined;
+  } else if (targetBranchId) {
+    allowedBranchIds = [targetBranchId];
   }
 
   // For non-Super Admin, branch is required
@@ -78,27 +194,17 @@ export async function getStaffPerformanceSummaryService(
     throw errors.badRequest('BRANCH_REQUIRED', 'Branch ID diperlukan');
   }
 
-  // Build date filter
-  const dateFilter: Prisma.TreatmentSessionWhereInput = {};
-  if (startDate || endDate) {
-    const treatmentDateFilter: Prisma.DateTimeFilter = {};
-    if (startDate) {
-      treatmentDateFilter.gte = new Date(startDate);
-    }
-    if (endDate) {
-      treatmentDateFilter.lte = new Date(endDate);
-    }
-    dateFilter.treatmentDate = treatmentDateFilter;
-  }
+  const dateFilter = buildDateFilter(startDate, endDate);
+  const sessionBranchFilter = buildBranchFilter(allowedBranchIds);
 
   // Build user where clause
   const userWhere: Prisma.UserWhereInput = {
     isActive: true,
-    NOT: { role: { in: [Role.MEMBER, Role.ADMIN_MANAGER, Role.SUPER_ADMIN] } },
-    ...(isAllBranches ? {} : { branchId: targetBranchId }),
+    role: { in: STAFF_PERFORMANCE_ROLES },
+    ...buildStaffBranchWhere(allowedBranchIds),
   };
 
-  // Get all staff (excluding MEMBER, ADMIN_MANAGER, SUPER_ADMIN)
+  // Get all matching staff first so ranking and pagination are based on performance order.
   const staff = await prisma.user.findMany({
     where: userWhere,
     select: {
@@ -122,57 +228,16 @@ export async function getStaffPerformanceSummaryService(
         },
       } : undefined,
     },
-    skip,
-    take: limit,
     orderBy: { profile: { fullName: 'asc' } },
   });
 
   const staffIds = staff.map((s) => s.id);
 
-  // Build session where clause for counting
-  const sessionBranchFilter = isAllBranches ? {} : { branchId: targetBranchId };
-
-  // Count sessions by position for each staff
-  const [doctorCounts, nurseCounts, adminCounts] = await Promise.all([
-    // Sessions as Doctor
-    prisma.treatmentSession.groupBy({
-      by: ['doctorId'],
-      where: {
-        doctorId: { in: staffIds },
-        ...sessionBranchFilter,
-        isCompleted: true,
-        ...dateFilter,
-      },
-      _count: true,
-    }),
-    // Sessions as Nurse
-    prisma.treatmentSession.groupBy({
-      by: ['nurseId'],
-      where: {
-        nurseId: { in: staffIds },
-        ...sessionBranchFilter,
-        isCompleted: true,
-        ...dateFilter,
-      },
-      _count: true,
-    }),
-    // Sessions as Admin Layanan
-    prisma.treatmentSession.groupBy({
-      by: ['adminLayananId'],
-      where: {
-        adminLayananId: { in: staffIds },
-        ...sessionBranchFilter,
-        isCompleted: true,
-        ...dateFilter,
-      },
-      _count: true,
-    }),
-  ]);
-
-  // Create maps for quick lookup
-  const doctorMap = new Map(doctorCounts.map((d) => [d.doctorId, d._count]));
-  const nurseMap = new Map(nurseCounts.map((n) => [n.nurseId, n._count]));
-  const adminMap = new Map(adminCounts.map((a) => [a.adminLayananId, a._count]));
+  const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(staffIds, {
+    ...sessionBranchFilter,
+    isCompleted: true,
+    ...dateFilter,
+  });
 
   // Build result with performance data
   const staffWithPerformance = staff.map((s) => {
@@ -200,13 +265,15 @@ export async function getStaffPerformanceSummaryService(
     };
   });
 
-  // Sort by total performance descending
-  staffWithPerformance.sort((a, b) => b.performance.total - a.performance.total);
-
-  // Get total count for pagination
-  const totalStaff = await prisma.user.count({
-    where: userWhere,
+  // Sort by total performance descending before pagination so ranks are global.
+  staffWithPerformance.sort((a, b) => {
+    const performanceDiff = b.performance.total - a.performance.total;
+    if (performanceDiff !== 0) return performanceDiff;
+    return a.fullName.localeCompare(b.fullName);
   });
+
+  const totalStaff = staffWithPerformance.length;
+  const paginatedStaff = staffWithPerformance.slice(skip, skip + limit);
 
   // Get branch info (null if all branches)
   let branch = null;
@@ -219,7 +286,7 @@ export async function getStaffPerformanceSummaryService(
 
   return {
     branch: isAllBranches ? { id: 'all', branchCode: 'ALL', name: 'Semua Cabang' } : branch,
-    staff: staffWithPerformance,
+    staff: paginatedStaff,
     total: totalStaff,
     page,
     limit,
@@ -240,9 +307,34 @@ export async function getStaffSessionHistoryService(
   query: StaffSessionHistoryQuery,
   callerRole: Role,
   callerBranchId: string | null,
+  callerUserId?: string,
 ) {
-  const { position = 'all', startDate, endDate, page = 1, limit = 20 } = query;
+  const { branchId, position = 'all', startDate, endDate, page = 1, limit = 20 } = query;
   const skip = (page - 1) * limit;
+  let allowedBranchIds: string[] | undefined;
+
+  if (callerRole === Role.ADMIN_CABANG) {
+    allowedBranchIds = callerBranchId ? [callerBranchId] : [];
+    if (branchId && branchId !== callerBranchId) {
+      throw errors.forbidden('Anda tidak memiliki akses ke cabang ini');
+    }
+  } else if (callerRole === Role.ADMIN_MANAGER && callerUserId) {
+    const managerBranches = await prisma.managerBranch.findMany({
+      where: { userId: callerUserId },
+      select: { branchId: true },
+    });
+    allowedBranchIds = managerBranches.map((branch) => branch.branchId);
+
+    if (branchId) {
+      if (!allowedBranchIds.includes(branchId)) {
+        throw errors.forbidden('Anda tidak memiliki akses ke cabang ini');
+      }
+
+      allowedBranchIds = [branchId];
+    }
+  } else if (callerRole === Role.SUPER_ADMIN && branchId && branchId !== 'all') {
+    allowedBranchIds = [branchId];
+  }
 
   // Get staff info
   const staff = await prisma.user.findUnique({
@@ -267,6 +359,11 @@ export async function getStaffSessionHistoryService(
           name: true,
         },
       },
+      staffBranches: {
+        select: {
+          branchId: true,
+        },
+      },
     },
   });
 
@@ -274,30 +371,30 @@ export async function getStaffSessionHistoryService(
     throw errors.notFound('Staff tidak ditemukan');
   }
 
-  // Check access - ADMIN_CABANG can only see staff in their branch
-  if (callerRole === Role.ADMIN_CABANG && staff.branchId !== callerBranchId) {
+  const staffBranchIds = new Set([
+    staff.branchId,
+    ...staff.staffBranches.map((branch) => branch.branchId),
+  ].filter(Boolean) as string[]);
+
+  if (allowedBranchIds && !allowedBranchIds.some((branchId) => staffBranchIds.has(branchId))) {
     throw errors.forbidden('Anda tidak memiliki akses ke staff ini');
   }
 
-  // Build date filter
-  const dateFilter: Prisma.TreatmentSessionWhereInput = {};
-  if (startDate || endDate) {
-    const treatmentDateFilter: Prisma.DateTimeFilter = {};
-    if (startDate) {
-      treatmentDateFilter.gte = new Date(startDate);
-    }
-    if (endDate) {
-      treatmentDateFilter.lte = new Date(endDate);
-    }
-    dateFilter.treatmentDate = treatmentDateFilter;
-  }
+  const dateFilter = buildDateFilter(startDate, endDate);
+  const sessionBranchFilter = buildBranchFilter(allowedBranchIds);
 
   // Build position filter
   const positionFilter: Prisma.TreatmentSessionWhereInput = {};
   if (position === 'doctor') {
-    positionFilter.doctorId = staffId;
+    positionFilter.OR = [
+      { doctorId: staffId },
+      { sessionDoctors: { some: { doctorId: staffId } } },
+    ];
   } else if (position === 'nurse') {
-    positionFilter.nurseId = staffId;
+    positionFilter.OR = [
+      { nurseId: staffId },
+      { sessionNurses: { some: { nurseId: staffId } } },
+    ];
   } else if (position === 'adminLayanan') {
     positionFilter.adminLayananId = staffId;
   } else {
@@ -306,6 +403,8 @@ export async function getStaffSessionHistoryService(
       { doctorId: staffId },
       { nurseId: staffId },
       { adminLayananId: staffId },
+      { sessionDoctors: { some: { doctorId: staffId } } },
+      { sessionNurses: { some: { nurseId: staffId } } },
     ];
   }
 
@@ -314,6 +413,7 @@ export async function getStaffSessionHistoryService(
     prisma.treatmentSession.findMany({
       where: {
         ...positionFilter,
+        ...sessionBranchFilter,
         ...dateFilter,
         isCompleted: true,
       },
@@ -327,6 +427,16 @@ export async function getStaffSessionHistoryService(
         doctorId: true,
         nurseId: true,
         adminLayananId: true,
+        sessionDoctors: {
+          select: {
+            doctorId: true,
+          },
+        },
+        sessionNurses: {
+          select: {
+            nurseId: true,
+          },
+        },
         branch: {
           select: {
             id: true,
@@ -366,6 +476,7 @@ export async function getStaffSessionHistoryService(
     prisma.treatmentSession.count({
       where: {
         ...positionFilter,
+        ...sessionBranchFilter,
         ...dateFilter,
         isCompleted: true,
       },
@@ -375,8 +486,18 @@ export async function getStaffSessionHistoryService(
   // Add position info to each session
   const sessionsWithPosition = sessions.map((session) => {
     const positions: string[] = [];
-    if (session.doctorId === staffId) positions.push('doctor');
-    if (session.nurseId === staffId) positions.push('nurse');
+    if (
+      session.doctorId === staffId ||
+      session.sessionDoctors.some((sessionDoctor) => sessionDoctor.doctorId === staffId)
+    ) {
+      positions.push('doctor');
+    }
+    if (
+      session.nurseId === staffId ||
+      session.sessionNurses.some((sessionNurse) => sessionNurse.nurseId === staffId)
+    ) {
+      positions.push('nurse');
+    }
     if (session.adminLayananId === staffId) positions.push('adminLayanan');
 
     return {
@@ -402,13 +523,34 @@ export async function getStaffSessionHistoryService(
   // Get counts by position
   const [doctorCount, nurseCount, adminCount] = await Promise.all([
     prisma.treatmentSession.count({
-      where: { doctorId: staffId, isCompleted: true, ...dateFilter },
+      where: {
+        OR: [
+          { doctorId: staffId },
+          { sessionDoctors: { some: { doctorId: staffId } } },
+        ],
+        ...sessionBranchFilter,
+        isCompleted: true,
+        ...dateFilter,
+      },
     }),
     prisma.treatmentSession.count({
-      where: { nurseId: staffId, isCompleted: true, ...dateFilter },
+      where: {
+        OR: [
+          { nurseId: staffId },
+          { sessionNurses: { some: { nurseId: staffId } } },
+        ],
+        ...sessionBranchFilter,
+        isCompleted: true,
+        ...dateFilter,
+      },
     }),
     prisma.treatmentSession.count({
-      where: { adminLayananId: staffId, isCompleted: true, ...dateFilter },
+      where: {
+        adminLayananId: staffId,
+        ...sessionBranchFilter,
+        isCompleted: true,
+        ...dateFilter,
+      },
     }),
   ]);
 

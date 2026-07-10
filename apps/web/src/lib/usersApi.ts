@@ -112,6 +112,7 @@ export interface StaffPerformanceQuery {
 }
 
 export interface StaffSessionHistoryQuery {
+  branchId?: string;
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
   startDate?: string;
   endDate?: string;
