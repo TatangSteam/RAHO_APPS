@@ -250,7 +250,7 @@ export default function MemberProfilePage() {
                   No. Member: {profile.memberNo}
                 </span>
                 <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-400">
-                  🎫 {profile.voucherCount} Voucher
+                  🎫 {profile.voucherCount} Voucher Terpakai
                 </span>
                 <span className={`text-xs font-semibold px-3 py-1 rounded-full ${
                   profile.isActive 

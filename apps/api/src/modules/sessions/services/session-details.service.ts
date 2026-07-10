@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, PackageStatus, PackageType, Role } from '@prisma/client';
 import type { UpdateSessionDetailsInput } from '../sessions.schema';
+import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 export class SessionDetailsService {
   async updateSessionDetails(
@@ -170,6 +171,8 @@ export class SessionDetailsService {
           skipDuplicates: true,
         });
       }
+
+      await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
 
       return updatedSession;
     });

@@ -210,6 +210,13 @@ export class MembersService {
   }
 
   /**
+   * Delete member diagnosis
+   */
+  async deleteMemberDiagnosis(memberId: string, diagnosisId: string, userId: string) {
+    return await this.medicalRecordsService.deleteMemberDiagnosis(memberId, diagnosisId, userId);
+  }
+
+  /**
    * Get member therapy plans
    */
   async getMemberTherapyPlans(memberId: string) {

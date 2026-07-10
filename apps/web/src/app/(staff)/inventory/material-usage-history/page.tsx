@@ -368,11 +368,20 @@ export default function MaterialUsageHistoryPage() {
       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
         {item.quantity.toFixed(2)} {item.unit}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-        <div>
-          <div className="font-medium">{item.staffName}</div>
+      <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+        <div className="space-y-1">
+          <div className="font-medium">Dicatat: {item.staffName}</div>
           <div className="text-xs text-gray-500 dark:text-neutral-400">
             {item.staffRole}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-neutral-300">
+            Admin: {item.adminLayananName || '-'}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-neutral-300">
+            Dokter: {item.doctorName || '-'}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-neutral-300">
+            Nakes: {item.nurseName || '-'}
           </div>
         </div>
       </td>
@@ -668,7 +677,7 @@ export default function MaterialUsageHistoryPage() {
                       Jumlah
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Nama Staf
+                      Tim Sesi
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-neutral-400 uppercase tracking-wider">
                       Kode Sesi

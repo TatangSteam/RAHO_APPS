@@ -36,7 +36,7 @@ router.post(
   controller.cancelPackage.bind(controller)
 );
 
-// Package edit (PENDING_PAYMENT only)
+// Package edit (Super Admin/Admin Manager can also edit waiting/active packages)
 router.put(
   '/packages/:packageId',
   authenticate,

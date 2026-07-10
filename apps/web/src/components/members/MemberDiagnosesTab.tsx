@@ -7,7 +7,7 @@ import { diagnosisApi } from '@/lib/diagnosisApi';
 import { usersApi } from '@/lib/usersApi';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import type { StaffMember } from '@/lib/usersApi';
-import { showToast } from '@/lib/toast';
+import { confirm, showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import ICDSearchInput from '@/components/ui/ICDSearchInput';
 import { icdApi } from '@/lib/icdApi';
@@ -70,12 +70,18 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       user?.role &&
       ['DOCTOR', 'NURSE', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role)
   );
+  const canDeleteDiagnosis = Boolean(
+    canEdit &&
+      user?.role &&
+      ['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role)
+  );
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDiagnosis, setEditingDiagnosis] = useState<Diagnosis | null>(null);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingDiagnosisId, setDeletingDiagnosisId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
@@ -304,6 +310,34 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
 
     setEditingDiagnosis(diagnosis);
     setShowCreateModal(true);
+  };
+
+  const handleDeleteDiagnosis = async (diagnosis: Diagnosis) => {
+    const confirmed = await confirm.show({
+      title: 'Hapus Diagnosa',
+      message: `Hapus diagnosa ${diagnosis.diagnosisCode}? Data yang dihapus tidak bisa dipulihkan.`,
+      variant: 'danger',
+      confirmText: 'Hapus Diagnosa',
+      cancelText: 'Batal',
+    });
+
+    if (!confirmed) return;
+
+    setDeletingDiagnosisId(diagnosis.id);
+    try {
+      await diagnosisApi.deleteDiagnosis(memberId, diagnosis.id);
+      showToast.success('Diagnosa berhasil dihapus');
+      await loadDiagnoses();
+    } catch (error: any) {
+      devError('Failed to delete diagnosis:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus diagnosa'
+      );
+    } finally {
+      setDeletingDiagnosisId(null);
+    }
   };
 
   const handleCloseModal = () => {
@@ -716,6 +750,20 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
                         title="Edit Diagnosa"
                       >
                         <Edit size={16} />
+                      </button>
+                    )}
+                    {canDeleteDiagnosis && (
+                      <button
+                        onClick={() => void handleDeleteDiagnosis(diagnosis)}
+                        disabled={deletingDiagnosisId === diagnosis.id}
+                        className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                        title="Hapus Diagnosa"
+                      >
+                        {deletingDiagnosisId === diagnosis.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
                       </button>
                     )}
                   </div>

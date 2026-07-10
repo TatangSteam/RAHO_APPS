@@ -208,6 +208,49 @@ export class MemberMedicalRecordsService {
     return updatedDiagnosis;
   }
 
+  async deleteMemberDiagnosis(memberId: string, diagnosisId: string, userId: string) {
+    const existingDiagnosis = await prisma.diagnosis.findFirst({
+      where: {
+        id: diagnosisId,
+        memberId,
+      },
+      include: {
+        encounter: {
+          select: {
+            branchId: true,
+          },
+        },
+      },
+    });
+
+    if (!existingDiagnosis) {
+      throw { status: 404, code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnosis tidak ditemukan' };
+    }
+
+    await prisma.diagnosis.delete({
+      where: { id: diagnosisId },
+    });
+
+    await logAudit({
+      userId,
+      branchId: existingDiagnosis.encounter?.branchId,
+      action: AuditAction.DELETE,
+      resource: 'Diagnosis',
+      resourceId: diagnosisId,
+      meta: {
+        memberId,
+        diagnosisCode: existingDiagnosis.diagnosisCode,
+        action: 'MEMBER_DIAGNOSIS_DELETED',
+      },
+    });
+
+    return {
+      id: diagnosisId,
+      diagnosisCode: existingDiagnosis.diagnosisCode,
+      message: 'Diagnosa berhasil dihapus',
+    };
+  }
+
   /**
    * Get member therapy plans
    * Returns active and edit-history therapy plans with usage information and session counts

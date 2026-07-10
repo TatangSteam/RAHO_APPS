@@ -520,13 +520,8 @@ export class PackageAssignmentService {
         }
       }
 
-      // Update member voucher count
-      if (totalBasicSessions > 0) {
-        await tx.member.update({
-          where: { id: params.memberId },
-          data: { voucherCount: { increment: totalBasicSessions } },
-        });
-      }
+      // Voucher count is recorded when a basic/booster voucher is used in a session.
+      // Buying a package only creates the voucher inventory and keeps it on hold.
 
       // Create add-ons
       for (const addon of params.addOns) {

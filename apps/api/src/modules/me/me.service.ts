@@ -124,7 +124,11 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
       voucherCount: true,
       memberPackages: {
         where: { status: 'ACTIVE' },
-        select: { id: true },
+        select: {
+          id: true,
+          totalSessions: true,
+          usedSessions: true,
+        },
       },
     },
   });
@@ -149,8 +153,13 @@ export async function getMemberDashboardService(memberId: string): Promise<Membe
     },
   });
 
+  const activeVoucherRemaining = member.memberPackages.reduce(
+    (sum, pkg) => sum + Math.max(0, pkg.totalSessions - pkg.usedSessions),
+    0
+  );
+
   return {
-    voucherSisa: member.voucherCount,
+    voucherSisa: activeVoucherRemaining,
     paketAktif: member.memberPackages.length,
     sesiTerakhir: lastSession
       ? {

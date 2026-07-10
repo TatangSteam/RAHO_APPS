@@ -61,6 +61,10 @@ describe('BoosterService.updateSessionBoosterPackage', () => {
       },
       treatmentSession: {
         update: jest.fn().mockResolvedValue({ id: 'session-1', boosterPackageId: newPackage.id }),
+        count: jest.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(1),
+      },
+      member: {
+        update: jest.fn(),
       },
     };
     mockPrisma.$transaction.mockImplementation((callback: any) => callback(tx));
@@ -86,5 +90,9 @@ describe('BoosterService.updateSessionBoosterPackage', () => {
         data: { boosterPackageId: newPackage.id, boosterType: null },
       }),
     );
+    expect(tx.member.update).toHaveBeenCalledWith({
+      where: { id: 'member-1' },
+      data: { voucherCount: 2 },
+    });
   });
 });

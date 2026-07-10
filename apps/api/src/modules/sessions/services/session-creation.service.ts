@@ -9,6 +9,7 @@ import {
   getDebtSessionAllowance,
   getSessionPackageAvailability,
 } from './session-creation.helpers';
+import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 /**
  * Service for session creation
@@ -771,12 +772,6 @@ export class SessionCreationService {
         });
       }
 
-      // Update member voucher count
-      await tx.member.update({
-        where: { id: data.memberId },
-        data: { voucherCount: { decrement: 1 } },
-      });
-
       // Update booster package if provided
       if (data.boosterPackageId) {
         const updatedBooster = await tx.memberPackage.update({
@@ -795,6 +790,9 @@ export class SessionCreationService {
           });
         }
       }
+
+      // Count vouchers only when they are actually used in a session.
+      await syncMemberVoucherUsageCount(tx, data.memberId);
 
       return { session, encounter };
     });

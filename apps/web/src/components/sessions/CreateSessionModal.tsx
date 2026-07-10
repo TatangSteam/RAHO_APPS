@@ -944,7 +944,7 @@ export default function CreateSessionModal({
                       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
                         <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
                         <p className="text-sm text-amber-700 dark:text-amber-400">
-                          Paket ini belum dibayar. Sesi akan dicatat sebagai utang dan voucher otomatis berkurang saat sesi dibuat. Sisa utang tersedia: {getDebtRemainingSessions(selectedPackage, outstandingDebtSessions)} sesi.
+                          Paket ini belum dibayar. Sesi akan dicatat sebagai utang, dan voucher baru tercatat dipakai saat sesi dibuat. Sisa utang tersedia: {getDebtRemainingSessions(selectedPackage, outstandingDebtSessions)} sesi.
                         </p>
                       </div>
                     )}

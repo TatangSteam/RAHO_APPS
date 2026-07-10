@@ -84,6 +84,11 @@ export const sessionApi = {
     return response.data.data;
   },
 
+  deleteDiagnosisByEncounter: async (encounterId: string): Promise<{ message: string }> => {
+    const response = await api.delete(`/treatment-sessions/encounters/${encounterId}/diagnoses`);
+    return response.data.data;
+  },
+
   // ============================================================
   // STEP 2: THERAPY PLAN
   // ============================================================

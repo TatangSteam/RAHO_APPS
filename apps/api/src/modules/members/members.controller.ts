@@ -292,6 +292,19 @@ export class MembersController {
     }
   }
 
+  async deleteMemberDiagnosis(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { memberId, diagnosisId } = req.params;
+      const { userId } = req.user!;
+
+      const result = await membersService.deleteMemberDiagnosis(memberId, diagnosisId, userId);
+
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ============================================================
   // THERAPY PLAN METHODS
   // ============================================================

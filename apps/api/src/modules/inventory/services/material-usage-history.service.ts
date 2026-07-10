@@ -25,6 +25,9 @@ export interface MaterialUsageHistoryItem {
   staffName: string;
   staffGroup: string;
   staffRole: string;
+  doctorName: string;
+  adminLayananName: string;
+  nurseName: string;
   sessionCode: string;
   notes: string | null;
 }
@@ -59,9 +62,16 @@ export class MaterialUsageHistoryService {
       };
     }
 
-    // Filter by staff (recorded by)
+    // Filter by staff involved in the session or the person who recorded usage.
     if (staffId) {
-      where.recordedBy = staffId;
+      where.OR = [
+        { recordedBy: staffId },
+        { session: { doctorId: staffId } },
+        { session: { nurseId: staffId } },
+        { session: { adminLayananId: staffId } },
+        { session: { sessionDoctors: { some: { doctorId: staffId } } } },
+        { session: { sessionNurses: { some: { nurseId: staffId } } } },
+      ];
     }
 
     // Filter by date range
@@ -102,6 +112,19 @@ export class MaterialUsageHistoryService {
         session: {
           include: {
             branch: true,
+            adminLayanan: { include: { profile: true } },
+            doctor: { include: { profile: true } },
+            nurse: { include: { profile: true } },
+            sessionDoctors: {
+              include: {
+                doctor: { include: { profile: true } },
+              },
+            },
+            sessionNurses: {
+              include: {
+                nurse: { include: { profile: true } },
+              },
+            },
           },
         },
       },
@@ -164,6 +187,21 @@ export class MaterialUsageHistoryService {
       const staffBranchInfo = staff?.staffBranches.length 
         ? staff.staffBranches.map(sb => sb.branchName).join(', ')
         : staff?.branchName || '-';
+      const adminLayananName = usage.session.adminLayanan?.profile?.fullName || '-';
+      const doctorNames = usage.session.sessionDoctors.length > 0
+        ? usage.session.sessionDoctors
+            .map((sessionDoctor) => sessionDoctor.doctor.profile?.fullName)
+            .filter(Boolean)
+            .join(', ')
+        : usage.session.doctor?.profile?.fullName || '';
+      const nurseNames = usage.session.sessionNurses.length > 0
+        ? usage.session.sessionNurses
+            .map((sessionNurse) => sessionNurse.nurse.profile?.fullName)
+            .filter(Boolean)
+            .join(', ')
+        : usage.session.nurse?.profile?.fullName || '';
+      const doctorName = doctorNames || '-';
+      const nurseName = nurseNames || '-';
 
       return {
         id: usage.id,
@@ -178,6 +216,9 @@ export class MaterialUsageHistoryService {
         staffName: staff?.name || 'Unknown',
         staffGroup: staffBranchInfo,
         staffRole: this.getRoleLabel(staff?.role || 'NURSE'),
+        doctorName,
+        adminLayananName,
+        nurseName,
         sessionCode: usage.session?.sessionCode || '-',
         notes: null,
       };

@@ -16,7 +16,7 @@ export const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'registrationDate', label: 'Tanggal Daftar', visible: false },
   { id: 'email', label: 'Email', visible: false },
   { id: 'age', label: 'Umur', visible: false },
-  { id: 'voucherCount', label: 'Total Voucher', visible: false },
+  { id: 'voucherCount', label: 'Voucher Terpakai', visible: false },
   { id: 'basicPackage', label: 'Voucher BASIC', visible: true },
   { id: 'sessionCount', label: 'Jumlah Sesi', visible: false },
   { id: 'lastInfusion', label: 'Terakhir Infus', visible: false },

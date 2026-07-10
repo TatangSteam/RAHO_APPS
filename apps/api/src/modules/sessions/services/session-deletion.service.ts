@@ -1,6 +1,7 @@
-import { AuditAction, StockMutationType } from '@prisma/client';
+import { AuditAction, PackageStatus, StockMutationType } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
+import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 type StockRollbackMutation = {
   inventoryItemId: string;
@@ -21,6 +22,26 @@ export class SessionDeletionService {
     }, new Map<string, number>());
   }
 
+  private async releasePackageUsage(tx: any, memberPackage: any) {
+    const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
+    await tx.memberPackage.update({
+      where: { id: memberPackage.id },
+      data: {
+        usedSessions,
+        status:
+          memberPackage.status === PackageStatus.EXPIRED &&
+          usedSessions < memberPackage.totalSessions
+            ? PackageStatus.ACTIVE
+            : memberPackage.status,
+        expiredAt:
+          memberPackage.status === PackageStatus.EXPIRED &&
+          usedSessions < memberPackage.totalSessions
+            ? null
+            : memberPackage.expiredAt,
+      },
+    });
+  }
+
   async deleteSession(sessionId: string, deletedBy: string) {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
@@ -32,8 +53,10 @@ export class SessionDeletionService {
                 user: { include: { profile: true } },
               },
             },
+            memberPackage: true,
           },
         },
+        boosterPackage: true,
         branch: true,
         infusion: { select: { id: true } },
         materials: { select: { id: true } },
@@ -105,6 +128,11 @@ export class SessionDeletionService {
         restoredStockItems += 1;
       }
 
+      await this.releasePackageUsage(tx, session.encounter.memberPackage);
+      if (session.boosterPackage) {
+        await this.releasePackageUsage(tx, session.boosterPackage);
+      }
+
       const evaluations = await tx.doctorEvaluation.findMany({
         where: { treatmentSessionId: sessionId },
         select: { id: true },
@@ -132,6 +160,7 @@ export class SessionDeletionService {
       });
 
       await tx.treatmentSession.delete({ where: { id: sessionId } });
+      await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
 
       return { restoredStockItems };
     });

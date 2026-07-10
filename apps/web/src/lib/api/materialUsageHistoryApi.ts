@@ -13,6 +13,9 @@ export interface MaterialUsageHistoryItem {
   staffName: string;
   staffGroup: string;
   staffRole: string;
+  doctorName: string;
+  adminLayananName: string;
+  nurseName: string;
   sessionCode: string;
   notes: string | null;
 }

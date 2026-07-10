@@ -219,7 +219,7 @@ export default function BranchDetailPage() {
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const canAccessBranch = !!user && hasRole(user.role, ADMIN_ABOVE_ROLES);
   const canManageBranch = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
-  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_CABANG';
+  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);

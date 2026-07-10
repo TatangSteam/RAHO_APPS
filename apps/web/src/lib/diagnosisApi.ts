@@ -26,6 +26,12 @@ export const diagnosisApi = {
     return data.data;
   },
 
+  // Delete diagnosis for a member
+  deleteDiagnosis: async (memberId: string, diagnosisId: string): Promise<{ message: string }> => {
+    const { data } = await api.delete<{ data: { message: string } }>(`/members/${memberId}/diagnoses/${diagnosisId}`);
+    return data.data;
+  },
+
   // Get diagnosis categories
   getCategories: async (): Promise<DiagnosisCategory[]> => {
     const { data } = await api.get<{ data: DiagnosisCategory[] }>('/diagnosis/categories');

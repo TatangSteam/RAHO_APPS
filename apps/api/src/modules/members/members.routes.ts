@@ -176,6 +176,15 @@ router.put(
   controller.updateMemberDiagnosis.bind(controller)
 );
 
+// DELETE /api/v1/members/:memberId/diagnoses/:diagnosisId - Delete diagnosis
+router.delete(
+  '/:memberId/diagnoses/:diagnosisId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  assertBranchAccess,
+  controller.deleteMemberDiagnosis.bind(controller)
+);
+
 // ============================================================
 // MEMBER CRUD (must be after specific routes)
 // ============================================================

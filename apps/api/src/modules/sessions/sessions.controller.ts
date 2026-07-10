@@ -49,7 +49,7 @@ export class SessionsController {
       throw {
         status: 403,
         code: 'SESSION_BRANCH_ACCESS_DENIED',
-        message: 'Anda tidak memiliki akses untuk membuat sesi pada cabang ini',
+        message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
       };
     }
   }
@@ -147,6 +147,11 @@ export class SessionsController {
       return session.branchId;
     }
 
+    if (user.role === Role.ADMIN_MANAGER) {
+      await this.assertManagerCanAccessBranch(user.userId, session.branchId);
+      return session.branchId;
+    }
+
     const accessibleBranchIds = new Set([
       ...(user.branchId ? [user.branchId] : []),
       ...(user.branches || []),
@@ -161,6 +166,48 @@ export class SessionsController {
     }
 
     return session.branchId;
+  }
+
+  private async getAuthorizedEncounterBranchId(
+    encounterId: string,
+    user: Request['user']
+  ): Promise<string> {
+    const encounter = await prisma.encounter.findUnique({
+      where: { id: encounterId },
+      select: { branchId: true },
+    });
+
+    if (!encounter) {
+      throw {
+        status: 404,
+        code: 'ENCOUNTER_NOT_FOUND',
+        message: 'Encounter tidak ditemukan',
+      };
+    }
+
+    if (user.role === Role.SUPER_ADMIN) {
+      return encounter.branchId;
+    }
+
+    if (user.role === Role.ADMIN_MANAGER) {
+      await this.assertManagerCanAccessBranch(user.userId, encounter.branchId);
+      return encounter.branchId;
+    }
+
+    const accessibleBranchIds = new Set([
+      ...(user.branchId ? [user.branchId] : []),
+      ...(user.branches || []),
+    ]);
+
+    if (!accessibleBranchIds.has(encounter.branchId)) {
+      throw {
+        status: 403,
+        code: 'SESSION_BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke encounter pada cabang ini',
+      };
+    }
+
+    return encounter.branchId;
   }
 
   // ============================================================
@@ -404,6 +451,21 @@ export class SessionsController {
       }
 
       const result = await sessionsService.updateDiagnosis(encounterId, validation.data, req.user!.userId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async deleteDiagnosis(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { encounterId } = req.params;
+      await this.getAuthorizedEncounterBranchId(encounterId, req.user!);
+
+      const result = await sessionsService.deleteDiagnosis(encounterId, req.user!.userId);
       return sendSuccess(res, result);
     } catch (err: any) {
       if (err.status) {

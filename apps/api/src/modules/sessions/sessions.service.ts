@@ -142,6 +142,10 @@ export class SessionsService {
     return this.diagnosisService.updateDiagnosis(encounterId, data, userId);
   }
 
+  async deleteDiagnosis(encounterId: string, userId: string) {
+    return this.diagnosisService.deleteDiagnosis(encounterId, userId);
+  }
+
   // ============================================================
   // STEP 2: THERAPY PLAN
   // ============================================================

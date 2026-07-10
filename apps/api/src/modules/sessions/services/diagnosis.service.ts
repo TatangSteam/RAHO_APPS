@@ -205,4 +205,50 @@ export class DiagnosisService {
 
     return updatedDiagnosis;
   }
+
+  async deleteDiagnosis(encounterId: string, userId: string) {
+    const existingDiagnosis = await prisma.diagnosis.findUnique({
+      where: { encounterId },
+      include: {
+        encounter: {
+          select: {
+            branchId: true,
+            memberId: true,
+          },
+        },
+      },
+    });
+
+    if (!existingDiagnosis) {
+      throw {
+        status: 404,
+        code: 'DIAGNOSIS_NOT_FOUND',
+        message: 'Diagnosa untuk encounter ini tidak ditemukan',
+      };
+    }
+
+    await prisma.diagnosis.delete({
+      where: { id: existingDiagnosis.id },
+    });
+
+    await logAudit({
+      userId,
+      branchId: existingDiagnosis.encounter?.branchId,
+      action: AuditAction.DELETE,
+      resource: 'Diagnosis',
+      resourceId: existingDiagnosis.id,
+      meta: {
+        diagnosisCode: existingDiagnosis.diagnosisCode,
+        encounterId,
+        memberId: existingDiagnosis.memberId,
+        action: 'SESSION_DIAGNOSIS_DELETED',
+      },
+    });
+
+    return {
+      id: existingDiagnosis.id,
+      diagnosisCode: existingDiagnosis.diagnosisCode,
+      message: 'Diagnosa sesi berhasil dihapus',
+    };
+  }
 }

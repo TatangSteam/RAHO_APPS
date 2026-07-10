@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { useAuthStore } from '@/stores/authStore';
+import { confirm, showToast } from '@/lib/toast';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import { devLog, devError } from '@/lib/logger';
 import styles from './Step1Diagnosis.module.css';
@@ -58,8 +59,10 @@ export default function Step1Diagnosis({
 }: Step1DiagnosisProps) {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberDiagnoses, setMemberDiagnoses] = useState<any[]>([]);
+  const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
     doktorPemeriksa: user?.userId || '',
@@ -180,6 +183,33 @@ export default function Step1Diagnosis({
     });
   };
 
+  const handleDeleteSessionDiagnosis = async () => {
+    if (!diagnosis) return;
+
+    const confirmed = await confirm.show({
+      title: 'Hapus Diagnosa Sesi',
+      message: `Hapus diagnosa ${diagnosis.diagnosisCode} dari sesi ini? Step diagnosa akan kembali kosong.`,
+      variant: 'danger',
+      confirmText: 'Hapus Diagnosa',
+      cancelText: 'Batal',
+    });
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await sessionApi.deleteDiagnosisByEncounter(encounterId);
+      showToast.success('Diagnosa sesi berhasil dihapus');
+      onComplete();
+    } catch (err: any) {
+      devError('Failed to delete session diagnosis:', err);
+      setError(err.response?.data?.error?.message || 'Gagal menghapus diagnosa sesi');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (isLocked) {
     return (
       <div className={`${styles.container} ${styles.locked}`}>
@@ -207,6 +237,12 @@ export default function Step1Diagnosis({
         </div>
 
         <div className={styles.completedContent}>
+          {error && (
+            <div className={styles.errorAlert}>
+              <span className={styles.errorIcon}>!</span>
+              <span>{error}</span>
+            </div>
+          )}
           <div className={styles.completedField}>
             <p className={styles.completedLabel}>Diagnosa:</p>
             <p className={styles.completedValue}>{diagnosis.diagnosa}</p>
@@ -229,6 +265,18 @@ export default function Step1Diagnosis({
             <div className={styles.completedField}>
               <p className={styles.completedLabel}>Pemeriksaan Fisik:</p>
               <p className={styles.completedValue}>{diagnosis.pemeriksaanFisik}</p>
+            </div>
+          )}
+          {canDeleteDiagnosis && (
+            <div className={styles.editButtonContainer}>
+              <button
+                type="button"
+                onClick={() => void handleDeleteSessionDiagnosis()}
+                disabled={deleting}
+                className={styles.deleteBtn}
+              >
+                {deleting ? 'Menghapus...' : 'Hapus Diagnosa'}
+              </button>
             </div>
           )}
         </div>

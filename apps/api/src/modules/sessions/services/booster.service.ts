@@ -2,6 +2,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, PackageStatus, Role, StockMutationType } from '@prisma/client';
 import type { UpdateSessionBoosterPackageInput } from '../sessions.schema';
+import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 // BoosterType enum values (not exported from Prisma because not used as field type in any model)
 type BoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
@@ -61,7 +62,11 @@ export class BoosterService {
       where: { id: sessionId },
       include: {
         boosterPackage: true,
-        encounter: { select: { memberId: true } },
+        encounter: {
+          select: {
+            memberId: true,
+          },
+        },
       },
     });
 
@@ -162,7 +167,7 @@ export class BoosterService {
         });
       }
 
-      return tx.treatmentSession.update({
+      const updatedSession = await tx.treatmentSession.update({
         where: { id: sessionId },
         data: {
           boosterPackageId: nextBoosterPackageId,
@@ -170,6 +175,9 @@ export class BoosterService {
         },
         include: { boosterPackage: true },
       });
+
+      await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
+      return updatedSession;
     });
 
     await logAudit({

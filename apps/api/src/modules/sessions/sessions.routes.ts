@@ -74,11 +74,11 @@ router.get(
   controller.getSessionById.bind(controller)
 );
 
-// Delete session (Super Admin or Admin Cabang for their own branch)
+// Delete session (Super Admin or Admin Manager for managed branches)
 router.delete(
   '/:sessionId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_CABANG]),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   controller.deleteSession.bind(controller)
 );
 
@@ -112,6 +112,13 @@ router.patch(
   authenticate,
   authorize(MEDICAL_STAFF),
   controller.updateDiagnosis.bind(controller)
+);
+
+router.delete(
+  '/encounters/:encounterId/diagnoses',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  controller.deleteDiagnosis.bind(controller)
 );
 
 // ============================================================

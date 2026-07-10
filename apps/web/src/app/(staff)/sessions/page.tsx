@@ -312,7 +312,7 @@ export default function SessionsPage() {
   });
 
   const [tableFields, setTableFields] = useState<Record<string, boolean>>({ ...DEFAULT_TABLE_FIELDS });
-  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_CABANG';
+  const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   // Field categories for UI grouping
   const fieldCategories = [

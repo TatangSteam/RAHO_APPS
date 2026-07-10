@@ -74,7 +74,7 @@ export default function MembersTab({
                   <span>{m.registrationBranch}</span>
                 </div>
                 <div className={styles.memberInfo}>
-                  <span className={styles.label}>Sisa Voucher:</span>
+                  <span className={styles.label}>Voucher Terpakai:</span>
                   <span className={styles.voucherBadge}>{m.voucherCount}</span>
                 </div>
                 <div className={styles.memberInfo}>

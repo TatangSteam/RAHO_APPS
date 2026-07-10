@@ -30,7 +30,7 @@ const PRIVILEGED_PACKAGE_EDIT_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
 
 /**
  * Package Edit Service
- * Handles editing pending packages
+ * Handles editing package purchases and privileged active voucher adjustments
  * Similar to assign package but for existing packages
  */
 export class PackageEditService {
