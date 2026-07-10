@@ -104,6 +104,12 @@ export interface SessionBoosterPackage {
   boosterType: BoosterType | null;
 }
 
+export interface SessionMemberPackage {
+  packageId: string;
+  packageCode: string;
+  packageType: 'BASIC' | 'BOOSTER';
+}
+
 export interface Session {
   sessionId: string;
   sessionCode: string;
@@ -124,6 +130,7 @@ export interface Session {
   treatmentDate: string;
   isCompleted: boolean;
   member: SessionMember;
+  memberPackage: SessionMemberPackage;
   adminLayanan: SessionStaff;
   doctor: SessionStaff;
   nurse: SessionStaff;
@@ -328,6 +335,19 @@ export interface UpdateBoosterTypeInput {
 
 export interface UpdateSessionBoosterPackageInput {
   useBooster: boolean;
+  boosterPackageId?: string | null;
+}
+
+export interface UpdateSessionDetailsInput {
+  memberPackageId?: string;
+  treatmentDate?: string;
+  pelaksanaan?: SessionType;
+  adminLayananId?: string;
+  doctorId?: string;
+  nurseId?: string;
+  additionalDoctorIds?: string[];
+  additionalNurseIds?: string[];
+  useBooster?: boolean;
   boosterPackageId?: string | null;
 }
 

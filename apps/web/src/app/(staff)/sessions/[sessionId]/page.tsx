@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { memberApi } from '@/lib/memberApi';
+import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
@@ -32,6 +33,48 @@ type BoosterPackageOption = {
   branchName?: string;
 };
 
+const getPackageId = (pkg: any) => pkg.packageId || pkg.id || '';
+
+const flattenMemberPackages = (packages: any[]): BoosterPackageOption[] => {
+  const flattened: BoosterPackageOption[] = [];
+
+  packages.forEach((pkg) => {
+    if (pkg?.isGroup) {
+      [...(pkg.basics || []), ...(pkg.boosters || [])].forEach((groupedPackage) => {
+        flattened.push({ ...groupedPackage, packageId: getPackageId(groupedPackage) });
+      });
+      return;
+    }
+
+    flattened.push({ ...pkg, packageId: getPackageId(pkg) });
+  });
+
+  return flattened.filter((pkg) => pkg.packageId);
+};
+
+const toDateTimeLocalValue = (value: string) => {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+};
+
+const mergeStaffOptions = (options: StaffMember[], current?: { userId: string; fullName: string; staffCode?: string | null }) => {
+  if (!current?.userId || options.some((option) => option.userId === current.userId)) {
+    return options;
+  }
+
+  return [
+    {
+      userId: current.userId,
+      fullName: current.fullName,
+      staffCode: current.staffCode || '',
+    },
+    ...options,
+  ];
+};
+
 export default function SessionDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -56,6 +99,18 @@ export default function SessionDetailPage() {
   const [loadingBoosterPackages, setLoadingBoosterPackages] = useState(false);
   const [savingBoosterPackage, setSavingBoosterPackage] = useState(false);
   const [boosterPackages, setBoosterPackages] = useState<BoosterPackageOption[]>([]);
+  const [basicPackages, setBasicPackages] = useState<BoosterPackageOption[]>([]);
+  const [adminLayananOptions, setAdminLayananOptions] = useState<StaffMember[]>([]);
+  const [doctorOptions, setDoctorOptions] = useState<StaffMember[]>([]);
+  const [nurseOptions, setNurseOptions] = useState<StaffMember[]>([]);
+  const [sessionEditMemberPackageId, setSessionEditMemberPackageId] = useState('');
+  const [sessionEditTreatmentDate, setSessionEditTreatmentDate] = useState('');
+  const [sessionEditPelaksanaan, setSessionEditPelaksanaan] = useState<'ON_SITE' | 'HOME_CARE'>('ON_SITE');
+  const [sessionEditAdminLayananId, setSessionEditAdminLayananId] = useState('');
+  const [sessionEditDoctorId, setSessionEditDoctorId] = useState('');
+  const [sessionEditNurseId, setSessionEditNurseId] = useState('');
+  const [sessionEditAdditionalDoctorIds, setSessionEditAdditionalDoctorIds] = useState<string[]>([]);
+  const [sessionEditAdditionalNurseIds, setSessionEditAdditionalNurseIds] = useState<string[]>([]);
   const [boosterEditUseBooster, setBoosterEditUseBooster] = useState(false);
   const [boosterEditPackageId, setBoosterEditPackageId] = useState('');
   const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
@@ -130,26 +185,68 @@ export default function SessionDetailPage() {
     setActiveStep(4);
   };
 
-  const formatBoosterPackageLabel = (pkg: BoosterPackageOption) => {
+  const formatPackageLabel = (pkg: BoosterPackageOption) => {
     const branchLabel = pkg.branchName ? ` - ${pkg.branchName}` : '';
     return `${pkg.packageCode} (${pkg.remainingSessions}/${pkg.totalSessions} sisa)${branchLabel}`;
+  };
+
+  const toggleSelectedId = (selectedIds: string[], id: string) => {
+    return selectedIds.includes(id)
+      ? selectedIds.filter((selectedId) => selectedId !== id)
+      : [...selectedIds, id];
   };
 
   const openBoosterEditModal = async () => {
     if (!session) return;
 
     setBoosterEditError(null);
+    setSessionEditMemberPackageId(session.session.memberPackage?.packageId || '');
+    setSessionEditTreatmentDate(toDateTimeLocalValue(session.session.treatmentDate));
+    setSessionEditPelaksanaan(session.session.pelaksanaan);
+    setSessionEditAdminLayananId(session.session.adminLayanan.userId);
+    setSessionEditDoctorId(session.session.doctor.userId);
+    setSessionEditNurseId(session.session.nurse.userId);
+    setSessionEditAdditionalDoctorIds(
+      (session.session.sessionDoctors || [])
+        .filter((assignment) => !assignment.isPrimary)
+        .map((assignment) => assignment.doctor.userId)
+    );
+    setSessionEditAdditionalNurseIds(
+      (session.session.sessionNurses || [])
+        .filter((assignment) => !assignment.isPrimary)
+        .map((assignment) => assignment.nurse.userId)
+    );
     setBoosterEditUseBooster(!!session.session.boosterPackage);
     setBoosterEditPackageId(session.session.boosterPackage?.packageId || '');
     setShowBoosterEditModal(true);
     setLoadingBoosterPackages(true);
 
     try {
-      const packages = await memberApi.getMemberPackages(session.memberId);
+      const [packages, admins, doctors, nurses] = await Promise.all([
+        memberApi.getMemberPackages(session.memberId, session.session.branchId),
+        usersApi.getAdminLayanan(session.session.branchId),
+        usersApi.getDoctors(session.session.branchId),
+        usersApi.getNurses(session.session.branchId),
+      ]);
+      const flatPackages = flattenMemberPackages(packages);
+      const currentBasicPackageId = session.session.memberPackage?.packageId;
       const currentPackageId = session.session.boosterPackage?.packageId;
       const sessionBranchId = session.session.branchId;
-      const availableBoosters = packages.filter((pkg: any) => {
-        const isCurrentPackage = pkg.packageId === currentPackageId;
+      const availableBasics = flatPackages.filter((pkg: any) => {
+        const packageId = getPackageId(pkg);
+        const isCurrentPackage = packageId === currentBasicPackageId;
+        const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
+        const hasRemainingSession = Number(pkg.remainingSessions || 0) > 0;
+
+        return (
+          pkg.packageType === 'BASIC' &&
+          isSameBranch &&
+          (isCurrentPackage || (pkg.status === 'ACTIVE' && hasRemainingSession))
+        );
+      });
+      const availableBoosters = flatPackages.filter((pkg: any) => {
+        const packageId = getPackageId(pkg);
+        const isCurrentPackage = packageId === currentPackageId;
         const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
         const hasRemainingSession = Number(pkg.remainingSessions || 0) > 0;
 
@@ -160,10 +257,14 @@ export default function SessionDetailPage() {
         );
       });
 
+      setBasicPackages(availableBasics);
       setBoosterPackages(availableBoosters);
+      setAdminLayananOptions(mergeStaffOptions(admins, session.session.adminLayanan));
+      setDoctorOptions(mergeStaffOptions(doctors, session.session.doctor));
+      setNurseOptions(mergeStaffOptions(nurses, session.session.nurse));
     } catch (error: any) {
-      devError('Error loading booster packages:', error);
-      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memuat paket booster');
+      devError('Error loading session edit data:', error);
+      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memuat data edit sesi');
     } finally {
       setLoadingBoosterPackages(false);
     }
@@ -171,6 +272,21 @@ export default function SessionDetailPage() {
 
   const handleSaveBoosterPackage = async () => {
     if (!session) return;
+
+    if (!sessionEditMemberPackageId) {
+      setBoosterEditError('Pilih paket dasar terlebih dahulu');
+      return;
+    }
+
+    if (!sessionEditTreatmentDate) {
+      setBoosterEditError('Tanggal terapi wajib diisi');
+      return;
+    }
+
+    if (!sessionEditAdminLayananId || !sessionEditDoctorId || !sessionEditNurseId) {
+      setBoosterEditError('Admin layanan, dokter, dan nakes wajib dipilih');
+      return;
+    }
 
     if (boosterEditUseBooster && !boosterEditPackageId) {
       setBoosterEditError('Pilih paket booster terlebih dahulu');
@@ -180,17 +296,29 @@ export default function SessionDetailPage() {
     try {
       setSavingBoosterPackage(true);
       setBoosterEditError(null);
-      await sessionApi.updateSessionBoosterPackage(sessionId, {
-        useBooster: boosterEditUseBooster,
-        boosterPackageId: boosterEditUseBooster ? boosterEditPackageId : null,
+      await sessionApi.updateSessionDetails(sessionId, {
+        memberPackageId: sessionEditMemberPackageId,
+        treatmentDate: new Date(sessionEditTreatmentDate).toISOString(),
+        pelaksanaan: sessionEditPelaksanaan,
+        adminLayananId: sessionEditAdminLayananId,
+        doctorId: sessionEditDoctorId,
+        nurseId: sessionEditNurseId,
+        additionalDoctorIds: sessionEditAdditionalDoctorIds.filter((doctorId) => doctorId !== sessionEditDoctorId),
+        additionalNurseIds: sessionEditAdditionalNurseIds.filter((nurseId) => nurseId !== sessionEditNurseId),
+        ...(session.session.boosterPackage?.boosterType
+          ? {}
+          : {
+              useBooster: boosterEditUseBooster,
+              boosterPackageId: boosterEditUseBooster ? boosterEditPackageId : null,
+            }),
       });
 
-      showToast.success('Paket booster sesi berhasil diperbarui');
+      showToast.success('Data sesi berhasil diperbarui');
       setShowBoosterEditModal(false);
       await loadSessionDetail();
     } catch (error: any) {
-      devError('Error updating session booster package:', error);
-      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memperbarui paket booster sesi');
+      devError('Error updating session details:', error);
+      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memperbarui data sesi');
     } finally {
       setSavingBoosterPackage(false);
     }
@@ -332,35 +460,40 @@ export default function SessionDetailPage() {
         </div>
       </div>
 
-      {/* Session Booster Package */}
+      {/* Session Details */}
       <div className="card" style={{ marginBottom: '24px', padding: '20px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
             <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>
-              Paket Booster Sesi
+              Data Sesi & Paket
             </h3>
-            {sessionInfo.boosterPackage ? (
-              <div style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.7 }}>
-                <div>
-                  Status: <strong style={{ color: 'var(--text-primary)' }}>Menggunakan paket booster</strong>
-                </div>
-                <div>
-                  Paket: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.packageCode}</strong>
-                </div>
-                {sessionInfo.boosterPackage.boosterType && (
-                  <div>
-                    Jenis booster/stok: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.boosterType}</strong>
-                  </div>
-                )}
+            <div style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.7 }}>
+              <div>
+                Pelaksanaan: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.pelaksanaan === 'HOME_CARE' ? 'Home Care' : 'On Site'}</strong>
               </div>
-            ) : (
-              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-                Sesi ini tidak menggunakan paket booster.
-              </p>
-            )}
+              <div>
+                Paket dasar: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.memberPackage?.packageCode || '-'}</strong>
+              </div>
+              {sessionInfo.boosterPackage ? (
+                <>
+                  <div>
+                    Booster: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.packageCode}</strong>
+                  </div>
+                  {sessionInfo.boosterPackage.boosterType && (
+                    <div>
+                      Jenis booster/stok: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.boosterType}</strong>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div>
+                  Booster: <strong style={{ color: 'var(--text-primary)' }}>Tidak menggunakan paket booster</strong>
+                </div>
+              )}
+            </div>
             {boosterPackageChangeLocked && (
               <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '10px' }}>
-                Paket booster tidak bisa diganti karena jenis booster/stok sudah digunakan pada sesi ini.
+                Paket booster tidak bisa diganti karena jenis booster/stok sudah digunakan pada sesi ini. Data sesi lain tetap bisa diedit.
               </p>
             )}
           </div>
@@ -369,10 +502,9 @@ export default function SessionDetailPage() {
             <button
               className="btn btn-secondary btn-sm"
               onClick={openBoosterEditModal}
-              disabled={boosterPackageChangeLocked}
-              title={boosterPackageChangeLocked ? 'Jenis booster/stok sudah digunakan' : 'Edit paket booster sesi'}
+              title="Edit data sesi"
             >
-              Edit Paket Booster
+              Edit Data Sesi
             </button>
           )}
         </div>
@@ -824,7 +956,9 @@ export default function SessionDetailPage() {
             className="card"
             style={{
               width: '100%',
-              maxWidth: '520px',
+              maxWidth: '760px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               padding: '24px',
               borderRadius: '16px',
               boxShadow: '0 24px 80px rgba(0, 0, 0, 0.35)',
@@ -833,10 +967,10 @@ export default function SessionDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
-                  Edit Paket Booster
+                  Edit Data Sesi
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-                  Atur apakah sesi ini memakai paket booster dan pilih paket boosternya.
+                  Ubah jadwal, pelaksanaan, paket, dan tim yang menangani sesi ini.
                 </p>
               </div>
               <button
@@ -862,35 +996,38 @@ export default function SessionDetailPage() {
               </div>
             )}
 
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontSize: '14px',
-              fontWeight: 600,
-              marginBottom: '14px',
-              cursor: savingBoosterPackage ? 'not-allowed' : 'pointer',
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px',
             }}>
-              <input
-                type="checkbox"
-                checked={boosterEditUseBooster}
-                onChange={(event) => {
-                  setBoosterEditUseBooster(event.target.checked);
-                  if (!event.target.checked) setBoosterEditPackageId('');
-                }}
-                disabled={savingBoosterPackage || loadingBoosterPackages}
-              />
-              Gunakan paket booster untuk sesi ini
-            </label>
-
-            {boosterEditUseBooster && (
-              <div style={{ marginBottom: '20px' }}>
+              <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
-                  Paket Booster
+                  Tanggal & Jam Terapi
+                </label>
+                <input
+                  type="datetime-local"
+                  value={sessionEditTreatmentDate}
+                  onChange={(event) => setSessionEditTreatmentDate(event.target.value)}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Pelaksanaan
                 </label>
                 <select
-                  value={boosterEditPackageId}
-                  onChange={(event) => setBoosterEditPackageId(event.target.value)}
+                  value={sessionEditPelaksanaan}
+                  onChange={(event) => setSessionEditPelaksanaan(event.target.value as 'ON_SITE' | 'HOME_CARE')}
                   disabled={savingBoosterPackage || loadingBoosterPackages}
                   style={{
                     width: '100%',
@@ -901,22 +1038,259 @@ export default function SessionDetailPage() {
                     color: 'var(--text-primary)',
                   }}
                 >
-                  <option value="">
-                    {loadingBoosterPackages ? 'Memuat paket booster...' : 'Pilih paket booster'}
-                  </option>
-                  {boosterPackages.map((pkg) => (
+                  <option value="ON_SITE">On Site</option>
+                  <option value="HOME_CARE">Home Care</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Paket Dasar
+                </label>
+                <select
+                  value={sessionEditMemberPackageId}
+                  onChange={(event) => setSessionEditMemberPackageId(event.target.value)}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="">{loadingBoosterPackages ? 'Memuat paket...' : 'Pilih paket dasar'}</option>
+                  {basicPackages.map((pkg) => (
                     <option key={pkg.packageId} value={pkg.packageId}>
-                      {formatBoosterPackageLabel(pkg)}
+                      {formatPackageLabel(pkg)}
                     </option>
                   ))}
                 </select>
-                {!loadingBoosterPackages && boosterPackages.length === 0 && (
+                {!loadingBoosterPackages && basicPackages.length === 0 && (
                   <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '8px' }}>
-                    Tidak ada paket booster aktif dengan sisa sesi untuk cabang ini.
+                    Tidak ada paket dasar aktif dengan sisa sesi untuk cabang ini.
                   </p>
                 )}
               </div>
-            )}
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Admin Layanan
+                </label>
+                <select
+                  value={sessionEditAdminLayananId}
+                  onChange={(event) => setSessionEditAdminLayananId(event.target.value)}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="">Pilih admin layanan</option>
+                  {adminLayananOptions.map((staff) => (
+                    <option key={staff.userId} value={staff.userId}>
+                      {staff.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Dokter Utama
+                </label>
+                <select
+                  value={sessionEditDoctorId}
+                  onChange={(event) => {
+                    setSessionEditDoctorId(event.target.value);
+                    setSessionEditAdditionalDoctorIds((ids) => ids.filter((id) => id !== event.target.value));
+                  }}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="">Pilih dokter</option>
+                  {doctorOptions.map((staff) => (
+                    <option key={staff.userId} value={staff.userId}>
+                      {staff.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Nakes Utama
+                </label>
+                <select
+                  value={sessionEditNurseId}
+                  onChange={(event) => {
+                    setSessionEditNurseId(event.target.value);
+                    setSessionEditAdditionalNurseIds((ids) => ids.filter((id) => id !== event.target.value));
+                  }}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="">Pilih nakes</option>
+                  {nurseOptions.map((staff) => (
+                    <option key={staff.userId} value={staff.userId}>
+                      {staff.fullName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: '16px',
+              marginTop: '18px',
+            }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Dokter Tambahan
+                </label>
+                <div style={{
+                  maxHeight: '130px',
+                  overflowY: 'auto',
+                  padding: '12px',
+                  border: '1px solid var(--surface-border)',
+                  borderRadius: '10px',
+                  background: 'var(--surface-input)',
+                }}>
+                  {doctorOptions.filter((staff) => staff.userId !== sessionEditDoctorId).map((staff) => (
+                    <label key={staff.userId} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '13px' }}>
+                      <input
+                        type="checkbox"
+                        checked={sessionEditAdditionalDoctorIds.includes(staff.userId)}
+                        onChange={() => setSessionEditAdditionalDoctorIds((ids) => toggleSelectedId(ids, staff.userId))}
+                        disabled={savingBoosterPackage || loadingBoosterPackages}
+                      />
+                      {staff.fullName}
+                    </label>
+                  ))}
+                  {doctorOptions.filter((staff) => staff.userId !== sessionEditDoctorId).length === 0 && (
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Tidak ada opsi tambahan.</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Nakes Tambahan
+                </label>
+                <div style={{
+                  maxHeight: '130px',
+                  overflowY: 'auto',
+                  padding: '12px',
+                  border: '1px solid var(--surface-border)',
+                  borderRadius: '10px',
+                  background: 'var(--surface-input)',
+                }}>
+                  {nurseOptions.filter((staff) => staff.userId !== sessionEditNurseId).map((staff) => (
+                    <label key={staff.userId} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', fontSize: '13px' }}>
+                      <input
+                        type="checkbox"
+                        checked={sessionEditAdditionalNurseIds.includes(staff.userId)}
+                        onChange={() => setSessionEditAdditionalNurseIds((ids) => toggleSelectedId(ids, staff.userId))}
+                        disabled={savingBoosterPackage || loadingBoosterPackages}
+                      />
+                      {staff.fullName}
+                    </label>
+                  ))}
+                  {nurseOptions.filter((staff) => staff.userId !== sessionEditNurseId).length === 0 && (
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>Tidak ada opsi tambahan.</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{
+              marginTop: '20px',
+              paddingTop: '18px',
+              borderTop: '1px solid var(--surface-border)',
+            }}>
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                fontSize: '14px',
+                fontWeight: 600,
+                marginBottom: '14px',
+                cursor: savingBoosterPackage || boosterPackageChangeLocked ? 'not-allowed' : 'pointer',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={boosterEditUseBooster}
+                  onChange={(event) => {
+                    setBoosterEditUseBooster(event.target.checked);
+                    if (!event.target.checked) setBoosterEditPackageId('');
+                  }}
+                  disabled={savingBoosterPackage || loadingBoosterPackages || boosterPackageChangeLocked}
+                />
+                Gunakan paket booster untuk sesi ini
+              </label>
+
+              {boosterPackageChangeLocked && (
+                <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '-6px', marginBottom: '14px' }}>
+                  Paket booster terkunci karena jenis booster/stok sudah dipakai.
+                </p>
+              )}
+
+              {boosterEditUseBooster && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                    Paket Booster
+                  </label>
+                  <select
+                    value={boosterEditPackageId}
+                    onChange={(event) => setBoosterEditPackageId(event.target.value)}
+                    disabled={savingBoosterPackage || loadingBoosterPackages || boosterPackageChangeLocked}
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px',
+                      borderRadius: '10px',
+                      border: '1px solid var(--surface-border)',
+                      background: 'var(--surface-input)',
+                      color: 'var(--text-primary)',
+                    }}
+                  >
+                    <option value="">
+                      {loadingBoosterPackages ? 'Memuat paket booster...' : 'Pilih paket booster'}
+                    </option>
+                    {boosterPackages.map((pkg) => (
+                      <option key={pkg.packageId} value={pkg.packageId}>
+                        {formatPackageLabel(pkg)}
+                      </option>
+                    ))}
+                  </select>
+                  {!loadingBoosterPackages && boosterPackages.length === 0 && (
+                    <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '8px' }}>
+                      Tidak ada paket booster aktif dengan sisa sesi untuk cabang ini.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
               <button

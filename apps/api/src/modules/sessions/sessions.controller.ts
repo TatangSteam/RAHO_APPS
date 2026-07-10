@@ -8,6 +8,7 @@ import {
   createInfusionSchema,
   createMaterialUsageSchema,
   createEvaluationSchema,
+  updateSessionDetailsSchema,
   updateSessionBoosterPackageSchema,
   type CreateSessionInput,
 } from './sessions.schema';
@@ -315,6 +316,32 @@ export class SessionsController {
       const { sessionId } = req.params;
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.deleteSession(sessionId, req.user!.userId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
+      }
+      next(err);
+    }
+  }
+
+  async updateSessionDetails(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const validation = updateSessionDetailsSchema.safeParse(req.body);
+
+      if (!validation.success) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
+      }
+
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      const result = await sessionsService.updateSessionDetails(
+        sessionId,
+        validation.data,
+        req.user!.userId,
+        branchId
+      );
+
       return sendSuccess(res, result);
     } catch (err: any) {
       if (err.status) {

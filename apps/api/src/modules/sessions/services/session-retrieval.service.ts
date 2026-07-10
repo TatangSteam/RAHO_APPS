@@ -32,6 +32,7 @@ export class SessionRetrievalService {
               },
             },
             diagnoses: true,
+            memberPackage: true,
           },
         },
         adminLayanan: { include: { profile: true } },
@@ -403,6 +404,11 @@ export class SessionRetrievalService {
               memberNo: session.encounter.member.memberNo,
               fullName: session.encounter.member.user.profile?.fullName || '',
             },
+            memberPackage: {
+              packageId: session.encounter.memberPackage.id,
+              packageCode: session.encounter.memberPackage.packageCode,
+              packageType: session.encounter.memberPackage.packageType,
+            },
             adminLayanan: {
               userId: session.adminLayanan.id,
               fullName: session.adminLayanan.profile?.fullName || '',
@@ -496,6 +502,11 @@ export class SessionRetrievalService {
         memberId: session.encounter.member.id,
         memberNo: session.encounter.member.memberNo,
         fullName: session.encounter.member.user.profile?.fullName || '',
+      },
+      memberPackage: {
+        packageId: session.encounter.memberPackage.id,
+        packageCode: session.encounter.memberPackage.packageCode,
+        packageType: session.encounter.memberPackage.packageType,
       },
       adminLayanan: {
         userId: session.adminLayanan.id,

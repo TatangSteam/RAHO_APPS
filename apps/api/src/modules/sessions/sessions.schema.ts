@@ -64,6 +64,28 @@ export const createSessionSchema = z.object({
 export type CreateSessionInput = z.infer<typeof createSessionSchema>;
 
 // ============================================================
+// UPDATE SESSION DETAILS
+// ============================================================
+
+export const updateSessionDetailsSchema = z.object({
+  memberPackageId: z.string().cuid().optional(),
+  treatmentDate: z.string().datetime().optional(),
+  pelaksanaan: z.nativeEnum(SessionType).optional(),
+  adminLayananId: z.string().cuid().optional(),
+  doctorId: z.string().cuid().optional(),
+  nurseId: z.string().cuid().optional(),
+  additionalDoctorIds: z.array(z.string().cuid()).optional(),
+  additionalNurseIds: z.array(z.string().cuid()).optional(),
+  useBooster: z.boolean().optional(),
+  boosterPackageId: z.string().cuid().nullable().optional(),
+}).refine(
+  (data) => data.useBooster !== true || !!data.boosterPackageId,
+  { message: 'Paket booster wajib dipilih jika menggunakan booster' }
+);
+
+export type UpdateSessionDetailsInput = z.infer<typeof updateSessionDetailsSchema>;
+
+// ============================================================
 // STEP 1: DIAGNOSIS
 // ============================================================
 

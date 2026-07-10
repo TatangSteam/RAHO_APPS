@@ -9,6 +9,7 @@ import type {
   CreateMaterialUsageInput,
   CreateEvaluationInput,
   UpdateSessionBoosterPackageInput,
+  UpdateSessionDetailsInput,
 } from './sessions.schema';
 
 // Import modular services
@@ -24,6 +25,7 @@ import { SessionCompletionService } from './services/session-completion.service'
 import { BoosterService } from './services/booster.service';
 import { PhotoService } from './services/photo.service';
 import { SessionDeletionService } from './services/session-deletion.service';
+import { SessionDetailsService } from './services/session-details.service';
 
 /**
  * Main Sessions Service - Orchestrates all session-related operations
@@ -55,6 +57,7 @@ export class SessionsService {
   private boosterService: BoosterService;
   private photoService: PhotoService;
   private deletionService: SessionDeletionService;
+  private detailsService: SessionDetailsService;
 
   constructor() {
     this.creationService = new SessionCreationService();
@@ -69,6 +72,7 @@ export class SessionsService {
     this.boosterService = new BoosterService();
     this.photoService = new PhotoService();
     this.deletionService = new SessionDeletionService();
+    this.detailsService = new SessionDetailsService();
   }
 
   // ============================================================
@@ -111,6 +115,15 @@ export class SessionsService {
 
   async deleteSession(sessionId: string, deletedBy: string) {
     return this.deletionService.deleteSession(sessionId, deletedBy);
+  }
+
+  async updateSessionDetails(
+    sessionId: string,
+    data: UpdateSessionDetailsInput,
+    userId: string,
+    branchId: string
+  ) {
+    return this.detailsService.updateSessionDetails(sessionId, data, userId, branchId);
   }
 
   // ============================================================

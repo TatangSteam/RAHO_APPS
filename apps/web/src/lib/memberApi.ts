@@ -97,8 +97,10 @@ export const memberApi = {
   },
 
   // Get member packages (for staff)
-  getMemberPackages: async (memberId: string): Promise<MemberPackage[]> => {
-    const { data } = await api.get<{ data: MemberPackage[] }>(`/members/${memberId}/packages`);
+  getMemberPackages: async (memberId: string, branchId?: string): Promise<MemberPackage[]> => {
+    const { data } = await api.get<{ data: MemberPackage[] }>(`/members/${memberId}/packages`, {
+      params: branchId ? { branchId } : undefined,
+    });
     return data.data;
   },
 

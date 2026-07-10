@@ -99,14 +99,15 @@ export class PackagesController {
     try {
       const { memberId } = req.params;
       const { branchId, role, branches } = req.user!;
+      const requestedBranchId = typeof req.query.branchId === 'string' ? req.query.branchId : undefined;
 
       console.log('🎯 [Packages Controller] getMemberPackages called');
       console.log('  - memberId:', memberId);
       console.log('  - branchId:', branchId);
       console.log('  - role:', role);
 
-      // ADMIN_MANAGER and SUPER_ADMIN should ALWAYS use member's registration branch
-      // They can view packages across all branches
+      // ADMIN_MANAGER and SUPER_ADMIN may request the session branch explicitly.
+      // Without a branch filter, keep the existing registration-branch behavior.
       let effectiveBranchIds = branchId ? [branchId] : [];
       
       if (role === 'ADMIN_MANAGER' || role === 'SUPER_ADMIN') {
@@ -119,8 +120,27 @@ export class PackagesController {
         if (!member) {
           throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
         }
+
+        if (requestedBranchId && role === 'ADMIN_MANAGER') {
+          const managedBranch = await prisma.managerBranch.findFirst({
+            where: {
+              userId: req.user!.userId,
+              branchId: requestedBranchId,
+              branch: { isActive: true },
+            },
+            select: { id: true },
+          });
+
+          if (!managedBranch) {
+            throw {
+              status: 403,
+              code: 'PACKAGE_BRANCH_ACCESS_DENIED',
+              message: 'Anda tidak memiliki akses ke paket member pada cabang ini',
+            };
+          }
+        }
         
-        effectiveBranchIds = [member.registrationBranchId];
+        effectiveBranchIds = [requestedBranchId || member.registrationBranchId];
         console.log('  - Using member registration branch:', effectiveBranchIds);
       } else if (role === 'DOCTOR' || role === 'NURSE') {
         effectiveBranchIds = Array.from(new Set([...(branches || []), ...(branchId ? [branchId] : [])]));

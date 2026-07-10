@@ -11,6 +11,7 @@ import type {
   VitalSign,
   UpdateBoosterTypeInput,
   UpdateSessionBoosterPackageInput,
+  UpdateSessionDetailsInput,
   CreateInfusionInput,
   InfusionExecution,
 } from '@/types/session';
@@ -46,6 +47,14 @@ export const sessionApi = {
     message: string;
   }> => {
     const response = await api.delete(`/treatment-sessions/${sessionId}`);
+    return response.data.data;
+  },
+
+  updateSessionDetails: async (
+    sessionId: string,
+    data: UpdateSessionDetailsInput
+  ): Promise<any> => {
+    const response = await api.patch(`/treatment-sessions/${sessionId}/details`, data);
     return response.data.data;
   },
 

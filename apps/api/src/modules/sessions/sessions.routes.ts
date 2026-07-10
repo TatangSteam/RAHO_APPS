@@ -82,6 +82,13 @@ router.delete(
   controller.deleteSession.bind(controller)
 );
 
+router.patch(
+  '/:sessionId/details',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  controller.updateSessionDetails.bind(controller)
+);
+
 // ============================================================
 // STEP 1: DIAGNOSIS
 // ============================================================
