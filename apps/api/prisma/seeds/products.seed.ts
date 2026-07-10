@@ -5,7 +5,7 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * 
  * SATUAN SESUAI LIST:
  * - IFA: Botol
- * - Cairan Terapi (NB-HHO, NB-NO, dll): ml
+ * - Cairan Terapi: gunakan baseUnit stok gudang dan usageUnit pemakaian terapi
  * - Handscoon S/M: Piece
  * - Oneswab: Piece
  * - Ultrafik: Piece
@@ -40,7 +40,7 @@ export async function seedProducts(prisma: PrismaClient) {
     },
 
     // ==================== NANOBUBBLE THERAPY (NBT) ====================
-    { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble HHO - untuk field: hho' },
+    { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, unit: 'botol', baseUnit: 'botol', usageUnit: 'ml', conversionFactor: 25, description: 'Nano Bubble HHO 25ml per botol - untuk field: hho' },
     { sku: 'PRD-NBT-HHO-002', name: 'HHO Konsentrat', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'HHO Konsentrat' },
     { sku: 'PRD-NBT-CNO-001', name: 'NB NO', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Nitric Oxide - untuk field: no' },
     { sku: 'PRD-NBT-CGT-001', name: 'NB Gasotransmitter (GT)', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Gasotransmitter - untuk field: gaso' },

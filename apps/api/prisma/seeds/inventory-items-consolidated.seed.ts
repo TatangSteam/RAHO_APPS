@@ -6,7 +6,7 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * 
  * SATUAN SESUAI LIST:
  * - IFA: Botol
- * - Cairan Terapi (NB-HHO, NB-NO, dll): ml
+ * - Cairan Terapi: gunakan baseUnit stok gudang dan usageUnit pemakaian terapi
  * - Handscoon S/M: Piece
  * - Oneswab: Piece
  * - Ultrafik: Piece
@@ -37,7 +37,7 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
     { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus lengkap - WAJIB per sesi terapi', stock: 500, minStock: 100 },
 
     // ==================== NANOBUBBLE THERAPY (NBT) ====================
-    { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble HHO - untuk field: hho', stock: 33000, minStock: 5000 },
+    { sku: 'PRD-NBT-HHO-001', name: 'NB-HHO', category: ProductCategory.MEDICINE, baseUnit: 'botol', usageUnit: 'ml', conversionFactor: 25, description: 'Nano Bubble HHO 25ml per botol - untuk field: hho', stock: 1320, minStock: 200 },
     { sku: 'PRD-NBT-HHO-002', name: 'HHO Konsentrat', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'HHO Konsentrat', stock: 5000, minStock: 1000 },
     { sku: 'PRD-NBT-CNO-001', name: 'NB NO', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Nitric Oxide - untuk field: no', stock: 3000, minStock: 500 },
     { sku: 'PRD-NBT-CGT-001', name: 'NB Gasotransmitter (GT)', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Nano Bubble Gasotransmitter - untuk field: gaso', stock: 17000, minStock: 3000 },
@@ -220,7 +220,7 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
   
   console.log('\n💡 SATUAN SESUAI LIST BARANG RAHO:');
   console.log('   • IFA: Botol');
-  console.log('   • Cairan Terapi (NB-HHO, NB-NO, dll): ml');
+  console.log('   • Cairan Terapi: baseUnit stok gudang, usageUnit pemakaian terapi');
   console.log('   • Handscoon S/M: Piece');
   console.log('   • Oneswab: Piece');
   console.log('   • Ultrafik: Piece');
