@@ -23,6 +23,24 @@ export class LogisticsController {
     }
   }
 
+  async listHomecareBranches(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBranches(this.actor(req));
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listHomecareStaff(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareStaff(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async createBranchStockRequest(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.createBranchStockRequest(this.actor(req), req.body);
@@ -77,6 +95,15 @@ export class LogisticsController {
     }
   }
 
+  async listHomecareTeams(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareTeams(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async addHomecareTeamMember(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.addHomecareTeamMember(this.actor(req), req.params.teamId, req.body);
@@ -109,6 +136,15 @@ export class LogisticsController {
     }
   }
 
+  async listHomecareBags(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBags(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getBagStock(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.getBagStock(this.actor(req), req.params.bagId);
@@ -122,6 +158,15 @@ export class LogisticsController {
     try {
       const result = await logisticsService.createBagStockRequest(this.actor(req), req.body);
       return sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listBagStockRequests(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBagRequests(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
     } catch (err) {
       next(err);
     }
@@ -148,6 +193,15 @@ export class LogisticsController {
   async shipBagShipment(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.shipBagShipment(this.actor(req), req.params.shipmentId, req.body);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listBagShipments(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBagShipments(this.actor(req), req.query as any);
       return sendSuccess(res, result);
     } catch (err) {
       next(err);

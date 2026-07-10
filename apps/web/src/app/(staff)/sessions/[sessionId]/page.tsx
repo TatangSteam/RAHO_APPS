@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
+import { memberApi } from '@/lib/memberApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { useAuthStore } from '@/stores/authStore';
 import type { SessionDetail } from '@/types/session';
 import Step1Diagnosis from '@/components/sessions/Step1Diagnosis';
 import Step2TherapyPlan from '@/components/sessions/Step2TherapyPlan';
@@ -18,10 +20,23 @@ import Step8ComplaintsRecommendations from '@/components/sessions/Step8Complaint
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
 import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
 
+type BoosterPackageOption = {
+  packageId: string;
+  packageCode: string;
+  packageType: string;
+  totalSessions: number;
+  usedSessions: number;
+  remainingSessions: number;
+  status: string;
+  branchId?: string;
+  branchName?: string;
+};
+
 export default function SessionDetailPage() {
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuthStore();
   const sessionId = params.sessionId as string;
   const requestedReturnTo = searchParams.get('returnTo');
   const returnTo =
@@ -37,6 +52,13 @@ export default function SessionDetailPage() {
   const [showTherapyPlanEditModal, setShowTherapyPlanEditModal] = useState(false);
   const [therapyPlanSetForEdit, setTherapyPlanSetForEdit] = useState<TherapyPlan[]>([]);
   const [loadingTherapyPlanEdit, setLoadingTherapyPlanEdit] = useState(false);
+  const [showBoosterEditModal, setShowBoosterEditModal] = useState(false);
+  const [loadingBoosterPackages, setLoadingBoosterPackages] = useState(false);
+  const [savingBoosterPackage, setSavingBoosterPackage] = useState(false);
+  const [boosterPackages, setBoosterPackages] = useState<BoosterPackageOption[]>([]);
+  const [boosterEditUseBooster, setBoosterEditUseBooster] = useState(false);
+  const [boosterEditPackageId, setBoosterEditPackageId] = useState('');
+  const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessionDetail();
@@ -108,6 +130,72 @@ export default function SessionDetailPage() {
     setActiveStep(4);
   };
 
+  const formatBoosterPackageLabel = (pkg: BoosterPackageOption) => {
+    const branchLabel = pkg.branchName ? ` - ${pkg.branchName}` : '';
+    return `${pkg.packageCode} (${pkg.remainingSessions}/${pkg.totalSessions} sisa)${branchLabel}`;
+  };
+
+  const openBoosterEditModal = async () => {
+    if (!session) return;
+
+    setBoosterEditError(null);
+    setBoosterEditUseBooster(!!session.session.boosterPackage);
+    setBoosterEditPackageId(session.session.boosterPackage?.packageId || '');
+    setShowBoosterEditModal(true);
+    setLoadingBoosterPackages(true);
+
+    try {
+      const packages = await memberApi.getMemberPackages(session.memberId);
+      const currentPackageId = session.session.boosterPackage?.packageId;
+      const sessionBranchId = session.session.branchId;
+      const availableBoosters = packages.filter((pkg: any) => {
+        const isCurrentPackage = pkg.packageId === currentPackageId;
+        const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
+        const hasRemainingSession = Number(pkg.remainingSessions || 0) > 0;
+
+        return (
+          pkg.packageType === 'BOOSTER' &&
+          isSameBranch &&
+          (isCurrentPackage || (pkg.status === 'ACTIVE' && hasRemainingSession))
+        );
+      });
+
+      setBoosterPackages(availableBoosters);
+    } catch (error: any) {
+      devError('Error loading booster packages:', error);
+      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memuat paket booster');
+    } finally {
+      setLoadingBoosterPackages(false);
+    }
+  };
+
+  const handleSaveBoosterPackage = async () => {
+    if (!session) return;
+
+    if (boosterEditUseBooster && !boosterEditPackageId) {
+      setBoosterEditError('Pilih paket booster terlebih dahulu');
+      return;
+    }
+
+    try {
+      setSavingBoosterPackage(true);
+      setBoosterEditError(null);
+      await sessionApi.updateSessionBoosterPackage(sessionId, {
+        useBooster: boosterEditUseBooster,
+        boosterPackageId: boosterEditUseBooster ? boosterEditPackageId : null,
+      });
+
+      showToast.success('Paket booster sesi berhasil diperbarui');
+      setShowBoosterEditModal(false);
+      await loadSessionDetail();
+    } catch (error: any) {
+      devError('Error updating session booster package:', error);
+      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memperbarui paket booster sesi');
+    } finally {
+      setSavingBoosterPackage(false);
+    }
+  };
+
   const handleCompleteSession = async () => {
     if (!session) return;
 
@@ -169,6 +257,8 @@ export default function SessionDetailPage() {
   if (!session) return null;
 
   const { session: sessionInfo, steps } = session;
+  const canEditSessionBoosterPackage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
   // Check if step can be accessed
   const canAccessStep = (step: number): boolean => {
@@ -238,6 +328,52 @@ export default function SessionDetailPage() {
             <span className="badge badge-success" style={{ fontSize: '14px', padding: '8px 16px' }}>
               ✓ Sesi Selesai
             </span>
+          )}
+        </div>
+      </div>
+
+      {/* Session Booster Package */}
+      <div className="card" style={{ marginBottom: '24px', padding: '20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '8px' }}>
+              Paket Booster Sesi
+            </h3>
+            {sessionInfo.boosterPackage ? (
+              <div style={{ color: 'var(--text-secondary)', fontSize: '14px', lineHeight: 1.7 }}>
+                <div>
+                  Status: <strong style={{ color: 'var(--text-primary)' }}>Menggunakan paket booster</strong>
+                </div>
+                <div>
+                  Paket: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.packageCode}</strong>
+                </div>
+                {sessionInfo.boosterPackage.boosterType && (
+                  <div>
+                    Jenis booster/stok: <strong style={{ color: 'var(--text-primary)' }}>{sessionInfo.boosterPackage.boosterType}</strong>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                Sesi ini tidak menggunakan paket booster.
+              </p>
+            )}
+            {boosterPackageChangeLocked && (
+              <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '10px' }}>
+                Paket booster tidak bisa diganti karena jenis booster/stok sudah digunakan pada sesi ini.
+              </p>
+            )}
+          </div>
+
+          {canEditSessionBoosterPackage && (
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={openBoosterEditModal}
+              disabled={boosterPackageChangeLocked}
+              title={boosterPackageChangeLocked ? 'Jenis booster/stok sudah digunakan' : 'Edit paket booster sesi'}
+            >
+              Edit Paket Booster
+            </button>
           )}
         </div>
       </div>
@@ -670,6 +806,135 @@ export default function SessionDetailPage() {
           >
             ← Kembali ke Profil Member
           </button>
+        </div>
+      )}
+
+      {showBoosterEditModal && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1100,
+          background: 'rgba(0, 0, 0, 0.65)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px',
+        }}>
+          <div
+            className="card"
+            style={{
+              width: '100%',
+              maxWidth: '520px',
+              padding: '24px',
+              borderRadius: '16px',
+              boxShadow: '0 24px 80px rgba(0, 0, 0, 0.35)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
+                  Edit Paket Booster
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                  Atur apakah sesi ini memakai paket booster dan pilih paket boosternya.
+                </p>
+              </div>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setShowBoosterEditModal(false)}
+                disabled={savingBoosterPackage}
+              >
+                Tutup
+              </button>
+            </div>
+
+            {boosterEditError && (
+              <div style={{
+                padding: '12px 14px',
+                borderRadius: '10px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#f87171',
+                fontSize: '14px',
+                marginBottom: '16px',
+              }}>
+                {boosterEditError}
+              </div>
+            )}
+
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              fontSize: '14px',
+              fontWeight: 600,
+              marginBottom: '14px',
+              cursor: savingBoosterPackage ? 'not-allowed' : 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={boosterEditUseBooster}
+                onChange={(event) => {
+                  setBoosterEditUseBooster(event.target.checked);
+                  if (!event.target.checked) setBoosterEditPackageId('');
+                }}
+                disabled={savingBoosterPackage || loadingBoosterPackages}
+              />
+              Gunakan paket booster untuk sesi ini
+            </label>
+
+            {boosterEditUseBooster && (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Paket Booster
+                </label>
+                <select
+                  value={boosterEditPackageId}
+                  onChange={(event) => setBoosterEditPackageId(event.target.value)}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                >
+                  <option value="">
+                    {loadingBoosterPackages ? 'Memuat paket booster...' : 'Pilih paket booster'}
+                  </option>
+                  {boosterPackages.map((pkg) => (
+                    <option key={pkg.packageId} value={pkg.packageId}>
+                      {formatBoosterPackageLabel(pkg)}
+                    </option>
+                  ))}
+                </select>
+                {!loadingBoosterPackages && boosterPackages.length === 0 && (
+                  <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '8px' }}>
+                    Tidak ada paket booster aktif dengan sisa sesi untuk cabang ini.
+                  </p>
+                )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setShowBoosterEditModal(false)}
+                disabled={savingBoosterPackage}
+              >
+                Batal
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleSaveBoosterPackage}
+                disabled={savingBoosterPackage || loadingBoosterPackages}
+              >
+                {savingBoosterPackage ? 'Menyimpan...' : 'Simpan'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -10,6 +10,7 @@ import type {
   CreateVitalSignInput,
   VitalSign,
   UpdateBoosterTypeInput,
+  UpdateSessionBoosterPackageInput,
   CreateInfusionInput,
   InfusionExecution,
 } from '@/types/session';
@@ -110,6 +111,14 @@ export const sessionApi = {
 
   updateBoosterType: async (sessionId: string, data: UpdateBoosterTypeInput): Promise<any> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/booster-type`, data);
+    return response.data.data;
+  },
+
+  updateSessionBoosterPackage: async (
+    sessionId: string,
+    data: UpdateSessionBoosterPackageInput
+  ): Promise<any> => {
+    const response = await api.patch(`/treatment-sessions/${sessionId}/booster-package`, data);
     return response.data.data;
   },
 

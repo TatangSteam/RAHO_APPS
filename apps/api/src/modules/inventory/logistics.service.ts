@@ -20,6 +20,7 @@ import {
   canRequestBagStock,
   centralStockManagerRoles,
   centralStockVisibleRoles,
+  logisticStaffRoles,
   stockShipmentRoles,
 } from './logistics.access';
 
@@ -588,6 +589,312 @@ export class LogisticsService {
         };
       }),
     };
+  }
+
+  async listHomecareBranches(actor: LogisticsActor) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses logistik homecare');
+
+    if (centralStockManagerRoles.has(actor.role)) {
+      const branches = await prisma.branch.findMany({
+        where: { isActive: true },
+        orderBy: [{ type: 'desc' }, { name: 'asc' }],
+      });
+
+      return branches.map((branch) => ({
+        id: branch.id,
+        branchCode: branch.branchCode,
+        name: branch.name,
+        type: branch.type,
+      }));
+    }
+
+    const branchIds = new Set<string>();
+    if (actor.branchId) branchIds.add(actor.branchId);
+
+    const teamMemberships = await prisma.homecareTeamMember.findMany({
+      where: { userId: actor.userId, isActive: true },
+      include: { team: true },
+    });
+    teamMemberships.forEach((membership) => branchIds.add(membership.team.branchId));
+
+    const branches = await prisma.branch.findMany({
+      where: { id: { in: Array.from(branchIds) }, isActive: true },
+      orderBy: [{ type: 'desc' }, { name: 'asc' }],
+    });
+
+    return branches.map((branch) => ({
+      id: branch.id,
+      branchCode: branch.branchCode,
+      name: branch.name,
+      type: branch.type,
+    }));
+  }
+
+  async listHomecareStaff(actor: LogisticsActor, query: { branchId?: string; search?: string } = {}) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses melihat staff homecare');
+
+    if (query.branchId) {
+      await this.assertManagerBranchAccess(actor, query.branchId);
+    }
+
+    const users = await prisma.user.findMany({
+      where: {
+        isActive: true,
+        role: { in: [Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
+        ...(query.branchId
+          ? {
+              OR: [
+                { branchId: query.branchId },
+                { staffBranches: { some: { branchId: query.branchId } } },
+              ],
+            }
+          : {}),
+        ...(query.search
+          ? {
+              OR: [
+                { email: { contains: query.search, mode: 'insensitive' } },
+                { staffCode: { contains: query.search, mode: 'insensitive' } },
+                { profile: { fullName: { contains: query.search, mode: 'insensitive' } } },
+              ],
+            }
+          : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        staffCode: true,
+        branchId: true,
+        profile: { select: { fullName: true, phone: true } },
+        branch: { select: { id: true, branchCode: true, name: true } },
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
+      take: 200,
+    });
+
+    return users.map((user) => ({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      staffCode: user.staffCode,
+      fullName: user.profile?.fullName || user.email,
+      phone: user.profile?.phone || null,
+      branchId: user.branchId,
+      branchName: user.branch?.name || null,
+      branchCode: user.branch?.branchCode || null,
+    }));
+  }
+
+  async listHomecareTeams(actor: LogisticsActor, query: { branchId?: string; search?: string; includeInactive?: boolean } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat tim homecare');
+
+    if (query.branchId) {
+      await this.assertManagerBranchAccess(actor, query.branchId);
+    }
+
+    const where: any = {
+      ...(query.includeInactive ? {} : { isActive: true }),
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: 'insensitive' } },
+              { teamCode: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.members = { some: { userId: actor.userId, isActive: true } };
+    }
+
+    const teams = await prisma.homecareTeam.findMany({
+      where,
+      include: {
+        members: { where: { isActive: true }, orderBy: { joinedAt: 'desc' } },
+        bags: { where: { isActive: true }, orderBy: { createdAt: 'desc' } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const branches = await prisma.branch.findMany({
+      where: { id: { in: Array.from(new Set(teams.map((team) => team.branchId))) } },
+      select: { id: true, branchCode: true, name: true, type: true },
+    });
+    const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+
+    const userIds = Array.from(new Set(teams.flatMap((team) => team.members.map((member) => member.userId))));
+    const users = userIds.length
+      ? await prisma.user.findMany({
+          where: { id: { in: userIds } },
+          select: { id: true, role: true, staffCode: true, email: true, profile: { select: { fullName: true } } },
+        })
+      : [];
+    const userMap = new Map(users.map((user) => [user.id, user]));
+
+    return teams.map((team) => {
+      const branch = branchMap.get(team.branchId);
+      return {
+        id: team.id,
+        teamCode: team.teamCode,
+        name: team.name,
+        branchId: team.branchId,
+        branchName: branch?.name || null,
+        branchCode: branch?.branchCode || null,
+        branchType: branch?.type || null,
+        description: team.description,
+        isActive: team.isActive,
+        memberCount: team.members.length,
+        bagCount: team.bags.length,
+        members: team.members.map((member) => {
+          const user = userMap.get(member.userId);
+          return {
+            id: member.id,
+            userId: member.userId,
+            role: member.role,
+            notes: member.notes,
+            joinedAt: member.joinedAt?.toISOString?.(),
+            fullName: user?.profile?.fullName || user?.email || member.userId,
+            staffCode: user?.staffCode || null,
+            userRole: user?.role || null,
+          };
+        }),
+        bags: team.bags.map((bag) => ({
+          id: bag.id,
+          bagCode: bag.bagCode,
+          name: bag.name,
+          status: bag.status,
+        })),
+        createdAt: team.createdAt?.toISOString?.(),
+        updatedAt: team.updatedAt?.toISOString?.(),
+      };
+    });
+  }
+
+  async listHomecareBags(actor: LogisticsActor, query: { teamId?: string; branchId?: string; status?: string; search?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat tas homecare');
+
+    if (query.branchId) {
+      await this.assertManagerBranchAccess(actor, query.branchId);
+    }
+
+    const where: any = {
+      isActive: true,
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+      ...(query.branchId ? { branchId: query.branchId } : {}),
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.search
+        ? {
+            OR: [
+              { name: { contains: query.search, mode: 'insensitive' } },
+              { bagCode: { contains: query.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.team = { members: { some: { userId: actor.userId, isActive: true } } };
+    }
+
+    const bags = await prisma.homecareBag.findMany({
+      where,
+      include: {
+        team: true,
+        stocks: true,
+        stockRequests: {
+          orderBy: { createdAt: 'desc' },
+          take: 3,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const branches = await prisma.branch.findMany({
+      where: { id: { in: Array.from(new Set(bags.map((bag) => bag.branchId))) } },
+      select: { id: true, branchCode: true, name: true, type: true },
+    });
+    const branchMap = new Map(branches.map((branch) => [branch.id, branch]));
+
+    return bags.map((bag) => {
+      const branch = branchMap.get(bag.branchId);
+      return {
+        id: bag.id,
+        bagCode: bag.bagCode,
+        name: bag.name,
+        teamId: bag.teamId,
+        teamCode: bag.team?.teamCode,
+        teamName: bag.team?.name,
+        branchId: bag.branchId,
+        branchName: branch?.name || null,
+        branchCode: branch?.branchCode || null,
+        branchType: branch?.type || null,
+        status: bag.status,
+        notes: bag.notes,
+        stockCount: bag.stocks.length,
+        lowStockCount: bag.stocks.filter((stock) => Number(stock.stock) <= Number(stock.minThreshold)).length,
+        totalStockQty: bag.stocks.reduce((sum, stock) => sum + Number(stock.stock), 0),
+        recentRequests: bag.stockRequests.map((request) => ({
+          id: request.id,
+          requestCode: request.requestCode,
+          status: request.status,
+          createdAt: request.createdAt?.toISOString?.(),
+        })),
+        createdAt: bag.createdAt?.toISOString?.(),
+        updatedAt: bag.updatedAt?.toISOString?.(),
+      };
+    });
+  }
+
+  async listHomecareBagRequests(actor: LogisticsActor, query: { status?: string; teamId?: string; bagId?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat request stok tas');
+
+    const where: any = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+      ...(query.bagId ? { bagId: query.bagId } : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
+    }
+
+    const requests = await prisma.homecareBagStockRequest.findMany({
+      where,
+      include: { team: true, bag: true, items: true, shipment: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return requests.map((request) => ({
+      ...this.formatBagRequest(request),
+      shipment: request.shipment
+        ? { id: request.shipment.id, shipmentCode: request.shipment.shipmentCode, status: request.shipment.status }
+        : null,
+    }));
+  }
+
+  async listHomecareBagShipments(actor: LogisticsActor, query: { status?: string; bagId?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat shipment tas');
+
+    const where: any = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.bagId ? { toBagId: query.bagId } : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
+    }
+
+    const shipments = await prisma.homecareBagShipment.findMany({
+      where,
+      include: { bag: true, request: true, items: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    return shipments.map((shipment) => this.formatBagShipment(shipment));
   }
 
   // ============================================================

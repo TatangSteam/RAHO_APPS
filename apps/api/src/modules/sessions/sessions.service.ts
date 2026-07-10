@@ -8,6 +8,7 @@ import type {
   CreateInfusionInput,
   CreateMaterialUsageInput,
   CreateEvaluationInput,
+  UpdateSessionBoosterPackageInput,
 } from './sessions.schema';
 
 // Import modular services
@@ -182,6 +183,15 @@ export class SessionsService {
 
   async updateBoosterType(sessionId: string, boosterType: string, userId: string, branchId: string) {
     return this.boosterService.updateBoosterType(sessionId, boosterType, userId, branchId);
+  }
+
+  async updateSessionBoosterPackage(
+    sessionId: string,
+    data: UpdateSessionBoosterPackageInput,
+    userId: string,
+    branchId: string
+  ) {
+    return this.boosterService.updateSessionBoosterPackage(sessionId, data, userId, branchId);
   }
 
   async getBoosterStockAvailability(branchId: string) {

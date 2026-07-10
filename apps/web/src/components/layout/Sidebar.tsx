@@ -113,6 +113,12 @@ const MENU_GROUPS: MenuGroup[] = [
         icon: <Truck size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
+      {
+        label: 'Tas Homecare',
+        href: '/inventory/homecare-bags',
+        icon: <Package size={20} />,
+        roles: ALL_STAFF,
+      },
     ],
   },
   {

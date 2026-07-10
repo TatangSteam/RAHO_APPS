@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Role, StockMutationType } from '@prisma/client';
+import { AuditAction, PackageStatus, Role, StockMutationType } from '@prisma/client';
+import type { UpdateSessionBoosterPackageInput } from '../sessions.schema';
 
 // BoosterType enum values (not exported from Prisma because not used as field type in any model)
 type BoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2';
@@ -42,6 +43,149 @@ export class BoosterService {
         unit: no2Item?.masterProduct.unit || 'ml',
       },
     };
+  }
+
+  /**
+   * Update whether a session uses a member booster package.
+   * This adjusts package usage counters so voucher balance stays consistent.
+   */
+  async updateSessionBoosterPackage(
+    sessionId: string,
+    input: UpdateSessionBoosterPackageInput,
+    userId: string,
+    branchId: string,
+  ) {
+    const nextBoosterPackageId = input.useBooster ? input.boosterPackageId : null;
+
+    const session = await prisma.treatmentSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        boosterPackage: true,
+        encounter: { select: { memberId: true } },
+      },
+    });
+
+    if (!session) {
+      throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
+    }
+
+    if (session.branchId !== branchId) {
+      throw {
+        status: 403,
+        code: 'SESSION_BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
+      };
+    }
+
+    if (session.boosterType && session.boosterPackageId !== nextBoosterPackageId) {
+      throw {
+        status: 409,
+        code: 'BOOSTER_TYPE_ALREADY_USED',
+        message: 'Paket booster tidak dapat diganti karena jenis booster/stok sudah digunakan pada sesi ini',
+      };
+    }
+
+    if (session.boosterPackageId === nextBoosterPackageId) {
+      return session;
+    }
+
+    let nextPackage = null;
+    if (nextBoosterPackageId) {
+      nextPackage = await prisma.memberPackage.findUnique({
+        where: { id: nextBoosterPackageId },
+      });
+
+      if (!nextPackage) {
+        throw { status: 404, code: 'BOOSTER_PACKAGE_NOT_FOUND', message: 'Paket booster tidak ditemukan' };
+      }
+
+      if (nextPackage.memberId !== session.encounter.memberId) {
+        throw {
+          status: 422,
+          code: 'BOOSTER_MEMBER_MISMATCH',
+          message: 'Paket booster tidak terdaftar untuk member sesi ini',
+        };
+      }
+
+      if (nextPackage.branchId !== session.branchId) {
+        throw {
+          status: 422,
+          code: 'BOOSTER_BRANCH_MISMATCH',
+          message: 'Paket booster tidak terdaftar di cabang sesi ini',
+        };
+      }
+
+      if (nextPackage.packageType !== 'BOOSTER') {
+        throw {
+          status: 422,
+          code: 'INVALID_BOOSTER_PACKAGE',
+          message: 'Paket yang dipilih bukan paket booster',
+        };
+      }
+
+      if (nextPackage.status !== PackageStatus.ACTIVE) {
+        throw { status: 422, code: 'BOOSTER_NOT_ACTIVE', message: 'Paket booster tidak aktif' };
+      }
+
+      if (nextPackage.totalSessions - nextPackage.usedSessions <= 0) {
+        throw { status: 422, code: 'BOOSTER_EXHAUSTED', message: 'Sesi booster sudah habis' };
+      }
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      if (session.boosterPackage) {
+        const usedSessions = Math.max(0, session.boosterPackage.usedSessions - 1);
+        await tx.memberPackage.update({
+          where: { id: session.boosterPackage.id },
+          data: {
+            usedSessions,
+            status:
+              session.boosterPackage.status === PackageStatus.EXPIRED &&
+              usedSessions < session.boosterPackage.totalSessions
+                ? PackageStatus.ACTIVE
+                : session.boosterPackage.status,
+          },
+        });
+      }
+
+      if (nextPackage) {
+        const usedSessions = nextPackage.usedSessions + 1;
+        await tx.memberPackage.update({
+          where: { id: nextPackage.id },
+          data: {
+            usedSessions,
+            status:
+              usedSessions >= nextPackage.totalSessions
+                ? PackageStatus.EXPIRED
+                : nextPackage.status,
+          },
+        });
+      }
+
+      return tx.treatmentSession.update({
+        where: { id: sessionId },
+        data: {
+          boosterPackageId: nextBoosterPackageId,
+          boosterType: nextBoosterPackageId ? session.boosterType : null,
+        },
+        include: { boosterPackage: true },
+      });
+    });
+
+    await logAudit({
+      userId,
+      branchId: session.branchId,
+      action: AuditAction.UPDATE,
+      resource: 'TreatmentSession',
+      resourceId: sessionId,
+      meta: {
+        action: 'UPDATE_SESSION_BOOSTER_PACKAGE',
+        previousBoosterPackageId: session.boosterPackageId,
+        nextBoosterPackageId,
+      },
+    });
+
+    return result;
   }
 
   /**

@@ -3,7 +3,7 @@
 // ============================================================
 
 export type SessionType = 'ON_SITE' | 'HOME_CARE';
-export type BoosterType = 'NO' | 'GASSOTRAUS';
+export type BoosterType = 'NO' | 'GT' | 'MB' | 'KCL' | 'H2S' | 'HK' | 'O3' | 'HHO' | 'NO2' | 'GASSOTRAUS';
 export type VitalType = 'SISTOL' | 'DIASTOL' | 'HR' | 'SATURASI' | 'PI';
 export type VitalTiming = 'SEBELUM' | 'SESUDAH';
 export type BottleType = 'IFA' | 'EDTA';
@@ -324,6 +324,11 @@ export interface CreateVitalSignInput {
 
 export interface UpdateBoosterTypeInput {
   boosterType: BoosterType;
+}
+
+export interface UpdateSessionBoosterPackageInput {
+  useBooster: boolean;
+  boosterPackageId?: string | null;
 }
 
 // ============================================================

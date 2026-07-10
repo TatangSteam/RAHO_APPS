@@ -174,6 +174,16 @@ export const updateBoosterTypeSchema = z.object({
 
 export type UpdateBoosterTypeInput = z.infer<typeof updateBoosterTypeSchema>;
 
+export const updateSessionBoosterPackageSchema = z.object({
+  useBooster: z.boolean(),
+  boosterPackageId: z.string().cuid().nullable().optional(),
+}).refine(
+  (data) => !data.useBooster || !!data.boosterPackageId,
+  { message: 'Paket booster wajib dipilih jika menggunakan booster' }
+);
+
+export type UpdateSessionBoosterPackageInput = z.infer<typeof updateSessionBoosterPackageSchema>;
+
 // ============================================================
 // STEP 5: INFUSION EXECUTION
 // ============================================================

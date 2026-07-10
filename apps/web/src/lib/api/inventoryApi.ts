@@ -317,6 +317,185 @@ export interface Shipment {
   updatedAt: string;
 }
 
+export interface HomecareProduct {
+  id: string;
+  sku?: string | null;
+  name: string;
+  category: string;
+  baseUnit: string;
+  usageUnit: string;
+  conversionFactor?: number;
+  isActive: boolean;
+  centralStockQty?: number;
+  minThreshold?: number;
+  storageLocation?: string | null;
+}
+
+export interface HomecareBranchOption {
+  id: string;
+  branchCode: string;
+  name: string;
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
+}
+
+export interface HomecareStaffOption {
+  userId: string;
+  email: string;
+  role: string;
+  staffCode?: string | null;
+  fullName: string;
+  phone?: string | null;
+  branchId?: string | null;
+  branchName?: string | null;
+  branchCode?: string | null;
+}
+
+export interface HomecareTeam {
+  id: string;
+  teamCode: string;
+  name: string;
+  branchId: string;
+  branchName?: string | null;
+  branchCode?: string | null;
+  branchType?: string | null;
+  description?: string | null;
+  isActive: boolean;
+  memberCount: number;
+  bagCount: number;
+  members: Array<{
+    id: string;
+    userId: string;
+    role: string;
+    notes?: string | null;
+    joinedAt?: string;
+    fullName: string;
+    staffCode?: string | null;
+    userRole?: string | null;
+  }>;
+  bags: Array<{
+    id: string;
+    bagCode: string;
+    name: string;
+    status: string;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBag {
+  id: string;
+  bagCode: string;
+  name: string;
+  teamId: string;
+  teamCode?: string;
+  teamName?: string;
+  branchId: string;
+  branchName?: string | null;
+  branchCode?: string | null;
+  branchType?: string | null;
+  status: string;
+  notes?: string | null;
+  stockCount: number;
+  lowStockCount: number;
+  totalStockQty: number;
+  recentRequests: Array<{
+    id: string;
+    requestCode: string;
+    status: string;
+    createdAt?: string;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBagStockDetail {
+  id: string;
+  bagCode: string;
+  name: string;
+  status: string;
+  team: {
+    id: string;
+    teamCode: string;
+    name: string;
+  };
+  stocks: Array<{
+    id: string;
+    masterProductId: string;
+    productName?: string | null;
+    sku?: string | null;
+    category?: string | null;
+    stock: number;
+    minThreshold: number;
+    baseUnit?: string | null;
+    usageUnit?: string | null;
+  }>;
+}
+
+export interface HomecareBagRequest {
+  id: string;
+  requestCode: string;
+  teamId: string;
+  teamName?: string;
+  bagId: string;
+  bagCode?: string;
+  bagName?: string;
+  branchId: string;
+  status: string;
+  priority: string;
+  requestNotes: string;
+  reviewNotes?: string | null;
+  rejectionReason?: string | null;
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    requestedQty: number;
+    approvedQty?: number | null;
+    finalQty?: number | null;
+    notes?: string | null;
+  }>;
+  shipment?: {
+    id: string;
+    shipmentCode: string;
+    status: string;
+  } | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBagShipment {
+  id: string;
+  shipmentCode: string;
+  requestId: string;
+  fromBranchId: string;
+  toBagId: string;
+  bagCode?: string;
+  bagName?: string;
+  status: string;
+  notes?: string | null;
+  shippedAt?: string | null;
+  receivedAt?: string | null;
+  shipmentPhotoUrl?: string | null;
+  shipmentPhotoName?: string | null;
+  receiptFileUrl?: string | null;
+  receiptFileName?: string | null;
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    sentQty: number;
+    receivedQty?: number | null;
+    discrepancyType?: string | null;
+    discrepancyNotes?: string | null;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareStockItemInput {
+  masterProductId: string;
+  quantity: number;
+  notes?: string;
+}
+
 // ============================================================
 // INVENTORY API
 // ============================================================
@@ -553,6 +732,156 @@ export const inventoryApi = {
    */
   approveShipment: (shipmentId: string, notes?: string) => {
     return api.post(`/inventory/shipments/${shipmentId}/approve`, { notes });
+  },
+
+  // ============================================================
+  // HOMECARE TEAM / BAG LOGISTICS
+  // ============================================================
+
+  getHomecareProducts: (params?: { search?: string; category?: string; includeInactive?: boolean }) => {
+    return api.get('/inventory/logistics/central-stock', { params });
+  },
+
+  getHomecareBranches: () => {
+    return api.get('/inventory/logistics/homecare-branches');
+  },
+
+  getHomecareStaff: (params?: { branchId?: string; search?: string }) => {
+    return api.get('/inventory/logistics/homecare-staff', { params });
+  },
+
+  getHomecareTeams: (params?: { branchId?: string; search?: string; includeInactive?: boolean }) => {
+    return api.get('/inventory/logistics/homecare-teams', { params });
+  },
+
+  createHomecareTeam: (data: {
+    teamCode?: string;
+    name: string;
+    branchId: string;
+    description?: string;
+  }) => {
+    return api.post('/inventory/logistics/homecare-teams', data);
+  },
+
+  addHomecareTeamMember: (teamId: string, data: {
+    userId: string;
+    role: 'ADMIN_LAYANAN' | 'DOCTOR' | 'NURSE' | 'DRIVER' | 'OTHER';
+    notes?: string;
+  }) => {
+    return api.post(`/inventory/logistics/homecare-teams/${teamId}/members`, data);
+  },
+
+  removeHomecareTeamMember: (teamId: string, userId: string, notes?: string) => {
+    return api.delete(`/inventory/logistics/homecare-teams/${teamId}/members/${userId}`, { data: { notes } });
+  },
+
+  getHomecareBags: (params?: { teamId?: string; branchId?: string; status?: string; search?: string }) => {
+    return api.get('/inventory/logistics/homecare-bags', { params });
+  },
+
+  createHomecareBag: (data: {
+    bagCode?: string;
+    name: string;
+    teamId: string;
+    branchId?: string;
+    status?: 'ACTIVE' | 'INACTIVE' | 'IN_CHECKING' | 'DAMAGED' | 'LOST';
+    notes?: string;
+  }) => {
+    return api.post('/inventory/logistics/homecare-bags', data);
+  },
+
+  getHomecareBagStock: (bagId: string) => {
+    return api.get(`/inventory/logistics/homecare-bags/${bagId}/stock`);
+  },
+
+  getHomecareBagRequests: (params?: { status?: string; teamId?: string; bagId?: string }) => {
+    return api.get('/inventory/logistics/homecare-bag-requests', { params });
+  },
+
+  createHomecareBagRequest: (data: {
+    teamId: string;
+    bagId: string;
+    priority?: string;
+    requestNotes: string;
+    items: Array<{ masterProductId: string; requestedQty: number; notes?: string }>;
+  }) => {
+    return api.post('/inventory/logistics/homecare-bag-requests', data);
+  },
+
+  approveHomecareBagRequest: (
+    requestId: string,
+    data: {
+      items?: Array<{ masterProductId: string; approvedQty: number; notes?: string }>;
+      reviewNotes?: string;
+    }
+  ) => {
+    return api.post(`/inventory/logistics/homecare-bag-requests/${requestId}/approve`, data);
+  },
+
+  rejectHomecareBagRequest: (requestId: string, reviewNotes: string) => {
+    return api.post(`/inventory/logistics/homecare-bag-requests/${requestId}/reject`, { reviewNotes });
+  },
+
+  getHomecareBagShipments: (params?: { status?: string; bagId?: string }) => {
+    return api.get('/inventory/logistics/homecare-bag-shipments', { params });
+  },
+
+  shipHomecareBagShipment: (shipmentId: string, data: { notes: string; shipmentPhotoUrl?: string; shipmentPhotoName?: string }) => {
+    return api.post(`/inventory/logistics/homecare-bag-shipments/${shipmentId}/ship`, data);
+  },
+
+  receiveHomecareBagShipment: (
+    shipmentId: string,
+    data: {
+      receivedItems?: Array<{ masterProductId: string; receivedQty: number }>;
+      discrepancies?: Array<{
+        masterProductId: string;
+        expectedQty: number;
+        receivedQty: number;
+        discrepancyType: 'SHORTAGE' | 'DAMAGE' | 'WRONG_ITEM' | 'OTHER';
+        notes: string;
+      }>;
+      notes: string;
+    }
+  ) => {
+    return api.post(`/inventory/logistics/homecare-bag-shipments/${shipmentId}/receive`, data);
+  },
+
+  useHomecareBagStock: (data: {
+    bagId: string;
+    teamId?: string;
+    treatmentSessionId?: string;
+    status?: 'DRAFT' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+    usageDate?: string;
+    notes: string;
+    allowNegativeStock?: boolean;
+    items: Array<HomecareStockItemInput & { unit?: string }>;
+  }) => {
+    return api.post('/inventory/logistics/homecare-bag-usages', data);
+  },
+
+  returnHomecareBagStock: (data: {
+    bagId: string;
+    teamId?: string;
+    toBranchId: string;
+    returnedAt?: string;
+    notes: string;
+    allowNegativeStock?: boolean;
+    items: Array<HomecareStockItemInput & { isReusable?: boolean; condition?: string }>;
+  }) => {
+    return api.post('/inventory/logistics/homecare-bag-returns', data);
+  },
+
+  createHomecareBagOpname: (data: {
+    bagId: string;
+    teamId?: string;
+    status?: 'DRAFT' | 'COMPLETED' | 'CANCELLED';
+    checkedAt?: string;
+    notes: string;
+    createAdjustments?: boolean;
+    items: Array<{ masterProductId: string; physicalQty: number; notes?: string }>;
+  }) => {
+    return api.post('/inventory/logistics/homecare-bag-opnames', data);
   },
 
   // ============================================================

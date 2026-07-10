@@ -205,6 +205,20 @@ router.get(
   logisticsController.getCentralStock.bind(logisticsController)
 );
 
+router.get(
+  '/logistics/homecare-branches',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listHomecareBranches.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-staff',
+  authenticate,
+  authorize(canManageCentralStock),
+  logisticsController.listHomecareStaff.bind(logisticsController)
+);
+
 router.post(
   '/logistics/branch-requests',
   authenticate,
@@ -245,6 +259,13 @@ router.post(
   logisticsController.receiveBranchShipment.bind(logisticsController)
 );
 
+router.get(
+  '/logistics/homecare-teams',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listHomecareTeams.bind(logisticsController)
+);
+
 router.post(
   '/logistics/homecare-teams',
   authenticate,
@@ -269,6 +290,13 @@ router.delete(
   logisticsController.removeHomecareTeamMember.bind(logisticsController)
 );
 
+router.get(
+  '/logistics/homecare-bags',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listHomecareBags.bind(logisticsController)
+);
+
 router.post(
   '/logistics/homecare-bags',
   authenticate,
@@ -282,6 +310,13 @@ router.get(
   authenticate,
   authorize(logisticStaffRoles),
   logisticsController.getBagStock.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-bag-requests',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listBagStockRequests.bind(logisticsController)
 );
 
 router.post(
@@ -306,6 +341,13 @@ router.post(
   authorize(canManageCentralStock),
   validate(rejectBagStockRequestSchema),
   logisticsController.rejectBagStockRequest.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-bag-shipments',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listBagShipments.bind(logisticsController)
 );
 
 router.post(

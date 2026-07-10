@@ -169,6 +169,13 @@ router.patch(
   controller.updateBoosterType.bind(controller)
 );
 
+router.patch(
+  '/:sessionId/booster-package',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  controller.updateSessionBoosterPackage.bind(controller)
+);
+
 router.get(
   '/booster-stock-availability',
   authenticate,
