@@ -31,6 +31,7 @@ type BoosterPackageOption = {
   status: string;
   branchId?: string;
   branchName?: string;
+  disabledReason?: string;
 };
 
 const getPackageId = (pkg: any) => pkg.packageId || pkg.id || '';
@@ -222,8 +223,12 @@ export default function SessionDetailPage() {
     setLoadingBoosterPackages(true);
 
     try {
+      const packageBranchId =
+        user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER'
+          ? 'all'
+          : session.session.branchId;
       const [packages, admins, doctors, nurses] = await Promise.all([
-        memberApi.getMemberPackages(session.memberId, session.session.branchId),
+        memberApi.getMemberPackages(session.memberId, packageBranchId),
         usersApi.getAdminLayanan(session.session.branchId),
         usersApi.getDoctors(session.session.branchId),
         usersApi.getNurses(session.session.branchId),
@@ -244,21 +249,33 @@ export default function SessionDetailPage() {
           (isCurrentPackage || (pkg.status === 'ACTIVE' && hasRemainingSession))
         );
       });
-      const availableBoosters = flatPackages.filter((pkg: any) => {
+      const boosterOptions = flatPackages
+        .filter((pkg: any) => pkg.packageType === 'BOOSTER')
+        .map((pkg: any) => {
         const packageId = getPackageId(pkg);
         const isCurrentPackage = packageId === currentPackageId;
         const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
         const hasRemainingSession = Number(pkg.remainingSessions || 0) > 0;
+          const disabledReasons = [
+            !isSameBranch
+              ? `beda cabang${pkg.branchName ? ` (${pkg.branchName})` : ''}`
+              : null,
+            pkg.status !== 'ACTIVE' ? `status ${pkg.status}` : null,
+            !hasRemainingSession ? 'sisa sesi 0' : null,
+          ].filter(Boolean);
 
-        return (
-          pkg.packageType === 'BOOSTER' &&
-          isSameBranch &&
-          (isCurrentPackage || (pkg.status === 'ACTIVE' && hasRemainingSession))
-        );
-      });
+          return {
+            ...pkg,
+            packageId,
+            disabledReason:
+              isCurrentPackage || disabledReasons.length === 0
+                ? undefined
+                : disabledReasons.join(', '),
+          };
+        });
 
       setBasicPackages(availableBasics);
-      setBoosterPackages(availableBoosters);
+      setBoosterPackages(boosterOptions);
       setAdminLayananOptions(mergeStaffOptions(admins, session.session.adminLayanan));
       setDoctorOptions(mergeStaffOptions(doctors, session.session.doctor));
       setNurseOptions(mergeStaffOptions(nurses, session.session.nurse));
@@ -1278,14 +1295,26 @@ export default function SessionDetailPage() {
                       {loadingBoosterPackages ? 'Memuat paket booster...' : 'Pilih paket booster'}
                     </option>
                     {boosterPackages.map((pkg) => (
-                      <option key={pkg.packageId} value={pkg.packageId}>
+                      <option
+                        key={pkg.packageId}
+                        value={pkg.packageId}
+                        disabled={!!pkg.disabledReason}
+                      >
                         {formatPackageLabel(pkg)}
+                        {pkg.disabledReason ? ` - tidak bisa dipakai: ${pkg.disabledReason}` : ''}
                       </option>
                     ))}
                   </select>
                   {!loadingBoosterPackages && boosterPackages.length === 0 && (
                     <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '8px' }}>
-                      Tidak ada paket booster aktif dengan sisa sesi untuk cabang ini.
+                      Tidak ada paket booster yang tercatat untuk member ini.
+                    </p>
+                  )}
+                  {!loadingBoosterPackages &&
+                    boosterPackages.length > 0 &&
+                    boosterPackages.every((pkg) => pkg.disabledReason) && (
+                    <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '8px' }}>
+                      Paket booster ditemukan, tetapi belum ada yang bisa dipakai untuk sesi ini. Cek status, sisa sesi, atau cabang pada opsi di atas.
                     </p>
                   )}
                 </div>

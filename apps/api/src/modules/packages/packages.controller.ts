@@ -121,7 +121,29 @@ export class PackagesController {
           throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
         }
 
-        if (requestedBranchId && role === 'ADMIN_MANAGER') {
+        if (requestedBranchId === 'all') {
+          if (role === 'ADMIN_MANAGER') {
+            const managerBranches = await prisma.managerBranch.findMany({
+              where: {
+                userId: req.user!.userId,
+                branch: { isActive: true },
+              },
+              select: { branchId: true },
+            });
+            effectiveBranchIds = managerBranches.map((branch) => branch.branchId);
+          } else {
+            const packageBranches = await prisma.memberPackage.findMany({
+              where: { memberId },
+              select: { branchId: true },
+              distinct: ['branchId'],
+            });
+            effectiveBranchIds = packageBranches.map((pkg) => pkg.branchId);
+          }
+
+          if (effectiveBranchIds.length === 0) {
+            effectiveBranchIds = [member.registrationBranchId];
+          }
+        } else if (requestedBranchId && role === 'ADMIN_MANAGER') {
           const managedBranch = await prisma.managerBranch.findFirst({
             where: {
               userId: req.user!.userId,
@@ -138,9 +160,10 @@ export class PackagesController {
               message: 'Anda tidak memiliki akses ke paket member pada cabang ini',
             };
           }
+          effectiveBranchIds = [requestedBranchId];
+        } else {
+          effectiveBranchIds = [requestedBranchId || member.registrationBranchId];
         }
-        
-        effectiveBranchIds = [requestedBranchId || member.registrationBranchId];
         console.log('  - Using member registration branch:', effectiveBranchIds);
       } else if (role === 'DOCTOR' || role === 'NURSE') {
         effectiveBranchIds = Array.from(new Set([...(branches || []), ...(branchId ? [branchId] : [])]));
