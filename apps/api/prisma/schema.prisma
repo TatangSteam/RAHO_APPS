@@ -1133,6 +1133,7 @@ model Diagnosis {
   diagnosisCode            String             @unique
   memberId                 String // Direct link to member
   encounterId              String?            @unique // Optional - only if linked to encounter
+  sourceDiagnosisId        String?            @map("source_diagnosis_id")
   doktorPemeriksa          String
   diagnosa                 String             @db.Text
   kategoriDiagnosa         DiagnosisCategory?
@@ -1153,6 +1154,7 @@ model Diagnosis {
   encounter Encounter? @relation(fields: [encounterId], references: [id])
 
   @@index([memberId])
+  @@index([sourceDiagnosisId])
   @@index([doktorPemeriksa])
   @@index([kategoriDiagnosa])
   @@map("diagnoses")

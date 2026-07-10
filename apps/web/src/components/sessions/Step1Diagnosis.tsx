@@ -65,6 +65,7 @@ export default function Step1Diagnosis({
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
+    sourceDiagnosisId: undefined,
     doktorPemeriksa: user?.userId || '',
     diagnosa: '',
     kategoriDiagnosa: undefined,
@@ -128,6 +129,7 @@ export default function Step1Diagnosis({
 
     try {
       const data: CreateDiagnosisInput = {
+        ...(formData.sourceDiagnosisId ? { sourceDiagnosisId: formData.sourceDiagnosisId } : {}),
         doktorPemeriksa: formData.doktorPemeriksa,
         diagnosa: formData.diagnosa,
         ...(formData.kategoriDiagnosa ? { kategoriDiagnosa: formData.kategoriDiagnosa } : {}),
@@ -166,6 +168,7 @@ export default function Step1Diagnosis({
     devLog('📋 doktorPemeriksa from diagnosis:', selectedDiagnosis.doktorPemeriksa);
     
     setFormData({
+      sourceDiagnosisId: selectedDiagnosis.id,
       doktorPemeriksa: selectedDiagnosis.doktorPemeriksa || user?.userId || '', // Use original doctor from diagnosis
       diagnosa: selectedDiagnosis.diagnosa,
       // Convert null to undefined for optional enum fields (Zod expects undefined, not null)

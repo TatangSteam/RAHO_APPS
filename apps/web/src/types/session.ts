@@ -142,6 +142,7 @@ export interface Session {
 export interface Diagnosis {
   id: string;
   diagnosisCode: string;
+  sourceDiagnosisId?: string | null;
   encounterId: string;
   doktorPemeriksa: string;
   diagnosa: string;
@@ -275,6 +276,7 @@ export interface SessionDetail {
 // ============================================================
 
 export interface CreateDiagnosisInput {
+  sourceDiagnosisId?: string;
   doktorPemeriksa: string;
   diagnosa: string;
   kategoriDiagnosa?: DiagnosisCategory;

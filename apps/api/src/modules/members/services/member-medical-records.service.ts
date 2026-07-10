@@ -156,6 +156,7 @@ export class MemberMedicalRecordsService {
       where: {
         id: diagnosisId,
         memberId,
+        encounterId: null,
       },
     });
 
@@ -176,24 +177,61 @@ export class MemberMedicalRecordsService {
 
     const diagnosisCategories = normalizeDiagnosisCategories(data);
 
-    // Update diagnosis
-    const updatedDiagnosis = await prisma.diagnosis.update({
-      where: { id: diagnosisId },
-      data: {
-        doktorPemeriksa: data.doktorPemeriksa,
-        diagnosa: data.diagnosa,
-        kategoriDiagnosa: diagnosisCategories.primaryCategory,
-        kategoriDiagnosaList: diagnosisCategories.categoryList,
-        icdPrimer: data.icdPrimer || null,
-        icdSekunder: data.icdSekunder || null,
-        icdTersier: data.icdTersier || null,
-        keluhanRiwayatSekarang: data.keluhanRiwayatSekarang || null,
-        riwayatPenyakitTerdahulu: data.riwayatPenyakitTerdahulu || null,
-        riwayatSosialKebiasaan: data.riwayatSosialKebiasaan || null,
-        riwayatPengobatan: data.riwayatPengobatan || null,
-        pemeriksaanFisik: data.pemeriksaanFisik || null,
-        pemeriksaanTambahan: data.pemeriksaanTambahan || null,
-      },
+    const updateData = {
+      doktorPemeriksa: data.doktorPemeriksa,
+      diagnosa: data.diagnosa,
+      kategoriDiagnosa: diagnosisCategories.primaryCategory,
+      kategoriDiagnosaList: diagnosisCategories.categoryList,
+      icdPrimer: data.icdPrimer || null,
+      icdSekunder: data.icdSekunder || null,
+      icdTersier: data.icdTersier || null,
+      keluhanRiwayatSekarang: data.keluhanRiwayatSekarang || null,
+      riwayatPenyakitTerdahulu: data.riwayatPenyakitTerdahulu || null,
+      riwayatSosialKebiasaan: data.riwayatSosialKebiasaan || null,
+      riwayatPengobatan: data.riwayatPengobatan || null,
+      pemeriksaanFisik: data.pemeriksaanFisik || null,
+      pemeriksaanTambahan: data.pemeriksaanTambahan || null,
+    };
+
+    const legacySessionCopyMatch = {
+      sourceDiagnosisId: null,
+      doktorPemeriksa: existingDiagnosis.doktorPemeriksa,
+      diagnosa: existingDiagnosis.diagnosa,
+      icdPrimer: existingDiagnosis.icdPrimer,
+      icdSekunder: existingDiagnosis.icdSekunder,
+      icdTersier: existingDiagnosis.icdTersier,
+      keluhanRiwayatSekarang: existingDiagnosis.keluhanRiwayatSekarang,
+      riwayatPenyakitTerdahulu: existingDiagnosis.riwayatPenyakitTerdahulu,
+      riwayatSosialKebiasaan: existingDiagnosis.riwayatSosialKebiasaan,
+      riwayatPengobatan: existingDiagnosis.riwayatPengobatan,
+      pemeriksaanFisik: existingDiagnosis.pemeriksaanFisik,
+    };
+
+    const { updatedDiagnosis, propagatedSessionDiagnoses } = await prisma.$transaction(async (tx) => {
+      const updatedDiagnosis = await tx.diagnosis.update({
+        where: { id: diagnosisId },
+        data: updateData,
+      });
+
+      const cascadeResult = await tx.diagnosis.updateMany({
+        where: {
+          memberId,
+          encounterId: { not: null },
+          OR: [
+            { sourceDiagnosisId: diagnosisId },
+            legacySessionCopyMatch,
+          ],
+        },
+        data: {
+          ...updateData,
+          sourceDiagnosisId: diagnosisId,
+        },
+      });
+
+      return {
+        updatedDiagnosis,
+        propagatedSessionDiagnoses: cascadeResult.count,
+      };
     });
 
     // Log audit
@@ -202,7 +240,11 @@ export class MemberMedicalRecordsService {
       action: AuditAction.UPDATE,
       resource: 'Diagnosis',
       resourceId: diagnosisId,
-      meta: { memberId, diagnosisCode: existingDiagnosis.diagnosisCode },
+      meta: {
+        memberId,
+        diagnosisCode: existingDiagnosis.diagnosisCode,
+        propagatedSessionDiagnoses,
+      },
     });
 
     return updatedDiagnosis;

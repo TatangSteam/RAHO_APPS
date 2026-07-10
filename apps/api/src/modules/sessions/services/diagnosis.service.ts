@@ -47,6 +47,28 @@ export class DiagnosisService {
       throw { status: 404, code: 'ENCOUNTER_NOT_FOUND', message: 'Encounter tidak ditemukan' };
     }
 
+    let sourceDiagnosisId: string | null = null;
+    if (data.sourceDiagnosisId) {
+      const sourceDiagnosis = await prisma.diagnosis.findFirst({
+        where: {
+          id: data.sourceDiagnosisId,
+          memberId: encounter.memberId,
+          encounterId: null,
+        },
+        select: { id: true },
+      });
+
+      if (!sourceDiagnosis) {
+        throw {
+          status: 404,
+          code: 'SOURCE_DIAGNOSIS_NOT_FOUND',
+          message: 'Diagnosa sumber member tidak ditemukan',
+        };
+      }
+
+      sourceDiagnosisId = sourceDiagnosis.id;
+    }
+
     // Validate doctor
     const doctor = await prisma.user.findUnique({
       where: { id: data.doktorPemeriksa },
@@ -83,6 +105,7 @@ export class DiagnosisService {
         diagnosisCode,
         memberId: encounter.memberId,
         encounterId, // Link to this specific encounter/session
+        sourceDiagnosisId,
         doktorPemeriksa: data.doktorPemeriksa,
         diagnosa: data.diagnosa,
         kategoriDiagnosa: diagnosisCategories.primaryCategory,
@@ -107,6 +130,7 @@ export class DiagnosisService {
       meta: { 
         diagnosisCode, 
         encounterId,
+        sourceDiagnosisId,
         action: 'SESSION_DIAGNOSIS_COPY',
         originalDiagnosa: data.diagnosa,
       },

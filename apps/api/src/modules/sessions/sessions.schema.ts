@@ -90,6 +90,7 @@ export type UpdateSessionDetailsInput = z.infer<typeof updateSessionDetailsSchem
 // ============================================================
 
 export const createDiagnosisSchema = z.object({
+  sourceDiagnosisId: z.string().cuid().optional(),
   doktorPemeriksa: z.string().cuid(),
   diagnosa: z.string().min(3, 'Diagnosa minimal 3 karakter'),
   kategoriDiagnosa: z.nativeEnum(DiagnosisCategory).optional().nullable(),
