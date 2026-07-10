@@ -149,6 +149,7 @@ export default function HomecareBagsPage() {
   const [selectedRequest, setSelectedRequest] = useState<HomecareBagRequest | null>(null);
   const [requestAction, setRequestAction] = useState<'approve' | 'reject' | null>(null);
   const [approvalRows, setApprovalRows] = useState<ApprovalRow[]>([]);
+  const [approvalSourceBranchId, setApprovalSourceBranchId] = useState('');
   const [reviewNotes, setReviewNotes] = useState('');
 
   const [selectedShipment, setSelectedShipment] = useState<HomecareBagShipment | null>(null);
@@ -175,6 +176,7 @@ export default function HomecareBagsPage() {
   const canAllowNegative = role === 'SUPER_ADMIN';
 
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
+  const branchMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
   const selectedBag = useMemo(() => bags.find((bag) => bag.id === selectedBagId) || null, [bags, selectedBagId]);
   const selectedTeam = useMemo(() => teams.find((team) => team.id === (selectedBag?.teamId || requestForm.teamId || bagForm.teamId)), [teams, selectedBag, requestForm.teamId, bagForm.teamId]);
   const bagStockProductIds = useMemo(() => new Set((bagStock?.stocks || []).map((stock) => stock.masterProductId)), [bagStock]);
@@ -194,6 +196,15 @@ export default function HomecareBagsPage() {
   const productUnit = useCallback(
     (masterProductId: string) => productMap.get(masterProductId)?.baseUnit || productMap.get(masterProductId)?.usageUnit || 'unit',
     [productMap],
+  );
+
+  const branchName = useCallback(
+    (branchId?: string | null) => {
+      if (!branchId) return '-';
+      const branch = branchMap.get(branchId);
+      return branch ? `${branch.name} (${branch.branchCode})` : branchId;
+    },
+    [branchMap],
   );
 
   const loadBagStock = useCallback(async (bagId: string) => {
@@ -434,6 +445,7 @@ export default function HomecareBagsPage() {
     setSelectedRequest(request);
     setRequestAction('approve');
     setReviewNotes('');
+    setApprovalSourceBranchId(request.branchId || branches.find((branch) => branch.type !== 'PUSAT')?.id || branches[0]?.id || '');
     setApprovalRows(request.items.map((item) => ({
       masterProductId: item.masterProductId,
       approvedQty: String(item.finalQty ?? item.requestedQty),
@@ -466,11 +478,17 @@ export default function HomecareBagsPage() {
       return;
     }
 
+    if (!approvalSourceBranchId) {
+      showToast.error('Pilih sumber stok terlebih dahulu');
+      return;
+    }
+
     try {
       setActionLoading(true);
       await inventoryApi.approveHomecareBagRequest(selectedRequest.id, {
         items,
         reviewNotes: reviewNotes.trim() || undefined,
+        sourceBranchId: approvalSourceBranchId,
       });
       setSelectedRequest(null);
       setRequestAction(null);
@@ -926,6 +944,14 @@ export default function HomecareBagsPage() {
                 </div>
                 {requestAction === 'approve' && (
                   <div className="space-y-2">
+                    <SelectField label="Sumber Stok" value={approvalSourceBranchId} onChange={setApprovalSourceBranchId}>
+                      <option value="">Pilih sumber stok</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name} ({branch.branchCode}){branch.id === selectedRequest.branchId ? ' - Cabang Tas' : ''}
+                        </option>
+                      ))}
+                    </SelectField>
                     {approvalRows.map((row, index) => (
                       <div key={row.masterProductId} className="grid gap-2 md:grid-cols-[1fr_120px]">
                         <div className="rounded-lg bg-white px-3 py-2 text-sm dark:bg-neutral-900">{productName(row.masterProductId)}</div>
@@ -964,7 +990,9 @@ export default function HomecareBagsPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-semibold text-neutral-900 dark:text-white">{shipment.shipmentCode}</div>
-                    <div className="mt-1 text-xs text-neutral-500">{shipment.bagName || shipment.bagCode} · {formatDate(shipment.createdAt)}</div>
+                    <div className="mt-1 text-xs text-neutral-500">
+                      {shipment.bagName || shipment.bagCode} · sumber {branchName(shipment.fromBranchId)} · {formatDate(shipment.createdAt)}
+                    </div>
                   </div>
                   <StatusBadge label={shipmentStatusLabels[shipment.status] || shipment.status} status={shipment.status} />
                 </div>

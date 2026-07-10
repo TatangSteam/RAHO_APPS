@@ -1670,7 +1670,17 @@ export class LogisticsService {
       throw { status: 400, code: 'NO_APPROVED_ITEMS', message: 'Minimal satu item harus disetujui' };
     }
 
-    const central = await this.getCentralBranch();
+    const sourceBranchId = input.sourceBranchId || request.bag.branchId;
+    await this.assertManagerBranchAccess(actor, sourceBranchId);
+
+    const sourceBranch = await prisma.branch.findUnique({
+      where: { id: sourceBranchId },
+      select: { id: true, branchCode: true, name: true, isActive: true },
+    });
+    if (!sourceBranch || !sourceBranch.isActive) {
+      throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
+    }
+
     const products = await prisma.masterProduct.findMany({
       where: { id: { in: finalItems.map((item) => item.masterProductId) } },
       select: { id: true, name: true },
@@ -1678,14 +1688,14 @@ export class LogisticsService {
     const productMap = new Map(products.map((product) => [product.id, product]));
 
     for (const item of finalItems.filter((item) => item.finalQty > 0)) {
-      const centralStock = await prisma.inventoryItem.findFirst({
-        where: { branchId: central.id, masterProductId: item.masterProductId },
+      const sourceStock = await prisma.inventoryItem.findFirst({
+        where: { branchId: sourceBranch.id, masterProductId: item.masterProductId },
       });
-      if (!centralStock || Number(centralStock.stock) < item.finalQty) {
+      if (!sourceStock || Number(sourceStock.stock) < item.finalQty) {
         throw {
           status: 422,
-          code: 'INSUFFICIENT_CENTRAL_STOCK',
-          message: `Stok pusat tidak mencukupi untuk ${productMap.get(item.masterProductId)?.name || item.masterProductId}`,
+          code: 'INSUFFICIENT_SOURCE_STOCK',
+          message: `Stok ${sourceBranch.name} tidak mencukupi untuk ${productMap.get(item.masterProductId)?.name || item.masterProductId}`,
         };
       }
     }
@@ -1709,12 +1719,12 @@ export class LogisticsService {
         include: { team: true, bag: true, items: true },
       });
 
-      const shipmentCode = await this.nextRequestCode('HBS', tx.homecareBagShipment, 'shipmentCode', `${central.branchCode}-${request.bag.bagCode}`);
+      const shipmentCode = await this.nextRequestCode('HBS', tx.homecareBagShipment, 'shipmentCode', `${sourceBranch.branchCode}-${request.bag.bagCode}`);
       const shipment = await tx.homecareBagShipment.create({
         data: {
           shipmentCode,
           requestId,
-          fromBranchId: central.id,
+          fromBranchId: sourceBranch.id,
           toBagId: request.bagId,
           status: ShipmentStatus.PREPARING,
           notes: input.reviewNotes?.trim() || `Pengiriman untuk request ${request.requestCode}`,
@@ -1743,6 +1753,7 @@ export class LogisticsService {
         action: isPartial ? 'PARTIAL_APPROVE_BAG_STOCK_REQUEST' : 'APPROVE_BAG_STOCK_REQUEST',
         requestCode: request.requestCode,
         shipmentId: result.shipment.id,
+        sourceBranchId: sourceBranch.id,
       },
     });
 
@@ -1793,9 +1804,14 @@ export class LogisticsService {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat dikirim saat PREPARING' };
     }
 
-    const central = await this.getCentralBranch();
-    if (shipment.fromBranchId !== central.id) {
-      throw { status: 422, code: 'INVALID_SOURCE_BRANCH', message: 'Sumber shipment tas harus stok pusat' };
+    await this.assertManagerBranchAccess(actor, shipment.fromBranchId);
+
+    const sourceBranch = await prisma.branch.findUnique({
+      where: { id: shipment.fromBranchId },
+      select: { type: true, isActive: true },
+    });
+    if (!sourceBranch || !sourceBranch.isActive) {
+      throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
     }
 
     const result = await prisma.$transaction(async (tx) => {
@@ -1816,7 +1832,7 @@ export class LogisticsService {
 
       await this.createLogisticTransaction(tx, {
         type: LogisticTransactionType.SHIPMENT,
-        sourceType: LogisticLocationType.CENTRAL_STOCK,
+        sourceType: sourceBranch.type === BranchType.PUSAT ? LogisticLocationType.CENTRAL_STOCK : LogisticLocationType.BRANCH_STOCK,
         sourceId: shipment.fromBranchId,
         destinationType: LogisticLocationType.HOMECARE_BAG,
         destinationId: shipment.toBagId,

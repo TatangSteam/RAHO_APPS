@@ -813,6 +813,7 @@ export const inventoryApi = {
     data: {
       items?: Array<{ masterProductId: string; approvedQty: number; notes?: string }>;
       reviewNotes?: string;
+      sourceBranchId?: string;
     }
   ) => {
     return api.post(`/inventory/logistics/homecare-bag-requests/${requestId}/approve`, data);

@@ -63,6 +63,10 @@ export const approveStockRequestSchema = z.object({
   reviewNotes: optionalText,
 });
 
+export const approveBagStockRequestSchema = approveStockRequestSchema.extend({
+  sourceBranchId: idSchema.optional(),
+});
+
 export const rejectStockRequestSchema = z.object({
   reviewNotes: requiredNotes,
 });
@@ -117,7 +121,6 @@ export const createBagStockRequestSchema = z.object({
   items: z.array(stockRequestItemSchema).min(1, 'Minimal satu item harus diminta'),
 }).merge(supportFileSchema);
 
-export const approveBagStockRequestSchema = approveStockRequestSchema;
 export const rejectBagStockRequestSchema = rejectStockRequestSchema;
 export const shipBagStockSchema = shipStockSchema;
 export const receiveBagShipmentSchema = receiveShipmentSchema;
