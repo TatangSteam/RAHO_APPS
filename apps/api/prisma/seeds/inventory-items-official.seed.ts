@@ -7,9 +7,9 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * SATUAN SESUAI LIST:
  * - IFA: Botol
  * - Cairan Terapi: gunakan baseUnit stok gudang dan usageUnit pemakaian terapi
- * - Handscoon: Kotak
- * - Oneswab: Kotak
- * - IV Cath, Ultrafik, Plesterin: Kotak
+ * - Handscoon: Piece
+ * - Oneswab: Piece
+ * - IV Cath, Ultrafik, Plesterin: Piece
  * - Kantong Sampah: Pack
  * - Kertas HVS: Rim
  * - Inform Consent: Rangkap
@@ -46,17 +46,17 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
     { sku: 'PRD-NBT-PRP-001', name: 'Cairan PRP', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Platelet Rich Plasma', stock: 1500, minStock: 300 },
 
     // ==================== MEDICAL SUPPLIES (MED) ====================
-    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'IV Catheter ukuran 24G', stock: 50, minStock: 10 },
-    { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Ultrafik', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'IV Catheter ukuran 24G', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Ultrafik', stock: 50, minStock: 10 },
     { sku: 'PRD-MED-TUB-001', name: 'BD TUBE ACB 8.5ml', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'BD Tube ACB 8.5ml', stock: 200, minStock: 50 },
-    { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Oneswab', stock: 100, minStock: 20 },
-    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Plester', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Oneswab', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Plester', stock: 50, minStock: 10 },
     { sku: 'PRD-MED-SPT-001', name: 'Spuit 20cc', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 20cc', stock: 300, minStock: 75 },
     { sku: 'PRD-MED-SPT-002', name: 'Spuit 5cc (3cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/3cc', stock: 400, minStock: 100 },
     { sku: 'PRD-MED-SPT-003', name: 'Spuit 5cc (10cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/10cc', stock: 400, minStock: 100 },
     { sku: 'PRD-MED-NDL-001', name: 'Needle (Salin) (25G)', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Needle Salin 25G', stock: 1000, minStock: 200 },
-    { sku: 'PRD-MED-HDS-001', name: 'Handscoon S', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Sarung tangan medis ukuran S', stock: 100, minStock: 20 },
-    { sku: 'PRD-MED-HDS-002', name: 'Handscoon M', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Sarung tangan medis ukuran M', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-HDS-001', name: 'Handscoon S', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Sarung tangan medis ukuran S', stock: 100, minStock: 20 },
+    { sku: 'PRD-MED-HDS-002', name: 'Handscoon M', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Sarung tangan medis ukuran M', stock: 100, minStock: 20 },
     { sku: 'PRD-MED-NPS-001', name: 'No Pain Spray', category: ProductCategory.MEDICINE, baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'Spray penghilang nyeri', stock: 30, minStock: 10 },
     { sku: 'PRD-MED-HCC-001', name: 'Hot Cold Compress', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Kompres panas dingin', stock: 20, minStock: 5 },
     { sku: 'PRD-MED-OXI-001', name: 'Oximeter Fingertip Omicron', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Pulse Oximeter', stock: 10, minStock: 2 },
@@ -214,9 +214,9 @@ export async function seedOfficialInventoryItems(prisma: PrismaClient) {
   console.log('\n💡 SATUAN SESUAI LIST BARANG RAHO:');
   console.log('   • IFA: Botol');
   console.log('   • Cairan Terapi: baseUnit stok gudang, usageUnit pemakaian terapi');
-  console.log('   • Handscoon S/M: Kotak');
-  console.log('   • Oneswab: Kotak');
-  console.log('   • IV Cath, Ultrafik, Plesterin: Kotak');
+  console.log('   • Handscoon S/M: Piece');
+  console.log('   • Oneswab: Piece');
+  console.log('   • IV Cath, Ultrafik, Plesterin: Piece');
   console.log('   • Kantong Sampah: Pack');
   console.log('   • Kertas HVS: Rim');
   console.log('   • Inform Consent: Rangkap');

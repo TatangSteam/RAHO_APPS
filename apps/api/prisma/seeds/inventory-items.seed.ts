@@ -30,16 +30,16 @@ export async function seedInventoryItems(prisma: PrismaClient) {
     // ============================================================
     // IV EQUIPMENT (Peralatan IV) - Category: DEVICE
     // ============================================================
-    { name: 'IV Catheter 24G', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '24 Gauge IV catheter', stock: 500, minStock: 50 },
-    { name: 'IV Catheter 22G', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '22 Gauge IV catheter', stock: 500, minStock: 50 },
-    { name: 'IV Catheter 20G', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '20 Gauge IV catheter', stock: 300, minStock: 30 },
+    { name: 'IV Catheter 24G', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '24 Gauge IV catheter', stock: 500, minStock: 50 },
+    { name: 'IV Catheter 22G', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '22 Gauge IV catheter', stock: 500, minStock: 50 },
+    { name: 'IV Catheter 20G', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '20 Gauge IV catheter', stock: 300, minStock: 30 },
     { name: 'IV Set Macro Drip', category: ProductCategory.DEVICE, unit: 'set', baseUnit: 'set', usageUnit: 'set', conversionFactor: 1, description: 'Macro drip IV administration set', stock: 400, minStock: 50 },
     { name: 'IV Set Micro Drip', category: ProductCategory.DEVICE, unit: 'set', baseUnit: 'set', usageUnit: 'set', conversionFactor: 1, description: 'Micro drip IV administration set', stock: 300, minStock: 40 },
-    { name: 'Syringe 3ml', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '3ml disposable syringe', stock: 1000, minStock: 100 },
-    { name: 'Syringe 5ml', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '5ml disposable syringe', stock: 1000, minStock: 100 },
-    { name: 'Syringe 10ml', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '10ml disposable syringe', stock: 800, minStock: 80 },
-    { name: 'Needle 23G', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '23 Gauge needle', stock: 1000, minStock: 100 },
-    { name: 'Needle 25G', category: ProductCategory.DEVICE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: '25 Gauge needle', stock: 1000, minStock: 100 },
+    { name: 'Syringe 3ml', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '3ml disposable syringe', stock: 1000, minStock: 100 },
+    { name: 'Syringe 5ml', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '5ml disposable syringe', stock: 1000, minStock: 100 },
+    { name: 'Syringe 10ml', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '10ml disposable syringe', stock: 800, minStock: 80 },
+    { name: 'Needle 23G', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '23 Gauge needle', stock: 1000, minStock: 100 },
+    { name: 'Needle 25G', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: '25 Gauge needle', stock: 1000, minStock: 100 },
 
     // ============================================================
     // WRAPPING & THERAPY SUPPLIES - Category: DEVICE
@@ -55,14 +55,14 @@ export async function seedInventoryItems(prisma: PrismaClient) {
     // ============================================================
     // CONSUMABLES (Bahan Habis Pakai) - Category: CONSUMABLE
     // ============================================================
-    { name: 'Alcohol Swab', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 200, description: 'Sterile alcohol swab', stock: 2000, minStock: 200 },
-    { name: 'Cotton Ball', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'pack', usageUnit: 'pcs', conversionFactor: 100, description: 'Sterile cotton ball', stock: 3000, minStock: 300 },
-    { name: 'Gauze Pad 4x4', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'pack', usageUnit: 'pcs', conversionFactor: 50, description: '4x4 inch sterile gauze pad', stock: 1500, minStock: 150 },
+    { name: 'Alcohol Swab', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Sterile alcohol swab', stock: 2000, minStock: 200 },
+    { name: 'Cotton Ball', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'pack', usageUnit: 'Piece', conversionFactor: 100, description: 'Sterile cotton ball', stock: 3000, minStock: 300 },
+    { name: 'Gauze Pad 4x4', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'pack', usageUnit: 'Piece', conversionFactor: 50, description: '4x4 inch sterile gauze pad', stock: 1500, minStock: 150 },
     { name: 'Medical Tape', category: ProductCategory.CONSUMABLE, unit: 'roll', baseUnit: 'roll', usageUnit: 'roll', conversionFactor: 1, description: 'Medical adhesive tape', stock: 200, minStock: 20 },
-    { name: 'Disposable Gloves (M)', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: 'Medium size disposable gloves', stock: 100, minStock: 10 },
-    { name: 'Disposable Gloves (L)', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 100, description: 'Large size disposable gloves', stock: 100, minStock: 10 },
-    { name: 'Surgical Mask', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'box', usageUnit: 'pcs', conversionFactor: 50, description: 'Disposable surgical mask', stock: 150, minStock: 15 },
-    { name: 'Tourniquet', category: ProductCategory.CONSUMABLE, unit: 'pcs', baseUnit: 'pcs', usageUnit: 'pcs', conversionFactor: 1, description: 'Medical tourniquet for IV insertion', stock: 50, minStock: 10 },
+    { name: 'Disposable Gloves (M)', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Medium size disposable gloves', stock: 100, minStock: 10 },
+    { name: 'Disposable Gloves (L)', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Large size disposable gloves', stock: 100, minStock: 10 },
+    { name: 'Surgical Mask', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Disposable surgical mask', stock: 150, minStock: 15 },
+    { name: 'Tourniquet', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Medical tourniquet for IV insertion', stock: 50, minStock: 10 },
   ];
 
   let created = 0;

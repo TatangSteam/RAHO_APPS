@@ -10,7 +10,7 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * - Handscoon S/M: Piece
  * - Oneswab: Piece
  * - Ultrafik: Piece
- * - IV Cath, Plesterin: Kotak
+ * - IV Cath, Plesterin: Piece
  * - Kantong Sampah: Pack
  * - Kertas HVS: Rim
  * - Inform Consent: Rangkap
@@ -52,11 +52,11 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
     { sku: 'PRD-NBT-PRP-001', name: 'Cairan PRP', category: ProductCategory.MEDICINE, baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Platelet Rich Plasma', stock: 1500, minStock: 300 },
 
     // ==================== MEDICAL SUPPLIES (MED) ====================
-    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'IV Catheter ukuran 24G', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'IV Catheter ukuran 24G', stock: 50, minStock: 10 },
     { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Ultrafik', stock: 500, minStock: 100 },
     { sku: 'PRD-MED-TUB-001', name: 'BD TUBE ACB 8.5ml', category: ProductCategory.DEVICE, baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'BD Tube ACB 8.5ml', stock: 200, minStock: 50 },
     { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Oneswab', stock: 1000, minStock: 200 },
-    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, baseUnit: 'Kotak', usageUnit: 'Kotak', conversionFactor: 1, description: 'Plester', stock: 50, minStock: 10 },
+    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Plester', stock: 50, minStock: 10 },
     { sku: 'PRD-MED-SPT-001', name: 'Spuit 20cc', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 20cc', stock: 300, minStock: 75 },
     { sku: 'PRD-MED-SPT-002', name: 'Spuit 5cc (3cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/3cc', stock: 400, minStock: 100 },
     { sku: 'PRD-MED-SPT-003', name: 'Spuit 5cc (10cc)', category: ProductCategory.DEVICE, baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/10cc', stock: 400, minStock: 100 },
@@ -224,7 +224,7 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
   console.log('   • Handscoon S/M: Piece');
   console.log('   • Oneswab: Piece');
   console.log('   • Ultrafik: Piece');
-  console.log('   • IV Cath, Plesterin: Kotak');
+  console.log('   • IV Cath, Plesterin: Piece');
   console.log('   • Kantong Sampah: Pack');
   console.log('   • Kertas HVS: Rim');
   console.log('   • Inform Consent: Rangkap');

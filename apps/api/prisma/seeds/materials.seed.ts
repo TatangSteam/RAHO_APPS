@@ -17,7 +17,7 @@ import { PrismaClient, ProductCategory } from '@prisma/client';
  * These follow the official "List Barang RAHO" exactly with correct:
  * - SKU codes (e.g., PRD-NBT-HHO-001)
  * - Product names (e.g., "NB-HHO", "H2", "Cairan H2S")
- * - Units (ml for cairan terapi, Botol for IFA, Kotak for Handscoon, etc.)
+ * - Units (ml for cairan terapi, Botol for IFA, Piece for Handscoon, etc.)
  * 
  * This file is kept for reference only and is NOT exported from index.ts
  * 
@@ -434,10 +434,10 @@ export async function seedMaterials(prisma: PrismaClient) {
     {
       name: 'Handscoon',
       category: ProductCategory.CONSUMABLE,
-      baseUnit: 'kotak',
-      usageUnit: 'pasang',
-      conversionFactor: 50,
-      description: 'Sarung tangan medis 1 kotak (50 pasang)',
+      baseUnit: 'piece',
+      usageUnit: 'piece',
+      conversionFactor: 1,
+      description: 'Sarung tangan medis 1 piece',
       stockPusat: 100,
       stockBandung: 70,
       stockSurabaya: 50,
@@ -446,10 +446,10 @@ export async function seedMaterials(prisma: PrismaClient) {
     {
       name: 'Alkohol Swab',
       category: ProductCategory.CONSUMABLE,
-      baseUnit: 'kotak',
+      baseUnit: 'piece',
       usageUnit: 'piece',
-      conversionFactor: 100,
-      description: 'Alkohol swab 1 kotak (100 piece)',
+      conversionFactor: 1,
+      description: 'Alkohol swab 1 piece',
       stockPusat: 50,
       stockBandung: 35,
       stockSurabaya: 25,
