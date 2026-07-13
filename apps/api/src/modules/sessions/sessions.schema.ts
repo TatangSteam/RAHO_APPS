@@ -78,6 +78,9 @@ export const updateSessionDetailsSchema = z.object({
   additionalNurseIds: z.array(z.string().cuid()).optional(),
   useBooster: z.boolean().optional(),
   boosterPackageId: z.string().cuid().nullable().optional(),
+  infusKe: z.number().int().positive().optional(),
+  branchInfusKe: z.number().int().positive().optional(),
+  shiftFollowingSessions: z.boolean().optional().default(false),
 }).refine(
   (data) => data.useBooster !== true || !!data.boosterPackageId,
   { message: 'Paket booster wajib dipilih jika menggunakan booster' }
