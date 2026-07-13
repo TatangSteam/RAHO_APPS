@@ -11,6 +11,7 @@ import { sendSuccess } from '../../utils/response';
 import { Role } from '@prisma/client';
 import { MemberExportService } from './services/member-export.service';
 import { MemberLabResultsService } from './services/member-lab-results.service';
+import { MemberAccountImportService } from './services/member-account-import.service';
 import { SupportingPhotosService } from '../sessions/services/supporting-photos.service';
 import { logAudit } from '../../utils/auditLog';
 import { prisma } from '../../lib/prisma';
@@ -18,6 +19,7 @@ import { prisma } from '../../lib/prisma';
 const membersService = new MembersService();
 const exportService = new MemberExportService();
 const labResultsService = new MemberLabResultsService();
+const accountImportService = new MemberAccountImportService();
 const supportingPhotosService = new SupportingPhotosService();
 
 export class MembersController {
@@ -631,6 +633,56 @@ export class MembersController {
       const count = await exportService.getPreviewCount(userId, role as Role, branchId, filters || {});
 
       sendSuccess(res, { count });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async dryRunAccountImport(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) {
+        throw { status: 400, code: 'FILE_REQUIRED', message: 'File Excel wajib diupload' };
+      }
+
+      const result = await accountImportService.dryRun({
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        actor: {
+          userId: req.user!.userId,
+          role: req.user!.role,
+          branchId: req.user!.branchId,
+          branches: req.user!.branches,
+        },
+        branchId: req.body.branchId,
+      });
+
+      sendSuccess(res, result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async executeAccountImport(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.file) {
+        throw { status: 400, code: 'FILE_REQUIRED', message: 'File Excel wajib diupload' };
+      }
+
+      const result = await accountImportService.execute({
+        buffer: req.file.buffer,
+        fileName: req.file.originalname,
+        actor: {
+          userId: req.user!.userId,
+          role: req.user!.role,
+          branchId: req.user!.branchId,
+          branches: req.user!.branches,
+        },
+        branchId: req.body.branchId,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent'),
+      });
+
+      sendSuccess(res, result, 201);
     } catch (error) {
       next(error);
     }

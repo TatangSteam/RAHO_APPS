@@ -3,7 +3,7 @@ import { MembersController } from './members.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { assertBranchAccess } from '../../middleware/assertBranchAccess';
-import { uploadMemberDocuments, uploadLabResult } from '../../middleware/upload';
+import { uploadMemberDocuments, uploadLabResult, uploadSpreadsheet } from '../../middleware/upload';
 import { validate } from '../../middleware/validate';
 import { bulkCreateTherapyPlansSchema, editTherapyPlanSchema, bulkEditTherapyPlanSetSchema } from './members.schema';
 import { Role } from '@prisma/client';
@@ -22,6 +22,7 @@ const ALLSTAFF = [
 
 const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 const MEMBER_DELETERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
+const ACCOUNT_IMPORTERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
 
 // Roles that can edit therapy plans and add rows to active therapy plan sets.
 const THERAPY_PLAN_EDITORS = [
@@ -78,6 +79,28 @@ router.post(
     { name: 'photo', maxCount: 1 },
   ]),
   controller.createMember.bind(controller)
+);
+
+// ============================================================
+// MEMBER ACCOUNT IMPORT ROUTES (must be before /:memberId)
+// ============================================================
+
+// POST /api/v1/members/import/accounts/dry-run - Validate Excel without creating accounts
+router.post(
+  '/import/accounts/dry-run',
+  authenticate,
+  authorize(ACCOUNT_IMPORTERS),
+  uploadSpreadsheet.single('file'),
+  controller.dryRunAccountImport.bind(controller)
+);
+
+// POST /api/v1/members/import/accounts/execute - Create member accounts from Excel
+router.post(
+  '/import/accounts/execute',
+  authenticate,
+  authorize(ACCOUNT_IMPORTERS),
+  uploadSpreadsheet.single('file'),
+  controller.executeAccountImport.bind(controller)
 );
 
 // ============================================================

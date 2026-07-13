@@ -5,7 +5,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
-import { Building2, Users, Package, MapPin, Phone, Clock, Calendar } from 'lucide-react';
+import { Building2, Users, Package, MapPin, Clock, Calendar, Upload, FileSpreadsheet, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface BranchInfo {
   id: string;
@@ -28,11 +28,52 @@ interface BranchStats {
   totalStaff: number;
 }
 
+interface ImportIssue {
+  rowNumber: number;
+  field: string;
+  message: string;
+}
+
+interface ImportPreview {
+  rowNumber: number;
+  fullName: string;
+  username: string;
+  phone: string;
+  birthDate: string | null;
+  gender: string | null;
+}
+
+interface ImportDryRunResult {
+  counts: {
+    rows: number;
+    validRows: number;
+    invalidRows: number;
+  };
+  preview: ImportPreview[];
+  issues: ImportIssue[];
+  canImport: boolean;
+}
+
+interface ImportedAccount {
+  rowNumber: number;
+  memberId: string;
+  memberNo: string;
+  fullName: string;
+  username: string;
+  password: string;
+}
+
 export default function CabangPage() {
   const { user } = useAuthStore();
   const [branch, setBranch] = useState<BranchInfo | null>(null);
   const [stats, setStats] = useState<BranchStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [checkingImport, setCheckingImport] = useState(false);
+  const [executingImport, setExecutingImport] = useState(false);
+  const [importPreview, setImportPreview] = useState<ImportDryRunResult | null>(null);
+  const [importedAccounts, setImportedAccounts] = useState<ImportedAccount[]>([]);
+  const canImportMemberAccounts = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   useEffect(() => {
     loadBranchData();
@@ -61,6 +102,59 @@ export default function CabangPage() {
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const buildImportFormData = () => {
+    if (!importFile) return null;
+    const formData = new FormData();
+    formData.append('file', importFile);
+    if (branch?.id) {
+      formData.append('branchId', branch.id);
+    }
+    return formData;
+  };
+
+  const handleImportDryRun = async () => {
+    const formData = buildImportFormData();
+    if (!formData) {
+      showToast.error('Pilih file Excel terlebih dahulu');
+      return;
+    }
+
+    try {
+      setCheckingImport(true);
+      setImportedAccounts([]);
+      const response = await api.post('/members/import/accounts/dry-run', formData);
+      setImportPreview(response.data.data);
+      showToast.success('File Excel berhasil dicek');
+    } catch (error: any) {
+      devError('Failed to validate member import:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal mengecek file Excel');
+    } finally {
+      setCheckingImport(false);
+    }
+  };
+
+  const handleExecuteImport = async () => {
+    const formData = buildImportFormData();
+    if (!formData || !importPreview?.canImport) {
+      showToast.error('Cek file Excel yang valid terlebih dahulu');
+      return;
+    }
+
+    try {
+      setExecutingImport(true);
+      const response = await api.post('/members/import/accounts/execute', formData);
+      const created = response.data.data.created || [];
+      setImportedAccounts(created);
+      showToast.success(response.data.data.message || 'Import member berhasil');
+      await loadBranchData();
+    } catch (error: any) {
+      devError('Failed to import member accounts:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal import akun member');
+    } finally {
+      setExecutingImport(false);
     }
   };
 
@@ -159,6 +253,138 @@ export default function CabangPage() {
 
       {/* Branch Information */}
       <div className="info-section">
+        {canImportMemberAccounts && (
+        <div className="info-card import-card">
+          <div className="info-header">
+            <FileSpreadsheet size={20} />
+            <h3>Import Akun Member dari Excel</h3>
+          </div>
+
+          <div className="import-layout">
+            <div className="import-picker">
+              <input
+                id="member-account-import"
+                type="file"
+                accept=".xlsx"
+                onChange={(event) => {
+                  const file = event.target.files?.[0] || null;
+                  setImportFile(file);
+                  setImportPreview(null);
+                  setImportedAccounts([]);
+                }}
+              />
+              <label htmlFor="member-account-import">
+                <Upload size={18} />
+                <span>{importFile ? importFile.name : 'Pilih File Excel'}</span>
+              </label>
+            </div>
+
+            <div className="import-actions">
+              <button
+                type="button"
+                className="secondary-action"
+                onClick={handleImportDryRun}
+                disabled={!importFile || checkingImport || executingImport}
+              >
+                {checkingImport ? 'Mengecek...' : 'Cek File'}
+              </button>
+              <button
+                type="button"
+                className="primary-action"
+                onClick={handleExecuteImport}
+                disabled={!importPreview?.canImport || checkingImport || executingImport}
+              >
+                {executingImport ? 'Mengimport...' : 'Buat Akun'}
+              </button>
+            </div>
+          </div>
+
+          {importPreview && (
+            <div className="import-result">
+              <div className={`import-status ${importPreview.canImport ? 'success' : 'error'}`}>
+                {importPreview.canImport ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+                <span>
+                  {importPreview.counts.rows} baris dicek, {importPreview.counts.validRows} valid, {importPreview.counts.invalidRows} perlu diperbaiki
+                </span>
+              </div>
+
+              {importPreview.issues.length > 0 && (
+                <div className="issue-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>Field</th>
+                        <th>Masalah</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.issues.slice(0, 8).map((issue, index) => (
+                        <tr key={`${issue.rowNumber}-${issue.field}-${index}`}>
+                          <td>{issue.rowNumber}</td>
+                          <td>{issue.field}</td>
+                          <td>{issue.message}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {importPreview.preview.length > 0 && importPreview.issues.length === 0 && (
+                <div className="issue-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Baris</th>
+                        <th>Nama</th>
+                        <th>Username</th>
+                        <th>No HP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.preview.slice(0, 8).map((row) => (
+                        <tr key={row.rowNumber}>
+                          <td>{row.rowNumber}</td>
+                          <td>{row.fullName}</td>
+                          <td>{row.username}</td>
+                          <td>{row.phone}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {importedAccounts.length > 0 && (
+            <div className="issue-table credentials-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Member No</th>
+                    <th>Nama</th>
+                    <th>Username</th>
+                    <th>Password</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importedAccounts.map((account) => (
+                    <tr key={account.memberId}>
+                      <td>{account.memberNo}</td>
+                      <td>{account.fullName}</td>
+                      <td>{account.username}</td>
+                      <td>{account.password}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        )}
+
         <div className="info-card">
           <div className="info-header">
             <MapPin size={20} />
@@ -414,6 +640,130 @@ export default function CabangPage() {
           display: flex;
           flex-direction: column;
           gap: 20px;
+        }
+
+        .import-layout {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+        }
+
+        .import-picker input {
+          display: none;
+        }
+
+        .import-picker label {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          min-height: 42px;
+          padding: 10px 14px;
+          border: 1px dashed var(--surface-border);
+          border-radius: var(--radius-md);
+          color: var(--text-primary);
+          cursor: pointer;
+          max-width: 420px;
+        }
+
+        .import-picker span {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .import-actions {
+          display: flex;
+          gap: 10px;
+          flex-wrap: wrap;
+        }
+
+        .primary-action,
+        .secondary-action {
+          min-height: 40px;
+          padding: 0 16px;
+          border-radius: var(--radius-md);
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          border: 1px solid transparent;
+        }
+
+        .primary-action {
+          background: var(--color-primary-500);
+          color: white;
+        }
+
+        .secondary-action {
+          background: var(--surface-hover);
+          color: var(--text-primary);
+          border-color: var(--surface-border);
+        }
+
+        .primary-action:disabled,
+        .secondary-action:disabled {
+          opacity: 0.55;
+          cursor: not-allowed;
+        }
+
+        .import-result {
+          margin-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+
+        .import-status {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          font-weight: 600;
+        }
+
+        .import-status.success {
+          color: var(--color-success);
+        }
+
+        .import-status.error {
+          color: var(--color-danger);
+        }
+
+        .issue-table {
+          width: 100%;
+          overflow-x: auto;
+          border: 1px solid var(--surface-border);
+          border-radius: var(--radius-md);
+        }
+
+        .issue-table table {
+          width: 100%;
+          border-collapse: collapse;
+          min-width: 640px;
+        }
+
+        .issue-table th,
+        .issue-table td {
+          padding: 10px 12px;
+          border-bottom: 1px solid var(--surface-border);
+          text-align: left;
+          font-size: 13px;
+          color: var(--text-primary);
+        }
+
+        .issue-table th {
+          color: var(--text-secondary);
+          font-weight: 700;
+          background: var(--surface-hover);
+        }
+
+        .issue-table tr:last-child td {
+          border-bottom: none;
+        }
+
+        .credentials-table {
+          margin-top: 16px;
         }
 
         .info-card {

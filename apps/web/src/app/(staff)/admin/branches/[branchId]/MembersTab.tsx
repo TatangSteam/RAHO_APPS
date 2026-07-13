@@ -1,18 +1,23 @@
 import { BranchMember } from './types';
+import MemberAccountImportPanel from './MemberAccountImportPanel';
 import styles from './page.module.css';
 
 interface MembersTabProps {
   members: BranchMember[];
+  branchId: string;
   branchName: string;
   onAddMember: () => void;
   onViewMember: (memberId: string) => void;
+  onImported: () => void;
 }
 
 export default function MembersTab({
   members,
+  branchId,
   branchName,
   onAddMember,
   onViewMember,
+  onImported,
 }: MembersTabProps) {
   return (
     <div className={styles.membersSection}>
@@ -27,6 +32,8 @@ export default function MembersTab({
           ➕ Tambah Member
         </button>
       </div>
+
+      <MemberAccountImportPanel branchId={branchId} onImported={onImported} />
 
       {members.length === 0 ? (
         <div className={styles.empty}>
