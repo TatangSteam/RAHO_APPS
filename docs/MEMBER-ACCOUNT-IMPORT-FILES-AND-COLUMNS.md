@@ -6,11 +6,11 @@ Dokumen ini merangkum file yang terlibat pada fitur import akun member dari Exce
 
 | File | Area | Fungsi |
 |---|---|---|
-| `apps/api/src/modules/members/services/member-account-import.service.ts` | Backend service | Membaca Excel, validasi data, cek duplikat, membuat `User` role `MEMBER`, membuat `Member`, memberi akses cabang, dan mengembalikan credential hasil import. |
+| `apps/api/src/modules/members/services/member-account-import.service.ts` | Backend service | Membaca Excel, validasi data, cek duplikat, membuat akun member baru, atau melengkapi data member existing jika cocok. |
 | `apps/api/src/modules/members/members.controller.ts` | Backend controller | Endpoint handler untuk `dry-run` dan `execute` import Excel. |
 | `apps/api/src/modules/members/members.routes.ts` | Backend route | Route import Excel dan pembatasan akses hanya untuk `SUPER_ADMIN` dan `ADMIN_MANAGER`. |
 | `apps/api/src/middleware/upload.ts` | Backend upload | Middleware `uploadSpreadsheet` untuk menerima file `.xlsx`. |
-| `apps/web/src/components/branches/MemberAccountImportPanel.tsx` | Frontend component | Tampilan upload Excel, tombol `Cek File`, tombol `Buat Akun`, tabel error, tabel preview, credential hasil import, dan panduan kolom. |
+| `apps/web/src/components/branches/MemberAccountImportPanel.tsx` | Frontend component | Tampilan upload Excel, tombol `Cek File`, tombol `Buat Akun`, tabel error lengkap per member, export data tidak lengkap, tabel preview, credential hasil import, dan panduan kolom. |
 | `apps/web/src/app/(staff)/branches/[branchId]/page.tsx` | Frontend page | Menampilkan tombol `Import Excel` pada tab `Members` di halaman detail cabang. |
 | `apps/web/src/app/(staff)/admin/branches/[branchId]/MemberAccountImportPanel.tsx` | Frontend compatibility | Re-export komponen import agar route lama tetap memakai logic yang sama. |
 | `docs/MEMBER-ACCOUNT-IMPORT-TEMPLATE.md` | Dokumentasi | Template kolom Excel dan contoh isi sheet. |
@@ -53,3 +53,12 @@ Gunakan file `.xlsx` dengan sheet bernama `Members`. Header kolom bisa berada di
 | Nama + tanggal lahir sama di Excel | Import ditolak. |
 | Nama + tanggal lahir sama di database cabang mana pun | Import ditolak. |
 | Kode referral tidak aktif/tidak ditemukan | Import ditolak untuk row terkait. |
+| NIK cocok dengan member existing | Row diproses sebagai update untuk melengkapi field yang masih kosong. |
+| Nama + tanggal lahir cocok dengan member existing | Row diproses sebagai update untuk melengkapi field yang masih kosong. |
+| NIK mengarah ke member A tetapi nama + tanggal lahir mengarah ke member B | Import ditolak karena data ambigu. |
+
+## Import Ulang untuk Melengkapi Data
+
+Jika file Excel diimport ulang dan sistem menemukan member existing berdasarkan `nik` atau kombinasi `nama_lengkap` + `tanggal_lahir`, sistem tidak membuat member baru. Sistem hanya mengisi field member yang masih kosong, misalnya `no_hp`, `alamat`, `pekerjaan`, `kontak_darurat`, dan data profil lain yang tersedia di Excel.
+
+Jika `Cek File` menemukan data tidak valid, UI akan menampilkan nama member, NIK, tanggal lahir, nomor HP, dan masalahnya. Tombol `Export Data Tidak Lengkap` menghasilkan CSV agar data tersebut bisa diperbaiki lalu diimport ulang.

@@ -10,6 +10,9 @@ interface ImportIssue {
   rowNumber: number;
   field: string;
   message: string;
+  fullName?: string;
+  nik?: string | null;
+  birthDate?: string | null;
 }
 
 interface ImportPreview {
@@ -17,6 +20,17 @@ interface ImportPreview {
   fullName: string;
   username: string;
   phone: string | null;
+  birthDate?: string | null;
+  action?: 'create' | 'update';
+}
+
+interface InvalidImportRow {
+  rowNumber: number;
+  fullName: string;
+  nik: string | null;
+  birthDate: string | null;
+  phone: string | null;
+  issues: ImportIssue[];
 }
 
 interface ImportDryRunResult {
@@ -24,18 +38,22 @@ interface ImportDryRunResult {
     rows: number;
     validRows: number;
     invalidRows: number;
+    createRows?: number;
+    updateRows?: number;
   };
   preview: ImportPreview[];
+  invalidRows?: InvalidImportRow[];
   issues: ImportIssue[];
   canImport: boolean;
 }
 
 interface ImportedAccount {
+  action?: 'created' | 'updated';
   memberId: string;
   memberNo: string;
   fullName: string;
-  username: string;
-  password: string;
+  username?: string;
+  password?: string;
 }
 
 interface MemberAccountImportPanelProps {
@@ -129,6 +147,38 @@ export default function MemberAccountImportPanel({
     }
   };
 
+  const exportInvalidRows = () => {
+    if (!preview?.invalidRows?.length) {
+      showToast.error('Tidak ada data tidak lengkap untuk diexport');
+      return;
+    }
+
+    const headers = ['baris', 'nama_lengkap', 'nik', 'tanggal_lahir', 'no_hp', 'field_bermasalah', 'masalah'];
+    const rows = preview.invalidRows.flatMap((row) => (
+      row.issues.map((issue) => [
+        row.rowNumber,
+        row.fullName,
+        row.nik || '',
+        row.birthDate || '',
+        row.phone || '',
+        issue.field,
+        issue.message,
+      ])
+    ));
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `member-import-data-tidak-lengkap-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className={compact ? 'w-full' : 'mb-6 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900/50'}>
       {!compact && (
@@ -194,26 +244,44 @@ export default function MemberAccountImportPanel({
             {preview.canImport ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
             <span>
               {preview.counts.rows} baris, {preview.counts.validRows} valid, {preview.counts.invalidRows} perlu diperbaiki
+              {typeof preview.counts.createRows === 'number' && typeof preview.counts.updateRows === 'number'
+                ? ` (${preview.counts.createRows} buat baru, ${preview.counts.updateRows} lengkapi existing)`
+                : ''}
             </span>
           </div>
 
           {preview.issues.length > 0 ? (
-            <ResultTable
-              headers={['Baris', 'Field', 'Masalah']}
-              rows={preview.issues.slice(0, 10).map((issue) => [
-                issue.rowNumber,
-                issue.field,
-                issue.message,
-              ])}
-            />
+            <>
+              <div className="mb-3">
+                <button
+                  type="button"
+                  onClick={exportInvalidRows}
+                  className="min-h-9 rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300"
+                >
+                  Export Data Tidak Lengkap
+                </button>
+              </div>
+              <ResultTable
+                headers={['Baris', 'Nama', 'NIK', 'Tgl Lahir', 'No HP', 'Masalah']}
+                rows={(preview.invalidRows || []).slice(0, 10).map((row) => [
+                  row.rowNumber,
+                  row.fullName,
+                  row.nik || '-',
+                  row.birthDate || '-',
+                  row.phone || '-',
+                  row.issues.map((issue) => `${issue.field}: ${issue.message}`).join(' | '),
+                ])}
+              />
+            </>
           ) : (
             <ResultTable
-              headers={['Baris', 'Nama', 'Username', 'No HP']}
+              headers={['Baris', 'Nama', 'Username', 'No HP', 'Aksi Import']}
               rows={preview.preview.slice(0, 10).map((row) => [
                 row.rowNumber,
                 row.fullName,
                 row.username,
                 row.phone || '-',
+                row.action === 'update' ? 'Lengkapi Existing' : 'Buat Baru',
               ])}
             />
           )}
@@ -223,12 +291,13 @@ export default function MemberAccountImportPanel({
       {createdAccounts.length > 0 && (
         <div className="mt-4">
           <ResultTable
-            headers={['Member No', 'Nama', 'Username', 'Password']}
+            headers={['Aksi', 'Member No', 'Nama', 'Username', 'Password']}
             rows={createdAccounts.map((account) => [
+              account.action === 'updated' ? 'Dilengkapi' : 'Dibuat',
               account.memberNo,
               account.fullName,
-              account.username,
-              account.password,
+              account.username || '-',
+              account.password || '-',
             ])}
           />
         </div>

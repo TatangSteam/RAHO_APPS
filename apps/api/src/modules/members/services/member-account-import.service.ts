@@ -50,6 +50,40 @@ interface RowIssue {
   rowNumber: number;
   field: string;
   message: string;
+  fullName?: string;
+  nik?: string | null;
+  birthDate?: string | null;
+}
+
+interface ExistingMemberMatch {
+  id: string;
+  userId: string;
+  memberNo: string;
+  user: {
+    email: string;
+    profile: {
+      fullName: string | null;
+      phone: string | null;
+    } | null;
+  };
+  nik: string | null;
+  tempatLahir: string | null;
+  dateOfBirth: Date | null;
+  jenisKelamin: Gender | null;
+  agama: string | null;
+  address: string | null;
+  pekerjaan: string | null;
+  statusNikah: string | null;
+  emergencyContact: string | null;
+  sumberInfoRaho: string | null;
+  postalCode: string | null;
+  isConsentToPhoto: boolean;
+}
+
+interface ImportPlan {
+  row: ParsedMemberAccount;
+  action: 'create' | 'update';
+  existingMember?: ExistingMemberMatch;
 }
 
 const REQUIRED_HEADERS = ['nama_lengkap', 'tanggal_lahir'];
@@ -96,9 +130,11 @@ export class MemberAccountImportService {
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
     const parsed = await this.parseWorkbook(input.buffer, input.fileName);
-    const issues = await this.validateRows(parsed);
+    const { issues, plans } = await this.validateRows(parsed);
 
     const invalidRows = new Set(issues.map((issue) => issue.rowNumber)).size;
+    const invalidRowNumbers = new Set(issues.map((issue) => issue.rowNumber));
+    const issuesByRow = this.groupIssuesByRow(issues);
 
     return {
       fileName: input.fileName,
@@ -111,6 +147,8 @@ export class MemberAccountImportService {
         rows: parsed.length,
         validRows: parsed.length - invalidRows,
         invalidRows,
+        createRows: plans.filter((plan) => plan.action === 'create' && !invalidRowNumbers.has(plan.row.rowNumber)).length,
+        updateRows: plans.filter((plan) => plan.action === 'update' && !invalidRowNumbers.has(plan.row.rowNumber)).length,
       },
       preview: parsed.slice(0, 20).map((row) => ({
         rowNumber: row.rowNumber,
@@ -119,7 +157,18 @@ export class MemberAccountImportService {
         phone: row.phone || null,
         birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
         gender: row.gender,
+        action: plans.find((plan) => plan.row.rowNumber === row.rowNumber)?.action || 'create',
       })),
+      invalidRows: parsed
+        .filter((row) => issuesByRow.has(row.rowNumber))
+        .map((row) => ({
+          rowNumber: row.rowNumber,
+          fullName: row.fullName || '-',
+          nik: row.nik,
+          birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
+          phone: row.phone,
+          issues: issuesByRow.get(row.rowNumber) || [],
+        })),
       issues,
       canImport: parsed.length > 0 && issues.length === 0,
     };
@@ -135,7 +184,7 @@ export class MemberAccountImportService {
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
     const parsed = await this.parseWorkbook(input.buffer, input.fileName);
-    const issues = await this.validateRows(parsed);
+    const { issues, plans } = await this.validateRows(parsed);
 
     if (parsed.length === 0) {
       throw { status: 400, code: 'IMPORT_EMPTY', message: 'File Excel tidak memiliki data member.' };
@@ -152,15 +201,32 @@ export class MemberAccountImportService {
 
     const created = await prisma.$transaction(async (tx) => {
       const rows: Array<{
+        action: 'created' | 'updated';
         rowNumber: number;
         memberId: string;
         memberNo: string;
         fullName: string;
-        username: string;
-        password: string;
+        username?: string;
+        password?: string;
       }> = [];
 
-      for (const [index, row] of parsed.entries()) {
+      for (const [index, plan] of plans.entries()) {
+        const { row } = plan;
+
+        if (plan.action === 'update' && plan.existingMember) {
+          await this.updateExistingMemberFromImport(tx, plan.existingMember, row, branch.id, input.actor.userId);
+
+          rows.push({
+            action: 'updated',
+            rowNumber: row.rowNumber,
+            memberId: plan.existingMember.id,
+            memberNo: plan.existingMember.memberNo,
+            fullName: plan.existingMember.user.profile?.fullName || row.fullName,
+            username: plan.existingMember.user.email,
+          });
+          continue;
+        }
+
         const username = await this.uniqueUsername(tx, row.memberUsername || this.generateUsername(row, index + 1));
         const password = row.memberPassword || this.generatePassword();
         const memberNo = await this.nextMemberNo(tx, branch.branchCode);
@@ -234,6 +300,7 @@ export class MemberAccountImportService {
         });
 
         rows.push({
+          action: 'created',
           rowNumber: row.rowNumber,
           memberId: member.id,
           memberNo,
@@ -254,20 +321,22 @@ export class MemberAccountImportService {
       resourceId: branch.id,
       meta: {
         fileName: input.fileName,
-        createdCount: created.length,
+        createdCount: created.filter((row) => row.action === 'created').length,
+        updatedCount: created.filter((row) => row.action === 'updated').length,
       },
       ipAddress: input.ipAddress,
       userAgent: Array.isArray(input.userAgent) ? input.userAgent.join(', ') : input.userAgent,
     });
 
     return {
-      message: `Berhasil membuat ${created.length} akun member.`,
+      message: `Berhasil membuat ${created.filter((row) => row.action === 'created').length} akun member dan melengkapi ${created.filter((row) => row.action === 'updated').length} member existing.`,
       branch: {
         id: branch.id,
         branchCode: branch.branchCode,
         name: branch.name,
       },
-      createdCount: created.length,
+      createdCount: created.filter((row) => row.action === 'created').length,
+      updatedCount: created.filter((row) => row.action === 'updated').length,
       created,
     };
   }
@@ -408,7 +477,7 @@ export class MemberAccountImportService {
     return values;
   }
 
-  private async validateRows(rows: ParsedMemberAccount[]): Promise<RowIssue[]> {
+  private async validateRows(rows: ParsedMemberAccount[]): Promise<{ issues: RowIssue[]; plans: ImportPlan[] }> {
     const issues: RowIssue[] = [];
     const usernames = new Set<string>();
     const niks = new Set<string>();
@@ -416,49 +485,47 @@ export class MemberAccountImportService {
 
     for (const row of rows) {
       if (!row.fullName || row.fullName.length < 3) {
-        issues.push({ rowNumber: row.rowNumber, field: 'nama_lengkap', message: 'Nama lengkap minimal 3 karakter.' });
+        issues.push(this.issue(row, 'nama_lengkap', 'Nama lengkap minimal 3 karakter.'));
       }
 
       if (!row.birthDate) {
-        issues.push({ rowNumber: row.rowNumber, field: 'tanggal_lahir', message: 'Tanggal lahir wajib valid.' });
+        issues.push(this.issue(row, 'tanggal_lahir', 'Tanggal lahir wajib valid.'));
       }
 
       if (row.phone && row.phone.replace(/\D/g, '').length < 10) {
-        issues.push({ rowNumber: row.rowNumber, field: 'no_hp', message: 'Nomor HP minimal 10 digit.' });
+        issues.push(this.issue(row, 'no_hp', 'Nomor HP minimal 10 digit.'));
       }
 
       if (row.memberUsername && !/^[a-zA-Z0-9._-]{4,30}$/.test(row.memberUsername)) {
         issues.push({
-          rowNumber: row.rowNumber,
-          field: 'username',
-          message: 'Username harus 4-30 karakter dan hanya huruf, angka, titik, underscore, atau tanda hubung.',
+          ...this.issue(row, 'username', 'Username harus 4-30 karakter dan hanya huruf, angka, titik, underscore, atau tanda hubung.'),
         });
       }
 
       if (row.memberPassword && row.memberPassword.length < 8) {
-        issues.push({ rowNumber: row.rowNumber, field: 'password', message: 'Password minimal 8 karakter.' });
+        issues.push(this.issue(row, 'password', 'Password minimal 8 karakter.'));
       }
 
       if (row.nik && row.nik.length !== 16) {
-        issues.push({ rowNumber: row.rowNumber, field: 'nik', message: 'NIK harus 16 digit.' });
+        issues.push(this.issue(row, 'nik', 'NIK harus 16 digit.'));
       }
 
       if (row.referralCode) {
         const referral = await prisma.referralCode.findFirst({ where: { code: row.referralCode, isActive: true } });
         if (!referral) {
-          issues.push({ rowNumber: row.rowNumber, field: 'kode_referral', message: 'Kode referral tidak aktif/tidak ditemukan.' });
+          issues.push(this.issue(row, 'kode_referral', 'Kode referral tidak aktif/tidak ditemukan.'));
         }
       }
 
       const username = row.memberUsername || this.generateUsername(row, row.rowNumber);
       if (usernames.has(username)) {
-        issues.push({ rowNumber: row.rowNumber, field: 'username', message: 'Username duplikat di file Excel.' });
+        issues.push(this.issue(row, 'username', 'Username duplikat di file Excel.'));
       }
       usernames.add(username);
 
       if (row.nik) {
         if (niks.has(row.nik)) {
-          issues.push({ rowNumber: row.rowNumber, field: 'nik', message: 'NIK duplikat di file Excel.' });
+          issues.push(this.issue(row, 'nik', 'NIK duplikat di file Excel.'));
         }
         niks.add(row.nik);
       }
@@ -466,76 +533,200 @@ export class MemberAccountImportService {
       if (row.fullName && row.birthDate) {
         const key = `${this.normalizePersonName(row.fullName)}|${row.birthDate.toISOString().slice(0, 10)}`;
         if (nameDob.has(key)) {
-          issues.push({
-            rowNumber: row.rowNumber,
-            field: 'nama_lengkap',
-            message: 'Nama dan tanggal lahir duplikat di file Excel.',
-          });
+          issues.push(this.issue(row, 'nama_lengkap', 'Nama dan tanggal lahir duplikat di file Excel.'));
         }
         nameDob.add(key);
       }
     }
 
-    await this.validateAgainstDatabase(rows, issues);
+    const plans = await this.validateAgainstDatabase(rows, issues);
 
-    return issues;
+    return { issues, plans };
   }
 
-  private async validateAgainstDatabase(rows: ParsedMemberAccount[], issues: RowIssue[]) {
+  private async validateAgainstDatabase(rows: ParsedMemberAccount[], issues: RowIssue[]): Promise<ImportPlan[]> {
+    const matchByRow = await this.findExistingMatches(rows, issues);
     const usernameRows = rows
-      .map((row) => ({ row, username: row.memberUsername || this.generateUsername(row, row.rowNumber) }))
+      .map((row) => {
+        const matched = matchByRow.get(row.rowNumber);
+        return {
+          row,
+          username: row.memberUsername || (matched ? null : this.generateUsername(row, row.rowNumber)),
+        };
+      })
       .filter((entry) => Boolean(entry.username));
 
     const existingUsers = await prisma.user.findMany({
       where: { email: { in: usernameRows.map((entry) => entry.username) } },
-      select: { email: true },
+      select: { id: true, email: true },
     });
-    const existingUsernames = new Set(existingUsers.map((user) => user.email));
+    const userIdByUsername = new Map(existingUsers.map((user) => [user.email, user.id]));
 
     for (const entry of usernameRows) {
-      if (existingUsernames.has(entry.username)) {
-        issues.push({ rowNumber: entry.row.rowNumber, field: 'username', message: 'Username sudah digunakan.' });
+      const existingUserId = userIdByUsername.get(entry.username!);
+      const matched = matchByRow.get(entry.row.rowNumber);
+      if (existingUserId && existingUserId !== matched?.userId) {
+        issues.push(this.issue(entry.row, 'username', 'Username sudah digunakan oleh member lain.'));
       }
     }
 
-    const nikRows = rows.filter((row) => row.nik);
-    if (nikRows.length > 0) {
-      const existingMembers = await prisma.member.findMany({
-        where: { nik: { in: nikRows.map((row) => row.nik!) } },
-        select: { nik: true },
-      });
-      const existingNiks = new Set(existingMembers.map((member) => member.nik));
-      for (const row of nikRows) {
-        if (existingNiks.has(row.nik)) {
-          issues.push({ rowNumber: row.rowNumber, field: 'nik', message: 'NIK sudah terdaftar.' });
-        }
-      }
-    }
+    return rows.map((row) => {
+      const existingMember = matchByRow.get(row.rowNumber);
+      return existingMember
+        ? { row, action: 'update', existingMember }
+        : { row, action: 'create' };
+    });
+  }
+
+  private async findExistingMatches(rows: ParsedMemberAccount[], issues: RowIssue[]) {
+    const matchByRow = new Map<number, ExistingMemberMatch>();
 
     for (const row of rows) {
-      if (!row.fullName || !row.birthDate) continue;
+      const candidates = new Map<string, ExistingMemberMatch>();
 
-      const sameBirthDate = await prisma.member.findMany({
-        where: {
-          dateOfBirth: row.birthDate,
-        },
+      if (row.nik) {
+        const byNik = await prisma.member.findUnique({
+          where: { nik: row.nik },
+          select: this.existingMemberSelect(),
+        });
+        if (byNik) candidates.set(byNik.id, byNik as ExistingMemberMatch);
+      }
+
+      if (row.fullName && row.birthDate) {
+        const sameBirthDate = await prisma.member.findMany({
+          where: { dateOfBirth: row.birthDate },
+          select: this.existingMemberSelect(),
+        });
+        const sameName = sameBirthDate.filter((member) => (
+          this.normalizePersonName(member.user.profile?.fullName) === this.normalizePersonName(row.fullName)
+        ));
+
+        if (sameName.length > 1) {
+          issues.push(this.issue(row, 'nama_lengkap', 'Ada lebih dari satu member existing dengan nama dan tanggal lahir yang sama. Import ditolak agar tidak salah update.'));
+        }
+
+        sameName.forEach((member) => candidates.set(member.id, member as ExistingMemberMatch));
+      }
+
+      if (candidates.size > 1) {
+        issues.push(this.issue(row, 'nik', 'Data cocok ke lebih dari satu member existing. Periksa NIK, nama, dan tanggal lahir.'));
+        continue;
+      }
+
+      const match = Array.from(candidates.values())[0];
+      if (match) {
+        matchByRow.set(row.rowNumber, match);
+      }
+    }
+
+    return matchByRow;
+  }
+
+  private existingMemberSelect() {
+    return {
+      id: true,
+      userId: true,
+      memberNo: true,
+      user: {
         select: {
-          user: {
+          email: true,
+          profile: {
             select: {
-              profile: { select: { fullName: true } },
+              fullName: true,
+              phone: true,
             },
           },
         },
-      });
+      },
+      nik: true,
+      tempatLahir: true,
+      dateOfBirth: true,
+      jenisKelamin: true,
+      agama: true,
+      address: true,
+      pekerjaan: true,
+      statusNikah: true,
+      emergencyContact: true,
+      sumberInfoRaho: true,
+      postalCode: true,
+      isConsentToPhoto: true,
+    } as const;
+  }
 
-      if (hasMatchingMemberName(row.fullName, sameBirthDate.map((member) => member.user.profile?.fullName))) {
-        issues.push({
-          rowNumber: row.rowNumber,
-          field: 'nama_lengkap',
-          message: 'Member dengan nama dan tanggal lahir yang sama sudah ada di cabang lain atau cabang ini.',
-        });
-      }
+  private async updateExistingMemberFromImport(
+    tx: DbClient,
+    existing: ExistingMemberMatch,
+    row: ParsedMemberAccount,
+    branchId: string,
+    actorUserId: string,
+  ) {
+    const profileUpdate: Prisma.UserProfileUpdateInput = {};
+    if (!existing.user.profile?.fullName && row.fullName) profileUpdate.fullName = row.fullName;
+    if (!existing.user.profile?.phone && row.phone) profileUpdate.phone = row.phone;
+
+    if (Object.keys(profileUpdate).length > 0) {
+      await tx.userProfile.upsert({
+        where: { userId: existing.userId },
+        update: profileUpdate,
+        create: {
+          userId: existing.userId,
+          fullName: row.fullName || existing.user.profile?.fullName || 'Member',
+          phone: row.phone || null,
+        },
+      });
     }
+
+    const memberUpdate: Prisma.MemberUpdateInput = {};
+    if (!existing.nik && row.nik) memberUpdate.nik = row.nik;
+    if (!existing.tempatLahir && row.birthPlace) memberUpdate.tempatLahir = row.birthPlace;
+    if (!existing.dateOfBirth && row.birthDate) memberUpdate.dateOfBirth = row.birthDate;
+    if (!existing.jenisKelamin && row.gender) memberUpdate.jenisKelamin = row.gender;
+    if (!existing.agama && row.religion) memberUpdate.agama = row.religion;
+    if (!existing.address && row.address) memberUpdate.address = row.address;
+    if (!existing.pekerjaan && row.occupation) memberUpdate.pekerjaan = row.occupation;
+    if (!existing.statusNikah && row.maritalStatus) memberUpdate.statusNikah = row.maritalStatus;
+    const emergencyContact = this.combineEmergencyContact(row);
+    if (!existing.emergencyContact && emergencyContact) memberUpdate.emergencyContact = emergencyContact;
+    if (!existing.sumberInfoRaho && row.infoSource) memberUpdate.sumberInfoRaho = row.infoSource;
+    if (!existing.postalCode && row.postalCode) memberUpdate.postalCode = row.postalCode;
+    if (!existing.isConsentToPhoto && row.isConsentToPhoto) memberUpdate.isConsentToPhoto = true;
+
+    if (Object.keys(memberUpdate).length > 0) {
+      await tx.member.update({
+        where: { id: existing.id },
+        data: memberUpdate,
+      });
+    }
+
+    await tx.branchMemberAccess.upsert({
+      where: { memberId_branchId: { memberId: existing.id, branchId } },
+      update: {},
+      create: {
+        memberId: existing.id,
+        branchId,
+        grantedBy: actorUserId,
+        notes: 'Melengkapi data member existing dari import Excel',
+      },
+    });
+  }
+
+  private issue(row: ParsedMemberAccount, field: string, message: string): RowIssue {
+    return {
+      rowNumber: row.rowNumber,
+      field,
+      message,
+      fullName: row.fullName || '-',
+      nik: row.nik,
+      birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
+    };
+  }
+
+  private groupIssuesByRow(issues: RowIssue[]) {
+    const grouped = new Map<number, RowIssue[]>();
+    for (const issue of issues) {
+      grouped.set(issue.rowNumber, [...(grouped.get(issue.rowNumber) || []), issue]);
+    }
+    return grouped;
   }
 
   private async nextMemberNo(tx: DbClient, branchCode: string) {
