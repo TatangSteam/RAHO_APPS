@@ -37,8 +37,9 @@ Gunakan file `.xlsx` dengan sheet bernama `Members`. Baris pertama berisi header
 1. Buka halaman Cabang.
 2. Pilih file Excel `.xlsx`.
 3. Klik `Cek File` untuk validasi tanpa membuat data.
-4. Jika valid, klik `Buat Akun`.
+4. Jika ada minimal satu baris valid, klik `Buat Akun`.
 5. Jika data belum ada, sistem membuat `User` role `MEMBER`, data `Member`, akses cabang, nomor member, dan notifikasi welcome.
 6. Jika data cocok dengan member existing berdasarkan `nik` atau `nama_lengkap` + `tanggal_lahir`, sistem tidak membuat duplikat dan hanya melengkapi field yang masih kosong.
-7. Jika ada data tidak valid, gunakan tombol `Export Data Tidak Lengkap`, perbaiki file, lalu import ulang.
-8. Username/password hasil import tampil untuk akun baru, termasuk password otomatis untuk baris yang kolom password-nya kosong.
+7. Jika ada data tidak valid, sistem tetap memproses baris valid dan men-skip baris tidak valid.
+8. Gunakan tombol `Export Data Tidak Lengkap`, perbaiki file, lalu import ulang untuk melengkapi data yang sebelumnya di-skip.
+9. Username/password hasil import tampil untuk akun baru, termasuk password otomatis untuk baris yang kolom password-nya kosong.

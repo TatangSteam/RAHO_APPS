@@ -47,18 +47,18 @@ Gunakan file `.xlsx` dengan sheet bernama `Members`. Header kolom bisa berada di
 | Validasi | Dampak Jika Gagal |
 |---|---|
 | File harus `.xlsx` valid | Import ditolak sebelum membaca row. |
-| `nama_lengkap`, `tanggal_lahir` wajib ada | Row ditandai error saat `Cek File`. |
-| Username duplikat di Excel atau database | Import ditolak. |
-| NIK duplikat di Excel atau database | Import ditolak. |
-| Nama + tanggal lahir sama di Excel | Import ditolak. |
-| Nama + tanggal lahir sama di database cabang mana pun | Import ditolak. |
-| Kode referral tidak aktif/tidak ditemukan | Import ditolak untuk row terkait. |
+| `nama_lengkap`, `tanggal_lahir` wajib ada | Row ditandai error saat `Cek File` dan di-skip saat `Buat Akun`. |
+| Username duplikat di Excel atau database | Row terkait ditandai error dan di-skip. |
+| NIK duplikat di Excel atau database | Row terkait ditandai error dan di-skip. |
+| Nama + tanggal lahir sama di Excel | Row terkait ditandai error dan di-skip. |
+| Nama + tanggal lahir sama di database cabang mana pun | Row terkait ditandai error dan di-skip jika hasilnya ambigu. |
+| Kode referral tidak aktif/tidak ditemukan | Row terkait ditandai error dan di-skip. |
 | NIK cocok dengan member existing | Row diproses sebagai update untuk melengkapi field yang masih kosong. |
 | Nama + tanggal lahir cocok dengan member existing | Row diproses sebagai update untuk melengkapi field yang masih kosong. |
-| NIK mengarah ke member A tetapi nama + tanggal lahir mengarah ke member B | Import ditolak karena data ambigu. |
+| NIK mengarah ke member A tetapi nama + tanggal lahir mengarah ke member B | Row terkait ditandai error dan di-skip karena data ambigu. |
 
 ## Import Ulang untuk Melengkapi Data
 
 Jika file Excel diimport ulang dan sistem menemukan member existing berdasarkan `nik` atau kombinasi `nama_lengkap` + `tanggal_lahir`, sistem tidak membuat member baru. Sistem hanya mengisi field member yang masih kosong, misalnya `no_hp`, `alamat`, `pekerjaan`, `kontak_darurat`, dan data profil lain yang tersedia di Excel.
 
-Jika `Cek File` menemukan data tidak valid, UI akan menampilkan nama member, NIK, tanggal lahir, nomor HP, dan masalahnya. Tombol `Export Data Tidak Lengkap` menghasilkan CSV agar data tersebut bisa diperbaiki lalu diimport ulang.
+Jika `Cek File` menemukan data tidak valid, UI akan menampilkan nama member, NIK, tanggal lahir, nomor HP, dan masalahnya. Jika masih ada baris valid, tombol `Buat Akun` tetap dapat dipakai; sistem akan memproses baris valid dan mengembalikan daftar baris yang di-skip. Tombol `Export Data Tidak Lengkap` menghasilkan CSV agar data tersebut bisa diperbaiki lalu diimport ulang.

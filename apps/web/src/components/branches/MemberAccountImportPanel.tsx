@@ -95,6 +95,7 @@ export default function MemberAccountImportPanel({
   const [importing, setImporting] = useState(false);
   const [preview, setPreview] = useState<ImportDryRunResult | null>(null);
   const [createdAccounts, setCreatedAccounts] = useState<ImportedAccount[]>([]);
+  const [skippedRows, setSkippedRows] = useState<InvalidImportRow[]>([]);
 
   const buildFormData = () => {
     if (!file) return null;
@@ -114,6 +115,7 @@ export default function MemberAccountImportPanel({
     try {
       setChecking(true);
       setCreatedAccounts([]);
+      setSkippedRows([]);
       const response = await api.post('/members/import/accounts/dry-run', formData);
       setPreview(response.data.data);
       showToast.success('File Excel berhasil dicek');
@@ -135,9 +137,12 @@ export default function MemberAccountImportPanel({
     try {
       setImporting(true);
       const response = await api.post('/members/import/accounts/execute', formData);
-      const created = response.data.data.created || [];
+      const data = response.data.data;
+      const created = data.created || [];
+      const skipped = data.skipped || [];
       setCreatedAccounts(created);
-      showToast.success(response.data.data.message || 'Import akun member berhasil');
+      setSkippedRows(skipped);
+      showToast.success(data.message || 'Import akun member berhasil');
       onImported();
     } catch (error: any) {
       devError('Failed to import member accounts:', error);
@@ -198,6 +203,7 @@ export default function MemberAccountImportPanel({
             setFile(event.target.files?.[0] || null);
             setPreview(null);
             setCreatedAccounts([]);
+            setSkippedRows([]);
           }}
         />
         <label
@@ -240,7 +246,13 @@ export default function MemberAccountImportPanel({
 
       {preview && (
         <div className="mt-4">
-          <div className={`mb-3 flex items-center gap-2 text-sm font-bold ${preview.canImport ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+          <div className={`mb-3 flex items-center gap-2 text-sm font-bold ${
+            preview.canImport
+              ? preview.counts.invalidRows > 0
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-emerald-600 dark:text-emerald-400'
+              : 'text-red-600 dark:text-red-400'
+          }`}>
             {preview.canImport ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
             <span>
               {preview.counts.rows} baris, {preview.counts.validRows} valid, {preview.counts.invalidRows} perlu diperbaiki
@@ -252,6 +264,11 @@ export default function MemberAccountImportPanel({
 
           {preview.issues.length > 0 ? (
             <>
+              {preview.canImport && (
+                <p className="mb-3 text-sm font-medium text-neutral-600 dark:text-neutral-300">
+                  Baris valid tetap bisa dibuat. Baris yang tidak lengkap akan di-skip dan bisa diexport untuk diperbaiki lalu diimport ulang.
+                </p>
+              )}
               <div className="mb-3">
                 <button
                   type="button"
@@ -298,6 +315,26 @@ export default function MemberAccountImportPanel({
               account.fullName,
               account.username || '-',
               account.password || '-',
+            ])}
+          />
+        </div>
+      )}
+
+      {skippedRows.length > 0 && (
+        <div className="mt-4">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold text-amber-700 dark:text-amber-300">
+            <AlertCircle size={16} />
+            <span>{skippedRows.length} baris di-skip karena tidak valid</span>
+          </div>
+          <ResultTable
+            headers={['Baris', 'Nama', 'NIK', 'Tgl Lahir', 'No HP', 'Masalah']}
+            rows={skippedRows.slice(0, 10).map((row) => [
+              row.rowNumber,
+              row.fullName,
+              row.nik || '-',
+              row.birthDate || '-',
+              row.phone || '-',
+              row.issues.map((issue) => `${issue.field}: ${issue.message}`).join(' | '),
             ])}
           />
         </div>
