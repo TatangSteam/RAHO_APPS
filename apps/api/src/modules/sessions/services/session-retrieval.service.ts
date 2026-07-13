@@ -417,6 +417,7 @@ export class SessionRetrievalService {
               userId: session.doctor.id,
               fullName: session.doctor.profile?.fullName || '',
             },
+            doctorEvaluationCompleted: this.hasDoctorEvaluation(session.evaluation),
             nurse: {
               userId: session.nurse.id,
               fullName: session.nurse.profile?.fullName || '',
@@ -516,6 +517,7 @@ export class SessionRetrievalService {
         userId: session.doctor.id,
         fullName: session.doctor.profile?.fullName || '',
       },
+      doctorEvaluationCompleted: this.hasDoctorEvaluation(session.evaluation),
       nurse: {
         userId: session.nurse.id,
         fullName: session.nurse.profile?.fullName || '',

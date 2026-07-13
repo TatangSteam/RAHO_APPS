@@ -28,7 +28,7 @@ export class MemberRegistrationService {
       birthDate: string;
       gender?: string;
       religion?: string;
-      phone: string;
+      phone?: string;
       email?: string;
       address?: string;
       occupation?: string;
@@ -219,7 +219,7 @@ export class MemberRegistrationService {
           profile: {
             create: {
               fullName,
-              phone: data.phone,
+              phone: data.phone || null,
             },
           },
         },

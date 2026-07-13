@@ -27,7 +27,7 @@ interface ParsedMemberAccount {
   fullName: string;
   memberUsername: string | null;
   memberPassword: string | null;
-  phone: string;
+  phone: string | null;
   identityType: string | null;
   nik: string | null;
   birthPlace: string | null;
@@ -52,7 +52,7 @@ interface RowIssue {
   message: string;
 }
 
-const REQUIRED_HEADERS = ['nama_lengkap', 'tanggal_lahir', 'no_hp'];
+const REQUIRED_HEADERS = ['nama_lengkap', 'tanggal_lahir'];
 
 const HEADER_ALIASES: Record<string, string> = {
   nama_lengkap: 'nama_lengkap',
@@ -116,7 +116,7 @@ export class MemberAccountImportService {
         rowNumber: row.rowNumber,
         fullName: row.fullName,
         username: row.memberUsername || this.generateUsername(row, row.rowNumber),
-        phone: row.phone,
+        phone: row.phone || null,
         birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
         gender: row.gender,
       })),
@@ -184,7 +184,7 @@ export class MemberAccountImportService {
             profile: {
               create: {
                 fullName: row.fullName,
-                phone: row.phone,
+                phone: row.phone || null,
               },
             },
           },
@@ -359,7 +359,7 @@ export class MemberAccountImportService {
         fullName,
         memberUsername: username,
         memberPassword: this.optionalText(values.password),
-        phone: this.text(values.no_hp),
+        phone: this.optionalText(values.no_hp),
         identityType: this.optionalText(values.tipe_identitas) || 'NIK',
         nik: this.normalizeNik(this.optionalText(values.nik)),
         birthPlace: this.optionalText(values.tempat_lahir),
@@ -423,7 +423,7 @@ export class MemberAccountImportService {
         issues.push({ rowNumber: row.rowNumber, field: 'tanggal_lahir', message: 'Tanggal lahir wajib valid.' });
       }
 
-      if (!row.phone || row.phone.replace(/\D/g, '').length < 10) {
+      if (row.phone && row.phone.replace(/\D/g, '').length < 10) {
         issues.push({ rowNumber: row.rowNumber, field: 'no_hp', message: 'Nomor HP minimal 10 digit.' });
       }
 

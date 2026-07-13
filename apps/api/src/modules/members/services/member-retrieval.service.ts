@@ -250,13 +250,13 @@ export class MemberRetrievalService {
         },
         documents: {
           where: {
-            documentType: 'FOTO_PROFIL',
+            documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
           },
           select: {
             fileUrl: true,
             documentType: true,
+            mimeType: true,
           },
-          take: 1,
         },
         encounters: {
           include: {
@@ -394,13 +394,13 @@ export class MemberRetrievalService {
         },
         documents: {
           where: {
-            documentType: 'FOTO_PROFIL',
+            documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
           },
           select: {
             fileUrl: true,
             documentType: true,
+            mimeType: true,
           },
-          take: 1,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -732,6 +732,9 @@ export class MemberRetrievalService {
     // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
     const profilePhoto = member.documents?.find(isProfileImageDocument);
     const photoUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
+    const hasInformedConsent = member.documents?.some(
+      (doc: any) => doc?.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN',
+    ) || false;
 
     // Check if member has cross-branch access
     const isLintas = member.branchAccesses && member.branchAccesses.length > 0;
@@ -768,6 +771,7 @@ export class MemberRetrievalService {
       isDeceased: member.isDeceased,
       isLintas,
       registrationBranch: member.registrationBranch?.name || 'N/A',
+      hasInformedConsent,
       photoUrl,
       createdAt: member.createdAt?.toISOString(),
     };

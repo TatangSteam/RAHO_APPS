@@ -156,16 +156,15 @@ export default function PersonalDataSection({ formData, onChange, errors }: Pers
         {/* Nomor Telepon - 6 cols on desktop, full on mobile */}
         <div className="form-col-6">
           <label className="form-label">
-            Nomor Telepon <span style={{ color: '#ef4444' }}>*</span>
+            Nomor Telepon
           </label>
           <input
             type="tel"
             name="phone"
             value={formData.phone}
             onChange={onChange}
-            required
             className="form-input"
-            placeholder="08xxxxxxxxxx"
+            placeholder="Opsional"
             autoComplete="off"
           />
         </div>

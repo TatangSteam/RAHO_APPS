@@ -68,6 +68,7 @@ interface Member {
   voucherCount: number;
   basicPackageCount: number;
   isLintas: boolean;
+  hasInformedConsent?: boolean;
   photoUrl?: string;
 }
 
@@ -129,6 +130,7 @@ interface Session {
   doctor: {
     fullName: string;
   } | null;
+  doctorEvaluationCompleted?: boolean;
   adminLayanan: {
     fullName: string;
   } | null;

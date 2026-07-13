@@ -11,6 +11,10 @@ interface MemberTableCellProps {
 
 export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: MemberTableCellProps) {
   const memberInitial = (member.fullName || 'M').charAt(0).toUpperCase();
+  const missingWarnings = [
+    !member.phone?.trim() ? 'No HP kosong' : null,
+    !member.hasInformedConsent ? 'Consent kosong' : null,
+  ].filter(Boolean) as string[];
 
   switch (columnId) {
     case 'memberNo':
@@ -92,6 +96,30 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
             <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
               🏢 {member.registrationBranch || 'N/A'}
             </div>
+            {missingWarnings.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px' }}>
+                {missingWarnings.map((warning) => (
+                  <span
+                    key={warning}
+                    title={warning}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      borderRadius: '999px',
+                      border: '1px solid rgba(245, 158, 11, 0.45)',
+                      background: 'rgba(245, 158, 11, 0.14)',
+                      color: '#b45309',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: '4px 7px',
+                    }}
+                  >
+                    {warning}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );

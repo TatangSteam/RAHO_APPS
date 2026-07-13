@@ -217,6 +217,12 @@ export default function MemberEditModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.phone.trim() && formData.phone.replace(/\D/g, '').length < 10) {
+      showToast.error('Nomor telepon minimal 10 digit');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -226,10 +232,10 @@ export default function MemberEditModal({
           fullName: formData.fullName,
           memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
-          phone: formData.phone,
           isConsentToPhoto: formData.isConsentToPhoto,
         };
 
+        if (formData.phone) createData.phone = formData.phone;
         if (formData.email) createData.email = formData.email;
         if (formData.address) createData.address = formData.address;
         if (formData.birthPlace) createData.birthPlace = formData.birthPlace;
@@ -255,7 +261,7 @@ export default function MemberEditModal({
           isConsentToPhoto: formData.isConsentToPhoto,
         };
 
-        if (formData.phone) updateData.phone = formData.phone;
+        updateData.phone = formData.phone;
         if (formData.memberPassword) updateData.memberPassword = formData.memberPassword;
         updateData.username = formData.memberUsername;
         if (formData.address) updateData.address = formData.address;
@@ -420,16 +426,15 @@ export default function MemberEditModal({
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
-                    No. Telepon <span className="text-red-500">*</span>
+                    No. Telepon
                   </label>
                   <input
                     type="tel"
                     name="phone"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    required
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
-                    placeholder="08xxxxxxxxxx"
+                    placeholder="Opsional"
                   />
                 </div>
 

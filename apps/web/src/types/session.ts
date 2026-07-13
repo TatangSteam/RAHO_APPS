@@ -133,6 +133,7 @@ export interface Session {
   memberPackage: SessionMemberPackage;
   adminLayanan: SessionStaff;
   doctor: SessionStaff;
+  doctorEvaluationCompleted?: boolean;
   nurse: SessionStaff;
   sessionDoctors?: SessionDoctorAssignment[];
   sessionNurses?: SessionNurseAssignment[];

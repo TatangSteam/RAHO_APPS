@@ -95,6 +95,13 @@ export default function MemberHeader({
 }: MemberHeaderProps) {
   // Get profile photo from documents
   const profilePhoto = member.documents?.find(doc => doc.documentType === 'FOTO_PROFIL');
+  const hasInformedConsent = member.documents?.some(
+    doc => doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN'
+  );
+  const missingWarnings = [
+    !member.profile?.phone?.trim() ? 'No HP belum terisi' : null,
+    !hasInformedConsent ? 'Inform consent belum terisi' : null,
+  ].filter(Boolean) as string[];
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -205,6 +212,29 @@ export default function MemberHeader({
                 }}>
                   Status: Meninggal
                 </span>
+              )}
+              {missingWarnings.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                  {missingWarnings.map((warning) => (
+                    <span
+                      key={warning}
+                      title={warning}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        padding: '5px 10px',
+                        borderRadius: '999px',
+                        border: '1px solid rgba(245, 158, 11, 0.45)',
+                        background: 'rgba(245, 158, 11, 0.14)',
+                        color: '#f59e0b',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      {warning}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>

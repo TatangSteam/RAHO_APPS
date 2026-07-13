@@ -6,8 +6,8 @@ Gunakan file `.xlsx` dengan sheet bernama `Members`. Baris pertama berisi header
 |---|---:|---|---|
 | `nama_lengkap` | Ya | `Budi Santoso` | Nama lengkap member, minimal 3 karakter. |
 | `tanggal_lahir` | Ya | `1990-05-21` | Format disarankan `YYYY-MM-DD`; format tanggal Excel juga didukung. |
-| `no_hp` | Ya | `081234567890` | Minimal 10 digit. Disimpan ke profil user. |
-| `username` | Tidak | `budi.santoso` | Jika kosong, sistem membuat username otomatis dari nama dan nomor HP. |
+| `no_hp` | Tidak | `081234567890` | Opsional. Jika diisi minimal 10 digit, disimpan ke profil user. |
+| `username` | Tidak | `budi.santoso` | Jika kosong, sistem membuat username otomatis dari nama dan nomor unik. |
 | `password` | Tidak | `RahoMember123` | Jika kosong, sistem membuat password otomatis. Jika diisi, minimal 8 karakter. |
 | `nik` | Tidak | `3273010101900001` | Harus 16 digit dan unik jika diisi. |
 | `tipe_identitas` | Tidak | `NIK` | Nilai yang didukung: `NIK`, `PASSPORT`, `KITAS`, `VIP`, `SPECIAL`, `FOREIGN_AUTO`, `NO_NIK`. Default `NIK`. |

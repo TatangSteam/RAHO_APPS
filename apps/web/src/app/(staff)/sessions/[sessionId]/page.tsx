@@ -635,6 +635,22 @@ export default function SessionDetailPage() {
                   <span style={{ fontSize: '18px' }}>👨‍⚕️</span>
                   <span>{sessionInfo.doctor.fullName}</span>
                 </div>
+                {!steps.step8_evaluation && (
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    marginTop: '10px',
+                    padding: '5px 10px',
+                    borderRadius: '999px',
+                    border: '1px solid rgba(245, 158, 11, 0.35)',
+                    background: 'rgba(245, 158, 11, 0.13)',
+                    color: '#f59e0b',
+                    fontSize: '12px',
+                    fontWeight: 800,
+                  }}>
+                    Evaluasi dokter belum diisi
+                  </div>
+                )}
                 {/* Additional Doctors - will be added when backend returns them */}
                 {(sessionInfo as any).sessionDoctors && (sessionInfo as any).sessionDoctors.length > 1 && (
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>

@@ -107,6 +107,7 @@ const DEFAULT_TABLE_FIELDS: Record<string, boolean> = {
   sessionCode: false,
   memberNo: false,
   doctorName: true,
+  doctorEvaluationStatus: true,
   nurseName: true,
   branchName: false,
   branchCode: false,
@@ -351,6 +352,7 @@ export default function SessionsPage() {
       fields: [
         { key: 'adminLayanan', label: 'Admin Layanan' },
         { key: 'doctorName', label: 'Nama Dokter Utama' },
+        { key: 'doctorEvaluationStatus', label: 'Status Evaluasi Dokter' },
         { key: 'doctorCode', label: 'Kode Dokter' },
         { key: 'nurseName', label: 'Nama Nakes' },
         { key: 'nurseCode', label: 'Kode Nakes' },
@@ -610,6 +612,7 @@ export default function SessionsPage() {
     if (['adminLayanan', 'doctorName', 'nurseName', 'allDoctors', 'allNurses'].includes(key)) {
       classes.push(styles.staffCell);
     }
+    if (key === 'doctorEvaluationStatus') classes.push(styles.statusCell);
     if (['branchName', 'branchCode', 'boosterType'].includes(key)) {
       classes.push(styles.branchCell);
     }
@@ -709,25 +712,34 @@ export default function SessionsPage() {
   const renderStaffList = (
     staff: Array<{ isPrimary?: boolean; fullName: string; staffCode?: string | null }>,
     fallback?: string,
+    showEvaluationWarning = false,
   ) => {
     const staffList = staff.filter((item) => item.fullName?.trim());
 
     if (staffList.length === 0) {
-      return <span className={styles.staffName}>{fallback || '-'}</span>;
+      return (
+        <div className={styles.staffStack}>
+          <span className={styles.staffName}>{fallback || '-'}</span>
+          {showEvaluationWarning && <span className={styles.doctorWarningBadge}>Evaluasi belum diisi</span>}
+        </div>
+      );
     }
 
     return (
-      <div className={styles.staffList}>
-        {staffList.map((item, index) => (
-          <span
-            key={`${item.fullName}-${item.staffCode || index}`}
-            className={`${styles.staffPill} ${item.isPrimary ? styles.primaryStaffPill : ''}`}
-            title={item.staffCode || undefined}
-          >
-            {item.fullName}
-            {item.isPrimary && <span className={styles.primaryStaffMark}>Utama</span>}
-          </span>
-        ))}
+      <div className={styles.staffStack}>
+        <div className={styles.staffList}>
+          {staffList.map((item, index) => (
+            <span
+              key={`${item.fullName}-${item.staffCode || index}`}
+              className={`${styles.staffPill} ${item.isPrimary ? styles.primaryStaffPill : ''}`}
+              title={item.staffCode || undefined}
+            >
+              {item.fullName}
+              {item.isPrimary && <span className={styles.primaryStaffMark}>Utama</span>}
+            </span>
+          ))}
+        </div>
+        {showEvaluationWarning && <span className={styles.doctorWarningBadge}>Evaluasi belum diisi</span>}
       </div>
     );
   };
@@ -777,7 +789,19 @@ export default function SessionsPage() {
       branchCode: () => <span className={styles.monoText}>{session.branchCode || '-'}</span>,
       boosterType: () => session.boosterPackage?.boosterType ? <span className={styles.boosterTag}>{session.boosterPackage.boosterType}</span> : '-',
       adminLayanan: () => <span className={styles.staffName}>{session.adminLayanan?.fullName || '-'}</span>,
-      doctorName: () => <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>,
+      doctorName: () => (
+        <div className={styles.staffStack}>
+          <span className={styles.staffName}>{session.doctor?.fullName || '-'}</span>
+          {!session.doctorEvaluationCompleted && (
+            <span className={styles.doctorWarningBadge}>Evaluasi belum diisi</span>
+          )}
+        </div>
+      ),
+      doctorEvaluationStatus: () => (
+        <span className={`${styles.statusBadge} ${session.doctorEvaluationCompleted ? styles.statusCompleted : styles.statusWarning}`}>
+          {session.doctorEvaluationCompleted ? 'Sudah diisi' : 'Belum diisi'}
+        </span>
+      ),
       nurseName: () => renderStaffList(
         session.sessionNurses?.map((item) => ({
           isPrimary: item.isPrimary,
@@ -793,6 +817,7 @@ export default function SessionsPage() {
           staffCode: item.doctor.staffCode,
         })) || [],
         session.doctor?.fullName,
+        !session.doctorEvaluationCompleted,
       ),
       allNurses: () => renderStaffList(
         session.sessionNurses?.map((item) => ({

@@ -22,6 +22,13 @@ const booleanFromFormSchema = z.union([z.boolean(), z.string()]).transform((val)
   }
   return val;
 });
+const optionalPhoneSchema = z
+  .string()
+  .trim()
+  .optional()
+  .refine((val) => !val || val.replace(/\D/g, '').length >= 10, {
+    message: 'Nomor telepon minimal 10 digit',
+  });
 
 const ifaSubstanceSchema = z.object({
   name: z.string().trim().min(1, 'Nama zat wajib diisi').max(80),
@@ -154,7 +161,7 @@ export const createMemberSchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'Format tanggal lahir tidak valid'),
   gender: GenderEnum.optional(),
   religion: z.string().optional(), // Agama
-  phone: z.string().min(10, 'Nomor telepon minimal 10 digit'),
+  phone: optionalPhoneSchema,
   email: z.string().email('Format email tidak valid').optional(),
   address: z.string().optional(),
   occupation: z.string().optional(),
@@ -208,7 +215,7 @@ export const updateMemberSchema = z.object({
   birthDate: z.string().optional(),
   gender: GenderEnum.optional(),
   religion: z.string().optional(), // Agama
-  phone: z.string().min(10).optional(),
+  phone: optionalPhoneSchema,
   username: memberUsernameSchema.optional(),
   // Backward compatibility for existing clients editing legacy email-based accounts.
   email: z.string().email().optional(),

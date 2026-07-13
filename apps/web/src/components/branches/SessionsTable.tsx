@@ -19,6 +19,7 @@ interface Session {
   doctor: {
     fullName: string;
   } | null;
+  doctorEvaluationCompleted?: boolean;
   adminLayanan: {
     fullName: string;
   } | null;
@@ -178,9 +179,16 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
                 </div>
               </td>
               <td className="px-6 py-4">
-                <div className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300">
-                  <Stethoscope size={16} className="text-blue-500" />
-                  {session.doctor?.fullName || 'N/A'}
+                <div className="flex flex-col items-start gap-1.5 text-sm text-neutral-700 dark:text-neutral-300">
+                  <div className="flex items-center gap-2">
+                    <Stethoscope size={16} className="text-blue-500" />
+                    {session.doctor?.fullName || 'N/A'}
+                  </div>
+                  {!session.doctorEvaluationCompleted && (
+                    <span className="inline-flex rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-300">
+                      Evaluasi belum diisi
+                    </span>
+                  )}
                 </div>
               </td>
               <td className="px-6 py-4">

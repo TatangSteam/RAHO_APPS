@@ -1303,6 +1303,15 @@ export async function getBranchSessionsService(
             },
           },
         },
+        evaluation: {
+          select: {
+            subjective: true,
+            objective: true,
+            assessment: true,
+            plan: true,
+            generalNotes: true,
+          },
+        },
       },
       skip,
       take: limit,
@@ -1311,6 +1320,17 @@ export async function getBranchSessionsService(
   ]);
 
   // Transform data with null safety for all optional relations
+  const hasDoctorEvaluation = (evaluation: typeof sessions[number]['evaluation']) => {
+    if (!evaluation) return false;
+    return [
+      evaluation.subjective,
+      evaluation.objective,
+      evaluation.assessment,
+      evaluation.plan,
+      evaluation.generalNotes,
+    ].some((value) => typeof value === 'string' && value.trim().length > 0);
+  };
+
   const sessionsFormatted = sessions.map((s) => ({
     id: s.id,
     sessionCode: s.sessionCode,
@@ -1324,6 +1344,7 @@ export async function getBranchSessionsService(
     doctor: s.doctor ? {
       fullName: s.doctor.profile?.fullName || 'N/A',
     } : null,
+    doctorEvaluationCompleted: hasDoctorEvaluation(s.evaluation),
     adminLayanan: s.adminLayanan ? {
       fullName: s.adminLayanan.profile?.fullName || 'N/A',
     } : null,

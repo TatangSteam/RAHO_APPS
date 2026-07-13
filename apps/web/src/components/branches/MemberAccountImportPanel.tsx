@@ -16,7 +16,7 @@ interface ImportPreview {
   rowNumber: number;
   fullName: string;
   username: string;
-  phone: string;
+  phone: string | null;
 }
 
 interface ImportDryRunResult {
@@ -43,6 +43,29 @@ interface MemberAccountImportPanelProps {
   compact?: boolean;
   onImported: () => void;
 }
+
+const TEMPLATE_COLUMNS = [
+  ['nama_lengkap', 'Ya', 'Budi Santoso', 'Nama lengkap member.'],
+  ['tanggal_lahir', 'Ya', '1990-05-21', 'Format disarankan YYYY-MM-DD.'],
+  ['no_hp', 'Tidak', '081234567890', 'Opsional. Jika diisi minimal 10 digit.'],
+  ['username', 'Tidak', 'budi.santoso', 'Jika kosong dibuat otomatis dari nama dan nomor unik.'],
+  ['password', 'Tidak', 'RahoMember123', 'Jika kosong dibuat otomatis.'],
+  ['nik', 'Tidak', '3273010101900001', 'Harus 16 digit dan unik jika diisi.'],
+  ['tipe_identitas', 'Tidak', 'NIK', 'Default NIK. Bisa NO_NIK untuk tanpa NIK.'],
+  ['tempat_lahir', 'Tidak', 'Bandung', 'Tempat lahir member.'],
+  ['jenis_kelamin', 'Tidak', 'L', 'Isi L/P atau Laki-laki/Perempuan.'],
+  ['agama', 'Tidak', 'Islam', 'Agama member.'],
+  ['email', 'Tidak', 'budi@example.com', 'Data referensi, login tetap pakai username.'],
+  ['alamat', 'Tidak', 'Jl. Merdeka No. 10', 'Alamat member.'],
+  ['pekerjaan', 'Tidak', 'Wiraswasta', 'Pekerjaan member.'],
+  ['status_nikah', 'Tidak', 'Menikah', 'Status pernikahan.'],
+  ['kontak_darurat', 'Tidak', 'Siti Santoso', 'Nama kontak darurat.'],
+  ['no_hp_kontak_darurat', 'Tidak', '081298765432', 'Nomor kontak darurat.'],
+  ['sumber_info_raho', 'Tidak', 'Instagram', 'Sumber informasi RAHO.'],
+  ['kode_pos', 'Tidak', '40111', 'Kode pos.'],
+  ['kode_referral', 'Tidak', 'REF-001', 'Harus cocok dengan referral aktif.'],
+  ['consent_foto', 'Tidak', 'Ya', 'Isi Ya/Tidak. Default Ya.'],
+] as const;
 
 export default function MemberAccountImportPanel({
   branchId,
@@ -153,6 +176,18 @@ export default function MemberAccountImportPanel({
         </button>
       </div>
 
+      <details className="mt-4 rounded-lg border border-neutral-200 bg-neutral-50/70 p-3 dark:border-neutral-800 dark:bg-neutral-900/70">
+        <summary className="cursor-pointer text-sm font-bold text-neutral-800 dark:text-neutral-100">
+          Lihat kolom Excel yang dibaca sistem
+        </summary>
+        <div className="mt-3">
+          <ResultTable
+            headers={['Kolom Excel', 'Wajib', 'Contoh', 'Keterangan']}
+            rows={TEMPLATE_COLUMNS.map((column) => [...column])}
+          />
+        </div>
+      </details>
+
       {preview && (
         <div className="mt-4">
           <div className={`mb-3 flex items-center gap-2 text-sm font-bold ${preview.canImport ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
@@ -178,7 +213,7 @@ export default function MemberAccountImportPanel({
                 row.rowNumber,
                 row.fullName,
                 row.username,
-                row.phone,
+                row.phone || '-',
               ])}
             />
           )}

@@ -178,7 +178,7 @@ export class MemberUpdateService {
           where: { userId: member.userId },
           data: {
             ...(data.fullName !== undefined && { fullName: requestedFullName }),
-            ...(data.phone !== undefined && { phone: data.phone })
+            ...(data.phone !== undefined && { phone: data.phone || null })
           }
         });
       }

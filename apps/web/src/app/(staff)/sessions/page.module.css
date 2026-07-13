@@ -694,6 +694,12 @@
   border: 1px solid rgba(251, 191, 36, 0.25);
 }
 
+.statusWarning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
 .memberDataCell {
   min-width: 190px;
 }
@@ -798,6 +804,13 @@
   overflow-wrap: anywhere;
 }
 
+.staffStack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
 .staffList {
   display: flex;
   flex-wrap: wrap;
@@ -837,6 +850,21 @@
   font-size: 0.62rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.doctorWarningBadge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.13);
+  color: #fbbf24;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .branchCell {

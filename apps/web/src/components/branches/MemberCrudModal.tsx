@@ -187,6 +187,12 @@ export default function MemberCrudModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (formData.phone.trim() && formData.phone.replace(/\D/g, '').length < 10) {
+      showToast.error('Nomor telepon minimal 10 digit');
+      return;
+    }
+
     setLoading(true);
 
     devLog('🔍 [MemberCrudModal] Submit attempt:', { action, formData, branchId });
@@ -200,12 +206,12 @@ export default function MemberCrudModal({
           fullName: formData.fullName,
           memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
-          phone: formData.phone,
           isConsentToPhoto: formData.isConsentToPhoto,
           branchId: branchId, // Include branchId for ADMIN_MANAGER
         };
         
         // Add optional fields only if they have values
+        if (formData.phone) createData.phone = formData.phone;
         if (formData.email) createData.email = formData.email;
         if (formData.address) createData.address = formData.address;
         if (formData.birthPlace) createData.birthPlace = formData.birthPlace;
@@ -298,7 +304,7 @@ export default function MemberCrudModal({
             <div className={styles.formGroup}>
               <label htmlFor="phone">
                 <Phone size={16} />
-                Nomor Telepon *
+                Nomor Telepon
               </label>
               <input
                 type="tel"
@@ -306,8 +312,7 @@ export default function MemberCrudModal({
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
-                required
-                placeholder="08xxxxxxxxxx"
+                placeholder="Opsional"
               />
             </div>
 

@@ -16,6 +16,7 @@ export interface Member {
   isDeceased?: boolean;
   isLintas: boolean;
   registrationBranch: string;
+  hasInformedConsent?: boolean;
   photoUrl?: string;
   createdAt: string;
 }
@@ -109,7 +110,7 @@ export interface CreateMemberData {
   birthDate: string;
   gender?: 'L' | 'P'; // L = Laki-laki, P = Perempuan
   religion?: string; // Agama
-  phone: string;
+  phone?: string;
   email?: string;
   address?: string;
   occupation?: string;

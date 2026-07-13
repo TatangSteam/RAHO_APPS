@@ -295,7 +295,7 @@ export default function NewMemberPage() {
       showToast.error('NIK harus 16 digit');
       return;
     }
-    if (!formData.phone || formData.phone.length < 10) {
+    if (formData.phone?.trim() && formData.phone.replace(/\D/g, '').length < 10) {
       showToast.error('Nomor telepon minimal 10 digit');
       return;
     }
@@ -332,6 +332,7 @@ export default function NewMemberPage() {
       // Prepare data without therapy plans
       const dataToSubmit = {
         ...formData,
+        phone: formData.phone?.trim() || undefined,
         // Only roles without a fixed branch send an explicit target branch.
         branchId: requiresBranchSelection ? formData.branchId : undefined,
       };

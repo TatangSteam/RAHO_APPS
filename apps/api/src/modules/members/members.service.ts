@@ -104,7 +104,7 @@ export class MembersService {
       birthPlace?: string;
       birthDate: string;
       gender?: string;
-      phone: string;
+      phone?: string;
       email?: string;
       address?: string;
       occupation?: string;
