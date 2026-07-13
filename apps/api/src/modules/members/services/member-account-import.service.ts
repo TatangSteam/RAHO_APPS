@@ -95,7 +95,7 @@ export class MemberAccountImportService {
     branchId?: string;
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
-    const parsed = await this.parseWorkbook(input.buffer);
+    const parsed = await this.parseWorkbook(input.buffer, input.fileName);
     const issues = await this.validateRows(parsed);
 
     const invalidRows = new Set(issues.map((issue) => issue.rowNumber)).size;
@@ -134,7 +134,7 @@ export class MemberAccountImportService {
     userAgent?: string | string[];
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
-    const parsed = await this.parseWorkbook(input.buffer);
+    const parsed = await this.parseWorkbook(input.buffer, input.fileName);
     const issues = await this.validateRows(parsed);
 
     if (parsed.length === 0) {
@@ -311,9 +311,25 @@ export class MemberAccountImportService {
     return branch;
   }
 
-  private async parseWorkbook(buffer: Buffer): Promise<ParsedMemberAccount[]> {
+  private async parseWorkbook(buffer: Buffer, fileName: string): Promise<ParsedMemberAccount[]> {
+    if (!this.isLikelyXlsx(buffer)) {
+      throw {
+        status: 400,
+        code: 'IMPORT_FILE_INVALID',
+        message: `File "${fileName}" bukan file Excel .xlsx yang valid. Simpan ulang file sebagai Excel Workbook (.xlsx), bukan .xls/CSV atau file yang hanya di-rename.`,
+      };
+    }
+
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as unknown as ArrayBuffer);
+    try {
+      await workbook.xlsx.load(buffer as any);
+    } catch (error) {
+      throw {
+        status: 400,
+        code: 'IMPORT_FILE_READ_FAILED',
+        message: `File "${fileName}" tidak bisa dibaca sebagai Excel .xlsx. Pastikan file tidak corrupt dan dibuat/disimpan sebagai Excel Workbook (.xlsx).`,
+      };
+    }
 
     const sheet = workbook.getWorksheet('Members') || workbook.worksheets[0];
     if (!sheet) return [];
@@ -659,5 +675,9 @@ export class MemberAccountImportService {
 
   private startOfUtcDay(value: Date) {
     return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+  }
+
+  private isLikelyXlsx(buffer: Buffer) {
+    return buffer.length > 4 && buffer[0] === 0x50 && buffer[1] === 0x4b;
   }
 }
