@@ -10,6 +10,8 @@ interface MemberTableCellProps {
 }
 
 export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: MemberTableCellProps) {
+  const memberInitial = (member.fullName || 'M').charAt(0).toUpperCase();
+
   switch (columnId) {
     case 'memberNo':
       return (
@@ -30,7 +32,7 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
             width: '40px', 
             height: '40px', 
             borderRadius: '50%', 
-            background: photoUrl ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #2563eb)', 
+            background: 'linear-gradient(135deg, #3b82f6, #2563eb)',
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center', 
@@ -39,28 +41,41 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
             fontSize: '16px',
             flexShrink: 0,
             position: 'relative',
-            overflow: 'visible',
+            overflow: 'hidden',
             border: '2px solid var(--surface-border)'
           }}>
-            {photoUrl ? (
+            <span style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              {memberInitial}
+            </span>
+            {photoUrl && (
               <img
                 src={photoUrl}
                 alt={member.fullName || 'Member'}
+                onError={(event) => {
+                  event.currentTarget.style.display = 'none';
+                }}
                 style={{
+                  position: 'absolute',
+                  inset: 0,
                   width: '100%',
                   height: '100%',
                   objectFit: 'cover',
                   borderRadius: '50%'
                 }}
               />
-            ) : (
-              (member.fullName || 'M').charAt(0).toUpperCase()
             )}
             {member.isActive && (
               <span style={{
                 position: 'absolute',
                 bottom: '0',
                 right: '0',
+                zIndex: 2,
                 width: '12px',
                 height: '12px',
                 background: '#22c55e',

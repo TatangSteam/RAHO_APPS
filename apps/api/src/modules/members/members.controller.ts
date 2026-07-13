@@ -778,6 +778,14 @@ export class MembersController {
         throw { status: 400, code: 'INVALID_DOCUMENT_TYPE', message: 'Invalid document type' };
       }
 
+      if (documentType === 'FOTO_PROFIL' && !file.mimetype.startsWith('image/')) {
+        throw {
+          status: 400,
+          code: 'INVALID_PROFILE_PHOTO_TYPE',
+          message: 'Foto profil hanya menerima file gambar.',
+        };
+      }
+
       const result = await membersService.uploadMemberDocument(
         memberId,
         file,

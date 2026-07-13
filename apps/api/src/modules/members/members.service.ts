@@ -347,6 +347,14 @@ export class MembersService {
         };
       }
 
+      if (documentType === 'FOTO_PROFIL' && !file.mimetype.startsWith('image/')) {
+        throw {
+          status: 400,
+          code: 'INVALID_PROFILE_PHOTO_TYPE',
+          message: 'Foto profil hanya menerima file gambar.',
+        };
+      }
+
       // Process file based on type
       const processType = documentType === 'FOTO_PROFIL' ? 'profilePhoto' : 'document';
       const processed = await processFile(file.buffer, file.mimetype, processType);

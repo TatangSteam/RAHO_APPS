@@ -1,5 +1,9 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import { BranchMember } from './types';
 import MemberAccountImportPanel from './MemberAccountImportPanel';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import styles from './page.module.css';
 
 interface MembersTabProps {
@@ -49,15 +53,7 @@ export default function MembersTab({
           {members.map((m) => (
             <div key={m.memberId} className={styles.memberCard}>
               <div className={styles.memberHeader}>
-                <div className={styles.memberAvatar}>
-                  {m.photoUrl ? (
-                    <img src={m.photoUrl} alt={m.fullName} />
-                  ) : (
-                    <div className={styles.avatarPlaceholder}>
-                      {m.fullName.charAt(0).toUpperCase()}
-                    </div>
-                  )}
-                </div>
+                <MemberAvatar member={m} />
                 <div className={styles.memberHeaderInfo}>
                   <h4>{m.fullName}</h4>
                   <p className={styles.memberNo}>{m.memberNo}</p>
@@ -106,6 +102,65 @@ export default function MembersTab({
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function MemberAvatar({ member }: { member: BranchMember }) {
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+  const initial = (member.fullName || 'M').charAt(0).toUpperCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    setImageFailed(false);
+    setPhotoUrl(null);
+
+    if (!member.photoUrl) {
+      return;
+    }
+
+    if (member.photoUrl.startsWith('blob:') || member.photoUrl.startsWith('data:')) {
+      setPhotoUrl(member.photoUrl);
+      return;
+    }
+
+    createAuthenticatedObjectUrl(member.photoUrl)
+      .then((url) => {
+        objectUrl = url;
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setPhotoUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPhotoUrl(null);
+          setImageFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [member.photoUrl]);
+
+  return (
+    <div className={styles.memberAvatar}>
+      <div className={styles.avatarPlaceholder}>{initial}</div>
+      {photoUrl && !imageFailed && (
+        <img
+          src={photoUrl}
+          alt={member.fullName || 'Member'}
+          onError={() => setImageFailed(true)}
+        />
       )}
     </div>
   );

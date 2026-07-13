@@ -16,6 +16,10 @@ function calculateAge(dateOfBirth?: Date | null): number | null {
   return age >= 0 ? age : null;
 }
 
+function isProfileImageDocument(doc: any): boolean {
+  return doc?.documentType === 'FOTO_PROFIL' && String(doc?.mimeType || '').startsWith('image/');
+}
+
 export interface MemberFilters {
   search?: string;
   status?: string;
@@ -647,7 +651,7 @@ export class MemberRetrievalService {
   private formatMemberDetailData(member: any) {
     // Get profile photo - check both memberDocuments and user.profile.avatarUrl
     // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
-    const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+    const profilePhoto = member.documents?.find(isProfileImageDocument);
     const avatarUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
     
     return {
@@ -726,7 +730,7 @@ export class MemberRetrievalService {
 
     // Get profile photo - check both memberDocuments and user.profile.avatarUrl
     // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
-    const profilePhoto = member.documents?.find((doc: any) => doc.documentType === 'FOTO_PROFIL');
+    const profilePhoto = member.documents?.find(isProfileImageDocument);
     const photoUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
 
     // Check if member has cross-branch access

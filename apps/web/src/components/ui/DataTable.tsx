@@ -1,7 +1,8 @@
 'use client';
 
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 
 // ═══════════════════════════════════════════════════════════════
 // TYPES
@@ -273,6 +274,9 @@ export function AvatarCell({
   badge?: ReactNode;
   color?: 'amber' | 'blue' | 'green' | 'purple' | 'red';
 }) {
+  const [resolvedAvatarUrl, setResolvedAvatarUrl] = useState<string | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
+
   const colorClasses = {
     amber: 'bg-amber-500/15 text-amber-600 dark:text-amber-500',
     blue: 'bg-blue-500/15 text-blue-600 dark:text-blue-500',
@@ -281,19 +285,61 @@ export function AvatarCell({
     red: 'bg-red-500/15 text-red-600 dark:text-red-500',
   };
 
+  const initial = (name || '?').charAt(0).toUpperCase();
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl: string | null = null;
+
+    setImageFailed(false);
+
+    if (!avatarUrl) {
+      setResolvedAvatarUrl(null);
+      return;
+    }
+
+    if (avatarUrl.startsWith('blob:') || avatarUrl.startsWith('data:')) {
+      setResolvedAvatarUrl(avatarUrl);
+      return;
+    }
+
+    createAuthenticatedObjectUrl(avatarUrl)
+      .then((url) => {
+        objectUrl = url;
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        setResolvedAvatarUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedAvatarUrl(null);
+          setImageFailed(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      if (objectUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [avatarUrl]);
+
   return (
     <div className="flex items-center gap-3">
-      {avatarUrl ? (
-        <img 
-          src={avatarUrl} 
-          alt={name}
-          className="w-9 h-9 rounded-lg object-cover"
-        />
-      ) : (
-        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm ${colorClasses[color]}`}>
-          {name.charAt(0).toUpperCase()}
-        </div>
-      )}
+      <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm overflow-hidden ${colorClasses[color]}`}>
+        {initial}
+        {resolvedAvatarUrl && !imageFailed && (
+          <img
+            src={resolvedAvatarUrl}
+            alt={name || 'Avatar'}
+            className="absolute inset-0 w-full h-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        )}
+      </div>
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="font-medium text-neutral-800 dark:text-neutral-200 truncate">{name}</span>
