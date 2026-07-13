@@ -170,7 +170,7 @@ export class MemberAccountImportService {
           issues: issuesByRow.get(row.rowNumber) || [],
         })),
       issues,
-      canImport: parsed.length > 0 && issues.length === 0,
+      canImport: plans.some((plan) => !invalidRowNumbers.has(plan.row.rowNumber)),
     };
   }
 
@@ -185,17 +185,31 @@ export class MemberAccountImportService {
     const branch = await this.resolveBranch(input.actor, input.branchId);
     const parsed = await this.parseWorkbook(input.buffer, input.fileName);
     const { issues, plans } = await this.validateRows(parsed);
+    const invalidRowNumbers = new Set(issues.map((issue) => issue.rowNumber));
+    const issuesByRow = this.groupIssuesByRow(issues);
+    const validPlans = plans.filter((plan) => !invalidRowNumbers.has(plan.row.rowNumber));
+    const skipped = parsed
+      .filter((row) => invalidRowNumbers.has(row.rowNumber))
+      .map((row) => ({
+        rowNumber: row.rowNumber,
+        fullName: row.fullName || '-',
+        nik: row.nik,
+        birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
+        phone: row.phone,
+        issues: issuesByRow.get(row.rowNumber) || [],
+      }));
 
     if (parsed.length === 0) {
       throw { status: 400, code: 'IMPORT_EMPTY', message: 'File Excel tidak memiliki data member.' };
     }
 
-    if (issues.length > 0) {
+    if (validPlans.length === 0) {
       throw {
         status: 400,
-        code: 'IMPORT_VALIDATION_FAILED',
-        message: `Import gagal. Perbaiki ${issues.length} error pada file Excel terlebih dahulu.`,
+        code: 'IMPORT_NO_VALID_ROWS',
+        message: 'Import gagal. Tidak ada baris valid yang bisa diproses.',
         details: issues,
+        skipped,
       };
     }
 
@@ -210,7 +224,7 @@ export class MemberAccountImportService {
         password?: string;
       }> = [];
 
-      for (const [index, plan] of plans.entries()) {
+      for (const [index, plan] of validPlans.entries()) {
         const { row } = plan;
 
         if (plan.action === 'update' && plan.existingMember) {
@@ -323,13 +337,14 @@ export class MemberAccountImportService {
         fileName: input.fileName,
         createdCount: created.filter((row) => row.action === 'created').length,
         updatedCount: created.filter((row) => row.action === 'updated').length,
+        skippedCount: skipped.length,
       },
       ipAddress: input.ipAddress,
       userAgent: Array.isArray(input.userAgent) ? input.userAgent.join(', ') : input.userAgent,
     });
 
     return {
-      message: `Berhasil membuat ${created.filter((row) => row.action === 'created').length} akun member dan melengkapi ${created.filter((row) => row.action === 'updated').length} member existing.`,
+      message: `Berhasil membuat ${created.filter((row) => row.action === 'created').length} akun member, melengkapi ${created.filter((row) => row.action === 'updated').length} member existing, dan skip ${skipped.length} baris tidak valid.`,
       branch: {
         id: branch.id,
         branchCode: branch.branchCode,
@@ -337,7 +352,9 @@ export class MemberAccountImportService {
       },
       createdCount: created.filter((row) => row.action === 'created').length,
       updatedCount: created.filter((row) => row.action === 'updated').length,
+      skippedCount: skipped.length,
       created,
+      skipped,
     };
   }
 
