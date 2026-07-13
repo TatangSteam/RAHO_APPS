@@ -132,8 +132,9 @@ export class MemberAccountImportService {
     const parsed = await this.parseWorkbook(input.buffer, input.fileName);
     const { issues, plans } = await this.validateRows(parsed);
 
-    const invalidRows = new Set(issues.map((issue) => issue.rowNumber)).size;
     const invalidRowNumbers = new Set(issues.map((issue) => issue.rowNumber));
+    const invalidRows = invalidRowNumbers.size;
+    const validRows = parsed.length - invalidRows;
     const issuesByRow = this.groupIssuesByRow(issues);
 
     return {
@@ -145,7 +146,7 @@ export class MemberAccountImportService {
       },
       counts: {
         rows: parsed.length,
-        validRows: parsed.length - invalidRows,
+        validRows,
         invalidRows,
         createRows: plans.filter((plan) => plan.action === 'create' && !invalidRowNumbers.has(plan.row.rowNumber)).length,
         updateRows: plans.filter((plan) => plan.action === 'update' && !invalidRowNumbers.has(plan.row.rowNumber)).length,
@@ -170,7 +171,7 @@ export class MemberAccountImportService {
           issues: issuesByRow.get(row.rowNumber) || [],
         })),
       issues,
-      canImport: plans.some((plan) => !invalidRowNumbers.has(plan.row.rowNumber)),
+      canImport: validRows > 0,
     };
   }
 
