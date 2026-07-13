@@ -96,7 +96,7 @@ export class MemberAccountImportService {
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
     const parsed = await this.parseWorkbook(input.buffer);
-    const issues = await this.validateRows(parsed, branch.id);
+    const issues = await this.validateRows(parsed);
 
     const invalidRows = new Set(issues.map((issue) => issue.rowNumber)).size;
 
@@ -135,7 +135,7 @@ export class MemberAccountImportService {
   }) {
     const branch = await this.resolveBranch(input.actor, input.branchId);
     const parsed = await this.parseWorkbook(input.buffer);
-    const issues = await this.validateRows(parsed, branch.id);
+    const issues = await this.validateRows(parsed);
 
     if (parsed.length === 0) {
       throw { status: 400, code: 'IMPORT_EMPTY', message: 'File Excel tidak memiliki data member.' };
@@ -392,7 +392,7 @@ export class MemberAccountImportService {
     return values;
   }
 
-  private async validateRows(rows: ParsedMemberAccount[], branchId: string): Promise<RowIssue[]> {
+  private async validateRows(rows: ParsedMemberAccount[]): Promise<RowIssue[]> {
     const issues: RowIssue[] = [];
     const usernames = new Set<string>();
     const niks = new Set<string>();
@@ -460,12 +460,12 @@ export class MemberAccountImportService {
       }
     }
 
-    await this.validateAgainstDatabase(rows, branchId, issues);
+    await this.validateAgainstDatabase(rows, issues);
 
     return issues;
   }
 
-  private async validateAgainstDatabase(rows: ParsedMemberAccount[], branchId: string, issues: RowIssue[]) {
+  private async validateAgainstDatabase(rows: ParsedMemberAccount[], issues: RowIssue[]) {
     const usernameRows = rows
       .map((row) => ({ row, username: row.memberUsername || this.generateUsername(row, row.rowNumber) }))
       .filter((entry) => Boolean(entry.username));
@@ -502,10 +502,6 @@ export class MemberAccountImportService {
       const sameBirthDate = await prisma.member.findMany({
         where: {
           dateOfBirth: row.birthDate,
-          OR: [
-            { registrationBranchId: branchId },
-            { branchAccesses: { some: { branchId } } },
-          ],
         },
         select: {
           user: {
@@ -520,7 +516,7 @@ export class MemberAccountImportService {
         issues.push({
           rowNumber: row.rowNumber,
           field: 'nama_lengkap',
-          message: 'Member dengan nama dan tanggal lahir yang sama sudah ada di cabang ini.',
+          message: 'Member dengan nama dan tanggal lahir yang sama sudah ada di cabang lain atau cabang ini.',
         });
       }
     }
