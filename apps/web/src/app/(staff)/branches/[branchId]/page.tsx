@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope, FileSpreadsheet
 } from 'lucide-react';
 
 // Import CRUD Modals
@@ -22,6 +22,7 @@ import AssignManagerModal from '@/components/branches/AssignManagerModal';
 import AssignMedicalStaffModal from '@/components/branches/AssignMedicalStaffModal';
 import ManageStaffBranchesModal from '@/components/branches/ManageStaffBranchesModal';
 import StaffCredentialsModal from '@/components/branches/StaffCredentialsModal';
+import MemberAccountImportPanel from '@/components/branches/MemberAccountImportPanel';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import { devError } from '@/lib/logger';
 
@@ -220,6 +221,7 @@ export default function BranchDetailPage() {
   const canAccessBranch = !!user && hasRole(user.role, ADMIN_ABOVE_ROLES);
   const canManageBranch = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
   const canDeleteSessions = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canImportMembers = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const [branch, setBranch] = useState<Branch | null>(null);
   const [loading, setLoading] = useState(true);
@@ -235,6 +237,7 @@ export default function BranchDetailPage() {
 
   // Member filter state
   const [memberBranchFilter, setMemberBranchFilter] = useState<'all' | 'registered' | 'lintas'>('all');
+  const [showMemberImport, setShowMemberImport] = useState(false);
 
   // Filtered members based on branch filter
   const filteredMembers = members.filter((member) => {
@@ -711,6 +714,16 @@ export default function BranchDetailPage() {
                       <option value="registered">Terdaftar di Cabang Ini</option>
                       <option value="lintas">Member Lintas Cabang</option>
                     </select>
+                    {canImportMembers && (
+                      <button
+                        type="button"
+                        onClick={() => setShowMemberImport((value) => !value)}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 font-medium rounded-lg border border-neutral-300 dark:border-neutral-700 transition-colors"
+                      >
+                        <FileSpreadsheet size={18} />
+                        <span>Import Excel</span>
+                      </button>
+                    )}
                     <button 
                       onClick={() => router.push(
                         `/members/new?branchId=${encodeURIComponent(branchId)}&returnTo=${encodeURIComponent(`/branches/${branchId}`)}`
@@ -722,6 +735,16 @@ export default function BranchDetailPage() {
                     </button>
                   </div>
                 </div>
+
+                {canImportMembers && showMemberImport && (
+                  <MemberAccountImportPanel
+                    branchId={branchId}
+                    onImported={() => {
+                      loadTabData();
+                      loadBranch();
+                    }}
+                  />
+                )}
 
                 {filteredMembers.length > 0 && (
                   <div className="mb-4 px-4 py-3 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-lg text-sm text-neutral-600 dark:text-neutral-400">
