@@ -26,6 +26,11 @@ interface Staff {
   role: string;
 }
 
+interface DiagnosisCategoryOption {
+  id: string;
+  name: string;
+}
+
 type MultiFilterKey = 'branchIds' | 'diagnosisCategories' | 'doctorIds' | 'nurseIds';
 
 interface SessionFilters {
@@ -94,6 +99,19 @@ const DIAGNOSIS_CATEGORY_OPTIONS = [
   { id: 'ONKOLOGI', name: 'Onkologi' },
   { id: 'LAINNYA', name: 'Lainnya' },
 ];
+
+const matchesSearchQuery = (value: string, query: string) => {
+  if (!query.trim()) return true;
+  return value.toLocaleLowerCase('id-ID').includes(query.trim().toLocaleLowerCase('id-ID'));
+};
+
+const handleSearchInputClick = (event: React.MouseEvent<HTMLInputElement>) => {
+  event.stopPropagation();
+};
+
+const handleSearchInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  event.stopPropagation();
+};
 
 const TABLE_COLUMNS_STORAGE_VERSION = 2;
 
@@ -218,6 +236,10 @@ export default function SessionsPage() {
   const [diagnosisFilterExpanded, setDiagnosisFilterExpanded] = useState(false);
   const [doctorFilterExpanded, setDoctorFilterExpanded] = useState(false);
   const [nurseFilterExpanded, setNurseFilterExpanded] = useState(false);
+  const [branchSearchQuery, setBranchSearchQuery] = useState('');
+  const [diagnosisSearchQuery, setDiagnosisSearchQuery] = useState('');
+  const [doctorSearchQuery, setDoctorSearchQuery] = useState('');
+  const [nurseSearchQuery, setNurseSearchQuery] = useState('');
 
   // Export modal states
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1100,6 +1122,15 @@ export default function SessionsPage() {
     return value !== '';
   }).length;
 
+  const filteredBranches = branches.filter((branch) => (
+    matchesSearchQuery(`${branch.name} ${branch.branchCode}`, branchSearchQuery)
+  ));
+  const filteredDiagnosisCategories = DIAGNOSIS_CATEGORY_OPTIONS.filter((category: DiagnosisCategoryOption) => (
+    matchesSearchQuery(category.name, diagnosisSearchQuery)
+  ));
+  const filteredDoctors = doctors.filter((doctor) => matchesSearchQuery(doctor.fullName, doctorSearchQuery));
+  const filteredNurses = nurses.filter((nurse) => matchesSearchQuery(nurse.fullName, nurseSearchQuery));
+
   return (
     <div className={styles.container}>
       <div className={styles.header}>
@@ -1156,16 +1187,28 @@ export default function SessionsPage() {
                   className={styles.multiFilterHeader}
                   onClick={() => setBranchFilterExpanded(!branchFilterExpanded)}
                 >
-                  <span className={styles.multiFilterTitle}>
-                    📍 Cabang ({filters.branchIds.length > 0 ? `${filters.branchIds.length} dipilih` : 'Semua'})
-                  </span>
+                  {branchFilterExpanded ? (
+                    <input
+                      type="text"
+                      className={styles.multiFilterInlineSearch}
+                      placeholder="Cari cabang..."
+                      value={branchSearchQuery}
+                      onChange={(e) => setBranchSearchQuery(e.target.value)}
+                      onClick={handleSearchInputClick}
+                      onKeyDown={handleSearchInputKeyDown}
+                    />
+                  ) : (
+                    <span className={styles.multiFilterTitle}>
+                      📍 Cabang ({filters.branchIds.length > 0 ? `${filters.branchIds.length} dipilih` : 'Semua'})
+                    </span>
+                  )}
                   <span className={`${styles.filterHeaderChevron} ${branchFilterExpanded ? styles.expanded : ''}`}>
                     ▶
                   </span>
                 </button>
                 {branchFilterExpanded && (
                   <div className={styles.multiFilterOptions}>
-                    {branches.map((branch) => (
+                    {filteredBranches.map((branch) => (
                       <label
                         key={branch.id}
                         className={`${styles.multiFilterOption} ${filters.branchIds.includes(branch.id) ? styles.selected : ''}`}
@@ -1180,6 +1223,9 @@ export default function SessionsPage() {
                     ))}
                     {branches.length === 0 && (
                       <div className={styles.multiFilterEmpty}>Cabang tidak tersedia</div>
+                    )}
+                    {branches.length > 0 && filteredBranches.length === 0 && (
+                      <div className={styles.multiFilterEmpty}>Cabang tidak ditemukan</div>
                     )}
                     {filters.branchIds.length > 0 && (
                       <button
@@ -1203,16 +1249,28 @@ export default function SessionsPage() {
                 className={styles.multiFilterHeader}
                 onClick={() => setDiagnosisFilterExpanded(!diagnosisFilterExpanded)}
               >
-                <span className={styles.multiFilterTitle}>
-                  🏥 Kategori Diagnosa ({filters.diagnosisCategories.length > 0 ? `${filters.diagnosisCategories.length} dipilih` : 'Semua'})
-                </span>
+                {diagnosisFilterExpanded ? (
+                  <input
+                    type="text"
+                    className={styles.multiFilterInlineSearch}
+                    placeholder="Cari kategori diagnosa..."
+                    value={diagnosisSearchQuery}
+                    onChange={(e) => setDiagnosisSearchQuery(e.target.value)}
+                    onClick={handleSearchInputClick}
+                    onKeyDown={handleSearchInputKeyDown}
+                  />
+                ) : (
+                  <span className={styles.multiFilterTitle}>
+                    🏥 Kategori Diagnosa ({filters.diagnosisCategories.length > 0 ? `${filters.diagnosisCategories.length} dipilih` : 'Semua'})
+                  </span>
+                )}
                 <span className={`${styles.filterHeaderChevron} ${diagnosisFilterExpanded ? styles.expanded : ''}`}>
                   ▶
                 </span>
               </button>
               {diagnosisFilterExpanded && (
                 <div className={styles.multiFilterOptions}>
-                  {DIAGNOSIS_CATEGORY_OPTIONS.map((category) => (
+                  {filteredDiagnosisCategories.map((category) => (
                     <label
                       key={category.id}
                       className={`${styles.multiFilterOption} ${filters.diagnosisCategories.includes(category.id) ? styles.selected : ''}`}
@@ -1225,6 +1283,9 @@ export default function SessionsPage() {
                       <span>{category.name}</span>
                     </label>
                   ))}
+                  {filteredDiagnosisCategories.length === 0 && (
+                    <div className={styles.multiFilterEmpty}>Kategori diagnosa tidak ditemukan</div>
+                  )}
                   {filters.diagnosisCategories.length > 0 && (
                     <button
                       type="button"
@@ -1246,9 +1307,21 @@ export default function SessionsPage() {
                 className={styles.multiFilterHeader}
                 onClick={() => setDoctorFilterExpanded(!doctorFilterExpanded)}
               >
-                <span className={styles.multiFilterTitle}>
-                  {getSelectedFilterLabel(filters.doctorIds, doctors, 'Semua Dokter')}
-                </span>
+                {doctorFilterExpanded ? (
+                  <input
+                    type="text"
+                    className={styles.multiFilterInlineSearch}
+                    placeholder="Cari dokter..."
+                    value={doctorSearchQuery}
+                    onChange={(e) => setDoctorSearchQuery(e.target.value)}
+                    onClick={handleSearchInputClick}
+                    onKeyDown={handleSearchInputKeyDown}
+                  />
+                ) : (
+                  <span className={styles.multiFilterTitle}>
+                    {getSelectedFilterLabel(filters.doctorIds, doctors, 'Semua Dokter')}
+                  </span>
+                )}
                 <span className={`${styles.filterHeaderChevron} ${doctorFilterExpanded ? styles.expanded : ''}`}>
                   â–¶
                 </span>
@@ -1258,7 +1331,7 @@ export default function SessionsPage() {
                   {doctors.length === 0 ? (
                     <div className={styles.multiFilterEmpty}>Dokter tidak tersedia</div>
                   ) : (
-                    doctors.map((doctor) => {
+                    filteredDoctors.map((doctor) => {
                       const checked = filters.doctorIds.includes(doctor.id);
 
                       return (
@@ -1275,6 +1348,9 @@ export default function SessionsPage() {
                         </label>
                       );
                     })
+                  )}
+                  {doctors.length > 0 && filteredDoctors.length === 0 && (
+                    <div className={styles.multiFilterEmpty}>Dokter tidak ditemukan</div>
                   )}
                   {filters.doctorIds.length > 0 && (
                     <button
@@ -1297,9 +1373,21 @@ export default function SessionsPage() {
                 className={styles.multiFilterHeader}
                 onClick={() => setNurseFilterExpanded(!nurseFilterExpanded)}
               >
-                <span className={styles.multiFilterTitle}>
-                  {getSelectedFilterLabel(filters.nurseIds, nurses, 'Semua Nakes')}
-                </span>
+                {nurseFilterExpanded ? (
+                  <input
+                    type="text"
+                    className={styles.multiFilterInlineSearch}
+                    placeholder="Cari nakes..."
+                    value={nurseSearchQuery}
+                    onChange={(e) => setNurseSearchQuery(e.target.value)}
+                    onClick={handleSearchInputClick}
+                    onKeyDown={handleSearchInputKeyDown}
+                  />
+                ) : (
+                  <span className={styles.multiFilterTitle}>
+                    {getSelectedFilterLabel(filters.nurseIds, nurses, 'Semua Nakes')}
+                  </span>
+                )}
                 <span className={`${styles.filterHeaderChevron} ${nurseFilterExpanded ? styles.expanded : ''}`}>
                   â–¶
                 </span>
@@ -1309,7 +1397,7 @@ export default function SessionsPage() {
                   {nurses.length === 0 ? (
                     <div className={styles.multiFilterEmpty}>Nakes tidak tersedia</div>
                   ) : (
-                    nurses.map((nurse) => {
+                    filteredNurses.map((nurse) => {
                       const checked = filters.nurseIds.includes(nurse.id);
 
                       return (
@@ -1326,6 +1414,9 @@ export default function SessionsPage() {
                         </label>
                       );
                     })
+                  )}
+                  {nurses.length > 0 && filteredNurses.length === 0 && (
+                    <div className={styles.multiFilterEmpty}>Nakes tidak ditemukan</div>
                   )}
                   {filters.nurseIds.length > 0 && (
                     <button
