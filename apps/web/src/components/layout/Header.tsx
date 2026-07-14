@@ -18,24 +18,40 @@ interface HeaderProps {
 }
 
 export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
-  const { user, updateUserAvatar } = useAuthStore();
+  const { user, updateUser, updateUserAvatar } = useAuthStore();
   const { theme, toggleTheme } = useThemeStore();
   
   // Fetch avatar on mount if not already loaded
   useEffect(() => {
-    if (user && !user.avatarUrl) {
+    if (user && (!user.avatarUrl || user.role === 'ADMIN_MANAGER')) {
       api.get('/auth/me')
         .then((res) => {
-          const avatarUrl = res.data.data?.profile?.avatarUrl;
-          if (avatarUrl) {
+          const me = res.data.data;
+          const avatarUrl = me?.profile?.avatarUrl;
+          if (avatarUrl && avatarUrl !== user.avatarUrl) {
             updateUserAvatar(avatarUrl);
+          }
+          if (
+            user.role === 'ADMIN_MANAGER' &&
+            me?.adminManagerAccessScope &&
+            me.adminManagerAccessScope !== user.adminManagerAccessScope
+          ) {
+            updateUser({ adminManagerAccessScope: me.adminManagerAccessScope });
+            const cookiePayload = btoa(
+              JSON.stringify({
+                role: user.role,
+                userId: user.userId || user.id,
+                adminManagerAccessScope: me.adminManagerAccessScope,
+              }),
+            );
+            document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
           }
         })
         .catch(() => {
           // Silently fail - avatar is optional
         });
     }
-  }, [user, updateUserAvatar]);
+  }, [user, updateUser, updateUserAvatar]);
   
   if (!user) return null;
 

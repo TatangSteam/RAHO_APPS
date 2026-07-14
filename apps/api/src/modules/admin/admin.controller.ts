@@ -640,6 +640,7 @@ export async function getAdminManagerDetail(req: Request, res: Response, next: N
       email: manager.email,
       fullName: manager.profile?.fullName || manager.email,
       phoneNumber: manager.profile?.phone || '',
+      adminManagerAccessScope: manager.adminManagerAccessScope,
       isActive: manager.isActive,
       createdAt: manager.createdAt,
       lastLoginAt: manager.lastLoginAt,
@@ -659,7 +660,7 @@ export async function getAdminManagerDetail(req: Request, res: Response, next: N
 export async function updateAdminManager(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { managerId } = req.params;
-    const { email, password, fullName, phoneNumber, isActive } = req.body;
+    const { email, password, fullName, phoneNumber, adminManagerAccessScope, isActive } = req.body;
     const currentUserId = (req as any).user.userId;
 
     const result = await adminService.updateAdminManager(managerId, {
@@ -667,6 +668,7 @@ export async function updateAdminManager(req: Request, res: Response, next: Next
       password,
       fullName,
       phoneNumber,
+      adminManagerAccessScope,
       isActive,
     }, currentUserId);
 

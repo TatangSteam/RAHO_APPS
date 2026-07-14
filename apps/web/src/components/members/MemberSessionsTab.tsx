@@ -81,15 +81,23 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName, canC
   const incompleteSessions = validSessions.filter(session => getStepProgress(session) < 7);
   const completeSessions = validSessions.filter(session => getStepProgress(session) === 7);
   const canCreateSession = Boolean(canCreate && user && user.role !== 'DOCTOR');
+  const isMemberViewOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
+  const canOpenSession = !isMemberViewOnlyAdminManager;
+  const openSession = (sessionId: string) => {
+    if (canOpenSession) {
+      router.push(`/sessions/${sessionId}`);
+    }
+  };
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <h3 style={{ fontSize: '18px', fontWeight: '600' }}>🩺 Sesi Terapi</h3>
         <div style={{ display: 'flex', gap: '8px' }}>
-          {hasIncompleteSession && incompleteSessions.length > 0 && (
+          {canOpenSession && hasIncompleteSession && incompleteSessions.length > 0 && (
             <button
-              onClick={() => router.push(`/sessions/${incompleteSessions[0].session.sessionId}`)}
+              onClick={() => openSession(incompleteSessions[0].session.sessionId)}
               className="btn btn-warning"
               style={{
                 background: 'linear-gradient(135deg, #f59e0b, #d97706)',
@@ -172,12 +180,12 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName, canC
                       className="card"
                       style={{
                         padding: '16px',
-                        cursor: 'pointer',
+                        cursor: canOpenSession ? 'pointer' : 'default',
                         transition: 'all var(--transition-fast)',
                         border: '2px solid rgba(251,191,36,0.3)',
                         background: 'linear-gradient(135deg, rgba(251,191,36,0.05), rgba(245,158,11,0.05))'
                       }}
-                      onClick={() => router.push(`/sessions/${sessionDetail.session.sessionId}`)}
+                      onClick={() => openSession(sessionDetail.session.sessionId)}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
@@ -302,10 +310,10 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName, canC
                       className="card"
                       style={{
                         padding: '16px',
-                        cursor: 'pointer',
+                        cursor: canOpenSession ? 'pointer' : 'default',
                         transition: 'all var(--transition-fast)',
                       }}
-                      onClick={() => router.push(`/sessions/${sessionDetail.session.sessionId}`)}
+                      onClick={() => openSession(sessionDetail.session.sessionId)}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>

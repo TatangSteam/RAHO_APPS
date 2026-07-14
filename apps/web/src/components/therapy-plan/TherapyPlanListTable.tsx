@@ -12,6 +12,7 @@ interface TherapyPlanListTableProps {
   hideInfusKe?: boolean;
   hideStatus?: boolean;
   hideAksi?: boolean;
+  canOpenSession?: boolean;
   highlightPlanId?: string;
 }
 
@@ -202,6 +203,7 @@ export default function TherapyPlanListTable({
   hideInfusKe = false,
   hideStatus = false,
   hideAksi = false,
+  canOpenSession = true,
   highlightPlanId,
 }: TherapyPlanListTableProps) {
   const extraColumns = getExtraSubstanceColumns(plans);
@@ -377,7 +379,7 @@ export default function TherapyPlanListTable({
                   {!hideAksi && (
                     <td style={cellStyle()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {plan.usedInSession && (
+                        {canOpenSession && plan.usedInSession && (
                           <button
                             type="button"
                             onClick={() => onOpenSession(plan.usedInSession!.id)}
@@ -387,7 +389,7 @@ export default function TherapyPlanListTable({
                             <ExternalLink size={14} />
                           </button>
                         )}
-                        {!plan.usedInSession && (
+                        {(!canOpenSession || !plan.usedInSession) && (
                           <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>-</span>
                         )}
                       </div>

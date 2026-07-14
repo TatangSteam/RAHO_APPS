@@ -7,6 +7,7 @@ import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
 import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
+import type { AdminManagerAccessScope } from '@/types/auth';
 import styles from './page.module.css';
 
 interface Staff {
@@ -31,6 +32,7 @@ interface AdminManagerDetail {
   email: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope: AdminManagerAccessScope;
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
@@ -65,6 +67,7 @@ export default function AdminManagerDetailPage() {
     phoneNumber: '',
     password: '',
     confirmPassword: '',
+    adminManagerAccessScope: 'FULL' as AdminManagerAccessScope,
     isActive: true,
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -221,6 +224,7 @@ export default function AdminManagerDetailPage() {
         phoneNumber: manager.phoneNumber || '',
         password: '',
         confirmPassword: '',
+        adminManagerAccessScope: manager.adminManagerAccessScope || 'FULL',
         isActive: manager.isActive,
       });
       setShowEditModal(true);
@@ -253,6 +257,7 @@ export default function AdminManagerDetailPage() {
         email: editForm.email,
         fullName: editForm.fullName,
         phoneNumber: editForm.phoneNumber,
+        adminManagerAccessScope: editForm.adminManagerAccessScope,
         isActive: editForm.isActive,
       };
 
@@ -376,9 +381,14 @@ export default function AdminManagerDetailPage() {
             <div className={styles.headerText}>
               <h1>{manager.fullName}</h1>
               <p className={styles.email}>{manager.email}</p>
-              <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
-                {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
-              </span>
+              <div className={styles.headerBadges}>
+                <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
+                  {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
+                </span>
+                <span className={`${styles.accessBadge} ${manager.adminManagerAccessScope === 'MEMBER_VIEW_ONLY' ? styles.memberOnly : styles.fullAccess}`}>
+                  {manager.adminManagerAccessScope === 'MEMBER_VIEW_ONLY' ? 'View Member Only' : 'Akses Penuh'}
+                </span>
+              </div>
             </div>
           </div>
           
@@ -769,6 +779,29 @@ export default function AdminManagerDetailPage() {
                   placeholder="08xxxxxxxxxx"
                   className={styles.input}
                 />
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Akses Admin Manager</label>
+                <div className={styles.toggleContainer}>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${editForm.adminManagerAccessScope === 'FULL' ? styles.active : ''}`}
+                    onClick={() => setEditForm(prev => ({ ...prev, adminManagerAccessScope: 'FULL' }))}
+                  >
+                    Akses Penuh
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${editForm.adminManagerAccessScope === 'MEMBER_VIEW_ONLY' ? styles.active : ''}`}
+                    onClick={() => setEditForm(prev => ({ ...prev, adminManagerAccessScope: 'MEMBER_VIEW_ONLY' }))}
+                  >
+                    View Member Only
+                  </button>
+                </div>
+                <p className={styles.fieldHelp}>
+                  Mode view member hanya membuka data member dari cabang yang di-assign.
+                </p>
               </div>
 
               <div className={styles.formGroup}>

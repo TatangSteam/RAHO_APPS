@@ -12,12 +12,16 @@ export type Role =
   | 'NURSE'
   | 'MEMBER';
 
+export type AdminManagerAccessScope = 'FULL' | 'MEMBER_VIEW_ONLY';
+
 export interface AuthUser {
   userId: string;
+  id?: string;
   email: string;
   role: Role;
   branchId: string | null;
   branchCode: string | null;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   fullName: string;
   staffCode: string | null;
   avatarUrl?: string | null;
@@ -80,8 +84,12 @@ export function hasRole(userRole: Role, allowedRoles: Role[]): boolean {
 }
 
 /** First route to redirect to after login, based on role */
-export function getDefaultRoute(role: Role): string {
+export function getDefaultRoute(role: Role, adminManagerAccessScope?: AdminManagerAccessScope | null): string {
   if (role === 'MEMBER') return '/me/dashboard';
+
+  if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
+    return '/members';
+  }
   
   // All staff roles get main dashboard
   if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'].includes(role)) {

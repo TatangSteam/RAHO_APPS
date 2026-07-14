@@ -2,6 +2,36 @@ import { Request, Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
 import { sendError } from '@utils/response';
 
+const MEMBER_VIEW_ONLY_SCOPE = 'MEMBER_VIEW_ONLY';
+
+function getNormalizedPath(req: Request): string {
+  const path = `${req.baseUrl}${req.path}`.replace(/\/+/g, '/');
+  return path.replace(/^\/api\/v\d+/, '') || '/';
+}
+
+function isMemberViewOnlyAllowedRoute(req: Request): boolean {
+  const method = req.method.toUpperCase();
+  const path = getNormalizedPath(req);
+
+  if (method === 'GET' && (path === '/members' || path.startsWith('/members/'))) {
+    return true;
+  }
+
+  if (method === 'GET' && (path === '/branches/all' || path === '/branches')) {
+    return true;
+  }
+
+  if (method === 'GET' && /^\/branches\/[^/]+\/members$/.test(path)) {
+    return true;
+  }
+
+  if (method === 'GET' && path === '/treatment-sessions' && typeof req.query.memberId === 'string') {
+    return true;
+  }
+
+  return false;
+}
+
 /**
  * Middleware factory — checks that req.user.role is in the allowed list.
  * Must be used AFTER `authenticate`.
@@ -22,6 +52,20 @@ export function authorize(allowedRoles: Role[]) {
         403,
         'AUTH_FORBIDDEN',
         'Anda tidak memiliki izin untuk melakukan aksi ini.',
+      );
+      return;
+    }
+
+    if (
+      req.user.role === Role.ADMIN_MANAGER &&
+      req.user.adminManagerAccessScope === MEMBER_VIEW_ONLY_SCOPE &&
+      !isMemberViewOnlyAllowedRoute(req)
+    ) {
+      sendError(
+        res,
+        403,
+        'ADMIN_MANAGER_MEMBER_VIEW_ONLY',
+        'Akses Admin Manager ini dibatasi hanya untuk melihat data member.',
       );
       return;
     }

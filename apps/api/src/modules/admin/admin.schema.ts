@@ -102,6 +102,7 @@ export const createAdminManagerSchema = z.object({
     .min(10, 'Nomor telepon minimal 10 digit')
     .max(20, 'Nomor telepon maksimal 20 digit')
     .regex(/^[0-9+\-\s()]+$/, 'Format nomor telepon tidak valid'),
+  adminManagerAccessScope: z.enum(['FULL', 'MEMBER_VIEW_ONLY']).optional(),
   branchIds: z.array(z.string().min(1, 'ID cabang tidak valid'))
     .min(1, 'Minimal 1 cabang harus dipilih')
 });

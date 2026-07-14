@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { getDefaultRoute, type Role } from '@/types/auth';
 import { UserCog } from 'lucide-react';
 import styles from './ImpersonateButton.module.css';
 
@@ -45,13 +46,17 @@ export const ImpersonateButton: React.FC<ImpersonateButtonProps> = ({
       const cookiePayload = btoa(
         JSON.stringify({ 
           role: response.targetUser.role, 
-          userId: response.targetUser.id 
+          userId: response.targetUser.id,
+          adminManagerAccessScope: response.targetUser.adminManagerAccessScope,
         })
       );
       document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=28800; SameSite=Lax`;
       
       // Redirect based on target role
-      const targetUrl = targetRole === 'ADMIN_MANAGER' ? '/admin-manager' : '/dashboard';
+      const targetUrl = getDefaultRoute(
+        response.targetUser.role as Role,
+        response.targetUser.adminManagerAccessScope,
+      );
       window.location.replace(targetUrl);
       
     } catch (error: any) {

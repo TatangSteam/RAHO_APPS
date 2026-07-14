@@ -189,6 +189,13 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
   const [collapsedSets, setCollapsedSets] = useState<Set<string>>(new Set());
   const [collapsedHistory, setCollapsedHistory] = useState<Set<string>>(new Set());
   const [expandedHistoricalSets, setExpandedHistoricalSets] = useState<Set<string>>(new Set());
+  const isMemberViewOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
+  const openSession = (sessionId: string) => {
+    if (!isMemberViewOnlyAdminManager) {
+      router.push(`/sessions/${sessionId}`);
+    }
+  };
 
   useEffect(() => {
     loadTherapyPlans();
@@ -1041,8 +1048,9 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                                         <TherapyPlanListTable
                                           plans={historicalPlans}
                                           memberId={memberId}
-                                          onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+                                          onOpenSession={openSession}
                                           onEdit={loadTherapyPlans}
+                                          canOpenSession={!isMemberViewOnlyAdminManager}
                                         />
                                       </div>
                                     )}
@@ -1058,8 +1066,9 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
                       <TherapyPlanListTable
                         plans={setPlans}
                         memberId={memberId}
-                        onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+                        onOpenSession={openSession}
                         onEdit={loadTherapyPlans}
+                        canOpenSession={!isMemberViewOnlyAdminManager}
                       />
                     </div>
                   )}

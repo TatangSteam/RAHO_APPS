@@ -1,6 +1,44 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 
+function getAuditMeta(activity: any) {
+  return activity?.meta && typeof activity.meta === 'object' ? activity.meta : {};
+}
+
+function resolveActivityUserName(activity: any): string {
+  const meta = getAuditMeta(activity);
+  const actorSnapshot = meta.actorSnapshot || {};
+
+  return (
+    activity.userName ||
+    activity.user?.profile?.fullName ||
+    activity.user?.email ||
+    actorSnapshot.userName ||
+    actorSnapshot.fullName ||
+    actorSnapshot.email ||
+    'System'
+  );
+}
+
+function resolveActivityUserEmail(activity: any): string {
+  const meta = getAuditMeta(activity);
+  const actorSnapshot = meta.actorSnapshot || {};
+
+  return (
+    activity.user?.email ||
+    actorSnapshot.email ||
+    activity.userName ||
+    'system'
+  );
+}
+
+function resolveActivityBranchName(activity: any): string | null {
+  const meta = getAuditMeta(activity);
+  const branchSnapshot = meta.branchSnapshot || {};
+
+  return activity.branchName || activity.branch?.name || branchSnapshot.branchName || null;
+}
+
 /**
  * Service for system statistics and health monitoring
  */
@@ -128,9 +166,9 @@ export class SystemStatsService {
         recentActivities: recentActivities.map(activity => ({
           id: activity.id,
           action: activity.action,
-          userName: activity.user.profile?.fullName || activity.user.email,
-          userEmail: activity.user.email,
-          branchName: activity.branch?.name || null,
+          userName: resolveActivityUserName(activity),
+          userEmail: resolveActivityUserEmail(activity),
+          branchName: resolveActivityBranchName(activity),
           createdAt: activity.createdAt.toISOString(),
         })),
       };
@@ -209,9 +247,9 @@ export class SystemStatsService {
       resource: activity.resource,
       resourceId: activity.resourceId,
       userId: activity.userId,
-      userName: activity.user.profile?.fullName || activity.user.email,
-      userEmail: activity.user.email,
-      branchName: activity.branch?.name || null,
+      userName: resolveActivityUserName(activity),
+      userEmail: resolveActivityUserEmail(activity),
+      branchName: resolveActivityBranchName(activity),
       meta: activity.meta,
       timestamp: activity.createdAt.toISOString(),
     }));

@@ -159,6 +159,7 @@ export class AdminService {
     password: string;
     fullName: string;
     phoneNumber: string;
+    adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
     branchIds: string[];
   }) {
     return await this.userManagementService.createAdminManager(data);
@@ -174,6 +175,7 @@ export class AdminService {
       password?: string;
       fullName?: string;
       phoneNumber?: string;
+      adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
       isActive?: boolean;
     },
     currentUserId: string

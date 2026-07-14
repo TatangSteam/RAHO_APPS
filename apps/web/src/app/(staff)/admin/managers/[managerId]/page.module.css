@@ -122,6 +122,31 @@
   color: #dc2626;
 }
 
+.headerBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.accessBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.accessBadge.fullAccess {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.accessBadge.memberOnly {
+  background: #fef3c7;
+  color: #b45309;
+}
+
 .headerActions {
   display: flex;
   gap: 12px;
@@ -839,6 +864,13 @@
   font-size: 12px;
   font-weight: 400;
   color: var(--text-muted);
+}
+
+.fieldHelp {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .input {

@@ -39,6 +39,8 @@ export default function MembersPage() {
   // Check if user is ADMIN_MANAGER (can see multiple branches they manage)
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isMemberViewOnlyAdminManager =
+    isAdminManager && user?.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
   const canCreateMember = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(
     user?.role || ''
@@ -193,8 +195,8 @@ export default function MembersPage() {
             >
               ⚙️ Kolom
             </button>
-            {/* Hide "Export Data" for DOCTOR and NURSE */}
-            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
+            {/* Hide "Export Data" for DOCTOR, NURSE, and member-view-only Admin Manager */}
+            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && !isMemberViewOnlyAdminManager && (
               <button
                 onClick={() => setShowExportModal(true)}
                 className="btn btn-secondary"

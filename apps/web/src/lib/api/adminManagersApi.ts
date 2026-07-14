@@ -1,4 +1,5 @@
 import { api } from '../api';
+import type { AdminManagerAccessScope } from '@/types/auth';
 
 export interface Branch {
   id: string;
@@ -14,6 +15,7 @@ export interface AdminManager {
   email: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
@@ -25,6 +27,7 @@ export interface CreateAdminManagerData {
   password: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope?: AdminManagerAccessScope;
   branchIds: string[];
 }
 
@@ -33,6 +36,7 @@ export interface UpdateAdminManagerData {
   password?: string;
   fullName?: string;
   phoneNumber?: string;
+  adminManagerAccessScope?: AdminManagerAccessScope;
   isActive?: boolean;
 }
 
@@ -54,6 +58,7 @@ export interface ImpersonateResponse {
     role: string;
     fullName: string;
     branchId?: string | null;
+    adminManagerAccessScope?: AdminManagerAccessScope | null;
     branches?: string[];
   };
   targetUser: {
@@ -62,6 +67,7 @@ export interface ImpersonateResponse {
     role: string;
     fullName: string;
     branchId?: string | null;
+    adminManagerAccessScope?: AdminManagerAccessScope | null;
   };
   originalUser?: {
     id: string;

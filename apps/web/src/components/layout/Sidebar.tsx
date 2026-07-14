@@ -242,6 +242,8 @@ export function Sidebar({
   if (!user) return null;
 
   const role = user.role as Role;
+  const isMemberViewOnlyAdminManager =
+    role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
   // Don't render sidebar for MEMBER role
   if (role === 'MEMBER') return null;
@@ -523,7 +525,10 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 flex flex-col gap-1">
         {MENU_GROUPS.map((group, gi) => {
-          const visibleItems = group.items.filter((item) => item.roles.includes(role));
+          const visibleItems = group.items.filter((item) => (
+            item.roles.includes(role) &&
+            (!isMemberViewOnlyAdminManager || item.href === '/members')
+          ));
           if (visibleItems.length === 0) return null;
 
           return (
