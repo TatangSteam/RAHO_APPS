@@ -86,11 +86,12 @@ export class StockRequestCreationService {
 
     console.log('Branch:', branch);
 
-    // Check for pending shipments (including shipments waiting for issue review)
+    // Check for shipments that still need to be sent/received. Shipments with
+    // issues are allowed because shortages can be requested in the next request.
     const pendingShipments = await prisma.shipment.findMany({
       where: {
         toBranchId: branchId,
-        status: { in: ['PREPARING', 'SHIPPED', 'RECEIVED_WITH_ISSUE'] },
+        status: { in: ['PREPARING', 'SHIPPED'] },
       },
       select: {
         id: true,
@@ -124,11 +125,20 @@ export class StockRequestCreationService {
         id: true,
         requestCode: true,
         status: true,
+        shipment: {
+          select: {
+            status: true,
+          },
+        },
       },
     });
 
-    if (pendingRequests.length > 0) {
-      const requestCodes = pendingRequests.map(r => r.requestCode).join(', ');
+    const blockingRequests = pendingRequests.filter(
+      (request) => request.status !== 'SHIPPED' || request.shipment?.status !== 'RECEIVED_WITH_ISSUE'
+    );
+
+    if (blockingRequests.length > 0) {
+      const requestCodes = blockingRequests.map(r => r.requestCode).join(', ');
       console.log('ERROR: Pending requests found:', requestCodes);
       throw {
         status: 422,

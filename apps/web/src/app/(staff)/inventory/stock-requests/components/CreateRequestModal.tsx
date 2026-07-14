@@ -67,10 +67,10 @@ export default function CreateRequestModal({
       try {
         setLoadingPendingInfo(true);
         
-        // Fetch pending shipments
+        // Fetch shipments that still need to be sent/received.
+        // Shipments with issue are allowed; shortages can be requested again.
         const shipmentsResponse = await inventoryApi.getShipments({ status: 'PREPARING' });
         const shippedResponse = await inventoryApi.getShipments({ status: 'SHIPPED' });
-        const issueResponse = await inventoryApi.getShipments({ status: 'RECEIVED_WITH_ISSUE' });
         
         let pendingShipments: Array<{ shipmentCode: string; status: string }> = [];
         
@@ -88,7 +88,6 @@ export default function CreateRequestModal({
         pendingShipments = [
           ...extractShipments(shipmentsResponse),
           ...extractShipments(shippedResponse),
-          ...extractShipments(issueResponse),
         ];
         
         // Fetch pending requests
@@ -100,7 +99,8 @@ export default function CreateRequestModal({
           pendingRequests = requestsData
             .filter((r: any) => 
               r.branchId === user.branchId && 
-              ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'APPROVED', 'SHIPPED'].includes(r.status)
+              ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'APPROVED', 'SHIPPED'].includes(r.status) &&
+              !(r.status === 'SHIPPED' && r.shipment?.status === 'RECEIVED_WITH_ISSUE')
             )
             .map((r: any) => ({ requestCode: r.requestCode, status: r.status }));
         }
