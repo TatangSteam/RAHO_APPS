@@ -65,7 +65,7 @@ interface MemberAccountImportPanelProps {
 const TEMPLATE_COLUMNS = [
   ['nama_lengkap', 'Ya', 'Budi Santoso', 'Nama lengkap member.'],
   ['tanggal_lahir', 'Ya', '1990-05-21', 'Format disarankan YYYY-MM-DD.'],
-  ['no_hp', 'Tidak', '081234567890', 'Opsional. Jika diisi minimal 10 digit.'],
+  ['no_hp', 'Ya', '081234567890', 'Nomor HP wajib diisi, minimal 10 digit.'],
   ['username', 'Tidak', 'budi.santoso', 'Jika kosong dibuat otomatis dari nama dan nomor unik.'],
   ['password', 'Tidak', 'RahoMember123', 'Jika kosong dibuat otomatis.'],
   ['nik', 'Tidak', '3273010101900001', 'Harus 16 digit dan unik jika diisi.'],
