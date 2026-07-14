@@ -471,7 +471,11 @@ export class ImpersonationService {
         phoneNumber: manager.profile?.phone || '',
         adminManagerAccessScope: manager.adminManagerAccessScope,
         isActive: manager.isActive,
-        branches: manager.managedBranches.map(mb => mb.branch),
+        branches: manager.managedBranches.map(mb => ({
+          ...mb.branch,
+          accessScope: mb.accessScope,
+          assignedAt: mb.createdAt,
+        })),
         createdAt: manager.createdAt,
         lastLoginAt: manager.lastLoginAt
       })),

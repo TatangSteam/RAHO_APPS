@@ -18,8 +18,24 @@ export class UserManagementService {
     fullName: string;
     phoneNumber: string;
     adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
-    branchIds: string[];
+    branchIds?: string[];
+    branchAssignments?: Array<{
+      branchId: string;
+      accessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
+    }>;
   }) {
+    const branchAssignments = data.branchAssignments?.length
+      ? data.branchAssignments.map((assignment) => ({
+          branchId: assignment.branchId,
+          accessScope: assignment.accessScope || data.adminManagerAccessScope || 'FULL',
+        }))
+      : (data.branchIds || []).map((branchId) => ({
+          branchId,
+          accessScope: data.adminManagerAccessScope || 'FULL',
+        }));
+
+    const branchIds = branchAssignments.map((assignment) => assignment.branchId);
+
     // Check if email already exists (only check active users)
     // Inactive users are soft-deleted and their emails can be reused
     const existingUser = await prisma.user.findFirst({
@@ -39,10 +55,10 @@ export class UserManagementService {
 
     // Validate branches
     const branches = await prisma.branch.findMany({
-      where: { id: { in: data.branchIds } },
+      where: { id: { in: branchIds } },
     });
 
-    if (branches.length !== data.branchIds.length) {
+    if (branches.length !== branchIds.length) {
       throw {
         status: 404,
         code: 'BRANCH_NOT_FOUND',
@@ -73,8 +89,9 @@ export class UserManagementService {
           },
         },
         managedBranches: {
-          create: data.branchIds.map(branchId => ({
-            branchId,
+          create: branchAssignments.map((assignment) => ({
+            branchId: assignment.branchId,
+            accessScope: assignment.accessScope,
           })),
         },
       },
@@ -102,6 +119,7 @@ export class UserManagementService {
         branchId: mb.branchId,
         branchName: mb.branch.name,
         branchCode: mb.branch.branchCode,
+        accessScope: mb.accessScope,
       })),
       createdAt: user.createdAt.toISOString(),
     };

@@ -117,8 +117,16 @@ export const branchesApi = {
   /**
    * Assign manager to branch
    */
-  assignManager: (branchId: string, managerId: string) => {
-    return api.post(`/branches/${branchId}/managers`, { managerId });
+  assignManager: (branchId: string, managerId: string, accessScope?: 'FULL' | 'MEMBER_VIEW_ONLY') => {
+    return api.post(`/branches/${branchId}/managers`, { managerId, accessScope });
+  },
+
+  updateManagerAccessScope: (
+    branchId: string,
+    managerId: string,
+    accessScope: 'FULL' | 'MEMBER_VIEW_ONLY'
+  ) => {
+    return api.patch(`/branches/${branchId}/managers/${managerId}`, { accessScope });
   },
 
   /**

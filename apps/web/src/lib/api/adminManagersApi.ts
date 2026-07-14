@@ -8,6 +8,13 @@ export interface Branch {
   city?: string;
   type: string;
   isActive: boolean;
+  accessScope?: AdminManagerAccessScope;
+  assignedAt?: string;
+}
+
+export interface ManagerBranchAssignment {
+  branchId: string;
+  accessScope: AdminManagerAccessScope;
 }
 
 export interface AdminManager {
@@ -29,6 +36,7 @@ export interface CreateAdminManagerData {
   phoneNumber: string;
   adminManagerAccessScope?: AdminManagerAccessScope;
   branchIds: string[];
+  branchAssignments?: ManagerBranchAssignment[];
 }
 
 export interface UpdateAdminManagerData {
@@ -140,8 +148,24 @@ export const adminManagersApi = {
   /**
    * Assign branch to manager
    */
-  assignBranchToManager: async (managerId: string, branchId: string): Promise<{ data: { message: string; branch: Branch } }> => {
-    const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId });
+  assignBranchToManager: async (
+    managerId: string,
+    branchId: string,
+    accessScope: AdminManagerAccessScope = 'FULL'
+  ): Promise<{ data: { message: string; branch: Branch } }> => {
+    const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId, accessScope });
+    return response.data;
+  },
+
+  /**
+   * Update branch assignment scope
+   */
+  updateBranchAccessScope: async (
+    managerId: string,
+    branchId: string,
+    accessScope: AdminManagerAccessScope
+  ): Promise<{ data: { message: string; branch: Branch } }> => {
+    const response = await api.patch(`/admin/managers/${managerId}/branches/${branchId}`, { accessScope });
     return response.data;
   },
 

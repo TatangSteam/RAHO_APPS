@@ -340,6 +340,31 @@
   color: var(--accent-orange-hover);
 }
 
+.scopeSelect {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.scopeSelect:hover:not(:disabled),
+.scopeSelect:focus {
+  outline: none;
+  border-color: var(--accent-orange);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+}
+
+.scopeSelect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* ===== Branch Content ===== */
 .branchContent {
   border-top: 1px solid var(--surface-border);
@@ -377,6 +402,16 @@
 .tab.active {
   color: var(--accent-orange);
   border-bottom-color: var(--accent-orange);
+}
+
+.tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.tab:disabled:hover {
+  color: var(--text-muted);
+  background: none;
 }
 
 .tabContent {

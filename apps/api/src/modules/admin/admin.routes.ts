@@ -38,6 +38,7 @@ import {
   getAdminManagerDetail,
   getAvailableBranchesForManager,
   assignBranchToManager,
+  updateManagerBranchAccessScope,
   unassignBranchFromManager,
   getBranchAdmins,
   startImpersonation,
@@ -325,6 +326,12 @@ router.get('/managers/:managerId/available-branches',
 router.post('/managers/:managerId/branches',
   authorize(['SUPER_ADMIN']),
   assignBranchToManager
+);
+
+// Update branch assignment scope (Super Admin only)
+router.patch('/managers/:managerId/branches/:branchId',
+  authorize(['SUPER_ADMIN']),
+  updateManagerBranchAccessScope
 );
 
 // Unassign branch from manager (Super Admin only)

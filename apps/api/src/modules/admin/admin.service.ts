@@ -160,7 +160,11 @@ export class AdminService {
     fullName: string;
     phoneNumber: string;
     adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
-    branchIds: string[];
+    branchIds?: string[];
+    branchAssignments?: Array<{
+      branchId: string;
+      accessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
+    }>;
   }) {
     return await this.userManagementService.createAdminManager(data);
   }

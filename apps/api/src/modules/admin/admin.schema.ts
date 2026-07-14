@@ -103,9 +103,19 @@ export const createAdminManagerSchema = z.object({
     .max(20, 'Nomor telepon maksimal 20 digit')
     .regex(/^[0-9+\-\s()]+$/, 'Format nomor telepon tidak valid'),
   adminManagerAccessScope: z.enum(['FULL', 'MEMBER_VIEW_ONLY']).optional(),
+  branchAssignments: z.array(z.object({
+    branchId: z.string().min(1, 'ID cabang tidak valid'),
+    accessScope: z.enum(['FULL', 'MEMBER_VIEW_ONLY']).optional(),
+  })).optional(),
   branchIds: z.array(z.string().min(1, 'ID cabang tidak valid'))
-    .min(1, 'Minimal 1 cabang harus dipilih')
-});
+    .optional()
+}).refine(
+  (data) => (data.branchAssignments?.length || 0) > 0 || (data.branchIds?.length || 0) > 0,
+  {
+    message: 'Minimal 1 cabang harus dipilih',
+    path: ['branchIds'],
+  },
+);
 
 // ============================================================
 // STOCK REQUEST SCHEMAS

@@ -225,6 +225,9 @@ export const AdminManagersTab: React.FC = () => {
                                 <div key={branch.id} className={styles.branchItem}>
                                   <span className={styles.branchCode}>{branch.branchCode}</span>
                                   <span className={styles.branchName}>{branch.name}</span>
+                                  <span className={`${styles.branchScope} ${branch.accessScope === 'MEMBER_VIEW_ONLY' ? styles.memberOnly : styles.fullAccess}`}>
+                                    {branch.accessScope === 'MEMBER_VIEW_ONLY' ? 'Member only' : 'Full'}
+                                  </span>
                                 </div>
                               ))}
                             </div>
