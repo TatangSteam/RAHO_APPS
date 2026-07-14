@@ -62,6 +62,7 @@ interface Member {
   fullName: string;
   email: string;
   phone: string;
+  age?: number | null;
   createdAt: string;
   isActive: boolean;
   registrationBranch: string;
@@ -239,18 +240,34 @@ export default function BranchDetailPage() {
 
   // Member filter state
   const [memberBranchFilter, setMemberBranchFilter] = useState<'all' | 'registered' | 'lintas'>('all');
+  const [memberSearchFilter, setMemberSearchFilter] = useState('');
   const [showMemberImport, setShowMemberImport] = useState(false);
 
   // Filtered members based on branch filter
   const filteredMembers = members.filter((member) => {
-    if (memberBranchFilter === 'all') return true;
-    if (memberBranchFilter === 'registered') {
-      return member.registrationBranch === branch?.branchCode;
-    }
-    if (memberBranchFilter === 'lintas') {
-      return member.isLintas || member.registrationBranch !== branch?.branchCode;
-    }
-    return true;
+    const normalizedSearchFilter = memberSearchFilter.trim().toLocaleLowerCase('id-ID');
+
+    const matchesBranch =
+      memberBranchFilter === 'all' ? true :
+      memberBranchFilter === 'registered' ? member.registrationBranch === branch?.branchCode :
+      member.isLintas || member.registrationBranch !== branch?.branchCode;
+
+    const searchableFields = [
+      member.fullName,
+      member.phone,
+      member.email,
+      member.memberNo,
+      String(member.age ?? ''),
+      new Date(member.createdAt).toLocaleDateString('id-ID'),
+      new Date(member.createdAt).toISOString().slice(0, 10),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('id-ID');
+
+    const matchesSearch = !normalizedSearchFilter || searchableFields.includes(normalizedSearchFilter);
+
+    return matchesBranch && matchesSearch;
   });
 
   // CRUD Modal states
@@ -702,6 +719,13 @@ export default function BranchDetailPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
                   <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Members</h2>
                   <div className="flex flex-wrap gap-3 items-center">
+                    <input
+                      type="text"
+                      value={memberSearchFilter}
+                      onChange={(e) => setMemberSearchFilter(e.target.value)}
+                      placeholder="Cari member: nama, telepon, username, tanggal, usia..."
+                      className="px-4 py-2.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-neutral-200 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/50 min-w-[220px]"
+                    />
                     <select 
                       value={memberBranchFilter}
                       onChange={(e) => {
