@@ -244,7 +244,7 @@ export class MemberAccountImportService {
           continue;
         }
 
-        const username = await this.uniqueUsername(tx, row.memberUsername || this.generateUsername(row, index + 1));
+        const username = await this.uniqueUsername(tx, row.memberUsername || this.generateUsername(row, row.rowNumber));
         const credentials = credentialsByRow.get(row.rowNumber);
         if (!credentials) {
           throw { status: 500, code: 'IMPORT_CREDENTIALS_MISSING', message: 'Gagal menyiapkan password akun member.' };
@@ -808,7 +808,10 @@ export class MemberAccountImportService {
   private generateUsername(row: ParsedMemberAccount, sequence: number) {
     const phoneTail = row.phone?.replace(/\D/g, '').slice(-4);
     const base = this.normalizePersonName(row.fullName).replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '') || 'member';
-    return `${base}.${phoneTail || row.rowNumber || sequence}`.slice(0, 30).toLowerCase();
+    const suffix = phoneTail ? `${phoneTail}.${sequence}` : `${row.rowNumber || sequence}`;
+    const maxBaseLength = Math.max(1, 30 - suffix.length - 1);
+    const trimmedBase = base.slice(0, maxBaseLength).replace(/\.+$/g, '') || 'member';
+    return `${trimmedBase}.${suffix}`.slice(0, 30).toLowerCase();
   }
 
   private generatePassword() {
