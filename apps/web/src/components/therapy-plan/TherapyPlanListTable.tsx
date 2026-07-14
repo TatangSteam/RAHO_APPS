@@ -19,6 +19,7 @@ type NumericTherapyPlanKey =
   | 'ifa250'
   | 'ifa500'
   | 'hho'
+  | 'hhoKonsentrat'
   | 'h2'
   | 'no'
   | 'gaso'
@@ -48,6 +49,7 @@ const DOSE_COLUMNS: DoseColumn[] = [
   { key: 'ifa250', label: 'IFA+NO' },
   { key: 'ifa500', label: 'IFA 500' },
   { key: 'hho', label: 'HHO ml', aliases: ['hho', 'nb hho'], mergeIfaSubstances: true },
+  { key: 'hhoKonsentrat', label: 'HHO Kons. ml', aliases: ['hho konsentrat', 'hhokonsentrat', 'hhoc'], mergeIfaSubstances: true },
   { key: 'h2', label: 'H2 ml', aliases: ['h2', 'hydrogen'], mergeIfaSubstances: true },
   { key: 'no', label: 'NO ml', aliases: ['no', 'nitric oxide'], mergeIfaSubstances: true },
   { key: 'gaso', label: 'GASO ml', aliases: ['gaso', 'gt', 'gasotransmitter'], mergeIfaSubstances: true },

@@ -71,10 +71,8 @@ export class MemberRetrievalService {
 
       const managedBranchIds = managerBranches.map(mb => mb.branchId);
       
-      // Include primary branch (if exists) + managed branches (remove duplicates)
-      const allBranchIds = branchId 
-        ? Array.from(new Set([branchId, ...managedBranchIds]))
-        : managedBranchIds;
+      // ADMIN_MANAGER visibility comes from ManagerBranch assignments only.
+      const allBranchIds = Array.from(new Set(managedBranchIds));
 
       console.log(`📊 ADMIN_MANAGER ${userId} manages ${allBranchIds.length} branches:`, allBranchIds);
 

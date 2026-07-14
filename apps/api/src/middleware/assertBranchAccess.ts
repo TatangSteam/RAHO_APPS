@@ -5,6 +5,15 @@ import { logger } from '@lib/logger';
 import { sendError } from '@utils/response';
 
 async function getAccessibleBranchIds(user: Request['user']): Promise<string[]> {
+  if (user.role === Role.ADMIN_MANAGER) {
+    const managerBranches = await prisma.managerBranch.findMany({
+      where: { userId: user.userId },
+      select: { branchId: true },
+    });
+
+    return managerBranches.map((managerBranch) => managerBranch.branchId);
+  }
+
   if (user.role === Role.DOCTOR || user.role === Role.NURSE) {
     const staffBranches = await prisma.staffBranch.findMany({
       where: { userId: user.userId },
@@ -29,7 +38,8 @@ async function getAccessibleBranchIds(user: Request['user']): Promise<string[]> 
  * Access is granted if any condition is met:
  * 1. The member's registration branch is accessible to the staff.
  * 2. A BranchMemberAccess record grants access to one of the staff branches.
- * 3. The staff role is SUPER_ADMIN or ADMIN_MANAGER.
+ * 3. The staff role is SUPER_ADMIN.
+ * 4. ADMIN_MANAGER has access through ManagerBranch assignments.
  *
  * Expects req.params.memberId and must run after authenticate.
  */
@@ -46,7 +56,7 @@ export async function assertBranchAccess(
     return;
   }
 
-  if (user.role === Role.SUPER_ADMIN || user.role === Role.ADMIN_MANAGER) {
+  if (user.role === Role.SUPER_ADMIN) {
     next();
     return;
   }

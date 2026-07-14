@@ -13,6 +13,7 @@ interface EditPlanInput {
   ifa250?: number | null;
   ifa500?: number | null;
   hho?: number | null;
+  hhoKonsentrat?: number | null;
   h2?: number | null;
   no?: number | null;
   gaso?: number | null;
@@ -244,6 +245,7 @@ export class MemberTherapyPlanSetEditService {
         planInput.ifa250 ||
         planInput.ifa500 ||
         planInput.hho ||
+        planInput.hhoKonsentrat ||
         planInput.h2 ||
         planInput.no ||
         planInput.gaso ||
@@ -341,6 +343,7 @@ export class MemberTherapyPlanSetEditService {
             ifa250: hasEdit && editInput.ifa250 !== undefined ? editInput.ifa250 : oldPlan.ifa250,
             ifa500: hasEdit && editInput.ifa500 !== undefined ? editInput.ifa500 : oldPlan.ifa500,
             hho: hasEdit && editInput.hho !== undefined ? editInput.hho : oldPlan.hho,
+            hhoKonsentrat: hasEdit && editInput.hhoKonsentrat !== undefined ? editInput.hhoKonsentrat : oldPlan.hhoKonsentrat,
             h2: hasEdit && editInput.h2 !== undefined ? editInput.h2 : oldPlan.h2,
             no: hasEdit && editInput.no !== undefined ? editInput.no : oldPlan.no,
             gaso: hasEdit && editInput.gaso !== undefined ? editInput.gaso : oldPlan.gaso,
@@ -378,6 +381,7 @@ export class MemberTherapyPlanSetEditService {
             ifa250: newPlanInput.ifa250,
             ifa500: newPlanInput.ifa500,
             hho: newPlanInput.hho,
+            hhoKonsentrat: newPlanInput.hhoKonsentrat,
             h2: newPlanInput.h2,
             no: newPlanInput.no,
             gaso: newPlanInput.gaso,

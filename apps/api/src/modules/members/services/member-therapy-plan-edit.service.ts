@@ -11,6 +11,7 @@ interface EditTherapyPlanInput {
   ifa250?: number | null;
   ifa500?: number | null;
   hho?: number | null;
+  hhoKonsentrat?: number | null;
   h2?: number | null;
   no?: number | null;
   gaso?: number | null;
@@ -81,6 +82,7 @@ export class MemberTherapyPlanEditService {
       input.ifa250 ||
       input.ifa500 ||
       input.hho ||
+      input.hhoKonsentrat ||
       input.h2 ||
       input.no ||
       input.gaso ||
@@ -143,6 +145,7 @@ export class MemberTherapyPlanEditService {
             ifa250: isEditedPlan && input.ifa250 !== undefined ? input.ifa250 : oldPlan.ifa250,
             ifa500: isEditedPlan && input.ifa500 !== undefined ? input.ifa500 : oldPlan.ifa500,
             hho: isEditedPlan && input.hho !== undefined ? input.hho : oldPlan.hho,
+            hhoKonsentrat: isEditedPlan && input.hhoKonsentrat !== undefined ? input.hhoKonsentrat : oldPlan.hhoKonsentrat,
             h2: isEditedPlan && input.h2 !== undefined ? input.h2 : oldPlan.h2,
             no: isEditedPlan && input.no !== undefined ? input.no : oldPlan.no,
             gaso: isEditedPlan && input.gaso !== undefined ? input.gaso : oldPlan.gaso,

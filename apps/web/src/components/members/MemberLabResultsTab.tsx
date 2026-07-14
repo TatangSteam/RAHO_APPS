@@ -27,9 +27,10 @@ interface LabResult {
 
 interface MemberLabResultsTabProps {
   memberId: string;
+  canEdit?: boolean;
 }
 
-export default function MemberLabResultsTab({ memberId }: MemberLabResultsTabProps) {
+export default function MemberLabResultsTab({ memberId, canEdit = true }: MemberLabResultsTabProps) {
   const { user } = useAuthStore();
   const [labResults, setLabResults] = useState<LabResult[]>([]);
   const [supportingPhotos, setSupportingPhotos] = useState<SupportingPhoto[]>([]);
@@ -45,9 +46,8 @@ export default function MemberLabResultsTab({ memberId }: MemberLabResultsTabPro
 
   // Check if current user can upload/delete lab results
   // Upload: All staff can upload
-  const canUpload = user?.role && ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role);
-  // Delete: Only ADMIN_MANAGER and SUPER_ADMIN
-  const canDelete = user?.role && ['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role);
+  const canUpload = canEdit && user?.role && ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user.role);
+  const canDelete = canEdit && user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     loadLabResults();

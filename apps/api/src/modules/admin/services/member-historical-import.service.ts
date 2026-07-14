@@ -111,6 +111,7 @@ interface ParsedTherapyPlan {
   ifa250: number | null;
   ifa500: number | null;
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -176,6 +177,7 @@ interface ParsedInfusion {
   ifa250: number | null;
   ifa500: number | null;
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -526,6 +528,7 @@ export class MemberHistoricalImportService {
                 ifa250: plan.ifa250,
                 ifa500: plan.ifa500,
                 hho: plan.hho,
+                hhoKonsentrat: plan.hhoKonsentrat,
                 h2: plan.h2,
                 no: plan.no,
                 gaso: plan.gaso,
@@ -936,6 +939,7 @@ export class MemberHistoricalImportService {
       ifa250: this.getNumber(row, 'IFA 250 (botol)'),
       ifa500: this.getNumber(row, 'IFA 500 (botol)'),
       hho: this.getNumber(row, 'HHO'),
+      hhoKonsentrat: this.getNumber(row, 'HHO Konsentrat') || this.getNumber(row, 'HHOC') || this.getNumber(row, 'HHOKonsentrat'),
       h2: this.getNumber(row, 'H2'),
       no: this.getNumber(row, 'NO'),
       gaso: this.getNumber(row, 'GASO'),
@@ -1007,6 +1011,7 @@ export class MemberHistoricalImportService {
       ifa250: this.getNumber(row, 'IFA 250 Aktual'),
       ifa500: this.getNumber(row, 'IFA 500 Aktual'),
       hho: this.getNumber(row, 'HHO Aktual'),
+      hhoKonsentrat: this.getNumber(row, 'HHO Konsentrat Aktual') || this.getNumber(row, 'HHOC Aktual') || this.getNumber(row, 'HHOKonsentrat Aktual'),
       h2: this.getNumber(row, 'H2 Aktual'),
       no: this.getNumber(row, 'NO Aktual'),
       gaso: this.getNumber(row, 'GASO Aktual'),
@@ -1501,6 +1506,7 @@ export class MemberHistoricalImportService {
       ifa250: infusion.ifa250,
       ifa500: infusion.ifa500,
       hho: infusion.hho,
+      hhoKonsentrat: infusion.hhoKonsentrat,
       h2: infusion.h2,
       no: infusion.no,
       gaso: infusion.gaso,

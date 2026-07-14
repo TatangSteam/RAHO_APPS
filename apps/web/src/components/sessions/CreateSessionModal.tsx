@@ -1158,7 +1158,7 @@ export default function CreateSessionModal({
                                     Klik tab "Detail Therapy Plan" untuk melihat detail lengkap
                                   </p>
                                   <p className="text-xs text-blue-600 dark:text-blue-400/80 mt-1">
-                                    IFA 250: {selectedPlan.ifa250 || 0} Botol - IFA 500: {selectedPlan.ifa500 || 0} Botol - HHO: {selectedPlan.hho || '-'} - NO: {selectedPlan.no || '-'} ...
+                                    IFA 250: {selectedPlan.ifa250 || 0} Botol - IFA 500: {selectedPlan.ifa500 || 0} Botol - HHO: {selectedPlan.hho || '-'} - HHO Kons.: {selectedPlan.hhoKonsentrat || '-'} - NO: {selectedPlan.no || '-'} ...
                                   </p>
                                 </div>
                               </div>

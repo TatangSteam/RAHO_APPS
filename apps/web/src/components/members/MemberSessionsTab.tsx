@@ -13,9 +13,10 @@ interface MemberSessionsTabProps {
   memberId: string;
   memberNo: string;
   memberName: string;
+  canCreate?: boolean;
 }
 
-export default function MemberSessionsTab({ memberId, memberNo, memberName }: MemberSessionsTabProps) {
+export default function MemberSessionsTab({ memberId, memberNo, memberName, canCreate = true }: MemberSessionsTabProps) {
   const router = useRouter();
   const { user } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -79,7 +80,7 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName }: Me
   // Separate sessions into incomplete and complete
   const incompleteSessions = validSessions.filter(session => getStepProgress(session) < 7);
   const completeSessions = validSessions.filter(session => getStepProgress(session) === 7);
-  const canCreateSession = Boolean(user && user.role !== 'DOCTOR');
+  const canCreateSession = Boolean(canCreate && user && user.role !== 'DOCTOR');
 
   return (
     <div>

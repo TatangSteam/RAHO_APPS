@@ -17,6 +17,7 @@ interface EditFormData {
   ifa250: number | string;
   ifa500: number | string;
   hho: number | string;
+  hhoKonsentrat: number | string;
   h2: number | string;
   no: number | string;
   gaso: number | string;
@@ -45,6 +46,7 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
     ifa250: plan.ifa250 || 0,
     ifa500: plan.ifa500 || 0,
     hho: plan.hho || 0,
+    hhoKonsentrat: plan.hhoKonsentrat || 0,
     h2: plan.h2 || 0,
     no: plan.no || 0,
     gaso: plan.gaso || 0,
@@ -69,6 +71,7 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
         ifa250: parseDoseInput(formData.ifa250),
         ifa500: parseDoseInput(formData.ifa500),
         hho: parseDoseInput(formData.hho),
+        hhoKonsentrat: parseDoseInput(formData.hhoKonsentrat),
         h2: parseDoseInput(formData.h2),
         no: parseDoseInput(formData.no),
         gaso: parseDoseInput(formData.gaso),
@@ -308,6 +311,17 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
                   className="form-input"
                   value={formData.hho}
                   onChange={(e) => handleNumberChange('hho', e.target.value)}
+                  style={{ fontSize: '13px' }}
+                />
+              </div>
+              <div>
+                <label className="form-label" style={{ fontSize: '12px', fontWeight: 700 }}>HHO Konsentrat (ml)</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  className="form-input"
+                  value={formData.hhoKonsentrat}
+                  onChange={(e) => handleNumberChange('hhoKonsentrat', e.target.value)}
                   style={{ fontSize: '13px' }}
                 />
               </div>

@@ -10,7 +10,7 @@ import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
   pkg: PackageDisplay;
-  onVerifyPayment: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
+  onVerifyPayment?: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
   onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
@@ -273,6 +273,7 @@ export default function PackageCard({
                   status={addon.status}
                   documentLabel={addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
                 />
+                {onVerifyPayment && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -283,6 +284,7 @@ export default function PackageCard({
                 >
                   ✅ Verify Payment
                 </button>
+                )}
               </div>
             )}
             
@@ -299,7 +301,7 @@ export default function PackageCard({
                   packageCode={addon.addOnCode}
                   status={addon.status}
                 />
-                {addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
+                {onVerifyPayment && addon.paymentPlanType === 'INSTALLMENT' && addon.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -567,6 +569,7 @@ export default function PackageCard({
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')} + ${boosters.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'PENDING_PAYMENT'}
                 />
+                {onVerifyPayment && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
@@ -583,6 +586,7 @@ export default function PackageCard({
                 >
                   ✅ Verify Payment (Bundle)
                 </button>
+                )}
                 {onEditPackage && canEditGroup && (
                   <button
                     onClick={(e) => {
@@ -631,7 +635,7 @@ export default function PackageCard({
                   packageCode={`${basics.map((p: MemberPackage) => p?.packageCode).join(', ')}`}
                   status={groupStatus || 'ACTIVE'}
                 />
-                {anyActiveInstallment && (
+                {onVerifyPayment && anyActiveInstallment && (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -819,6 +823,7 @@ export default function PackageCard({
                 status={memberPkg.status}
                 documentLabel={memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' ? 'Lihat Invoice' : undefined}
               />
+              {onVerifyPayment && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -829,6 +834,7 @@ export default function PackageCard({
               >
                 ✅ Verify Payment
               </button>
+              )}
               {onEditPackage && canEditStandalonePackage && (
                 <button
                   onClick={(e) => {
@@ -875,7 +881,7 @@ export default function PackageCard({
                 packageCode={memberPkg.packageCode}
                 status={memberPkg.status}
               />
-              {memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
+              {onVerifyPayment && memberPkg.paymentPlanType === 'INSTALLMENT' && memberPkg.paymentPlanStatus === 'ACTIVE_INSTALLMENT' && (
                 <button
                   onClick={(e) => {
                     e.stopPropagation();

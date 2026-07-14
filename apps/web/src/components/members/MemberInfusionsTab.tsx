@@ -212,8 +212,8 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                   gap: '10px' 
                 }}>
                   {infusion.ifa250 && (
-                    <div style={{ 
-                      display: 'flex', 
+                    <div style={{
+                      display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '10px 14px',
@@ -256,6 +256,22 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                       <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>HHO</span>
                       <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
                         {infusion.hho} ml
+                      </span>
+                    </div>
+                  )}
+                  {infusion.hhoKonsentrat && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(148,163,184,0.2)'
+                    }}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>HHO Konsentrat</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
+                        {infusion.hhoKonsentrat} ml
                       </span>
                     </div>
                   )}

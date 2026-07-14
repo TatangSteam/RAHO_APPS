@@ -570,6 +570,26 @@ export class MembersController {
 
       console.log('📊 getMembersByBranch called with branchId:', branchId);
 
+      if (req.user!.role === Role.ADMIN_MANAGER) {
+        const assignment = await prisma.managerBranch.findUnique({
+          where: {
+            userId_branchId: {
+              userId: req.user!.userId,
+              branchId,
+            },
+          },
+          select: { id: true },
+        });
+
+        if (!assignment) {
+          throw {
+            status: 403,
+            code: 'BRANCH_ACCESS_DENIED',
+            message: 'Anda tidak memiliki akses ke cabang ini',
+          };
+        }
+      }
+
       const result = await membersService.getMembersByBranch(branchId, {
         search: search as string,
         status: status as string,

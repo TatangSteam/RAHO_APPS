@@ -21,6 +21,7 @@ interface Step5InfusionProps {
 // IFA fields handled separately with radio selection
 const DOSE_FIELDS = [
   { key: 'hho', label: 'HHO', unit: 'ml' },
+  { key: 'hhoKonsentrat', label: 'HHO Konsentrat', unit: 'ml' },
   { key: 'h2', label: 'H2', unit: 'ml' },
   { key: 'no', label: 'NO', unit: 'ml' },
   { key: 'gaso', label: 'GASO', unit: 'ml' },
@@ -44,6 +45,7 @@ type NumericDoseKey =
   | 'ifa250'
   | 'ifa500'
   | 'hho'
+  | 'hhoKonsentrat'
   | 'h2'
   | 'no'
   | 'gaso'
@@ -69,6 +71,7 @@ interface TherapyPlanSetRow {
   ifa250?: number | null;
   ifa500?: number | null;
   hho?: number | null;
+  hhoKonsentrat?: number | null;
   h2?: number | null;
   no?: number | null;
   gaso?: number | null;
@@ -106,6 +109,7 @@ const SET_DOSE_COLUMNS: DoseColumn[] = [
   { key: 'ifa250', label: 'IFA+NO' },
   { key: 'ifa500', label: 'IFA 500' },
   { key: 'hho', label: 'HHO ml', aliases: ['hho', 'nb hho'], mergeIfaSubstances: true },
+  { key: 'hhoKonsentrat', label: 'HHO Kons. ml', aliases: ['hho konsentrat', 'hhokonsentrat', 'hhoc'], mergeIfaSubstances: true },
   { key: 'h2', label: 'H2 ml', aliases: ['h2', 'hydrogen'], mergeIfaSubstances: true },
   { key: 'no', label: 'NO ml', aliases: ['no', 'nitric oxide'], mergeIfaSubstances: true },
   { key: 'gaso', label: 'GASO ml', aliases: ['gaso', 'gt', 'gasotransmitter'], mergeIfaSubstances: true },
@@ -271,6 +275,7 @@ export default function Step5Infusion({
     ifa250: 1, // Default 1 botol IFA + NO 2,5ml per terapi (wajib)
     ifa500: undefined,
     hho: undefined,
+    hhoKonsentrat: undefined,
     h2: undefined,
     no: undefined,
     gaso: undefined,

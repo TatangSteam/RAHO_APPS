@@ -68,12 +68,12 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const canEditDiagnosis = Boolean(
     canEdit &&
       user?.role &&
-      ['DOCTOR', 'NURSE', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role)
+      ['DOCTOR', 'NURSE', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'SUPER_ADMIN'].includes(user.role)
   );
   const canDeleteDiagnosis = Boolean(
     canEdit &&
       user?.role &&
-      ['ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user.role)
+      ['SUPER_ADMIN'].includes(user.role)
   );
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);

@@ -8,7 +8,6 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { devError } from '@/lib/logger';
-import { hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import NewMemberHeader from '@/components/members/new/NewMemberHeader';
 import PersonalDataSection from '@/components/members/new/PersonalDataSection';
 import AccountSection from '@/components/members/new/AccountSection';
@@ -41,6 +40,7 @@ export default function NewMemberPage() {
     requestedReturnTo?.startsWith('/') && !requestedReturnTo.startsWith('//')
       ? requestedReturnTo
       : null;
+  const canCreateMember = !!user && ['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN'].includes(user.role);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<FormFieldErrors>({});
@@ -52,14 +52,14 @@ export default function NewMemberPage() {
   // Branch selection for roles that are not attached to one branch account.
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(false);
-  const requiresBranchSelection = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
+  const requiresBranchSelection = user?.role === 'SUPER_ADMIN';
   const isBranchLocked =
     requiresBranchSelection &&
     !!requestedBranchId &&
     branches.some((branch) => branch.id === requestedBranchId);
 
   const [formData, setFormData] = useState<CreateMemberData>({
-    // Branch selection (for SUPER_ADMIN / ADMIN_MANAGER)
+    // Branch selection (for SUPER_ADMIN)
     branchId: requestedBranchId,
     
     // Section A - Data Pribadi
@@ -94,6 +94,13 @@ export default function NewMemberPage() {
     nextIncentiveType: undefined,
     nextIncentiveValue: undefined,
   });
+
+  useEffect(() => {
+    if (user && !canCreateMember) {
+      showToast.error('Admin Manager hanya memiliki akses view member');
+      router.replace('/members');
+    }
+  }, [canCreateMember, router, user]);
 
   // Form persistence - Save to localStorage
   const FORM_STORAGE_KEY = requestedBranchId
@@ -148,7 +155,7 @@ export default function NewMemberPage() {
     }
   };
 
-  // Fetch branches for SUPER_ADMIN / ADMIN_MANAGER.
+  // Fetch branches for SUPER_ADMIN.
   useEffect(() => {
     if (requiresBranchSelection) {
       setLoadingBranches(true);
@@ -272,7 +279,7 @@ export default function NewMemberPage() {
     setFormError('');
     setFieldErrors({});
 
-    // SUPER_ADMIN / ADMIN_MANAGER must select the registration branch.
+    // SUPER_ADMIN must select the registration branch.
     if (requiresBranchSelection && !formData.branchId) {
       showToast.error('Pilih cabang terlebih dahulu');
       return;
@@ -434,6 +441,10 @@ export default function NewMemberPage() {
     setHasSavedData(!!savedData);
   }, [formData, FORM_STORAGE_KEY]);
 
+  if (user && !canCreateMember) {
+    return null;
+  }
+
   return (
     <>
       <NewMemberHeader onBack={() => returnTo ? router.push(returnTo) : router.back()} />
@@ -497,7 +508,7 @@ export default function NewMemberPage() {
           </ErrorAlert>
         )}
 
-        {/* Branch Selection for SUPER_ADMIN / ADMIN_MANAGER */}
+        {/* Branch Selection for SUPER_ADMIN */}
         {requiresBranchSelection && (
           <div className="card" style={{ padding: '20px' }}>
             <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>

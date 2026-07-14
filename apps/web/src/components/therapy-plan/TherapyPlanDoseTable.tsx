@@ -14,6 +14,7 @@ type TherapyPlanDoseKey =
   | 'o2'
   | 'edta'
   | 'hho'
+  | 'hhoKonsentrat'
   | 'h2'
   | 'jmlNb';
 
@@ -29,6 +30,7 @@ export interface TherapyPlanDoseTablePlan {
   o2?: number | null;
   edta?: number | null;
   hho?: number | null;
+  hhoKonsentrat?: number | null;
   h2?: number | null;
   jmlNb?: number | null;
   ifaSubstances?: TherapyPlanSubstance[] | null;
@@ -74,6 +76,7 @@ const DOSE_FIELDS: DoseFieldMeta[] = [
   { key: 'o2', label: 'O2', unit: 'ml', source: 'Zat Utama', note: 'Oxygen' },
   { key: 'edta', label: 'EDTA', unit: 'ml', source: 'Zat Utama' },
   { key: 'hho', label: 'HHO', unit: 'ml', source: 'Manual', note: 'NB-HHO' },
+  { key: 'hhoKonsentrat', label: 'HHO Konsentrat', unit: 'ml', source: 'Manual', note: 'HHO Konsentrat' },
   { key: 'h2', label: 'H2', unit: 'ml', source: 'Manual', note: 'Hydrogen' },
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', source: 'Manual' },
 ];

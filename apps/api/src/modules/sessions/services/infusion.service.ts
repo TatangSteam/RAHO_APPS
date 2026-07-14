@@ -125,6 +125,7 @@ export class InfusionService {
         hasDoseDeviation(data.ifa250, plan.ifa250) ||
         hasDoseDeviation(data.ifa500, plan.ifa500) ||
         hasDoseDeviation(data.hho, plan.hho) ||
+        hasDoseDeviation(data.hhoKonsentrat, plan.hhoKonsentrat) ||
         hasDoseDeviation(data.h2, plan.h2) ||
         hasDoseDeviation(data.no, plannedActualNo) ||
         hasDoseDeviation(data.gaso, plan.gaso) ||
@@ -263,6 +264,7 @@ export class InfusionService {
         { field: 'IFA250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA + NO 2,5ml', qty: data.ifa250, unit: 'Botol' },
         // Cairan Terapi - Satuan ML
         { field: 'HHO', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', qty: data.hho, unit: 'ml' },
+        { field: 'HHO_KONSENTRAT', sku: 'PRD-NBT-HHO-002', namePattern: 'HHO Konsentrat', qty: data.hhoKonsentrat, unit: 'ml' },
         { field: 'H2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', qty: data.h2, unit: 'ml' },
         {
           field: 'NO',

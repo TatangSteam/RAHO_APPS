@@ -58,7 +58,7 @@ router.delete(
 router.post(
   '/members/:memberId/purchases',
   authenticate,
-  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN']),
   controller.assignToMember.bind(controller)
 );
 
@@ -74,7 +74,7 @@ router.get(
 router.patch(
   '/purchases/:purchaseId/verify',
   authenticate,
-  authorize(['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN']),
+  authorize(['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN']),
   controller.verifyPurchase.bind(controller)
 );
 

@@ -10,6 +10,7 @@ export interface TherapyPlanData {
   ifa250?: DoseInputValue; // IFA + NO 2,5ml (satuan: Botol)
   ifa500?: DoseInputValue; // IFA 500ml (satuan: Botol)
   hho?: DoseInputValue;
+  hhoKonsentrat?: DoseInputValue;
   h2?: DoseInputValue;
   no?: DoseInputValue;
   gaso?: DoseInputValue;
@@ -42,6 +43,7 @@ const AUTO_FILL_FIELDS = [
 // MANUAL fields (tidak ada di infus aktual): HHO, H2, JML NB
 const MANUAL_FIELDS = [
   { key: 'hho', label: 'HHO', unit: 'ml', product: 'NB-HHO' },
+  { key: 'hhoKonsentrat', label: 'HHO Konsentrat', unit: 'ml', product: 'HHO Konsentrat' },
   { key: 'h2', label: 'H2', unit: 'ml', product: 'Hydrogen' },
   { key: 'jmlNb', label: 'Jml.NB', unit: 'ml', product: '' },
 ];
@@ -68,6 +70,7 @@ export default function TherapyPlanSection({ therapyPlans, onChange }: TherapyPl
       ifa250: 1, // Default 1 botol IFA + NO 2,5ml
       ifa500: undefined,
       hho: undefined,
+      hhoKonsentrat: undefined,
       h2: undefined,
       no: undefined,
       gaso: undefined,

@@ -24,6 +24,7 @@ interface EditableRow {
   ifa250: DoseInputValue;
   ifa500: DoseInputValue;
   hho: DoseInputValue;
+  hhoKonsentrat: DoseInputValue;
   h2: DoseInputValue;
   no: DoseInputValue;
   gaso: DoseInputValue;
@@ -173,6 +174,7 @@ export default function EditTherapyPlanSetModal({
           ifa250: plan.ifa250 ?? null,
           ifa500: plan.ifa500 ?? null,
           hho: plan.hho ?? null,
+          hhoKonsentrat: plan.hhoKonsentrat ?? null,
           h2: plan.h2 ?? null,
           no: plan.no ?? null,
           gaso: plan.gaso ?? null,
@@ -240,6 +242,7 @@ export default function EditTherapyPlanSetModal({
         hasValueChanged(initialRow.ifa250, row.ifa250) ||
         hasValueChanged(initialRow.ifa500, row.ifa500) ||
         hasValueChanged(initialRow.hho, row.hho) ||
+        hasValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
         hasValueChanged(initialRow.h2, row.h2) ||
         hasValueChanged(initialRow.no, row.no) ||
         hasValueChanged(initialRow.gaso, row.gaso) ||
@@ -260,6 +263,7 @@ export default function EditTherapyPlanSetModal({
     ifa250: null,
     ifa500: null,
     hho: null,
+    hhoKonsentrat: null,
     h2: null,
     no: null,
     gaso: null,
@@ -352,6 +356,7 @@ export default function EditTherapyPlanSetModal({
       (parseDoseInput(row.ifa250) || 0) > 0 ||
       (parseDoseInput(row.ifa500) || 0) > 0 ||
       (parseDoseInput(row.hho) || 0) > 0 ||
+      (parseDoseInput(row.hhoKonsentrat) || 0) > 0 ||
       (parseDoseInput(row.h2) || 0) > 0 ||
       (parseDoseInput(row.no) || 0) > 0 ||
       (parseDoseInput(row.gaso) || 0) > 0 ||
@@ -375,7 +380,7 @@ export default function EditTherapyPlanSetModal({
 
     // Check for negative values
     const hasNegative = [
-      row.ifa250, row.ifa500, row.hho, row.h2, row.no,
+      row.ifa250, row.ifa500, row.hho, row.hhoKonsentrat, row.h2, row.no,
       row.gaso, row.o2, row.o3, row.edta, row.mb,
       row.h2s, row.kcl, row.jmlNb
     ].some(val => {
@@ -434,6 +439,7 @@ export default function EditTherapyPlanSetModal({
           hasValueChanged(initialRow.ifa250, row.ifa250) ||
           hasValueChanged(initialRow.ifa500, row.ifa500) ||
           hasValueChanged(initialRow.hho, row.hho) ||
+          hasValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
           hasValueChanged(initialRow.h2, row.h2) ||
           hasValueChanged(initialRow.no, row.no) ||
           hasValueChanged(initialRow.gaso, row.gaso) ||
@@ -469,6 +475,7 @@ export default function EditTherapyPlanSetModal({
           ifa250: toDosePayload(row.ifa250),
           ifa500: toDosePayload(row.ifa500),
           hho: toDosePayload(row.hho),
+          hhoKonsentrat: toDosePayload(row.hhoKonsentrat),
           h2: toDosePayload(row.h2),
           no: toDosePayload(row.no),
           gaso: toDosePayload(row.gaso),
@@ -700,6 +707,7 @@ export default function EditTherapyPlanSetModal({
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">IFA 250</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">IFA 500</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">HHO</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">HHO Kons.</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">H2</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">NO</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">GASO</th>
@@ -766,6 +774,18 @@ export default function EditTherapyPlanSetModal({
                         type="number"
                         value={row.hho ?? ''}
                         onChange={(e) => handleInputChange(index, 'hho', e.target.value)}
+                        disabled={row.isLocked}
+                        className="w-20 px-2 py-1 text-sm text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder="0"
+                        min="0"
+                        step="0.1"
+                      />
+                    </td>
+                    <td className="px-3 py-2 border-r border-neutral-200 dark:border-neutral-700">
+                      <input
+                        type="number"
+                        value={row.hhoKonsentrat ?? ''}
+                        onChange={(e) => handleInputChange(index, 'hhoKonsentrat', e.target.value)}
                         disabled={row.isLocked}
                         className="w-20 px-2 py-1 text-sm text-center border border-neutral-300 dark:border-neutral-600 rounded bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
                         placeholder="0"

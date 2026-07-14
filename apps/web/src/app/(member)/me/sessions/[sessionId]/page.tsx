@@ -63,7 +63,7 @@ function VitalItem({ label, value, unit }: { label: string; value: number | null
 }
 
 const IFA_LABELS: Record<string, string> = {
-  ifa250: 'IFA 250', ifa500: 'IFA 500', hho: 'HHO', h2: 'H₂', no: 'NO',
+  ifa250: 'IFA 250', ifa500: 'IFA 500', hho: 'HHO', hhoKonsentrat: 'HHO Kons.', h2: 'H₂', no: 'NO',
   gaso: 'GASO', o2: 'O₂', o3: 'O₃', edta: 'EDTA', mb: 'MB',
   h2s: 'H₂S', kcl: 'KCl', jmlNb: 'Jml NB'
 }
