@@ -729,6 +729,53 @@
   gap: 1.5rem;
 }
 
+.memberFilters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(180px, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-lg);
+}
+
+.memberFilterField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.memberFilterLabel {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.memberFilterInput {
+  width: 100%;
+  min-height: 42px;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--surface-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-input);
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-family: inherit;
+  outline: none;
+  transition: all var(--transition-fast);
+}
+
+.memberFilterInput:hover {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+.memberFilterInput:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
 .memberCard {
   background: var(--surface-card);
   border: 1px solid var(--surface-border);
@@ -1084,6 +1131,10 @@
   }
 
   .membersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .memberFilters {
     grid-template-columns: 1fr;
   }
 
