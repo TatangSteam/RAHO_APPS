@@ -155,6 +155,7 @@ export default function StockRequestsPage() {
       items: requestItems.map(item => ({
         masterProductId: item.masterProductId,
         requestedQty: item.requestedQty,
+        unit: item.unit,
         notes: item.notes || undefined,
       })),
       notes: requestNotes.trim(),

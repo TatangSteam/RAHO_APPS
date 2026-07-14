@@ -2,6 +2,10 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, OverstockStatus } from '@prisma/client';
+import {
+  formatStockRequestQuantity,
+  parseStockRequestQuantity,
+} from './stock-request-units';
 
 /**
  * Service for managing branch overstock
@@ -318,7 +322,7 @@ export class OverstockService {
   /**
    * Get overstock info for stock request items (for display in UI)
    */
-  async getOverstockInfoForRequest(branchId: string, items: Array<{ masterProductId: string; requestedQty: number }>) {
+  async getOverstockInfoForRequest(branchId: string, items: Array<{ masterProductId: string; requestedQty: number; unit?: string }>) {
     const result: Array<{
       masterProductId: string;
       requestedQty: number;
@@ -333,7 +337,17 @@ export class OverstockService {
       }>;
     }> = [];
 
+    const masterProducts = await prisma.masterProduct.findMany({
+      where: { id: { in: items.map((item) => item.masterProductId) } },
+    });
+    const masterProductById = new Map(masterProducts.map((product) => [product.id, product]));
+
     for (const item of items) {
+      const masterProduct = masterProductById.get(item.masterProductId);
+      const requestedQty = parseStockRequestQuantity(masterProduct, item.requestedQty, item.unit);
+      const formatQuantity = (quantity: unknown) => (
+        item.unit ? formatStockRequestQuantity(masterProduct, quantity) : Number(quantity || 0)
+      );
       const overstocks = await prisma.branchOverstock.findMany({
         where: {
           branchId,
@@ -352,17 +366,17 @@ export class OverstockService {
       });
 
       const availableOverstock = overstocks.reduce((sum, o) => sum + Number(o.quantity), 0);
-      const deductedQty = Math.min(availableOverstock, item.requestedQty);
-      const finalQty = item.requestedQty - deductedQty;
+      const deductedQty = Math.min(availableOverstock, requestedQty);
+      const finalQty = requestedQty - deductedQty;
 
       result.push({
         masterProductId: item.masterProductId,
-        requestedQty: item.requestedQty,
-        availableOverstock,
-        deductedQty,
-        finalQty,
+        requestedQty: formatQuantity(requestedQty),
+        availableOverstock: formatQuantity(availableOverstock),
+        deductedQty: formatQuantity(deductedQty),
+        finalQty: formatQuantity(finalQty),
         overstockDetails: overstocks.map(o => ({
-          quantity: Number(o.quantity),
+          quantity: formatQuantity(o.quantity),
           reason: o.reason,
           sourceShipmentCode: o.sourceShipment.shipmentCode,
           createdAt: o.createdAt.toISOString(),

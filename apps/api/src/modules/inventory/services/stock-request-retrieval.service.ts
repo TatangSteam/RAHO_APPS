@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { StockRequestStatus, Role } from '@prisma/client';
+import {
+  formatStockRequestQuantity,
+  getStockRequestUnit,
+} from './stock-request-units';
 
 interface GetRequestsOptions {
   branchId?: string;
@@ -302,17 +306,21 @@ export class StockRequestRetrievalService {
       status: request.status,
       notes: request.notes,
       itemCount: request.items.length,
-      totalItems: request.items.reduce((sum: number, item: any) => sum + Number(item.requestedQty), 0),
+      totalItems: request.items.reduce((sum: number, item: any) => (
+        sum + formatStockRequestQuantity(item.masterProduct, item.requestedQty)
+      ), 0),
       items: request.items.map((item: any) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
-        requestedQty: Number(item.requestedQty),
-        approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
-        overstockDeducted: item.overstockDeducted ? Number(item.overstockDeducted) : 0,
-        finalQty: item.finalQty ? Number(item.finalQty) : Number(item.requestedQty),
-        unit: item.masterProduct.baseUnit,
+        requestedQty: formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        approvedQty: item.approvedQty ? formatStockRequestQuantity(item.masterProduct, item.approvedQty) : null,
+        overstockDeducted: item.overstockDeducted ? formatStockRequestQuantity(item.masterProduct, item.overstockDeducted) : 0,
+        finalQty: item.finalQty
+          ? formatStockRequestQuantity(item.masterProduct, item.finalQty)
+          : formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        unit: getStockRequestUnit(item.masterProduct),
         notes: item.notes,
       })),
       // Invoice summary
@@ -389,7 +397,7 @@ export class StockRequestRetrievalService {
           sku: item.sku,
           productName: item.productName,
           description: item.description,
-          quantity: Number(item.quantity),
+          quantity: formatStockRequestQuantity(item.masterProduct, item.quantity),
           pricePerUnit: Number(item.pricePerUnit),
           subtotal: Number(item.subtotal),
         })),
@@ -428,16 +436,16 @@ export class StockRequestRetrievalService {
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.masterProduct.name,
-          sentQty: Number(item.sentQty),
-          receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
-          unit: item.masterProduct.baseUnit,
+          sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
+          receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+          unit: getStockRequestUnit(item.masterProduct),
         })),
         discrepancies: request.shipment.discrepancies?.map((d: any) => ({
           id: d.id,
           masterProductId: d.masterProductId,
           productName: d.productName,
-          expectedQty: Number(d.expectedQty),
-          receivedQty: Number(d.receivedQty),
+          expectedQty: formatStockRequestQuantity(d.masterProduct, d.expectedQty),
+          receivedQty: formatStockRequestQuantity(d.masterProduct, d.receivedQty),
           discrepancyType: d.discrepancyType,
           notes: d.notes,
           photoUrl: d.photoUrl,

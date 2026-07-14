@@ -7,10 +7,16 @@ import {
   buildStockRequestInvoiceDraft,
   getStockRequestInvoiceApprovalPlan,
 } from './stock-request-approval.helpers';
+import {
+  formatStockRequestQuantity,
+  getStockRequestUnit,
+  parseStockRequestQuantity,
+} from './stock-request-units';
 
 interface InvoiceItemInput {
   masterProductId: string;
   quantity: number;
+  unit?: string;
   pricePerUnit: number;
 }
 
@@ -114,7 +120,11 @@ export class StockRequestApprovalService {
         branch: true,
         invoice: {
           include: {
-            items: true,
+            items: {
+              include: {
+                masterProduct: true,
+              },
+            },
             payments: {
               orderBy: { uploadedAt: 'desc' },
             },
@@ -270,9 +280,17 @@ export class StockRequestApprovalService {
       };
     }
 
+    const normalizedInvoiceItems = invoiceData.items.map((item) => {
+      const requestItem = request.items.find((requestItem: any) => requestItem.masterProductId === item.masterProductId);
+      return {
+        ...item,
+        quantity: parseStockRequestQuantity(requestItem?.masterProduct, item.quantity, item.unit),
+      };
+    });
+
     const { items: invoiceItems, subtotal } = buildStockRequestInvoiceDraft(
       request.items,
-      invoiceData.items,
+      normalizedInvoiceItems,
       totalAmount !== undefined ? Number(totalAmount) : undefined
     );
     const approvalPlan = getStockRequestInvoiceApprovalPlan(subtotal, invoiceData.paymentMode);
@@ -1253,9 +1271,9 @@ export class StockRequestApprovalService {
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
-        requestedQty: Number(item.requestedQty),
-        approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
-        unit: item.masterProduct.baseUnit,
+        requestedQty: formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        approvedQty: item.approvedQty ? formatStockRequestQuantity(item.masterProduct, item.approvedQty) : null,
+        unit: getStockRequestUnit(item.masterProduct),
         notes: item.notes,
       })),
       // Payment info
@@ -1296,7 +1314,7 @@ export class StockRequestApprovalService {
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.productName,
-        quantity: Number(item.quantity),
+        quantity: formatStockRequestQuantity(item.masterProduct, item.quantity),
         pricePerUnit: Number(item.pricePerUnit),
         subtotal: Number(item.subtotal),
       })),
@@ -1336,9 +1354,9 @@ export class StockRequestApprovalService {
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
-        sentQty: Number(item.sentQty),
-        receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
-        unit: item.masterProduct.baseUnit,
+        sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
+        receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+        unit: getStockRequestUnit(item.masterProduct),
       })),
       shippedAt: shipment.shippedAt?.toISOString(),
       receivedAt: shipment.receivedAt?.toISOString(),

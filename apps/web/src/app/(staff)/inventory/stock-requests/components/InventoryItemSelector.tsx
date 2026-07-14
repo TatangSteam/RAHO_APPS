@@ -2,6 +2,7 @@
 
 import { InventoryItem, MasterProduct, RequestItem } from '../types';
 import styles from '../page.module.css';
+import { getStockRequestUnit } from '../stockRequestUnits';
 
 interface InventoryItemSelectorProps {
   inventoryItems: InventoryItem[] | MasterProduct[];
@@ -93,7 +94,7 @@ export default function InventoryItemSelector({
               {!isInventoryItem(item) && (
                 <div className={styles.stockInfo}>
                   <span className={styles.stockBadge}>
-                    Unit: {item.baseUnit}
+                    Unit: {getStockRequestUnit(item)}
                   </span>
                 </div>
               )}

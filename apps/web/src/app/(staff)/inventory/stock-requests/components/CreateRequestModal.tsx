@@ -7,6 +7,7 @@ import { MasterProduct, RequestItem } from '../types';
 import { inventoryApi, OverstockPreviewItem } from '@/lib/api/inventoryApi';
 import { useAuthStore } from '@/stores/authStore';
 import { devError } from '@/lib/logger';
+import { getStockRequestUnit } from '../stockRequestUnits';
 
 interface PendingInfo {
   hasPendingShipments: boolean;
@@ -155,6 +156,7 @@ export default function CreateRequestModal({
         const items = requestItems.map(item => ({
           masterProductId: item.masterProductId,
           requestedQty: item.requestedQty,
+          unit: item.unit,
         }));
         
         const response = await inventoryApi.previewOverstockDeduction(user.branchId, items);
@@ -195,7 +197,8 @@ export default function CreateRequestModal({
     if (requestItems.some(ri => ri.masterProductId === item.id)) return;
 
     let defaultQty = 10;
-    const unit = item.baseUnit.toLowerCase();
+    const requestUnit = getStockRequestUnit(item);
+    const unit = requestUnit.toLowerCase();
     if (unit.includes('ml') || unit.includes('liter')) defaultQty = 100;
     else if (unit.includes('box') || unit.includes('pack')) defaultQty = 1;
 
@@ -203,7 +206,7 @@ export default function CreateRequestModal({
       masterProductId: item.id,
       productName: item.name,
       requestedQty: defaultQty,
-      unit: item.baseUnit,
+      unit: requestUnit,
       notes: '',
     }]);
   };
@@ -456,7 +459,7 @@ export default function CreateRequestModal({
                               {item.name}
                             </p>
                             <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate">
-                              {item.category} • {item.baseUnit}
+                              {item.category} • {getStockRequestUnit(item)}
                               {item.sku && <span className="ml-1 text-neutral-400">• SKU: {item.sku}</span>}
                             </p>
                           </div>

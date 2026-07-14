@@ -7,6 +7,7 @@ import { api } from '../api';
 export interface StockRequestItem {
   masterProductId: string;
   requestedQty: number;
+  unit?: string;
   notes?: string;
 }
 
@@ -25,6 +26,7 @@ export interface UpdateStockRequestInput {
 export interface InvoiceItemInput {
   masterProductId: string;
   quantity: number;
+  unit?: string;
   pricePerUnit: number;
 }
 
@@ -39,12 +41,14 @@ export interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
+    unit?: string;
   }>;
   discrepancies?: Array<{
     masterProductId: string;
     expectedQty: number;
     receivedQty: number;
     discrepancyType: 'SHORTAGE' | 'DAMAGE' | 'WRONG_ITEM' | 'OTHER';
+    unit?: string;
     notes?: string;
     photoUrl?: string;
   }>;
@@ -59,6 +63,7 @@ export interface ShipShipmentInput {
   items?: Array<{
     masterProductId: string;
     sentQty: number;
+    unit?: string;
     overstockReason?: string;
   }>;
 }
@@ -68,6 +73,7 @@ export interface UpdateShipmentInput {
   items?: Array<{
     masterProductId: string;
     sentQty: number;
+    unit?: string;
     overstockReason?: string;
   }>;
 }
@@ -80,6 +86,7 @@ export interface ReviewShipmentIssueInput {
   shortageItems?: Array<{
     masterProductId: string;
     quantity: number;
+    unit?: string;
   }>;
 }
 

@@ -4,17 +4,20 @@ import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
 import { ShipmentProcessingService } from './services/shipment-processing.service';
 import { ShipmentRetrievalService } from './services/shipment-retrieval.service';
+import { parseStockRequestQuantity } from './services/stock-request-units';
 
 interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
+    unit?: string;
   }>;
   discrepancies?: Array<{
     masterProductId: string;
     expectedQty: number;
     receivedQty: number;
     discrepancyType: DiscrepancyType;
+    unit?: string;
     notes?: string;
     photoUrl?: string;
     photoFileName?: string;
@@ -29,6 +32,7 @@ interface ReviewShipmentIssueInput {
   shortageItems?: Array<{
     masterProductId: string;
     quantity: number;
+    unit?: string;
   }>;
 }
 
@@ -58,6 +62,7 @@ export class ShipmentService {
       items?: Array<{
         masterProductId: string;
         sentQty: number;
+        unit?: string;
         overstockReason?: string;
       }>;
     }
@@ -91,6 +96,7 @@ export class ShipmentService {
       items?: Array<{
         masterProductId: string;
         sentQty: number;
+        unit?: string;
         overstockReason?: string;
       }>;
     }
@@ -111,7 +117,11 @@ export class ShipmentService {
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
       include: {
-        items: true,
+        items: {
+          include: {
+            masterProduct: true,
+          },
+        },
         stockRequest: {
           include: {
             items: true,
@@ -153,7 +163,17 @@ export class ShipmentService {
       }
     }
 
-    const itemUpdates = Array.isArray(data.items) ? data.items : undefined;
+    let itemUpdates = Array.isArray(data.items) ? data.items : undefined;
+    if (itemUpdates) {
+      itemUpdates = itemUpdates.map((item) => {
+        const shipmentItem = shipment.items.find((shipmentItem) => shipmentItem.masterProductId === item.masterProductId);
+        return {
+          ...item,
+          sentQty: parseStockRequestQuantity(shipmentItem?.masterProduct, item.sentQty, item.unit),
+        };
+      });
+    }
+
     if (itemUpdates) {
       if (itemUpdates.length === 0) {
         throw {
