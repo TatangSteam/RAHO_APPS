@@ -44,6 +44,8 @@ export class SessionDetailsService {
     const nextAdminLayananId = input.adminLayananId ?? session.adminLayananId;
     const nextDoctorId = input.doctorId ?? session.doctorId;
     const nextNurseId = input.nurseId ?? session.nurseId;
+    const nextInfusKe = input.infusKe ?? session.infusKe;
+    const nextBranchInfusKe = input.branchInfusKe ?? session.branchInfusKe;
     const nextBoosterPackageId =
       input.useBooster === undefined
         ? session.boosterPackageId
@@ -94,6 +96,15 @@ export class SessionDetailsService {
       };
     }
 
+    await this.validateSessionNumbers({
+      sessionId,
+      memberId: session.encounter.memberId,
+      branchId: session.branchId,
+      infusKe: nextInfusKe,
+      branchInfusKe: nextBranchInfusKe,
+      shiftFollowingSessions: !!input.shiftFollowingSessions,
+    });
+
     const additionalDoctorIds = this.uniqueIds(input.additionalDoctorIds || []).filter(
       (doctorId) => doctorId !== nextDoctorId
     );
@@ -129,9 +140,22 @@ export class SessionDetailsService {
         });
       }
 
+      await this.shiftSessionNumbersIfNeeded(tx, {
+        sessionId,
+        memberId: session.encounter.memberId,
+        branchId: session.branchId,
+        currentInfusKe: session.infusKe,
+        nextInfusKe,
+        currentBranchInfusKe: session.branchInfusKe,
+        nextBranchInfusKe,
+        shiftFollowingSessions: !!input.shiftFollowingSessions,
+      });
+
       const updatedSession = await tx.treatmentSession.update({
         where: { id: sessionId },
         data: {
+          infusKe: nextInfusKe,
+          branchInfusKe: nextBranchInfusKe,
           treatmentDate: input.treatmentDate ? new Date(input.treatmentDate) : undefined,
           pelaksanaan: input.pelaksanaan,
           adminLayananId: nextAdminLayananId,
@@ -199,6 +223,11 @@ export class SessionDetailsService {
         nextDoctorId,
         previousNurseId: session.nurseId,
         nextNurseId,
+        previousInfusKe: session.infusKe,
+        nextInfusKe,
+        previousBranchInfusKe: session.branchInfusKe,
+        nextBranchInfusKe,
+        shiftFollowingSessions: !!input.shiftFollowingSessions,
       },
     });
 
@@ -296,6 +325,96 @@ export class SessionDetailsService {
       'INVALID_ADMIN',
       'Admin layanan tidak valid atau tidak aktif'
     );
+  }
+
+  private async validateSessionNumbers(input: {
+    sessionId: string;
+    memberId: string;
+    branchId: string;
+    infusKe: number;
+    branchInfusKe: number;
+    shiftFollowingSessions: boolean;
+  }) {
+    if (input.shiftFollowingSessions) return;
+
+    const [globalDuplicate, branchDuplicate] = await Promise.all([
+      prisma.treatmentSession.findFirst({
+        where: {
+          id: { not: input.sessionId },
+          infusKe: input.infusKe,
+          encounter: { memberId: input.memberId },
+        },
+        select: { sessionCode: true, treatmentDate: true },
+      }),
+      prisma.treatmentSession.findFirst({
+        where: {
+          id: { not: input.sessionId },
+          branchId: input.branchId,
+          branchInfusKe: input.branchInfusKe,
+          encounter: { memberId: input.memberId },
+        },
+        select: { sessionCode: true, treatmentDate: true },
+      }),
+    ]);
+
+    if (globalDuplicate) {
+      throw {
+        status: 409,
+        code: 'SESSION_GLOBAL_NUMBER_DUPLICATE',
+        message: `Nomor sesi global ${input.infusKe} sudah dipakai oleh sesi ${globalDuplicate.sessionCode}. Pilih nomor lain atau aktifkan opsi update maju.`,
+      };
+    }
+
+    if (branchDuplicate) {
+      throw {
+        status: 409,
+        code: 'SESSION_BRANCH_NUMBER_DUPLICATE',
+        message: `Nomor sesi cabang ${input.branchInfusKe} sudah dipakai oleh sesi ${branchDuplicate.sessionCode}. Pilih nomor lain atau aktifkan opsi update maju.`,
+      };
+    }
+  }
+
+  private async shiftSessionNumbersIfNeeded(
+    tx: any,
+    input: {
+      sessionId: string;
+      memberId: string;
+      branchId: string;
+      currentInfusKe: number;
+      nextInfusKe: number;
+      currentBranchInfusKe: number;
+      nextBranchInfusKe: number;
+      shiftFollowingSessions: boolean;
+    }
+  ) {
+    if (!input.shiftFollowingSessions) return;
+
+    if (input.nextInfusKe !== input.currentInfusKe) {
+      await tx.treatmentSession.updateMany({
+        where: {
+          id: { not: input.sessionId },
+          infusKe: { gte: input.nextInfusKe },
+          encounter: { memberId: input.memberId },
+        },
+        data: {
+          infusKe: { increment: 1 },
+        },
+      });
+    }
+
+    if (input.nextBranchInfusKe !== input.currentBranchInfusKe) {
+      await tx.treatmentSession.updateMany({
+        where: {
+          id: { not: input.sessionId },
+          branchId: input.branchId,
+          branchInfusKe: { gte: input.nextBranchInfusKe },
+          encounter: { memberId: input.memberId },
+        },
+        data: {
+          branchInfusKe: { increment: 1 },
+        },
+      });
+    }
   }
 
   private async validateStaffRole(userId: string, roles: Role[], code: string, message: string) {

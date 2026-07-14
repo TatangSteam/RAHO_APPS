@@ -112,6 +112,9 @@ export default function SessionDetailPage() {
   const [sessionEditNurseId, setSessionEditNurseId] = useState('');
   const [sessionEditAdditionalDoctorIds, setSessionEditAdditionalDoctorIds] = useState<string[]>([]);
   const [sessionEditAdditionalNurseIds, setSessionEditAdditionalNurseIds] = useState<string[]>([]);
+  const [sessionEditInfusKe, setSessionEditInfusKe] = useState<number | ''>('');
+  const [sessionEditBranchInfusKe, setSessionEditBranchInfusKe] = useState<number | ''>('');
+  const [sessionEditShiftFollowing, setSessionEditShiftFollowing] = useState(false);
   const [boosterEditUseBooster, setBoosterEditUseBooster] = useState(false);
   const [boosterEditPackageId, setBoosterEditPackageId] = useState('');
   const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
@@ -207,6 +210,9 @@ export default function SessionDetailPage() {
     setSessionEditAdminLayananId(session.session.adminLayanan.userId);
     setSessionEditDoctorId(session.session.doctor.userId);
     setSessionEditNurseId(session.session.nurse.userId);
+    setSessionEditInfusKe(session.session.infusKe || '');
+    setSessionEditBranchInfusKe(session.session.branchInfusKe || session.session.infusKe || '');
+    setSessionEditShiftFollowing(false);
     setSessionEditAdditionalDoctorIds(
       (session.session.sessionDoctors || [])
         .filter((assignment) => !assignment.isPrimary)
@@ -305,6 +311,16 @@ export default function SessionDetailPage() {
       return;
     }
 
+    if (!sessionEditInfusKe || Number(sessionEditInfusKe) < 1) {
+      setBoosterEditError('Nomor sesi global wajib diisi dan minimal 1');
+      return;
+    }
+
+    if (!sessionEditBranchInfusKe || Number(sessionEditBranchInfusKe) < 1) {
+      setBoosterEditError('Nomor sesi cabang wajib diisi dan minimal 1');
+      return;
+    }
+
     if (boosterEditUseBooster && !boosterEditPackageId) {
       setBoosterEditError('Pilih paket booster terlebih dahulu');
       return;
@@ -317,6 +333,9 @@ export default function SessionDetailPage() {
         memberPackageId: sessionEditMemberPackageId,
         treatmentDate: new Date(sessionEditTreatmentDate).toISOString(),
         pelaksanaan: sessionEditPelaksanaan,
+        infusKe: Number(sessionEditInfusKe),
+        branchInfusKe: Number(sessionEditBranchInfusKe),
+        shiftFollowingSessions: sessionEditShiftFollowing,
         adminLayananId: sessionEditAdminLayananId,
         doctorId: sessionEditDoctorId,
         nurseId: sessionEditNurseId,
@@ -1109,6 +1128,54 @@ export default function SessionDetailPage() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Nomor Sesi Global
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={sessionEditInfusKe}
+                  onChange={(event) => setSessionEditInfusKe(event.target.value ? Number(event.target.value) : '')}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px' }}>
+                  Urutan sesi member di semua cabang.
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Nomor Sesi Cabang
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={sessionEditBranchInfusKe}
+                  onChange={(event) => setSessionEditBranchInfusKe(event.target.value ? Number(event.target.value) : '')}
+                  disabled={savingBoosterPackage || loadingBoosterPackages}
+                  style={{
+                    width: '100%',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <p style={{ color: 'var(--text-secondary)', fontSize: '12px', marginTop: '6px' }}>
+                  Urutan sesi member khusus di cabang ini.
+                </p>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
                   Admin Layanan
                 </label>
                 <select
@@ -1191,6 +1258,34 @@ export default function SessionDetailPage() {
                 </select>
               </div>
             </div>
+
+            <label style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '10px',
+              marginTop: '16px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              background: 'rgba(245, 158, 11, 0.08)',
+              cursor: savingBoosterPackage || loadingBoosterPackages ? 'not-allowed' : 'pointer',
+            }}>
+              <input
+                type="checkbox"
+                checked={sessionEditShiftFollowing}
+                onChange={(event) => setSessionEditShiftFollowing(event.target.checked)}
+                disabled={savingBoosterPackage || loadingBoosterPackages}
+                style={{ marginTop: '3px' }}
+              />
+              <span>
+                <span style={{ display: 'block', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Update maju jika nomor sudah dipakai
+                </span>
+                <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                  Jika nomor target bentrok, sesi lain pada nomor tersebut dan setelahnya akan digeser +1. Jika tidak dicentang, sistem menolak duplikasi.
+                </span>
+              </span>
+            </label>
 
             <div style={{
               display: 'grid',

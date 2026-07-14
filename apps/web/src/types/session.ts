@@ -352,6 +352,9 @@ export interface UpdateSessionDetailsInput {
   additionalNurseIds?: string[];
   useBooster?: boolean;
   boosterPackageId?: string | null;
+  infusKe?: number;
+  branchInfusKe?: number;
+  shiftFollowingSessions?: boolean;
 }
 
 // ============================================================

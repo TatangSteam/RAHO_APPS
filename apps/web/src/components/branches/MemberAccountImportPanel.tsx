@@ -96,6 +96,7 @@ export default function MemberAccountImportPanel({
   const [preview, setPreview] = useState<ImportDryRunResult | null>(null);
   const [createdAccounts, setCreatedAccounts] = useState<ImportedAccount[]>([]);
   const [skippedRows, setSkippedRows] = useState<InvalidImportRow[]>([]);
+  const hasImportableRows = Boolean(preview && (preview.canImport || preview.counts.validRows > 0));
 
   const buildFormData = () => {
     if (!file) return null;
@@ -129,7 +130,7 @@ export default function MemberAccountImportPanel({
 
   const importFile = async () => {
     const formData = buildFormData();
-    if (!formData || !preview?.canImport) {
+    if (!formData || !hasImportableRows) {
       showToast.error('Cek file Excel yang valid terlebih dahulu');
       return;
     }
@@ -225,7 +226,7 @@ export default function MemberAccountImportPanel({
         <button
           type="button"
           onClick={importFile}
-          disabled={!preview?.canImport || checking || importing}
+          disabled={!hasImportableRows || checking || importing}
           className="min-h-10 rounded-lg bg-amber-500 px-4 text-sm font-semibold text-black transition-colors hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {importing ? 'Mengimport...' : 'Buat Akun'}
@@ -247,13 +248,13 @@ export default function MemberAccountImportPanel({
       {preview && (
         <div className="mt-4">
           <div className={`mb-3 flex items-center gap-2 text-sm font-bold ${
-            preview.canImport
+            hasImportableRows
               ? preview.counts.invalidRows > 0
                 ? 'text-amber-700 dark:text-amber-300'
                 : 'text-emerald-600 dark:text-emerald-400'
               : 'text-red-600 dark:text-red-400'
           }`}>
-            {preview.canImport ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+            {hasImportableRows ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
             <span>
               {preview.counts.rows} baris, {preview.counts.validRows} valid, {preview.counts.invalidRows} perlu diperbaiki
               {typeof preview.counts.createRows === 'number' && typeof preview.counts.updateRows === 'number'
@@ -264,7 +265,7 @@ export default function MemberAccountImportPanel({
 
           {preview.issues.length > 0 ? (
             <>
-              {preview.canImport && (
+              {hasImportableRows && (
                 <p className="mb-3 text-sm font-medium text-neutral-600 dark:text-neutral-300">
                   Baris valid tetap bisa dibuat. Baris yang tidak lengkap akan di-skip dan bisa diexport untuk diperbaiki lalu diimport ulang.
                 </p>
