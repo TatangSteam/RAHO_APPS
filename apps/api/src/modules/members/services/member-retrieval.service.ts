@@ -164,6 +164,7 @@ export class MemberRetrievalService {
     if (search) {
       const searchConditions = [
         { memberNo: { contains: search, mode: 'insensitive' } },
+        { nik: { contains: search, mode: 'insensitive' } },
         { 
           user: { 
             profile: { 

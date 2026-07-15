@@ -10,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
 import { 
   Building2, ArrowLeft, Edit, Trash2, Users, 
-  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope, FileSpreadsheet
+  Package, UserCog, MapPin, Phone, Activity, Plus, Shield, Layers, DollarSign, Stethoscope, FileSpreadsheet, Search, X
 } from 'lucide-react';
 
 // Import CRUD Modals
@@ -239,6 +239,8 @@ export default function BranchDetailPage() {
 
   // Member filter state
   const [memberBranchFilter, setMemberBranchFilter] = useState<'all' | 'registered' | 'lintas'>('all');
+  const [memberSearch, setMemberSearch] = useState('');
+  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('');
   const [showMemberImport, setShowMemberImport] = useState(false);
 
   // Filtered members based on branch filter
@@ -316,7 +318,15 @@ export default function BranchDetailPage() {
     if (branch) {
       loadTabData();
     }
-  }, [activeTab, branch]);
+  }, [activeTab, branch, debouncedMemberSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedMemberSearch(memberSearch.trim());
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [memberSearch]);
 
   const loadBranch = async () => {
     try {
@@ -339,7 +349,11 @@ export default function BranchDetailPage() {
       setTabLoading(true);
 
       if (activeTab === 'members') {
-        const response = await branchesApi.getBranchMembers(branchId, { page: 1, limit: 100 });
+        const response = await branchesApi.getBranchMembers(branchId, {
+          page: 1,
+          limit: 100,
+          search: debouncedMemberSearch || undefined,
+        });
         const membersResult = response.data.data;
         const membersData = membersResult?.members || [];
         setMembers(Array.isArray(membersData) ? membersData : []);
@@ -702,6 +716,32 @@ export default function BranchDetailPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-neutral-200 dark:border-neutral-700/50">
                   <h2 className="text-xl font-bold text-neutral-900 dark:text-white">Members</h2>
                   <div className="flex flex-wrap gap-3 items-center">
+                    <div className="relative min-w-[260px] flex-1 sm:flex-none">
+                      <Search
+                        size={17}
+                        className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400"
+                      />
+                      <input
+                        type="text"
+                        value={memberSearch}
+                        onChange={(event) => setMemberSearch(event.target.value)}
+                        placeholder="Cari nama, member no, username, telepon..."
+                        className="h-10 w-full rounded-lg border border-neutral-300 bg-white pl-10 pr-10 text-sm font-medium text-neutral-700 placeholder:text-neutral-400 focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-500"
+                      />
+                      {memberSearch && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemberSearch('');
+                            setDebouncedMemberSearch('');
+                          }}
+                          className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+                          aria-label="Hapus pencarian member"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
                     <select 
                       value={memberBranchFilter}
                       onChange={(e) => {
