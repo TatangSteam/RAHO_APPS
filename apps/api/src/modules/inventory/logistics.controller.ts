@@ -127,10 +127,37 @@ export class LogisticsController {
     }
   }
 
+  async deleteHomecareTeam(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.deleteHomecareTeam(this.actor(req), req.params.teamId);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async createHomecareBag(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.createHomecareBag(this.actor(req), req.body);
       return sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async assignHomecareBag(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.assignHomecareBag(this.actor(req), req.params.bagId, req.body);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async deleteHomecareBag(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.deleteHomecareBag(this.actor(req), req.params.bagId);
+      return sendSuccess(res, result);
     } catch (err) {
       next(err);
     }
@@ -226,6 +253,15 @@ export class LogisticsController {
     }
   }
 
+  async listBagUsages(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBagUsages(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async returnBagStock(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.returnBagStock(this.actor(req), req.body);
@@ -235,10 +271,28 @@ export class LogisticsController {
     }
   }
 
+  async listBagReturns(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBagReturns(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async createBagOpname(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.createBagOpname(this.actor(req), req.body);
       return sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listBagOpnames(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareBagOpnames(this.actor(req), req.query as any);
+      return sendSuccess(res, result);
     } catch (err) {
       next(err);
     }

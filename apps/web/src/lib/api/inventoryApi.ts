@@ -394,8 +394,8 @@ export interface HomecareBag {
   bagCode: string;
   name: string;
   teamId: string;
-  teamCode?: string;
-  teamName?: string;
+  teamCode?: string | null;
+  teamName?: string | null;
   branchId: string;
   branchName?: string | null;
   branchCode?: string | null;
@@ -492,6 +492,84 @@ export interface HomecareBagShipment {
     receivedQty?: number | null;
     discrepancyType?: string | null;
     discrepancyNotes?: string | null;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBagUsage {
+  id: string;
+  usageCode: string;
+  bagId: string;
+  bagCode?: string | null;
+  bagName?: string | null;
+  teamId: string;
+  teamCode?: string | null;
+  teamName?: string | null;
+  treatmentSessionId?: string | null;
+  usedBy: string;
+  status: string;
+  usageDate?: string;
+  notes: string;
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    quantity: number;
+    unit?: string | null;
+    notes?: string | null;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBagReturn {
+  id: string;
+  returnCode: string;
+  bagId: string;
+  bagCode?: string | null;
+  bagName?: string | null;
+  teamId: string;
+  teamCode?: string | null;
+  teamName?: string | null;
+  toBranchId: string;
+  returnedBy: string;
+  returnedAt?: string;
+  receivedBy?: string | null;
+  receivedAt?: string | null;
+  notes: string;
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    quantity: number;
+    isReusable: boolean;
+    condition?: string | null;
+    notes?: string | null;
+  }>;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HomecareBagOpname {
+  id: string;
+  opnameCode: string;
+  bagId: string;
+  bagCode?: string | null;
+  bagName?: string | null;
+  teamId: string;
+  teamCode?: string | null;
+  teamName?: string | null;
+  status: string;
+  checkedBy: string;
+  checkedAt?: string;
+  notes: string;
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    systemQty: number;
+    physicalQty: number;
+    difference: number;
+    adjustmentCreated: boolean;
+    notes?: string | null;
   }>;
   createdAt?: string;
   updatedAt?: string;
@@ -782,6 +860,10 @@ export const inventoryApi = {
     return api.delete(`/inventory/logistics/homecare-teams/${teamId}/members/${userId}`, { data: { notes } });
   },
 
+  deleteHomecareTeam: (teamId: string) => {
+    return api.delete(`/inventory/logistics/homecare-teams/${teamId}`);
+  },
+
   getHomecareBags: (params?: { teamId?: string; branchId?: string; status?: string; search?: string }) => {
     return api.get('/inventory/logistics/homecare-bags', { params });
   },
@@ -795,6 +877,17 @@ export const inventoryApi = {
     notes?: string;
   }) => {
     return api.post('/inventory/logistics/homecare-bags', data);
+  },
+
+  assignHomecareBag: (bagId: string, data: {
+    teamId: string;
+    notes?: string;
+  }) => {
+    return api.patch(`/inventory/logistics/homecare-bags/${bagId}/assign`, data);
+  },
+
+  deleteHomecareBag: (bagId: string) => {
+    return api.delete(`/inventory/logistics/homecare-bags/${bagId}`);
   },
 
   getHomecareBagStock: (bagId: string) => {
@@ -832,6 +925,10 @@ export const inventoryApi = {
 
   getHomecareBagShipments: (params?: { status?: string; bagId?: string }) => {
     return api.get('/inventory/logistics/homecare-bag-shipments', { params });
+  },
+
+  getHomecareBagUsages: (params?: { status?: string; bagId?: string; teamId?: string }) => {
+    return api.get('/inventory/logistics/homecare-bag-usages', { params });
   },
 
   shipHomecareBagShipment: (shipmentId: string, data: { notes: string; shipmentPhotoUrl?: string; shipmentPhotoName?: string }) => {
@@ -880,6 +977,10 @@ export const inventoryApi = {
     return api.post('/inventory/logistics/homecare-bag-returns', data);
   },
 
+  getHomecareBagReturns: (params?: { bagId?: string; teamId?: string }) => {
+    return api.get('/inventory/logistics/homecare-bag-returns', { params });
+  },
+
   createHomecareBagOpname: (data: {
     bagId: string;
     teamId?: string;
@@ -890,6 +991,10 @@ export const inventoryApi = {
     items: Array<{ masterProductId: string; physicalQty: number; notes?: string }>;
   }) => {
     return api.post('/inventory/logistics/homecare-bag-opnames', data);
+  },
+
+  getHomecareBagOpnames: (params?: { status?: string; bagId?: string; teamId?: string }) => {
+    return api.get('/inventory/logistics/homecare-bag-opnames', { params });
   },
 
   // ============================================================
