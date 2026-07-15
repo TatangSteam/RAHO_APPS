@@ -398,6 +398,7 @@ export class StockRequestRetrievalService {
           productName: item.productName,
           description: item.description,
           quantity: formatStockRequestQuantity(item.masterProduct, item.quantity),
+          unit: getStockRequestUnit(item.masterProduct),
           pricePerUnit: Number(item.pricePerUnit),
           subtotal: Number(item.subtotal),
         })),

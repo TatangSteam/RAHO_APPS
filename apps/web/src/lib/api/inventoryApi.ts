@@ -211,6 +211,7 @@ export interface StockRequest {
       productName: string;
       description?: string;
       quantity: number;
+      unit?: string;
       pricePerUnit: number;
       subtotal: number;
     }>;
@@ -232,9 +233,13 @@ export interface Shipment {
   fromBranchId: string;
   fromBranchName: string;
   fromBranchCode?: string;
+  fromBranchCity?: string | null;
+  fromBranchAddress?: string | null;
   toBranchId: string;
   toBranchName: string;
   toBranchCode?: string;
+  toBranchCity?: string | null;
+  toBranchAddress?: string | null;
   toBranchType?: string;
   status: string;
   notes?: string;
@@ -296,6 +301,10 @@ export interface Shipment {
       subtotal?: number;
       totalAmount: number;
       status: string;
+      paymentVerificationStatus?: string;
+      paymentProofUrl?: string | null;
+      paymentProofFileName?: string | null;
+      paidAt?: string | null;
       items?: Array<{
         id: string;
         masterProductId: string;
@@ -303,6 +312,7 @@ export interface Shipment {
         productName: string;
         description?: string;
         quantity: number;
+        unit?: string;
         pricePerUnit: number;
         subtotal: number;
       }>;

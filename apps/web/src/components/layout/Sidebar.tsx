@@ -114,6 +114,12 @@ const MENU_GROUPS: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
       {
+        label: 'Laporan Pengiriman',
+        href: '/inventory/shipment-report',
+        icon: <FileSpreadsheet size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
+      },
+      {
         label: 'Tas Homecare',
         href: '/inventory/homecare-bags',
         icon: <Package size={20} />,

@@ -55,6 +55,7 @@ export interface StockRequestInvoice {
     productName: string;
     description?: string;
     quantity: number;
+    unit?: string;
     pricePerUnit: number;
     subtotal: number;
   }>;

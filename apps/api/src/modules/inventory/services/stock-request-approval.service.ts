@@ -357,7 +357,11 @@ export class StockRequestApprovalService {
           branch: true,
           invoice: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
         },
@@ -501,7 +505,11 @@ export class StockRequestApprovalService {
           branch: true,
           invoice: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
         },
@@ -714,7 +722,11 @@ export class StockRequestApprovalService {
           branch: true,
           invoice: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
               payments: {
                 orderBy: { uploadedAt: 'desc' },
               },
@@ -861,7 +873,11 @@ export class StockRequestApprovalService {
             branch: true,
             invoice: {
               include: {
-                items: true,
+                items: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
               },
             },
           },
@@ -935,7 +951,11 @@ export class StockRequestApprovalService {
           branch: true,
           invoice: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
         },
@@ -1084,7 +1104,11 @@ export class StockRequestApprovalService {
           branch: true,
           invoice: {
             include: {
-              items: true,
+              items: {
+                include: {
+                  masterProduct: true,
+                },
+              },
             },
           },
         },
@@ -1160,7 +1184,11 @@ export class StockRequestApprovalService {
         branch: true,
         invoice: {
           include: {
-            items: true,
+            items: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         },
       },
@@ -1315,6 +1343,7 @@ export class StockRequestApprovalService {
         masterProductId: item.masterProductId,
         productName: item.productName,
         quantity: formatStockRequestQuantity(item.masterProduct, item.quantity),
+        unit: getStockRequestUnit(item.masterProduct),
         pricePerUnit: Number(item.pricePerUnit),
         subtotal: Number(item.subtotal),
       })),

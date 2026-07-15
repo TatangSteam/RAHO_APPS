@@ -158,6 +158,7 @@ export default function UploadPaymentModal({
           masterProductId: item.masterProductId,
           productName: item.productName,
           quantity: item.requestedQty,
+          unit: item.unit,
           pricePerUnit: 0,
           subtotal: 0,
         }));

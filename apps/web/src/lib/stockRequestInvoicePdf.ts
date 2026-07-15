@@ -19,6 +19,8 @@ type AutoTableDocument = jsPDF & {
   };
 };
 
+type StockRequestInvoiceItem = NonNullable<NonNullable<StockRequest['invoice']>['items']>[number];
+
 async function loadImageDataUrl(path: string): Promise<string | null> {
   try {
     const response = await fetch(path);
@@ -33,6 +35,19 @@ async function loadImageDataUrl(path: string): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function formatQuantityWithUnit(quantity: number, unit?: string | null) {
+  const displayQuantity = String(quantity).trim();
+  const displayUnit = String(unit || '').trim();
+
+  return displayUnit ? `${displayQuantity} ${displayUnit}` : displayQuantity;
+}
+
+function getInvoiceItemUnit(request: StockRequest, item: StockRequestInvoiceItem) {
+  return item.unit || request.items.find((requestItem) => (
+    requestItem.masterProductId === item.masterProductId
+  ))?.unit;
 }
 
 export async function generateStockRequestInvoicePDF(request: StockRequest) {
@@ -170,11 +185,11 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     currentY += 12;
 
     const tableData = invoice.items?.map((item) => {
-      const qty = item.quantity;
+      const qty = formatQuantityWithUnit(item.quantity, getInvoiceItemUnit(request, item));
       const sku = item.sku || '-';
       const description = item.productName + (item.description ? `\n${item.description}` : '');
 
-      return [sku, qty.toString(), description];
+      return [sku, qty, description];
     }) || [];
 
     autoTable(doc, {
