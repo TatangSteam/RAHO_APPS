@@ -82,7 +82,7 @@ export const branchesApi = {
   /**
    * Get branch members
    */
-  getBranchMembers: (branchId: string, params?: { page?: number; limit?: number }) => {
+  getBranchMembers: (branchId: string, params?: { page?: number; limit?: number; search?: string }) => {
     return api.get(`/branches/${branchId}/members`, { params });
   },
 
