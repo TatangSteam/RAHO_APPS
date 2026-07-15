@@ -234,13 +234,17 @@ export class ShipmentRetrievalService {
           );
           if (stockRequestItem) {
             originalRequestedQty = Number(stockRequestItem.requestedQty);
-            overstockDeducted = stockRequestItem.overstockDeducted ? Number(stockRequestItem.overstockDeducted) : 0;
+            overstockDeducted = stockRequestItem.overstockDeducted === null || stockRequestItem.overstockDeducted === undefined
+              ? 0
+              : Number(stockRequestItem.overstockDeducted);
           }
         }
         
         // requestedQty in ShipmentItem is the original request amount (stored for reference)
         // sentQty is the amount to send (after overstock deduction = finalQty)
-        const requestedQty = item.requestedQty ? Number(item.requestedQty) : originalRequestedQty;
+        const requestedQty = item.requestedQty === null || item.requestedQty === undefined
+          ? originalRequestedQty
+          : Number(item.requestedQty);
 
         // Get stock before/after from stock mutations (RECEIVED records)
         let stockBefore: number | null = null;
@@ -264,9 +268,13 @@ export class ShipmentRetrievalService {
           requestedQty: formatStockRequestQuantity(item.masterProduct, requestedQty), // Original requested amount
           originalRequestedQty: formatStockRequestQuantity(item.masterProduct, originalRequestedQty), // Same as requestedQty, for clarity
           overstockDeducted: formatStockRequestQuantity(item.masterProduct, overstockDeducted), // Amount already deducted from overstock
-          overstockQty: item.overstockQty ? formatStockRequestQuantity(item.masterProduct, item.overstockQty) : null, // New overstock from this shipment
+          overstockQty: item.overstockQty === null || item.overstockQty === undefined
+            ? null
+            : formatStockRequestQuantity(item.masterProduct, item.overstockQty), // New overstock from this shipment
           overstockReason: item.overstockReason || null, // Reason for overstock
-          receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+          receivedQty: item.receivedQty === null || item.receivedQty === undefined
+            ? null
+            : formatStockRequestQuantity(item.masterProduct, item.receivedQty),
           stockBefore: stockBefore === null ? null : formatStockRequestQuantity(item.masterProduct, stockBefore), // Stock quantity at destination branch before receiving
           stockAfter: stockAfter === null ? null : formatStockRequestQuantity(item.masterProduct, stockAfter), // Stock quantity at destination branch after receiving
           unit: getStockRequestUnit(item.masterProduct),

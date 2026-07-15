@@ -153,7 +153,9 @@ export class ShipmentProcessingService {
           ri => ri.masterProductId === item.masterProductId
         );
         const originalRequestedQty = requestItem ? Number(requestItem.requestedQty) : 0;
-        const overstockDeducted = requestItem?.overstockDeducted ? Number(requestItem.overstockDeducted) : 0;
+        const overstockDeducted = requestItem?.overstockDeducted === null || requestItem?.overstockDeducted === undefined
+          ? 0
+          : Number(requestItem.overstockDeducted);
         const expectedSentQty = originalRequestedQty - overstockDeducted;
         
         if (item.sentQty > expectedSentQty && !item.overstockReason) {
@@ -182,7 +184,9 @@ export class ShipmentProcessingService {
             // Get original requested qty
             const originalRequestedQty = requestItem ? Number(requestItem.requestedQty) : Number(shipmentItem.sentQty);
             // Get overstock that was already deducted
-            const overstockDeducted = requestItem?.overstockDeducted ? Number(requestItem.overstockDeducted) : 0;
+            const overstockDeducted = requestItem?.overstockDeducted === null || requestItem?.overstockDeducted === undefined
+              ? 0
+              : Number(requestItem.overstockDeducted);
             // Expected sent qty is original minus what was already deducted from overstock
             const expectedSentQty = originalRequestedQty - overstockDeducted;
             // Calculate new overstock (if sending more than expected)
@@ -867,9 +871,15 @@ export class ShipmentProcessingService {
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
         sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
-        requestedQty: item.requestedQty ? formatStockRequestQuantity(item.masterProduct, item.requestedQty) : null,
-        receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
-        overstockQty: item.overstockQty ? formatStockRequestQuantity(item.masterProduct, item.overstockQty) : null,
+        requestedQty: item.requestedQty === null || item.requestedQty === undefined
+          ? null
+          : formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        receivedQty: item.receivedQty === null || item.receivedQty === undefined
+          ? null
+          : formatStockRequestQuantity(item.masterProduct, item.receivedQty),
+        overstockQty: item.overstockQty === null || item.overstockQty === undefined
+          ? null
+          : formatStockRequestQuantity(item.masterProduct, item.overstockQty),
         overstockReason: item.overstockReason,
         unit: getStockRequestUnit(item.masterProduct),
       })),

@@ -381,7 +381,7 @@ export class StockRequestApprovalService {
               items: {
                 create: request.items.map(item => ({
                   masterProductId: item.masterProductId,
-                  sentQty: item.finalQty || item.requestedQty,
+                  sentQty: item.finalQty ?? item.requestedQty,
                   requestedQty: item.requestedQty,
                 })),
               },
@@ -542,7 +542,7 @@ export class StockRequestApprovalService {
           items: {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
-              sentQty: item.finalQty || item.requestedQty,
+              sentQty: item.finalQty ?? item.requestedQty,
               requestedQty: item.requestedQty,
             })),
           },
@@ -993,7 +993,7 @@ export class StockRequestApprovalService {
             create: request.items.map(item => ({
               masterProductId: item.masterProductId,
               // Use finalQty (after overstock deduction) instead of requestedQty
-              sentQty: item.finalQty || item.requestedQty,
+              sentQty: item.finalQty ?? item.requestedQty,
               requestedQty: item.requestedQty, // Keep original for reference
             })),
           },
@@ -1300,7 +1300,15 @@ export class StockRequestApprovalService {
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
         requestedQty: formatStockRequestQuantity(item.masterProduct, item.requestedQty),
-        approvedQty: item.approvedQty ? formatStockRequestQuantity(item.masterProduct, item.approvedQty) : null,
+        approvedQty: item.approvedQty === null || item.approvedQty === undefined
+          ? null
+          : formatStockRequestQuantity(item.masterProduct, item.approvedQty),
+        overstockDeducted: item.overstockDeducted === null || item.overstockDeducted === undefined
+          ? 0
+          : formatStockRequestQuantity(item.masterProduct, item.overstockDeducted),
+        finalQty: item.finalQty === null || item.finalQty === undefined
+          ? formatStockRequestQuantity(item.masterProduct, item.requestedQty)
+          : formatStockRequestQuantity(item.masterProduct, item.finalQty),
         unit: getStockRequestUnit(item.masterProduct),
         notes: item.notes,
       })),
@@ -1384,7 +1392,9 @@ export class StockRequestApprovalService {
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
         sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
-        receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+        receivedQty: item.receivedQty === null || item.receivedQty === undefined
+          ? null
+          : formatStockRequestQuantity(item.masterProduct, item.receivedQty),
         unit: getStockRequestUnit(item.masterProduct),
       })),
       shippedAt: shipment.shippedAt?.toISOString(),

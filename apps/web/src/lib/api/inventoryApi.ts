@@ -1052,7 +1052,7 @@ export const inventoryApi = {
   /**
    * Preview overstock deduction for stock request items
    */
-  previewOverstockDeduction: (branchId: string, items: Array<{ masterProductId: string; requestedQty: number }>) => {
+  previewOverstockDeduction: (branchId: string, items: Array<{ masterProductId: string; requestedQty: number; unit?: string }>) => {
     return api.post('/inventory/overstock/preview', { branchId, items });
   },
 

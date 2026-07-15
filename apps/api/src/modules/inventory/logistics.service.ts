@@ -1075,7 +1075,7 @@ export class LogisticsService {
     const finalItems = request.items.map((item) => {
       const approvedQty = approvalMap.has(item.masterProductId)
         ? Number(approvalMap.get(item.masterProductId))
-        : Number(item.finalQty || item.requestedQty);
+        : Number(item.finalQty ?? item.requestedQty);
 
       if (approvedQty < 0 || approvedQty > Number(item.requestedQty)) {
         throw {
@@ -1868,7 +1868,7 @@ export class LogisticsService {
     const finalItems = request.items.map((item) => {
       const approvedQty = approvalMap.has(item.masterProductId)
         ? Number(approvalMap.get(item.masterProductId))
-        : Number(item.finalQty || item.requestedQty);
+        : Number(item.finalQty ?? item.requestedQty);
       if (approvedQty < 0 || approvedQty > Number(item.requestedQty)) {
         throw { status: 400, code: 'INVALID_APPROVED_QTY', message: 'Jumlah approve tidak valid' };
       }
