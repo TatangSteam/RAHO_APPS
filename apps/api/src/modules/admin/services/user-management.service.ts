@@ -17,8 +17,25 @@ export class UserManagementService {
     password: string;
     fullName: string;
     phoneNumber: string;
-    branchIds: string[];
+    adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
+    branchIds?: string[];
+    branchAssignments?: Array<{
+      branchId: string;
+      accessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
+    }>;
   }) {
+    const branchAssignments = data.branchAssignments?.length
+      ? data.branchAssignments.map((assignment) => ({
+          branchId: assignment.branchId,
+          accessScope: assignment.accessScope || data.adminManagerAccessScope || 'FULL',
+        }))
+      : (data.branchIds || []).map((branchId) => ({
+          branchId,
+          accessScope: data.adminManagerAccessScope || 'FULL',
+        }));
+
+    const branchIds = branchAssignments.map((assignment) => assignment.branchId);
+
     // Check if email already exists (only check active users)
     // Inactive users are soft-deleted and their emails can be reused
     const existingUser = await prisma.user.findFirst({
@@ -38,10 +55,10 @@ export class UserManagementService {
 
     // Validate branches
     const branches = await prisma.branch.findMany({
-      where: { id: { in: data.branchIds } },
+      where: { id: { in: branchIds } },
     });
 
-    if (branches.length !== data.branchIds.length) {
+    if (branches.length !== branchIds.length) {
       throw {
         status: 404,
         code: 'BRANCH_NOT_FOUND',
@@ -62,6 +79,7 @@ export class UserManagementService {
         email: data.email,
         password: hashedPassword,
         role: Role.ADMIN_MANAGER,
+        adminManagerAccessScope: data.adminManagerAccessScope || 'FULL',
         staffCode,
         isActive: true,
         profile: {
@@ -71,8 +89,9 @@ export class UserManagementService {
           },
         },
         managedBranches: {
-          create: data.branchIds.map(branchId => ({
-            branchId,
+          create: branchAssignments.map((assignment) => ({
+            branchId: assignment.branchId,
+            accessScope: assignment.accessScope,
           })),
         },
       },
@@ -90,6 +109,7 @@ export class UserManagementService {
       id: user.id,
       email: user.email,
       role: user.role,
+      adminManagerAccessScope: user.adminManagerAccessScope,
       isActive: user.isActive,
       profile: {
         fullName: user.profile?.fullName,
@@ -99,6 +119,7 @@ export class UserManagementService {
         branchId: mb.branchId,
         branchName: mb.branch.name,
         branchCode: mb.branch.branchCode,
+        accessScope: mb.accessScope,
       })),
       createdAt: user.createdAt.toISOString(),
     };
@@ -114,6 +135,7 @@ export class UserManagementService {
       password?: string;
       fullName?: string;
       phoneNumber?: string;
+      adminManagerAccessScope?: 'FULL' | 'MEMBER_VIEW_ONLY';
       isActive?: boolean;
     },
     currentUserId: string
@@ -167,6 +189,18 @@ export class UserManagementService {
       updateData.isActive = data.isActive;
     }
 
+    if (data.adminManagerAccessScope !== undefined) {
+      if (!['FULL', 'MEMBER_VIEW_ONLY'].includes(data.adminManagerAccessScope)) {
+        throw {
+          status: 400,
+          code: 'INVALID_ADMIN_MANAGER_ACCESS_SCOPE',
+          message: 'Mode akses Admin Manager tidak valid',
+        };
+      }
+
+      updateData.adminManagerAccessScope = data.adminManagerAccessScope;
+    }
+
     if (data.fullName) {
       profileUpdateData.fullName = data.fullName;
     }
@@ -210,6 +244,7 @@ export class UserManagementService {
           email: data.email ? { from: existingManager.email, to: data.email } : undefined,
           fullName: data.fullName ? { from: existingManager.profile?.fullName, to: data.fullName } : undefined,
           phoneNumber: data.phoneNumber ? { from: existingManager.profile?.phone, to: data.phoneNumber } : undefined,
+          adminManagerAccessScope: data.adminManagerAccessScope ? { from: existingManager.adminManagerAccessScope, to: data.adminManagerAccessScope } : undefined,
           isActive: data.isActive !== undefined ? { from: existingManager.isActive, to: data.isActive } : undefined,
           passwordChanged: !!data.password,
         }
@@ -220,6 +255,7 @@ export class UserManagementService {
       id: updatedUser.id,
       email: updatedUser.email,
       role: updatedUser.role,
+      adminManagerAccessScope: updatedUser.adminManagerAccessScope,
       isActive: updatedUser.isActive,
       profile: {
         fullName: updatedUser.profile?.fullName,
@@ -379,6 +415,7 @@ export class UserManagementService {
         id: user.id,
         email: user.email,
         role: user.role,
+        adminManagerAccessScope: user.adminManagerAccessScope,
         isActive: user.isActive,
         profile: {
           fullName: user.profile?.fullName,

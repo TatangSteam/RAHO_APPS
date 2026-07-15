@@ -11,6 +11,7 @@ export interface AuthUser {
   role: string;
   branchId: string | null;
   branchCode: string | null;
+  adminManagerAccessScope?: string | null;
   fullName: string;
   staffCode: string | null;
 }
@@ -114,6 +115,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     role: user.role,
     branchId: user.branchId,
     branchCode: user.branch?.branchCode ?? null,
+    adminManagerAccessScope: user.role === 'ADMIN_MANAGER' ? user.adminManagerAccessScope : null,
     fullName: user.profile?.fullName ?? '',
     staffCode: user.staffCode,
   };
@@ -156,6 +158,7 @@ export async function refreshService(refreshToken: string) {
     role: user.role,
     branchId: user.branchId,
     branchCode: user.branch?.branchCode ?? null,
+    adminManagerAccessScope: user.role === 'ADMIN_MANAGER' ? user.adminManagerAccessScope : null,
     fullName: user.profile?.fullName ?? '',
     staffCode: user.staffCode,
   };
@@ -170,6 +173,7 @@ export async function getMeService(userId: string) {
       id: true,
       email: true,
       role: true,
+      adminManagerAccessScope: true,
       staffCode: true,
       branchId: true,
       isActive: true,

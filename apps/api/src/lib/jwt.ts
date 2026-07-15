@@ -7,6 +7,7 @@ export interface ImpersonationData {
   email: string;
   role: Role;
   branchId?: string | null;
+  adminManagerAccessScope?: string | null;
   branches?: string[];
   impersonating?: ImpersonationData;
 }
@@ -17,6 +18,7 @@ export interface JwtPayload {
   role: string;
   branchId: string | null;
   branchCode: string | null;
+  adminManagerAccessScope?: string | null;
   fullName: string;
   staffCode: string | null;
   branches?: string[]; // Multi-branch assignment for staff

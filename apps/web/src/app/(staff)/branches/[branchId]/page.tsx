@@ -62,6 +62,7 @@ interface Member {
   fullName: string;
   email: string;
   phone: string;
+  age?: number | null;
   createdAt: string;
   isActive: boolean;
   registrationBranch: string;
@@ -245,14 +246,29 @@ export default function BranchDetailPage() {
 
   // Filtered members based on branch filter
   const filteredMembers = members.filter((member) => {
-    if (memberBranchFilter === 'all') return true;
-    if (memberBranchFilter === 'registered') {
-      return member.registrationBranch === branch?.branchCode;
-    }
-    if (memberBranchFilter === 'lintas') {
-      return member.isLintas || member.registrationBranch !== branch?.branchCode;
-    }
-    return true;
+    const normalizedSearchFilter = debouncedMemberSearch.toLocaleLowerCase('id-ID');
+
+    const matchesBranch =
+      memberBranchFilter === 'all' ? true :
+      memberBranchFilter === 'registered' ? member.registrationBranch === branch?.branchCode :
+      member.isLintas || member.registrationBranch !== branch?.branchCode;
+
+    const searchableFields = [
+      member.fullName,
+      member.phone,
+      member.email,
+      member.memberNo,
+      String((member as any).age ?? ''),
+      new Date(member.createdAt).toLocaleDateString('id-ID'),
+      new Date(member.createdAt).toISOString().slice(0, 10),
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLocaleLowerCase('id-ID');
+
+    const matchesSearch = !normalizedSearchFilter || searchableFields.includes(normalizedSearchFilter);
+
+    return matchesBranch && matchesSearch;
   });
 
   // CRUD Modal states

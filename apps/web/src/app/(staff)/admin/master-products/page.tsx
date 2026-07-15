@@ -97,6 +97,7 @@ const INFUSION_AUTO_FILL_MAPPING = [
   { field: 'o2', label: 'O2', namePattern: 'O2 (Oxygen)' },
   { field: 'edta', label: 'EDTA', namePattern: 'EDTA' },
   { field: 'hho', label: 'HHO', namePattern: 'NB-HHO' },
+  { field: 'hhoKonsentrat', label: 'HHO Konsentrat', namePattern: 'HHO Konsentrat' },
 ];
 
 function getAutoFillInfo(productName: string) {

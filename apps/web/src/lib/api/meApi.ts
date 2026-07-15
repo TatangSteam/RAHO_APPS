@@ -59,6 +59,7 @@ export interface MemberSessionDetail {
     ifa250: number | null
     ifa500: number | null
     hho: number | null
+    hhoKonsentrat: number | null
     h2: number | null
     no: number | null
     gaso: number | null
@@ -90,6 +91,7 @@ export interface MemberSessionDetail {
     ifa250: number | null
     ifa500: number | null
     hho: number | null
+    hhoKonsentrat: number | null
     h2: number | null
     no: number | null
     gaso: number | null

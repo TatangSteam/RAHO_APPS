@@ -5,6 +5,7 @@ import { adminManagersApi, Branch, CreateAdminManagerData } from '@/lib/api/admi
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { X, Eye, EyeOff, Building2 } from 'lucide-react';
+import type { AdminManagerAccessScope } from '@/types/auth';
 import styles from './CreateAdminManagerModal.module.css';
 
 interface CreateAdminManagerModalProps {
@@ -23,6 +24,7 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
   const [loadingBranches, setLoadingBranches] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchAccessScopes, setBranchAccessScopes] = useState<Record<string, AdminManagerAccessScope>>({});
   
   const [formData, setFormData] = useState<CreateAdminManagerData>({
     email: '',
@@ -104,17 +106,34 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
         ? prev.branchIds.filter(id => id !== branchId)
         : [...prev.branchIds, branchId],
     }));
+    setBranchAccessScopes(prev => {
+      if (formData.branchIds.includes(branchId)) {
+        const next = { ...prev };
+        delete next[branchId];
+        return next;
+      }
+
+      return { ...prev, [branchId]: prev[branchId] || 'FULL' };
+    });
     // Clear error when user selects
     if (errors.branchIds) {
       setErrors(prev => ({ ...prev, branchIds: undefined }));
     }
   };
 
+  const handleBranchScopeChange = (branchId: string, accessScope: AdminManagerAccessScope) => {
+    setBranchAccessScopes(prev => ({ ...prev, [branchId]: accessScope }));
+  };
+
   const handleSelectAllBranches = () => {
     if (formData.branchIds.length === branches.length) {
       setFormData(prev => ({ ...prev, branchIds: [] }));
+      setBranchAccessScopes({});
     } else {
       setFormData(prev => ({ ...prev, branchIds: branches.map(b => b.id) }));
+      setBranchAccessScopes(prev => Object.fromEntries(
+        branches.map((branch) => [branch.id, prev[branch.id] || 'FULL']),
+      ));
     }
   };
 
@@ -128,7 +147,13 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
 
     try {
       setLoading(true);
-      await adminManagersApi.createAdminManager(formData);
+      await adminManagersApi.createAdminManager({
+        ...formData,
+        branchAssignments: formData.branchIds.map((branchId) => ({
+          branchId,
+          accessScope: branchAccessScopes[branchId] || 'FULL',
+        })),
+      });
       showToast.success('Admin Manager berhasil dibuat');
       onSuccess();
       handleClose();
@@ -149,6 +174,7 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
       phoneNumber: '',
       branchIds: [],
     });
+    setBranchAccessScopes({});
     setErrors({});
     setShowPassword(false);
     onClose();
@@ -288,6 +314,22 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
                         <span className={styles.branchCode}>{branch.branchCode}</span>
                         <span className={styles.branchName}>{branch.name}</span>
                         <span className={styles.branchType}>{branch.type}</span>
+                        {formData.branchIds.includes(branch.id) && (
+                          <select
+                            className={styles.branchScopeSelect}
+                            value={branchAccessScopes[branch.id] || 'FULL'}
+                            onClick={(e) => e.stopPropagation()}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onChange={(e) => handleBranchScopeChange(
+                              branch.id,
+                              e.target.value as AdminManagerAccessScope,
+                            )}
+                            aria-label={`Scope akses ${branch.name}`}
+                          >
+                            <option value="FULL">Akses Penuh</option>
+                            <option value="MEMBER_VIEW_ONLY">Hanya Lihat Member</option>
+                          </select>
+                        )}
                       </div>
                     </div>
                     <div className={styles.checkmark}>

@@ -8,13 +8,6 @@ import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
 import type { Invoice } from '@/types/invoice';
-import {
-  hasRole,
-  MANAGER_ABOVE_ROLES,
-  PACKAGE_MANAGEMENT_ROLES,
-  PACKAGE_VERIFIED_EDIT_ROLES,
-  PACKAGE_WAITING_VERIFICATION_EDIT_ROLES,
-} from '@/types/auth';
 import { useAuthStore } from '@/stores/authStore';
 import { confirm as confirmDialog, showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
@@ -250,19 +243,21 @@ export default function MemberDetailPage() {
   };
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
-  const canDeleteMember = !!user && hasRole(user.role, MANAGER_ABOVE_ROLES);
-  const canAssignPackage = !['DOCTOR', 'NURSE'].includes(user?.role || '');
-  const canEditPackage = !!user && hasRole(user.role, PACKAGE_MANAGEMENT_ROLES);
-  const canEditWaitingVerificationPackage = !!user && hasRole(user.role, PACKAGE_WAITING_VERIFICATION_EDIT_ROLES);
-  const canEditVerifiedPackage = !!user && hasRole(user.role, PACKAGE_VERIFIED_EDIT_ROLES);
-  const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(user?.role || '');
+  const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const canMutateMember = !isAdminManager;
+  const canSendNotification = Boolean(user && canMutateMember);
+  const canDeleteMember = isSuperAdmin;
+  const canAssignPackage = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
+  const canEditPackage = canAssignPackage;
+  const canEditWaitingVerificationPackage = isSuperAdmin;
+  const canEditVerifiedPackage = isSuperAdmin;
+  const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
+  const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditDiagnosis = [
     'DOCTOR',
     'NURSE',
     'ADMIN_LAYANAN',
     'ADMIN_CABANG',
-    'ADMIN_MANAGER',
     'SUPER_ADMIN',
   ].includes(user?.role || '');
   
@@ -712,6 +707,7 @@ export default function MemberDetailPage() {
         isSuperAdmin={isSuperAdmin}
         canDelete={canDeleteMember}
         isDeleting={deletingMember}
+        canSendNotification={canSendNotification}
         canUploadDocuments={canUploadDocuments}
         hasDocuments={hasDocuments}
       />
@@ -774,7 +770,7 @@ export default function MemberDetailPage() {
               <MemberPackagesTab
                 packages={packages}
                 loading={loadingPackages}
-                onVerifyPayment={async (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
+                onVerifyPayment={canAssignPackage ? async (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => {
                   setSelectedPackageId(packageId);
                   setSelectedPackageProof({
                     url: proofUrl || null,
@@ -801,19 +797,19 @@ export default function MemberDetailPage() {
                   } catch (error) {
                     devError('Load verification invoice error:', error);
                   }
-                }}
-                onRefundPackage={(packageId: string, packageCode: string, finalPrice: number) => {
+                } : undefined}
+                onRefundPackage={canAssignPackage ? (packageId: string, packageCode: string, finalPrice: number) => {
                   setSelectedPackageId(packageId);
                   setRefundPackageCode(packageCode);
                   setRefundFinalPrice(finalPrice);
                   setRefundAmount(finalPrice);
                   setShowRefundModal(true);
-                }}
-                onCancelPackage={(packageId: string, packageCode: string) => {
+                } : undefined}
+                onCancelPackage={canAssignPackage ? (packageId: string, packageCode: string) => {
                   setSelectedPackageId(packageId);
                   setCancelPackageCode(packageCode);
                   setShowCancelModal(true);
-                }}
+                } : undefined}
                 onViewRefundDetail={(refundData) => {
                   setRefundDetailData(refundData);
                   setShowRefundDetailModal(true);
@@ -875,14 +871,15 @@ export default function MemberDetailPage() {
               memberId={memberId}
               memberNo={member.memberNo}
               memberName={member.profile.fullName}
+              canCreate={!isAdminManager}
             />
           )}
 
           {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canEditDiagnosis} />}
           
-          {activeTab === 'therapy-plan' && <MemberTherapyPlansTab memberId={memberId} />}
+          {activeTab === 'therapy-plan' && <MemberTherapyPlansTab memberId={memberId} canEdit={!isAdminManager} />}
           
-          {activeTab === 'lab-results' && <MemberLabResultsTab memberId={memberId} />}
+          {activeTab === 'lab-results' && <MemberLabResultsTab memberId={memberId} canEdit={!isAdminManager} />}
         </div>
       </div>
 

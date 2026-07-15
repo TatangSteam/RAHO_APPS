@@ -8,6 +8,7 @@ interface ImpersonationData {
   email: string;
   role: Role;
   branchId?: string | null;
+  adminManagerAccessScope?: string | null;
   branches?: string[];
   impersonating?: ImpersonationData;
 }
@@ -18,6 +19,7 @@ interface ImpersonationTokenPayload {
   role: Role;
   branchId: string | null;
   branchCode: string | null;
+  adminManagerAccessScope?: string | null;
   fullName: string;
   staffCode: string | null;
   impersonating?: ImpersonationData;
@@ -116,6 +118,9 @@ export class ImpersonationService {
       userId: targetUser.id,
       email: targetUser.email,
       role: targetUser.role,
+      adminManagerAccessScope: targetUser.role === 'ADMIN_MANAGER'
+        ? targetUser.adminManagerAccessScope
+        : null,
     };
 
     // Add branch data based on role
@@ -142,6 +147,7 @@ export class ImpersonationService {
         role: currentToken.role as Role,
         branchId: null,
         branchCode: null,
+        adminManagerAccessScope: currentToken.adminManagerAccessScope || null,
         fullName: currentToken.fullName,
         staffCode: null,
         impersonating: {
@@ -158,6 +164,9 @@ export class ImpersonationService {
         role: currentUser.role,
         branchId: currentUser.branchId,
         branchCode: currentUser.branch?.branchCode || null,
+        adminManagerAccessScope: currentUser.role === 'ADMIN_MANAGER'
+          ? currentUser.adminManagerAccessScope
+          : null,
         fullName: currentUser.profile?.fullName || currentUser.email,
         staffCode: currentUser.staffCode,
         impersonating: impersonationData
@@ -185,6 +194,9 @@ export class ImpersonationService {
         role: targetUser.role,
         branchId: targetUser.branchId,
         branchCode: targetUser.branch?.branchCode || null,
+        adminManagerAccessScope: targetUser.role === 'ADMIN_MANAGER'
+          ? targetUser.adminManagerAccessScope
+          : null,
         branches: targetUser.role === 'ADMIN_MANAGER' 
           ? targetUser.managedBranches.map(mb => ({
               id: mb.branchId,
@@ -217,6 +229,7 @@ export class ImpersonationService {
         role: currentToken.role,
         branchId: currentToken.branchId,
         branchCode: currentToken.branchCode,
+        adminManagerAccessScope: currentToken.adminManagerAccessScope || null,
         fullName: currentToken.fullName,
         staffCode: currentToken.staffCode,
         impersonating: {
@@ -224,6 +237,7 @@ export class ImpersonationService {
           email: currentToken.impersonating.email,
           role: currentToken.impersonating.role,
           branchId: currentToken.impersonating.branchId,
+          adminManagerAccessScope: currentToken.impersonating.adminManagerAccessScope || null,
           branches: currentToken.impersonating.branches
         }
       };
@@ -254,6 +268,9 @@ export class ImpersonationService {
           role: user!.role,
           branchId: user!.branchId,
           branchCode: user!.branch?.branchCode || null,
+          adminManagerAccessScope: user!.role === 'ADMIN_MANAGER'
+            ? user!.adminManagerAccessScope
+            : null,
           branches: user!.role === 'ADMIN_MANAGER'
             ? user!.managedBranches.map(mb => ({
                 id: mb.branchId,
@@ -271,6 +288,7 @@ export class ImpersonationService {
         role: currentToken.role,
         branchId: currentToken.branchId,
         branchCode: currentToken.branchCode,
+        adminManagerAccessScope: currentToken.adminManagerAccessScope || null,
         fullName: currentToken.fullName,
         staffCode: currentToken.staffCode
       };
@@ -301,6 +319,9 @@ export class ImpersonationService {
           role: user!.role,
           branchId: user!.branchId,
           branchCode: user!.branch?.branchCode || null,
+          adminManagerAccessScope: user!.role === 'ADMIN_MANAGER'
+            ? user!.adminManagerAccessScope
+            : null,
           branches: user!.role === 'ADMIN_MANAGER'
             ? user!.managedBranches.map(mb => ({
                 id: mb.branchId,
@@ -448,8 +469,13 @@ export class ImpersonationService {
         email: manager.email,
         fullName: manager.profile?.fullName || manager.email,
         phoneNumber: manager.profile?.phone || '',
+        adminManagerAccessScope: manager.adminManagerAccessScope,
         isActive: manager.isActive,
-        branches: manager.managedBranches.map(mb => mb.branch),
+        branches: manager.managedBranches.map(mb => ({
+          ...mb.branch,
+          accessScope: mb.accessScope,
+          assignedAt: mb.createdAt,
+        })),
         createdAt: manager.createdAt,
         lastLoginAt: manager.lastLoginAt
       })),

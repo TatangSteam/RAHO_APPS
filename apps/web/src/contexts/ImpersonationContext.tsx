@@ -4,12 +4,14 @@ import React, { createContext, useContext, useState, useCallback, useEffect, Rea
 import { useRouter } from 'next/navigation';
 import { adminManagersApi } from '@/lib/api/adminManagersApi';
 import { showToast } from '@/lib/toast';
+import { getDefaultRoute, type AdminManagerAccessScope, type Role } from '@/types/auth';
 
 // Types
 interface AuthUser {
   id: string;
   email: string;
   role: string;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   fullName?: string;
   branchId?: string | null;
 }
@@ -18,6 +20,7 @@ interface ImpersonatedUser {
   id: string;
   email: string;
   role: string;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   fullName?: string;
   branchId?: string | null;
 }
@@ -120,7 +123,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, loading: true, error: null }));
     
     try {
-      const response = await adminManagersApi.startImpersonation(userId);
+      const response = await adminManagersApi.impersonateUser(userId, targetRole);
       
       // Store new token
       const currentToken = localStorage.getItem('accessToken');
@@ -149,6 +152,14 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       // Update localStorage with new token
       localStorage.setItem('accessToken', response.token);
       localStorage.setItem('user', JSON.stringify(response.targetUser));
+      const cookiePayload = btoa(
+        JSON.stringify({
+          role: response.targetUser.role,
+          userId: response.targetUser.id,
+          adminManagerAccessScope: response.targetUser.adminManagerAccessScope,
+        }),
+      );
+      document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=28800; SameSite=Lax`;
       
       // Store impersonation data
       const impersonationData = {
@@ -172,12 +183,10 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       
       showToast.success(`Berhasil masuk sebagai ${response.targetUser.fullName || response.targetUser.email}`);
       
-      // Redirect based on role
-      if (targetRole === 'ADMIN_MANAGER') {
-        router.push('/admin-manager');
-      } else {
-        router.push('/dashboard');
-      }
+      router.push(getDefaultRoute(
+        response.targetUser.role as Role,
+        response.targetUser.adminManagerAccessScope,
+      ));
       
       // Force page reload to update auth state
       setTimeout(() => {

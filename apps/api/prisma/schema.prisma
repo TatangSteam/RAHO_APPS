@@ -28,6 +28,11 @@ enum Role {
   MEMBER
 }
 
+enum AdminManagerAccessScope {
+  FULL
+  MEMBER_VIEW_ONLY
+}
+
 enum BranchType {
   PUSAT
   PREMIER
@@ -347,16 +352,17 @@ model Branch {
 }
 
 model User {
-  id          String    @id @default(cuid())
-  email       String    @unique
-  password    String
-  role        Role
-  staffCode   String?   @unique
-  branchId    String?
-  isActive    Boolean   @default(true)
-  lastLoginAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                       String                   @id @default(cuid())
+  email                    String                   @unique
+  password                 String
+  role                     Role
+  adminManagerAccessScope  AdminManagerAccessScope  @default(FULL)
+  staffCode                String?                  @unique
+  branchId                 String?
+  isActive                 Boolean                  @default(true)
+  lastLoginAt              DateTime?
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
 
   // Relations
   branch          Branch?         @relation(fields: [branchId], references: [id])
@@ -414,11 +420,12 @@ model UserProfile {
 }
 
 model ManagerBranch {
-  id        String   @id @default(cuid())
-  userId    String
-  branchId  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String                   @id @default(cuid())
+  userId      String
+  branchId    String
+  accessScope AdminManagerAccessScope @default(FULL)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -426,6 +433,7 @@ model ManagerBranch {
   @@unique([userId, branchId])
   @@index([userId])
   @@index([branchId])
+  @@index([accessScope])
   @@map("manager_branches")
 }
 
@@ -1194,6 +1202,7 @@ model TherapyPlan {
   ifa250              Decimal?  @db.Decimal(10, 2) // IFA A + MG 250ml (satuan: Botol)
   ifa500              Decimal?  @db.Decimal(10, 2) // IFA A + MG 500ml (satuan: Botol)
   hho                 Decimal?  @db.Decimal(10, 2)
+  hhoKonsentrat       Decimal?  @db.Decimal(10, 2)
   h2                  Decimal?  @db.Decimal(10, 2)
   no                  Decimal?  @db.Decimal(10, 2)
   gaso                Decimal?  @db.Decimal(10, 2)
@@ -1254,6 +1263,7 @@ model InfusionExecution {
   ifa250             Decimal?    @db.Decimal(10, 2) // IFA A + MG 250ml (satuan: Botol)
   ifa500             Decimal?    @db.Decimal(10, 2) // IFA A + MG 500ml (satuan: Botol)
   hho                Decimal?    @db.Decimal(10, 2)
+  hhoKonsentrat      Decimal?    @db.Decimal(10, 2)
   h2                 Decimal?    @db.Decimal(10, 2)
   no                 Decimal?    @db.Decimal(10, 2)
   gaso               Decimal?    @db.Decimal(10, 2)

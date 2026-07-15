@@ -14,7 +14,7 @@ const controller = new PackagesController();
 router.post(
   '/packages/payment-proof/upload',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   uploadPaymentProof.single('file'),
   controller.uploadPaymentProof.bind(controller)
 );
@@ -23,7 +23,7 @@ router.post(
 router.post(
   '/packages/:packageId/refund',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   uploadPaymentProof.single('refundProof'),
   controller.refundPackage.bind(controller)
 );
@@ -32,7 +32,7 @@ router.post(
 router.post(
   '/packages/:packageId/cancel',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   controller.cancelPackage.bind(controller)
 );
 
@@ -40,7 +40,7 @@ router.post(
 router.put(
   '/packages/:packageId',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   controller.editPackage.bind(controller)
 );
 
@@ -48,7 +48,7 @@ router.put(
 router.patch(
   '/packages/:packageId/verify',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   controller.verifyPayment.bind(controller)
 );
 
@@ -56,7 +56,7 @@ router.patch(
 router.patch(
   '/packages/:packageId/reject',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN']),
+  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
   controller.rejectPayment.bind(controller)
 );
 

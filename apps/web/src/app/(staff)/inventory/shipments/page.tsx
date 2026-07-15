@@ -265,7 +265,7 @@ export default function ShipmentsPage() {
     setIssueReviewDecision(decision);
   };
 
-  const submitIssueReview = async (notes: string, shortageItems?: Array<{ masterProductId: string; quantity: number }>) => {
+  const submitIssueReview = async (notes: string, shortageItems?: Array<{ masterProductId: string; quantity: number; unit?: string }>) => {
     if (!selectedShipment || !issueReviewDecision) return;
 
     try {
@@ -842,6 +842,7 @@ export default function ShipmentsPage() {
               items.map((item) => ({
                 masterProductId: item.productId,
                 quantity: item.sendQty,
+                unit: item.unit,
               }))
             );
           }}

@@ -71,10 +71,8 @@ export class MemberRetrievalService {
 
       const managedBranchIds = managerBranches.map(mb => mb.branchId);
       
-      // Include primary branch (if exists) + managed branches (remove duplicates)
-      const allBranchIds = branchId 
-        ? Array.from(new Set([branchId, ...managedBranchIds]))
-        : managedBranchIds;
+      // ADMIN_MANAGER visibility comes from ManagerBranch assignments only.
+      const allBranchIds = Array.from(new Set(managedBranchIds));
 
       console.log(`📊 ADMIN_MANAGER ${userId} manages ${allBranchIds.length} branches:`, allBranchIds);
 
@@ -737,8 +735,10 @@ export class MemberRetrievalService {
       (doc: any) => doc?.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN',
     ) || false;
 
-    // Check if member has cross-branch access
-    const isLintas = member.branchAccesses && member.branchAccesses.length > 0;
+    // Cross-branch only means access to a branch other than the registration branch.
+    const isLintas = member.branchAccesses?.some(
+      (access: any) => access.branchId !== member.registrationBranchId,
+    ) || false;
 
     // Flatten all sessions from encounters
     const allSessions = member.encounters?.flatMap((e: any) => e.sessions || []) || [];

@@ -13,6 +13,7 @@ import {
   getBranchManagers,
   getBranchSessions,
   assignManagerToBranch,
+  updateManagerBranchAccessScope,
   unassignManagerFromBranch,
   getAvailableManagersForBranch,
 } from './branches.controller';
@@ -144,6 +145,14 @@ branchesRouter.post(
 );
 
 // ── Unassign Manager from Branch ──────────────────────────────
+// Update manager assignment scope for a branch
+branchesRouter.patch(
+  '/:branchId/managers/:managerId',
+  authenticate,
+  authorize([Role.SUPER_ADMIN]),
+  updateManagerBranchAccessScope,
+);
+
 branchesRouter.delete(
   '/:branchId/managers/:managerId',
   authenticate,

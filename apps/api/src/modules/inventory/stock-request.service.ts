@@ -7,6 +7,7 @@ import { StockRequestApprovalService } from './services/stock-request-approval.s
 import { StockRequestRetrievalService } from './services/stock-request-retrieval.service';
 import { OverstockService } from './services/overstock.service';
 import { buildStockRequestInvoiceDraft } from './services/stock-request-approval.helpers';
+import { parseStockRequestQuantity } from './services/stock-request-units';
 
 /**
  * Main Stock Request Service - Orchestrates stock request operations
@@ -56,11 +57,13 @@ export class StockRequestService {
       items?: Array<{
         masterProductId: string;
         requestedQty: number;
+        unit?: string;
         notes?: string;
       }>;
       invoiceItems?: Array<{
         masterProductId: string;
         quantity: number;
+        unit?: string;
         pricePerUnit: number;
       }>;
       invoiceTotalAmount?: number;
@@ -191,6 +194,17 @@ export class StockRequestService {
       }
     }
 
+    const normalizedItemUpdates = itemUpdates
+      ? itemUpdates.map((item) => {
+          const requestItem = request.items.find((requestItem) => requestItem.masterProductId === item.masterProductId);
+          return {
+            masterProductId: item.masterProductId,
+            requestedQty: parseStockRequestQuantity(requestItem?.masterProduct, item.requestedQty, item.unit),
+            notes: item.notes,
+          };
+        })
+      : undefined;
+
     if (shouldUpdateInvoice) {
       if (!request.invoice) {
         throw {
@@ -307,7 +321,7 @@ export class StockRequestService {
         },
       });
 
-      if (itemUpdates) {
+      if (normalizedItemUpdates) {
         const usages = await tx.overstockUsage.findMany({
           where: { stockRequestId: requestId },
           include: { overstock: true },
@@ -346,7 +360,7 @@ export class StockRequestService {
           },
         });
 
-        for (const item of itemUpdates) {
+        for (const item of normalizedItemUpdates) {
           const existingItem = request.items.find(i => i.masterProductId === item.masterProductId);
           await tx.stockRequestItem.update({
             where: { id: existingItem.id },
@@ -379,11 +393,14 @@ export class StockRequestService {
 
       if (shouldUpdateInvoice && request.invoice) {
         const normalizedInvoiceItems = invoiceItemUpdates
-          ? invoiceItemUpdates.map((item) => ({
-              masterProductId: item.masterProductId,
-              quantity: Number(item.quantity),
-              pricePerUnit: Number(item.pricePerUnit),
-            }))
+          ? invoiceItemUpdates.map((item) => {
+              const requestItem = request.items.find((requestItem) => requestItem.masterProductId === item.masterProductId);
+              return {
+                masterProductId: item.masterProductId,
+                quantity: parseStockRequestQuantity(requestItem?.masterProduct, item.quantity, item.unit),
+                pricePerUnit: Number(item.pricePerUnit),
+              };
+            })
           : request.invoice.items.map((item) => ({
               masterProductId: item.masterProductId,
               quantity: Number(item.quantity),
@@ -444,7 +461,7 @@ export class StockRequestService {
       meta: {
         action: shouldUpdateInvoice ? 'UPDATE_STOCK_REQUEST_INVOICE' : 'UPDATE_STOCK_REQUEST',
         requestCode: request.requestCode,
-        itemCount: itemUpdates?.length,
+        itemCount: normalizedItemUpdates?.length,
         invoiceItemCount: invoiceItemUpdates?.length,
         invoiceTotalAmount: data.invoiceTotalAmount,
       },

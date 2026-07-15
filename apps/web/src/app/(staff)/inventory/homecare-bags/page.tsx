@@ -140,8 +140,31 @@ export default function HomecareBagsPage() {
   const [stockLoading, setStockLoading] = useState(false);
 
   const [teamForm, setTeamForm] = useState({ name: '', teamCode: '', branchId: '', description: '' });
-  const [memberForm, setMemberForm] = useState({ teamId: '', userId: '', role: 'ADMIN_LAYANAN', notes: '' });
-  const [bagForm, setBagForm] = useState({ name: '', bagCode: '', teamId: '', branchId: '', status: 'ACTIVE', notes: '' });
+  const [manageMemberState, setManageMemberState] = useState({
+    teamId: '',
+    userId: '',
+    role: 'ADMIN_LAYANAN',
+    notes: '',
+  });
+  const [manageBagState, setManageBagState] = useState<{
+    teamId: string;
+    mode: 'choose' | 'assign' | 'create';
+    assignBagId: string;
+    assignNotes: string;
+    createName: string;
+    createBagCode: string;
+    createStatus: string;
+    createNotes: string;
+  }>({
+    teamId: '',
+    mode: 'choose',
+    assignBagId: '',
+    assignNotes: '',
+    createName: '',
+    createBagCode: '',
+    createStatus: 'ACTIVE',
+    createNotes: '',
+  });
 
   const [requestForm, setRequestForm] = useState({ teamId: '', bagId: '', priority: 'NORMAL', requestNotes: '' });
   const [requestRows, setRequestRows] = useState<BagItemRow[]>([{ masterProductId: '', quantity: '', notes: '' }]);
@@ -170,7 +193,8 @@ export default function HomecareBagsPage() {
 
   const role = user?.role || '';
   const canManageSetup = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(role);
-  const canRequestBagStock = role === 'ADMIN_LAYANAN';
+  const canManageBag = canManageSetup;
+  const canRequestBagStock = role === 'ADMIN_LAYANAN' || canManageSetup;
   const canReviewRequests = canManageSetup;
   const canShipStock = canManageSetup;
   const canAllowNegative = role === 'SUPER_ADMIN';
@@ -178,11 +202,18 @@ export default function HomecareBagsPage() {
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const branchMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
   const selectedBag = useMemo(() => bags.find((bag) => bag.id === selectedBagId) || null, [bags, selectedBagId]);
-  const selectedTeam = useMemo(() => teams.find((team) => team.id === (selectedBag?.teamId || requestForm.teamId || bagForm.teamId)), [teams, selectedBag, requestForm.teamId, bagForm.teamId]);
   const bagStockProductIds = useMemo(() => new Set((bagStock?.stocks || []).map((stock) => stock.masterProductId)), [bagStock]);
   const stockProducts = useMemo(
     () => products.filter((product) => bagStockProductIds.has(product.id)),
     [bagStockProductIds, products],
+  );
+  const selectedBagStockTotalQty = useMemo(
+    () => (bagStock?.stocks || []).reduce((total, stock) => total + Number(stock.stock || 0), 0),
+    [bagStock],
+  );
+  const selectedBagLowStockCount = useMemo(
+    () => (bagStock?.stocks || []).filter((stock) => Number(stock.stock) <= Number(stock.minThreshold)).length,
+    [bagStock],
   );
   const pendingRequests = requests.filter((request) => request.status === 'PENDING');
   const preparingShipments = shipments.filter((shipment) => shipment.status === 'PREPARING');
@@ -257,6 +288,8 @@ export default function HomecareBagsPage() {
       }
       if (!selectedBagId && bagData[0]) {
         setSelectedBagId(bagData[0].id);
+      } else if (selectedBagId && !bagData.some((bag) => bag.id === selectedBagId)) {
+        setSelectedBagId(bagData[0]?.id || '');
       }
 
       if (canManageSetup) {
@@ -349,19 +382,19 @@ export default function HomecareBagsPage() {
   };
 
   const handleAddMember = async () => {
-    if (!memberForm.teamId || !memberForm.userId) {
+    if (!manageMemberState.teamId || !manageMemberState.userId) {
       showToast.error('Pilih tim dan staff');
       return;
     }
 
     try {
       setActionLoading(true);
-      await inventoryApi.addHomecareTeamMember(memberForm.teamId, {
-        userId: memberForm.userId,
-        role: memberForm.role as any,
-        notes: memberForm.notes.trim() || undefined,
+      await inventoryApi.addHomecareTeamMember(manageMemberState.teamId, {
+        userId: manageMemberState.userId,
+        role: manageMemberState.role as any,
+        notes: manageMemberState.notes.trim() || undefined,
       });
-      setMemberForm((current) => ({ ...current, userId: '', notes: '' }));
+      setManageMemberState((current) => ({ ...current, userId: '', notes: '' }));
       await resetAfterAction('Anggota tim berhasil ditambahkan');
     } catch (error: any) {
       showToast.error(getErrorMessage(error, 'Gagal menambahkan anggota tim'));
@@ -384,27 +417,131 @@ export default function HomecareBagsPage() {
     }
   };
 
-  const handleCreateBag = async () => {
-    if (!bagForm.name.trim() || !bagForm.teamId) {
-      showToast.error('Nama tas dan tim wajib diisi');
+  const handleDeleteTeam = async (teamId: string, teamName: string) => {
+    if (!window.confirm(`Hapus tim "${teamName}"? Tim hanya bisa dihapus jika tidak punya tas dan tidak punya anggota aktif.`)) return;
+
+    try {
+      setActionLoading(true);
+      await inventoryApi.deleteHomecareTeam(teamId);
+      if (manageBagState.teamId === teamId) closeManageBag();
+      if (manageMemberState.teamId === teamId) closeManageMembers();
+      await resetAfterAction('Tim homecare berhasil dihapus');
+    } catch (error: any) {
+      showToast.error(getErrorMessage(error, 'Gagal menghapus tim homecare'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openManageBag = (teamId: string, mode: 'choose' | 'assign' | 'create' = 'choose') => {
+    setManageBagState({
+      teamId,
+      mode,
+      assignBagId: '',
+      assignNotes: '',
+      createName: '',
+      createBagCode: '',
+      createStatus: 'ACTIVE',
+      createNotes: '',
+    });
+  };
+
+  const closeManageBag = () => {
+    setManageBagState({
+      teamId: '',
+      mode: 'choose',
+      assignBagId: '',
+      assignNotes: '',
+      createName: '',
+      createBagCode: '',
+      createStatus: 'ACTIVE',
+      createNotes: '',
+    });
+  };
+
+  const openManageMembers = (teamId: string) => {
+    setManageMemberState({
+      teamId,
+      userId: '',
+      role: 'ADMIN_LAYANAN',
+      notes: '',
+    });
+  };
+
+  const closeManageMembers = () => {
+    setManageMemberState({
+      teamId: '',
+      userId: '',
+      role: 'ADMIN_LAYANAN',
+      notes: '',
+    });
+  };
+
+  const handleCreateBagForTeam = async () => {
+    if (!manageBagState.teamId || !manageBagState.createName.trim()) {
+      showToast.error('Nama tas wajib diisi');
       return;
     }
 
-    const team = teams.find((item) => item.id === bagForm.teamId);
+    const team = teams.find((item) => item.id === manageBagState.teamId);
+    if (!team) {
+      showToast.error('Tim homecare tidak ditemukan');
+      return;
+    }
+
     try {
       setActionLoading(true);
       await inventoryApi.createHomecareBag({
-        name: bagForm.name.trim(),
-        teamId: bagForm.teamId,
-        branchId: bagForm.branchId || team?.branchId,
-        bagCode: bagForm.bagCode.trim() || undefined,
-        status: bagForm.status as any,
-        notes: bagForm.notes.trim() || undefined,
+        name: manageBagState.createName.trim(),
+        teamId: team.id,
+        branchId: team.branchId,
+        bagCode: manageBagState.createBagCode.trim() || undefined,
+        status: manageBagState.createStatus as any,
+        notes: manageBagState.createNotes.trim() || undefined,
       });
-      setBagForm((current) => ({ ...current, name: '', bagCode: '', notes: '' }));
-      await resetAfterAction('Tas homecare berhasil dibuat');
+      closeManageBag();
+      await resetAfterAction('Tas homecare berhasil dibuat untuk tim');
     } catch (error: any) {
       showToast.error(getErrorMessage(error, 'Gagal membuat tas homecare'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAssignBag = async () => {
+    if (!manageBagState.assignBagId || !manageBagState.teamId) {
+      showToast.error('Pilih tas dan tim tujuan');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      await inventoryApi.assignHomecareBag(manageBagState.assignBagId, {
+        teamId: manageBagState.teamId,
+        notes: manageBagState.assignNotes.trim() || undefined,
+      });
+      closeManageBag();
+      await resetAfterAction('Tas berhasil dipindahkan ke tim');
+    } catch (error: any) {
+      showToast.error(getErrorMessage(error, 'Gagal assign tas ke tim'));
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleDeleteBag = async (bagId: string, bagName: string) => {
+    if (!window.confirm(`Hapus tas "${bagName}"? Tas hanya bisa dihapus jika belum memiliki stok atau riwayat operasional.`)) return;
+
+    try {
+      setActionLoading(true);
+      await inventoryApi.deleteHomecareBag(bagId);
+      if (selectedBagId === bagId) {
+        setSelectedBagId('');
+        setBagStock(null);
+      }
+      await resetAfterAction('Tas homecare berhasil dihapus');
+    } catch (error: any) {
+      showToast.error(getErrorMessage(error, 'Gagal menghapus tas homecare'));
     } finally {
       setActionLoading(false);
     }
@@ -825,31 +962,83 @@ export default function HomecareBagsPage() {
                   <div className="font-semibold text-neutral-900 dark:text-white">{bagStock?.name || selectedBag.name}</div>
                   <div className="text-neutral-500">{bagStock?.bagCode || selectedBag.bagCode} · {bagStock?.team?.name || selectedBag.teamName}</div>
                 </div>
+                <div className="mb-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Jenis Barang</div>
+                    <div className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{bagStock?.stocks.length || 0}</div>
+                  </div>
+                  <div className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Total Isi Tas</div>
+                    <div className="mt-1 text-xl font-bold text-neutral-900 dark:text-white">{selectedBagStockTotalQty}</div>
+                  </div>
+                  <div className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900">
+                    <div className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Stok Rendah</div>
+                    <div className={`mt-1 text-xl font-bold ${selectedBagLowStockCount > 0 ? 'text-amber-500' : 'text-neutral-900 dark:text-white'}`}>
+                      {selectedBagLowStockCount}
+                    </div>
+                  </div>
+                </div>
                 {bagStock?.stocks.length ? (
-                  <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
-                    <table className="w-full text-sm">
-                      <thead className="bg-neutral-50 text-left text-xs uppercase text-neutral-500 dark:bg-neutral-900">
-                        <tr>
-                          <th className="px-3 py-2">Barang</th>
-                          <th className="px-3 py-2">Stok</th>
-                          <th className="px-3 py-2">Minimum</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-                        {bagStock.stocks.map((stock) => (
-                          <tr key={stock.id}>
-                            <td className="px-3 py-3">
-                              <div className="font-medium text-neutral-900 dark:text-white">{stock.productName || productName(stock.masterProductId)}</div>
-                              <div className="text-xs text-neutral-500">{stock.sku || productMap.get(stock.masterProductId)?.sku || '-'}</div>
-                            </td>
-                            <td className={`px-3 py-3 font-semibold ${stock.stock <= stock.minThreshold ? 'text-amber-500' : 'text-neutral-800 dark:text-neutral-100'}`}>
-                              {stock.stock} {stock.baseUnit || productUnit(stock.masterProductId)}
-                            </td>
-                            <td className="px-3 py-3 text-neutral-500">{stock.minThreshold}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-semibold text-neutral-900 dark:text-white">Isi Tas</div>
+                        <div className="text-xs text-neutral-500">Daftar barang yang saat ini ada di tas terpilih.</div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      {bagStock.stocks.map((stock) => {
+                        const isLow = stock.stock <= stock.minThreshold;
+
+                        return (
+                          <div
+                            key={stock.id}
+                            className="rounded-lg border border-neutral-200 bg-white p-3 dark:border-neutral-800 dark:bg-neutral-900"
+                          >
+                            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="font-semibold text-neutral-900 dark:text-white">
+                                    {stock.productName || productName(stock.masterProductId)}
+                                  </div>
+                                  {stock.category ? (
+                                    <span className="rounded-full bg-neutral-100 px-2 py-1 text-[11px] font-semibold text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                                      {stock.category}
+                                    </span>
+                                  ) : null}
+                                  {isLow ? (
+                                    <span className="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                                      Stok menipis
+                                    </span>
+                                  ) : (
+                                    <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                      Aman
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1 text-xs text-neutral-500">
+                                  {stock.sku || productMap.get(stock.masterProductId)?.sku || 'Tanpa SKU'}
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3 text-sm md:min-w-[260px]">
+                                <div className="rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Stok Saat Ini</div>
+                                  <div className={`mt-1 font-bold ${isLow ? 'text-amber-500' : 'text-neutral-900 dark:text-white'}`}>
+                                    {stock.stock} {stock.baseUnit || productUnit(stock.masterProductId)}
+                                  </div>
+                                </div>
+                                <div className="rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
+                                  <div className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">Batas Minimum</div>
+                                  <div className="mt-1 font-bold text-neutral-900 dark:text-white">
+                                    {stock.minThreshold} {stock.baseUnit || productUnit(stock.masterProductId)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : (
                   <EmptyState text="Tas ini belum memiliki stok." />
@@ -1139,7 +1328,7 @@ export default function HomecareBagsPage() {
       {activeTab === 'setup' && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)]">
           <section className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-950">
-            <SectionTitle icon={<Users size={18} />} title="Setup Tim & Tas" />
+            <SectionTitle icon={<Users size={18} />} title="Setup Tim" />
             {canManageSetup ? (
               <div className="mt-4 space-y-6">
                 <div className="space-y-3">
@@ -1152,45 +1341,6 @@ export default function HomecareBagsPage() {
                   </SelectField>
                   <TextArea label="Deskripsi" value={teamForm.description} onChange={(value) => setTeamForm((current) => ({ ...current, description: value }))} />
                   <ActionButton icon={<Plus size={16} />} onClick={handleCreateTeam} loading={actionLoading}>Buat Tim</ActionButton>
-                </div>
-
-                <div className="space-y-3 border-t border-neutral-200 pt-5 dark:border-neutral-800">
-                  <div className="font-semibold text-neutral-900 dark:text-white">Tambah Anggota</div>
-                  <SelectField label="Tim" value={memberForm.teamId} onChange={(value) => setMemberForm((current) => ({ ...current, teamId: value }))}>
-                    <option value="">Pilih tim</option>
-                    {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-                  </SelectField>
-                  <SelectField label="Staff" value={memberForm.userId} onChange={(value) => setMemberForm((current) => ({ ...current, userId: value }))}>
-                    <option value="">Pilih staff</option>
-                    {staffOptions.map((staff) => <option key={staff.userId} value={staff.userId}>{staff.fullName} · {staff.role}</option>)}
-                  </SelectField>
-                  <SelectField label="Role Tim" value={memberForm.role} onChange={(value) => setMemberForm((current) => ({ ...current, role: value }))}>
-                    {teamMemberRoles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  </SelectField>
-                  <InputField label="Catatan" value={memberForm.notes} onChange={(value) => setMemberForm((current) => ({ ...current, notes: value }))} />
-                  <ActionButton icon={<Users size={16} />} onClick={handleAddMember} loading={actionLoading}>Tambah Anggota</ActionButton>
-                </div>
-
-                <div className="space-y-3 border-t border-neutral-200 pt-5 dark:border-neutral-800">
-                  <div className="font-semibold text-neutral-900 dark:text-white">Tas Baru</div>
-                  <InputField label="Nama Tas" value={bagForm.name} onChange={(value) => setBagForm((current) => ({ ...current, name: value }))} />
-                  <InputField label="Kode Tas" value={bagForm.bagCode} onChange={(value) => setBagForm((current) => ({ ...current, bagCode: value }))} placeholder="Auto jika kosong" />
-                  <SelectField label="Tim" value={bagForm.teamId} onChange={(value) => {
-                    const team = teams.find((item) => item.id === value);
-                    setBagForm((current) => ({ ...current, teamId: value, branchId: team?.branchId || current.branchId }));
-                  }}>
-                    <option value="">Pilih tim</option>
-                    {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
-                  </SelectField>
-                  <SelectField label="Status" value={bagForm.status} onChange={(value) => setBagForm((current) => ({ ...current, status: value }))}>
-                    <option value="ACTIVE">Aktif</option>
-                    <option value="IN_CHECKING">Dalam Pengecekan</option>
-                    <option value="DAMAGED">Rusak</option>
-                    <option value="INACTIVE">Nonaktif</option>
-                    <option value="LOST">Hilang</option>
-                  </SelectField>
-                  <TextArea label="Catatan" value={bagForm.notes} onChange={(value) => setBagForm((current) => ({ ...current, notes: value }))} />
-                  <ActionButton icon={<Boxes size={16} />} onClick={handleCreateBag} loading={actionLoading}>Buat Tas</ActionButton>
                 </div>
               </div>
             ) : (
@@ -1208,8 +1358,233 @@ export default function HomecareBagsPage() {
                       <div className="font-semibold text-neutral-900 dark:text-white">{team.name}</div>
                       <div className="text-xs text-neutral-500">{team.teamCode} · {team.branchName || '-'}</div>
                     </div>
-                    <div className="text-xs text-neutral-500">{team.memberCount} anggota · {team.bagCount} tas</div>
+                    <div className="flex items-start gap-2">
+                      <div className="text-xs text-neutral-500">{team.memberCount} anggota · {team.bagCount} tas</div>
+                      {canManageSetup && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTeam(team.id, team.name)}
+                          className="text-xs font-semibold text-red-500 hover:text-red-600"
+                        >
+                          Hapus Tim
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {team.bagCount === 0 ? (
+                    <div className="mt-3 rounded-xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 dark:border-amber-900/50 dark:from-amber-950/40 dark:to-orange-950/20">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-amber-800 dark:text-amber-200">Tim ini belum punya tas</div>
+                          <div className="mt-1 text-xs text-amber-700/90 dark:text-amber-300/90">
+                            Tambahkan tas baru atau assign tas dari tim lain agar tim ini siap operasional.
+                          </div>
+                        </div>
+                        {canManageBag && (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openManageBag(team.id)}
+                              className="rounded-lg bg-amber-600 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-700"
+                            >
+                              Tambahkan Tas
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openManageMembers(team.id)}
+                              className="rounded-lg border border-amber-300 px-3 py-2 text-sm font-semibold text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-200 dark:hover:bg-amber-950/40"
+                            >
+                              Kelola Anggota
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-900">
+                      <div className="text-sm text-neutral-600 dark:text-neutral-300">
+                        Tim ini sudah memiliki <span className="font-semibold text-neutral-900 dark:text-white">{team.bagCount} tas</span> yang bisa dikelola.
+                      </div>
+                      {canManageSetup && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openManageBag(team.id)}
+                            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                          >
+                            Kelola Tas
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => openManageMembers(team.id)}
+                            className="rounded-lg border border-neutral-300 px-3 py-2 text-xs font-semibold text-neutral-700 hover:bg-white dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-950"
+                          >
+                            Kelola Anggota
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {canManageBag && manageBagState.teamId === team.id && (
+                    <div className="mt-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                      <div className="mb-3 rounded-lg bg-neutral-50 p-3 text-sm text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+                        <div className="font-semibold text-neutral-900 dark:text-white">Kelola tas untuk {team.name}</div>
+                        <div className="mt-1">
+                          {manageBagState.mode === 'choose'
+                            ? 'Pilih jenis tindakan yang ingin dilakukan untuk tim ini.'
+                            : manageBagState.mode === 'assign'
+                            ? 'Pilih tas yang sudah ada untuk dipindahkan dari tim asal ke tim ini.'
+                            : 'Buat tas baru dan hubungkan langsung ke tim ini.'}
+                        </div>
+                      </div>
+                      {manageBagState.mode === 'choose' ? (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={() => setManageBagState((current) => ({ ...current, mode: 'assign' }))}
+                            className="rounded-xl border border-neutral-200 bg-white p-4 text-left hover:border-emerald-400 hover:bg-emerald-50 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-emerald-950/20"
+                          >
+                            <div className="text-sm font-semibold text-neutral-900 dark:text-white">Assign Tas Existing</div>
+                            <div className="mt-1 text-xs text-neutral-500">Pindahkan tas yang sudah ada dari tim lain ke tim ini.</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManageBagState((current) => ({ ...current, mode: 'create' }))}
+                            className="rounded-xl border border-neutral-200 bg-white p-4 text-left hover:border-emerald-400 hover:bg-emerald-50 dark:border-neutral-700 dark:bg-neutral-950 dark:hover:bg-emerald-950/20"
+                          >
+                            <div className="text-sm font-semibold text-neutral-900 dark:text-white">Buat Tas Baru</div>
+                            <div className="mt-1 text-xs text-neutral-500">Buat tas baru dan hubungkan langsung ke tim ini.</div>
+                          </button>
+                        </div>
+                      ) : manageBagState.mode === 'assign' ? (
+                        <>
+                          <div className="mb-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setManageBagState((current) => ({ ...current, mode: 'assign' }))}
+                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                            >
+                              Assign Tas Existing
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setManageBagState((current) => ({ ...current, mode: 'create' }))}
+                              className="rounded-lg border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+                            >
+                              Buat Tas Baru
+                            </button>
+                          </div>
+                          <SelectField label="Pilih Tas" value={manageBagState.assignBagId} onChange={(value) => setManageBagState((current) => ({ ...current, assignBagId: value, teamId: team.id }))}>
+                            <option value="">Pilih tas</option>
+                            {bags
+                              .filter((bag) => bag.teamId !== team.id)
+                              .map((bag) => <option key={bag.id} value={bag.id}>{bag.name} ({bag.bagCode}) · {bag.teamName || '-'}</option>)}
+                          </SelectField>
+                          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+                            Tas yang dipilih akan dilepas dari tim asal dan dipindahkan ke tim ini.
+                          </div>
+                          <TextArea label="Catatan" value={manageBagState.assignNotes} onChange={(value) => setManageBagState((current) => ({ ...current, assignNotes: value, teamId: team.id }))} />
+                        </>
+                      ) : (
+                        <>
+                          <div className="mb-3 flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setManageBagState((current) => ({ ...current, mode: 'assign' }))}
+                              className="rounded-lg border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+                            >
+                              Assign Tas Existing
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setManageBagState((current) => ({ ...current, mode: 'create' }))}
+                              className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white"
+                            >
+                              Buat Tas Baru
+                            </button>
+                          </div>
+                          <InputField label="Nama Tas" value={manageBagState.createName} onChange={(value) => setManageBagState((current) => ({ ...current, createName: value, teamId: team.id }))} />
+                          <InputField label="Kode Tas" value={manageBagState.createBagCode} onChange={(value) => setManageBagState((current) => ({ ...current, createBagCode: value, teamId: team.id }))} placeholder="Auto jika kosong" />
+                          <SelectField label="Status" value={manageBagState.createStatus} onChange={(value) => setManageBagState((current) => ({ ...current, createStatus: value, teamId: team.id }))}>
+                            <option value="ACTIVE">Aktif</option>
+                            <option value="IN_CHECKING">Dalam Pengecekan</option>
+                            <option value="DAMAGED">Rusak</option>
+                            <option value="INACTIVE">Nonaktif</option>
+                            <option value="LOST">Hilang</option>
+                          </SelectField>
+                          <TextArea label="Catatan" value={manageBagState.createNotes} onChange={(value) => setManageBagState((current) => ({ ...current, createNotes: value, teamId: team.id }))} />
+                        </>
+                      )}
+                      <div className="mt-3 flex gap-2">
+                        {manageBagState.mode !== 'choose' && (
+                          <ActionButton
+                            icon={manageBagState.mode === 'assign' ? <Users size={16} /> : <Boxes size={16} />}
+                            onClick={manageBagState.mode === 'assign' ? handleAssignBag : handleCreateBagForTeam}
+                            loading={actionLoading}
+                          >
+                            {manageBagState.mode === 'assign' ? 'Assign Tas' : 'Buat Tas'}
+                          </ActionButton>
+                        )}
+                        <button
+                          type="button"
+                          onClick={closeManageBag}
+                          className="mt-3 rounded-lg border border-neutral-200 px-4 py-2 text-sm font-semibold dark:border-neutral-700"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {canManageSetup && manageMemberState.teamId === team.id && (
+                    <div className="mt-3 rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+                      <div className="mb-3 rounded-lg bg-neutral-50 p-3 text-sm text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
+                        <div className="font-semibold text-neutral-900 dark:text-white">Kelola anggota {team.name}</div>
+                        <div className="mt-1">Tambahkan anggota aktif ke tim ini dan atur peran operasionalnya.</div>
+                      </div>
+                      <SelectField label="Staff" value={manageMemberState.userId} onChange={(value) => setManageMemberState((current) => ({ ...current, userId: value, teamId: team.id }))}>
+                        <option value="">Pilih staff</option>
+                        {staffOptions.map((staff) => <option key={staff.userId} value={staff.userId}>{staff.fullName} · {staff.role}</option>)}
+                      </SelectField>
+                      <SelectField label="Role Tim" value={manageMemberState.role} onChange={(value) => setManageMemberState((current) => ({ ...current, role: value, teamId: team.id }))}>
+                        {teamMemberRoles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+                      </SelectField>
+                      <InputField label="Catatan" value={manageMemberState.notes} onChange={(value) => setManageMemberState((current) => ({ ...current, notes: value, teamId: team.id }))} />
+                      <div className="mt-3 flex gap-2">
+                        <ActionButton icon={<Users size={16} />} onClick={handleAddMember} loading={actionLoading}>Tambah Anggota</ActionButton>
+                        <button
+                          type="button"
+                          onClick={closeManageMembers}
+                          className="mt-3 rounded-lg border border-neutral-200 px-4 py-2 text-sm font-semibold dark:border-neutral-700"
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {team.bags.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {team.bags.map((bag) => (
+                        <div key={bag.id} className="flex items-center justify-between rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 dark:border-neutral-800 dark:bg-neutral-900">
+                          <div>
+                            <div className="text-sm font-semibold text-neutral-900 dark:text-white">{bag.name}</div>
+                            <div className="text-xs text-neutral-500">{bag.bagCode}</div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <StatusBadge label={bag.status} status={bag.status} />
+                            {canManageBag && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBag(bag.id, bag.name)}
+                                className="text-xs font-semibold text-red-500 hover:text-red-600"
+                              >
+                                Hapus Tas
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="mt-3 grid gap-2 md:grid-cols-2">
                     {team.members.map((member) => (
                       <div key={member.id} className="flex items-center justify-between rounded-lg bg-neutral-50 px-3 py-2 text-sm dark:bg-neutral-900">

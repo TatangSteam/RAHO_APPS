@@ -62,9 +62,11 @@ export function middleware(request: NextRequest): NextResponse {
 
   // Authenticated — decode role from cookie
   let role: string | null = null;
+  let adminManagerAccessScope: string | null = null;
   try {
     const payload = JSON.parse(Buffer.from(authCookie, 'base64').toString());
     role = payload?.role ?? null;
+    adminManagerAccessScope = payload?.adminManagerAccessScope ?? null;
     middlewareLog('[Middleware] Decoded role:', role);
   } catch {
     // Invalid cookie — clear and redirect
@@ -78,6 +80,9 @@ export function middleware(request: NextRequest): NextResponse {
   if (isPublicRoute) {
     middlewareLog('[Middleware] Public route, redirecting logged-in user');
     if (role === 'MEMBER') return NextResponse.redirect(new URL('/me/dashboard', request.url));
+    if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
+      return NextResponse.redirect(new URL('/members', request.url));
+    }
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
@@ -87,9 +92,27 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.redirect(new URL('/me/dashboard', request.url));
   }
 
+  if (
+    role === 'ADMIN_MANAGER' &&
+    adminManagerAccessScope === 'MEMBER_VIEW_ONLY' &&
+    isStaffRoute &&
+    !(
+      pathname === '/members' ||
+      pathname.startsWith('/members/') ||
+      pathname === '/profile' ||
+      pathname.startsWith('/profile/')
+    )
+  ) {
+    middlewareLog('[Middleware] member-only Admin Manager trying to access non-member route');
+    return NextResponse.redirect(new URL('/members', request.url));
+  }
+
   // Staff trying to access member-only routes
   if (role !== 'MEMBER' && isMemberRoute) {
     middlewareLog('[Middleware] Staff trying to access member route, redirecting');
+    if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
+      return NextResponse.redirect(new URL('/members', request.url));
+    }
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

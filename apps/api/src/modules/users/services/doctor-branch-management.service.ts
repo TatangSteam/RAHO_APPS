@@ -409,6 +409,7 @@ export class DoctorBranchManagementService {
           branchCode: mb.branch.branchCode,
           address: mb.branch.address,
           type: mb.branch.type,
+          accessScope: mb.accessScope,
           isPrimary: index === 0, // First branch is considered primary
           addedAt: mb.createdAt.toISOString(),
           ...(stats ? { stats } : {}),

@@ -141,6 +141,7 @@ export interface CreateMemberData {
     ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
     ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
     hho?: number;
+    hhoKonsentrat?: number;
     h2?: number;
     no?: number;
     gaso?: number;

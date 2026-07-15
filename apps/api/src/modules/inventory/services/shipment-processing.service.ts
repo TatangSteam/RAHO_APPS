@@ -5,12 +5,18 @@ import { AuditAction, Role, StockMutationType, DiscrepancyType } from '@prisma/c
 import { uploadFile } from '../../../config/minio';
 import { env } from '../../../config/env';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  formatStockRequestQuantity,
+  getStockRequestUnit,
+  parseStockRequestQuantity,
+} from './stock-request-units';
 
 interface DiscrepancyItem {
   masterProductId: string;
   expectedQty: number;
   receivedQty: number;
   discrepancyType: DiscrepancyType;
+  unit?: string;
   notes?: string;
   photoUrl?: string;
   photoFileName?: string;
@@ -20,6 +26,7 @@ interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
+    unit?: string;
   }>;
   discrepancies?: DiscrepancyItem[];
   notes?: string;
@@ -32,6 +39,7 @@ interface ReviewShipmentIssueInput {
   shortageItems?: Array<{
     masterProductId: string;
     quantity: number;
+    unit?: string;
   }>;
 }
 
@@ -53,6 +61,7 @@ export class ShipmentProcessingService {
       items?: Array<{
         masterProductId: string;
         sentQty: number;
+        unit?: string;
         overstockReason?: string;
       }>;
     }
@@ -122,6 +131,19 @@ export class ShipmentProcessingService {
           message: 'Anda tidak memiliki akses untuk mengirim ke cabang ini',
         };
       }
+    }
+
+    if (data?.items) {
+      data = {
+        ...data,
+        items: data.items.map((item) => {
+          const shipmentItem = shipment.items.find((shipmentItem) => shipmentItem.masterProductId === item.masterProductId);
+          return {
+            ...item,
+            sentQty: parseStockRequestQuantity(shipmentItem?.masterProduct, item.sentQty, item.unit),
+          };
+        }),
+      };
     }
 
     // Validate overstock items have reasons
@@ -315,6 +337,33 @@ export class ShipmentProcessingService {
     const receiptUpload = await uploadFile(input.receiptFile.buffer, receiptKey, input.receiptFile.mimetype);
     const receiptFileUrl = `${env.API_PREFIX}/files/${receiptUpload.key}`;
 
+    if (input.receivedItems) {
+      input = {
+        ...input,
+        receivedItems: input.receivedItems.map((receivedItem) => {
+          const shipmentItem = shipment.items.find((item) => item.masterProductId === receivedItem.masterProductId);
+          return {
+            ...receivedItem,
+            receivedQty: parseStockRequestQuantity(shipmentItem?.masterProduct, receivedItem.receivedQty, receivedItem.unit),
+          };
+        }),
+      };
+    }
+
+    if (input.discrepancies) {
+      input = {
+        ...input,
+        discrepancies: input.discrepancies.map((discrepancy) => {
+          const shipmentItem = shipment.items.find((item) => item.masterProductId === discrepancy.masterProductId);
+          return {
+            ...discrepancy,
+            expectedQty: parseStockRequestQuantity(shipmentItem?.masterProduct, discrepancy.expectedQty, discrepancy.unit),
+            receivedQty: parseStockRequestQuantity(shipmentItem?.masterProduct, discrepancy.receivedQty, discrepancy.unit),
+          };
+        }),
+      };
+    }
+
     const hasDiscrepancies = input.discrepancies && input.discrepancies.length > 0;
     const newStatus = hasDiscrepancies ? 'RECEIVED_WITH_ISSUE' : 'RECEIVED';
     const requestStatus = hasDiscrepancies ? 'SHIPPED' : 'COMPLETED';
@@ -491,7 +540,7 @@ export class ShipmentProcessingService {
           createdOverstocks.push({
             masterProductId: item.masterProductId,
             productName: item.masterProduct.name,
-            quantity: overstockQty,
+            quantity: formatStockRequestQuantity(item.masterProduct, overstockQty),
             reason: item.overstockReason,
           });
         }
@@ -556,7 +605,11 @@ export class ShipmentProcessingService {
             masterProduct: true,
           },
         },
-        discrepancies: true,
+        discrepancies: {
+          include: {
+            masterProduct: true,
+          },
+        },
         fromBranch: true,
         toBranch: true,
         stockRequest: true,
@@ -605,6 +658,13 @@ export class ShipmentProcessingService {
     }
 
     const decision = input.decision;
+    const shortageItems = input.shortageItems?.map((shortageItem) => {
+      const shipmentItem = shipment.items.find((item) => item.masterProductId === shortageItem.masterProductId);
+      return {
+        ...shortageItem,
+        quantity: parseStockRequestQuantity(shipmentItem?.masterProduct, shortageItem.quantity, shortageItem.unit),
+      };
+    });
     const reviewNotes = input.notes?.trim();
     const reviewLine = `[Review Admin Manager] ${
       decision === 'SEND_SHORTAGE'
@@ -619,8 +679,8 @@ export class ShipmentProcessingService {
       if (decision === 'SEND_SHORTAGE') {
         const shortageMap = new Map<string, number>();
 
-        if (input.shortageItems?.length) {
-          input.shortageItems.forEach(item => {
+        if (shortageItems?.length) {
+          shortageItems.forEach(item => {
             if (item.quantity > 0) {
               shortageMap.set(item.masterProductId, item.quantity);
             }
@@ -715,7 +775,11 @@ export class ShipmentProcessingService {
             },
             fromBranch: true,
             toBranch: true,
-            discrepancies: true,
+            discrepancies: {
+              include: {
+                masterProduct: true,
+              },
+            },
           },
         });
       }
@@ -749,7 +813,11 @@ export class ShipmentProcessingService {
           },
           fromBranch: true,
           toBranch: true,
-          discrepancies: true,
+          discrepancies: {
+            include: {
+              masterProduct: true,
+            },
+          },
         },
       });
     });
@@ -798,19 +866,19 @@ export class ShipmentProcessingService {
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
-        sentQty: Number(item.sentQty),
-        requestedQty: item.requestedQty ? Number(item.requestedQty) : null,
-        receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
-        overstockQty: item.overstockQty ? Number(item.overstockQty) : null,
+        sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
+        requestedQty: item.requestedQty ? formatStockRequestQuantity(item.masterProduct, item.requestedQty) : null,
+        receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+        overstockQty: item.overstockQty ? formatStockRequestQuantity(item.masterProduct, item.overstockQty) : null,
         overstockReason: item.overstockReason,
-        unit: item.masterProduct.baseUnit,
+        unit: getStockRequestUnit(item.masterProduct),
       })),
       discrepancies: shipment.discrepancies?.map((d: any) => ({
         id: d.id,
         masterProductId: d.masterProductId,
         productName: d.productName,
-        expectedQty: Number(d.expectedQty),
-        receivedQty: Number(d.receivedQty),
+        expectedQty: formatStockRequestQuantity(d.masterProduct, d.expectedQty),
+        receivedQty: formatStockRequestQuantity(d.masterProduct, d.receivedQty),
         discrepancyType: d.discrepancyType,
         notes: d.notes,
         photoUrl: d.photoUrl,

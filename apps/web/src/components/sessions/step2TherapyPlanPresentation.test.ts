@@ -21,6 +21,7 @@ const sessionPlan: SessionTherapyPlan = {
   ifa250: 1,
   ifa500: null,
   hho: null,
+  hhoKonsentrat: null,
   h2: 2,
   no: null,
   gaso: null,

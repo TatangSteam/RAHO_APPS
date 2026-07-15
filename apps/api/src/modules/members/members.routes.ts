@@ -20,14 +20,14 @@ const ALLSTAFF = [
   Role.NURSE,
 ];
 
-const ADMIN_PLUS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
-const MEMBER_DELETERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
-const ACCOUNT_IMPORTERS = [Role.ADMIN_MANAGER, Role.SUPER_ADMIN];
+const ALLSTAFF_EXCEPT_ADMIN_MANAGER = ALLSTAFF.filter((role) => role !== Role.ADMIN_MANAGER);
+const MEMBER_MUTATORS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.SUPER_ADMIN];
+const MEMBER_DELETERS = [Role.SUPER_ADMIN];
+const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
 
 // Roles that can edit therapy plans and add rows to active therapy plan sets.
 const THERAPY_PLAN_EDITORS = [
   Role.SUPER_ADMIN,
-  Role.ADMIN_MANAGER,
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
   Role.DOCTOR,
@@ -41,7 +41,7 @@ router.get('/', authenticate, authorize(ALLSTAFF), controller.getMembers.bind(co
 router.post(
   '/export',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize([Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
   controller.exportMembers.bind(controller)
 );
 
@@ -49,7 +49,7 @@ router.post(
 router.post(
   '/export/preview',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize([Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
   controller.getExportPreview.bind(controller)
 );
 
@@ -57,7 +57,7 @@ router.post(
 router.get(
   '/lookup',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   controller.lookupMember.bind(controller)
 );
 
@@ -65,7 +65,7 @@ router.get(
 router.post(
   '/grant-access',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   controller.grantAccess.bind(controller)
 );
 
@@ -73,7 +73,7 @@ router.post(
 router.post(
   '/',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize(MEMBER_MUTATORS),
   uploadMemberDocuments.fields([
     { name: 'psp', maxCount: 1 },
     { name: 'photo', maxCount: 1 },
@@ -113,7 +113,7 @@ const packagesController = new PackagesController();
 router.post(
   '/:memberId/packages',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize(MEMBER_MUTATORS),
   assertBranchAccess,
   packagesController.assignPackage.bind(packagesController)
 );
@@ -137,7 +137,7 @@ router.get(
 router.post(
   '/:memberId/notifications',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   assertBranchAccess,
   controller.sendNotification.bind(controller)
 );
@@ -185,7 +185,7 @@ router.get(
 router.post(
   '/:memberId/diagnoses',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   assertBranchAccess,
   controller.createMemberDiagnosis.bind(controller)
 );
@@ -194,7 +194,7 @@ router.post(
 router.put(
   '/:memberId/diagnoses/:diagnosisId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   assertBranchAccess,
   controller.updateMemberDiagnosis.bind(controller)
 );
@@ -203,7 +203,7 @@ router.put(
 router.delete(
   '/:memberId/diagnoses/:diagnosisId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN]),
   assertBranchAccess,
   controller.deleteMemberDiagnosis.bind(controller)
 );
@@ -225,7 +225,7 @@ router.get(
 router.patch(
   '/:memberId',
   authenticate,
-  authorize(ADMIN_PLUS),
+  authorize(MEMBER_MUTATORS),
   assertBranchAccess,
   controller.updateMember.bind(controller)
 );
@@ -256,7 +256,7 @@ router.get(
 router.post(
   '/:memberId/therapy-plans/bulk',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(THERAPY_PLAN_EDITORS),
   assertBranchAccess,
   validate(bulkCreateTherapyPlansSchema),
   controller.bulkCreateTherapyPlans.bind(controller)
@@ -275,7 +275,7 @@ router.get(
 router.post(
   '/:memberId/therapy-plans',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(THERAPY_PLAN_EDITORS),
   assertBranchAccess,
   controller.createMemberTherapyPlan.bind(controller)
 );
@@ -348,7 +348,7 @@ router.get(
 router.patch(
   '/:memberId/email',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN]),
   controller.updateMemberEmail.bind(controller)
 );
 
@@ -356,7 +356,7 @@ router.patch(
 router.patch(
   '/:memberId/username',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  authorize([Role.SUPER_ADMIN]),
   controller.updateMemberUsername.bind(controller)
 );
 
@@ -373,11 +373,12 @@ router.post(
 // ============================================================
 
 // POST /api/v1/members/:memberId/documents - Upload member documents (PSP or Profile Photo)
-// Accessible by ADMIN_LAYANAN, ADMIN_CABANG, ADMIN_MANAGER, SUPER_ADMIN
+// Accessible by ADMIN_LAYANAN, ADMIN_CABANG, SUPER_ADMIN
 router.post(
   '/:memberId/documents',
   authenticate,
-  authorize([Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  authorize(MEMBER_MUTATORS),
+  assertBranchAccess,
   uploadMemberDocuments.single('file'),
   controller.uploadMemberDocuments.bind(controller)
 );
@@ -408,7 +409,7 @@ router.get(
 router.post(
   '/:memberId/lab-results',
   authenticate,
-  authorize(ALLSTAFF), // All staff can upload
+  authorize(ALLSTAFF_EXCEPT_ADMIN_MANAGER),
   assertBranchAccess,
   uploadLabResult.single('file'),
   controller.uploadLabResult.bind(controller)
@@ -418,7 +419,7 @@ router.post(
 router.delete(
   '/:memberId/lab-results/:labResultId',
   authenticate,
-  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  authorize([Role.SUPER_ADMIN]),
   assertBranchAccess,
   controller.deleteLabResult.bind(controller)
 );

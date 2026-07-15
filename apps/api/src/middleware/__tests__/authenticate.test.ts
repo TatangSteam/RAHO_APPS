@@ -9,6 +9,9 @@ jest.mock('@lib/jwt');
 jest.mock('@utils/response');
 jest.mock('@lib/prisma', () => ({
   prisma: {
+    user: {
+      findUnique: jest.fn(),
+    },
     staffBranch: {
       findMany: jest.fn(),
     },
@@ -36,6 +39,9 @@ describe('authenticate middleware - Token Validation', () => {
     mockResponse = {};
     mockNext = jest.fn();
     jest.clearAllMocks();
+    (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+      adminManagerAccessScope: 'FULL',
+    });
     (prisma.staffBranch.findMany as jest.Mock).mockResolvedValue([]);
   });
 
@@ -116,6 +122,7 @@ describe('authenticate middleware - Token Validation', () => {
         userId: 'manager-456',
         email: 'manager@raho.id',
         role: 'ADMIN_MANAGER',
+        adminManagerAccessScope: 'FULL',
         branchId: null,
         branchCode: null,
         fullName: 'Super Admin',

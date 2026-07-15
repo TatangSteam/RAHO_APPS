@@ -41,6 +41,7 @@ export interface BranchMember {
   fullName: string;
   phone: string;
   email: string;
+  age: number | null;
   voucherCount: number;
   basicPackageCount: number;
   isActive: boolean;

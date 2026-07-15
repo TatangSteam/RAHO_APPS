@@ -1,6 +1,10 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { ShipmentStatus, StockMutationType } from '@prisma/client';
+import {
+  formatStockRequestQuantity,
+  getStockRequestUnit,
+} from './stock-request-units';
 
 /**
  * Service for retrieving shipments
@@ -160,7 +164,11 @@ export class ShipmentRetrievalService {
             },
             invoice: {
               include: {
-                items: true,
+                items: {
+                  include: {
+                    masterProduct: true,
+                  },
+                },
               },
             },
           },
@@ -201,7 +209,9 @@ export class ShipmentRetrievalService {
       receiptFileSize: shipment.receiptFileSize,
       receiptMimeType: shipment.receiptMimeType,
       itemCount: shipment.items.length,
-      totalItems: shipment.items.reduce((sum: number, item: any) => sum + Number(item.sentQty), 0),
+      totalItems: shipment.items.reduce((sum: number, item: any) => (
+        sum + formatStockRequestQuantity(item.masterProduct, item.sentQty)
+      ), 0),
       hasDiscrepancies: shipment.discrepancies?.length > 0,
       discrepancyCount: shipment.discrepancies?.length || 0,
       items: shipment.items.map((item: any) => {
@@ -242,16 +252,16 @@ export class ShipmentRetrievalService {
           masterProductId: item.masterProductId,
           productName: item.masterProduct.name,
           productCategory: item.masterProduct.category,
-          sentQty: Number(item.sentQty),
-          requestedQty, // Original requested amount
-          originalRequestedQty, // Same as requestedQty, for clarity
-          overstockDeducted, // Amount already deducted from overstock
-          overstockQty: item.overstockQty ? Number(item.overstockQty) : null, // New overstock from this shipment
+          sentQty: formatStockRequestQuantity(item.masterProduct, item.sentQty),
+          requestedQty: formatStockRequestQuantity(item.masterProduct, requestedQty), // Original requested amount
+          originalRequestedQty: formatStockRequestQuantity(item.masterProduct, originalRequestedQty), // Same as requestedQty, for clarity
+          overstockDeducted: formatStockRequestQuantity(item.masterProduct, overstockDeducted), // Amount already deducted from overstock
+          overstockQty: item.overstockQty ? formatStockRequestQuantity(item.masterProduct, item.overstockQty) : null, // New overstock from this shipment
           overstockReason: item.overstockReason || null, // Reason for overstock
-          receivedQty: item.receivedQty ? Number(item.receivedQty) : null,
-          stockBefore, // Stock quantity at destination branch before receiving
-          stockAfter, // Stock quantity at destination branch after receiving
-          unit: item.masterProduct.baseUnit,
+          receivedQty: item.receivedQty ? formatStockRequestQuantity(item.masterProduct, item.receivedQty) : null,
+          stockBefore: stockBefore === null ? null : formatStockRequestQuantity(item.masterProduct, stockBefore), // Stock quantity at destination branch before receiving
+          stockAfter: stockAfter === null ? null : formatStockRequestQuantity(item.masterProduct, stockAfter), // Stock quantity at destination branch after receiving
+          unit: getStockRequestUnit(item.masterProduct),
         };
       }),
       // Stock request summary
@@ -294,8 +304,8 @@ export class ShipmentRetrievalService {
         id: d.id,
         masterProductId: d.masterProductId,
         productName: d.productName,
-        expectedQty: Number(d.expectedQty),
-        receivedQty: Number(d.receivedQty),
+        expectedQty: formatStockRequestQuantity(d.masterProduct, d.expectedQty),
+        receivedQty: formatStockRequestQuantity(d.masterProduct, d.receivedQty),
         discrepancyType: d.discrepancyType,
         notes: d.notes,
         photoUrl: d.photoUrl,
@@ -315,9 +325,9 @@ export class ShipmentRetrievalService {
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.masterProduct.name,
-          requestedQty: Number(item.requestedQty),
-          approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
-          unit: item.masterProduct.baseUnit,
+          requestedQty: formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+          approvedQty: item.approvedQty ? formatStockRequestQuantity(item.masterProduct, item.approvedQty) : null,
+          unit: getStockRequestUnit(item.masterProduct),
         })),
         invoice: shipment.stockRequest.invoice ? {
           id: shipment.stockRequest.invoice.id,
@@ -331,7 +341,7 @@ export class ShipmentRetrievalService {
             sku: item.sku,
             productName: item.productName,
             description: item.description,
-            quantity: Number(item.quantity),
+            quantity: formatStockRequestQuantity(item.masterProduct, item.quantity),
             pricePerUnit: Number(item.pricePerUnit),
             subtotal: Number(item.subtotal),
           })),

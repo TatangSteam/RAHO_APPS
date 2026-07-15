@@ -1,4 +1,5 @@
 import { api } from '../api';
+import type { AdminManagerAccessScope } from '@/types/auth';
 
 export interface Branch {
   id: string;
@@ -7,6 +8,13 @@ export interface Branch {
   city?: string;
   type: string;
   isActive: boolean;
+  accessScope?: AdminManagerAccessScope;
+  assignedAt?: string;
+}
+
+export interface ManagerBranchAssignment {
+  branchId: string;
+  accessScope: AdminManagerAccessScope;
 }
 
 export interface AdminManager {
@@ -14,6 +22,7 @@ export interface AdminManager {
   email: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
@@ -25,7 +34,9 @@ export interface CreateAdminManagerData {
   password: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope?: AdminManagerAccessScope;
   branchIds: string[];
+  branchAssignments?: ManagerBranchAssignment[];
 }
 
 export interface UpdateAdminManagerData {
@@ -33,6 +44,7 @@ export interface UpdateAdminManagerData {
   password?: string;
   fullName?: string;
   phoneNumber?: string;
+  adminManagerAccessScope?: AdminManagerAccessScope;
   isActive?: boolean;
 }
 
@@ -54,6 +66,7 @@ export interface ImpersonateResponse {
     role: string;
     fullName: string;
     branchId?: string | null;
+    adminManagerAccessScope?: AdminManagerAccessScope | null;
     branches?: string[];
   };
   targetUser: {
@@ -62,6 +75,7 @@ export interface ImpersonateResponse {
     role: string;
     fullName: string;
     branchId?: string | null;
+    adminManagerAccessScope?: AdminManagerAccessScope | null;
   };
   originalUser?: {
     id: string;
@@ -134,8 +148,24 @@ export const adminManagersApi = {
   /**
    * Assign branch to manager
    */
-  assignBranchToManager: async (managerId: string, branchId: string): Promise<{ data: { message: string; branch: Branch } }> => {
-    const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId });
+  assignBranchToManager: async (
+    managerId: string,
+    branchId: string,
+    accessScope: AdminManagerAccessScope = 'FULL'
+  ): Promise<{ data: { message: string; branch: Branch } }> => {
+    const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId, accessScope });
+    return response.data;
+  },
+
+  /**
+   * Update branch assignment scope
+   */
+  updateBranchAccessScope: async (
+    managerId: string,
+    branchId: string,
+    accessScope: AdminManagerAccessScope
+  ): Promise<{ data: { message: string; branch: Branch } }> => {
+    const response = await api.patch(`/admin/managers/${managerId}/branches/${branchId}`, { accessScope });
     return response.data;
   },
 

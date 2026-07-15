@@ -15,20 +15,42 @@ import {
   getBranchManagersService,
   getBranchSessionsService,
   assignManagerToBranchService,
+  updateManagerBranchAccessScopeService,
   unassignManagerFromBranchService,
   getAvailableManagersForBranchService,
 } from './branches.service';
 import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { logger } from '@lib/logger';
+import { prisma } from '@lib/prisma';
 
-function assertCanAccessBranch(req: Request, branchId: string): void {
+async function assertCanAccessBranch(req: Request, branchId: string): Promise<void> {
   if (req.user?.role === 'ADMIN_CABANG' && req.user.branchId !== branchId) {
     throw {
       status: 403,
       code: 'BRANCH_ACCESS_DENIED',
       message: 'Anda tidak memiliki akses ke cabang ini',
     };
+  }
+
+  if (req.user?.role === 'ADMIN_MANAGER') {
+    const assignment = await prisma.managerBranch.findUnique({
+      where: {
+        userId_branchId: {
+          userId: req.user.userId,
+          branchId,
+        },
+      },
+      select: { id: true },
+    });
+
+    if (!assignment) {
+      throw {
+        status: 403,
+        code: 'BRANCH_ACCESS_DENIED',
+        message: 'Anda tidak memiliki akses ke cabang ini',
+      };
+    }
   }
 }
 
@@ -63,7 +85,7 @@ export async function getAllBranchesWithStats(req: Request, res: Response, next:
 // ── Get Single Branch ─────────────────────────────────────────
 export async function getBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    assertCanAccessBranch(req, req.params.branchId);
+    await assertCanAccessBranch(req, req.params.branchId);
     const branch = await getBranchWithStatsService(req.params.branchId);
     sendSuccess(res, branch);
   } catch (err) {
@@ -168,7 +190,7 @@ export async function getBranchManagers(req: Request, res: Response, next: NextF
 // ── Get Branch Sessions ───────────────────────────────────────
 export async function getBranchSessions(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    assertCanAccessBranch(req, req.params.branchId);
+    await assertCanAccessBranch(req, req.params.branchId);
     const { page = '1', limit = '50', status } = req.query;
     const result = await getBranchSessionsService(req.params.branchId, {
       page: parseInt(page as string),
@@ -185,14 +207,14 @@ export async function getBranchSessions(req: Request, res: Response, next: NextF
 export async function assignManagerToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId } = req.params;
-    const { managerId } = req.body;
+    const { managerId, accessScope } = req.body;
 
     if (!managerId) {
       res.status(400).json({ success: false, message: 'managerId is required' });
       return;
     }
 
-    const result = await assignManagerToBranchService(branchId, managerId);
+    const result = await assignManagerToBranchService(branchId, managerId, accessScope);
 
     await logAudit({
       userId: req.user.userId,
@@ -200,7 +222,7 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
       action: 'CREATE',
       resource: 'ManagerBranch',
       resourceId: `${managerId}_${branchId}`,
-      meta: { action: 'assign_manager', managerId, branchId },
+      meta: { action: 'assign_manager', managerId, branchId, accessScope: result.accessScope },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
     });
@@ -212,6 +234,35 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
 }
 
 // ── Unassign Manager from Branch ──────────────────────────────
+export async function updateManagerBranchAccessScope(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, managerId } = req.params;
+    const { accessScope } = req.body;
+
+    const result = await updateManagerBranchAccessScopeService(branchId, managerId, accessScope);
+
+    await logAudit({
+      userId: req.user.userId,
+      branchId,
+      action: 'UPDATE',
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: {
+        action: 'update_manager_branch_access_scope',
+        managerId,
+        branchId,
+        accessScope: result.accessScope,
+      },
+      ipAddress: req.ip,
+      userAgent: req.get('user-agent'),
+    });
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function unassignManagerFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId, managerId } = req.params;

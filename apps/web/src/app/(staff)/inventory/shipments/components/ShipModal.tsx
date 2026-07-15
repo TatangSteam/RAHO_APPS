@@ -125,6 +125,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
         return {
           masterProductId: item.masterProductId,
           sentQty: item.sentQty,
+          unit: item.unit,
           overstockReason: item.sentQty > expectedSentQty ? item.overstockReason : undefined,
         };
       }),

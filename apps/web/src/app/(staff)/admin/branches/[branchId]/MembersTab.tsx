@@ -23,6 +23,21 @@ export default function MembersTab({
   onViewMember,
   onImported,
 }: MembersTabProps) {
+  const [nameFilter, setNameFilter] = useState('');
+  const [ageFilter, setAgeFilter] = useState('');
+
+  const normalizedNameFilter = nameFilter.trim().toLocaleLowerCase('id-ID');
+  const normalizedAgeFilter = ageFilter.trim();
+
+  const filteredMembers = members.filter((member) => {
+    const matchesName = !normalizedNameFilter || member.fullName.toLocaleLowerCase('id-ID').includes(normalizedNameFilter);
+    const matchesAge = !normalizedAgeFilter || String(member.age ?? '') === normalizedAgeFilter;
+
+    return matchesName && matchesAge;
+  });
+
+  const hasActiveFilter = normalizedNameFilter.length > 0 || normalizedAgeFilter.length > 0;
+
   return (
     <div className={styles.membersSection}>
       <div className={styles.membersHeader}>
@@ -39,6 +54,35 @@ export default function MembersTab({
 
       <MemberAccountImportPanel branchId={branchId} onImported={onImported} />
 
+      {members.length > 0 && (
+        <div className={styles.memberFilters}>
+          <div className={styles.memberFilterField}>
+            <label htmlFor="member-name-filter" className={styles.memberFilterLabel}>Nama Member</label>
+            <input
+              id="member-name-filter"
+              type="text"
+              className={styles.memberFilterInput}
+              placeholder="Cari nama member..."
+              value={nameFilter}
+              onChange={(e) => setNameFilter(e.target.value)}
+            />
+          </div>
+          <div className={styles.memberFilterField}>
+            <label htmlFor="member-age-filter" className={styles.memberFilterLabel}>Usia</label>
+            <input
+              id="member-age-filter"
+              type="number"
+              min="0"
+              inputMode="numeric"
+              className={styles.memberFilterInput}
+              placeholder="Contoh: 30"
+              value={ageFilter}
+              onChange={(e) => setAgeFilter(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
+
       {members.length === 0 ? (
         <div className={styles.empty}>
           <div className={styles.emptyIcon}>🧑‍⚕️</div>
@@ -48,9 +92,19 @@ export default function MembersTab({
             ➕ Tambah Member
           </button>
         </div>
+      ) : filteredMembers.length === 0 ? (
+        <div className={styles.empty}>
+          <div className={styles.emptyIcon}>🔎</div>
+          <h3>Member Tidak Ditemukan</h3>
+          <p>
+            {hasActiveFilter
+              ? 'Tidak ada member yang sesuai dengan filter nama atau usia'
+              : 'Belum ada member yang dapat ditampilkan'}
+          </p>
+        </div>
       ) : (
         <div className={styles.membersGrid}>
-          {members.map((m) => (
+          {filteredMembers.map((m) => (
             <div key={m.memberId} className={styles.memberCard}>
               <div className={styles.memberHeader}>
                 <MemberAvatar member={m} />
@@ -71,6 +125,10 @@ export default function MembersTab({
                 <div className={styles.memberInfo}>
                   <span className={styles.label}>Telepon:</span>
                   <span>{m.phone}</span>
+                </div>
+                <div className={styles.memberInfo}>
+                  <span className={styles.label}>Usia:</span>
+                  <span>{m.age ?? '-'}{m.age !== null ? ' tahun' : ''}</span>
                 </div>
                 <div className={styles.memberInfo}>
                   <span className={styles.label}>Cabang Registrasi:</span>

@@ -188,6 +188,7 @@ export default function ReviewModal({
     return request.items.map(item => ({
       masterProductId: item.masterProductId,
       quantity: item.requestedQty,
+      unit: item.unit,
       pricePerUnit: 0,
     }));
   };

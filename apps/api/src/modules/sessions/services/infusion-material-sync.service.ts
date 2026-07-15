@@ -7,6 +7,7 @@ type DoseField =
   | 'ifa250'
   | 'ifa500'
   | 'hho'
+  | 'hhoKonsentrat'
   | 'h2'
   | 'no'
   | 'gaso'
@@ -36,6 +37,7 @@ const MATERIALS: MaterialDefinition[] = [
   { field: 'ifa500', sku: 'PRD-INF-IFA-001', namePattern: 'IFA 500ml', unit: 'Botol' },
   { field: 'ifa250', sku: 'PRD-INF-IFA-002', namePattern: 'IFA + NO 2,5ml', unit: 'Botol' },
   { field: 'hho', sku: 'PRD-NBT-HHO-001', namePattern: 'NB-HHO', unit: 'ml' },
+  { field: 'hhoKonsentrat', sku: 'PRD-NBT-HHO-002', namePattern: 'HHO Konsentrat', unit: 'ml' },
   { field: 'h2', sku: 'PRD-NBT-CH2-001', namePattern: 'H2', unit: 'ml' },
   { field: 'no', sku: 'PRD-NBT-CNO-001', namePattern: 'NB NO', unit: 'ml' },
   { field: 'gaso', sku: 'PRD-NBT-CGT-001', namePattern: 'NB Gasotransmitter', unit: 'ml' },
@@ -98,6 +100,7 @@ function buildActualDosesFromPlan(plan: TherapyPlanLike): DoseValues {
     ifa250,
     ifa500: toDoseValue(plan.ifa500),
     hho: toDoseValue(plan.hho),
+    hhoKonsentrat: toDoseValue(plan.hhoKonsentrat),
     h2: toDoseValue(plan.h2),
     no: toDoseValue(getPlannedActualNoMl(plan.no, ifa250, plan.ifaSubstances)),
     gaso: toDoseValue(plan.gaso),
@@ -116,6 +119,7 @@ function buildActualDosesFromInfusion(infusion: Partial<Record<DoseField, unknow
     ifa250: toDoseValue(infusion.ifa250),
     ifa500: toDoseValue(infusion.ifa500),
     hho: toDoseValue(infusion.hho),
+    hhoKonsentrat: toDoseValue(infusion.hhoKonsentrat),
     h2: toDoseValue(infusion.h2),
     no: toDoseValue(infusion.no),
     gaso: toDoseValue(infusion.gaso),

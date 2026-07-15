@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { infusionApi, InfusionExecution } from '@/lib/infusionApi';
 import { showToast } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/stores/authStore';
 
 interface MemberInfusionsTabProps {
   memberId: string;
@@ -11,8 +12,11 @@ interface MemberInfusionsTabProps {
 
 export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps) {
   const router = useRouter();
+  const { user } = useAuthStore();
   const [infusions, setInfusions] = useState<InfusionExecution[]>([]);
   const [loading, setLoading] = useState(true);
+  const isMemberViewOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
   useEffect(() => {
     loadInfusions();
@@ -101,10 +105,15 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                 border: '2px solid rgba(59,130,246,0.2)',
                 borderRadius: 'var(--radius-lg)',
                 transition: 'all 0.2s ease',
-                cursor: 'pointer'
+                cursor: isMemberViewOnlyAdminManager ? 'default' : 'pointer'
               }}
-              onClick={() => router.push(`/sessions/${infusion.treatmentSessionId}`)}
+              onClick={() => {
+                if (!isMemberViewOnlyAdminManager) {
+                  router.push(`/sessions/${infusion.treatmentSessionId}`);
+                }
+              }}
               onMouseEnter={(e) => {
+                if (isMemberViewOnlyAdminManager) return;
                 e.currentTarget.style.transform = 'translateY(-2px)';
                 e.currentTarget.style.boxShadow = '0 8px 24px rgba(59,130,246,0.2)';
               }}
@@ -212,8 +221,8 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                   gap: '10px' 
                 }}>
                   {infusion.ifa250 && (
-                    <div style={{ 
-                      display: 'flex', 
+                    <div style={{
+                      display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center',
                       padding: '10px 14px',
@@ -256,6 +265,22 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
                       <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>HHO</span>
                       <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
                         {infusion.hho} ml
+                      </span>
+                    </div>
+                  )}
+                  {infusion.hhoKonsentrat && (
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '10px 14px',
+                      background: 'rgba(255,255,255,0.08)',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid rgba(148,163,184,0.2)'
+                    }}>
+                      <span style={{ fontSize: '12px', fontWeight: '600', color: '#cbd5e1' }}>HHO Konsentrat</span>
+                      <span style={{ fontSize: '15px', fontWeight: '700', color: '#60a5fa' }}>
+                        {infusion.hhoKonsentrat} ml
                       </span>
                     </div>
                   )}

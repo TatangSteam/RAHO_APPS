@@ -39,16 +39,13 @@ export default function MembersPage() {
   // Check if user is ADMIN_MANAGER (can see multiple branches they manage)
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
+  const isMemberViewOnlyAdminManager =
+    isAdminManager && user?.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
-  const canCreateMember = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN'].includes(
+  const canCreateMember = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(
     user?.role || ''
   );
-
-  // DOCTOR and NURSE can view but cannot create members
-  const canViewMembers = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'ADMIN_MANAGER', 'SUPER_ADMIN', 'DOCTOR', 'NURSE'].includes(
-    user?.role || ''
-  );
-
+  const canLookupCrossBranch = !['DOCTOR', 'NURSE', 'ADMIN_MANAGER'].includes(user?.role || '');
   // Load branches list for filter
   useEffect(() => {
     if (isSuperAdmin || isAdminManager) {
@@ -198,8 +195,8 @@ export default function MembersPage() {
             >
               ⚙️ Kolom
             </button>
-            {/* Hide "Export Data" for DOCTOR and NURSE */}
-            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
+            {/* Hide "Export Data" for DOCTOR, NURSE, and member-view-only Admin Manager */}
+            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && !isMemberViewOnlyAdminManager && (
               <button
                 onClick={() => setShowExportModal(true)}
                 className="btn btn-secondary"
@@ -208,8 +205,8 @@ export default function MembersPage() {
                 📥 Export Data
               </button>
             )}
-            {/* Hide "Cari Lintas Cabang" for DOCTOR and NURSE - they can only see members in their branch */}
-            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && (
+            {/* Hide cross-branch lookup for read-only Admin Manager and medical staff */}
+            {canLookupCrossBranch && (
               <button
                 onClick={() => setShowLookupModal(true)}
                 className="btn btn-secondary"

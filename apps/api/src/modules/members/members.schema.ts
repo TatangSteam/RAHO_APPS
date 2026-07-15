@@ -48,6 +48,7 @@ export const therapyPlanDataSchema = z.object({
   ifa250: z.number().int().min(0).nullable().optional(),
   ifa500: z.number().int().min(0).nullable().optional(),
   hho: z.number().min(0).nullable().optional(),
+  hhoKonsentrat: z.number().min(0).nullable().optional(),
   h2: z.number().min(0).nullable().optional(),
   no: z.number().min(0).nullable().optional(),
   gaso: z.number().min(0).nullable().optional(),
@@ -67,6 +68,7 @@ export const therapyPlanDataSchema = z.object({
       data.ifa250 ||
       data.ifa500 ||
       data.hho ||
+      data.hhoKonsentrat ||
       data.h2 ||
       data.no ||
       data.gaso ||
@@ -102,6 +104,7 @@ export const editTherapyPlanSchema = z.object({
   ifa250: z.number().int().min(0).nullable().optional(),
   ifa500: z.number().int().min(0).nullable().optional(),
   hho: z.number().min(0).nullable().optional(),
+  hhoKonsentrat: z.number().min(0).nullable().optional(),
   h2: z.number().min(0).nullable().optional(),
   no: z.number().min(0).nullable().optional(),
   gaso: z.number().min(0).nullable().optional(),
@@ -127,6 +130,7 @@ export const bulkEditTherapyPlanSetSchema = z.object({
       ifa250: z.number().int().min(0).nullable().optional(),
       ifa500: z.number().int().min(0).nullable().optional(),
       hho: z.number().min(0).nullable().optional(),
+      hhoKonsentrat: z.number().min(0).nullable().optional(),
       h2: z.number().min(0).nullable().optional(),
       no: z.number().min(0).nullable().optional(),
       gaso: z.number().min(0).nullable().optional(),

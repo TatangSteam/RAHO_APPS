@@ -14,6 +14,7 @@ import { THERAPY_PLAN_EDITORS, hasRole } from '@/types/auth';
 
 interface MemberTherapyPlansTabProps {
   memberId: string;
+  canEdit?: boolean;
 }
 
 type TherapyPlanStatusFilter = 'all' | 'available' | 'used' | 'superseded';
@@ -176,7 +177,7 @@ function getSetSummary(plans: TherapyPlan[]) {
   };
 }
 
-export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTabProps) {
+export default function MemberTherapyPlansTab({ memberId, canEdit = true }: MemberTherapyPlansTabProps) {
   const router = useRouter();
   const { user } = useAuthStore();
   const [therapyPlans, setTherapyPlans] = useState<TherapyPlan[]>([]);
@@ -188,6 +189,13 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   const [collapsedSets, setCollapsedSets] = useState<Set<string>>(new Set());
   const [collapsedHistory, setCollapsedHistory] = useState<Set<string>>(new Set());
   const [expandedHistoricalSets, setExpandedHistoricalSets] = useState<Set<string>>(new Set());
+  const isMemberViewOnlyAdminManager =
+    user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
+  const openSession = (sessionId: string) => {
+    if (!isMemberViewOnlyAdminManager) {
+      router.push(`/sessions/${sessionId}`);
+    }
+  };
 
   useEffect(() => {
     loadTherapyPlans();
@@ -304,7 +312,7 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
   }, [therapyPlans, setFamilies]);
 
   const summary = useMemo(() => getSetSummary(therapyPlans), [therapyPlans]);
-  const canEditTherapyPlans = Boolean(user && hasRole(user.role, THERAPY_PLAN_EDITORS));
+  const canEditTherapyPlans = Boolean(canEdit && user && hasRole(user.role, THERAPY_PLAN_EDITORS));
   const hasActiveFilters = Boolean(
     filters.search.trim() ||
     filters.status !== 'all' ||
@@ -441,14 +449,16 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
             Therapy plan dibuat bulk sebagai satu set dan hanya ditampilkan dalam tabel.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => setShowBulkModal(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          Buat Set Bulk
-        </button>
+        {canEditTherapyPlans && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => setShowBulkModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            Buat Set Bulk
+          </button>
+        )}
       </div>
 
       {showBulkModal && (
@@ -1038,8 +1048,9 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                                         <TherapyPlanListTable
                                           plans={historicalPlans}
                                           memberId={memberId}
-                                          onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+                                          onOpenSession={openSession}
                                           onEdit={loadTherapyPlans}
+                                          canOpenSession={!isMemberViewOnlyAdminManager}
                                         />
                                       </div>
                                     )}
@@ -1055,8 +1066,9 @@ export default function MemberTherapyPlansTab({ memberId }: MemberTherapyPlansTa
                       <TherapyPlanListTable
                         plans={setPlans}
                         memberId={memberId}
-                        onOpenSession={(sessionId) => router.push(`/sessions/${sessionId}`)}
+                        onOpenSession={openSession}
                         onEdit={loadTherapyPlans}
+                        canOpenSession={!isMemberViewOnlyAdminManager}
                       />
                     </div>
                   )}

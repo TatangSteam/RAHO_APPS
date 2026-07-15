@@ -19,6 +19,7 @@ export function toSessionTherapyPlanTablePlan(
     ifa250: plan.ifa250 ?? undefined,
     ifa500: plan.ifa500 ?? undefined,
     hho: plan.hho ?? undefined,
+    hhoKonsentrat: plan.hhoKonsentrat ?? undefined,
     h2: plan.h2 ?? undefined,
     no: plan.no ?? undefined,
     gaso: plan.gaso ?? undefined,

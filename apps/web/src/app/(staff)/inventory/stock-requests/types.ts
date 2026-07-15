@@ -232,6 +232,7 @@ export interface LegacyRequestItem {
 export interface InvoiceItemInput {
   masterProductId: string;
   quantity: number;
+  unit?: string;
   pricePerUnit: number;
 }
 

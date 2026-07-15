@@ -9,6 +9,9 @@ jest.mock('@lib/prisma', () => ({
     staffBranch: {
       findMany: jest.fn(),
     },
+    managerBranch: {
+      findMany: jest.fn(),
+    },
     member: {
       findUnique: jest.fn(),
     },
@@ -49,6 +52,7 @@ describe('assertBranchAccess middleware', () => {
     mockNext = jest.fn();
     jest.clearAllMocks();
     (prisma.staffBranch.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.member.findUnique as jest.Mock).mockResolvedValue({
       id: 'member-1',
       registrationBranchId: 'branch-1',
@@ -65,11 +69,11 @@ describe('assertBranchAccess middleware', () => {
     expect(prisma.member.findUnique).not.toHaveBeenCalled();
   });
 
-  it('should bypass branch check for global roles', async () => {
+  it('should bypass branch check for super admin', async () => {
     const request = makeRequest({
       user: {
         ...makeRequest().user!,
-        role: Role.ADMIN_MANAGER,
+        role: Role.SUPER_ADMIN,
         branchId: null,
       },
     });
@@ -78,6 +82,59 @@ describe('assertBranchAccess middleware', () => {
 
     expect(mockNext).toHaveBeenCalled();
     expect(prisma.member.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('should allow admin manager access through assigned manager branches', async () => {
+    const request = makeRequest({
+      user: {
+        ...makeRequest().user!,
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+      },
+    });
+
+    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([
+      { branchId: 'branch-2' },
+    ]);
+    (prisma.member.findUnique as jest.Mock).mockResolvedValue({
+      id: 'member-1',
+      registrationBranchId: 'branch-2',
+      branchAccesses: [],
+    });
+
+    await assertBranchAccess(request as Request, mockResponse as Response, mockNext);
+
+    expect(mockNext).toHaveBeenCalled();
+    expect(sendError).not.toHaveBeenCalled();
+  });
+
+  it('should deny admin manager access when member is outside assigned branches', async () => {
+    const request = makeRequest({
+      user: {
+        ...makeRequest().user!,
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+      },
+    });
+
+    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([
+      { branchId: 'branch-1' },
+    ]);
+    (prisma.member.findUnique as jest.Mock).mockResolvedValue({
+      id: 'member-1',
+      registrationBranchId: 'branch-2',
+      branchAccesses: [],
+    });
+
+    await assertBranchAccess(request as Request, mockResponse as Response, mockNext);
+
+    expect(sendError).toHaveBeenCalledWith(
+      mockResponse,
+      403,
+      'BRANCH_ACCESS_DENIED',
+      'Anda tidak memiliki akses ke member ini.',
+    );
+    expect(mockNext).not.toHaveBeenCalled();
   });
 
   it('should allow access through registration branch', async () => {

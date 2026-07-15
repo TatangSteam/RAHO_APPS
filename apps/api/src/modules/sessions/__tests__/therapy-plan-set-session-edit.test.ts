@@ -27,6 +27,7 @@ describe('session therapy plan set editing', () => {
       ifa250: 1,
       ifa500: null,
       hho: null,
+      hhoKonsentrat: null,
       h2: null,
       no: null,
       gaso: null,

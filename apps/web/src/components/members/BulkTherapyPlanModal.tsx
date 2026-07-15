@@ -92,6 +92,7 @@ export default function BulkTherapyPlanModal({
     ifa250: 1,
     ifa500: undefined,
     hho: undefined,
+    hhoKonsentrat: undefined,
     h2: undefined,
     no: undefined,
     gaso: undefined,
@@ -224,6 +225,7 @@ export default function BulkTherapyPlanModal({
           ifa250: 1,
           ifa500: undefined,
           hho: undefined,
+          hhoKonsentrat: undefined,
           h2: undefined,
           no: undefined,
           gaso: undefined,
@@ -298,6 +300,7 @@ export default function BulkTherapyPlanModal({
           ifa250: 1,
           ifa500: undefined,
           hho: undefined,
+          hhoKonsentrat: undefined,
           h2: undefined,
           no: undefined,
           gaso: undefined,
@@ -412,6 +415,7 @@ export default function BulkTherapyPlanModal({
               ifa250: currentPlan.ifa250,
               ifa500: currentPlan.ifa500,
               hho: currentPlan.hho,
+              hhoKonsentrat: currentPlan.hhoKonsentrat,
               h2: currentPlan.h2,
               no: currentPlan.no,
               gaso: currentPlan.gaso,
@@ -448,6 +452,7 @@ export default function BulkTherapyPlanModal({
           ifa250: currentPlan.ifa250,
           ifa500: currentPlan.ifa500,
           hho: currentPlan.hho,
+          hhoKonsentrat: currentPlan.hhoKonsentrat,
           h2: currentPlan.h2,
           no: currentPlan.no,
           gaso: currentPlan.gaso,
@@ -476,6 +481,7 @@ export default function BulkTherapyPlanModal({
         parseDoseInput(plan.ifa250) ||
         parseDoseInput(plan.ifa500) ||
         parseDoseInput(plan.hho) ||
+        parseDoseInput(plan.hhoKonsentrat) ||
         parseDoseInput(plan.h2) ||
         parseDoseInput(plan.no) ||
         parseDoseInput(plan.gaso) ||
@@ -523,6 +529,7 @@ export default function BulkTherapyPlanModal({
         ifa250: parseDoseInput(plan.ifa250),
         ifa500: parseDoseInput(plan.ifa500),
         hho: parseDoseInput(plan.hho),
+        hhoKonsentrat: parseDoseInput(plan.hhoKonsentrat),
         h2: parseDoseInput(plan.h2),
         no: parseDoseInput(plan.no),
         gaso: parseDoseInput(plan.gaso),
@@ -559,6 +566,7 @@ export default function BulkTherapyPlanModal({
 
   const doseFields = [
     { key: 'hho', label: 'HHO' },
+    { key: 'hhoKonsentrat', label: 'HHO Kons.' },
     { key: 'h2', label: 'H2' },
     { key: 'no', label: 'NO' },
     { key: 'gaso', label: 'GASO' },

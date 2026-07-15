@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { Prisma, PackageType } from '@prisma/client';
+import { AdminManagerAccessScope, Prisma, PackageType } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { errors } from '@middleware/errorHandler';
@@ -28,6 +28,18 @@ const DEFAULT_THERAPY_PACKAGES = [
   { name: 'FREE Terapi Nano Bubble dan Booster 4X Premier', totalSessions: 4, price: 0, productCode: 'FRE-TRP-F4-PM' },
   { name: 'FREE Terapi Nano Bubble dan Booster 5X Premier', totalSessions: 5, price: 0, productCode: 'FRE-TRP-F5-PM' },
 ];
+
+function parseManagerBranchAccessScope(value?: unknown) {
+  if (value === AdminManagerAccessScope.MEMBER_VIEW_ONLY) {
+    return AdminManagerAccessScope.MEMBER_VIEW_ONLY;
+  }
+
+  if (value === undefined || value === null || value === '' || value === AdminManagerAccessScope.FULL) {
+    return AdminManagerAccessScope.FULL;
+  }
+
+  throw errors.badRequest('INVALID_ADMIN_MANAGER_ACCESS_SCOPE', 'Mode akses Admin Manager tidak valid.');
+}
 
 const DEFAULT_BOOSTER_TYPES = [
   { code: 'NO', name: 'NO' },
@@ -586,6 +598,7 @@ export async function getBranchManagersService(branchId: string) {
     avatarUrl: mb.user.profile?.avatarUrl || null,
     lastLoginAt: mb.user.lastLoginAt,
     assignedAt: mb.createdAt,
+    accessScope: mb.accessScope,
   }));
 
   return {
@@ -600,7 +613,9 @@ export async function getBranchManagersService(branchId: string) {
 }
 
 // ── Assign Manager to Branch ──────────────────────────────────
-export async function assignManagerToBranchService(branchId: string, managerId: string) {
+export async function assignManagerToBranchService(branchId: string, managerId: string, accessScope?: unknown) {
+  const normalizedAccessScope = parseManagerBranchAccessScope(accessScope);
+
   // Verify branch exists
   const branch = await prisma.branch.findUnique({
     where: { id: branchId },
@@ -639,6 +654,7 @@ export async function assignManagerToBranchService(branchId: string, managerId: 
     data: {
       userId: managerId,
       branchId: branchId,
+      accessScope: normalizedAccessScope,
     },
   });
 
@@ -654,10 +670,75 @@ export async function assignManagerToBranchService(branchId: string, managerId: 
       branchCode: branch.branchCode,
       name: branch.name,
     },
+    accessScope: normalizedAccessScope,
   };
 }
 
 // ── Unassign Manager from Branch ──────────────────────────────
+export async function updateManagerBranchAccessScopeService(
+  branchId: string,
+  managerId: string,
+  accessScope: unknown,
+) {
+  const normalizedAccessScope = parseManagerBranchAccessScope(accessScope);
+
+  const existing = await prisma.managerBranch.findUnique({
+    where: {
+      userId_branchId: {
+        userId: managerId,
+        branchId,
+      },
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          email: true,
+          profile: { select: { fullName: true } },
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          branchCode: true,
+          name: true,
+        },
+      },
+    },
+  });
+
+  if (!existing) {
+    throw errors.notFound('Admin Manager tidak di-assign ke cabang ini.');
+  }
+
+  await prisma.managerBranch.update({
+    where: {
+      userId_branchId: {
+        userId: managerId,
+        branchId,
+      },
+    },
+    data: {
+      accessScope: normalizedAccessScope,
+    },
+  });
+
+  return {
+    message: 'Scope akses Admin Manager berhasil diperbarui',
+    manager: {
+      id: existing.user.id,
+      email: existing.user.email,
+      fullName: existing.user.profile?.fullName || existing.user.email,
+    },
+    branch: {
+      id: existing.branch.id,
+      branchCode: existing.branch.branchCode,
+      name: existing.branch.name,
+    },
+    accessScope: normalizedAccessScope,
+  };
+}
+
 export async function unassignManagerFromBranchService(branchId: string, managerId: string) {
   // Verify branch exists
   const branch = await prisma.branch.findUnique({

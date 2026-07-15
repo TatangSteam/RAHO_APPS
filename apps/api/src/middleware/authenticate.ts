@@ -16,6 +16,7 @@ declare global {
         role: string;
         branchId: string | null;
         branchCode: string | null;
+        adminManagerAccessScope?: string | null;
         fullName: string;
         staffCode: string | null;
         branches?: string[];
@@ -26,6 +27,7 @@ declare global {
         email: string;
         role: string;
         branchId: string | null;
+        adminManagerAccessScope?: string | null;
         fullName: string;
       };
       isImpersonating: boolean;
@@ -81,6 +83,19 @@ async function getAssignedBranchIds(
   );
 }
 
+async function getAdminManagerAccessScope(userId: string, role: string): Promise<string | null> {
+  if (role !== 'ADMIN_MANAGER') {
+    return null;
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { adminManagerAccessScope: true },
+  });
+
+  return user?.adminManagerAccessScope || 'FULL';
+}
+
 /**
  * Verify JWT access token and attach the current authorization user to the request.
  *
@@ -108,6 +123,10 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         deepest.role,
         deepest.branchId,
       );
+      const adminManagerAccessScope = await getAdminManagerAccessScope(
+        deepest.userId,
+        deepest.role,
+      );
 
       logger.debug('Impersonation token authenticated', {
         chain,
@@ -134,6 +153,7 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         fullName: payload.fullName,
         staffCode: null,
         branches: deepest.branches || assignedBranchIds,
+        ...(adminManagerAccessScope ? { adminManagerAccessScope } : {}),
       };
 
       req.isImpersonating = true;
@@ -144,11 +164,16 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
         payload.role,
         payload.branchId,
       );
+      const adminManagerAccessScope = await getAdminManagerAccessScope(
+        payload.userId,
+        payload.role,
+      );
 
       req.user = {
         ...payload,
         id: payload.userId,
         branches: payload.branches || assignedBranchIds,
+        ...(adminManagerAccessScope ? { adminManagerAccessScope } : {}),
       };
       req.isImpersonating = false;
     }

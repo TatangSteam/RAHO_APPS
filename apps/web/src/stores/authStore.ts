@@ -30,6 +30,7 @@ interface AuthState {
 interface AuthActions {
   setAuth: (user: AuthUser, tokens: TokenPair) => void;
   setAccessToken: (accessToken: string, refreshToken: string) => void;
+  updateUser: (updates: Partial<AuthUser>) => void;
   updateUserAvatar: (avatarUrl: string | null) => void;
   setActiveBranch: (branchId: string) => void;
   setAssignedBranches: (branchIds: string[]) => void;
@@ -74,6 +75,11 @@ export const useAuthStore = create<AuthStore>()(
 
       setAccessToken: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
+
+      updateUser: (updates) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, ...updates } : null,
+        })),
 
       updateUserAvatar: (avatarUrl) =>
         set((state) => ({

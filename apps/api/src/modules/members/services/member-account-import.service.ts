@@ -86,7 +86,7 @@ interface ImportPlan {
   existingMember?: ExistingMemberMatch;
 }
 
-const REQUIRED_HEADERS = ['nama_lengkap', 'tanggal_lahir'];
+const REQUIRED_HEADERS = ['nama_lengkap', 'tanggal_lahir', 'no_hp'];
 
 const HEADER_ALIASES: Record<string, string> = {
   nama_lengkap: 'nama_lengkap',
@@ -214,6 +214,8 @@ export class MemberAccountImportService {
       };
     }
 
+    const credentialsByRow = await this.prepareCreateCredentials(validPlans);
+
     const created = await prisma.$transaction(async (tx) => {
       const rows: Array<{
         action: 'created' | 'updated';
@@ -242,8 +244,12 @@ export class MemberAccountImportService {
           continue;
         }
 
-        const username = await this.uniqueUsername(tx, row.memberUsername || this.generateUsername(row, index + 1));
-        const password = row.memberPassword || this.generatePassword();
+        const username = await this.uniqueUsername(tx, row.memberUsername || this.generateUsername(row, row.rowNumber));
+        const credentials = credentialsByRow.get(row.rowNumber);
+        if (!credentials) {
+          throw { status: 500, code: 'IMPORT_CREDENTIALS_MISSING', message: 'Gagal menyiapkan password akun member.' };
+        }
+
         const memberNo = await this.nextMemberNo(tx, branch.branchCode);
         const birthDate = row.birthDate!;
         const identityNumber = resolveMemberIdentityNumber(
@@ -258,14 +264,14 @@ export class MemberAccountImportService {
         const user = await tx.user.create({
           data: {
             email: username,
-            password: await bcrypt.hash(password, 10),
+            password: credentials.passwordHash,
             role: Role.MEMBER,
             branchId: branch.id,
             isActive: true,
             profile: {
               create: {
                 fullName: row.fullName,
-                phone: row.phone || null,
+                phone: row.phone,
               },
             },
           },
@@ -321,12 +327,12 @@ export class MemberAccountImportService {
           memberNo,
           fullName: row.fullName,
           username,
-          password,
+          password: credentials.password,
         });
       }
 
       return rows;
-    });
+    }, { maxWait: 10000, timeout: 120000 });
 
     await logAudit({
       userId: input.actor.userId,
@@ -357,6 +363,22 @@ export class MemberAccountImportService {
       created,
       skipped,
     };
+  }
+
+  private async prepareCreateCredentials(plans: ImportPlan[]) {
+    const credentialsByRow = new Map<number, { password: string; passwordHash: string }>();
+
+    for (const plan of plans) {
+      if (plan.action !== 'create') continue;
+
+      const password = plan.row.memberPassword || this.generatePassword();
+      credentialsByRow.set(plan.row.rowNumber, {
+        password,
+        passwordHash: await bcrypt.hash(password, 10),
+      });
+    }
+
+    return credentialsByRow;
   }
 
   private async resolveBranch(actor: ImportActor, requestedBranchId?: string) {
@@ -510,7 +532,9 @@ export class MemberAccountImportService {
         issues.push(this.issue(row, 'tanggal_lahir', 'Tanggal lahir wajib valid.'));
       }
 
-      if (row.phone && row.phone.replace(/\D/g, '').length < 10) {
+      if (!row.phone) {
+        issues.push(this.issue(row, 'no_hp', 'Nomor HP wajib diisi.'));
+      } else if (row.phone.replace(/\D/g, '').length < 10) {
         issues.push(this.issue(row, 'no_hp', 'Nomor HP minimal 10 digit.'));
       }
 
@@ -689,7 +713,7 @@ export class MemberAccountImportService {
         create: {
           userId: existing.userId,
           fullName: row.fullName || existing.user.profile?.fullName || 'Member',
-          phone: row.phone || null,
+          phone: row.phone,
         },
       });
     }
@@ -784,7 +808,10 @@ export class MemberAccountImportService {
   private generateUsername(row: ParsedMemberAccount, sequence: number) {
     const phoneTail = row.phone?.replace(/\D/g, '').slice(-4);
     const base = this.normalizePersonName(row.fullName).replace(/\s+/g, '.').replace(/[^a-z0-9.]/g, '') || 'member';
-    return `${base}.${phoneTail || row.rowNumber || sequence}`.slice(0, 30).toLowerCase();
+    const suffix = phoneTail ? `${phoneTail}.${sequence}` : `${row.rowNumber || sequence}`;
+    const maxBaseLength = Math.max(1, 30 - suffix.length - 1);
+    const trimmedBase = base.slice(0, maxBaseLength).replace(/\.+$/g, '') || 'member';
+    return `${trimmedBase}.${suffix}`.slice(0, 30).toLowerCase();
   }
 
   private generatePassword() {

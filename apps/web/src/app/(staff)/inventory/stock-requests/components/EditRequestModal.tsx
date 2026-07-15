@@ -102,6 +102,7 @@ export default function EditRequestModal({
       payload.items = items.map((item) => ({
         masterProductId: item.masterProductId,
         requestedQty: item.requestedQty,
+        unit: item.unit,
         notes: item.notes.trim() || undefined,
       }));
     }

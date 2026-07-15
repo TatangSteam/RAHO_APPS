@@ -10,6 +10,7 @@ interface BulkTherapyPlanInput {
   ifa250?: number | null;
   ifa500?: number | null;
   hho?: number | null;
+  hhoKonsentrat?: number | null;
   h2?: number | null;
   no?: number | null;
   gaso?: number | null;
@@ -202,6 +203,7 @@ export class MemberTherapyPlanBulkService {
       plan.ifa250 ||
       plan.ifa500 ||
       plan.hho ||
+      plan.hhoKonsentrat ||
       plan.h2 ||
       plan.no ||
       plan.gaso ||
@@ -231,6 +233,7 @@ export class MemberTherapyPlanBulkService {
       'ifa250',
       'ifa500',
       'hho',
+      'hhoKonsentrat',
       'h2',
       'no',
       'gaso',
@@ -375,6 +378,7 @@ export class MemberTherapyPlanBulkService {
             ifa250: plan.ifa250,
             ifa500: plan.ifa500,
             hho: plan.hho,
+            hhoKonsentrat: plan.hhoKonsentrat,
             h2: plan.h2,
             no: plan.no,
             gaso: plan.gaso,

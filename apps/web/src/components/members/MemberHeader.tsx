@@ -15,6 +15,7 @@ interface MemberHeaderProps {
   onManageCredentials?: () => void;
   onUploadDocuments?: () => void;
   isSuperAdmin: boolean;
+  canSendNotification?: boolean;
   canDelete?: boolean;
   isDeleting?: boolean;
   canUploadDocuments?: boolean;
@@ -88,6 +89,7 @@ export default function MemberHeader({
   onManageCredentials, 
   onUploadDocuments,
   isSuperAdmin,
+  canSendNotification = true,
   canDelete = false,
   isDeleting = false,
   canUploadDocuments = false,
@@ -240,9 +242,11 @@ export default function MemberHeader({
           </div>
         </div>
         <div className="member-detail-actions">
-          <button onClick={onSendNotification} className="btn btn-secondary member-detail-action-button">
-            📧 Kirim Notifikasi
-          </button>
+          {canSendNotification && (
+            <button onClick={onSendNotification} className="btn btn-secondary member-detail-action-button">
+              📧 Kirim Notifikasi
+            </button>
+          )}
           {canUploadDocuments && onUploadDocuments && (
             <HeaderIconAction
               onClick={onUploadDocuments} 

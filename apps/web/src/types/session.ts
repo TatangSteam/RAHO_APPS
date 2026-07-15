@@ -175,6 +175,7 @@ export interface TherapyPlan {
   ifa250: number | null; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
   ifa500: number | null; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -209,6 +210,7 @@ export interface InfusionExecution {
   ifa250: number | null; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
   ifa500: number | null; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -302,6 +304,7 @@ export interface CreateTherapyPlanInput {
   ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
   ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
+  hhoKonsentrat?: number;
   h2?: number;
   no?: number;
   gaso?: number;
@@ -365,6 +368,7 @@ export interface CreateInfusionInput {
   ifa250?: number; // IFA + NO 2,5ml - Wajib 1 botol per terapi (satuan: Botol)
   ifa500?: number; // IFA 500ml - Alternatif/special case (satuan: Botol)
   hho?: number;
+  hhoKonsentrat?: number;
   h2?: number;
   no?: number;
   gaso?: number;

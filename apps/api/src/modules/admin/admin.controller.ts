@@ -1,10 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import { AdminService } from './admin.service';
 import { sendSuccess } from '@utils/response';
-import { Role, PackageType, AuditAction } from '@prisma/client';
+import { AdminManagerAccessScope, Role, PackageType, AuditAction } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 
 const adminService = new AdminService();
+
+function parseAdminManagerAccessScope(value: unknown): AdminManagerAccessScope {
+  if (value === AdminManagerAccessScope.MEMBER_VIEW_ONLY) {
+    return AdminManagerAccessScope.MEMBER_VIEW_ONLY;
+  }
+
+  if (value === undefined || value === null || value === '' || value === AdminManagerAccessScope.FULL) {
+    return AdminManagerAccessScope.FULL;
+  }
+
+  throw {
+    status: 400,
+    code: 'INVALID_ADMIN_MANAGER_ACCESS_SCOPE',
+    message: 'Mode akses Admin Manager tidak valid',
+  };
+}
 
 // ── Get Branches for Admin Manager ────────────────────────────
 export async function getBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -29,7 +45,11 @@ export async function getBranches(req: Request, res: Response, next: NextFunctio
       console.log('🔍 [getBranches] ManagerBranch records found:', managerBranches.length);
       console.log('🔍 [getBranches] ManagerBranch data:', JSON.stringify(managerBranches, null, 2));
       
-      branches = managerBranches.map(mb => mb.branch);
+      branches = managerBranches.map(mb => ({
+        ...mb.branch,
+        accessScope: mb.accessScope,
+        assignedAt: mb.createdAt,
+      }));
       console.log('🔍 [getBranches] Branches extracted:', branches.length);
     } else if (user.role === 'SUPER_ADMIN') {
       // Super admin can see all branches
@@ -640,10 +660,15 @@ export async function getAdminManagerDetail(req: Request, res: Response, next: N
       email: manager.email,
       fullName: manager.profile?.fullName || manager.email,
       phoneNumber: manager.profile?.phone || '',
+      adminManagerAccessScope: manager.adminManagerAccessScope,
       isActive: manager.isActive,
       createdAt: manager.createdAt,
       lastLoginAt: manager.lastLoginAt,
-      branches: manager.managedBranches.map(mb => mb.branch)
+      branches: manager.managedBranches.map(mb => ({
+        ...mb.branch,
+        accessScope: mb.accessScope,
+        assignedAt: mb.createdAt,
+      }))
     };
 
     sendSuccess(res, result);
@@ -659,7 +684,7 @@ export async function getAdminManagerDetail(req: Request, res: Response, next: N
 export async function updateAdminManager(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { managerId } = req.params;
-    const { email, password, fullName, phoneNumber, isActive } = req.body;
+    const { email, password, fullName, phoneNumber, adminManagerAccessScope, isActive } = req.body;
     const currentUserId = (req as any).user.userId;
 
     const result = await adminService.updateAdminManager(managerId, {
@@ -667,6 +692,7 @@ export async function updateAdminManager(req: Request, res: Response, next: Next
       password,
       fullName,
       phoneNumber,
+      adminManagerAccessScope,
       isActive,
     }, currentUserId);
 
@@ -758,6 +784,7 @@ export async function assignBranchToManager(req: Request, res: Response, next: N
   try {
     const { managerId } = req.params;
     const { branchId } = req.body;
+    const accessScope = parseAdminManagerAccessScope(req.body.accessScope);
     const currentUserId = (req as any).user.userId;
 
     if (!branchId) {
@@ -821,7 +848,8 @@ export async function assignBranchToManager(req: Request, res: Response, next: N
     const assignment = await prisma.managerBranch.create({
       data: {
         userId: managerId,
-        branchId
+        branchId,
+        accessScope,
       },
       include: {
         branch: {
@@ -850,7 +878,8 @@ export async function assignBranchToManager(req: Request, res: Response, next: N
         managerId, 
         managerEmail: manager.email,
         branchId, 
-        branchName: branch.name 
+        branchName: branch.name,
+        accessScope,
       },
       ipAddress: req.ip,
       userAgent: req.headers['user-agent']
@@ -858,8 +887,116 @@ export async function assignBranchToManager(req: Request, res: Response, next: N
 
     sendSuccess(res, {
       message: `Cabang ${branch.name} berhasil di-assign ke manager`,
-      branch: assignment.branch
+      branch: {
+        ...assignment.branch,
+        accessScope: assignment.accessScope,
+        assignedAt: assignment.createdAt,
+      }
     }, 201);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Update branch assignment scope for manager
+ * PATCH /admin/managers/:managerId/branches/:branchId
+ */
+export async function updateManagerBranchAccessScope(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId, branchId } = req.params;
+    const accessScope = parseAdminManagerAccessScope(req.body.accessScope);
+    const currentUserId = (req as any).user.userId;
+
+    const manager = await prisma.user.findUnique({
+      where: { id: managerId },
+      select: { id: true, role: true, email: true },
+    });
+
+    if (!manager || manager.role !== 'ADMIN_MANAGER') {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan'
+      };
+    }
+
+    const existingAssignment = await prisma.managerBranch.findUnique({
+      where: {
+        userId_branchId: {
+          userId: managerId,
+          branchId,
+        },
+      },
+      include: {
+        branch: {
+          select: {
+            id: true,
+            branchCode: true,
+            name: true,
+            city: true,
+            type: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    if (!existingAssignment) {
+      throw {
+        status: 404,
+        code: 'ASSIGNMENT_NOT_FOUND',
+        message: 'Cabang tidak di-assign ke manager ini'
+      };
+    }
+
+    const updatedAssignment = await prisma.managerBranch.update({
+      where: { id: existingAssignment.id },
+      data: { accessScope },
+      include: {
+        branch: {
+          select: {
+            id: true,
+            branchCode: true,
+            name: true,
+            city: true,
+            type: true,
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    const { logAudit } = await import('@utils/auditLog');
+    await logAudit({
+      userId: currentUserId,
+      branchId,
+      action: AuditAction.UPDATE,
+      resource: 'ManagerBranch',
+      resourceId: `${managerId}_${branchId}`,
+      meta: {
+        action: 'update_manager_branch_access_scope',
+        managerId,
+        managerEmail: manager.email,
+        branchId,
+        branchName: existingAssignment.branch.name,
+        accessScope: {
+          from: existingAssignment.accessScope,
+          to: accessScope,
+        },
+      },
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
+    });
+
+    sendSuccess(res, {
+      message: `Akses cabang ${existingAssignment.branch.name} berhasil diperbarui`,
+      branch: {
+        ...updatedAssignment.branch,
+        accessScope: updatedAssignment.accessScope,
+        assignedAt: updatedAssignment.createdAt,
+      },
+    });
   } catch (err) {
     next(err);
   }

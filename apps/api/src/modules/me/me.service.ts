@@ -738,6 +738,7 @@ interface TherapyPlanData {
   ifa250: number | null;
   ifa500: number | null;
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -756,6 +757,7 @@ interface InfusionData {
   ifa250: number | null;
   ifa500: number | null;
   hho: number | null;
+  hhoKonsentrat: number | null;
   h2: number | null;
   no: number | null;
   gaso: number | null;
@@ -959,6 +961,7 @@ export async function getMemberSessionDetailService(
           ifa250: session.therapyPlan.ifa250 ? Number(session.therapyPlan.ifa250) : null,
           ifa500: session.therapyPlan.ifa500 ? Number(session.therapyPlan.ifa500) : null,
           hho: session.therapyPlan.hho ? Number(session.therapyPlan.hho) : null,
+          hhoKonsentrat: session.therapyPlan.hhoKonsentrat ? Number(session.therapyPlan.hhoKonsentrat) : null,
           h2: session.therapyPlan.h2 ? Number(session.therapyPlan.h2) : null,
           no: session.therapyPlan.no ? Number(session.therapyPlan.no) : null,
           gaso: session.therapyPlan.gaso ? Number(session.therapyPlan.gaso) : null,
@@ -984,6 +987,7 @@ export async function getMemberSessionDetailService(
           ifa250: session.infusion.ifa250 ? Number(session.infusion.ifa250) : null,
           ifa500: session.infusion.ifa500 ? Number(session.infusion.ifa500) : null,
           hho: session.infusion.hho ? Number(session.infusion.hho) : null,
+          hhoKonsentrat: session.infusion.hhoKonsentrat ? Number(session.infusion.hhoKonsentrat) : null,
           h2: session.infusion.h2 ? Number(session.infusion.h2) : null,
           no: session.infusion.no ? Number(session.infusion.no) : null,
           gaso: session.infusion.gaso ? Number(session.infusion.gaso) : null,

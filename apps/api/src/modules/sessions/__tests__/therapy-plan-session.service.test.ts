@@ -166,6 +166,7 @@ describe('TherapyPlanService session editing', () => {
         ifa250: true,
         ifa500: true,
         hho: true,
+        hhoKonsentrat: true,
         h2: true,
         no: true,
         gaso: true,

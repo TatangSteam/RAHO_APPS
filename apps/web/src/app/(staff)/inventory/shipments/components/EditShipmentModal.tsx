@@ -77,6 +77,7 @@ export function EditShipmentModal({
       items: items.map((item) => ({
         masterProductId: item.masterProductId,
         sentQty: item.sentQty,
+        unit: item.unit,
         overstockReason: item.overstockReason.trim() || undefined,
       })),
     });

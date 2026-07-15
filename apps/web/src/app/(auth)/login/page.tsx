@@ -66,12 +66,16 @@ export default function LoginPage() {
 
       // Store minimal payload in cookie for Next.js middleware
       const cookiePayload = btoa(
-        JSON.stringify({ role: result.user.role, userId: result.user.userId }),
+        JSON.stringify({
+          role: result.user.role,
+          userId: result.user.userId,
+          adminManagerAccessScope: result.user.adminManagerAccessScope,
+        }),
       );
       document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
 
       // Redirect based on role
-      router.push(getDefaultRoute(result.user.role));
+      router.push(getDefaultRoute(result.user.role, result.user.adminManagerAccessScope));
       router.refresh();
     } catch (err: any) {
       const code = getApiErrorCode(err);

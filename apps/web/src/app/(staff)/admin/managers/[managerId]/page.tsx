@@ -7,6 +7,7 @@ import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
 import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
+import type { AdminManagerAccessScope } from '@/types/auth';
 import styles from './page.module.css';
 
 interface Staff {
@@ -31,11 +32,17 @@ interface AdminManagerDetail {
   email: string;
   fullName: string;
   phoneNumber: string;
+  adminManagerAccessScope?: AdminManagerAccessScope | null;
   isActive: boolean;
   createdAt: string;
   lastLoginAt: string | null;
   branches: Branch[];
 }
+
+const accessScopeLabels: Record<AdminManagerAccessScope, string> = {
+  FULL: 'Akses Penuh',
+  MEMBER_VIEW_ONLY: 'Hanya Lihat Member',
+};
 
 export default function AdminManagerDetailPage() {
   const router = useRouter();
@@ -56,6 +63,8 @@ export default function AdminManagerDetailPage() {
   const [loadingAvailableBranches, setLoadingAvailableBranches] = useState(false);
   const [assigningBranch, setAssigningBranch] = useState<string | null>(null);
   const [removingBranch, setRemovingBranch] = useState<string | null>(null);
+  const [selectedAccessScope, setSelectedAccessScope] = useState<AdminManagerAccessScope>('FULL');
+  const [updatingBranchScope, setUpdatingBranchScope] = useState<string | null>(null);
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
@@ -176,6 +185,7 @@ export default function AdminManagerDetailPage() {
   };
 
   const handleOpenAddBranchModal = () => {
+    setSelectedAccessScope('FULL');
     setShowAddBranchModal(true);
     loadAvailableBranches();
   };
@@ -183,7 +193,7 @@ export default function AdminManagerDetailPage() {
   const handleAssignBranch = async (branchId: string) => {
     try {
       setAssigningBranch(branchId);
-      await adminManagersApi.assignBranchToManager(managerId, branchId);
+      await adminManagersApi.assignBranchToManager(managerId, branchId, selectedAccessScope);
       showToast.success('Cabang berhasil ditambahkan');
       setShowAddBranchModal(false);
       await loadManagerDetail();
@@ -192,6 +202,37 @@ export default function AdminManagerDetailPage() {
       showToast.error(error.response?.data?.message || 'Gagal menambahkan cabang');
     } finally {
       setAssigningBranch(null);
+    }
+  };
+
+  const getBranchAccessScope = (branch: Branch): AdminManagerAccessScope => {
+    return branch.accessScope || manager?.adminManagerAccessScope || 'FULL';
+  };
+
+  const handleUpdateBranchScope = async (
+    branchId: string,
+    accessScope: AdminManagerAccessScope,
+  ) => {
+    try {
+      setUpdatingBranchScope(branchId);
+      await adminManagersApi.updateBranchAccessScope(managerId, branchId, accessScope);
+      setManager((previous) => previous
+        ? {
+            ...previous,
+            branches: previous.branches.map((branch) => (
+              branch.id === branchId ? { ...branch, accessScope } : branch
+            )),
+          }
+        : previous);
+      if (accessScope === 'MEMBER_VIEW_ONLY') {
+        setActiveTab((previous) => ({ ...previous, [branchId]: 'members' }));
+      }
+      showToast.success('Scope cabang berhasil diperbarui');
+    } catch (error: any) {
+      devError('Error updating branch scope:', error);
+      showToast.error(error.response?.data?.message || 'Gagal memperbarui scope cabang');
+    } finally {
+      setUpdatingBranchScope(null);
     }
   };
 
@@ -322,9 +363,12 @@ export default function AdminManagerDetailPage() {
         newSet.delete(branchId);
       } else {
         newSet.add(branchId);
-        // Set default tab to staff
+        const branch = manager?.branches.find((item) => item.id === branchId);
+        const defaultTab = branch && getBranchAccessScope(branch) === 'MEMBER_VIEW_ONLY'
+          ? 'members'
+          : 'staff';
         if (!activeTab[branchId]) {
-          setActiveTab(prev => ({ ...prev, [branchId]: 'staff' }));
+          setActiveTab(prev => ({ ...prev, [branchId]: defaultTab }));
         }
       }
       return newSet;
@@ -332,8 +376,20 @@ export default function AdminManagerDetailPage() {
   };
 
   const setTab = (branchId: string, tab: 'staff' | 'members') => {
+    const branch = manager?.branches.find((item) => item.id === branchId);
+    if (tab === 'staff' && branch && getBranchAccessScope(branch) === 'MEMBER_VIEW_ONLY') {
+      return;
+    }
+
     setActiveTab(prev => ({ ...prev, [branchId]: tab }));
   };
+
+  const fullAccessBranchCount = manager?.branches.filter(
+    (branch) => getBranchAccessScope(branch) === 'FULL',
+  ).length || 0;
+  const memberOnlyBranchCount = manager?.branches.filter(
+    (branch) => getBranchAccessScope(branch) === 'MEMBER_VIEW_ONLY',
+  ).length || 0;
 
   if (loading) {
     return (
@@ -376,9 +432,17 @@ export default function AdminManagerDetailPage() {
             <div className={styles.headerText}>
               <h1>{manager.fullName}</h1>
               <p className={styles.email}>{manager.email}</p>
-              <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
-                {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
-              </span>
+              <div className={styles.headerBadges}>
+                <span className={`${styles.statusBadge} ${manager.isActive ? styles.active : styles.inactive}`}>
+                  {manager.isActive ? 'Aktif' : 'Tidak Aktif'}
+                </span>
+                <span className={`${styles.accessBadge} ${styles.fullAccess}`}>
+                  {fullAccessBranchCount} Akses Penuh
+                </span>
+                <span className={`${styles.accessBadge} ${styles.memberOnly}`}>
+                  {memberOnlyBranchCount} Hanya Lihat Member
+                </span>
+              </div>
             </div>
           </div>
           
@@ -478,9 +542,11 @@ export default function AdminManagerDetailPage() {
           <div className={styles.branchesList}>
             {manager.branches.map((branch) => {
               const isExpanded = expandedBranches.has(branch.id);
-              const currentTab = activeTab[branch.id] || 'staff';
               const staff = branchStaff[branch.id] || [];
               const members = branchMembers[branch.id] || [];
+              const branchAccessScope = getBranchAccessScope(branch);
+              const isMemberOnlyBranch = branchAccessScope === 'MEMBER_VIEW_ONLY';
+              const currentTab = isMemberOnlyBranch ? 'members' : (activeTab[branch.id] || 'staff');
 
               return (
                 <div key={branch.id} className={styles.branchCard}>
@@ -506,6 +572,9 @@ export default function AdminManagerDetailPage() {
                     </div>
                     
                     <div className={styles.branchStats}>
+                      <span className={`${styles.accessBadge} ${isMemberOnlyBranch ? styles.memberOnly : styles.fullAccess}`}>
+                        {accessScopeLabels[branchAccessScope]}
+                      </span>
                       <span className={styles.statBadge}>
                         <UserCog size={14} />
                         {staff.length} Staff
@@ -525,6 +594,20 @@ export default function AdminManagerDetailPage() {
                       >
                         {removingBranch === branch.id ? '⏳' : <Trash2 size={16} />}
                       </button>
+                      <select
+                        className={styles.scopeSelect}
+                        value={branchAccessScope}
+                        disabled={updatingBranchScope === branch.id}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleUpdateBranchScope(branch.id, e.target.value as AdminManagerAccessScope);
+                        }}
+                        title="Ubah akses manager untuk cabang ini"
+                      >
+                        <option value="FULL">Akses Penuh</option>
+                        <option value="MEMBER_VIEW_ONLY">Hanya Lihat Member</option>
+                      </select>
                       <div 
                         className={styles.expandIcon}
                         onClick={() => toggleBranch(branch.id)}
@@ -542,6 +625,8 @@ export default function AdminManagerDetailPage() {
                         <button
                           className={`${styles.tab} ${currentTab === 'staff' ? styles.active : ''}`}
                           onClick={() => setTab(branch.id, 'staff')}
+                          disabled={isMemberOnlyBranch}
+                          title={isMemberOnlyBranch ? 'Scope cabang ini hanya mengizinkan lihat member' : undefined}
                         >
                           <UserCog size={16} />
                           Staff ({staff.length})
@@ -673,6 +758,29 @@ export default function AdminManagerDetailPage() {
             </div>
             
             <div className={styles.modalContent}>
+              <div className={styles.formGroup}>
+                <label>Scope akses untuk cabang yang ditambahkan</label>
+                <div className={styles.toggleContainer}>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${selectedAccessScope === 'FULL' ? styles.active : ''}`}
+                    onClick={() => setSelectedAccessScope('FULL')}
+                  >
+                    Akses Penuh
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.toggleBtn} ${selectedAccessScope === 'MEMBER_VIEW_ONLY' ? styles.active : ''}`}
+                    onClick={() => setSelectedAccessScope('MEMBER_VIEW_ONLY')}
+                  >
+                    Hanya Lihat Member
+                  </button>
+                </div>
+                <p className={styles.fieldHelp}>
+                  Scope ini hanya berlaku untuk cabang yang dipilih di bawah.
+                </p>
+              </div>
+
               {loadingAvailableBranches ? (
                 <div className={styles.modalLoading}>
                   <div className={styles.loadingSpinner}>⏳</div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
@@ -18,13 +18,16 @@ import { clsx } from 'clsx';
 // Inner component that uses LoadingContext
 function StaffLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   
   const managerNotifications = useManagerInventoryNotifications(
-    user?.role === 'ADMIN_MANAGER' && Boolean(accessToken),
+    user?.role === 'ADMIN_MANAGER' &&
+      user.adminManagerAccessScope !== 'MEMBER_VIEW_ONLY' &&
+      Boolean(accessToken),
     { pollMs: 60000 },
   );
 
@@ -49,6 +52,21 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     setMobileOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (
+      user?.role === 'ADMIN_MANAGER' &&
+      user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY' &&
+      !(
+        pathname === '/members' ||
+        pathname.startsWith('/members/') ||
+        pathname === '/profile' ||
+        pathname.startsWith('/profile/')
+      )
+    ) {
+      router.replace('/members');
+    }
+  }, [pathname, router, user]);
 
   // Prevent body scroll when mobile menu is open
   useEffect(() => {

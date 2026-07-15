@@ -3,11 +3,17 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, Role, BranchType } from '@prisma/client';
 import { OverstockService } from './overstock.service';
+import {
+  formatStockRequestQuantity,
+  getStockRequestUnit,
+  parseStockRequestQuantity,
+} from './stock-request-units';
 
 export interface CreateStockRequestInput {
   items: Array<{
     masterProductId: string;
     requestedQty: number;
+    unit?: string;
     notes?: string;
   }>;
   notes?: string;
@@ -80,11 +86,12 @@ export class StockRequestCreationService {
 
     console.log('Branch:', branch);
 
-    // Check for pending shipments (including shipments waiting for issue review)
+    // Check for shipments that still need to be sent/received. Shipments with
+    // issues are allowed because shortages can be requested in the next request.
     const pendingShipments = await prisma.shipment.findMany({
       where: {
         toBranchId: branchId,
-        status: { in: ['PREPARING', 'SHIPPED', 'RECEIVED_WITH_ISSUE'] },
+        status: { in: ['PREPARING', 'SHIPPED'] },
       },
       select: {
         id: true,
@@ -118,11 +125,20 @@ export class StockRequestCreationService {
         id: true,
         requestCode: true,
         status: true,
+        shipment: {
+          select: {
+            status: true,
+          },
+        },
       },
     });
 
-    if (pendingRequests.length > 0) {
-      const requestCodes = pendingRequests.map(r => r.requestCode).join(', ');
+    const blockingRequests = pendingRequests.filter(
+      (request) => request.status !== 'SHIPPED' || request.shipment?.status !== 'RECEIVED_WITH_ISSUE'
+    );
+
+    if (blockingRequests.length > 0) {
+      const requestCodes = blockingRequests.map(r => r.requestCode).join(', ');
       console.log('ERROR: Pending requests found:', requestCodes);
       throw {
         status: 422,
@@ -175,6 +191,8 @@ export class StockRequestCreationService {
       };
     }
 
+    const masterProductById = new Map(masterProducts.map((product) => [product.id, product]));
+
     // Validate quantities
     for (const item of data.items) {
       if (!item.requestedQty || item.requestedQty <= 0) {
@@ -187,10 +205,19 @@ export class StockRequestCreationService {
       }
     }
 
+    const normalizedItems = data.items.map((item) => {
+      const masterProduct = masterProductById.get(item.masterProductId);
+      return {
+        masterProductId: item.masterProductId,
+        requestedQty: parseStockRequestQuantity(masterProduct, item.requestedQty, item.unit),
+        notes: item.notes,
+      };
+    });
+
     console.log('All validations passed, proceeding with creation...');
 
     // Get overstock info for all items
-    const overstockInfo = await overstockService.getOverstockInfoForRequest(branchId, data.items);
+    const overstockInfo = await overstockService.getOverstockInfoForRequest(branchId, normalizedItems);
 
     // Generate request code
     const requestCode = await this.generateRequestCode(branchId);
@@ -206,7 +233,7 @@ export class StockRequestCreationService {
           status: 'PENDING',
           notes: data.notes,
           items: {
-            create: data.items.map(item => {
+            create: normalizedItems.map(item => {
               const itemOverstock = overstockInfo.find(o => o.masterProductId === item.masterProductId);
               return {
                 masterProductId: item.masterProductId,
@@ -283,8 +310,8 @@ export class StockRequestCreationService {
         requestCode, 
         branchId, 
         branchType: branch.type,
-        itemCount: data.items.length,
-        items: data.items.map(i => ({
+        itemCount: normalizedItems.length,
+        items: normalizedItems.map(i => ({
           masterProductId: i.masterProductId,
           requestedQty: i.requestedQty,
         })),
@@ -351,15 +378,17 @@ export class StockRequestCreationService {
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
         productCategory: item.masterProduct.category,
-        requestedQty: Number(item.requestedQty),
-        approvedQty: item.approvedQty ? Number(item.approvedQty) : null,
-        overstockDeducted: item.overstockDeducted ? Number(item.overstockDeducted) : 0,
-        finalQty: item.finalQty ? Number(item.finalQty) : Number(item.requestedQty),
-        unit: item.masterProduct.baseUnit,
+        requestedQty: formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        approvedQty: item.approvedQty ? formatStockRequestQuantity(item.masterProduct, item.approvedQty) : null,
+        overstockDeducted: item.overstockDeducted ? formatStockRequestQuantity(item.masterProduct, item.overstockDeducted) : 0,
+        finalQty: item.finalQty
+          ? formatStockRequestQuantity(item.masterProduct, item.finalQty)
+          : formatStockRequestQuantity(item.masterProduct, item.requestedQty),
+        unit: getStockRequestUnit(item.masterProduct),
         notes: item.notes,
         overstockUsages: item.overstockUsages?.map((u: any) => ({
           id: u.id,
-          quantityUsed: Number(u.quantityUsed),
+          quantityUsed: formatStockRequestQuantity(item.masterProduct, u.quantityUsed),
           reason: u.overstock?.reason,
           sourceShipmentCode: u.overstock?.sourceShipment?.shipmentCode,
         })) || [],

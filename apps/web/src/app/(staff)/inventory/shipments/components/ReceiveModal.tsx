@@ -19,12 +19,13 @@ interface ReceiveModalProps {
 
 export default function ReceiveModal({ shipment, onClose, onReceive, loading }: ReceiveModalProps) {
   const [notes, setNotes] = useState('');
-  const [receivedItems, setReceivedItems] = useState<Array<{ masterProductId: string; receivedQty: number }>>([]);
+  const [receivedItems, setReceivedItems] = useState<Array<{ masterProductId: string; receivedQty: number; unit?: string }>>([]);
   const [discrepancies, setDiscrepancies] = useState<Array<{
     masterProductId: string;
     expectedQty: number;
     receivedQty: number;
     discrepancyType: DiscrepancyType;
+    unit?: string;
     notes: string;
   }>>([]);
   const [hasDiscrepancy, setHasDiscrepancy] = useState(false);
@@ -37,6 +38,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
       shipment.items.map(item => ({
         masterProductId: item.masterProductId,
         receivedQty: item.sentQty,
+        unit: item.unit,
       }))
     );
     setDiscrepancies([]);
@@ -71,6 +73,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
             expectedQty: originalItem.sentQty,
             receivedQty: qty,
             discrepancyType: 'SHORTAGE' as DiscrepancyType,
+            unit: originalItem.unit,
             notes: '',
           }];
         }
