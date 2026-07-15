@@ -897,6 +897,74 @@ export class LogisticsService {
     return shipments.map((shipment) => this.formatBagShipment(shipment));
   }
 
+  async listHomecareBagUsages(actor: LogisticsActor, query: { status?: string; bagId?: string; teamId?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat pemakaian tas');
+
+    const where: any = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.bagId ? { bagId: query.bagId } : {}),
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
+    }
+
+    const usages = await prisma.homecareBagUsage.findMany({
+      where,
+      include: { bag: { include: { team: true } }, items: true },
+      orderBy: { usageDate: 'desc' },
+      take: 100,
+    });
+
+    return usages.map((usage) => this.formatBagUsage(usage));
+  }
+
+  async listHomecareBagReturns(actor: LogisticsActor, query: { bagId?: string; teamId?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat pengembalian tas');
+
+    const where: any = {
+      ...(query.bagId ? { bagId: query.bagId } : {}),
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
+    }
+
+    const returns = await prisma.homecareBagReturn.findMany({
+      where,
+      include: { bag: { include: { team: true } }, items: true },
+      orderBy: { returnedAt: 'desc' },
+      take: 100,
+    });
+
+    return returns.map((bagReturn) => this.formatBagReturn(bagReturn));
+  }
+
+  async listHomecareBagOpnames(actor: LogisticsActor, query: { status?: string; bagId?: string; teamId?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat inspeksi tas');
+
+    const where: any = {
+      ...(query.status ? { status: query.status } : {}),
+      ...(query.bagId ? { bagId: query.bagId } : {}),
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+    };
+
+    if (!centralStockManagerRoles.has(actor.role)) {
+      where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
+    }
+
+    const opnames = await prisma.homecareBagOpname.findMany({
+      where,
+      include: { bag: { include: { team: true } }, items: true },
+      orderBy: { checkedAt: 'desc' },
+      take: 100,
+    });
+
+    return opnames.map((opname) => this.formatBagOpname(opname));
+  }
+
   // ============================================================
   // Branch stock requests using legacy tables
   // ============================================================
@@ -1502,12 +1570,51 @@ export class LogisticsService {
     return updated;
   }
 
+  async deleteHomecareTeam(actor: LogisticsActor, teamId: string) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses menghapus tim homecare');
+    const team = await prisma.homecareTeam.findUnique({
+      where: { id: teamId },
+      include: {
+        members: {
+          where: { isActive: true },
+          select: { id: true },
+        },
+        bags: {
+          select: { id: true },
+        },
+      },
+    });
+    if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    if (team.bags.length > 0) {
+      throw { status: 400, code: 'TEAM_HAS_BAGS', message: 'Tim masih memiliki tas. Pindahkan atau hapus tas terlebih dahulu' };
+    }
+    if (team.members.length > 0) {
+      throw { status: 400, code: 'TEAM_HAS_ACTIVE_MEMBERS', message: 'Tim masih memiliki anggota aktif. Nonaktifkan anggota terlebih dahulu' };
+    }
+
+    await prisma.homecareTeam.delete({
+      where: { id: teamId },
+    });
+
+    await logAudit({
+      userId: actor.userId,
+      branchId: team.branchId,
+      action: AuditAction.DELETE,
+      resource: 'HomecareTeam',
+      resourceId: teamId,
+      meta: { action: 'DELETE_HOMECARE_TEAM', teamCode: team.teamCode, teamName: team.name },
+    });
+
+    return { id: teamId };
+  }
+
   async createHomecareBag(actor: LogisticsActor, input: any) {
-    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses membuat tas homecare');
+    this.assertRole(actor, [Role.SUPER_ADMIN], 'Hanya super admin yang dapat membuat tas homecare');
     const team = await prisma.homecareTeam.findUnique({ where: { id: input.teamId } });
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
 
     const branchId = input.branchId || team.branchId;
+
     const bagCode = input.bagCode || this.uniqueCode('HCB');
     const bag = await prisma.homecareBag.create({
       data: {
@@ -1532,6 +1639,110 @@ export class LogisticsService {
     });
 
     return bag;
+  }
+
+  async assignHomecareBag(actor: LogisticsActor, bagId: string, input: any) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses assign tas homecare');
+
+    const [bag, team] = await Promise.all([
+      prisma.homecareBag.findUnique({
+        where: { id: bagId },
+        include: { team: true, stocks: true },
+      }),
+      prisma.homecareTeam.findUnique({
+        where: { id: input.teamId },
+      }),
+    ]);
+
+    if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
+    if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    if (bag.teamId === team.id) {
+      throw {
+        status: 400,
+        code: 'BAG_ALREADY_ASSIGNED_TO_TEAM',
+        message: 'Tas homecare ini sudah berada di tim tersebut',
+      };
+    }
+
+    const assignedBag = await prisma.homecareBag.update({
+      where: { id: bagId },
+      data: {
+        teamId: team.id,
+        branchId: team.branchId,
+        notes: input.notes ?? bag.notes,
+      },
+      include: { team: true, stocks: true },
+    });
+
+    await logAudit({
+      userId: actor.userId,
+      branchId: team.branchId,
+      action: AuditAction.ASSIGN,
+      resource: 'HomecareBag',
+      resourceId: assignedBag.id,
+      meta: {
+        action: 'ASSIGN_HOMECARE_BAG',
+        bagCode: assignedBag.bagCode,
+        fromTeamId: bag.teamId,
+        toTeamId: team.id,
+      },
+    });
+
+    return assignedBag;
+  }
+
+  async deleteHomecareBag(actor: LogisticsActor, bagId: string) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses menghapus tas homecare');
+    const bag = await prisma.homecareBag.findUnique({
+      where: { id: bagId },
+      include: {
+        team: true,
+        stocks: true,
+        stockRequests: { select: { id: true } },
+        shipments: { select: { id: true } },
+        usages: { select: { id: true } },
+        returns: { select: { id: true } },
+        opnames: { select: { id: true } },
+        mutations: { select: { id: true } },
+      },
+    });
+    if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
+
+    if (
+      bag.stocks.length > 0 ||
+      bag.stockRequests.length > 0 ||
+      bag.shipments.length > 0 ||
+      bag.usages.length > 0 ||
+      bag.returns.length > 0 ||
+      bag.opnames.length > 0 ||
+      bag.mutations.length > 0
+    ) {
+      throw {
+        status: 400,
+        code: 'BAG_HAS_HISTORY',
+        message: 'Tas sudah memiliki stok atau riwayat operasional sehingga tidak dapat dihapus',
+      };
+    }
+
+    await prisma.homecareBag.delete({
+      where: { id: bagId },
+    });
+
+    await logAudit({
+      userId: actor.userId,
+      branchId: bag.branchId,
+      action: AuditAction.DELETE,
+      resource: 'HomecareBag',
+      resourceId: bagId,
+      meta: {
+        action: 'DELETE_HOMECARE_BAG',
+        bagCode: bag.bagCode,
+        bagName: bag.name,
+        teamId: bag.teamId,
+      },
+    });
+
+    return { id: bagId };
   }
 
   async getBagStock(actor: LogisticsActor, bagId: string) {
@@ -1583,7 +1794,7 @@ export class LogisticsService {
   // ============================================================
 
   async createBagStockRequest(actor: LogisticsActor, input: any) {
-    this.assertRole(actor, canRequestBagStock, 'Hanya Admin Layanan yang dapat request stok tas');
+    this.assertRole(actor, canRequestBagStock, 'Anda tidak memiliki akses membuat request stok tas');
     const notes = this.requireNotes(input.requestNotes);
     await this.assertBagAccess(actor, input.bagId, { requireAdminLayanan: true });
     await this.validateProducts(input.items.map((item) => item.masterProductId));
@@ -2071,7 +2282,10 @@ export class LogisticsService {
         changes,
       });
 
-      return usage;
+      return tx.homecareBagUsage.findUniqueOrThrow({
+        where: { id: usage.id },
+        include: { bag: { include: { team: true } }, items: true },
+      });
     });
 
     await logAudit({
@@ -2122,7 +2336,7 @@ export class LogisticsService {
             })),
           },
         },
-        include: { bag: true, items: true },
+        include: { bag: { include: { team: true } }, items: true },
       });
 
       const changes: MovementChange[] = [];
@@ -2240,7 +2454,7 @@ export class LogisticsService {
             }),
           },
         },
-        include: { bag: true, items: true },
+        include: { bag: { include: { team: true } }, items: true },
       });
 
       const changes: MovementChange[] = [];
@@ -2437,7 +2651,11 @@ export class LogisticsService {
       id: usage.id,
       usageCode: usage.usageCode,
       bagId: usage.bagId,
+      bagCode: usage.bag?.bagCode,
+      bagName: usage.bag?.name,
       teamId: usage.teamId,
+      teamCode: usage.bag?.team?.teamCode,
+      teamName: usage.bag?.team?.name,
       treatmentSessionId: usage.treatmentSessionId,
       usedBy: usage.usedBy,
       status: usage.status,
@@ -2462,7 +2680,11 @@ export class LogisticsService {
       id: bagReturn.id,
       returnCode: bagReturn.returnCode,
       bagId: bagReturn.bagId,
+      bagCode: bagReturn.bag?.bagCode,
+      bagName: bagReturn.bag?.name,
       teamId: bagReturn.teamId,
+      teamCode: bagReturn.bag?.team?.teamCode,
+      teamName: bagReturn.bag?.team?.name,
       toBranchId: bagReturn.toBranchId,
       returnedBy: bagReturn.returnedBy,
       returnedAt: bagReturn.returnedAt?.toISOString?.(),
@@ -2487,7 +2709,11 @@ export class LogisticsService {
       id: opname.id,
       opnameCode: opname.opnameCode,
       bagId: opname.bagId,
+      bagCode: opname.bag?.bagCode,
+      bagName: opname.bag?.name,
       teamId: opname.teamId,
+      teamCode: opname.bag?.team?.teamCode,
+      teamName: opname.bag?.team?.name,
       status: opname.status,
       checkedBy: opname.checkedBy,
       checkedAt: opname.checkedAt?.toISOString?.(),

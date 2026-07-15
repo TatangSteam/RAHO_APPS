@@ -12,6 +12,10 @@ export const canManageCentralStock: Role[] = [
   Role.ADMIN_LOGISTIK,
 ];
 
+export const superAdminOnly: Role[] = [
+  Role.SUPER_ADMIN,
+];
+
 export const canShipStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
@@ -23,6 +27,9 @@ export const canRequestBranchStock: Role[] = [
 ];
 
 export const canRequestBagStock: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_LOGISTIK,
   Role.ADMIN_LAYANAN,
 ];
 

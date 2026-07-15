@@ -15,9 +15,11 @@ import {
   canRequestBagStock,
   canShipStock,
   logisticStaffRoles,
+  superAdminOnly,
 } from './logistics.access';
 import {
   addHomecareTeamMemberSchema,
+  assignHomecareBagSchema,
   approveBagStockRequestSchema,
   approveStockRequestSchema,
   createBagOpnameSchema,
@@ -290,6 +292,13 @@ router.delete(
   logisticsController.removeHomecareTeamMember.bind(logisticsController)
 );
 
+router.delete(
+  '/logistics/homecare-teams/:teamId',
+  authenticate,
+  authorize(canManageCentralStock),
+  logisticsController.deleteHomecareTeam.bind(logisticsController)
+);
+
 router.get(
   '/logistics/homecare-bags',
   authenticate,
@@ -300,9 +309,24 @@ router.get(
 router.post(
   '/logistics/homecare-bags',
   authenticate,
-  authorize(canManageCentralStock),
+  authorize(superAdminOnly),
   validate(createHomecareBagSchema),
   logisticsController.createHomecareBag.bind(logisticsController)
+);
+
+router.patch(
+  '/logistics/homecare-bags/:bagId/assign',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(assignHomecareBagSchema),
+  logisticsController.assignHomecareBag.bind(logisticsController)
+);
+
+router.delete(
+  '/logistics/homecare-bags/:bagId',
+  authenticate,
+  authorize(canManageCentralStock),
+  logisticsController.deleteHomecareBag.bind(logisticsController)
 );
 
 router.get(
@@ -374,6 +398,13 @@ router.post(
   logisticsController.useBagStock.bind(logisticsController)
 );
 
+router.get(
+  '/logistics/homecare-bag-usages',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listBagUsages.bind(logisticsController)
+);
+
 router.post(
   '/logistics/homecare-bag-returns',
   authenticate,
@@ -382,12 +413,26 @@ router.post(
   logisticsController.returnBagStock.bind(logisticsController)
 );
 
+router.get(
+  '/logistics/homecare-bag-returns',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listBagReturns.bind(logisticsController)
+);
+
 router.post(
   '/logistics/homecare-bag-opnames',
   authenticate,
   authorize(logisticStaffRoles),
   validate(createBagOpnameSchema),
   logisticsController.createBagOpname.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-bag-opnames',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.listBagOpnames.bind(logisticsController)
 );
 
 // ============================================================
