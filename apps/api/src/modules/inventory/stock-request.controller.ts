@@ -69,7 +69,16 @@ export class StockRequestController {
   async createPartnershipInvoice(req: Request, res: Response, next: NextFunction) {
     try {
       const { requestId } = req.params;
-      const { items, notes, paymentMode, totalAmount } = req.body;
+      const {
+        items,
+        notes,
+        paymentMode,
+        totalAmount,
+        paymentAccountLabel,
+        paymentBankName,
+        paymentAccountNumber,
+        paymentAccountHolder,
+      } = req.body;
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -106,6 +115,10 @@ export class StockRequestController {
         totalAmount: totalAmount !== undefined ? Number(totalAmount) : undefined,
         notes,
         paymentMode,
+        paymentAccountLabel,
+        paymentBankName,
+        paymentAccountNumber,
+        paymentAccountHolder,
       });
       return sendSuccess(res, result);
     } catch (err: any) {

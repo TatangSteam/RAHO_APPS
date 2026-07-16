@@ -1634,6 +1634,12 @@ model StockRequestInvoice {
   paymentUploadedAt    DateTime?
   paymentUploadedBy    String?
 
+  // Payment account shown on unpaid invoices
+  paymentAccountLabel  String?
+  paymentBankName      String?
+  paymentAccountNumber String?
+  paymentAccountHolder String?
+
   // Payment Verification by Admin Manager
   paymentVerificationStatus PaymentVerificationStatus @default(PENDING)
   verifiedBy                String?

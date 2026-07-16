@@ -10,6 +10,12 @@ import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 import { useAuthStore } from '@/stores/authStore';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { inventoryApi } from '@/lib/api/inventoryApi';
+import {
+  PAYMENT_ACCOUNT_OPTIONS,
+  getDefaultStockRequestPaymentAccount,
+  getPaymentAccountByType,
+  type PaymentAccountType,
+} from '@/lib/paymentAccounts';
 
 interface ReviewModalProps {
   request: StockRequest;
@@ -22,7 +28,13 @@ interface ReviewModalProps {
     items: InvoiceItemInput[],
     notes?: string,
     paymentMode?: 'NORMAL' | 'DEBT',
-    totalAmount?: number
+    totalAmount?: number,
+    paymentAccount?: {
+      paymentAccountLabel?: string;
+      paymentBankName?: string;
+      paymentAccountNumber?: string;
+      paymentAccountHolder?: string;
+    }
   ) => Promise<void>;
   onMarkPaymentAsDebt: (requestId: string, notes?: string) => Promise<void>;
   onConfirmPayment: (requestId: string, verificationNotes?: string) => Promise<void>;
@@ -57,6 +69,10 @@ export default function ReviewModal({
   
   // Total price for Partnership (single input instead of per-item)
   const [totalInvoiceAmount, setTotalInvoiceAmount] = useState<string>('');
+  const [selectedPaymentAccountType, setSelectedPaymentAccountType] = useState<PaymentAccountType>('CABANG');
+  const [paymentBankName, setPaymentBankName] = useState('');
+  const [paymentAccountNumber, setPaymentAccountNumber] = useState('');
+  const [paymentAccountHolder, setPaymentAccountHolder] = useState('');
   
   // Upload payment proof states
   const [showUploadSection, setShowUploadSection] = useState(false);
@@ -115,6 +131,14 @@ export default function ReviewModal({
       document.body.style.overflow = '';
     };
   }, []);
+
+  useEffect(() => {
+    const account = getDefaultStockRequestPaymentAccount(request.branchType, request.branchName);
+    setSelectedPaymentAccountType(account.type);
+    setPaymentBankName(account.bankName);
+    setPaymentAccountNumber(account.accountNumber);
+    setPaymentAccountHolder(account.accountHolder);
+  }, [request.id, request.branchName, request.branchType]);
 
   // Fetch a payment proof image with authentication
   const fetchPaymentProof = useCallback(async (paymentId: string, proofFileUrl: string) => {
@@ -193,10 +217,28 @@ export default function ReviewModal({
     }));
   };
 
+  const applyPaymentAccountPreset = (type: PaymentAccountType) => {
+    const account = getPaymentAccountByType(type);
+    setSelectedPaymentAccountType(account.type);
+    setPaymentBankName(account.bankName);
+    setPaymentAccountNumber(account.accountNumber);
+    setPaymentAccountHolder(account.accountHolder);
+  };
+
+  const buildPaymentAccountInput = () => {
+    const selectedAccount = getPaymentAccountByType(selectedPaymentAccountType);
+    return {
+      paymentAccountLabel: selectedAccount.label,
+      paymentBankName: paymentBankName.trim(),
+      paymentAccountNumber: paymentAccountNumber.trim(),
+      paymentAccountHolder: paymentAccountHolder.trim(),
+    };
+  };
+
   const handleApprove = async () => {
     const invoiceItems = buildInvoiceItems();
     const total = parseFloat(totalInvoiceAmount) || 0;
-    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, undefined, total);
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, undefined, total, buildPaymentAccountInput());
   };
 
   const handleApproveDebt = async () => {
@@ -207,7 +249,7 @@ export default function ReviewModal({
     }
 
     const invoiceItems = buildInvoiceItems();
-    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, 'DEBT', total);
+    await onCreatePartnershipInvoice(request.id, invoiceItems, reviewNotes, 'DEBT', total, buildPaymentAccountInput());
   };
 
   const handleMarkDebt = async () => {
@@ -669,6 +711,59 @@ export default function ReviewModal({
                     <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
                       Masukkan 0 atau kosongkan untuk approve gratis tanpa bukti pembayaran.
                     </p>
+
+                    <div className="mt-4 border-t border-emerald-500/20 pt-4">
+                      <label className="mb-2 block text-xs font-semibold text-neutral-500 dark:text-neutral-400">
+                        Rekening Pembayaran
+                      </label>
+                      <select
+                        value={selectedPaymentAccountType}
+                        onChange={(event) => applyPaymentAccountPreset(event.target.value as PaymentAccountType)}
+                        className="w-full rounded-xl border border-emerald-500/30 bg-white px-4 py-2.5 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-white"
+                      >
+                        {PAYMENT_ACCOUNT_OPTIONS.map((account) => (
+                          <option key={account.type} value={account.type}>
+                            {account.label} - {account.bankName} {account.accountNumber}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <label className="mb-1 block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                            Nama Bank
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentBankName}
+                            onChange={(event) => setPaymentBankName(event.target.value)}
+                            className="w-full rounded-lg border border-emerald-500/30 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                            No Rekening
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentAccountNumber}
+                            onChange={(event) => setPaymentAccountNumber(event.target.value)}
+                            className="w-full rounded-lg border border-emerald-500/30 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-white"
+                          />
+                        </div>
+                        <div>
+                          <label className="mb-1 block text-[11px] font-semibold text-neutral-500 dark:text-neutral-400">
+                            Atas Nama
+                          </label>
+                          <input
+                            type="text"
+                            value={paymentAccountHolder}
+                            onChange={(event) => setPaymentAccountHolder(event.target.value)}
+                            className="w-full rounded-lg border border-emerald-500/30 bg-white px-3 py-2 text-sm font-medium text-neutral-900 outline-none focus:ring-2 focus:ring-emerald-500 dark:bg-neutral-800 dark:text-white"
+                          />
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

@@ -25,6 +25,10 @@ interface CreateInvoiceInput {
   totalAmount?: number;
   notes?: string;
   paymentMode?: 'NORMAL' | 'DEBT';
+  paymentAccountLabel?: string;
+  paymentBankName?: string;
+  paymentAccountNumber?: string;
+  paymentAccountHolder?: string;
 }
 
 /**
@@ -323,6 +327,10 @@ export class StockRequestApprovalService {
           verificationNotes: approvalPlan.verificationNotes,
           paidAt: approvalPlan.paidAtNow ? now : null,
           notes: invoiceData.notes,
+          paymentAccountLabel: invoiceData.paymentAccountLabel?.trim() || null,
+          paymentBankName: invoiceData.paymentBankName?.trim() || null,
+          paymentAccountNumber: invoiceData.paymentAccountNumber?.trim() || null,
+          paymentAccountHolder: invoiceData.paymentAccountHolder?.trim() || null,
           createdBy: userId,
           items: {
             create: invoiceItems,
@@ -1343,9 +1351,14 @@ export class StockRequestApprovalService {
       paymentVerificationStatus: invoice.paymentVerificationStatus,
       paymentProofUrl: invoice.paymentProofUrl,
       paymentProofFileName: invoice.paymentProofFileName,
+      paymentAccountLabel: invoice.paymentAccountLabel,
+      paymentBankName: invoice.paymentBankName,
+      paymentAccountNumber: invoice.paymentAccountNumber,
+      paymentAccountHolder: invoice.paymentAccountHolder,
       verifiedAt: invoice.verifiedAt?.toISOString(),
       paidAt: invoice.paidAt?.toISOString(),
       rejectionReason: invoice.rejectionReason,
+      notes: invoice.notes,
       items: invoice.items?.map((item: any) => ({
         id: item.id,
         masterProductId: item.masterProductId,

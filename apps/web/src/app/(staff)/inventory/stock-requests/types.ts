@@ -45,9 +45,14 @@ export interface StockRequestInvoice {
   paymentVerificationStatus: string;
   paymentProofUrl?: string;
   paymentProofFileName?: string;
+  paymentAccountLabel?: string | null;
+  paymentBankName?: string | null;
+  paymentAccountNumber?: string | null;
+  paymentAccountHolder?: string | null;
   verifiedAt?: string;
   paidAt?: string;
   rejectionReason?: string;
+  notes?: string | null;
   items?: Array<{
     id: string;
     masterProductId: string;

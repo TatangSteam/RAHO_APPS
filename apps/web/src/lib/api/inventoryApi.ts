@@ -35,6 +35,10 @@ export interface CreateInvoiceInput {
   totalAmount?: number;
   notes?: string;
   paymentMode?: 'NORMAL' | 'DEBT';
+  paymentAccountLabel?: string;
+  paymentBankName?: string;
+  paymentAccountNumber?: string;
+  paymentAccountHolder?: string;
 }
 
 export interface ReceiveShipmentInput {
@@ -202,8 +206,13 @@ export interface StockRequest {
     remainingAmount?: number;
     status: string;
     paymentVerificationStatus: string;
+    notes?: string | null;
     paymentProofUrl?: string;
     paymentUploadedAt?: string;
+    paymentAccountLabel?: string | null;
+    paymentBankName?: string | null;
+    paymentAccountNumber?: string | null;
+    paymentAccountHolder?: string | null;
     items?: Array<{
       id: string;
       masterProductId: string;
@@ -302,8 +311,13 @@ export interface Shipment {
       totalAmount: number;
       status: string;
       paymentVerificationStatus?: string;
+      notes?: string | null;
       paymentProofUrl?: string | null;
       paymentProofFileName?: string | null;
+      paymentAccountLabel?: string | null;
+      paymentBankName?: string | null;
+      paymentAccountNumber?: string | null;
+      paymentAccountHolder?: string | null;
       paidAt?: string | null;
       items?: Array<{
         id: string;

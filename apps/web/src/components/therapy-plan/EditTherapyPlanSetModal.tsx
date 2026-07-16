@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Copy, CopyPlus, Trash2 } from 'lucide-react';
 import { TherapyPlan, therapyPlanApi, BulkEditTherapyPlanSetInput } from '@/lib/therapyPlanApi';
 import { showToast } from '../ui/Toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -51,6 +52,25 @@ const toDosePayload = (value: DoseInputValue): number | null => {
   const parsed = parseDoseInput(value);
   return parsed === 0 ? null : parsed;
 };
+
+const copyEditableValues = (source: EditableRow, target: EditableRow): EditableRow => ({
+  ...target,
+  keterangan: source.keterangan,
+  ifa250: source.ifa250,
+  ifa500: source.ifa500,
+  hho: source.hho,
+  hhoKonsentrat: source.hhoKonsentrat,
+  h2: source.h2,
+  no: source.no,
+  gaso: source.gaso,
+  o2: source.o2,
+  o3: source.o3,
+  edta: source.edta,
+  mb: source.mb,
+  h2s: source.h2s,
+  kcl: source.kcl,
+  jmlNb: source.jmlNb,
+});
 
 export default function EditTherapyPlanSetModal({
   isOpen,
@@ -191,13 +211,38 @@ export default function EditTherapyPlanSetModal({
         }));
 
       const draft = loadDraft();
+      const initialRowByPlanNumber = new Map(
+        initialRowsData.map((row) => [row.planNumber, row])
+      );
+      const initialPlanNumbers = new Set(initialRowsData.map((row) => row.planNumber));
+      const lockedPlanNumbers = initialRowsData
+        .filter((row) => row.isLocked)
+        .map((row) => row.planNumber);
+      const maxInitialPlanNumber = Math.max(...initialRowsData.map((row) => row.planNumber), 0);
+      const draftPlanNumbers = new Set(draft?.map((row) => row.planNumber) ?? []);
       const draftValid = Boolean(
         draft &&
-        draft.length >= initialRowsData.length &&
-        initialRowsData.every((initialRow, index) => draft[index]?.planNumber === initialRow.planNumber)
+        draft.length > 0 &&
+        draft.length <= maxTherapyPlansPerSet &&
+        lockedPlanNumbers.every((planNumber) => draftPlanNumbers.has(planNumber)) &&
+        draft.every((row, index) => {
+          const previousRow = draft[index - 1];
+          return (
+            Number.isInteger(row.planNumber) &&
+            row.planNumber > 0 &&
+            (!previousRow || row.planNumber > previousRow.planNumber) &&
+            (initialPlanNumbers.has(row.planNumber) || row.planNumber > maxInitialPlanNumber)
+          );
+        })
       );
+      const restoredRows = draftValid
+        ? draft!.map((row) => ({
+            ...row,
+            isLocked: initialRowByPlanNumber.get(row.planNumber)?.isLocked ?? false,
+          }))
+        : initialRowsData;
 
-      setRows(draftValid ? draft! : initialRowsData);
+      setRows(restoredRows);
       if (draftValid) {
         showToast.info('Draft ditemukan dan dipulihkan');
       }
@@ -323,6 +368,88 @@ export default function EditTherapyPlanSetModal({
     );
   };
 
+  const getRemovableRowsFromEnd = (sourceRows = rows) => {
+    const lastLockedIndex = sourceRows.reduce(
+      (lastIndex, row, index) => (row.isLocked ? index : lastIndex),
+      -1
+    );
+    const trailingUnlockedRows = sourceRows.length - lastLockedIndex - 1;
+    return Math.max(0, Math.min(trailingUnlockedRows, sourceRows.length - 1));
+  };
+
+  const removeLastRows = (countOverride?: number) => {
+    if (!canEditSetNameAndAddPlans) {
+      showToast.error('Anda tidak memiliki izin untuk mengurangi terapi');
+      return;
+    }
+
+    const count = countOverride ?? parseInt(addRowCount, 10);
+    if (!Number.isFinite(count) || count < 1) {
+      showToast.error('Jumlah terapi yang dikurangi minimal 1');
+      return;
+    }
+
+    const removableRows = getRemovableRowsFromEnd();
+    if (removableRows <= 0) {
+      showToast.error('Tidak ada terapi terakhir yang dapat dikurangi');
+      return;
+    }
+
+    if (count > removableRows) {
+      showToast.error(`Hanya ${removableRows} terapi terakhir yang dapat dikurangi`);
+      return;
+    }
+
+    const removedRows = rows.slice(rows.length - count);
+    setRows(rows.slice(0, rows.length - count));
+
+    const firstPlanNumber = removedRows[0].planNumber;
+    const lastPlanNumber = removedRows[removedRows.length - 1].planNumber;
+    showToast.success(
+      count === 1
+        ? `Terapi #${firstPlanNumber} dikurangi`
+        : `${count} terapi dikurangi (#${firstPlanNumber}-#${lastPlanNumber})`
+    );
+  };
+
+  const copyToNextEditableRow = (index: number) => {
+    const sourceRow = rows[index];
+    if (!sourceRow) return;
+
+    const targetIndex = rows.findIndex((row, rowIndex) => rowIndex > index && !row.isLocked);
+    if (targetIndex === -1) {
+      showToast.error('Tidak ada terapi di bawah yang dapat diisi');
+      return;
+    }
+
+    setRows((currentRows) =>
+      currentRows.map((row, rowIndex) =>
+        rowIndex === targetIndex ? copyEditableValues(sourceRow, row) : row
+      )
+    );
+    showToast.success(
+      `Data Terapi #${sourceRow.planNumber} disalin ke Terapi #${rows[targetIndex].planNumber}`
+    );
+  };
+
+  const copyToAllEditableRowsBelow = (index: number) => {
+    const sourceRow = rows[index];
+    if (!sourceRow) return;
+
+    const targetCount = rows.filter((row, rowIndex) => rowIndex > index && !row.isLocked).length;
+    if (targetCount === 0) {
+      showToast.error('Tidak ada terapi di bawah yang dapat diisi');
+      return;
+    }
+
+    setRows((currentRows) =>
+      currentRows.map((row, rowIndex) =>
+        rowIndex > index && !row.isLocked ? copyEditableValues(sourceRow, row) : row
+      )
+    );
+    showToast.success(`Data Terapi #${sourceRow.planNumber} disalin ke ${targetCount} terapi di bawah`);
+  };
+
   const changesDetected = hasChanges();
 
   if (!isOpen || !mounted) return null;
@@ -331,6 +458,7 @@ export default function EditTherapyPlanSetModal({
   const setName = therapyPlans[0]?.setName || '';
   const setId = therapyPlans[0]?.therapyPlanSetId || '';
   const remainingAddableRows = Math.max(0, maxTherapyPlansPerSet - rows.length);
+  const removableRowsFromEnd = getRemovableRowsFromEnd();
 
   const handleInputChange = (index: number, field: keyof EditableRow, value: string) => {
     const newRows = [...rows];
@@ -461,8 +589,18 @@ export default function EditTherapyPlanSetModal({
         sessionPlanNumber !== null &&
         sessionPlanNumber !== initialSessionPlanNumber
       );
+      const retainedPlanNumbers = rows.map((row) => row.planNumber);
+      const initialPlanNumbers = initialRows.map((row) => row.planNumber);
+      const planMembershipChanged =
+        retainedPlanNumbers.length !== initialPlanNumbers.length ||
+        retainedPlanNumbers.some((planNumber, index) => planNumber !== initialPlanNumbers[index]);
 
-      if (editedUnlockedPlans.length === 0 && !setNameChanged && !sessionPlanNumberChanged) {
+      if (
+        editedUnlockedPlans.length === 0 &&
+        !setNameChanged &&
+        !sessionPlanNumberChanged &&
+        !planMembershipChanged
+      ) {
         showToast.error('Tidak ada perubahan pada plan yang tidak terkunci atau nama set');
         setIsSubmitting(false);
         return;
@@ -488,6 +626,10 @@ export default function EditTherapyPlanSetModal({
           jmlNb: toDosePayload(row.jmlNb),
         })),
       };
+
+      if (canEditSetNameAndAddPlans) {
+        payload.retainedPlanNumbers = retainedPlanNumbers;
+      }
 
       // Include newSetName if it changed and user has permission
       if (setNameChanged) {
@@ -663,12 +805,12 @@ export default function EditTherapyPlanSetModal({
                   <input
                     type="number"
                     min="1"
-                    max={remainingAddableRows || 1}
+                    max={Math.max(remainingAddableRows, removableRowsFromEnd, 1)}
                     value={addRowCount}
                     onChange={(e) => handleAddRowCountChange(e.target.value)}
-                    disabled={isSubmitting || remainingAddableRows <= 0}
+                    disabled={isSubmitting}
                     className="w-full px-3 py-2 text-sm text-center border border-amber-300 dark:border-amber-700 rounded-lg bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:ring-2 focus:ring-amber-500 focus:border-amber-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                    aria-label="Jumlah terapi yang ditambahkan"
+                    aria-label="Jumlah terapi yang ditambah atau dikurangi"
                   />
                 </div>
                 <button
@@ -685,6 +827,19 @@ export default function EditTherapyPlanSetModal({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                   </svg>
                   Tambah Terapi
+                </button>
+                <button
+                  onClick={() => removeLastRows()}
+                  disabled={isSubmitting || removableRowsFromEnd <= 0}
+                  className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-red-500 to-rose-600 border border-transparent rounded-lg hover:from-red-600 hover:to-rose-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 transition-all shadow-md"
+                  title={
+                    removableRowsFromEnd <= 0
+                      ? 'Tidak ada terapi terakhir yang dapat dikurangi'
+                      : 'Kurangi terapi dari baris terakhir'
+                  }
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Kurangi Terakhir
                 </button>
               </div>
             </div>
@@ -717,11 +872,20 @@ export default function EditTherapyPlanSetModal({
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">MB</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">H2S</th>
                   <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">KCl</th>
-                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase">Jml NB</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase border-r border-neutral-200 dark:border-neutral-700">Jml NB</th>
+                  <th className="px-3 py-2 text-center text-xs font-semibold text-neutral-700 dark:text-neutral-300 uppercase">Aksi</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-neutral-900 divide-y divide-neutral-200 dark:divide-neutral-700">
-                {rows.map((row, index) => (
+                {rows.map((row, index) => {
+                  const hasEditableRowBelow = rows.some(
+                    (candidateRow, candidateIndex) => candidateIndex > index && !candidateRow.isLocked
+                  );
+                  const isLastRow = index === rows.length - 1;
+                  const canRemoveThisRow =
+                    canEditSetNameAndAddPlans && isLastRow && !row.isLocked && rows.length > 1;
+
+                  return (
                   <tr key={row.planNumber} className={`${row.planNumber === sessionPlanNumber ? 'bg-blue-50 dark:bg-blue-900/20' : row.isLocked ? 'bg-neutral-100 dark:bg-neutral-800/30 opacity-60' : 'hover:bg-neutral-50 dark:hover:bg-neutral-800/50'}`}>
                     <td className="px-3 py-2 text-sm text-neutral-900 dark:text-white border-r border-neutral-200 dark:border-neutral-700 font-medium">
                       <div className="flex items-center gap-1">
@@ -901,7 +1065,7 @@ export default function EditTherapyPlanSetModal({
                         step="0.1"
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 border-r border-neutral-200 dark:border-neutral-700">
                       <input
                         type="number"
                         value={row.jmlNb ?? ''}
@@ -913,8 +1077,44 @@ export default function EditTherapyPlanSetModal({
                         step="0.1"
                       />
                     </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => copyToNextEditableRow(index)}
+                          disabled={isSubmitting || !hasEditableRowBelow}
+                          title="Copy ke terapi berikutnya"
+                          className="p-1.5 rounded bg-blue-100 text-blue-600 hover:bg-blue-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20 transition-colors"
+                        >
+                          <Copy size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => copyToAllEditableRowsBelow(index)}
+                          disabled={isSubmitting || !hasEditableRowBelow}
+                          title="Copy ke semua terapi di bawah"
+                          className="p-1.5 rounded bg-green-100 text-green-600 hover:bg-green-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-green-500/10 dark:text-green-400 dark:hover:bg-green-500/20 transition-colors"
+                        >
+                          <CopyPlus size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeLastRows(1)}
+                          disabled={isSubmitting || !canRemoveThisRow}
+                          title={
+                            canRemoveThisRow
+                              ? 'Hapus terapi terakhir'
+                              : 'Hanya terapi terakhir yang belum terkunci dapat dihapus'
+                          }
+                          className="p-1.5 rounded bg-red-100 text-red-600 hover:bg-red-200 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition-colors"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

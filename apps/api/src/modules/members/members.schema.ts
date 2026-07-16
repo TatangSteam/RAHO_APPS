@@ -123,6 +123,10 @@ export const editTherapyPlanSchema = z.object({
 export const bulkEditTherapyPlanSetSchema = z.object({
   newSetName: z.string().trim().max(120).optional(), // Optional custom set name (only for authorized users)
   sessionPlanNumber: z.number().int().min(1, 'Nomor terapi sesi harus positif').optional(),
+  retainedPlanNumbers: z
+    .array(z.number().int().min(1, 'Nomor terapi harus positif'))
+    .max(50, 'Maksimal 50 therapy plans dalam satu set')
+    .optional(),
   plans: z.array(
     z.object({
       planNumber: z.number().int().min(1, 'Plan number harus positif'),

@@ -4,6 +4,7 @@ import React from 'react';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
 import { devLog } from '@/lib/logger';
+import { getDefaultInvoicePaymentAccount } from '@/lib/paymentAccounts';
 import styles from './InvoiceDocument.module.css';
 
 interface Props {
@@ -63,6 +64,8 @@ export default function InvoiceDocument({ invoice }: Props) {
   const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
   const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
   const numberLabel = isReceipt ? 'No. Kwitansi:' : 'No. Faktur:';
+  const paymentAccount = getDefaultInvoicePaymentAccount(invoice);
+  const shouldShowPaymentAccount = !isReceipt && invoice.status !== 'CANCELLED';
   const isInstallment = Boolean(
     invoice.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal
   );
@@ -105,7 +108,7 @@ export default function InvoiceDocument({ invoice }: Props) {
         />
         <div className={styles.headerContent}>
           <h1 className={styles.companyName}>REVERSE AGING & HOMEOSTASIS CLUB</h1>
-          <p className={styles.companyLegal}>CV DUNIA SEHAT SENTOSA INDONESIA</p>
+          <p className={styles.companyLegal}>PT DUNIA SEHAT SENTOSA JAKARTA</p>
           <p className={styles.companyAddress}>Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada No 3-6</p>
           <p className={styles.companyCity}>Jakarta Pusat | (021) 3192-8888 | info@raho.id</p>
         </div>
@@ -209,6 +212,26 @@ export default function InvoiceDocument({ invoice }: Props) {
         </table>
       </div>
 
+      {/* Notes */}
+      {invoice.notes && (
+        <div className={styles.notes}>
+          <h3 className={styles.sectionTitle}>Catatan</h3>
+          <p className={styles.notesContent}>{invoice.notes}</p>
+        </div>
+      )}
+
+      {shouldShowPaymentAccount && (
+        <div className={styles.paymentSection}>
+          <h3 className={styles.sectionTitle}>Rekening</h3>
+          <div className={styles.paymentDetails}>
+            <p className={styles.paymentInstruction}>Pembayaran dapat ditransfer melalui rekening</p>
+            <p><strong>Nama Bank</strong>: {paymentAccount.bankName}</p>
+            <p><strong>No Rekening</strong>: {paymentAccount.accountNumber}</p>
+            <p><strong>Atas nama</strong>: {paymentAccount.accountHolder}</p>
+          </div>
+        </div>
+      )}
+
       {/* Summary */}
       <div className={styles.summary}>
         <div className={styles.summaryTable}>
@@ -261,15 +284,6 @@ export default function InvoiceDocument({ invoice }: Props) {
               * Insentif referral akan diberikan kepada {invoice.incentive.referrerName}
             </p>
           </div>
-        </div>
-      )}
-
-
-      {/* Notes */}
-      {invoice.notes && (
-        <div className={styles.notes}>
-          <h3 className={styles.sectionTitle}>Catatan</h3>
-          <p className={styles.notesContent}>{invoice.notes}</p>
         </div>
       )}
 

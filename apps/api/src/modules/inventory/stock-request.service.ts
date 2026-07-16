@@ -496,6 +496,10 @@ export class StockRequestService {
       totalAmount?: number;
       notes?: string;
       paymentMode?: 'NORMAL' | 'DEBT';
+      paymentAccountLabel?: string;
+      paymentBankName?: string;
+      paymentAccountNumber?: string;
+      paymentAccountHolder?: string;
     }
   ) {
     return await this.approvalService.createInvoice(requestId, userId, invoiceData);
@@ -517,6 +521,10 @@ export class StockRequestService {
       totalAmount?: number;
       notes?: string;
       paymentMode?: 'NORMAL' | 'DEBT';
+      paymentAccountLabel?: string;
+      paymentBankName?: string;
+      paymentAccountNumber?: string;
+      paymentAccountHolder?: string;
     }
   ) {
     return await this.approvalService.createPartnershipInvoice(requestId, userId, invoiceData);

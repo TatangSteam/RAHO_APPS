@@ -30,6 +30,7 @@ interface EditPlanInput {
 
 interface BulkEditSetInput {
   newSetName?: string; // Optional: Custom set name (only for authorized users)
+  retainedPlanNumbers?: number[];
   plans: EditPlanInput[];
 }
 
@@ -219,12 +220,24 @@ export class MemberTherapyPlanSetEditService {
         plan.treatmentSessionId !== options.editableTreatmentSessionId
     );
     const usedPlanNumbers = new Set(usedPlans.map((p) => p.planNumber || 0));
+    const originalPlanNumbers = originalSet.plans
+      .map((plan) => plan.planNumber || 0)
+      .filter((planNumber) => planNumber > 0);
+    const existingPlanNumbers = new Set(originalPlanNumbers);
 
     // 3. Validate input plans and check for edits to locked plans
     const planEditsMap = new Map<number, EditPlanInput>();
     const attemptedLockedEdits: number[] = [];
     
     input.plans.forEach((planInput) => {
+      if (!Number.isInteger(planInput.planNumber) || planInput.planNumber < 1) {
+        throw {
+          status: 400,
+          code: 'INVALID_PLAN_NUMBER',
+          message: 'Nomor terapi harus berupa angka positif',
+        };
+      }
+
       // Check if trying to edit a locked (used) plan
       if (usedPlanNumbers.has(planInput.planNumber)) {
         attemptedLockedEdits.push(planInput.planNumber);
@@ -277,12 +290,88 @@ export class MemberTherapyPlanSetEditService {
       };
     }
 
-    // If no edits remain after filtering locked plans
-    if (planEditsMap.size === 0) {
+    const retainedPlanNumbers = input.retainedPlanNumbers
+      ? [...new Set(input.retainedPlanNumbers)].sort((a, b) => a - b)
+      : [...new Set([...originalPlanNumbers, ...planEditsMap.keys()])].sort((a, b) => a - b);
+    const retainedPlanNumberSet = new Set(retainedPlanNumbers);
+
+    if (retainedPlanNumbers.length === 0) {
+      throw {
+        status: 400,
+        code: 'NO_RETAINED_PLANS',
+        message: 'Minimal satu terapi harus tersisa dalam set',
+      };
+    }
+
+    if (retainedPlanNumbers.length > 50) {
+      throw {
+        status: 400,
+        code: 'TOO_MANY_RETAINED_PLANS',
+        message: 'Maksimal 50 terapi dalam satu set',
+      };
+    }
+
+    const editedButRemovedPlanNumbers = [...planEditsMap.keys()].filter(
+      (planNumber) => !retainedPlanNumberSet.has(planNumber)
+    );
+    if (editedButRemovedPlanNumbers.length > 0) {
+      throw {
+        status: 400,
+        code: 'EDITED_PLAN_NOT_RETAINED',
+        message: `Terapi #${editedButRemovedPlanNumbers.join(', #')} diedit tetapi tidak termasuk dalam set yang disimpan`,
+      };
+    }
+
+    const retainedNewPlanNumbersWithoutData = retainedPlanNumbers.filter(
+      (planNumber) => !existingPlanNumbers.has(planNumber) && !planEditsMap.has(planNumber)
+    );
+    if (retainedNewPlanNumbersWithoutData.length > 0) {
+      throw {
+        status: 400,
+        code: 'NEW_PLAN_DATA_REQUIRED',
+        message: `Data terapi #${retainedNewPlanNumbersWithoutData.join(', #')} belum lengkap`,
+      };
+    }
+
+    const removedOriginalPlanNumbers = originalPlanNumbers.filter(
+      (planNumber) => !retainedPlanNumberSet.has(planNumber)
+    );
+    const removedLockedPlanNumbers = removedOriginalPlanNumbers.filter((planNumber) =>
+      usedPlanNumbers.has(planNumber)
+    );
+    if (removedLockedPlanNumbers.length > 0) {
+      throw {
+        status: 400,
+        code: 'LOCKED_PLAN_REMOVE_ATTEMPT',
+        message: `Terapi #${removedLockedPlanNumbers.join(', #')} sudah digunakan dalam sesi dan tidak dapat dihapus`,
+      };
+    }
+
+    if (
+      editableSessionPlan?.planNumber &&
+      !retainedPlanNumberSet.has(editableSessionPlan.planNumber)
+    ) {
+      throw {
+        status: 400,
+        code: 'SESSION_PLAN_REMOVE_ATTEMPT',
+        message: `Terapi #${editableSessionPlan.planNumber} sedang digunakan sesi ini dan tidak dapat dihapus`,
+      };
+    }
+
+    const addedPlanNumbers = retainedPlanNumbers.filter(
+      (planNumber) => !existingPlanNumbers.has(planNumber)
+    );
+    const hasPlanStructureChange =
+      removedOriginalPlanNumbers.length > 0 || addedPlanNumbers.length > 0;
+    const setNameChanged =
+      input.newSetName !== undefined && input.newSetName !== originalSet.name;
+
+    // If no edits remain after filtering locked plans and nothing else changed
+    if (planEditsMap.size === 0 && !hasPlanStructureChange && !setNameChanged) {
       throw {
         status: 400,
         code: 'NO_VALID_EDITS',
-        message: 'Tidak ada plan yang dapat diedit. Semua plan yang dipilih sudah terkunci.',
+        message: 'Tidak ada perubahan therapy plan set yang dapat disimpan.',
       };
     }
 
@@ -308,19 +397,23 @@ export class MemberTherapyPlanSetEditService {
       });
 
       const copiedPlans = [];
-      const existingPlanNumbers = new Set(originalSet.plans.map(p => p.planNumber || 0));
       const newPlanInputs: EditPlanInput[] = [];
 
       // Identify new plans (plans that don't exist in original set)
-      planEditsMap.forEach((planInput, planNumber) => {
-        if (!existingPlanNumbers.has(planNumber)) {
+      retainedPlanNumbers.forEach((planNumber) => {
+        const planInput = planEditsMap.get(planNumber);
+        if (planInput && !existingPlanNumbers.has(planNumber)) {
           newPlanInputs.push(planInput);
         }
       });
 
-      // Copy all existing plans with edits applied
+      // Copy retained existing plans with edits applied
       for (const oldPlan of originalSet.plans) {
         const planNumber = oldPlan.planNumber || 1;
+        if (!retainedPlanNumberSet.has(planNumber)) {
+          continue;
+        }
+
         const editInput = planEditsMap.get(planNumber);
         const hasEdit = !!editInput;
 

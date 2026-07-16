@@ -3,9 +3,10 @@ import autoTable from 'jspdf-autotable';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from './formatNumber';
 import { devLog, devError } from '@/lib/logger';
+import { getDefaultInvoicePaymentAccount } from '@/lib/paymentAccounts';
 
 const COMPANY_NAME = 'REVERSE AGING & HOMEOSTASIS CLUB';
-const COMPANY_LEGAL = 'CV DUNIA SEHAT SENTOSA INDONESIA';
+const COMPANY_LEGAL = 'PT DUNIA SEHAT SENTOSA JAKARTA';
 const COMPANY_ADDRESS = 'Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada No 3-6';
 const COMPANY_CITY = 'Jakarta Pusat';
 const COMPANY_PHONE = '(021) 3192-8888';
@@ -46,6 +47,8 @@ export async function generateInvoicePDF(invoice: Invoice) {
     const billToTitle = isReceipt ? 'DITERIMA DARI' : 'TAGIHAN UNTUK';
     const numberLabel = isReceipt ? 'No. Kwitansi' : 'No. Faktur';
     const totalLabel = isReceipt ? 'TOTAL DITERIMA' : 'TOTAL PEMBAYARAN';
+    const paymentAccount = getDefaultInvoicePaymentAccount(invoice);
+    const shouldShowPaymentAccount = !isReceipt && invoice.status !== 'CANCELLED';
     const isInstallment = Boolean(
       invoice.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal
     );
@@ -302,6 +305,55 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // SUMMARY SECTION
     // ============================================================
     currentY = (doc as any).lastAutoTable.finalY + 8;
+    const sectionTopY = currentY;
+    const leftColumnWidth = contentWidth - 98;
+    let postTableLeftY = sectionTopY;
+
+    if (invoice.notes) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(0, 0, 0);
+      doc.text('CATATAN', margin, postTableLeftY);
+
+      postTableLeftY += 4;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      const splitNotes = doc.splitTextToSize(invoice.notes, leftColumnWidth);
+      doc.text(splitNotes, margin, postTableLeftY);
+      postTableLeftY += splitNotes.length * 4 + 4;
+    }
+
+    if (shouldShowPaymentAccount) {
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(0, 0, 0);
+      doc.text('PEMBAYARAN DAPAT DITRANSFER MELALUI REKENING', margin, postTableLeftY);
+
+      const labelX = margin;
+      const valueX = margin + 30;
+      postTableLeftY += 5;
+      doc.setFontSize(8);
+      doc.text('Nama Bank', labelX, postTableLeftY);
+      doc.text(':', valueX - 3, postTableLeftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.bankName, valueX, postTableLeftY);
+
+      postTableLeftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('No Rekening', labelX, postTableLeftY);
+      doc.text(':', valueX - 3, postTableLeftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.accountNumber, valueX, postTableLeftY);
+
+      postTableLeftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Atas nama', labelX, postTableLeftY);
+      doc.text(':', valueX - 3, postTableLeftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.accountHolder, valueX, postTableLeftY);
+      postTableLeftY += 4;
+    }
+
     doc.setDrawColor(...BRAND_RED);
     doc.setLineWidth(0.6);
     doc.line(margin, currentY - 5, pageWidth - margin, currentY - 5);
@@ -355,6 +407,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     doc.setTextColor(255, 255, 255);
     doc.text(totalLabel, summaryLabelX, currentY);
     doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, currentY, { align: 'right' });
+    currentY = Math.max(currentY, postTableLeftY);
     
     // ============================================================
     // INCENTIVE INFORMATION (if exists)
@@ -398,23 +451,6 @@ export async function generateInvoicePDF(invoice: Invoice) {
       doc.text(`* Insentif referral akan diberikan kepada ${invoice.incentive.referrerName}`, margin + 3, currentY);
       
       currentY += 5;
-    }
-    
-    // ============================================================
-    // NOTES
-    // ============================================================
-    if (invoice.notes) {
-      currentY += 8;
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text('CATATAN', margin, currentY);
-      
-      currentY += 4;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      const splitNotes = doc.splitTextToSize(invoice.notes, contentWidth);
-      doc.text(splitNotes, margin, currentY);
-      currentY += splitNotes.length * 4;
     }
     
     // ============================================================

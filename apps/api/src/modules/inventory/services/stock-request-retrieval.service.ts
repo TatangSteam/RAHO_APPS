@@ -336,6 +336,11 @@ export class StockRequestRetrievalService {
         remainingAmount: Number(request.invoice.remainingAmount ?? request.invoice.totalAmount ?? 0),
         status: request.invoice.status,
         paymentVerificationStatus: request.invoice.paymentVerificationStatus,
+        notes: request.invoice.notes,
+        paymentAccountLabel: request.invoice.paymentAccountLabel,
+        paymentBankName: request.invoice.paymentBankName,
+        paymentAccountNumber: request.invoice.paymentAccountNumber,
+        paymentAccountHolder: request.invoice.paymentAccountHolder,
       } : null,
       // Shipment summary
       shipment: request.shipment ? {
@@ -392,9 +397,14 @@ export class StockRequestRetrievalService {
         paymentVerificationStatus: request.invoice.paymentVerificationStatus,
         paymentProofUrl: request.invoice.paymentProofUrl,
         paymentProofFileName: request.invoice.paymentProofFileName,
+        paymentAccountLabel: request.invoice.paymentAccountLabel,
+        paymentBankName: request.invoice.paymentBankName,
+        paymentAccountNumber: request.invoice.paymentAccountNumber,
+        paymentAccountHolder: request.invoice.paymentAccountHolder,
         verifiedAt: request.invoice.verifiedAt?.toISOString(),
         paidAt: request.invoice.paidAt?.toISOString(),
         rejectionReason: request.invoice.rejectionReason,
+        notes: request.invoice.notes,
         items: request.invoice.items?.map((item: any) => ({
           id: item.id,
           masterProductId: item.masterProductId,

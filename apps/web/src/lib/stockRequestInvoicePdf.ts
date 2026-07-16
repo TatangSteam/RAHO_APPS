@@ -3,9 +3,10 @@ import autoTable from 'jspdf-autotable';
 import { formatNumberWithDots } from './formatNumber';
 import { devLog, devError } from '@/lib/logger';
 import type { StockRequest } from '@/app/(staff)/inventory/stock-requests/types';
+import { getDefaultStockRequestPaymentAccount } from '@/lib/paymentAccounts';
 
 const COMPANY_NAME = 'REVERSE AGING & HOMEOSTASIS CLUB';
-const COMPANY_LEGAL = 'CV DUNIA SEHAT SENTOSA INDONESIA';
+const COMPANY_LEGAL = 'PT DUNIA SEHAT SENTOSA JAKARTA';
 const COMPANY_ADDRESS = 'Komplek Duta Merlin Blok E No 05-06, Jalan Gajah Mada No 3-6';
 const COMPANY_CITY = 'Jakarta Pusat';
 const COMPANY_PHONE = '(021) 3192-8888';
@@ -48,6 +49,18 @@ function getInvoiceItemUnit(request: StockRequest, item: StockRequestInvoiceItem
   return item.unit || request.items.find((requestItem) => (
     requestItem.masterProductId === item.masterProductId
   ))?.unit;
+}
+
+function getPaymentAccount(request: StockRequest) {
+  const invoice = request.invoice;
+  const fallback = getDefaultStockRequestPaymentAccount(request.branchType, request.branchName);
+
+  return {
+    label: invoice?.paymentAccountLabel || fallback.label,
+    bankName: invoice?.paymentBankName || fallback.bankName,
+    accountNumber: invoice?.paymentAccountNumber || fallback.accountNumber,
+    accountHolder: invoice?.paymentAccountHolder || fallback.accountHolder,
+  };
 }
 
 export async function generateStockRequestInvoicePDF(request: StockRequest) {
@@ -218,42 +231,76 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     });
 
     // ============================================================
-    // SUMMARY SECTION - Total Only
+    // NOTES, PAYMENT ACCOUNT, AND SUMMARY
     // ============================================================
-    currentY = ((doc as AutoTableDocument).lastAutoTable?.finalY ?? currentY) + 8;
-
+    const tableEndY = (doc as AutoTableDocument).lastAutoTable?.finalY ?? currentY;
+    const sectionTopY = tableEndY + 6;
     const summaryX = pageWidth - margin - 70;
     const summaryValueX = pageWidth - margin;
+    const leftColumnWidth = summaryX - margin - 8;
+    const invoiceNotes = invoice.notes || request.notes;
+    const shouldShowPaymentAccount = invoice.status !== 'PAID' && invoice.status !== 'CANCELLED';
+    const paymentAccount = getPaymentAccount(request);
+    let leftY = sectionTopY;
 
-    // Total line
-    doc.setDrawColor(...BRAND_RED);
-    doc.setLineWidth(0.5);
-    doc.line(summaryX, currentY, summaryValueX, currentY);
-
-    currentY += 6;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...BRAND_RED);
-    doc.text('TOTAL PEMBAYARAN', summaryX, currentY);
-    doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, currentY, { align: 'right' });
-
-    // ============================================================
-    // NOTES
-    // ============================================================
-    if (request.notes) {
-      currentY += 15;
+    if (invoiceNotes) {
       doc.setTextColor(0, 0, 0);
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(9);
-      doc.text('CATATAN', margin, currentY);
+      doc.text('CATATAN', margin, leftY);
 
-      currentY += 4;
+      leftY += 4;
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8);
-      const splitNotes = doc.splitTextToSize(request.notes, contentWidth) as string[];
-      doc.text(splitNotes, margin, currentY);
-      currentY += splitNotes.length * 4;
+      const splitNotes = doc.splitTextToSize(invoiceNotes, leftColumnWidth) as string[];
+      doc.text(splitNotes, margin, leftY);
+      leftY += splitNotes.length * 4 + 3;
     }
+
+    if (shouldShowPaymentAccount) {
+      doc.setTextColor(0, 0, 0);
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.text('PEMBAYARAN DAPAT DITRANSFER MELALUI REKENING', margin, leftY);
+
+      const labelX = margin;
+      const valueX = margin + 30;
+      leftY += 5;
+      doc.setFontSize(8);
+      doc.text('Nama Bank', labelX, leftY);
+      doc.text(':', valueX - 3, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.bankName, valueX, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('No Rekening', labelX, leftY);
+      doc.text(':', valueX - 3, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.accountNumber, valueX, leftY);
+
+      leftY += 5;
+      doc.setFont('helvetica', 'bold');
+      doc.text('Atas nama', labelX, leftY);
+      doc.text(':', valueX - 3, leftY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(paymentAccount.accountHolder, valueX, leftY);
+      leftY += 4;
+    }
+
+    let summaryY = sectionTopY;
+    doc.setDrawColor(...BRAND_RED);
+    doc.setLineWidth(0.5);
+    doc.line(summaryX, summaryY, summaryValueX, summaryY);
+
+    summaryY += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(...BRAND_RED);
+    doc.text('TOTAL PEMBAYARAN', summaryX, summaryY);
+    doc.text(`Rp ${formatNumberWithDots(invoice.totalAmount)}`, summaryValueX, summaryY, { align: 'right' });
+
+    currentY = Math.max(leftY, summaryY);
 
     // ============================================================
     // SIGNATURES

@@ -230,11 +230,23 @@ export default function StockRequestsPage() {
     items: InvoiceItemInput[],
     notes?: string,
     paymentMode?: 'NORMAL' | 'DEBT',
-    totalAmount?: number
+    totalAmount?: number,
+    paymentAccount?: {
+      paymentAccountLabel?: string;
+      paymentBankName?: string;
+      paymentAccountNumber?: string;
+      paymentAccountHolder?: string;
+    }
   ) => {
     try {
       setActionLoading(true);
-      const response = await inventoryApi.createPartnershipInvoice(requestId, { items, notes, paymentMode, totalAmount });
+      const response = await inventoryApi.createPartnershipInvoice(requestId, {
+        items,
+        notes,
+        paymentMode,
+        totalAmount,
+        ...paymentAccount,
+      });
       const message = response.data?.data?.message || 'Invoice berhasil dibuat';
       showToast.success(message);
       setShowModal(false);
