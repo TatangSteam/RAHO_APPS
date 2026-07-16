@@ -59,13 +59,16 @@ interface Branch {
 interface Member {
   memberId: string;
   memberNo: string;
+  nik?: string | null;
   fullName: string;
   email: string;
+  username?: string;
   phone: string;
   age?: number | null;
   createdAt: string;
   isActive: boolean;
   registrationBranch: string;
+  registrationBranchCode?: string;
   voucherCount: number;
   basicPackageCount: number;
   isLintas: boolean;
@@ -244,27 +247,37 @@ export default function BranchDetailPage() {
   const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('');
   const [showMemberImport, setShowMemberImport] = useState(false);
 
+  const normalizeMemberSearchText = (value: unknown) =>
+    String(value ?? '')
+      .toLocaleLowerCase('id-ID')
+      .replace(/[\s\-/.]+/g, '');
+
   // Filtered members based on branch filter
   const filteredMembers = members.filter((member) => {
-    const normalizedSearchFilter = debouncedMemberSearch.toLocaleLowerCase('id-ID');
+    const normalizedSearchFilter = normalizeMemberSearchText(debouncedMemberSearch);
+    const normalizedBranchCode = branch?.branchCode ? normalizeMemberSearchText(branch.branchCode) : '';
+    const normalizedRegistrationBranch =
+      normalizeMemberSearchText(member.registrationBranchCode || member.registrationBranch);
 
     const matchesBranch =
       memberBranchFilter === 'all' ? true :
-      memberBranchFilter === 'registered' ? member.registrationBranch === branch?.branchCode :
-      member.isLintas || member.registrationBranch !== branch?.branchCode;
+      memberBranchFilter === 'registered' ? normalizedRegistrationBranch === normalizedBranchCode :
+      member.isLintas || normalizedRegistrationBranch !== normalizedBranchCode;
 
     const searchableFields = [
       member.fullName,
       member.phone,
       member.email,
+      member.username,
       member.memberNo,
+      member.nik,
       String((member as any).age ?? ''),
       new Date(member.createdAt).toLocaleDateString('id-ID'),
       new Date(member.createdAt).toISOString().slice(0, 10),
     ]
       .filter(Boolean)
-      .join(' ')
-      .toLocaleLowerCase('id-ID');
+      .map(normalizeMemberSearchText)
+      .join(' ');
 
     const matchesSearch = !normalizedSearchFilter || searchableFields.includes(normalizedSearchFilter);
 
@@ -365,13 +378,24 @@ export default function BranchDetailPage() {
       setTabLoading(true);
 
       if (activeTab === 'members') {
-        const response = await branchesApi.getBranchMembers(branchId, {
+        let response = await branchesApi.getBranchMembers(branchId, {
           page: 1,
           limit: 100,
           search: debouncedMemberSearch || undefined,
         });
-        const membersResult = response.data.data;
-        const membersData = membersResult?.members || [];
+
+        let membersResult = response.data.data;
+        let membersData = membersResult?.members || [];
+
+        if (debouncedMemberSearch && Array.isArray(membersData) && membersData.length === 0) {
+          response = await branchesApi.getBranchMembers(branchId, {
+            page: 1,
+            limit: 1000,
+          });
+          membersResult = response.data.data;
+          membersData = membersResult?.members || [];
+        }
+
         setMembers(Array.isArray(membersData) ? membersData : []);
       } else if (activeTab === 'inventory') {
         const response = await inventoryApi.getInventoryItems(branchId, {});
@@ -741,7 +765,7 @@ export default function BranchDetailPage() {
                         type="text"
                         value={memberSearch}
                         onChange={(event) => setMemberSearch(event.target.value)}
-                        placeholder="Cari nama, member no, username, telepon..."
+                        placeholder="Cari nama, member no, NIK, username..."
                         className="h-10 w-full rounded-lg border border-neutral-300 bg-white pl-10 pr-10 text-sm font-medium text-neutral-700 placeholder:text-neutral-400 focus:border-amber-500/50 focus:outline-none focus:ring-2 focus:ring-amber-500/30 dark:border-neutral-700 dark:bg-neutral-800 dark:text-neutral-200 dark:placeholder:text-neutral-500"
                       />
                       {memberSearch && (

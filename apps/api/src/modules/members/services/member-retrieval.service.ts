@@ -324,6 +324,7 @@ export class MemberRetrievalService {
     if (search) {
       const searchConditions = [
         { memberNo: { contains: search, mode: 'insensitive' } },
+        { nik: { contains: search, mode: 'insensitive' } },
         { 
           user: { 
             profile: { 
@@ -757,6 +758,7 @@ export class MemberRetrievalService {
     return {
       memberId: member.id,
       memberNo: member.memberNo,
+      nik: member.nik,
       fullName: member.user?.profile?.fullName || '',
       phone: member.user?.profile?.phone || '',
       email: member.user?.email || '',
@@ -772,6 +774,7 @@ export class MemberRetrievalService {
       isDeceased: member.isDeceased,
       isLintas,
       registrationBranch: member.registrationBranch?.name || 'N/A',
+      registrationBranchCode: member.registrationBranch?.branchCode || '',
       hasInformedConsent,
       photoUrl,
       createdAt: member.createdAt?.toISOString(),

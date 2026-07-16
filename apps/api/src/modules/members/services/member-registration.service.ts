@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
+import { generateMemberNo } from '../../../utils/codeGenerator';
 import { AuditAction, DocumentType } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { uploadFile } from '../../../config/minio';
@@ -386,9 +387,11 @@ export class MemberRegistrationService {
    * Generate member number
    */
   private async generateMemberNumber(branchCode: string): Promise<string> {
-    const prefix = `MBR-${branchCode}`;
+    const now = new Date();
+    const yymm = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const prefix = `MBR-${branchCode}-${yymm}-`;
     
-    // Get last member number for this branch
+    // Get last member number for this branch in the current month.
     const lastMember = await prisma.member.findFirst({
       where: {
         memberNo: {
@@ -406,7 +409,13 @@ export class MemberRegistrationService {
       sequence = lastSequence + 1;
     }
 
-    return `${prefix}-${sequence.toString().padStart(4, '0')}`;
+    let candidate = generateMemberNo(branchCode, sequence);
+    while (await prisma.member.findUnique({ where: { memberNo: candidate } })) {
+      sequence += 1;
+      candidate = generateMemberNo(branchCode, sequence);
+    }
+
+    return candidate;
   }
 
   /**
