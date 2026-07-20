@@ -47,6 +47,52 @@ function assertCanManageStaffRole(callerRole: Role, targetRole: Role) {
   }
 }
 
+async function getManagedBranchIds(userId: string): Promise<string[]> {
+  const branches = await prisma.managerBranch.findMany({
+    where: { userId },
+    select: { branchId: true },
+  });
+
+  return branches.map((branch) => branch.branchId);
+}
+
+async function assertAdminManagerCanUseBranch(callerUserId: string | undefined, branchId: string | null) {
+  if (!callerUserId) {
+    throw errors.forbidden('Admin Manager tidak valid.');
+  }
+
+  if (!branchId) {
+    throw errors.badRequest('BRANCH_REQUIRED', 'Cabang harus dipilih untuk staff cabang.');
+  }
+
+  const managedBranchIds = await getManagedBranchIds(callerUserId);
+  if (!managedBranchIds.includes(branchId)) {
+    throw errors.forbidden('Admin Manager hanya dapat mengelola staff di cabang yang dikelola.');
+  }
+}
+
+async function assertBranchExists(branchId: string | null | undefined) {
+  if (!branchId) return;
+
+  const branchExists = await prisma.branch.findUnique({ where: { id: branchId } });
+  if (!branchExists) {
+    throw errors.badRequest('BRANCH_NOT_FOUND', 'Branch tidak ditemukan.');
+  }
+}
+
+function buildBranchAccessFilter(branchIds: string[]): Prisma.UserWhereInput {
+  if (branchIds.length === 0) {
+    return { id: { in: [] } };
+  }
+
+  return {
+    OR: [
+      { branchId: { in: branchIds } },
+      { staffBranches: { some: { branchId: { in: branchIds } } } },
+    ],
+  };
+}
+
 // ── Shared User Select ───────────────────────────────────────
 
 const userSelect = {
@@ -69,37 +115,44 @@ export async function listUsersService(
   query: ListUsersQuery,
   callerRole: Role,
   callerBranchId: string | null,
+  callerUserId?: string,
 ) {
   const { page, limit, role, branchId, search, isActive } = query;
   const skip = (page - 1) * limit;
+  const andFilters: Prisma.UserWhereInput[] = [];
+
+  if (callerRole === Role.ADMIN_CABANG && callerBranchId) {
+    andFilters.push(buildBranchAccessFilter([callerBranchId]));
+  } else if (callerRole === Role.ADMIN_MANAGER) {
+    const managedBranchIds = callerUserId ? await getManagedBranchIds(callerUserId) : [];
+
+    if (branchId) {
+      if (!managedBranchIds.includes(branchId)) {
+        throw errors.forbidden('Admin Manager hanya dapat melihat staff di cabang yang dikelola.');
+      }
+      andFilters.push(buildBranchAccessFilter([branchId]));
+    } else {
+      andFilters.push(buildBranchAccessFilter(managedBranchIds));
+    }
+  } else if (branchId) {
+    andFilters.push(buildBranchAccessFilter([branchId]));
+  }
+
+  if (search) {
+    andFilters.push({
+      OR: [
+        { email: { contains: search, mode: 'insensitive' } },
+        { staffCode: { contains: search, mode: 'insensitive' } },
+        { profile: { fullName: { contains: search, mode: 'insensitive' } } },
+      ],
+    });
+  }
 
   const where: Prisma.UserWhereInput = {
     // Only show active users by default
     isActive: isActive !== undefined ? (isActive === 'true') : true,
-    // Staff at branch level can only see users in their branch
-    ...(callerRole === Role.ADMIN_CABANG && callerBranchId
-      ? { branchId: callerBranchId }
-      : {}),
-    // Filter by branchId query param (manager/SA only)
-    // IMPORTANT: Include both primary branch AND staff assigned via StaffBranch
-    ...(branchId && callerRole !== Role.ADMIN_CABANG
-      ? {
-          OR: [
-            { branchId }, // Primary branch
-            { staffBranches: { some: { branchId } } }, // Multi-branch assignment
-          ],
-        }
-      : {}),
     ...(role ? { role } : {}),
-    ...(search
-      ? {
-          OR: [
-            { email: { contains: search, mode: 'insensitive' } },
-            { staffCode: { contains: search, mode: 'insensitive' } },
-            { profile: { fullName: { contains: search, mode: 'insensitive' } } },
-          ],
-        }
-      : {}),
+    ...(andFilters.length > 0 ? { AND: andFilters } : {}),
     // Exclude members, admin managers, and super admins from staff user list
     // Admin managers are shown in the separate "Managers" tab
     // Super admins should not appear in branch staff lists
@@ -197,6 +250,7 @@ export async function createUserService(
   input: CreateUserInput,
   callerRole: Role,
   callerBranchId: string | null,
+  callerUserId?: string,
 ) {
   console.log('🔍 [UserService] Creating user with input:', input);
   console.log('🔍 [UserService] Caller role:', callerRole);
@@ -226,17 +280,14 @@ export async function createUserService(
     branchId = callerBranchId; // Force new user to same branch
   }
 
+  if (callerRole === Role.ADMIN_MANAGER && input.role !== Role.ADMIN_LOGISTIK) {
+    await assertAdminManagerCanUseBranch(callerUserId, branchId);
+  }
+
   console.log('🔍 [UserService] Final branchId to use:', branchId);
 
   // Validate branchId exists if provided
-  if (branchId) {
-    const branchExists = await prisma.branch.findUnique({ where: { id: branchId } });
-    if (!branchExists) {
-      console.log('❌ [UserService] Branch not found:', branchId);
-      throw errors.badRequest('BRANCH_NOT_FOUND', 'Branch tidak ditemukan.');
-    }
-    console.log('✅ [UserService] Branch exists:', branchExists.name);
-  }
+  await assertBranchExists(branchId);
 
   const hashed = await bcrypt.hash(input.password, HASH_ROUNDS);
   const staffCode = generateStaffCode(input.role);
@@ -278,6 +329,7 @@ export async function updateUserService(
   userId: string,
   input: UpdateUserInput,
   callerRole?: Role,
+  callerUserId?: string,
 ) {
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) throw errors.notFound('User tidak ditemukan.');
@@ -320,6 +372,28 @@ export async function updateUserService(
   const hashedPassword = input.password
     ? await bcrypt.hash(input.password, HASH_ROUNDS)
     : undefined;
+
+  const targetRole = input.role ?? existing.role;
+  const nextBranchId = targetRole === Role.ADMIN_LOGISTIK
+    ? null
+    : input.branchId !== undefined
+      ? input.branchId
+      : existing.branchId;
+
+  if (targetRole !== Role.ADMIN_LOGISTIK && input.branchId === null) {
+    throw errors.badRequest('BRANCH_REQUIRED', 'Cabang harus dipilih untuk staff cabang.');
+  }
+
+  await assertBranchExists(nextBranchId);
+
+  if (callerRole === Role.ADMIN_MANAGER) {
+    if (!STAFF_CREDENTIAL_MANAGED_ROLES.includes(existing.role)) {
+      throw errors.forbidden('Admin Manager hanya dapat mengubah akun staff cabang.');
+    }
+
+    await assertAdminManagerCanUseBranch(callerUserId, existing.branchId);
+    await assertAdminManagerCanUseBranch(callerUserId, nextBranchId);
+  }
 
   const profileUpdate = {
     ...(input.fullName !== undefined ? { fullName: input.fullName } : {}),

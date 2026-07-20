@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info, Eye, EyeOff } from 'lucide-react';
+import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info, Eye, EyeOff, Building2 } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
 import { api } from '@/lib/api';
@@ -15,6 +15,7 @@ interface StaffCrudModalProps {
   branchId: string;
   staffData?: any;
   callerRole?: string; // Role of the user opening the modal
+  allowBranchChange?: boolean;
 }
 
 interface StaffFormData {
@@ -25,6 +26,13 @@ interface StaffFormData {
   fullName: string;
   phone: string;
   isActive: boolean;
+  selectedBranchId: string;
+}
+
+interface BranchOption {
+  id: string;
+  branchCode: string;
+  name: string;
 }
 
 // Role options for ADMIN_CABANG - can only create ADMIN_LAYANAN, DOCTOR, NURSE
@@ -49,14 +57,18 @@ export default function StaffCrudModal({
   action,
   branchId,
   staffData,
-  callerRole
+  callerRole,
+  allowBranchChange = false
 }: StaffCrudModalProps) {
   // Determine which role options to show based on caller's role
   const roleOptions = (callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN_MANAGER') 
     ? ROLE_OPTIONS_MANAGER 
     : ROLE_OPTIONS_ADMIN_CABANG;
   const canManageCredentials = callerRole === 'SUPER_ADMIN' || callerRole === 'ADMIN_MANAGER';
+  const canChangeAdminLayananBranch = allowBranchChange && canManageCredentials;
   const [loading, setLoading] = useState(false);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  const [branches, setBranches] = useState<BranchOption[]>([]);
   const [mounted, setMounted] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -67,7 +79,8 @@ export default function StaffCrudModal({
     role: 'ADMIN_LAYANAN',
     fullName: '',
     phone: '',
-    isActive: true
+    isActive: true,
+    selectedBranchId: branchId
   });
 
   // Handle mounting for portal
@@ -87,6 +100,25 @@ export default function StaffCrudModal({
   }, [isOpen]);
 
   useEffect(() => {
+    if (!isOpen || !canChangeAdminLayananBranch) return;
+
+    const loadBranches = async () => {
+      try {
+        setLoadingBranches(true);
+        const response = await api.get('/branches/all');
+        setBranches(response.data.data || []);
+      } catch (error: any) {
+        devError('Error loading branches:', error);
+        showToast.error('Gagal memuat data cabang');
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    loadBranches();
+  }, [isOpen, canChangeAdminLayananBranch]);
+
+  useEffect(() => {
     if (action === 'edit' && staffData) {
       devLog('🔍 [StaffCrudModal] Setting form data from staffData:', staffData);
       setFormData({
@@ -96,7 +128,8 @@ export default function StaffCrudModal({
         role: staffData.role || 'ADMIN_LAYANAN',
         fullName: staffData.profile?.fullName || '',
         phone: staffData.profile?.phone || '',
-        isActive: staffData.isActive ?? true
+        isActive: staffData.isActive ?? true,
+        selectedBranchId: staffData.branch?.id || staffData.branchId || branchId
       });
       devLog('🔍 [StaffCrudModal] Form data set successfully');
     } else if (action === 'create') {
@@ -108,11 +141,12 @@ export default function StaffCrudModal({
         role: 'ADMIN_LAYANAN',
         fullName: '',
         phone: '',
-        isActive: true
+        isActive: true,
+        selectedBranchId: branchId
       });
     }
     setError('');
-  }, [action, staffData, isOpen]);
+  }, [action, staffData, isOpen, branchId]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -129,6 +163,7 @@ export default function StaffCrudModal({
     const email = formData.email.trim();
     const password = formData.password?.trim() || '';
     const shouldSendCredentials = action === 'create' || (action === 'edit' && canManageCredentials);
+    const shouldSendBranch = action === 'edit' && canChangeAdminLayananBranch && formData.role === 'ADMIN_LAYANAN';
 
     if (shouldSendCredentials && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       const message = 'Format email tidak valid';
@@ -160,6 +195,13 @@ export default function StaffCrudModal({
       }
     }
 
+    if (shouldSendBranch && !formData.selectedBranchId) {
+      const message = 'Cabang harus dipilih';
+      setError(message);
+      showToast.error(message);
+      return;
+    }
+
     setLoading(true);
 
     devLog('🔍 [StaffCrudModal] Submit attempt:', {
@@ -180,7 +222,9 @@ export default function StaffCrudModal({
           role: formData.role,
           fullName: formData.fullName,
           phone: formData.phone,
-          branchId: branchId
+          branchId: canChangeAdminLayananBranch && formData.role === 'ADMIN_LAYANAN'
+            ? formData.selectedBranchId
+            : branchId
         };
         
         devLog('🔍 [StaffCrudModal] Creating staff with data:', {
@@ -203,6 +247,10 @@ export default function StaffCrudModal({
             updateData.password = password;
           }
         }
+
+        if (shouldSendBranch) {
+          updateData.branchId = formData.selectedBranchId;
+        }
         
         devLog('🔍 [StaffCrudModal] Updating staff:', staffData.id, 'with data:', {
           ...updateData,
@@ -224,6 +272,10 @@ export default function StaffCrudModal({
   };
 
   if (!isOpen || !mounted) return null;
+
+  const showBranchSelection = action === 'edit'
+    && canChangeAdminLayananBranch
+    && formData.role === 'ADMIN_LAYANAN';
 
   const modalContent = (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -415,6 +467,35 @@ export default function StaffCrudModal({
                   </option>
                 ))}
               </select>
+            </div>
+          )}
+
+          {showBranchSelection && (
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                Cabang <span className="text-red-500">*</span>
+              </label>
+              <div className="relative">
+                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
+                <select
+                  name="selectedBranchId"
+                  value={formData.selectedBranchId}
+                  onChange={handleInputChange}
+                  required
+                  disabled={loading || loadingBranches}
+                  className="w-full pl-11 pr-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <option value="">Pilih cabang</option>
+                  {branches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.branchCode} - {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {loadingBranches && (
+                <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">Memuat cabang...</p>
+              )}
             </div>
           )}
 
