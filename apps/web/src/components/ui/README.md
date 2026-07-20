@@ -151,4 +151,4 @@ export default function LoginPage() {
 
 ---
 
-**Need help?** Check `LOADING_SPINNER_IMPLEMENTATION.md` for detailed documentation.
+**Need help?** Refer to the usage examples in this document.

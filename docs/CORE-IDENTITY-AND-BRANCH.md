@@ -305,4 +305,3 @@ Dengan model ini, RAHO dapat mendukung operasi multi-cabang tanpa mencampur data
 - `apps/api/src/middleware/assertBranchAccess.ts`
 - `apps/web/src/stores/authStore.ts`
 - Dokumen arsitektur di folder `Requirements` tentang Architecture Modeling RAHO
-- `summary/2026-06-11/MULTI-BRANCH-INTEGRATION-GUIDE.md`
