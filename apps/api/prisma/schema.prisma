@@ -219,6 +219,26 @@ enum InternalTransferStatus {
   DISCREPANCY
 }
 
+enum PurchaseOrderStatus {
+  DRAFT
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CANCELLED
+}
+
+enum GoodsReceiptStatus {
+  POSTED
+  REVERSED
+}
+
+enum GoodsReceiptCondition {
+  GOOD
+  DAMAGED
+  EXPIRED
+  OTHER
+}
+
 enum StockRequestStatus {
   PENDING // Baru dibuat, menunggu review
   PARTIALLY_APPROVED // Sebagian quantity disetujui dan direservasi
@@ -479,6 +499,8 @@ model Branch {
   expenses               Expense[]
   internalTransfersFrom  InternalTransferLedger[]   @relation("InternalTransferFromBranch")
   internalTransfersTo    InternalTransferLedger[]   @relation("InternalTransferToBranch")
+  purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -2006,6 +2028,7 @@ model MasterProduct {
   uomConversions           UnitConversion[]
   batches                  InventoryBatch[]
   inventoryBalances        InventoryBalance[]
+  purchaseOrderItems       PurchaseOrderItem[]
 
   @@index([category, isActive])
   @@index([isActive])
@@ -2051,6 +2074,8 @@ model StockLocation {
   inventoryItems      InventoryItem[]
   balances            InventoryBalance[]
   openingBalanceLines OpeningBalanceLine[]
+  purchaseOrderItems  PurchaseOrderItem[]
+  goodsReceiptItems   GoodsReceiptItem[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId, isActive])
@@ -2067,10 +2092,11 @@ model UnitOfMeasure {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  baseProducts    MasterProduct[]  @relation("ProductBaseUom")
-  usageProducts   MasterProduct[]  @relation("ProductUsageUom")
-  fromConversions UnitConversion[] @relation("ConversionFromUom")
-  toConversions   UnitConversion[] @relation("ConversionToUom")
+  baseProducts       MasterProduct[]     @relation("ProductBaseUom")
+  usageProducts      MasterProduct[]     @relation("ProductUsageUom")
+  fromConversions    UnitConversion[]    @relation("ConversionFromUom")
+  toConversions      UnitConversion[]    @relation("ConversionToUom")
+  purchaseOrderItems PurchaseOrderItem[]
 
   @@index([category, isActive])
   @@map("units_of_measure")
@@ -2116,6 +2142,7 @@ model InventoryItem {
   stockLocation       StockLocation?       @relation(fields: [stockLocationId], references: [id], onDelete: SetNull)
   balances            InventoryBalance[]
   openingBalanceLines OpeningBalanceLine[]
+  goodsReceiptItems   GoodsReceiptItem[]
 
   @@unique([masterProductId, branchId])
   @@index([branchId, stock])
@@ -2147,6 +2174,7 @@ model StockMutation {
   inventoryBalance InventoryBalance?         @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
   batch            InventoryBatch?           @relation(fields: [batchId], references: [id], onDelete: Restrict)
   costAllocations  InventoryCostAllocation[]
+  goodsReceiptItem GoodsReceiptItem?
 
   @@index([inventoryItemId, createdAt])
   @@index([referenceType, referenceId])
@@ -2174,6 +2202,7 @@ model InventoryBatch {
   costLayers             InventoryCostLayer[]
   stockMutations         StockMutation[]
   shipmentTransferLayers ShipmentTransferLayer[]
+  goodsReceiptItems      GoodsReceiptItem[]
 
   @@unique([masterProductId, batchNumber])
   @@index([masterProductId, expiryDate])
@@ -2206,6 +2235,7 @@ model InventoryBalance {
   reservations           StockReservation[]
   shipmentTransferLayers ShipmentTransferLayer[]
   shipmentReceiptItems   ShipmentReceiptItem[]
+  goodsReceiptItems      GoodsReceiptItem[]
 
   @@unique([inventoryItemId, stockLocationId, batchKey])
   @@index([branchId, masterProductId])
@@ -2243,6 +2273,7 @@ model InventoryPosting {
   transferDispatch   InternalTransferLedger?   @relation("TransferDispatchPosting")
   transferReceipt    InternalTransferLedger?   @relation("TransferReceiptPosting")
   shipmentReceipt    ShipmentReceipt?
+  goodsReceipt       GoodsReceipt?
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])
@@ -2269,6 +2300,7 @@ model InventoryCostLayer {
   batch                  InventoryBatch?           @relation(fields: [batchId], references: [id], onDelete: Restrict)
   allocations            InventoryCostAllocation[]
   shipmentTransferLayers ShipmentTransferLayer[]
+  goodsReceiptItem       GoodsReceiptItem?
 
   @@index([inventoryBalanceId, receivedAt, id])
   @@index([batchId, receivedAt])
@@ -2303,6 +2335,142 @@ model InventoryCostAllocation {
 // ============================================================
 // PROCUREMENT DOMAIN
 // ============================================================
+
+model Supplier {
+  id              String   @id @default(cuid())
+  supplierCode    String   @unique
+  name            String
+  taxId           String?
+  contactName     String?
+  email           String?
+  phone           String?
+  address         String?
+  paymentTermDays Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  purchaseOrders PurchaseOrder[]
+
+  @@index([name, isActive])
+  @@map("suppliers")
+}
+
+model PurchaseOrder {
+  id          String              @id @default(cuid())
+  poNumber    String              @unique
+  supplierId  String
+  branchId    String
+  status      PurchaseOrderStatus @default(DRAFT)
+  currency    String              @default("IDR")
+  orderDate   DateTime
+  approvedBy  String?
+  approvedAt  DateTime?
+  totalAmount Decimal             @default(0) @db.Decimal(18, 4)
+  notes       String?
+  createdBy   String
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  supplier Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  branch   Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  items    PurchaseOrderItem[]
+  receipts GoodsReceipt[]
+
+  @@index([branchId, status, orderDate])
+  @@index([supplierId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id                         String   @id @default(cuid())
+  purchaseOrderId            String
+  lineNumber                 Int
+  masterProductId            String
+  uomId                      String?
+  destinationStockLocationId String?
+  orderedQty                 Decimal  @db.Decimal(18, 4)
+  receivedQty                Decimal  @default(0) @db.Decimal(18, 4)
+  unitCost                   Decimal  @db.Decimal(18, 4)
+  notes                      String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  purchaseOrder            PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  masterProduct            MasterProduct      @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  uom                      UnitOfMeasure?     @relation(fields: [uomId], references: [id], onDelete: Restrict)
+  destinationStockLocation StockLocation?     @relation(fields: [destinationStockLocationId], references: [id], onDelete: Restrict)
+  receiptItems             GoodsReceiptItem[]
+
+  @@unique([purchaseOrderId, lineNumber])
+  @@index([masterProductId])
+  @@index([destinationStockLocationId])
+  @@map("purchase_order_items")
+}
+
+model GoodsReceipt {
+  id                     String             @id
+  receiptNumber          String             @unique
+  purchaseOrderId        String
+  branchId               String
+  status                 GoodsReceiptStatus @default(POSTED)
+  idempotencyKey         String             @unique
+  payloadHash            String
+  inventoryPostingId     String             @unique
+  supplierDeliveryNumber String?
+  totalQuantity          Decimal            @db.Decimal(18, 4)
+  quarantinedQuantity    Decimal            @default(0) @db.Decimal(18, 4)
+  totalCost              Decimal            @db.Decimal(18, 4)
+  notes                  String?
+  receivedBy             String
+  receivedAt             DateTime
+  createdAt              DateTime           @default(now())
+
+  purchaseOrder    PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  branch           Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  inventoryPosting InventoryPosting   @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
+  items            GoodsReceiptItem[]
+
+  @@index([branchId, receivedAt])
+  @@index([purchaseOrderId, receivedAt])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptItem {
+  id                  String                @id @default(cuid())
+  goodsReceiptId      String
+  purchaseOrderItemId String
+  inventoryItemId     String
+  inventoryBalanceId  String
+  stockLocationId     String
+  batchId             String?
+  batchKey            String                @default("NO_BATCH")
+  stockMutationId     String                @unique
+  costLayerId         String                @unique
+  condition           GoodsReceiptCondition @default(GOOD)
+  quantity            Decimal               @db.Decimal(18, 4)
+  quarantineQty       Decimal               @default(0) @db.Decimal(18, 4)
+  unitCost            Decimal               @db.Decimal(18, 4)
+  totalCost           Decimal               @db.Decimal(18, 4)
+  notes               String?
+  createdAt           DateTime              @default(now())
+
+  goodsReceipt      GoodsReceipt       @relation(fields: [goodsReceiptId], references: [id], onDelete: Restrict)
+  purchaseOrderItem PurchaseOrderItem  @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+  inventoryItem     InventoryItem      @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  inventoryBalance  InventoryBalance   @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
+  stockLocation     StockLocation      @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
+  batch             InventoryBatch?    @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  stockMutation     StockMutation      @relation(fields: [stockMutationId], references: [id], onDelete: Restrict)
+  costLayer         InventoryCostLayer @relation(fields: [costLayerId], references: [id], onDelete: Restrict)
+
+  @@unique([goodsReceiptId, purchaseOrderItemId, stockLocationId, batchKey, condition])
+  @@index([purchaseOrderItemId])
+  @@index([inventoryBalanceId])
+  @@index([batchId])
+  @@map("goods_receipt_items")
+}
 
 model StockRequest {
   id             String             @id @default(cuid())

@@ -7,6 +7,7 @@ import { LogisticsController } from './logistics.controller';
 import { InventoryMasterController } from './inventory-master.controller';
 import { InventoryLedgerController } from './inventory-ledger.controller';
 import { StockReservationController } from './stock-reservation.controller';
+import { GoodsReceiptController } from './goods-receipt.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
@@ -41,6 +42,11 @@ import {
   shipStockSchema,
   useBagStockSchema,
 } from './logistics.schema';
+import {
+  goodsReceiptListQuerySchema,
+  postGoodsReceiptSchema,
+  purchaseOrderListQuerySchema,
+} from './goods-receipt.schema';
 
 const router = Router();
 const inventoryController = new InventoryController();
@@ -51,6 +57,7 @@ const logisticsController = new LogisticsController();
 const inventoryMasterController = new InventoryMasterController();
 const inventoryLedgerController = new InventoryLedgerController();
 const stockReservationController = new StockReservationController();
+const goodsReceiptController = new GoodsReceiptController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -125,6 +132,38 @@ router.post('/ledger/opening-stock', authenticate, authorize(MANAGER_ROLES), inv
 router.post('/ledger/receipts', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.receive.bind(inventoryLedgerController));
 router.post('/ledger/issues', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.issue.bind(inventoryLedgerController));
 router.post('/ledger/postings/:postingId/reverse', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.reverse.bind(inventoryLedgerController));
+
+// ============================================================
+// PURCHASE GOODS RECEIPT
+// ============================================================
+
+router.get(
+  '/purchase-orders',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  validateQuery(purchaseOrderListQuerySchema),
+  goodsReceiptController.purchaseOrders.bind(goodsReceiptController),
+);
+router.get(
+  '/goods-receipts',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  validateQuery(goodsReceiptListQuerySchema),
+  goodsReceiptController.list.bind(goodsReceiptController),
+);
+router.get(
+  '/goods-receipts/:receiptId',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  goodsReceiptController.get.bind(goodsReceiptController),
+);
+router.post(
+  '/purchase-orders/:purchaseOrderId/goods-receipts',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  validate(postGoodsReceiptSchema),
+  goodsReceiptController.post.bind(goodsReceiptController),
+);
 
 // ============================================================
 // INVENTORY ITEMS

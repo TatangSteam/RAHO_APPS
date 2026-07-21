@@ -7,6 +7,7 @@ const shouldStartWebServer = process.env.E2E_START_WEB_SERVER !== 'false';
 const includeMobileProject = process.env.E2E_INCLUDE_MOBILE === 'true';
 const workers = Number(process.env.E2E_WORKERS || (process.env.CI ? 2 : 1));
 const browserChannel = process.env.E2E_BROWSER_CHANNEL || 'chromium';
+const video = process.env.E2E_VIDEO === 'off' ? 'off' : 'retain-on-failure';
 
 export default defineConfig({
   testDir: './e2e',
@@ -33,7 +34,7 @@ export default defineConfig({
     timezoneId: 'Asia/Jakarta',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    video,
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
   },

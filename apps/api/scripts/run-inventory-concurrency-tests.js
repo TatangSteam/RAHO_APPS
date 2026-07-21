@@ -7,6 +7,7 @@ run([
   'src/modules/inventory/services/__tests__/stock-reservation.integration.test.ts',
   'src/modules/inventory/services/__tests__/shipment-ledger.integration.test.ts',
   'src/modules/inventory/services/__tests__/internal-transfer.concurrency.integration.test.ts',
+  'src/modules/inventory/services/__tests__/goods-receipt.integration.test.ts',
   '--runInBand',
   '--detectOpenHandles',
 ]);

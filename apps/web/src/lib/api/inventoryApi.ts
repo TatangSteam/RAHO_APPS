@@ -635,6 +635,57 @@ export interface HomecareStockItemInput {
   notes?: string;
 }
 
+export type GoodsReceiptCondition = 'GOOD' | 'DAMAGED' | 'EXPIRED' | 'OTHER';
+
+export interface PurchaseOrderInventoryLine {
+  id: string;
+  lineNumber: number;
+  orderedQty: string;
+  receivedQty: string;
+  remainingQty: string;
+  unitCost: string;
+  masterProduct: {
+    id: string;
+    sku?: string | null;
+    name: string;
+    tracksBatch: boolean;
+    tracksExpiry: boolean;
+  };
+  destinationStockLocation?: {
+    id: string;
+    code: string;
+    name: string;
+    warehouse: { id: string; code: string; name: string };
+  } | null;
+}
+
+export interface PurchaseOrderInventory {
+  id: string;
+  poNumber: string;
+  status: 'DRAFT' | 'APPROVED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
+  currency: string;
+  orderDate: string;
+  supplier: { id: string; supplierCode: string; name: string };
+  branch: { id: string; branchCode: string; name: string };
+  items: PurchaseOrderInventoryLine[];
+  _count: { receipts: number };
+}
+
+export interface PostGoodsReceiptInput {
+  idempotencyKey: string;
+  receivedAt: string;
+  supplierDeliveryNumber?: string;
+  notes?: string;
+  lines: Array<{
+    purchaseOrderItemId: string;
+    quantity: string;
+    stockLocationId: string;
+    condition: GoodsReceiptCondition;
+    batch?: { batchNumber: string; manufactureDate?: string; expiryDate?: string };
+    notes?: string;
+  }>;
+}
+
 // ============================================================
 // INVENTORY API
 // ============================================================
@@ -739,6 +790,22 @@ export const inventoryApi = {
 
   getLedgerBalances: (params?: Record<string, string | number | undefined>) => {
     return api.get('/inventory/ledger/balances', { params });
+  },
+
+  getPurchaseOrdersForReceipt: (params?: Record<string, string | number | undefined>) => {
+    return api.get('/inventory/purchase-orders', { params });
+  },
+
+  getGoodsReceipts: (params?: Record<string, string | number | undefined>) => {
+    return api.get('/inventory/goods-receipts', { params });
+  },
+
+  getGoodsReceipt: (receiptId: string) => {
+    return api.get(`/inventory/goods-receipts/${receiptId}`);
+  },
+
+  postGoodsReceipt: (purchaseOrderId: string, data: PostGoodsReceiptInput) => {
+    return api.post(`/inventory/purchase-orders/${purchaseOrderId}/goods-receipts`, data);
   },
 
   getLedgerPostings: (params?: Record<string, string | number | undefined>) => {
