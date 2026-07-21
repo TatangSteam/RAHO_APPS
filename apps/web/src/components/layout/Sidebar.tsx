@@ -7,7 +7,7 @@ import {
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
-  FileSpreadsheet, ShieldCheck,
+  FileSpreadsheet, ShieldCheck, Landmark,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -187,6 +187,17 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Import Data',
         href: '/admin/member-import',
         icon: <FileSpreadsheet size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+      },
+    ],
+  },
+  {
+    title: 'Finance',
+    items: [
+      {
+        label: 'Accounting',
+        href: '/accounting',
+        icon: <Landmark size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
     ],

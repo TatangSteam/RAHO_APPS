@@ -1,0 +1,101 @@
+import { AccountType, AccountingPeriodStatus, NormalBalance } from '@prisma/client';
+import { z } from 'zod';
+
+const codeSchema = z.string().trim().min(2).max(30).regex(/^[A-Z0-9._-]+$/i);
+const moneySchema = z.string().trim().regex(/^\d{1,16}(\.\d{1,2})?$/, 'Nominal harus berupa string desimal maksimal 2 digit pecahan.');
+const jsonObjectSchema = z.record(z.unknown()).optional();
+
+export const createAccountSchema = z.object({
+  code: codeSchema,
+  name: z.string().trim().min(2).max(150),
+  type: z.nativeEnum(AccountType),
+  normalBalance: z.nativeEnum(NormalBalance),
+  parentId: z.string().min(1).nullable().optional(),
+  allowPosting: z.boolean().default(true),
+  isControl: z.boolean().default(false),
+  description: z.string().trim().max(500).nullable().optional(),
+});
+
+export const updateAccountSchema = z.object({
+  name: z.string().trim().min(2).max(150).optional(),
+  allowPosting: z.boolean().optional(),
+  isControl: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+}).refine((value) => Object.keys(value).length > 0, 'Minimal satu perubahan diperlukan.');
+
+export const listAccountsQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  type: z.nativeEnum(AccountType).optional(),
+  isActive: z.enum(['true', 'false']).optional(),
+  allowPosting: z.enum(['true', 'false']).optional(),
+});
+
+export const createAccountingPeriodSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  fiscalYear: z.number().int().min(2000).max(2200),
+  periodNo: z.number().int().min(1).max(13),
+  startDate: z.coerce.date(),
+  endDate: z.coerce.date(),
+  branchId: z.string().min(1).nullable().optional(),
+}).refine((value) => value.endDate >= value.startDate, {
+  path: ['endDate'],
+  message: 'Tanggal akhir harus sama atau setelah tanggal mulai.',
+});
+
+export const updateAccountingPeriodStatusSchema = z.object({
+  status: z.nativeEnum(AccountingPeriodStatus),
+  reason: z.string().trim().min(5).max(500),
+});
+
+export const listAccountingPeriodsQuerySchema = z.object({
+  fiscalYear: z.coerce.number().int().min(2000).max(2200).optional(),
+  status: z.nativeEnum(AccountingPeriodStatus).optional(),
+  branchId: z.string().min(1).optional(),
+});
+
+export const postJournalSchema = z.object({
+  postingKey: z.string().trim().min(8).max(200),
+  transactionDate: z.coerce.date(),
+  branchId: z.string().min(1),
+  description: z.string().trim().min(3).max(500),
+  costCenterCode: codeSchema.optional(),
+  lines: z.array(z.object({
+    accountCode: codeSchema,
+    debit: moneySchema.default('0'),
+    credit: moneySchema.default('0'),
+    description: z.string().trim().max(500).optional(),
+    branchId: z.string().min(1).optional(),
+    costCenterCode: codeSchema.optional(),
+    metadata: jsonObjectSchema,
+  })).min(2).max(200),
+  sourceLinks: z.array(z.object({
+    sourceType: codeSchema,
+    sourceId: z.string().trim().min(1).max(200),
+    sourceNumber: z.string().trim().max(100).optional(),
+    relationType: codeSchema.default('PRIMARY'),
+    metadata: jsonObjectSchema,
+  })).min(1).max(20),
+  metadata: jsonObjectSchema,
+});
+
+export const listJournalsQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().positive().max(100).default(25),
+  branchId: z.string().min(1).optional(),
+  accountCode: codeSchema.optional(),
+  sourceType: codeSchema.optional(),
+  sourceId: z.string().trim().min(1).max(200).optional(),
+  startDate: z.coerce.date().optional(),
+  endDate: z.coerce.date().optional(),
+  search: z.string().trim().optional(),
+});
+
+export type CreateAccountInput = z.infer<typeof createAccountSchema>;
+export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
+export type ListAccountsQuery = z.infer<typeof listAccountsQuerySchema>;
+export type CreateAccountingPeriodInput = z.infer<typeof createAccountingPeriodSchema>;
+export type UpdateAccountingPeriodStatusInput = z.infer<typeof updateAccountingPeriodStatusSchema>;
+export type ListAccountingPeriodsQuery = z.infer<typeof listAccountingPeriodsQuerySchema>;
+export type PostJournalApiInput = z.infer<typeof postJournalSchema>;
+export type ListJournalsQuery = z.infer<typeof listJournalsQuerySchema>;

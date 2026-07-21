@@ -28,6 +28,7 @@ import auditRouter from './modules/audit/audit.routes';
 import referralsRouter from './modules/referrals/referrals.routes';
 import filesRouter from './modules/files/files.routes';
 import iamRouter from './modules/iam/iam.routes';
+import accountingRouter from './modules/accounting/accounting.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -53,7 +54,7 @@ export function createApp(): Application {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Branch-Id', 'X-E2E-Test', 'Cache-Control'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Branch-Id', 'X-E2E-Test', 'Cache-Control'],
     }),
   );
 
@@ -95,6 +96,7 @@ export function createApp(): Application {
 
   app.use(`${prefix}/auth`, authRouter);
   app.use(`${prefix}/iam`, iamRouter);
+  app.use(`${prefix}/accounting`, accountingRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

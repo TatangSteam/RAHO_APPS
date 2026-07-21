@@ -38,6 +38,30 @@ enum PermissionEffect {
   DENY
 }
 
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  REVENUE
+  EXPENSE
+}
+
+enum NormalBalance {
+  DEBIT
+  CREDIT
+}
+
+enum JournalStatus {
+  POSTED
+  REVERSED
+}
+
+enum AccountingPeriodStatus {
+  OPEN
+  CLOSED
+  LOCKED
+}
+
 enum BranchType {
   PUSAT
   PREMIER
@@ -349,6 +373,9 @@ model Branch {
   referralCodes       ReferralCode[]
   auditLogs           AuditLog[]
   permissionOverrides UserPermissionOverride[]
+  accountingPeriods   AccountingPeriod[]
+  journalEntries      JournalEntry[]
+  journalLines        JournalLine[]
   overstocks          BranchOverstock[]
 
   @@index([branchCode])
@@ -384,6 +411,10 @@ model User {
   staffBranches              StaffBranch[]            @relation("StaffBranches")
   permissionOverrides        UserPermissionOverride[] @relation("PermissionOverrideUser")
   permissionOverridesCreated UserPermissionOverride[] @relation("PermissionOverrideCreatedBy")
+  journalEntriesCreated      JournalEntry[]           @relation("JournalEntryCreatedBy")
+  journalEntriesPosted       JournalEntry[]           @relation("JournalEntryPostedBy")
+  accountingPeriodsCreated   AccountingPeriod[]       @relation("AccountingPeriodCreatedBy")
+  accountingPeriodsClosed    AccountingPeriod[]       @relation("AccountingPeriodClosedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -537,6 +568,149 @@ model UserPermissionOverride {
   @@index([branchId])
   @@index([validUntil])
   @@map("user_permission_overrides")
+}
+
+// ============================================================
+// ACCOUNTING FOUNDATION
+// ============================================================
+
+model Account {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  name          String
+  type          AccountType
+  normalBalance NormalBalance
+  parentId      String?
+  level         Int           @default(1)
+  allowPosting  Boolean       @default(true)
+  isControl     Boolean       @default(false)
+  isActive      Boolean       @default(true)
+  description   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  parent   Account?      @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children Account[]     @relation("AccountHierarchy")
+  lines    JournalLine[]
+
+  @@index([type, isActive])
+  @@index([parentId])
+  @@map("accounts")
+}
+
+model AccountingPeriod {
+  id         String                 @id @default(cuid())
+  name       String
+  fiscalYear Int
+  periodNo   Int
+  startDate  DateTime
+  endDate    DateTime
+  branchId   String?
+  scopeKey   String                 @default("GLOBAL")
+  status     AccountingPeriodStatus @default(OPEN)
+  closedAt   DateTime?
+  closedBy   String?
+  createdBy  String
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  branch         Branch?        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  creator        User           @relation("AccountingPeriodCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  closer         User?          @relation("AccountingPeriodClosedBy", fields: [closedBy], references: [id], onDelete: Restrict)
+  journalEntries JournalEntry[]
+
+  @@unique([fiscalYear, periodNo, scopeKey])
+  @@index([scopeKey, status, startDate, endDate])
+  @@index([branchId, status])
+  @@map("accounting_periods")
+}
+
+model JournalEntry {
+  id                 String        @id @default(cuid())
+  journalNumber      String        @unique
+  postingKey         String        @unique
+  payloadHash        String
+  transactionDate    DateTime
+  description        String
+  branchId           String
+  accountingPeriodId String
+  status             JournalStatus @default(POSTED)
+  totalDebit         Decimal       @db.Decimal(18, 2)
+  totalCredit        Decimal       @db.Decimal(18, 2)
+  metadata           Json?
+  postedAt           DateTime      @default(now())
+  createdBy          String
+  postedBy           String
+  reversedAt         DateTime?
+  reversedByEntryId  String?       @unique
+  createdAt          DateTime      @default(now())
+
+  branch           Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  accountingPeriod AccountingPeriod    @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  creator          User                @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  poster           User                @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
+  reversedByEntry  JournalEntry?       @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
+  reversesEntry    JournalEntry?       @relation("JournalReversal")
+  lines            JournalLine[]
+  sourceLinks      JournalSourceLink[]
+
+  @@index([branchId, transactionDate])
+  @@index([accountingPeriodId, status])
+  @@index([status, postedAt])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id             String   @id @default(cuid())
+  journalEntryId String
+  lineNo         Int
+  accountId      String
+  branchId       String
+  costCenterCode String?
+  description    String?
+  debit          Decimal  @default(0) @db.Decimal(18, 2)
+  credit         Decimal  @default(0) @db.Decimal(18, 2)
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  account      Account      @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  branch       Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+
+  @@unique([journalEntryId, lineNo])
+  @@index([accountId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([costCenterCode, createdAt])
+  @@map("journal_lines")
+}
+
+model JournalSourceLink {
+  id             String   @id @default(cuid())
+  journalEntryId String
+  sourceType     String
+  sourceId       String
+  sourceNumber   String?
+  relationType   String   @default("PRIMARY")
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([journalEntryId, sourceType, sourceId, relationType])
+  @@index([sourceType, sourceId])
+  @@index([sourceNumber])
+  @@map("journal_source_links")
+}
+
+model JournalSequence {
+  id         String   @id @default(cuid())
+  scopeKey   String
+  fiscalYear Int
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scopeKey, fiscalYear])
+  @@map("journal_sequences")
 }
 
 // ============================================================
