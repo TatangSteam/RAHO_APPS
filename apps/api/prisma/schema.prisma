@@ -288,6 +288,34 @@ enum ExpenseStatus {
   PAID
 }
 
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum PurchaseRequestStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CONVERTED
+}
+
+enum PurchaseOrderStatus {
+  ISSUED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum SupplierInvoiceStatus {
+  POSTED
+  PARTIALLY_PAID
+  PAID
+}
+
 enum DiscrepancyType {
   SHORTAGE // Kurang
   DAMAGE // Rusak
@@ -479,6 +507,11 @@ model Branch {
   expenses               Expense[]
   internalTransfersFrom  InternalTransferLedger[]   @relation("InternalTransferFromBranch")
   internalTransfersTo    InternalTransferLedger[]   @relation("InternalTransferToBranch")
+  purchaseRequests       PurchaseRequest[]
+  purchaseOrders         PurchaseOrder[]
+  goodsReceipts          GoodsReceipt[]
+  supplierInvoices       SupplierInvoice[]
+  supplierPayments       SupplierPayment[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -525,6 +558,13 @@ model User {
   expensesCreated             Expense[]                @relation("ExpenseCreatedBy")
   expensesReviewed            Expense[]                @relation("ExpenseReviewedBy")
   expensesPaid                Expense[]                @relation("ExpensePaidBy")
+  suppliersCreated            Supplier[]               @relation("SupplierCreatedBy")
+  purchaseRequestsCreated     PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
+  purchaseRequestsReviewed    PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
+  purchaseOrdersCreated       PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
+  goodsReceiptsCreated        GoodsReceipt[]           @relation("GoodsReceiptCreatedBy")
+  supplierInvoicesCreated     SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
+  supplierPaymentsCreated     SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -699,12 +739,14 @@ model Account {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  parent              Account?             @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children            Account[]            @relation("AccountHierarchy")
-  lines               JournalLine[]
-  cashBankAccounts    CashBankAccount[]
-  openingBalanceLines OpeningBalanceLine[]
-  expenses            Expense[]
+  parent                 Account?             @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children               Account[]            @relation("AccountHierarchy")
+  lines                  JournalLine[]
+  cashBankAccounts       CashBankAccount[]
+  openingBalanceLines    OpeningBalanceLine[]
+  expenses               Expense[]
+  supplierInvoiceDebits  SupplierInvoice[]    @relation("SupplierInvoiceGrniAccount")
+  supplierInvoiceCredits SupplierInvoice[]    @relation("SupplierInvoiceApAccount")
 
   @@index([type, isActive])
   @@index([parentId])
@@ -771,6 +813,9 @@ model JournalEntry {
   expense              Expense?
   transferDispatch     InternalTransferLedger? @relation("TransferDispatchJournal")
   transferReceipt      InternalTransferLedger? @relation("TransferReceiptJournal")
+  goodsReceipt         GoodsReceipt?
+  supplierInvoice      SupplierInvoice?
+  supplierPayment      SupplierPayment?
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -1401,6 +1446,7 @@ model CashBankAccount {
   transactions        CashBankTransaction[]
   openingBalanceLines OpeningBalanceLine[]
   expenses            Expense[]
+  supplierPayments    SupplierPayment[]
 
   @@unique([branchId, name])
   @@index([branchId, type, isActive])
@@ -1434,6 +1480,7 @@ model CashBankTransaction {
   creator            User                @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   openingBalanceLine OpeningBalanceLine?
   expense            Expense?
+  supplierPayment    SupplierPayment?
 
   @@index([cashBankAccountId, transactionDate])
   @@index([branchId, transactionDate])
@@ -1555,6 +1602,258 @@ model Expense {
   @@index([status, createdAt])
   @@index([expenseAccountId])
   @@map("expenses")
+}
+
+// ============================================================
+// PURCHASING & ACCOUNTS PAYABLE
+// ============================================================
+
+model Supplier {
+  id               String         @id @default(cuid())
+  code             String         @unique
+  name             String
+  taxId            String?
+  contactName      String?
+  phone            String?
+  email            String?
+  address          String?
+  paymentTermsDays Int            @default(30)
+  status           SupplierStatus @default(ACTIVE)
+  createdBy        String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  creator  User              @relation("SupplierCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  orders   PurchaseOrder[]
+  invoices SupplierInvoice[]
+
+  @@index([status, name])
+  @@map("suppliers")
+}
+
+model PurchaseRequest {
+  id              String                @id @default(cuid())
+  requestNumber   String                @unique
+  postingKey      String                @unique
+  payloadHash     String
+  branchId        String
+  requestDate     DateTime
+  requiredDate    DateTime?
+  description     String
+  status          PurchaseRequestStatus @default(DRAFT)
+  approvalNote    String?
+  rejectionReason String?
+  createdBy       String
+  submittedAt     DateTime?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  convertedAt     DateTime?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  branch   Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  creator  User                  @relation("PurchaseRequestCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  reviewer User?                 @relation("PurchaseRequestReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  items    PurchaseRequestItem[]
+  order    PurchaseOrder?
+
+  @@index([branchId, requestDate])
+  @@index([status, createdAt])
+  @@map("purchase_requests")
+}
+
+model PurchaseRequestItem {
+  id                String   @id @default(cuid())
+  purchaseRequestId String
+  lineNo            Int
+  masterProductId   String
+  description       String
+  requestedQty      Decimal  @db.Decimal(18, 4)
+  approvedQty       Decimal? @db.Decimal(18, 4)
+  estimatedUnitCost Decimal  @db.Decimal(18, 4)
+  createdAt         DateTime @default(now())
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id], onDelete: Cascade)
+  masterProduct   MasterProduct   @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+
+  @@unique([purchaseRequestId, lineNo])
+  @@index([masterProductId])
+  @@map("purchase_request_items")
+}
+
+model PurchaseOrder {
+  id                String              @id @default(cuid())
+  poNumber          String              @unique
+  postingKey        String              @unique
+  payloadHash       String
+  purchaseRequestId String              @unique
+  supplierId        String
+  branchId          String
+  orderDate         DateTime
+  expectedDate      DateTime?
+  status            PurchaseOrderStatus @default(ISSUED)
+  currency          String              @default("IDR")
+  totalAmount       Decimal             @db.Decimal(18, 2)
+  notes             String?
+  createdBy         String
+  issuedAt          DateTime            @default(now())
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  purchaseRequest PurchaseRequest     @relation(fields: [purchaseRequestId], references: [id], onDelete: Restrict)
+  supplier        Supplier            @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  branch          Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  creator         User                @relation("PurchaseOrderCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  items           PurchaseOrderItem[]
+  goodsReceipts   GoodsReceipt[]
+  invoices        SupplierInvoice[]
+
+  @@index([branchId, orderDate])
+  @@index([supplierId, status])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderItem {
+  id              String   @id @default(cuid())
+  purchaseOrderId String
+  lineNo          Int
+  masterProductId String
+  skuSnapshot     String?
+  nameSnapshot    String
+  uomSnapshot     String
+  orderedQty      Decimal  @db.Decimal(18, 4)
+  receivedQty     Decimal  @default(0) @db.Decimal(18, 4)
+  unitPrice       Decimal  @db.Decimal(18, 4)
+  lineTotal       Decimal  @db.Decimal(18, 2)
+  createdAt       DateTime @default(now())
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  masterProduct MasterProduct      @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  receiptLines  GoodsReceiptLine[]
+
+  @@unique([purchaseOrderId, lineNo])
+  @@index([masterProductId])
+  @@map("purchase_order_items")
+}
+
+model GoodsReceipt {
+  id                String   @id @default(cuid())
+  receiptNumber     String   @unique
+  idempotencyKey    String   @unique
+  payloadHash       String
+  purchaseOrderId   String
+  branchId          String
+  receiptDate       DateTime
+  totalValue        Decimal  @db.Decimal(18, 2)
+  journalEntryId    String   @unique
+  evidenceReference String?
+  createdBy         String
+  createdAt         DateTime @default(now())
+
+  purchaseOrder PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  branch        Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry       @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  creator       User               @relation("GoodsReceiptCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  lines         GoodsReceiptLine[]
+
+  @@index([purchaseOrderId, receiptDate])
+  @@index([branchId, receiptDate])
+  @@map("goods_receipts")
+}
+
+model GoodsReceiptLine {
+  id                  String    @id @default(cuid())
+  goodsReceiptId      String
+  purchaseOrderItemId String
+  lineNo              Int
+  inventoryItemId     String
+  stockLocationId     String
+  quantity            Decimal   @db.Decimal(18, 4)
+  unitCost            Decimal   @db.Decimal(18, 4)
+  lineValue           Decimal   @db.Decimal(18, 2)
+  batchNumber         String?
+  manufactureDate     DateTime?
+  expiryDate          DateTime?
+  inventoryPostingId  String    @unique
+  createdAt           DateTime  @default(now())
+
+  goodsReceipt      GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Restrict)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+  inventoryItem     InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockLocation     StockLocation     @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
+  inventoryPosting  InventoryPosting  @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
+
+  @@unique([goodsReceiptId, lineNo])
+  @@index([purchaseOrderItemId])
+  @@map("goods_receipt_lines")
+}
+
+model SupplierInvoice {
+  id                    String                @id @default(cuid())
+  invoiceNumber         String                @unique
+  supplierInvoiceNumber String
+  postingKey            String                @unique
+  payloadHash           String
+  purchaseOrderId       String
+  supplierId            String
+  branchId              String
+  invoiceDate           DateTime
+  dueDate               DateTime
+  amount                Decimal               @db.Decimal(18, 2)
+  paidAmount            Decimal               @default(0) @db.Decimal(18, 2)
+  balanceAmount         Decimal               @db.Decimal(18, 2)
+  status                SupplierInvoiceStatus @default(POSTED)
+  grniAccountId         String
+  apAccountId           String
+  journalEntryId        String                @unique
+  evidenceReference     String?
+  createdBy             String
+  postedAt              DateTime              @default(now())
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  purchaseOrder PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier      Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  branch        Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  grniAccount   Account           @relation("SupplierInvoiceGrniAccount", fields: [grniAccountId], references: [id], onDelete: Restrict)
+  apAccount     Account           @relation("SupplierInvoiceApAccount", fields: [apAccountId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  creator       User              @relation("SupplierInvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payments      SupplierPayment[]
+
+  @@unique([supplierId, supplierInvoiceNumber])
+  @@index([branchId, dueDate, status])
+  @@index([purchaseOrderId, invoiceDate])
+  @@map("supplier_invoices")
+}
+
+model SupplierPayment {
+  id                    String   @id @default(cuid())
+  paymentNumber         String   @unique
+  postingKey            String   @unique
+  payloadHash           String
+  supplierInvoiceId     String
+  cashBankAccountId     String
+  branchId              String
+  paymentDate           DateTime
+  amount                Decimal  @db.Decimal(18, 2)
+  paymentReference      String
+  journalEntryId        String   @unique
+  cashBankTransactionId String   @unique
+  createdBy             String
+  postedAt              DateTime @default(now())
+  createdAt             DateTime @default(now())
+
+  supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  branch              Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  journalEntry        JournalEntry        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+  creator             User                @relation("SupplierPaymentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([supplierInvoiceId, paymentDate])
+  @@index([branchId, paymentDate])
+  @@map("supplier_payments")
 }
 
 enum AddOnType {
@@ -2006,6 +2305,8 @@ model MasterProduct {
   uomConversions           UnitConversion[]
   batches                  InventoryBatch[]
   inventoryBalances        InventoryBalance[]
+  purchaseRequestItems     PurchaseRequestItem[]
+  purchaseOrderItems       PurchaseOrderItem[]
 
   @@index([category, isActive])
   @@index([isActive])
@@ -2051,6 +2352,7 @@ model StockLocation {
   inventoryItems      InventoryItem[]
   balances            InventoryBalance[]
   openingBalanceLines OpeningBalanceLine[]
+  goodsReceiptLines   GoodsReceiptLine[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId, isActive])
@@ -2116,6 +2418,7 @@ model InventoryItem {
   stockLocation       StockLocation?       @relation(fields: [stockLocationId], references: [id], onDelete: SetNull)
   balances            InventoryBalance[]
   openingBalanceLines OpeningBalanceLine[]
+  goodsReceiptLines   GoodsReceiptLine[]
 
   @@unique([masterProductId, branchId])
   @@index([branchId, stock])
@@ -2240,6 +2543,7 @@ model InventoryPosting {
   stockMutations     StockMutation[]
   costAllocations    InventoryCostAllocation[]
   openingBalanceLine OpeningBalanceLine?
+  goodsReceiptLine   GoodsReceiptLine?
   transferDispatch   InternalTransferLedger?   @relation("TransferDispatchPosting")
   transferReceipt    InternalTransferLedger?   @relation("TransferReceiptPosting")
   shipmentReceipt    ShipmentReceipt?

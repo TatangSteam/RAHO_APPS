@@ -1,0 +1,24 @@
+import { api } from './api';
+
+export type Supplier = { id: string; code: string; name: string; status: 'ACTIVE' | 'INACTIVE' | 'BLOCKED'; paymentTermsDays: number };
+export type PurchaseRequest = { id: string; requestNumber: string; branchId: string; requestDate: string; description: string; status: string; items: Array<{ id: string; description: string; requestedQty: string; approvedQty?: string }> };
+export type PurchaseOrder = { id: string; poNumber: string; branchId: string; orderDate: string; status: string; totalAmount: string; supplier: Supplier; items: Array<{ id: string; nameSnapshot: string; orderedQty: string; receivedQty: string; unitPrice: string }>; goodsReceipts: Array<{ id: string; receiptNumber: string; totalValue: string }>; invoices: Array<{ id: string; invoiceNumber: string }> };
+export type SupplierInvoice = { id: string; invoiceNumber: string; supplierInvoiceNumber: string; branchId: string; dueDate: string; amount: string; paidAmount: string; balanceAmount: string; status: string; supplier: Supplier; purchaseOrder: { poNumber: string }; journalEntry: { journalNumber: string }; payments: Array<{ id: string; paymentNumber: string; amount: string }> };
+const unwrap = <T>(response: { data: { data: T } }) => response.data.data;
+
+export const purchasingApi = {
+  suppliers: async () => unwrap<Supplier[]>(await api.get('/purchasing/suppliers')),
+  createSupplier: async (data: Record<string, unknown>) => unwrap<Supplier>(await api.post('/purchasing/suppliers', data)),
+  requests: async () => unwrap<PurchaseRequest[]>(await api.get('/purchasing/purchase-requests')),
+  submitRequest: async (id: string) => unwrap<PurchaseRequest>(await api.post(`/purchasing/purchase-requests/${id}/submit`)),
+  approveRequest: async (row: PurchaseRequest) => unwrap<PurchaseRequest>(await api.post(`/purchasing/purchase-requests/${row.id}/approve`, { items: row.items.map((item) => ({ itemId: item.id, approvedQty: item.requestedQty })) })),
+  rejectRequest: async (id: string, reason: string) => unwrap<PurchaseRequest>(await api.post(`/purchasing/purchase-requests/${id}/reject`, { reason })),
+  orders: async () => unwrap<PurchaseOrder[]>(await api.get('/purchasing/purchase-orders')),
+  createOrder: async (purchaseRequestId: string, supplierId: string) => unwrap<{ purchaseOrder: PurchaseOrder }>(await api.post('/purchasing/purchase-orders', { postingKey: crypto.randomUUID(), purchaseRequestId, supplierId, orderDate: new Date().toISOString() })),
+  accountsPayable: async () => unwrap<SupplierInvoice[]>(await api.get('/purchasing/accounts-payable')),
+  postInvoice: async (purchaseOrderId: string, supplierInvoiceNumber: string, amount: string, termsDays: number) => {
+    const due = new Date(); due.setDate(due.getDate() + termsDays);
+    return unwrap(await api.post('/purchasing/supplier-invoices', { postingKey: crypto.randomUUID(), purchaseOrderId, supplierInvoiceNumber, invoiceDate: new Date().toISOString(), dueDate: due.toISOString(), amount }));
+  },
+  payInvoice: async (id: string, cashBankAccountId: string, amount: string, paymentReference: string) => unwrap(await api.post(`/purchasing/supplier-invoices/${id}/payments`, { postingKey: crypto.randomUUID(), cashBankAccountId, paymentDate: new Date().toISOString(), amount, paymentReference })),
+};
