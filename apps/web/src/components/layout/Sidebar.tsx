@@ -7,7 +7,7 @@ import {
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
-  FileSpreadsheet, ShieldCheck, Landmark,
+  FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
   Database, Warehouse,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -218,6 +218,18 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/cash-bank',
         icon: <CreditCard size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Opening Balance',
+        href: '/opening-balances',
+        icon: <Scale size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+      },
+      {
+        label: 'Expense',
+        href: '/expenses',
+        icon: <ReceiptText size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'],
       },
     ],
   },
