@@ -46,6 +46,7 @@ export async function listUsers(req: Request, res: Response, next: NextFunction)
       query,
       req.user.role as Role,
       req.user.branchId,
+      req.user.userId,
     );
     sendSuccess(res, users, 200, buildPaginationMeta(total, page, limit));
   } catch (err) { next(err); }
@@ -67,7 +68,7 @@ export async function createUser(req: Request, res: Response, next: NextFunction
     const input = createUserSchema.parse(req.body);
     console.log('🔍 [UsersController] Parsed input:', input);
     
-    const user = await createUserService(input, req.user.role as Role, req.user.branchId);
+    const user = await createUserService(input, req.user.role as Role, req.user.branchId, req.user.userId);
 
     // Create audit log for user creation (fire-and-forget)
     logAudit({
@@ -111,7 +112,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
       ...(password !== undefined ? { password: '[REDACTED]' } : {}),
     });
     
-    const user = await updateUserService(req.params.userId, input, req.user.role as Role);
+    const user = await updateUserService(req.params.userId, input, req.user.role as Role, req.user.userId);
     const auditChanges = {
       ...inputForLog,
       ...(password !== undefined ? { passwordChanged: true } : {}),
@@ -312,6 +313,7 @@ export async function listBranchStaff(req: Request, res: Response, next: NextFun
       { ...query, branchId },
       req.user.role as Role,
       null, // Pass null for callerBranchId since we're explicitly filtering by branchId param
+      req.user.userId,
     );
     
     // Return full user data including staffCode and profile for frontend

@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import CreateStaffModal from '@/components/staff/CreateStaffModal';
+import StaffCrudModal from '@/components/branches/StaffCrudModal';
 import styles from './page.module.css';
 
 interface Staff {
@@ -21,10 +22,11 @@ interface Staff {
     fullName: string;
     phone?: string;
   };
-  branch: {
+  branch?: {
+    id: string;
     name: string;
     branchCode: string;
-  };
+  } | null;
 }
 
 interface StaffActivity {
@@ -52,6 +54,7 @@ export default function StaffManagementPage() {
   const [activeTab, setActiveTab] = useState<'staff' | 'activity'>('staff');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
+  const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [mounted, setMounted] = useState(false);
   const [roleFilter, setRoleFilter] = useState<string>('ALL');
 
@@ -153,6 +156,11 @@ export default function StaffManagementPage() {
     }
   };
 
+  const handleEditSuccess = () => {
+    setEditingStaff(null);
+    fetchStaff();
+  };
+
   const getRoleBadge = (role: string) => {
     const roleMap: Record<string, { label: string; className: string }> = {
       ADMIN_LOGISTIK: { label: 'Admin Logistik', className: styles.roleDefault },
@@ -170,6 +178,7 @@ export default function StaffManagementPage() {
   const filteredStaff = roleFilter === 'ALL' 
     ? staff 
     : staff.filter(s => s.role === roleFilter);
+  const canEditAdminLayananBranch = ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '');
 
   const getActionBadge = (action: string) => {
     const actionMap: Record<string, { label: string; className: string }> = {
@@ -288,6 +297,14 @@ export default function StaffManagementPage() {
                 </div>
 
                 <div className={styles.staffActions}>
+                  {canEditAdminLayananBranch && s.role === 'ADMIN_LAYANAN' && (
+                    <button
+                      className={`${styles.actionBtn} ${styles.view}`}
+                      onClick={() => setEditingStaff(s)}
+                    >
+                      Edit
+                    </button>
+                  )}
                   <button
                     className={`${styles.actionBtn} ${s.isActive ? styles.deactivate : styles.activate}`}
                     onClick={() => handleToggleActive(s.id, s.isActive)}
@@ -349,6 +366,19 @@ export default function StaffManagementPage() {
         userRole={user?.role || ''}
       />
 
+      {editingStaff && (
+        <StaffCrudModal
+          isOpen={true}
+          onClose={() => setEditingStaff(null)}
+          onSuccess={handleEditSuccess}
+          action="edit"
+          branchId={editingStaff.branch?.id || user?.branchId || ''}
+          staffData={editingStaff}
+          callerRole={user?.role || ''}
+          allowBranchChange
+        />
+      )}
+
       {/* Staff Detail Modal */}
       {selectedStaff && (
         <div className={styles.modal}>
@@ -384,7 +414,11 @@ export default function StaffManagementPage() {
               )}
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Cabang:</span>
-                <span>{selectedStaff.branch.name} ({selectedStaff.branch.branchCode})</span>
+                <span>
+                  {selectedStaff.branch
+                    ? `${selectedStaff.branch.name} (${selectedStaff.branch.branchCode})`
+                    : 'Semua Cabang'}
+                </span>
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Status:</span>
