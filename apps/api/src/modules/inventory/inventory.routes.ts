@@ -4,6 +4,8 @@ import { StockRequestController } from './stock-request.controller';
 import { ShipmentController } from './shipment.controller';
 import { OverstockController } from './overstock.controller';
 import { LogisticsController } from './logistics.controller';
+import { InventoryMasterController } from './inventory-master.controller';
+import { InventoryLedgerController } from './inventory-ledger.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
@@ -45,6 +47,8 @@ const stockRequestController = new StockRequestController();
 const shipmentController = new ShipmentController();
 const overstockController = new OverstockController();
 const logisticsController = new LogisticsController();
+const inventoryMasterController = new InventoryMasterController();
+const inventoryLedgerController = new InventoryLedgerController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -70,6 +74,54 @@ router.get(
   authorize(ADMIN_ROLES),
   inventoryController.getMasterProducts.bind(inventoryController)
 );
+
+router.post(
+  '/master-products',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryMasterController.createProduct.bind(inventoryMasterController)
+);
+
+router.patch(
+  '/master-products/:productId',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  inventoryMasterController.updateProduct.bind(inventoryMasterController)
+);
+
+// ============================================================
+// INVENTORY MASTER DATA
+// ============================================================
+
+router.get('/warehouses', authenticate, authorize(ALLSTAFF), inventoryMasterController.listWarehouses.bind(inventoryMasterController));
+router.post('/warehouses', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createWarehouse.bind(inventoryMasterController));
+router.patch('/warehouses/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateWarehouse.bind(inventoryMasterController));
+router.delete('/warehouses/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.deactivateWarehouse.bind(inventoryMasterController));
+
+router.get('/stock-locations', authenticate, authorize(ALLSTAFF), inventoryMasterController.listLocations.bind(inventoryMasterController));
+router.post('/stock-locations', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createLocation.bind(inventoryMasterController));
+router.patch('/stock-locations/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateLocation.bind(inventoryMasterController));
+router.delete('/stock-locations/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.deactivateLocation.bind(inventoryMasterController));
+
+router.get('/uoms', authenticate, authorize(ALLSTAFF), inventoryMasterController.listUoms.bind(inventoryMasterController));
+router.post('/uoms', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createUom.bind(inventoryMasterController));
+router.patch('/uoms/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateUom.bind(inventoryMasterController));
+router.post('/conversions/preview', authenticate, authorize(ALLSTAFF), inventoryMasterController.previewConversion.bind(inventoryMasterController));
+
+router.get('/batches', authenticate, authorize(ALLSTAFF), inventoryMasterController.listBatches.bind(inventoryMasterController));
+router.post('/batches', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createBatch.bind(inventoryMasterController));
+router.patch('/batches/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateBatch.bind(inventoryMasterController));
+
+// ============================================================
+// INVENTORY LEDGER AND FIFO
+// ============================================================
+
+router.get('/ledger/balances', authenticate, authorize(ALLSTAFF), inventoryLedgerController.balances.bind(inventoryLedgerController));
+router.get('/ledger/postings', authenticate, authorize(ALLSTAFF), inventoryLedgerController.postings.bind(inventoryLedgerController));
+router.get('/ledger/reconciliation', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.reconcile.bind(inventoryLedgerController));
+router.post('/ledger/receipts', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.receive.bind(inventoryLedgerController));
+router.post('/ledger/issues', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.issue.bind(inventoryLedgerController));
+router.post('/ledger/postings/:postingId/reverse', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.reverse.bind(inventoryLedgerController));
 
 // ============================================================
 // INVENTORY ITEMS
@@ -145,14 +197,6 @@ router.patch(
   authenticate,
   authorize(MANAGER_ROLES),
   inventoryController.adjustStock.bind(inventoryController)
-);
-
-// Update master product conversion factor (SUPER_ADMIN or ADMIN_MANAGER)
-router.patch(
-  '/master-products/:productId',
-  authenticate,
-  authorize(MANAGER_ROLES),
-  inventoryController.updateMasterProduct.bind(inventoryController)
 );
 
 // ============================================================

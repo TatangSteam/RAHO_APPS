@@ -659,6 +659,78 @@ export const inventoryApi = {
     return api.get('/inventory/master-products');
   },
 
+  createMasterProduct: (data: Record<string, unknown>) => {
+    return api.post('/inventory/master-products', data);
+  },
+
+  updateMasterProduct: (productId: string, data: Record<string, unknown>) => {
+    return api.patch(`/inventory/master-products/${productId}`, data);
+  },
+
+  getWarehouses: (params?: { branchId?: string; includeInactive?: boolean; search?: string }) => {
+    return api.get('/inventory/warehouses', { params });
+  },
+
+  createWarehouse: (data: { branchId: string; code: string; name: string; isDefault?: boolean }) => {
+    return api.post('/inventory/warehouses', data);
+  },
+
+  updateWarehouse: (id: string, data: Record<string, unknown>) => {
+    return api.patch(`/inventory/warehouses/${id}`, data);
+  },
+
+  deactivateWarehouse: (id: string) => {
+    return api.delete(`/inventory/warehouses/${id}`);
+  },
+
+  getStockLocations: (warehouseId: string, includeInactive = false) => {
+    return api.get('/inventory/stock-locations', { params: { warehouseId, includeInactive } });
+  },
+
+  createStockLocation: (data: { warehouseId: string; code: string; name: string; isDefault?: boolean }) => {
+    return api.post('/inventory/stock-locations', data);
+  },
+
+  getUoms: (includeInactive = false) => {
+    return api.get('/inventory/uoms', { params: { includeInactive } });
+  },
+
+  createUom: (data: { code: string; name: string; category?: string; precision?: number }) => {
+    return api.post('/inventory/uoms', data);
+  },
+
+  getBatches: (params?: { masterProductId?: string; includeBlocked?: boolean }) => {
+    return api.get('/inventory/batches', { params });
+  },
+
+  createBatch: (data: Record<string, unknown>) => {
+    return api.post('/inventory/batches', data);
+  },
+
+  getLedgerBalances: (params?: Record<string, string | number | undefined>) => {
+    return api.get('/inventory/ledger/balances', { params });
+  },
+
+  getLedgerPostings: (params?: Record<string, string | number | undefined>) => {
+    return api.get('/inventory/ledger/postings', { params });
+  },
+
+  receiveInventory: (data: Record<string, unknown>) => {
+    return api.post('/inventory/ledger/receipts', data);
+  },
+
+  issueInventory: (data: Record<string, unknown>) => {
+    return api.post('/inventory/ledger/issues', data);
+  },
+
+  reverseInventoryPosting: (postingId: string, data: Record<string, unknown>) => {
+    return api.post(`/inventory/ledger/postings/${postingId}/reverse`, data);
+  },
+
+  reconcileInventory: (branchId: string) => {
+    return api.get('/inventory/ledger/reconciliation', { params: { branchId } });
+  },
+
   // ============================================================
   // STOCK REQUESTS
   // ============================================================

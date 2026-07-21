@@ -106,6 +106,13 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   Inventory: 'INVENTORY',
   InventoryItem: 'INVENTORY',
   StockMutation: 'INVENTORY',
+  Warehouse: 'INVENTORY',
+  StockLocation: 'INVENTORY',
+  UnitOfMeasure: 'INVENTORY',
+  UnitConversion: 'INVENTORY',
+  InventoryBatch: 'INVENTORY',
+  InventoryPosting: 'INVENTORY',
+  InventoryCostLayer: 'INVENTORY',
   Overstock: 'INVENTORY',
   Referral: 'REFERRAL',
   ReferralCode: 'REFERRAL',
@@ -148,8 +155,12 @@ export function sanitizeAuditData(value: unknown, depth = 0): unknown {
   if (depth > MAX_SANITIZE_DEPTH) return '[Max depth reached]';
   if (value instanceof Date) return value.toISOString();
   if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'function') return '[Function]';
   if (typeof value !== 'object') return value;
   if (Buffer.isBuffer(value)) return '[Binary data]';
+  if ('toJSON' in value && typeof (value as { toJSON?: unknown }).toJSON === 'function') {
+    return sanitizeAuditData((value as { toJSON: () => unknown }).toJSON(), depth + 1);
+  }
   if (Array.isArray(value)) {
     return value.map((item) => sanitizeAuditData(item, depth + 1));
   }

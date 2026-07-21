@@ -179,7 +179,22 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
 }
 
 // ── Helper: Auto-add Products to Branch Inventory ─────────────
+async function ensureDefaultInventoryStorage(branchId: string, createdBy: string) {
+  const warehouse = await prisma.warehouse.upsert({
+    where: { branchId_code: { branchId, code: 'DEFAULT' } },
+    create: { branchId, code: 'DEFAULT', name: 'Warehouse Utama', isDefault: true, createdBy },
+    update: { isActive: true },
+  });
+  const location = await prisma.stockLocation.upsert({
+    where: { warehouseId_code: { warehouseId: warehouse.id, code: 'DEFAULT' } },
+    create: { warehouseId: warehouse.id, code: 'DEFAULT', name: 'Lokasi Utama', isDefault: true, createdBy },
+    update: { isActive: true },
+  });
+  return { warehouse, location };
+}
+
 async function autoAddProductsToBranchInventory(branchId: string) {
+  const storage = await ensureDefaultInventoryStorage(branchId, 'system');
   
   // Find all products with isAutoAddedToBranch = true
   const autoAddProducts = await prisma.masterProduct.findMany({
@@ -228,13 +243,70 @@ async function autoAddProductsToBranchInventory(branchId: string) {
       const initialStock = product.defaultInitialStock || 
         (product.sku?.startsWith('PRD-INF-SET') ? 100 : 0);
       
-      await prisma.inventoryItem.create({
-        data: {
-          masterProductId: product.id,
-          branchId,
-          stock: initialStock,
-          minThreshold: 10, // Default minimum threshold
-        },
+      await prisma.$transaction(async (tx) => {
+        const inventoryItem = await tx.inventoryItem.create({
+          data: {
+            masterProductId: product.id,
+            branchId,
+            stock: initialStock,
+            minThreshold: 10,
+            warehouseId: storage.warehouse.id,
+            stockLocationId: storage.location.id,
+          },
+        });
+        const balance = await tx.inventoryBalance.create({
+          data: {
+            inventoryItemId: inventoryItem.id,
+            stockLocationId: storage.location.id,
+            masterProductId: product.id,
+            branchId,
+            batchKey: 'NO_BATCH',
+            onHandQty: initialStock,
+          },
+        });
+        if (new Prisma.Decimal(initialStock).greaterThan(0)) {
+          const posting = await tx.inventoryPosting.create({
+            data: {
+              postingNumber: `INV-AUTO-${branchId}-${product.id}`,
+              idempotencyKey: `BRANCH_AUTO_STOCK:${branchId}:${product.id}`,
+              payloadHash: `BRANCH_AUTO_STOCK:${branchId}:${product.id}:${initialStock}`,
+              type: 'OPENING',
+              reasonCode: 'BRANCH_AUTO_STOCK',
+              sourceType: 'BRANCH',
+              sourceId: branchId,
+              branchId,
+              occurredAt: new Date(),
+              postedBy: 'system',
+            },
+          });
+          await tx.stockMutation.create({
+            data: {
+              inventoryItemId: inventoryItem.id,
+              type: 'ADJUSTMENT',
+              quantity: initialStock,
+              stockBefore: 0,
+              stockAfter: initialStock,
+              referenceType: 'BRANCH_AUTO_STOCK',
+              referenceId: branchId,
+              notes: 'Opening stock otomatis saat cabang dibuat',
+              createdBy: 'system',
+              inventoryPostingId: posting.id,
+              inventoryBalanceId: balance.id,
+            },
+          });
+          await tx.inventoryCostLayer.create({
+            data: {
+              inventoryBalanceId: balance.id,
+              sourceType: 'BRANCH_AUTO_STOCK',
+              sourceId: branchId,
+              originalQty: initialStock,
+              remainingQty: initialStock,
+              unitCost: null,
+              valuationStatus: 'PENDING_VALUATION',
+              receivedAt: new Date(),
+            },
+          });
+        }
       });
       addedCount++;
     }
@@ -455,6 +527,12 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
     },
     select: branchSelect,
   });
+
+  try {
+    await ensureDefaultInventoryStorage(branch.id, createdBy);
+  } catch (error) {
+    logger.warn('[Branches] Default inventory storage side effect failed', { error });
+  }
 
   // Auto-create default package pricing for the new branch
   try {

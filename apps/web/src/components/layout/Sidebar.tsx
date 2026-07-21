@@ -8,6 +8,7 @@ import {
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark,
+  Database, Warehouse,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -43,6 +44,18 @@ const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMI
 const MENU_GROUPS: MenuGroup[] = [
   {
     items: [
+      {
+        label: 'Master Inventori',
+        href: '/inventory/master-data',
+        icon: <Warehouse size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
+      },
+      {
+        label: 'Ledger Stok',
+        href: '/inventory/ledger',
+        icon: <Database size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+      },
       {
         label: 'Dashboard',
         href: '/dashboard',

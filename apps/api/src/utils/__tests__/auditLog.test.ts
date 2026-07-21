@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { AuditAction, Role } from '@prisma/client';
+import { AuditAction, Prisma, Role } from '@prisma/client';
 import { buildChangedFields, logAudit, logAuditFromRequest, sanitizeAuditData } from '../auditLog';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
@@ -228,5 +228,11 @@ describe('auditLog utility', () => {
     )).toEqual([
       { field: 'name', before: 'Before', after: 'After' },
     ]);
+  });
+
+  it('serializes Prisma Decimal values through toJSON', () => {
+    expect(sanitizeAuditData({ totalCost: new Prisma.Decimal('123.4500') })).toEqual({
+      totalCost: '123.45',
+    });
   });
 });
