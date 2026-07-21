@@ -8,7 +8,7 @@ import {
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark,
-  Database, Warehouse,
+  Database, LockKeyhole, Warehouse,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -118,7 +118,13 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Request Stok',
         href: '/inventory/stock-requests',
         icon: <ClipboardList size={20} />,
-        roles: ['ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Reservasi Stok',
+        href: '/inventory/stock-reservations',
+        icon: <LockKeyhole size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
       },
       {
         label: 'Pengiriman',

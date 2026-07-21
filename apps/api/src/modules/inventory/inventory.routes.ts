@@ -6,6 +6,7 @@ import { OverstockController } from './overstock.controller';
 import { LogisticsController } from './logistics.controller';
 import { InventoryMasterController } from './inventory-master.controller';
 import { InventoryLedgerController } from './inventory-ledger.controller';
+import { StockReservationController } from './stock-reservation.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
@@ -49,6 +50,7 @@ const overstockController = new OverstockController();
 const logisticsController = new LogisticsController();
 const inventoryMasterController = new InventoryMasterController();
 const inventoryLedgerController = new InventoryLedgerController();
+const stockReservationController = new StockReservationController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -119,6 +121,7 @@ router.patch('/batches/:id', authenticate, authorize(ADMIN_ROLES), inventoryMast
 router.get('/ledger/balances', authenticate, authorize(ALLSTAFF), inventoryLedgerController.balances.bind(inventoryLedgerController));
 router.get('/ledger/postings', authenticate, authorize(ALLSTAFF), inventoryLedgerController.postings.bind(inventoryLedgerController));
 router.get('/ledger/reconciliation', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.reconcile.bind(inventoryLedgerController));
+router.post('/ledger/opening-stock', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.opening.bind(inventoryLedgerController));
 router.post('/ledger/receipts', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.receive.bind(inventoryLedgerController));
 router.post('/ledger/issues', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.issue.bind(inventoryLedgerController));
 router.post('/ledger/postings/:postingId/reverse', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.reverse.bind(inventoryLedgerController));
@@ -511,6 +514,13 @@ router.get(
 // STOCK REQUESTS
 // ============================================================
 
+router.get(
+  '/stock-reservations',
+  authenticate,
+  authorize(ADMIN_ROLES),
+  stockReservationController.list.bind(stockReservationController)
+);
+
 // Get pending review requests (for dashboard) - must be before :requestId route
 router.get(
   '/stock-requests/pending-review',
@@ -549,6 +559,20 @@ router.patch(
   authenticate,
   authorize(MANAGER_ROLES),
   stockRequestController.updateRequest.bind(stockRequestController)
+);
+
+router.post(
+  '/stock-requests/:requestId/reservations/approve',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockReservationController.approve.bind(stockReservationController)
+);
+
+router.post(
+  '/stock-requests/:requestId/reservations/release',
+  authenticate,
+  authorize(MANAGER_ROLES),
+  stockReservationController.release.bind(stockReservationController)
 );
 
 // Approve stock request for PREMIER branch

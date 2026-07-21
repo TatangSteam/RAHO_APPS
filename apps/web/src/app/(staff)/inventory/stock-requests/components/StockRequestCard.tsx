@@ -39,6 +39,13 @@ const STATUS_CONFIG: Record<StockRequestStatus, {
     textColor: 'text-amber-600 dark:text-amber-400',
     borderColor: 'border-amber-200 dark:border-amber-500/30'
   },
+  PARTIALLY_APPROVED: {
+    label: 'Disetujui Parsial',
+    icon: <ClipboardCheck className="w-3.5 h-3.5" />,
+    bgColor: 'bg-amber-50 dark:bg-amber-500/10',
+    textColor: 'text-amber-700 dark:text-amber-300',
+    borderColor: 'border-amber-300 dark:border-amber-500/30'
+  },
   APPROVED: { 
     label: 'Disetujui', 
     icon: <CheckCircle className="w-3.5 h-3.5" />, 
@@ -94,6 +101,13 @@ const STATUS_CONFIG: Record<StockRequestStatus, {
     bgColor: 'bg-orange-50 dark:bg-orange-500/10',
     textColor: 'text-orange-600 dark:text-orange-400',
     borderColor: 'border-orange-200 dark:border-orange-500/30'
+  },
+  RESERVATION_RELEASED: {
+    label: 'Reservation Dilepas',
+    icon: <Package className="w-3.5 h-3.5" />,
+    bgColor: 'bg-slate-50 dark:bg-slate-500/10',
+    textColor: 'text-slate-600 dark:text-slate-400',
+    borderColor: 'border-slate-200 dark:border-slate-500/30'
   },
 };
 

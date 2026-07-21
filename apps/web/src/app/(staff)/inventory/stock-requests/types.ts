@@ -4,6 +4,7 @@
 
 export type StockRequestStatus = 
   | 'PENDING' 
+  | 'PARTIALLY_APPROVED'
   | 'APPROVED' 
   | 'WAITING_PAYMENT' 
   | 'PAYMENT_UPLOADED' 
@@ -11,7 +12,8 @@ export type StockRequestStatus =
   | 'REJECTED' 
   | 'SHIPPED' 
   | 'COMPLETED' 
-  | 'COMPLETED_WITH_ISSUE';
+  | 'COMPLETED_WITH_ISSUE'
+  | 'RESERVATION_RELEASED';
 
 export type BranchType = 'PREMIER' | 'PARTNERSHIP' | 'PUSAT';
 
@@ -270,6 +272,7 @@ export type StockFilterType = 'ALL' | 'LOW_STOCK' | 'IN_STOCK';
 
 export const STATUS_LABELS: Record<StockRequestStatus, string> = {
   PENDING: 'Menunggu Review',
+  PARTIALLY_APPROVED: 'Disetujui Parsial',
   APPROVED: 'Disetujui',
   WAITING_PAYMENT: 'Menunggu Pembayaran',
   PAYMENT_UPLOADED: 'Bukti Pembayaran Diupload',
@@ -278,10 +281,12 @@ export const STATUS_LABELS: Record<StockRequestStatus, string> = {
   SHIPPED: 'Dikirim',
   COMPLETED: 'Selesai',
   COMPLETED_WITH_ISSUE: 'Selesai (Ada Masalah)',
+  RESERVATION_RELEASED: 'Reservation Dilepas',
 };
 
 export const STATUS_COLORS: Record<StockRequestStatus, string> = {
   PENDING: '#f59e0b',
+  PARTIALLY_APPROVED: '#b7791f',
   APPROVED: '#10b981',
   WAITING_PAYMENT: '#8b5cf6',
   PAYMENT_UPLOADED: '#3b82f6',
@@ -290,10 +295,12 @@ export const STATUS_COLORS: Record<StockRequestStatus, string> = {
   SHIPPED: '#6366f1',
   COMPLETED: '#22c55e',
   COMPLETED_WITH_ISSUE: '#f97316',
+  RESERVATION_RELEASED: '#64748b',
 };
 
 export const STATUS_ICONS: Record<StockRequestStatus, string> = {
   PENDING: '⏳',
+  PARTIALLY_APPROVED: 'PA',
   APPROVED: '✅',
   WAITING_PAYMENT: '💳',
   PAYMENT_UPLOADED: '📤',
@@ -302,4 +309,5 @@ export const STATUS_ICONS: Record<StockRequestStatus, string> = {
   SHIPPED: '🚚',
   COMPLETED: '✔️',
   COMPLETED_WITH_ISSUE: '⚠️',
+  RESERVATION_RELEASED: 'RL',
 };

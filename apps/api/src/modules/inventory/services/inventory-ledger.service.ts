@@ -15,6 +15,7 @@ import { logAudit } from '@utils/auditLog';
 import type {
   InventoryLedgerQuery,
   IssueInventoryInput,
+  OpeningInventoryInput,
   ReceiveInventoryInput,
   ReverseInventoryPostingInput,
 } from '../inventory-ledger.schema';
@@ -48,7 +49,7 @@ function hashPayload(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function postingNumber(prefix: 'RCV' | 'ISS' | 'REV'): string {
+function postingNumber(prefix: 'OPN' | 'RCV' | 'ISS' | 'REV'): string {
   return `INV-${prefix}-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
@@ -159,6 +160,20 @@ async function lockValidLayers(
   `);
 }
 
+function capLayersToAvailableBalances(layers: LockedLayer[], balances: LockedBalance[]): LockedLayer[] {
+  const availableByBalance = new Map(balances.map((balance) => [
+    balance.id,
+    balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty),
+  ]));
+  return layers.flatMap((layer) => {
+    const balanceAvailable = availableByBalance.get(layer.inventoryBalanceId) ?? new Prisma.Decimal(0);
+    if (balanceAvailable.lessThanOrEqualTo(0)) return [];
+    const allocatableQty = Prisma.Decimal.min(layer.remainingQty, balanceAvailable);
+    availableByBalance.set(layer.inventoryBalanceId, balanceAvailable.sub(allocatableQty));
+    return allocatableQty.greaterThan(0) ? [{ ...layer, remainingQty: allocatableQty }] : [];
+  });
+}
+
 async function loadPostingResult(postingId: string) {
   return prisma.inventoryPosting.findUniqueOrThrow({
     where: { id: postingId },
@@ -169,10 +184,18 @@ async function loadPostingResult(postingId: string) {
   });
 }
 
-export async function receiveInventory(actorUserId: string, input: ReceiveInventoryInput) {
+async function postInboundInventory(
+  actorUserId: string,
+  input: ReceiveInventoryInput,
+  type: InventoryPostingType,
+) {
   await assertBranchAccess(actorUserId, input.branchId);
-  await assertPermission(actorUserId, PERMISSIONS.INVENTORY_POST, input.branchId);
-  const payloadHash = hashPayload(input);
+  await assertPermission(
+    actorUserId,
+    type === InventoryPostingType.OPENING ? PERMISSIONS.INVENTORY_OPENING_POST : PERMISSIONS.INVENTORY_POST,
+    input.branchId,
+  );
+  const payloadHash = hashPayload({ type, ...input });
 
   const postingId = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
     const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
@@ -223,8 +246,8 @@ export async function receiveInventory(actorUserId: string, input: ReceiveInvent
     const totalCost = quantity.mul(unitCost);
     const posting = await tx.inventoryPosting.create({
       data: {
-        postingNumber: postingNumber('RCV'), idempotencyKey: input.idempotencyKey, payloadHash,
-        type: InventoryPostingType.RECEIPT, reasonCode: input.reasonCode, sourceType: input.sourceType,
+        postingNumber: postingNumber(type === InventoryPostingType.OPENING ? 'OPN' : 'RCV'), idempotencyKey: input.idempotencyKey, payloadHash,
+        type, reasonCode: input.reasonCode, sourceType: input.sourceType,
         sourceId: input.sourceId, sourceNumber: input.sourceNumber, branchId: input.branchId,
         costCenterCode: input.costCenterCode, occurredAt: input.occurredAt, totalCost, postedBy: actorUserId,
       },
@@ -250,8 +273,20 @@ export async function receiveInventory(actorUserId: string, input: ReceiveInvent
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
   const result = await loadPostingResult(postingId);
-  await logAudit({ userId: actorUserId, branchId: input.branchId, action: 'CREATE', resource: 'InventoryPosting', resourceId: postingId, afterData: { type: 'RECEIPT', sourceType: input.sourceType, sourceId: input.sourceId, quantity: input.quantity } });
+  await logAudit({ userId: actorUserId, branchId: input.branchId, action: 'CREATE', resource: 'InventoryPosting', resourceId: postingId, afterData: { type, sourceType: input.sourceType, sourceId: input.sourceId, quantity: input.quantity } });
   return result;
+}
+
+export async function receiveInventory(actorUserId: string, input: ReceiveInventoryInput) {
+  return postInboundInventory(actorUserId, input, InventoryPostingType.RECEIPT);
+}
+
+export async function postOpeningInventory(actorUserId: string, input: OpeningInventoryInput) {
+  return postInboundInventory(actorUserId, {
+    ...input,
+    sourceType: 'OPENING_STOCK',
+    reasonCode: 'OPENING_STOCK',
+  }, InventoryPostingType.OPENING);
 }
 
 function ensureUniqueIssueLines(input: IssueInventoryInput) {
@@ -300,7 +335,7 @@ export async function issueInventory(actorUserId: string, input: IssueInventoryI
       }
 
       const layers = await lockValidLayers(tx, item.id, location.id, input.occurredAt, line.batchId);
-      const allocations = allocateFifo(quantity, layers);
+      const allocations = allocateFifo(quantity, capLayersToAvailableBalances(layers, balances));
       const lineCost = sumAllocationCost(allocations);
       postingCost = postingCost.add(lineCost);
 
@@ -344,8 +379,11 @@ export async function issueInventory(actorUserId: string, input: IssueInventoryI
       }
 
       for (const [balanceId, allocatedQuantity] of quantityByBalance) {
+        const lockedBalance = balances.find((balance) => balance.id === balanceId);
+        if (!lockedBalance) throw errors.conflict('INVENTORY_BALANCE_MISSING', 'Inventory balance allocation tidak ditemukan.');
+        const minimumOnHand = allocatedQuantity.add(lockedBalance.reservedQty).add(lockedBalance.quarantineQty);
         const balanceUpdate = await tx.inventoryBalance.updateMany({
-          where: { id: balanceId, onHandQty: { gte: allocatedQuantity } },
+          where: { id: balanceId, onHandQty: { gte: minimumOnHand } },
           data: { onHandQty: { decrement: allocatedQuantity }, version: { increment: 1 } },
         });
         if (balanceUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Inventory balance berubah saat diproses.');

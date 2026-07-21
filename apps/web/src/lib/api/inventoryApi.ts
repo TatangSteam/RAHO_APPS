@@ -719,6 +719,10 @@ export const inventoryApi = {
     return api.post('/inventory/ledger/receipts', data);
   },
 
+  postOpeningStock: (data: Record<string, unknown>) => {
+    return api.post('/inventory/ledger/opening-stock', data);
+  },
+
   issueInventory: (data: Record<string, unknown>) => {
     return api.post('/inventory/ledger/issues', data);
   },
@@ -844,6 +848,24 @@ export const inventoryApi = {
    */
   approveRequest: (requestId: string, data?: { reviewNotes?: string; invoiceItems?: InvoiceItemInput[] }) => {
     return api.post(`/inventory/stock-requests/${requestId}/approve`, data);
+  },
+
+  approveAndReserveStockRequest: (requestId: string, data: Record<string, unknown>) => {
+    return api.post(`/inventory/stock-requests/${requestId}/reservations/approve`, data);
+  },
+
+  releaseStockRequestReservations: (requestId: string, data: Record<string, unknown>) => {
+    return api.post(`/inventory/stock-requests/${requestId}/reservations/release`, data);
+  },
+
+  getStockReservations: (params?: {
+    sourceBranchId?: string;
+    destinationBranchId?: string;
+    status?: 'ACTIVE' | 'RELEASED';
+    page?: number;
+    limit?: number;
+  }) => {
+    return api.get('/inventory/stock-reservations', { params });
   },
 
   // ============================================================

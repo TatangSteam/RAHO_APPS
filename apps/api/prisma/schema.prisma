@@ -210,6 +210,7 @@ enum InventoryCostAllocationType {
 
 enum StockRequestStatus {
   PENDING // Baru dibuat, menunggu review
+  PARTIALLY_APPROVED // Sebagian quantity disetujui dan direservasi
   APPROVED // Disetujui (untuk Premier)
   WAITING_PAYMENT // Menunggu pembayaran (untuk Partnership)
   PAYMENT_UPLOADED // Bukti bayar sudah diupload
@@ -218,6 +219,12 @@ enum StockRequestStatus {
   SHIPPED // Sedang dikirim
   COMPLETED // Selesai - barang diterima sesuai
   COMPLETED_WITH_ISSUE // Selesai - ada ketidaksesuaian
+  RESERVATION_RELEASED // Approval tetap tercatat, seluruh reservation sudah dilepas
+}
+
+enum StockReservationStatus {
+  ACTIVE
+  RELEASED
 }
 
 enum PaymentVerificationStatus {
@@ -396,34 +403,35 @@ model Branch {
   updatedAt      DateTime   @updatedAt
 
   // Relations
-  users                User[]
-  members              Member[]
-  branchMemberAccess   BranchMemberAccess[]
-  memberPackages       MemberPackage[]
-  memberAddOns         MemberAddOn[]
-  nonTherapyPurchases  MemberNonTherapyPurchase[]
-  invoices             Invoice[]
-  packagePricings      PackagePricing[]
-  inventoryItems       InventoryItem[]
-  stockRequests        StockRequest[]
-  shipmentsFrom        Shipment[]                 @relation("ShipmentFrom")
-  shipmentsTo          Shipment[]                 @relation("ShipmentTo")
-  encounters           Encounter[]
-  treatmentSessions    TreatmentSession[]
-  managerBranches      ManagerBranch[]
-  staffBranches        StaffBranch[]              @relation("StaffBranches")
-  referralCodes        ReferralCode[]
-  auditLogs            AuditLog[]
-  permissionOverrides  UserPermissionOverride[]
-  accountingPeriods    AccountingPeriod[]
-  journalEntries       JournalEntry[]
-  journalLines         JournalLine[]
-  cashBankAccounts     CashBankAccount[]
-  cashBankTransactions CashBankTransaction[]
-  overstocks           BranchOverstock[]
-  warehouses           Warehouse[]
-  inventoryPostings    InventoryPosting[]
-  inventoryBalances    InventoryBalance[]
+  users                  User[]
+  members                Member[]
+  branchMemberAccess     BranchMemberAccess[]
+  memberPackages         MemberPackage[]
+  memberAddOns           MemberAddOn[]
+  nonTherapyPurchases    MemberNonTherapyPurchase[]
+  invoices               Invoice[]
+  packagePricings        PackagePricing[]
+  inventoryItems         InventoryItem[]
+  stockRequests          StockRequest[]             @relation("StockRequestDestination")
+  stockRequestsFulfilled StockRequest[]             @relation("StockRequestSource")
+  shipmentsFrom          Shipment[]                 @relation("ShipmentFrom")
+  shipmentsTo            Shipment[]                 @relation("ShipmentTo")
+  encounters             Encounter[]
+  treatmentSessions      TreatmentSession[]
+  managerBranches        ManagerBranch[]
+  staffBranches          StaffBranch[]              @relation("StaffBranches")
+  referralCodes          ReferralCode[]
+  auditLogs              AuditLog[]
+  permissionOverrides    UserPermissionOverride[]
+  accountingPeriods      AccountingPeriod[]
+  journalEntries         JournalEntry[]
+  journalLines           JournalLine[]
+  cashBankAccounts       CashBankAccount[]
+  cashBankTransactions   CashBankTransaction[]
+  overstocks             BranchOverstock[]
+  warehouses             Warehouse[]
+  inventoryPostings      InventoryPosting[]
+  inventoryBalances      InventoryBalance[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -2015,6 +2023,7 @@ model InventoryBalance {
   batch          InventoryBatch?      @relation(fields: [batchId], references: [id], onDelete: Restrict)
   costLayers     InventoryCostLayer[]
   stockMutations StockMutation[]
+  reservations   StockReservation[]
 
   @@unique([inventoryItemId, stockLocationId, batchKey])
   @@index([branchId, masterProductId])
@@ -2109,17 +2118,23 @@ model InventoryCostAllocation {
 // ============================================================
 
 model StockRequest {
-  id          String             @id @default(cuid())
-  requestCode String             @unique
-  branchId    String
-  requestedBy String
-  status      StockRequestStatus @default(PENDING)
-  notes       String?
+  id             String             @id @default(cuid())
+  requestCode    String             @unique
+  branchId       String
+  sourceBranchId String?
+  requestedBy    String
+  status         StockRequestStatus @default(PENDING)
+  notes          String?
 
   // Review fields
-  reviewedBy  String?
-  reviewedAt  DateTime?
-  reviewNotes String?
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  reviewNotes            String?
+  approvalIdempotencyKey String?   @unique
+  approvalPayloadHash    String?
+  releaseIdempotencyKey  String?   @unique
+  releasePayloadHash     String?
+  reservationReleasedAt  DateTime?
 
   // Payment fields (for Partnership branches)
   paymentProofUrl      String?
@@ -2147,13 +2162,16 @@ model StockRequest {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branch          Branch               @relation(fields: [branchId], references: [id])
+  branch          Branch               @relation("StockRequestDestination", fields: [branchId], references: [id])
+  sourceBranch    Branch?              @relation("StockRequestSource", fields: [sourceBranchId], references: [id], onDelete: Restrict)
   items           StockRequestItem[]
+  reservations    StockReservation[]
   invoice         StockRequestInvoice?
   shipment        Shipment?
   overstockUsages OverstockUsage[]
 
   @@index([branchId, status])
+  @@index([sourceBranchId, status])
   @@index([status])
   @@index([requestedBy])
   @@index([createdAt])
@@ -2171,14 +2189,41 @@ model StockRequestItem {
   finalQty          Decimal? @db.Decimal(10, 2) // Final qty after overstock deduction (requestedQty - overstockDeducted)
   notes             String?
 
-  stockRequest    StockRequest     @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
-  inventoryItem   InventoryItem?   @relation(fields: [inventoryItemId], references: [id])
-  masterProduct   MasterProduct    @relation(fields: [masterProductId], references: [id])
+  stockRequest    StockRequest       @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem?     @relation(fields: [inventoryItemId], references: [id])
+  masterProduct   MasterProduct      @relation(fields: [masterProductId], references: [id])
   overstockUsages OverstockUsage[]
+  reservations    StockReservation[]
 
   @@index([stockRequestId])
   @@index([masterProductId])
   @@map("stock_request_items")
+}
+
+model StockReservation {
+  id                 String                 @id @default(cuid())
+  stockRequestId     String
+  stockRequestItemId String
+  inventoryBalanceId String
+  quantity           Decimal                @db.Decimal(18, 4)
+  releasedQty        Decimal                @default(0) @db.Decimal(18, 4)
+  status             StockReservationStatus @default(ACTIVE)
+  reservedBy         String
+  reservedAt         DateTime               @default(now())
+  releasedBy         String?
+  releasedAt         DateTime?
+  releaseReason      String?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  stockRequest     StockRequest     @relation(fields: [stockRequestId], references: [id], onDelete: Restrict)
+  stockRequestItem StockRequestItem @relation(fields: [stockRequestItemId], references: [id], onDelete: Restrict)
+  inventoryBalance InventoryBalance @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
+
+  @@unique([stockRequestItemId, inventoryBalanceId])
+  @@index([stockRequestId, status])
+  @@index([inventoryBalanceId, status])
+  @@map("stock_reservations")
 }
 
 model Shipment {

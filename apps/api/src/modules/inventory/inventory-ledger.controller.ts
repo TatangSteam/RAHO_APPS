@@ -3,6 +3,7 @@ import { sendCreated, sendSuccess } from '@utils/response';
 import {
   inventoryLedgerQuerySchema,
   issueInventorySchema,
+  openingInventorySchema,
   receiveInventorySchema,
   reverseInventoryPostingSchema,
 } from './inventory-ledger.schema';
@@ -10,12 +11,16 @@ import {
   issueInventory,
   listInventoryBalances,
   listInventoryPostings,
+  postOpeningInventory,
   receiveInventory,
   reconcileInventory,
   reverseInventoryPosting,
 } from './services/inventory-ledger.service';
 
 export class InventoryLedgerController {
+  async opening(req: Request, res: Response, next: NextFunction) {
+    try { sendCreated(res, await postOpeningInventory(req.user.userId, openingInventorySchema.parse(req.body))); } catch (error) { next(error); }
+  }
   async receive(req: Request, res: Response, next: NextFunction) {
     try { sendCreated(res, await receiveInventory(req.user.userId, receiveInventorySchema.parse(req.body))); } catch (error) { next(error); }
   }
@@ -35,4 +40,3 @@ export class InventoryLedgerController {
     try { sendSuccess(res, await reconcileInventory(req.user.userId, String(req.query.branchId || ''))); } catch (error) { next(error); }
   }
 }
-

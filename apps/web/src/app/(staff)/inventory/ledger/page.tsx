@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDownToLine, ArrowUpFromLine, RefreshCw, RotateCcw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpFromLine, PackagePlus, RefreshCw, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
@@ -25,10 +25,12 @@ export default function InventoryLedgerPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [inboundMode, setInboundMode] = useState<'RECEIPT' | 'OPENING'>('RECEIPT');
   const [receipt, setReceipt] = useState({ inventoryItemId: '', quantity: '', unitCost: '', batchNumber: '', expiryDate: '', sourceId: '' });
   const [issue, setIssue] = useState({ inventoryItemId: '', quantity: '', sourceId: '' });
 
   const canPost = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'].includes(user?.role || '');
+  const canPostOpening = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
   const canReverse = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
 
   const load = useCallback(async () => {
@@ -68,14 +70,16 @@ export default function InventoryLedgerPage() {
     const selected = items.find((item) => item.id === receipt.inventoryItemId);
     try {
       setSaving(true);
-      await inventoryApi.receiveInventory({
-        idempotencyKey: idempotencyKey('RECEIPT'), branchId, inventoryItemId: receipt.inventoryItemId,
-        quantity: receipt.quantity, unitCost: receipt.unitCost, sourceType: 'MANUAL_RECEIPT',
-        sourceId: receipt.sourceId || idempotencyKey('SRC'), reasonCode: 'MANUAL_RECEIPT',
+      const payload = {
+        idempotencyKey: idempotencyKey(inboundMode), branchId, inventoryItemId: receipt.inventoryItemId,
+        quantity: receipt.quantity, unitCost: receipt.unitCost,
+        sourceId: receipt.sourceId || idempotencyKey(inboundMode === 'OPENING' ? 'OPENING' : 'SRC'),
         ...(selected?.masterProduct?.tracksBatch ? { batch: { batchNumber: receipt.batchNumber, expiryDate: receipt.expiryDate || undefined } } : {}),
-      });
+      };
+      if (inboundMode === 'OPENING') await inventoryApi.postOpeningStock(payload);
+      else await inventoryApi.receiveInventory({ ...payload, sourceType: 'MANUAL_RECEIPT', reasonCode: 'MANUAL_RECEIPT' });
       setReceipt({ inventoryItemId: '', quantity: '', unitCost: '', batchNumber: '', expiryDate: '', sourceId: '' });
-      showToast.success('Receipt berhasil diposting.');
+      showToast.success(inboundMode === 'OPENING' ? 'Opening stock berhasil diposting.' : 'Receipt berhasil diposting.');
       await load();
     } catch (requestError: any) { showToast.error(requestError.response?.data?.error?.message || 'Receipt gagal.'); }
     finally { setSaving(false); }
@@ -122,13 +126,13 @@ export default function InventoryLedgerPage() {
 
     {canPost && <>
       <form className={styles.form} onSubmit={submitReceipt}>
-        <ArrowDownToLine size={20} />
-        <label className={styles.field}><span>Terima item</span><select className={styles.select} required value={receipt.inventoryItemId} onChange={(event) => setReceipt({ ...receipt, inventoryItemId: event.target.value })}><option value="">Pilih</option>{items.map((item) => <option key={item.id} value={item.id}>{item.masterProduct?.sku || ''} {item.masterProduct?.name}</option>)}</select></label>
+        {canPostOpening && <div className={styles.segmented} aria-label="Tipe inbound"><button type="button" className={inboundMode === 'RECEIPT' ? styles.segmentActive : styles.segment} onClick={() => setInboundMode('RECEIPT')}><ArrowDownToLine size={15} /> Receipt</button><button type="button" className={inboundMode === 'OPENING' ? styles.segmentActive : styles.segment} onClick={() => setInboundMode('OPENING')}><PackagePlus size={15} /> Opening</button></div>}
+        <label className={styles.field}><span>{inboundMode === 'OPENING' ? 'Opening item' : 'Terima item'}</span><select className={styles.select} required value={receipt.inventoryItemId} onChange={(event) => setReceipt({ ...receipt, inventoryItemId: event.target.value })}><option value="">Pilih</option>{items.map((item) => <option key={item.id} value={item.id}>{item.masterProduct?.sku || ''} {item.masterProduct?.name}</option>)}</select></label>
         <label className={styles.field}><span>Quantity</span><input className={styles.input} required inputMode="decimal" value={receipt.quantity} onChange={(event) => setReceipt({ ...receipt, quantity: event.target.value })} /></label>
         <label className={styles.field}><span>Unit cost</span><input className={styles.input} required inputMode="decimal" value={receipt.unitCost} onChange={(event) => setReceipt({ ...receipt, unitCost: event.target.value })} /></label>
         <label className={styles.field}><span>Batch (jika wajib)</span><input className={styles.input} value={receipt.batchNumber} onChange={(event) => setReceipt({ ...receipt, batchNumber: event.target.value })} /></label>
         <label className={styles.field}><span>Expiry</span><input className={styles.input} type="date" value={receipt.expiryDate} onChange={(event) => setReceipt({ ...receipt, expiryDate: event.target.value })} /></label>
-        <button className={styles.button} disabled={saving}><ArrowDownToLine size={15} /> Posting receipt</button>
+        <button className={styles.button} disabled={saving}>{inboundMode === 'OPENING' ? <PackagePlus size={15} /> : <ArrowDownToLine size={15} />} Posting {inboundMode === 'OPENING' ? 'opening' : 'receipt'}</button>
       </form>
       <form className={styles.form} onSubmit={submitIssue}>
         <ArrowUpFromLine size={20} />
@@ -145,4 +149,3 @@ export default function InventoryLedgerPage() {
     {loading ? <div className={styles.loading}>Memuat ledger...</div> : view === 'BALANCE' ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Produk</th><th>Warehouse / Lokasi</th><th>Batch</th><th className={styles.number}>On hand</th><th className={styles.number}>Reserved</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Available</th></tr></thead><tbody>{balances.map((row) => <tr key={row.id}><td>{row.masterProduct?.sku}<br />{row.masterProduct?.name}</td><td>{row.stockLocation?.warehouse?.code} / {row.stockLocation?.code}</td><td>{row.batch?.batchNumber || '-'}</td><td className={styles.number}>{String(row.onHandQty)}</td><td className={styles.number}>{String(row.reservedQty)}</td><td className={styles.number}>{String(row.quarantineQty)}</td><td className={styles.number}>{String(row.availableQty)}</td></tr>)}</tbody></table></div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Nomor / Tanggal</th><th>Type</th><th>Source</th><th>Mutation</th><th className={styles.number}>Actual cost</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{postings.map((posting) => <tr key={posting.id}><td>{posting.postingNumber}<br />{new Date(posting.occurredAt).toLocaleString('id-ID')}</td><td>{posting.type}</td><td>{posting.sourceType}<br />{posting.sourceId}</td><td>{posting.stockMutations?.map((mutation: Row) => `${mutation.inventoryItem?.masterProduct?.name}: ${mutation.quantity}`).join(', ') || '-'}</td><td className={styles.number}>{String(posting.totalCost)}</td><td><span className={posting.status === 'POSTED' ? styles.badge : styles.inactiveBadge}>{posting.status}</span></td><td>{canReverse && posting.type === 'ISSUE' && posting.status === 'POSTED' ? <button className={styles.secondaryButton} disabled={saving} onClick={() => void reverse(posting)} title="Reverse"><RotateCcw size={15} /></button> : '-'}</td></tr>)}</tbody></table></div>}
   </main>;
 }
-

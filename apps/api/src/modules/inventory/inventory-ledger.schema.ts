@@ -34,6 +34,11 @@ export const receiveInventorySchema = z.object({
   costCenterCode: z.string().trim().max(80).optional(),
 });
 
+export const openingInventorySchema = receiveInventorySchema.omit({
+  sourceType: true,
+  reasonCode: true,
+});
+
 export const issueInventorySchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   branchId: z.string().trim().min(1),
@@ -68,7 +73,7 @@ export const inventoryLedgerQuerySchema = z.object({
 });
 
 export type ReceiveInventoryInput = z.infer<typeof receiveInventorySchema>;
+export type OpeningInventoryInput = z.infer<typeof openingInventorySchema>;
 export type IssueInventoryInput = z.infer<typeof issueInventorySchema>;
 export type ReverseInventoryPostingInput = z.infer<typeof reverseInventoryPostingSchema>;
 export type InventoryLedgerQuery = z.infer<typeof inventoryLedgerQuerySchema>;
-

@@ -33,6 +33,38 @@
   overflow-x: auto;
 }
 
+.segmented {
+  display: inline-flex;
+  align-self: flex-end;
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.segment,
+.segmentActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+  border: 0;
+  border-right: 1px solid var(--surface-border);
+  padding: 8px 11px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  background: var(--surface-card);
+}
+
+.segment:last-child,
+.segmentActive:last-child {
+  border-right: 0;
+}
+
+.segmentActive {
+  color: #fff;
+  background: #18715e;
+}
+
 .tab {
   border: 0;
   border-bottom: 3px solid transparent;
@@ -219,10 +251,86 @@
   font-variant-numeric: tabular-nums;
 }
 
+.section {
+  padding: 18px 0;
+  border-top: 1px solid var(--surface-border);
+}
+
+.sectionHeader,
+.requestHeader,
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sectionHeader {
+  margin-bottom: 12px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: 0;
+}
+
+.sectionHeader span,
+.requestHeader span,
+.lineRow span,
+.available {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.requestList {
+  display: grid;
+  gap: 10px;
+}
+
+.requestCard {
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  background: var(--surface-card);
+  padding: 14px;
+}
+
+.requestHeader > div,
+.lineRow > div {
+  display: grid;
+  gap: 4px;
+}
+
+.lineGrid {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.lineRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.2fr) minmax(210px, 1fr) minmax(140px, 0.6fr) minmax(90px, auto);
+  align-items: end;
+  gap: 10px;
+  padding: 10px 0;
+  border-top: 1px solid var(--surface-border);
+}
+
+.available {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.actions {
+  justify-content: flex-end;
+}
+
 @media (max-width: 720px) {
   .page { padding: 16px; }
   .header { align-items: stretch; flex-direction: column; }
   .field { min-width: 100%; }
   .summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lineRow { grid-template-columns: 1fr; }
 }
-
