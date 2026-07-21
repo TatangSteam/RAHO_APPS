@@ -30,6 +30,8 @@ import filesRouter from './modules/files/files.routes';
 import iamRouter from './modules/iam/iam.routes';
 import accountingRouter from './modules/accounting/accounting.routes';
 import cashBankRouter from './modules/cash-bank/cash-bank.routes';
+import openingBalanceRouter from './modules/opening-balance/opening-balance.routes';
+import expenseRouter from './modules/expenses/expense.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -99,6 +101,8 @@ export function createApp(): Application {
   app.use(`${prefix}/iam`, iamRouter);
   app.use(`${prefix}/accounting`, accountingRouter);
   app.use(`${prefix}/cash-bank`, cashBankRouter);
+  app.use(`${prefix}/opening-balances`, openingBalanceRouter);
+  app.use(`${prefix}/expenses`, expenseRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

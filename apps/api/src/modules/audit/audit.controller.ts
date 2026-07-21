@@ -37,6 +37,8 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   InvoicePayment: 'FINANCE',
   CashBankAccount: 'CASH_BANK',
   CashBankTransaction: 'CASH_BANK',
+  OpeningBalance: 'ACCOUNTING',
+  Expense: 'EXPENSE',
   TreatmentSession: 'SESI_TERAPI',
   Session: 'SESI_TERAPI',
   Diagnosis: 'DIAGNOSIS',

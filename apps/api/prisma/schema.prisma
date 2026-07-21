@@ -251,6 +251,31 @@ enum CashBankTransactionStatus {
   REVERSED
 }
 
+enum OpeningBalanceStatus {
+  DRAFT
+  SUBMITTED
+  POSTED
+  REJECTED
+}
+
+enum OpeningBalanceLineType {
+  GENERAL
+  CASH_BANK
+  INVENTORY
+  AR
+  AP
+  DEPOSIT
+  DEFERRED_REVENUE
+}
+
+enum ExpenseStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PAID
+}
+
 enum DiscrepancyType {
   SHORTAGE // Kurang
   DAMAGE // Rusak
@@ -432,6 +457,8 @@ model Branch {
   warehouses             Warehouse[]
   inventoryPostings      InventoryPosting[]
   inventoryBalances      InventoryBalance[]
+  openingBalances        OpeningBalance[]
+  expenses               Expense[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -473,6 +500,11 @@ model User {
   paymentsVerified            InvoicePayment[]         @relation("PaymentVerifiedBy")
   cashBankAccountsCreated     CashBankAccount[]        @relation("CashBankAccountCreatedBy")
   cashBankTransactionsCreated CashBankTransaction[]    @relation("CashBankTransactionCreatedBy")
+  openingBalancesCreated      OpeningBalance[]         @relation("OpeningBalanceCreatedBy")
+  openingBalancesReviewed     OpeningBalance[]         @relation("OpeningBalanceReviewedBy")
+  expensesCreated             Expense[]                @relation("ExpenseCreatedBy")
+  expensesReviewed            Expense[]                @relation("ExpenseReviewedBy")
+  expensesPaid                Expense[]                @relation("ExpensePaidBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -647,10 +679,12 @@ model Account {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  parent           Account?          @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children         Account[]         @relation("AccountHierarchy")
-  lines            JournalLine[]
-  cashBankAccounts CashBankAccount[]
+  parent              Account?             @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children            Account[]            @relation("AccountHierarchy")
+  lines               JournalLine[]
+  cashBankAccounts    CashBankAccount[]
+  openingBalanceLines OpeningBalanceLine[]
+  expenses            Expense[]
 
   @@index([type, isActive])
   @@index([parentId])
@@ -704,15 +738,17 @@ model JournalEntry {
   reversedByEntryId  String?       @unique
   createdAt          DateTime      @default(now())
 
-  branch              Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  accountingPeriod    AccountingPeriod     @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
-  creator             User                 @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  poster              User                 @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
-  reversedByEntry     JournalEntry?        @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
-  reversesEntry       JournalEntry?        @relation("JournalReversal")
-  lines               JournalLine[]
-  sourceLinks         JournalSourceLink[]
-  cashBankTransaction CashBankTransaction?
+  branch               Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  accountingPeriod     AccountingPeriod      @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  creator              User                  @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  poster               User                  @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
+  reversedByEntry      JournalEntry?         @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
+  reversesEntry        JournalEntry?         @relation("JournalReversal")
+  lines                JournalLine[]
+  sourceLinks          JournalSourceLink[]
+  cashBankTransactions CashBankTransaction[]
+  openingBalance       OpeningBalance?
+  expense              Expense?
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -1336,11 +1372,13 @@ model CashBankAccount {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  branch       Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  coaAccount   Account               @relation(fields: [coaAccountId], references: [id], onDelete: Restrict)
-  creator      User                  @relation("CashBankAccountCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  payments     InvoicePayment[]
-  transactions CashBankTransaction[]
+  branch              Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  coaAccount          Account               @relation(fields: [coaAccountId], references: [id], onDelete: Restrict)
+  creator             User                  @relation("CashBankAccountCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payments            InvoicePayment[]
+  transactions        CashBankTransaction[]
+  openingBalanceLines OpeningBalanceLine[]
+  expenses            Expense[]
 
   @@unique([branchId, name])
   @@index([branchId, type, isActive])
@@ -1361,23 +1399,140 @@ model CashBankTransaction {
   sourceId          String
   sourceNumber      String?
   invoicePaymentId  String?                   @unique
-  journalEntryId    String                    @unique
+  journalEntryId    String
   description       String
   metadata          Json?
   createdBy         String
   createdAt         DateTime                  @default(now())
 
-  cashBankAccount CashBankAccount @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
-  branch          Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  invoicePayment  InvoicePayment? @relation(fields: [invoicePaymentId], references: [id], onDelete: Restrict)
-  journalEntry    JournalEntry    @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
-  creator         User            @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  cashBankAccount    CashBankAccount     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  invoicePayment     InvoicePayment?     @relation(fields: [invoicePaymentId], references: [id], onDelete: Restrict)
+  journalEntry       JournalEntry        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  creator            User                @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  openingBalanceLine OpeningBalanceLine?
+  expense            Expense?
 
   @@index([cashBankAccountId, transactionDate])
   @@index([branchId, transactionDate])
   @@index([sourceType, sourceId])
   @@index([status, transactionDate])
   @@map("cash_bank_transactions")
+}
+
+model OpeningBalance {
+  id              String               @id @default(cuid())
+  documentNumber  String               @unique
+  postingKey      String               @unique
+  payloadHash     String
+  branchId        String
+  balanceDate     DateTime
+  description     String
+  status          OpeningBalanceStatus @default(DRAFT)
+  totalDebit      Decimal              @default(0) @db.Decimal(18, 2)
+  totalCredit     Decimal              @default(0) @db.Decimal(18, 2)
+  journalEntryId  String?              @unique
+  rejectionReason String?
+  createdBy       String
+  submittedAt     DateTime?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  postedAt        DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  branch       Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  creator      User                 @relation("OpeningBalanceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  reviewer     User?                @relation("OpeningBalanceReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  journalEntry JournalEntry?        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  lines        OpeningBalanceLine[]
+
+  @@index([branchId, balanceDate])
+  @@index([status, createdAt])
+  @@map("opening_balances")
+}
+
+model OpeningBalanceLine {
+  id                    String                 @id @default(cuid())
+  openingBalanceId      String
+  lineNo                Int
+  type                  OpeningBalanceLineType
+  accountId             String
+  description           String
+  debit                 Decimal                @default(0) @db.Decimal(18, 2)
+  credit                Decimal                @default(0) @db.Decimal(18, 2)
+  counterpartyRef       String?
+  cashBankAccountId     String?
+  inventoryItemId       String?
+  stockLocationId       String?
+  quantity              Decimal?               @db.Decimal(18, 4)
+  unitCost              Decimal?               @db.Decimal(18, 4)
+  batchNumber           String?
+  manufactureDate       DateTime?
+  expiryDate            DateTime?
+  inventoryPostingId    String?                @unique
+  cashBankTransactionId String?                @unique
+  metadata              Json?
+  createdAt             DateTime               @default(now())
+
+  openingBalance      OpeningBalance       @relation(fields: [openingBalanceId], references: [id], onDelete: Cascade)
+  account             Account              @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount?     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  inventoryItem       InventoryItem?       @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockLocation       StockLocation?       @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
+  inventoryPosting    InventoryPosting?    @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction? @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([openingBalanceId, lineNo])
+  @@index([type, accountId])
+  @@index([inventoryItemId, stockLocationId])
+  @@map("opening_balance_lines")
+}
+
+model Expense {
+  id                    String        @id @default(cuid())
+  expenseNumber         String        @unique
+  postingKey            String        @unique
+  payloadHash           String
+  branchId              String
+  expenseDate           DateTime
+  category              String
+  description           String
+  amount                Decimal       @db.Decimal(18, 2)
+  expenseAccountId      String
+  cashBankAccountId     String
+  status                ExpenseStatus @default(DRAFT)
+  evidenceFileUrl       String?
+  evidenceFileName      String?
+  evidenceFileSize      Int?
+  evidenceMimeType      String?
+  evidenceChecksum      String?
+  approvalNote          String?
+  rejectionReason       String?
+  journalEntryId        String?       @unique
+  cashBankTransactionId String?       @unique
+  createdBy             String
+  submittedAt           DateTime?
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  paidBy                String?
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  branch              Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  expenseAccount      Account              @relation(fields: [expenseAccountId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount      @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  creator             User                 @relation("ExpenseCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  reviewer            User?                @relation("ExpenseReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  payer               User?                @relation("ExpensePaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
+  journalEntry        JournalEntry?        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction? @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, expenseDate])
+  @@index([status, createdAt])
+  @@index([expenseAccountId])
+  @@map("expenses")
 }
 
 enum AddOnType {
@@ -1870,9 +2025,10 @@ model StockLocation {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  warehouse      Warehouse          @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
-  inventoryItems InventoryItem[]
-  balances       InventoryBalance[]
+  warehouse           Warehouse            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  inventoryItems      InventoryItem[]
+  balances            InventoryBalance[]
+  openingBalanceLines OpeningBalanceLine[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId, isActive])
@@ -1929,14 +2085,15 @@ model InventoryItem {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  masterProduct     MasterProduct      @relation(fields: [masterProductId], references: [id])
-  branch            Branch             @relation(fields: [branchId], references: [id])
-  stockMutations    StockMutation[]
-  materialUsages    MaterialUsage[]
-  stockRequestItems StockRequestItem[]
-  warehouse         Warehouse?         @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
-  stockLocation     StockLocation?     @relation(fields: [stockLocationId], references: [id], onDelete: SetNull)
-  balances          InventoryBalance[]
+  masterProduct       MasterProduct        @relation(fields: [masterProductId], references: [id])
+  branch              Branch               @relation(fields: [branchId], references: [id])
+  stockMutations      StockMutation[]
+  materialUsages      MaterialUsage[]
+  stockRequestItems   StockRequestItem[]
+  warehouse           Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: SetNull)
+  stockLocation       StockLocation?       @relation(fields: [stockLocationId], references: [id], onDelete: SetNull)
+  balances            InventoryBalance[]
+  openingBalanceLines OpeningBalanceLine[]
 
   @@unique([masterProductId, branchId])
   @@index([branchId, stock])
@@ -2052,11 +2209,12 @@ model InventoryPosting {
   reversalOfId   String?                @unique
   createdAt      DateTime               @default(now())
 
-  branch          Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  reversalOf      InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversedBy      InventoryPosting?         @relation("InventoryPostingReversal")
-  stockMutations  StockMutation[]
-  costAllocations InventoryCostAllocation[]
+  branch             Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  reversalOf         InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy         InventoryPosting?         @relation("InventoryPostingReversal")
+  stockMutations     StockMutation[]
+  costAllocations    InventoryCostAllocation[]
+  openingBalanceLine OpeningBalanceLine?
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])

@@ -20,6 +20,7 @@ import type {
   ReverseInventoryPostingInput,
 } from '../inventory-ledger.schema';
 import { allocateFifo, FifoLayerInput, sumAllocationCost } from './fifo-allocation.service';
+import { calculateInventoryAssetValue } from './inventory-valuation.helpers';
 
 type Tx = Prisma.TransactionClient;
 
@@ -287,6 +288,121 @@ export async function postOpeningInventory(actorUserId: string, input: OpeningIn
     sourceType: 'OPENING_STOCK',
     reasonCode: 'OPENING_STOCK',
   }, InventoryPostingType.OPENING);
+}
+
+/**
+ * Opening-stock integration point. The caller owns the surrounding database
+ * transaction so inventory cost layer and finance journal commit together.
+ */
+export async function receiveOpeningInventoryInTransaction(
+  actorUserId: string,
+  input: ReceiveInventoryInput,
+  tx: Tx,
+) {
+  await assertBranchAccess(actorUserId, input.branchId);
+  await assertPermission(actorUserId, PERMISSIONS.INVENTORY_POST, input.branchId);
+  const payloadHash = hashPayload({ ...input, postingType: 'OPENING' });
+  const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
+  if (existing) return existing;
+
+  const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
+  if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item opening tidak ditemukan dalam branch.');
+  const product = await tx.masterProduct.findUnique({ where: { id: item.masterProductId } });
+  if (!product?.isActive) throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
+  const location = await assertLocationForItem(tx, item, input.stockLocationId);
+
+  let batchId: string | null = null;
+  if (product.tracksBatch) {
+    if (!input.batch) throw errors.badRequest('BATCH_REQUIRED', 'Batch wajib untuk opening stock product ini.');
+    if (product.tracksExpiry && !input.batch.expiryDate) throw errors.badRequest('EXPIRY_REQUIRED', 'Expiry date wajib untuk product ini.');
+    if (input.batch.manufactureDate && input.batch.expiryDate && input.batch.expiryDate <= input.batch.manufactureDate) {
+      throw errors.badRequest('INVALID_BATCH_DATES', 'Expiry date harus setelah manufacture date.');
+    }
+    const batch = await tx.inventoryBatch.upsert({
+      where: { masterProductId_batchNumber: { masterProductId: product.id, batchNumber: input.batch.batchNumber } },
+      create: {
+        masterProductId: product.id,
+        batchNumber: input.batch.batchNumber,
+        manufactureDate: input.batch.manufactureDate,
+        expiryDate: input.batch.expiryDate,
+      },
+      update: {},
+    });
+    if (batch.isBlocked) throw errors.unprocessable('BATCH_BLOCKED', 'Batch opening stock sedang diblokir.');
+    batchId = batch.id;
+  } else if (input.batch) {
+    throw errors.badRequest('BATCH_NOT_ENABLED', 'Product ini tidak menggunakan batch tracking.');
+  }
+
+  const batchKey = batchId ?? 'NO_BATCH';
+  const balance = await tx.inventoryBalance.upsert({
+    where: { inventoryItemId_stockLocationId_batchKey: { inventoryItemId: item.id, stockLocationId: location.id, batchKey } },
+    create: {
+      inventoryItemId: item.id,
+      stockLocationId: location.id,
+      masterProductId: product.id,
+      branchId: item.branchId,
+      batchId,
+      batchKey,
+    },
+    update: {},
+  });
+  await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "inventory_balances" WHERE "id" = ${balance.id} FOR UPDATE`);
+
+  const quantity = new Prisma.Decimal(input.quantity);
+  const unitCost = new Prisma.Decimal(input.unitCost);
+  const totalCost = quantity.mul(unitCost);
+  const posting = await tx.inventoryPosting.create({
+    data: {
+      postingNumber: postingNumber('OPN'),
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+      type: InventoryPostingType.OPENING,
+      reasonCode: input.reasonCode,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      sourceNumber: input.sourceNumber,
+      branchId: input.branchId,
+      costCenterCode: input.costCenterCode,
+      occurredAt: input.occurredAt,
+      totalCost,
+      postedBy: actorUserId,
+    },
+  });
+  await tx.inventoryBalance.update({ where: { id: balance.id }, data: { onHandQty: { increment: quantity }, version: { increment: 1 } } });
+  await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: { increment: quantity }, warehouseId: location.warehouseId, stockLocationId: location.id } });
+  const mutation = await tx.stockMutation.create({
+    data: {
+      inventoryItemId: item.id,
+      type: StockMutationType.RECEIVED,
+      quantity,
+      stockBefore: item.stock,
+      stockAfter: item.stock.add(quantity),
+      referenceType: input.sourceType,
+      referenceId: input.sourceId,
+      notes: input.reasonCode,
+      createdBy: actorUserId,
+      inventoryPostingId: posting.id,
+      inventoryBalanceId: balance.id,
+      batchId,
+      actualCost: totalCost,
+    },
+  });
+  const costLayer = await tx.inventoryCostLayer.create({
+    data: {
+      inventoryBalanceId: balance.id,
+      batchId,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      originalQty: quantity,
+      remainingQty: quantity,
+      unitCost,
+      currency: input.currency,
+      valuationStatus: InventoryValuationStatus.VALUED,
+      receivedAt: input.occurredAt,
+    },
+  });
+  return { ...posting, stockMutationId: mutation.id, costLayerId: costLayer.id };
 }
 
 function ensureUniqueIssueLines(input: IssueInventoryInput) {
@@ -559,6 +675,7 @@ export async function reconcileInventory(actorUserId: string, branchId: string) 
       balanceQty,
       valuedLayerQty,
       pendingValuationQty,
+      assetValue: calculateInventoryAssetValue(item.balances.flatMap((balance) => balance.costLayers)),
       balanceMatchesMirror: balanceQty.equals(item.stock),
       layerMatchesBalance: valuedLayerQty.add(pendingValuationQty).equals(balanceQty),
     };
