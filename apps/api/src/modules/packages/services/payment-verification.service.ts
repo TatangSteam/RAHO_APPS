@@ -4,6 +4,8 @@ import { logAudit } from '../../../utils/auditLog';
 import type { VerifyPaymentInput } from '../packages.schema';
 import { PackageStatus } from '@prisma/client';
 import { InvoiceGenerationService } from './invoice-generation.service';
+import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';
+import { PERMISSIONS } from '../../iam/permission-catalog';
 
 /**
  * Service for handling payment verification
@@ -46,6 +48,8 @@ export class PaymentVerificationService {
     if (!pkg) {
       return await this.verifyAddOnPayment(packageId, data, branchId, userId);
     }
+    await assertBranchAccess(userId, pkg.branchId);
+    await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, pkg.branchId);
 
     // Allow verification from PENDING_PAYMENT if staff provides payment proof
     if (pkg.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
@@ -97,6 +101,8 @@ export class PaymentVerificationService {
     if (!pkg) {
       return await this.rejectAddOnPayment(packageId, rejectionReason, branchId, userId);
     }
+    await assertBranchAccess(userId, pkg.branchId);
+    await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, pkg.branchId);
 
     if (pkg.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {
@@ -136,6 +142,8 @@ export class PaymentVerificationService {
     if (!addon) {
       throw { status: 404, code: 'ITEM_NOT_FOUND', message: 'Paket atau add-on tidak ditemukan' };
     }
+    await assertBranchAccess(userId, addon.branchId);
+    await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, addon.branchId);
 
     if (addon.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
       // Staff is uploading proof and verifying in one step.
@@ -419,6 +427,8 @@ export class PaymentVerificationService {
     if (!addon) {
       throw { status: 404, code: 'ITEM_NOT_FOUND', message: 'Paket atau add-on tidak ditemukan' };
     }
+    await assertBranchAccess(userId, addon.branchId);
+    await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, addon.branchId);
 
     if (addon.status !== PackageStatus.WAITING_VERIFICATION) {
       throw {

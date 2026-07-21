@@ -4,6 +4,7 @@ import { verifyAccessToken, JwtPayload } from '@lib/jwt';
 import { sendError } from '@utils/response';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
+import { getAccessibleBranchIds, getEffectivePermissionCodes } from '@modules/iam/authorization.service';
 
 // Extend Express Request with authenticated user
 declare global {
@@ -20,6 +21,9 @@ declare global {
         fullName: string;
         staffCode: string | null;
         branches?: string[];
+        permissions?: string[];
+        accessibleBranchIds?: string[] | null;
+        roleTemplateId?: string | null;
       };
       originalUser?: {
         id: string;
@@ -57,43 +61,31 @@ function extractDeepestImpersonation(payload: JwtPayload): {
   return { deepest: current, chain };
 }
 
-function uniqueBranchIds(branchId: string, assignedBranchIds: string[]): string[] {
-  return [branchId, ...assignedBranchIds].filter(
-    (value, index, all) => all.indexOf(value) === index,
-  );
-}
-
-async function getAssignedBranchIds(
-  userId: string,
-  role: string,
-  branchId?: string | null,
-): Promise<string[]> {
-  if (role === 'MEMBER' || !branchId) {
-    return [];
-  }
-
-  const staffBranches = await prisma.staffBranch.findMany({
-    where: { userId },
-    select: { branchId: true },
-  });
-
-  return uniqueBranchIds(
-    branchId,
-    staffBranches.map((staffBranch) => staffBranch.branchId),
-  );
-}
-
-async function getAdminManagerAccessScope(userId: string, role: string): Promise<string | null> {
-  if (role !== 'ADMIN_MANAGER') {
-    return null;
-  }
-
+async function getCurrentUserContext(userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { adminManagerAccessScope: true },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      branchId: true,
+      roleTemplateId: true,
+      staffCode: true,
+      isActive: true,
+      adminManagerAccessScope: true,
+      profile: { select: { fullName: true } },
+      branch: { select: { branchCode: true } },
+    },
   });
-
-  return user?.adminManagerAccessScope || 'FULL';
+  if (!user?.isActive) return null;
+  const [permissions, accessibleBranchIds] = await Promise.all([
+    getEffectivePermissionCodes(user.id),
+    getAccessibleBranchIds(user.id),
+  ]);
+  const legacyBranchIds = accessibleBranchIds === null
+    ? (await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })).map((branch) => branch.id)
+    : accessibleBranchIds;
+  return { user, permissions, accessibleBranchIds, legacyBranchIds };
 }
 
 /**
@@ -118,15 +110,12 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
 
     if (payload.impersonating) {
       const { deepest, chain } = extractDeepestImpersonation(payload);
-      const assignedBranchIds = await getAssignedBranchIds(
-        deepest.userId,
-        deepest.role,
-        deepest.branchId,
-      );
-      const adminManagerAccessScope = await getAdminManagerAccessScope(
-        deepest.userId,
-        deepest.role,
-      );
+      const current = await getCurrentUserContext(deepest.userId);
+      if (!current) {
+        sendError(res, 401, 'AUTH_USER_INACTIVE', 'Akun tidak aktif atau tidak ditemukan.');
+        return;
+      }
+      const { user, permissions, accessibleBranchIds, legacyBranchIds } = current;
 
       logger.debug('Impersonation token authenticated', {
         chain,
@@ -144,36 +133,45 @@ export async function authenticate(req: Request, res: Response, next: NextFuncti
       };
 
       req.user = {
-        id: deepest.userId,
-        userId: deepest.userId,
-        email: deepest.email,
-        role: deepest.role,
-        branchId: deepest.branchId || null,
-        branchCode: null,
-        fullName: payload.fullName,
-        staffCode: null,
-        branches: deepest.branches || assignedBranchIds,
-        ...(adminManagerAccessScope ? { adminManagerAccessScope } : {}),
+        id: user.id,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        branchId: user.branchId,
+        branchCode: user.branch?.branchCode || null,
+        fullName: user.profile?.fullName || user.email,
+        staffCode: user.staffCode,
+        roleTemplateId: user.roleTemplateId,
+        branches: legacyBranchIds,
+        permissions,
+        accessibleBranchIds,
+        ...(user.role === 'ADMIN_MANAGER' ? { adminManagerAccessScope: user.adminManagerAccessScope } : {}),
       };
 
       req.isImpersonating = true;
       req.impersonationChain = chain;
     } else {
-      const assignedBranchIds = await getAssignedBranchIds(
-        payload.userId,
-        payload.role,
-        payload.branchId,
-      );
-      const adminManagerAccessScope = await getAdminManagerAccessScope(
-        payload.userId,
-        payload.role,
-      );
+      const current = await getCurrentUserContext(payload.userId);
+      if (!current) {
+        sendError(res, 401, 'AUTH_USER_INACTIVE', 'Akun tidak aktif atau tidak ditemukan.');
+        return;
+      }
+      const { user, permissions, accessibleBranchIds, legacyBranchIds } = current;
 
       req.user = {
-        ...payload,
-        id: payload.userId,
-        branches: payload.branches || assignedBranchIds,
-        ...(adminManagerAccessScope ? { adminManagerAccessScope } : {}),
+        id: user.id,
+        userId: user.id,
+        email: user.email,
+        role: user.role,
+        branchId: user.branchId,
+        branchCode: user.branch?.branchCode || null,
+        fullName: user.profile?.fullName || user.email,
+        staffCode: user.staffCode,
+        roleTemplateId: user.roleTemplateId,
+        branches: legacyBranchIds,
+        permissions,
+        accessibleBranchIds,
+        ...(user.role === 'ADMIN_MANAGER' ? { adminManagerAccessScope: user.adminManagerAccessScope } : {}),
       };
       req.isImpersonating = false;
     }

@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
-import { authorize } from '@middleware/authorize';
 import { upload } from '@middleware/upload';
-import { Role } from '@prisma/client';
+import { requirePermission } from '@middleware/requirePermission';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import {
   listUsers,
   getUser,
@@ -39,7 +39,7 @@ export const usersRouter = Router();
 usersRouter.get(
   '/',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   listUsers,
 );
 
@@ -47,7 +47,7 @@ usersRouter.get(
 usersRouter.get(
   '/medical-staff',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getMedicalStaffNotInBranch,
 );
 
@@ -55,7 +55,7 @@ usersRouter.get(
 usersRouter.get(
   '/medical-staff/all',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getAllMedicalStaff,
 );
 
@@ -67,7 +67,7 @@ usersRouter.get(
 usersRouter.get(
   '/performance/summary',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getStaffPerformanceSummary,
 );
 
@@ -75,7 +75,7 @@ usersRouter.get(
 usersRouter.get(
   '/performance/:staffId/history',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getStaffSessionHistory,
 );
 
@@ -83,15 +83,23 @@ usersRouter.get(
 usersRouter.get(
   '/staff/:role',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getStaffByRole,
+);
+
+// Static route must be registered before /:userId.
+usersRouter.get(
+  '/doctors',
+  authenticate,
+  requirePermission(PERMISSIONS.IAM_USER_READ),
+  getDoctorsByBranch,
 );
 
 // ── Get Single User ───────────────────────────────────────────
 usersRouter.get(
   '/:userId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getUser,
 );
 
@@ -99,7 +107,7 @@ usersRouter.get(
 usersRouter.post(
   '/',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_CREATE),
   createUser,
 );
 
@@ -107,7 +115,7 @@ usersRouter.post(
 usersRouter.patch(
   '/:userId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_UPDATE),
   updateUser,
 );
 
@@ -115,7 +123,7 @@ usersRouter.patch(
 usersRouter.delete(
   '/:userId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.IAM_USER_DEACTIVATE),
   deactivateUser,
 );
 
@@ -130,7 +138,7 @@ usersRouter.post(
 usersRouter.post(
   '/:userId/reset-password',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_USER_RESET_PASSWORD),
   resetPassword,
 );
 
@@ -150,7 +158,7 @@ usersRouter.post(
 usersRouter.get(
   '/:userId/branches',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_READ),
   getUserBranches,
 );
 
@@ -158,7 +166,7 @@ usersRouter.get(
 usersRouter.get(
   '/:userId/branches/available',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_READ),
   getAvailableBranchesForUser,
 );
 
@@ -166,7 +174,7 @@ usersRouter.get(
 usersRouter.post(
   '/:userId/branches',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
   assignUserToBranch,
 );
 
@@ -174,7 +182,7 @@ usersRouter.post(
 usersRouter.delete(
   '/:userId/branches/:branchId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
   removeUserFromBranch,
 );
 
@@ -182,7 +190,7 @@ usersRouter.delete(
 usersRouter.patch(
   '/:userId/branches/:branchId/set-primary',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
   setPrimaryBranch,
 );
 
@@ -194,7 +202,7 @@ usersRouter.patch(
 usersRouter.get(
   '/:userId/credentials',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
   getUserCredentials,
 );
 
@@ -202,7 +210,7 @@ usersRouter.get(
 usersRouter.patch(
   '/:userId/email',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_USER_UPDATE),
   updateUserEmail,
 );
 
@@ -211,18 +219,11 @@ usersRouter.patch(
 // ══════════════════════════════════════════════════════════════
 
 // ── Get Doctors by Branch ─────────────────────────────────────
-usersRouter.get(
-  '/doctors',
-  authenticate,
-  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
-  getDoctorsByBranch,
-);
-
 // ── Assign Doctor to Branch ───────────────────────────────────
 usersRouter.post(
   '/doctors/:doctorId/branches',
   authenticate,
-  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
   assignDoctorToBranch,
 );
 
@@ -230,6 +231,6 @@ usersRouter.post(
 usersRouter.delete(
   '/doctors/:doctorId/branches/:branchId',
   authenticate,
-  authorize([Role.ADMIN_MANAGER, Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
   removeDoctorFromBranch,
 );

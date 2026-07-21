@@ -1,36 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { sendError } from '@utils/response';
-
-async function getAccessibleBranchIds(user: Request['user']): Promise<string[]> {
-  if (user.role === Role.ADMIN_MANAGER) {
-    const managerBranches = await prisma.managerBranch.findMany({
-      where: { userId: user.userId },
-      select: { branchId: true },
-    });
-
-    return managerBranches.map((managerBranch) => managerBranch.branchId);
-  }
-
-  if (user.role === Role.DOCTOR || user.role === Role.NURSE) {
-    const staffBranches = await prisma.staffBranch.findMany({
-      where: { userId: user.userId },
-      select: { branchId: true },
-    });
-
-    const branchIds = staffBranches.map((staffBranch) => staffBranch.branchId);
-
-    if (user.branchId && !branchIds.includes(user.branchId)) {
-      branchIds.push(user.branchId);
-    }
-
-    return branchIds;
-  }
-
-  return user.branchId ? [user.branchId] : [];
-}
+import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 
 /**
  * Assert that the authenticated staff has access to the requested member.
@@ -56,21 +28,16 @@ export async function assertBranchAccess(
     return;
   }
 
-  if (user.role === Role.SUPER_ADMIN) {
-    next();
-    return;
-  }
-
   try {
-    const accessibleBranchIds = await getAccessibleBranchIds(user);
+    const accessibleBranchIds = await getAccessibleBranchIds(user.userId);
+
+    if (accessibleBranchIds === null) {
+      next();
+      return;
+    }
 
     if (accessibleBranchIds.length === 0) {
-      const message =
-        user.role === Role.DOCTOR || user.role === Role.NURSE
-          ? 'Anda belum di-assign ke cabang manapun.'
-          : 'Anda tidak memiliki akses ke member ini.';
-
-      sendError(res, 403, 'BRANCH_ACCESS_DENIED', message);
+      sendError(res, 403, 'BRANCH_ACCESS_DENIED', 'Anda belum memiliki branch scope.');
       return;
     }
 

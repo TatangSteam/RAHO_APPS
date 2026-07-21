@@ -7,6 +7,8 @@ import { Readable } from 'stream';
 import { InvoiceStatus, Role } from '@prisma/client';
 import { createReadStream, existsSync, statSync } from 'fs';
 import path from 'path';
+import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '../../iam/authorization.service';
+import { PERMISSIONS } from '../../iam/permission-catalog';
 
 /**
  * Service for invoice retrieval
@@ -48,32 +50,15 @@ export class InvoiceRetrievalService {
     };
   }
 
-  private async getAccessibleBranchIds(user: { userId: string; role: string; branchId: string | null }) {
-    if (user.role === Role.SUPER_ADMIN) {
-      return undefined;
+  private async assertInvoiceAccess(invoice: any, user: { userId: string; role: string }) {
+    await assertPermission(user.userId, PERMISSIONS.INVOICE_READ, invoice.branchId);
+    if (user.role === Role.MEMBER) {
+      if (invoice.member?.userId !== user.userId) {
+        throw { status: 403, code: 'INVOICE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke invoice ini.' };
+      }
+      return;
     }
-
-    if (user.role === Role.ADMIN_MANAGER) {
-      const managerBranches = await prisma.managerBranch.findMany({
-        where: { userId: user.userId },
-        select: { branchId: true },
-      });
-
-      return managerBranches.map((branch) => branch.branchId);
-    }
-
-    const branchIds = new Set<string>();
-    if (user.branchId) {
-      branchIds.add(user.branchId);
-    }
-
-    const staffBranches = await prisma.staffBranch.findMany({
-      where: { userId: user.userId },
-      select: { branchId: true },
-    });
-
-    staffBranches.forEach((branch) => branchIds.add(branch.branchId));
-    return Array.from(branchIds);
+    await assertBranchAccess(user.userId, invoice.branchId);
   }
 
   /**
@@ -86,9 +71,20 @@ export class InvoiceRetrievalService {
     const page = Math.max(1, Number(options.page || 1));
     const limit = Math.min(100, Math.max(1, Number(options.limit || 50)));
     const skip = (page - 1) * limit;
-    const branchIds = await this.getAccessibleBranchIds(user);
+    if (user.role === Role.MEMBER) {
+      await assertPermission(user.userId, PERMISSIONS.INVOICE_READ);
+    }
+    const accessibleBranchIds = user.role === Role.MEMBER ? [] : await getAccessibleBranchIds(user.userId);
+    const candidateBranchIds = accessibleBranchIds === null
+      ? (await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })).map((branch) => branch.id)
+      : accessibleBranchIds;
+    const branchIds = user.role === Role.MEMBER
+      ? []
+      : (await Promise.all(candidateBranchIds.map(async (branchId) =>
+          (await hasPermission(user.userId, PERMISSIONS.INVOICE_READ, branchId)) ? branchId : null
+        ))).filter(Boolean);
 
-    if (Array.isArray(branchIds) && branchIds.length === 0) {
+    if (user.role !== Role.MEMBER && branchIds.length === 0) {
       return {
         data: [],
         pagination: {
@@ -100,8 +96,10 @@ export class InvoiceRetrievalService {
       };
     }
 
-    const where: any = {};
-    if (Array.isArray(branchIds)) {
+    const where: any = user.role === Role.MEMBER
+      ? { member: { is: { userId: user.userId } } }
+      : {};
+    if (user.role !== Role.MEMBER) {
       where.branchId = { in: branchIds };
     }
 
@@ -181,7 +179,7 @@ export class InvoiceRetrievalService {
   /**
    * Get invoice by ID
    */
-  async getInvoiceById(invoiceId: string) {
+  async getInvoiceById(invoiceId: string, user: { userId: string; role: string }) {
     const invoice = await (prisma as any).invoice.findUnique({
       where: { id: invoiceId },
       include: this.getInvoiceInclude(),
@@ -191,13 +189,15 @@ export class InvoiceRetrievalService {
       throw new Error('Invoice not found');
     }
 
+    await this.assertInvoiceAccess(invoice, user);
+
     return this.formatInvoice(invoice);
   }
 
   /**
    * Get invoice by package/add-on ID
    */
-  async getInvoiceByPackageId(packageId: string) {
+  async getInvoiceByPackageId(packageId: string, user: { userId: string; role: string }) {
     const invoice = await (prisma as any).invoice.findFirst({
       where: {
         items: {
@@ -214,13 +214,30 @@ export class InvoiceRetrievalService {
       throw new Error('Invoice not found for this package');
     }
 
+
+    await this.assertInvoiceAccess(invoice, user);
+
     return this.formatInvoice(invoice);
   }
 
   /**
    * Get member's invoices
    */
-  async getMemberInvoices(memberId: string) {
+  async getMemberInvoices(memberId: string, user: { userId: string; role: string }) {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      select: { userId: true, registrationBranchId: true },
+    });
+    if (!member) throw new Error('Member not found');
+    if (user.role === Role.MEMBER) {
+      await assertPermission(user.userId, PERMISSIONS.INVOICE_READ, member.registrationBranchId);
+      if (member.userId !== user.userId) {
+        throw { status: 403, code: 'INVOICE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke invoice ini.' };
+      }
+    } else {
+      await assertPermission(user.userId, PERMISSIONS.INVOICE_READ, member.registrationBranchId);
+      await assertBranchAccess(user.userId, member.registrationBranchId);
+    }
     const invoices = await (prisma as any).invoice.findMany({
       where: { memberId },
       include: this.getInvoiceInclude(),
@@ -264,30 +281,13 @@ export class InvoiceRetrievalService {
     }
 
     if (user.role === Role.MEMBER) {
+      await assertPermission(user.userId, PERMISSIONS.INVOICE_PROOF_READ, payment.invoice.branchId);
       if (payment.invoice.member.userId !== user.userId) {
         throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
       }
-    } else if (user.role !== Role.SUPER_ADMIN && user.role !== Role.ADMIN_MANAGER) {
-      const accessibleBranchIds = new Set<string>();
-      if (user.branchId) accessibleBranchIds.add(user.branchId);
-
-      const staffBranches = await prisma.staffBranch.findMany({
-        where: { userId: user.userId },
-        select: { branchId: true },
-      });
-
-      staffBranches.forEach((row) => accessibleBranchIds.add(row.branchId));
-
-      const invoiceBranchIds = [
-        payment.invoice.branchId,
-        payment.invoice.member.registrationBranchId,
-        ...payment.invoice.member.branchAccesses.map((access) => access.branchId),
-      ];
-
-      const hasAccess = invoiceBranchIds.some((branchId) => accessibleBranchIds.has(branchId));
-      if (!hasAccess) {
-        throw { status: 403, code: 'FILE_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke file ini' };
-      }
+    } else {
+      await assertPermission(user.userId, PERMISSIONS.INVOICE_PROOF_READ, payment.invoice.branchId);
+      await assertBranchAccess(user.userId, payment.invoice.branchId);
     }
 
     // Extract the MinIO key from the stored URL

@@ -33,6 +33,11 @@ enum AdminManagerAccessScope {
   MEMBER_VIEW_ONLY
 }
 
+enum PermissionEffect {
+  ALLOW
+  DENY
+}
+
 enum BranchType {
   PUSAT
   PREMIER
@@ -343,6 +348,7 @@ model Branch {
   staffBranches       StaffBranch[]              @relation("StaffBranches")
   referralCodes       ReferralCode[]
   auditLogs           AuditLog[]
+  permissionOverrides UserPermissionOverride[]
   overstocks          BranchOverstock[]
 
   @@index([branchCode])
@@ -352,28 +358,32 @@ model Branch {
 }
 
 model User {
-  id                       String                   @id @default(cuid())
-  email                    String                   @unique
-  password                 String
-  role                     Role
-  adminManagerAccessScope  AdminManagerAccessScope  @default(FULL)
-  staffCode                String?                  @unique
-  branchId                 String?
-  isActive                 Boolean                  @default(true)
-  lastLoginAt              DateTime?
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
+  id                      String                  @id @default(cuid())
+  email                   String                  @unique
+  password                String
+  role                    Role
+  adminManagerAccessScope AdminManagerAccessScope @default(FULL)
+  staffCode               String?                 @unique
+  branchId                String?
+  roleTemplateId          String?
+  isActive                Boolean                 @default(true)
+  lastLoginAt             DateTime?
+  createdAt               DateTime                @default(now())
+  updatedAt               DateTime                @updatedAt
 
   // Relations
-  branch          Branch?         @relation(fields: [branchId], references: [id])
-  profile         UserProfile?
-  member          Member?
-  auditLogs       AuditLog[]
-  notifications   Notification[]
-  chatMessages    ChatMessage[]
-  chatRooms       ChatRoom[]      @relation("ChatRoomStaff")
-  managedBranches ManagerBranch[]
-  staffBranches   StaffBranch[]   @relation("StaffBranches")
+  branch                     Branch?                  @relation(fields: [branchId], references: [id])
+  roleTemplate               RoleTemplate?            @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
+  profile                    UserProfile?
+  member                     Member?
+  auditLogs                  AuditLog[]
+  notifications              Notification[]
+  chatMessages               ChatMessage[]
+  chatRooms                  ChatRoom[]               @relation("ChatRoomStaff")
+  managedBranches            ManagerBranch[]
+  staffBranches              StaffBranch[]            @relation("StaffBranches")
+  permissionOverrides        UserPermissionOverride[] @relation("PermissionOverrideUser")
+  permissionOverridesCreated UserPermissionOverride[] @relation("PermissionOverrideCreatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -400,6 +410,7 @@ model User {
   @@index([email])
   @@index([role])
   @@index([branchId, role, isActive])
+  @@index([roleTemplateId])
   @@index([staffCode])
   @@map("users")
 }
@@ -420,12 +431,12 @@ model UserProfile {
 }
 
 model ManagerBranch {
-  id          String                   @id @default(cuid())
+  id          String                  @id @default(cuid())
   userId      String
   branchId    String
   accessScope AdminManagerAccessScope @default(FULL)
-  createdAt   DateTime                 @default(now())
-  updatedAt   DateTime                 @updatedAt
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
@@ -451,6 +462,81 @@ model StaffBranch {
   @@index([userId])
   @@index([branchId])
   @@map("staff_branches")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  module      String
+  description String?
+  isSensitive Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  roleTemplates RoleTemplatePermission[]
+  userOverrides UserPermissionOverride[]
+
+  @@index([module, isActive])
+  @@map("permissions")
+}
+
+model RoleTemplate {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  baseRole    Role?    @unique
+  isSystem    Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  permissions RoleTemplatePermission[]
+  users       User[]
+
+  @@index([isActive])
+  @@map("role_templates")
+}
+
+model RoleTemplatePermission {
+  id             String   @id @default(cuid())
+  roleTemplateId String
+  permissionId   String
+  createdAt      DateTime @default(now())
+
+  roleTemplate RoleTemplate @relation(fields: [roleTemplateId], references: [id], onDelete: Cascade)
+  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleTemplateId, permissionId])
+  @@index([permissionId])
+  @@map("role_template_permissions")
+}
+
+model UserPermissionOverride {
+  id           String           @id @default(cuid())
+  userId       String
+  permissionId String
+  effect       PermissionEffect
+  branchId     String?
+  scopeKey     String           @default("GLOBAL")
+  reason       String?
+  validUntil   DateTime?
+  createdBy    String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  user       User       @relation("PermissionOverrideUser", fields: [userId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  branch     Branch?    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  creator    User       @relation("PermissionOverrideCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@unique([userId, permissionId, scopeKey])
+  @@index([userId, effect])
+  @@index([branchId])
+  @@index([validUntil])
+  @@map("user_permission_overrides")
 }
 
 // ============================================================

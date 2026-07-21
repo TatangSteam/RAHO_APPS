@@ -7,7 +7,7 @@ import {
   Bell, MessageSquare, ChevronLeft, X,
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
-  FileSpreadsheet,
+  FileSpreadsheet, ShieldCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -204,6 +204,12 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Master Produk',
         href: '/admin/master-products',
         icon: <Boxes size={20} />,
+        roles: ['SUPER_ADMIN'],
+      },
+      {
+        label: 'Permission & Role',
+        href: '/admin/permissions',
+        icon: <ShieldCheck size={20} />,
         roles: ['SUPER_ADMIN'],
       },
       {

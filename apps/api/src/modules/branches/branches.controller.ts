@@ -23,6 +23,7 @@ import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@u
 import { logAudit } from '@utils/auditLog';
 import { logger } from '@lib/logger';
 import { prisma } from '@lib/prisma';
+import { assertNotSelf } from '@modules/iam/authorization.service';
 
 async function assertCanAccessBranch(req: Request, branchId: string): Promise<void> {
   if (req.user?.role === 'ADMIN_CABANG' && req.user.branchId !== branchId) {
@@ -213,6 +214,7 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
       res.status(400).json({ success: false, message: 'managerId is required' });
       return;
     }
+    assertNotSelf(req.user.userId, managerId, 'menambah branch scope');
 
     const result = await assignManagerToBranchService(branchId, managerId, accessScope);
 
@@ -237,6 +239,7 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
 export async function updateManagerBranchAccessScope(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId, managerId } = req.params;
+    assertNotSelf(req.user.userId, managerId, 'mengubah branch scope');
     const { accessScope } = req.body;
 
     const result = await updateManagerBranchAccessScopeService(branchId, managerId, accessScope);
@@ -266,6 +269,7 @@ export async function updateManagerBranchAccessScope(req: Request, res: Response
 export async function unassignManagerFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId, managerId } = req.params;
+    assertNotSelf(req.user.userId, managerId, 'menghapus branch scope');
 
     const result = await unassignManagerFromBranchService(branchId, managerId);
 

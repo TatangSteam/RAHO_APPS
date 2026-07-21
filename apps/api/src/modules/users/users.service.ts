@@ -10,6 +10,13 @@ import {
   ResetPasswordInput,
   ListUsersQuery,
 } from './users.schema';
+import {
+  assertBranchAccess,
+  assertCanAssignBaseRole,
+  assertNotSelf,
+  assertTargetInActorScope,
+  getAccessibleBranchIds,
+} from '@modules/iam/authorization.service';
 
 const HASH_ROUNDS = 12;
 const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
@@ -99,6 +106,8 @@ const userSelect = {
   id: true,
   email: true,
   role: true,
+  roleTemplateId: true,
+  roleTemplate: { select: { id: true, code: true, name: true } },
   staffCode: true,
   branchId: true,
   isActive: true,
@@ -121,21 +130,12 @@ export async function listUsersService(
   const skip = (page - 1) * limit;
   const andFilters: Prisma.UserWhereInput[] = [];
 
-  if (callerRole === Role.ADMIN_CABANG && callerBranchId) {
-    andFilters.push(buildBranchAccessFilter([callerBranchId]));
-  } else if (callerRole === Role.ADMIN_MANAGER) {
-    const managedBranchIds = callerUserId ? await getManagedBranchIds(callerUserId) : [];
-
-    if (branchId) {
-      if (!managedBranchIds.includes(branchId)) {
-        throw errors.forbidden('Admin Manager hanya dapat melihat staff di cabang yang dikelola.');
-      }
-      andFilters.push(buildBranchAccessFilter([branchId]));
-    } else {
-      andFilters.push(buildBranchAccessFilter(managedBranchIds));
-    }
-  } else if (branchId) {
+  const accessibleBranchIds = callerUserId ? await getAccessibleBranchIds(callerUserId) : [];
+  if (branchId) {
+    if (callerUserId) await assertBranchAccess(callerUserId, branchId);
     andFilters.push(buildBranchAccessFilter([branchId]));
+  } else if (accessibleBranchIds !== null) {
+    andFilters.push(buildBranchAccessFilter(accessibleBranchIds));
   }
 
   if (search) {
@@ -235,7 +235,8 @@ export async function listUsersService(
 
 // ── Get Single User ──────────────────────────────────────────
 
-export async function getUserService(userId: string) {
+export async function getUserService(userId: string, callerUserId?: string) {
+  if (callerUserId) await assertTargetInActorScope(callerUserId, userId);
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: userSelect,
@@ -256,7 +257,9 @@ export async function createUserService(
   console.log('🔍 [UserService] Caller role:', callerRole);
   console.log('🔍 [UserService] Caller branchId:', callerBranchId);
 
+  if (!callerUserId) throw errors.forbidden('User pembuat tidak ditemukan.');
   assertCanManageStaffRole(callerRole, input.role);
+  await assertCanAssignBaseRole(callerUserId, input.role);
 
   // Check email uniqueness (only check active users)
   // Inactive users are soft-deleted and their emails can be reused
@@ -280,9 +283,7 @@ export async function createUserService(
     branchId = callerBranchId; // Force new user to same branch
   }
 
-  if (callerRole === Role.ADMIN_MANAGER && input.role !== Role.ADMIN_LOGISTIK) {
-    await assertAdminManagerCanUseBranch(callerUserId, branchId);
-  }
+  if (branchId) await assertBranchAccess(callerUserId, branchId);
 
   console.log('🔍 [UserService] Final branchId to use:', branchId);
 
@@ -333,13 +334,20 @@ export async function updateUserService(
 ) {
   const existing = await prisma.user.findUnique({ where: { id: userId } });
   if (!existing) throw errors.notFound('User tidak ditemukan.');
+  if (!callerUserId) throw errors.forbidden('User pembuat perubahan tidak ditemukan.');
+  if (
+    callerUserId === userId &&
+    ['email', 'password', 'role', 'branchId', 'isActive'].some((field) => field in input)
+  ) {
+    assertNotSelf(callerUserId, userId, 'mengubah akses atau status');
+  }
+  await assertTargetInActorScope(callerUserId, userId);
 
   if (input.role !== undefined && input.role !== existing.role) {
-    if (!callerRole) {
-      throw errors.forbidden('Role pembuat perubahan tidak ditemukan.');
-    }
+    if (!callerRole) throw errors.forbidden('Role pembuat perubahan tidak ditemukan.');
     assertCanManageStaffRole(callerRole, input.role);
     assertCanManageStaffRole(callerRole, existing.role);
+    await assertCanAssignBaseRole(callerUserId, input.role);
   }
 
   const hasCredentialUpdate = input.email !== undefined || input.password !== undefined;
@@ -385,6 +393,7 @@ export async function updateUserService(
   }
 
   await assertBranchExists(nextBranchId);
+  if (nextBranchId) await assertBranchAccess(callerUserId, nextBranchId);
 
   if (callerRole === Role.ADMIN_MANAGER) {
     if (!STAFF_CREDENTIAL_MANAGED_ROLES.includes(existing.role)) {

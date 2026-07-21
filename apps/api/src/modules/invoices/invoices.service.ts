@@ -33,8 +33,8 @@ export const invoiceService = {
   /**
    * Create a new invoice (DRAFT status)
    */
-  async createInvoice(data: CreateInvoiceInput, userId: string) {
-    return this.creationService.createInvoice(data, userId);
+  async createInvoice(data: CreateInvoiceInput, user: { userId: string; role: string; branchId: string | null }) {
+    return this.creationService.createInvoice(data, user);
   },
 
   /**
@@ -50,8 +50,8 @@ export const invoiceService = {
   /**
    * Get invoice by ID
    */
-  async getInvoiceById(invoiceId: string) {
-    return this.retrievalService.getInvoiceById(invoiceId);
+  async getInvoiceById(invoiceId: string, user: { userId: string; role: string; branchId: string | null }) {
+    return this.retrievalService.getInvoiceById(invoiceId, user);
   },
 
   /**
@@ -64,46 +64,47 @@ export const invoiceService = {
   /**
    * Get invoice by package ID
    */
-  async getInvoiceByPackageId(packageId: string) {
-    return this.retrievalService.getInvoiceByPackageId(packageId);
+  async getInvoiceByPackageId(packageId: string, user: { userId: string; role: string; branchId: string | null }) {
+    return this.retrievalService.getInvoiceByPackageId(packageId, user);
   },
 
   /**
    * Get member's invoices
    */
-  async getMemberInvoices(memberId: string) {
-    return this.retrievalService.getMemberInvoices(memberId);
+  async getMemberInvoices(memberId: string, user: { userId: string; role: string; branchId: string | null }) {
+    return this.retrievalService.getMemberInvoices(memberId, user);
   },
 
   /**
    * Update invoice (only DRAFT invoices can be updated)
    */
-  async updateInvoice(invoiceId: string, data: UpdateInvoiceInput) {
-    const updated = await this.creationService.updateInvoice(invoiceId, data);
+  async updateInvoice(invoiceId: string, data: UpdateInvoiceInput, userId: string) {
+    const updated = await this.creationService.updateInvoice(invoiceId, data, userId);
     return this.retrievalService.formatInvoice(updated);
   },
 
   /**
    * Finalize invoice (DRAFT -> PENDING_PAYMENT)
    */
-  async finalizeInvoice(invoiceId: string, dueDate?: string) {
-    const updated = await this.paymentService.finalizeInvoice(invoiceId, dueDate);
+  async finalizeInvoice(invoiceId: string, dueDate: string | undefined, userId: string) {
+    const updated = await this.paymentService.finalizeInvoice(invoiceId, dueDate, userId);
     return this.retrievalService.formatInvoice(updated);
   },
 
   /**
    * Record payment and mark invoice as PAID
    */
-  async recordPayment(invoiceId: string, data: RecordPaymentInput, userId: string) {
-    await this.paymentService.recordPayment(invoiceId, data, userId);
-    return this.getInvoiceById(invoiceId);
+  async recordPayment(invoiceId: string, data: RecordPaymentInput, user: { userId: string; role: string; branchId: string | null }) {
+    await this.paymentService.assertInvoiceBranch(invoiceId, user.userId);
+    await this.paymentService.recordPayment(invoiceId, data, user.userId);
+    return this.getInvoiceById(invoiceId, user);
   },
 
   /**
    * Cancel invoice
    */
-  async cancelInvoice(invoiceId: string, data: CancelInvoiceInput) {
-    const updated = await this.cancellationService.cancelInvoice(invoiceId, data);
+  async cancelInvoice(invoiceId: string, data: CancelInvoiceInput, userId: string) {
+    const updated = await this.cancellationService.cancelInvoice(invoiceId, data, userId);
     return this.retrievalService.formatInvoice(updated);
   },
 

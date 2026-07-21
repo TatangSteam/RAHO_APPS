@@ -2,7 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import { prisma } from '@lib/prisma';
 import { sendSuccess, buildPaginationMeta } from '@utils/response';
 import { errors } from '@middleware/errorHandler';
-import { Role } from '@prisma/client';
+import {
+  assertBranchAccess,
+  assertPermission,
+  getAccessibleBranchIds,
+  hasPermission,
+} from '@modules/iam/authorization.service';
+import { PERMISSIONS, PermissionCode } from '@modules/iam/permission-catalog';
 
 type AuditWhere = Record<string, unknown>;
 type AuditLogRecord = Record<string, any>;
@@ -63,29 +69,26 @@ function getStringQuery(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-async function getManagedBranchIds(userId: string): Promise<string[]> {
-  const managerBranches = await prisma.managerBranch.findMany({
-    where: { userId },
-    select: { branchId: true },
-  });
-  return managerBranches.map((item) => item.branchId);
-}
-
-async function buildAuditWhere(req: Request): Promise<AuditWhere> {
+async function buildAuditWhere(req: Request, permission: PermissionCode = PERMISSIONS.AUDIT_READ): Promise<AuditWhere> {
   const where: AuditWhere = {};
-  const role = req.user.role as Role;
   const branchId = getStringQuery(req.query.branchId);
-
-  if (role === Role.ADMIN_MANAGER) {
-    const managedBranchIds = await getManagedBranchIds(req.user.userId);
-    if (branchId && !managedBranchIds.includes(branchId)) {
-      throw errors.forbidden('Anda hanya dapat melihat audit log cabang yang dikelola.');
-    }
-    where.branchId = { in: branchId ? [branchId] : managedBranchIds };
-  } else if (role === Role.SUPER_ADMIN) {
-    if (branchId) where.branchId = branchId;
+  const accessibleBranchIds = await getAccessibleBranchIds(req.user.userId);
+  if (branchId) {
+    await assertBranchAccess(req.user.userId, branchId);
+    await assertPermission(req.user.userId, permission, branchId);
+    where.branchId = branchId;
   } else {
-    throw errors.forbidden('Audit log hanya dapat diakses Super Admin dan Admin Manager.');
+    const candidates = accessibleBranchIds === null
+      ? (await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })).map((branch) => branch.id)
+      : accessibleBranchIds;
+    const permittedBranches = (await Promise.all(candidates.map(async (candidate) =>
+      (await hasPermission(req.user.userId, permission, candidate)) ? candidate : null
+    ))).filter(Boolean);
+    if (accessibleBranchIds === null && await hasPermission(req.user.userId, permission)) {
+      if (permittedBranches.length !== candidates.length) where.branchId = { in: permittedBranches };
+    } else {
+      where.branchId = { in: permittedBranches };
+    }
   }
 
   const action = getStringQuery(req.query.action);
@@ -347,7 +350,7 @@ export async function getAuditLogDetail(req: Request, res: Response, next: NextF
 
 export async function exportAuditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const where = await buildAuditWhere(req);
+    const where = await buildAuditWhere(req, PERMISSIONS.AUDIT_EXPORT);
     const logs = await (prisma.auditLog as any).findMany({
       where,
       include: getAuditInclude(),

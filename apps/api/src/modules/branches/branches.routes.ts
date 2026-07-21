@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
 import { authorize } from '@middleware/authorize';
 import { Role } from '@prisma/client';
+import { requirePermission } from '@middleware/requirePermission';
+import { requireBranchAccess } from '@middleware/requireBranchAccess';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import {
   listBranches,
   getAllBranchesWithStats,
@@ -83,7 +86,6 @@ branchesRouter.get(
 branchesRouter.get(
   '/',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
   listBranches,
 );
 
@@ -91,7 +93,6 @@ branchesRouter.get(
 branchesRouter.get(
   '/all',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG, Role.ADMIN_LAYANAN]),
   getAllBranchesWithStats,
 );
 
@@ -99,7 +100,8 @@ branchesRouter.get(
 branchesRouter.get(
   '/:branchId/members',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
+  requireBranchAccess,
   membersController.getMembersByBranch.bind(membersController),
 );
 
@@ -107,7 +109,8 @@ branchesRouter.get(
 branchesRouter.get(
   '/:branchId/staff',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_USER_READ),
+  requireBranchAccess,
   listBranchStaff,
 );
 
@@ -116,7 +119,8 @@ branchesRouter.get(
 branchesRouter.get(
   '/:branchId/managers/available',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_READ),
+  requireBranchAccess,
   getAvailableManagersForBranch,
 );
 
@@ -124,7 +128,8 @@ branchesRouter.get(
 branchesRouter.get(
   '/:branchId/managers',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_READ),
+  requireBranchAccess,
   getBranchManagers,
 );
 
@@ -132,7 +137,8 @@ branchesRouter.get(
 branchesRouter.get(
   '/:branchId/sessions',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.BRANCH_READ),
+  requireBranchAccess,
   getBranchSessions,
 );
 
@@ -140,7 +146,8 @@ branchesRouter.get(
 branchesRouter.post(
   '/:branchId/managers',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
+  requireBranchAccess,
   assignManagerToBranch,
 );
 
@@ -149,14 +156,16 @@ branchesRouter.post(
 branchesRouter.patch(
   '/:branchId/managers/:managerId',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
+  requireBranchAccess,
   updateManagerBranchAccessScope,
 );
 
 branchesRouter.delete(
   '/:branchId/managers/:managerId',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.IAM_BRANCH_SCOPE_MANAGE),
+  requireBranchAccess,
   unassignManagerFromBranch,
 );
 
@@ -164,7 +173,8 @@ branchesRouter.delete(
 branchesRouter.get(
   '/:branchId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG]),
+  requirePermission(PERMISSIONS.BRANCH_READ),
+  requireBranchAccess,
   getBranch,
 );
 
@@ -172,7 +182,7 @@ branchesRouter.get(
 branchesRouter.post(
   '/',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.BRANCH_CREATE),
   createBranch,
 );
 
@@ -180,7 +190,8 @@ branchesRouter.post(
 branchesRouter.patch(
   '/:branchId',
   authenticate,
-  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  requirePermission(PERMISSIONS.BRANCH_UPDATE),
+  requireBranchAccess,
   updateBranch,
 );
 
@@ -189,7 +200,8 @@ branchesRouter.patch(
 branchesRouter.delete(
   '/:branchId/force',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.BRANCH_DELETE),
+  requireBranchAccess,
   forceDeleteBranch,
 );
 
@@ -197,6 +209,7 @@ branchesRouter.delete(
 branchesRouter.delete(
   '/:branchId',
   authenticate,
-  authorize([Role.SUPER_ADMIN]),
+  requirePermission(PERMISSIONS.BRANCH_DELETE),
+  requireBranchAccess,
   deleteBranch,
 );

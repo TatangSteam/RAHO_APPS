@@ -3,6 +3,8 @@ import { PackagesController } from './packages.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { uploadPaymentProof } from '../../middleware/upload';
+import { requirePermission } from '../../middleware/requirePermission';
+import { PERMISSIONS } from '../iam/permission-catalog';
 
 const router = Router();
 const controller = new PackagesController();
@@ -14,7 +16,7 @@ const controller = new PackagesController();
 router.post(
   '/packages/payment-proof/upload',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_PAYMENT),
   uploadPaymentProof.single('file'),
   controller.uploadPaymentProof.bind(controller)
 );
@@ -23,7 +25,7 @@ router.post(
 router.post(
   '/packages/:packageId/refund',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_CANCEL),
   uploadPaymentProof.single('refundProof'),
   controller.refundPackage.bind(controller)
 );
@@ -32,7 +34,7 @@ router.post(
 router.post(
   '/packages/:packageId/cancel',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_CANCEL),
   controller.cancelPackage.bind(controller)
 );
 
@@ -40,7 +42,7 @@ router.post(
 router.put(
   '/packages/:packageId',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_UPDATE),
   controller.editPackage.bind(controller)
 );
 
@@ -48,7 +50,7 @@ router.put(
 router.patch(
   '/packages/:packageId/verify',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_PAYMENT),
   controller.verifyPayment.bind(controller)
 );
 
@@ -56,7 +58,7 @@ router.patch(
 router.patch(
   '/packages/:packageId/reject',
   authenticate,
-  authorize(['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_PAYMENT),
   controller.rejectPayment.bind(controller)
 );
 

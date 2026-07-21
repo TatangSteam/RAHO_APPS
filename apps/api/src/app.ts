@@ -27,6 +27,7 @@ import { adminRoutes } from './modules/admin/admin.routes';
 import auditRouter from './modules/audit/audit.routes';
 import referralsRouter from './modules/referrals/referrals.routes';
 import filesRouter from './modules/files/files.routes';
+import iamRouter from './modules/iam/iam.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -93,6 +94,7 @@ export function createApp(): Application {
   const prefix = env.API_PREFIX;
 
   app.use(`${prefix}/auth`, authRouter);
+  app.use(`${prefix}/iam`, iamRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

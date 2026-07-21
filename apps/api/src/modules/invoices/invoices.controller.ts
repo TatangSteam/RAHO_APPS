@@ -44,7 +44,7 @@ export const invoiceController = {
       const validated = createInvoiceSchema.parse(req.body);
       const userId = req.user.userId;
 
-      const invoice = await invoiceService.createInvoice(validated, userId);
+      const invoice = await invoiceService.createInvoice(validated, req.user);
 
       logger.info(`Invoice created: ${invoice.invoiceNumber} by user ${userId}`);
       return sendCreated(res, invoice);
@@ -61,7 +61,7 @@ export const invoiceController = {
   async getInvoiceById(req: Request, res: Response) {
     try {
       const { invoiceId } = req.params;
-      const invoice = await invoiceService.getInvoiceById(invoiceId);
+      const invoice = await invoiceService.getInvoiceById(invoiceId, req.user);
 
       return sendSuccess(res, invoice);
     } catch (error: any) {
@@ -101,7 +101,7 @@ export const invoiceController = {
   async getInvoiceByPackageId(req: Request, res: Response) {
     try {
       const { packageId } = req.params;
-      const invoice = await invoiceService.getInvoiceByPackageId(packageId);
+      const invoice = await invoiceService.getInvoiceByPackageId(packageId, req.user);
 
       return sendSuccess(res, invoice);
     } catch (error: any) {
@@ -117,7 +117,7 @@ export const invoiceController = {
   async getMemberInvoices(req: Request, res: Response) {
     try {
       const { memberId } = req.params;
-      const invoices = await invoiceService.getMemberInvoices(memberId);
+      const invoices = await invoiceService.getMemberInvoices(memberId, req.user);
 
       return sendSuccess(res, invoices);
     } catch (error: any) {
@@ -135,7 +135,7 @@ export const invoiceController = {
       const { invoiceId } = req.params;
       const validated = updateInvoiceSchema.parse(req.body);
 
-      const invoice = await invoiceService.updateInvoice(invoiceId, validated);
+      const invoice = await invoiceService.updateInvoice(invoiceId, validated, req.user.userId);
 
       logger.info(`Invoice updated: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
@@ -154,7 +154,7 @@ export const invoiceController = {
       const { invoiceId } = req.params;
       const validated = finalizeInvoiceSchema.parse(req.body);
 
-      const invoice = await invoiceService.finalizeInvoice(invoiceId, validated.dueDate);
+      const invoice = await invoiceService.finalizeInvoice(invoiceId, validated.dueDate, req.user.userId);
 
       logger.info(`Invoice finalized: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
@@ -174,7 +174,7 @@ export const invoiceController = {
       const validated = recordPaymentSchema.parse(req.body);
       const userId = req.user.userId;
 
-      const invoice = await invoiceService.recordPayment(invoiceId, validated, userId);
+      const invoice = await invoiceService.recordPayment(invoiceId, validated, req.user);
 
       logger.info(`Payment recorded for invoice: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
@@ -193,7 +193,7 @@ export const invoiceController = {
       const { invoiceId } = req.params;
       const validated = cancelInvoiceSchema.parse(req.body);
 
-      const invoice = await invoiceService.cancelInvoice(invoiceId, validated);
+      const invoice = await invoiceService.cancelInvoice(invoiceId, validated, req.user.userId);
 
       logger.info(`Invoice cancelled: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);

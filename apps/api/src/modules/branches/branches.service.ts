@@ -8,6 +8,18 @@ import {
   UpdateBranchInput,
   ListBranchesQuery,
 } from './branches.schema';
+import { getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
+
+async function getReadableBranchIds(userId: string): Promise<string[]> {
+  const accessible = await getAccessibleBranchIds(userId);
+  const candidates = accessible === null
+    ? (await prisma.branch.findMany({ select: { id: true } })).map((branch) => branch.id)
+    : accessible;
+  return (await Promise.all(candidates.map(async (branchId) =>
+    (await hasPermission(userId, PERMISSIONS.BRANCH_READ, branchId)) ? branchId : null
+  ))).filter((branchId): branchId is string => Boolean(branchId));
+}
 
 // ── Default Package Pricing Data ──────────────────────────────
 const DEFAULT_THERAPY_PACKAGES = [
@@ -264,14 +276,7 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
       : {}),
   };
 
-  // Filter branches for ADMIN_MANAGER based on ManagerBranch assignments
-  if (userRole === 'ADMIN_MANAGER' && userId) {
-    where.managerBranches = {
-      some: {
-        userId: userId
-      }
-    };
-  }
+  where.id = { in: userId ? await getReadableBranchIds(userId) : [] };
 
   const summaryWhere = { ...where } as Prisma.BranchWhereInput;
   delete (summaryWhere as any).isActive;
@@ -377,18 +382,7 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
     isActive: true, // Only show active branches
   };
   
-  if (userRole === 'ADMIN_MANAGER' && userId) {
-    where.managerBranches = {
-      some: {
-        userId: userId
-      }
-    };
-  }
-
-  // First, let's verify the ManagerBranch records exist
-  if (userRole === 'ADMIN_MANAGER' && userId) {
-    logger.debug('[Branches] Applying manager branch visibility filter', { userId });
-  }
+  where.id = { in: userId ? await getReadableBranchIds(userId) : [] };
 
   const branches = await prisma.branch.findMany({
     where,
@@ -461,16 +455,6 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
     },
     select: branchSelect,
   });
-
-  // Auto-assign ADMIN_MANAGER to the branch they created
-  if (userRole === 'ADMIN_MANAGER') {
-    await prisma.managerBranch.create({
-      data: {
-        userId: createdBy,
-        branchId: branch.id,
-      },
-    });
-  }
 
   // Auto-create default package pricing for the new branch
   try {
