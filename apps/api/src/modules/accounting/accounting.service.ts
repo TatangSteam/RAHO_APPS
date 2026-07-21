@@ -261,7 +261,7 @@ export async function postJournal(input: PostJournalInput, tx?: DbClient) {
  * ini; otorisasi mengikuti business event INVENTORY.POST dan source document wajib.
  */
 export async function postInventoryDerivedJournal(input: PostJournalInput, tx: DbClient) {
-  const posting = validateAndNormalizePosting(input);
+  const posting = validateAndNormalizePosting(input, { allowCrossBranch: true });
   if (posting.sourceLinks.some((source) => source.sourceType.trim().toUpperCase() !== 'INTERNAL_TRANSFER')) {
     throw errors.badRequest('DERIVED_JOURNAL_SOURCE_INVALID', 'Jurnal turunan inventory wajib memakai source INTERNAL_TRANSFER.');
   }

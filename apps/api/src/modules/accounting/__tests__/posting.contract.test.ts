@@ -83,6 +83,18 @@ describe('accounting posting contract', () => {
     })).toThrow('satu branch');
   });
 
+  it('allows cross-branch lines only when an internal caller opts in', () => {
+    const posting = validateAndNormalizePosting({
+      ...validPosting,
+      lines: [
+        { accountCode: '1300', debit: '100.00', branchId: 'branch-1' },
+        { accountCode: '1310', credit: '100.00', branchId: 'branch-2' },
+      ],
+    }, { allowCrossBranch: true });
+
+    expect(posting.lines.map((line) => line.branchId)).toEqual(['branch-1', 'branch-2']);
+  });
+
   it('rejects duplicate source relations', () => {
     expect(() => validateAndNormalizePosting({
       ...validPosting,

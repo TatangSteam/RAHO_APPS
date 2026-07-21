@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'crypto';
 import {
+  AccountType,
   AuditAction,
   DiscrepancyType,
+  InternalTransferStatus,
   InventoryPostingStatus,
   InventoryPostingType,
   InventoryValuationStatus,
@@ -16,6 +18,7 @@ import { env } from '@config/env';
 import { uploadFile } from '@config/minio';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
+import { postInventoryDerivedJournal } from '@modules/accounting/accounting.service';
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { logAudit } from '@utils/auditLog';
@@ -25,6 +28,7 @@ import type {
   ShipmentReceiptEvidence,
 } from '../shipment-ledger.schema';
 import { allocateFifo, type FifoLayerInput, sumAllocationCost } from './fifo-allocation.service';
+import { buildInternalTransferJournal, INTERNAL_TRANSFER_ACCOUNTS } from './internal-transfer-posting.helpers';
 
 type Tx = Prisma.TransactionClient;
 
@@ -56,6 +60,199 @@ type ReceiptOptions = {
 };
 
 const MAX_TRANSACTION_ATTEMPTS = 3;
+
+async function assertInternalTransferAccounts(tx: Tx) {
+  const accountCodes = [INTERNAL_TRANSFER_ACCOUNTS.inventory, INTERNAL_TRANSFER_ACCOUNTS.inTransit];
+  const accounts = await tx.account.findMany({
+    where: { code: { in: accountCodes } },
+    select: { code: true, type: true, isActive: true, allowPosting: true },
+  });
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  for (const code of accountCodes) {
+    const account = accountByCode.get(code);
+    if (!account?.isActive || !account.allowPosting || account.type !== AccountType.ASSET) {
+      throw errors.unprocessable(
+        'INTERNAL_TRANSFER_ACCOUNT_INVALID',
+        `Account ${code} wajib berupa akun aset aktif dan postable.`,
+      );
+    }
+  }
+}
+
+async function postDispatchTransferAccounting(
+  tx: Tx,
+  input: {
+    shipmentId: string;
+    shipmentCode: string;
+    fromBranchId: string;
+    toBranchId: string;
+    postingId: string;
+    totalCost: Prisma.Decimal;
+    occurredAt: Date;
+    actorUserId: string;
+  },
+) {
+  await assertInternalTransferAccounts(tx);
+  const journalLines = buildInternalTransferJournal('DISPATCH', input.totalCost);
+  const journalResult = await postInventoryDerivedJournal({
+    postingKey: `INTERNAL_TRANSFER:DISPATCH:${input.shipmentId}`,
+    transactionDate: input.occurredAt,
+    branchId: input.fromBranchId,
+    actorUserId: input.actorUserId,
+    description: `Dispatch internal transfer ${input.shipmentCode}`,
+    lines: journalLines.map((line) => ({
+      ...line,
+      branchId: input.fromBranchId,
+      description: line.accountCode === INTERNAL_TRANSFER_ACCOUNTS.inTransit
+        ? 'Persediaan dalam perjalanan'
+        : 'Persediaan keluar untuk transfer internal',
+    })),
+    sourceLinks: [{
+      sourceType: 'INTERNAL_TRANSFER',
+      sourceId: input.shipmentId,
+      sourceNumber: input.shipmentCode,
+      relationType: 'DISPATCH',
+    }],
+    metadata: {
+      policy: 'INTERNAL_TRANSFER_IN_TRANSIT',
+      noRevenueOrExpense: true,
+      inventoryValue: input.totalCost.toFixed(4),
+    },
+  }, tx);
+  const ledger = await tx.internalTransferLedger.create({
+    data: {
+      shipmentId: input.shipmentId,
+      fromBranchId: input.fromBranchId,
+      toBranchId: input.toBranchId,
+      totalValue: input.totalCost,
+      dispatchInventoryPostingId: input.postingId,
+      dispatchJournalEntryId: journalResult.journal.id,
+      dispatchedAt: input.occurredAt,
+    },
+  });
+  await tx.auditLog.create({
+    data: {
+      userId: input.actorUserId,
+      branchId: input.fromBranchId,
+      action: 'CREATE',
+      module: 'INVENTORY',
+      resource: 'InternalTransferLedger',
+      resourceId: ledger.id,
+      entityType: 'InternalTransferLedger',
+      entityId: ledger.id,
+      entityCode: input.shipmentCode,
+      afterData: {
+        status: ledger.status,
+        totalValue: ledger.totalValue.toFixed(4),
+        dispatchInventoryPostingId: input.postingId,
+        dispatchJournalEntryId: journalResult.journal.id,
+      },
+      description: `Internal transfer ${input.shipmentCode} dispatched.`,
+    },
+  });
+  return ledger;
+}
+
+async function postReceiptTransferAccounting(
+  tx: Tx,
+  input: {
+    shipmentId: string;
+    shipmentCode: string;
+    receiptId: string;
+    receiptPostingId: string;
+    receiptCost: Prisma.Decimal;
+    status: InternalTransferStatus;
+    occurredAt: Date;
+    actorUserId: string;
+  },
+) {
+  await tx.$queryRaw(Prisma.sql`
+    SELECT "id" FROM "internal_transfer_ledgers"
+    WHERE "shipmentId" = ${input.shipmentId}
+    FOR UPDATE
+  `);
+  const ledger = await tx.internalTransferLedger.findUnique({ where: { shipmentId: input.shipmentId } });
+  if (!ledger) {
+    throw errors.unprocessable(
+      'TRANSFER_DISPATCH_MISSING',
+      'Posting dispatch internal transfer tidak ditemukan.',
+    );
+  }
+  const receivedValue = ledger.receivedValue.add(input.receiptCost);
+  if (receivedValue.greaterThan(ledger.totalValue)) {
+    throw errors.conflict('TRANSFER_VALUE_MISMATCH', 'Nilai receipt melebihi nilai internal transfer.');
+  }
+
+  let receiptJournalEntryId: string | undefined;
+  if (input.receiptCost.isPositive()) {
+    await assertInternalTransferAccounts(tx);
+    const journalLines = buildInternalTransferJournal('RECEIPT', input.receiptCost);
+    const journalResult = await postInventoryDerivedJournal({
+      postingKey: `INTERNAL_TRANSFER:RECEIPT:${input.shipmentId}:${input.receiptId}`,
+      transactionDate: input.occurredAt,
+      branchId: ledger.toBranchId,
+      actorUserId: input.actorUserId,
+      description: `Receipt internal transfer ${input.shipmentCode}`,
+      lines: journalLines.map((line) => ({
+        ...line,
+        branchId: line.accountCode === INTERNAL_TRANSFER_ACCOUNTS.inventory
+          ? ledger.toBranchId
+          : ledger.fromBranchId,
+        description: line.accountCode === INTERNAL_TRANSFER_ACCOUNTS.inventory
+          ? 'Persediaan diterima dari transfer internal'
+          : 'Pelepasan persediaan dalam perjalanan',
+      })),
+      sourceLinks: [{
+        sourceType: 'INTERNAL_TRANSFER',
+        sourceId: input.shipmentId,
+        sourceNumber: input.shipmentCode,
+        relationType: 'RECEIPT',
+      }],
+      metadata: {
+        policy: 'INTERNAL_TRANSFER_IN_TRANSIT',
+        noRevenueOrExpense: true,
+        shipmentReceiptId: input.receiptId,
+        inventoryValue: input.receiptCost.toFixed(4),
+      },
+    }, tx);
+    receiptJournalEntryId = journalResult.journal.id;
+  }
+
+  const updated = await tx.internalTransferLedger.update({
+    where: { id: ledger.id },
+    data: {
+      status: input.status,
+      receivedValue,
+      receivedAt: input.occurredAt,
+      ...(receiptJournalEntryId ? {
+        receiptInventoryPostingId: input.receiptPostingId,
+        receiptJournalEntryId,
+      } : {}),
+    },
+  });
+  await tx.auditLog.create({
+    data: {
+      userId: input.actorUserId,
+      branchId: ledger.toBranchId,
+      action: 'UPDATE',
+      module: 'INVENTORY',
+      resource: 'InternalTransferLedger',
+      resourceId: ledger.id,
+      entityType: 'InternalTransferLedger',
+      entityId: ledger.id,
+      entityCode: input.shipmentCode,
+      beforeData: { status: ledger.status, receivedValue: ledger.receivedValue.toFixed(4) },
+      afterData: {
+        status: updated.status,
+        receivedValue: updated.receivedValue.toFixed(4),
+        receiptInventoryPostingId: updated.receiptInventoryPostingId,
+        receiptJournalEntryId: updated.receiptJournalEntryId,
+      },
+      description: `Internal transfer ${input.shipmentCode} receipt posted.`,
+    },
+  });
+  return updated;
+}
 
 function hashPayload(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -511,6 +708,16 @@ export async function dispatchReservedShipment(
     }
 
     await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingTotalCost } });
+    await postDispatchTransferAccounting(tx, {
+      shipmentId: shipment.id,
+      shipmentCode: shipment.shipmentCode,
+      fromBranchId: shipment.fromBranchId,
+      toBranchId: shipment.toBranchId,
+      postingId: posting.id,
+      totalCost: postingTotalCost,
+      occurredAt: shippedAt,
+      actorUserId,
+    });
     await tx.shipment.update({
       where: { id: shipment.id },
       data: {
@@ -893,11 +1100,28 @@ export async function receiveReservedShipment(
       : openDiscrepancyCount > 0 || totalQuarantine.isPositive()
         ? ShipmentStatus.RECEIVED_WITH_ISSUE
         : ShipmentStatus.RECEIVED;
+    const transferStatus = shipmentStatus === ShipmentStatus.RECEIVED
+      ? InternalTransferStatus.RECEIVED
+      : shipmentStatus === ShipmentStatus.RECEIVED_WITH_ISSUE
+        || openDiscrepancyCount > 0
+        || totalQuarantine.isPositive()
+        ? InternalTransferStatus.DISCREPANCY
+        : InternalTransferStatus.IN_TRANSIT;
 
     await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: receiptCost } });
     await tx.shipmentReceipt.update({
       where: { id: receipt.id },
       data: { totalQuantity: receiptQuantity, quarantinedQuantity: receiptQuarantine, totalCost: receiptCost },
+    });
+    await postReceiptTransferAccounting(tx, {
+      shipmentId: shipment.id,
+      shipmentCode: shipment.shipmentCode,
+      receiptId: receipt.id,
+      receiptPostingId: posting.id,
+      receiptCost,
+      status: transferStatus,
+      occurredAt: input.occurredAt,
+      actorUserId,
     });
     await tx.shipment.update({
       where: { id: shipment.id },

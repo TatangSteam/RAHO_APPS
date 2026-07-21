@@ -16,6 +16,8 @@ describeDatabase('shipment transfer ledger', () => {
   const destinationWarehouseId = `ship_dwh_${runId}`;
   const sourceLocationId = `ship_sloc_${runId}`;
   const destinationLocationId = `ship_dloc_${runId}`;
+  const sourcePeriodId = `ship_speriod_${runId}`;
+  const destinationPeriodId = `ship_dperiod_${runId}`;
   const uomId = `ship_uom_${runId}`;
   const productId = `ship_product_${runId}`;
   const sourceItemId = `ship_sitem_${runId}`;
@@ -55,6 +57,32 @@ describeDatabase('shipment transfer ledger', () => {
       data: [
         { id: sourceBranchId, branchCode: `SS${runId.slice(0, 7)}`, name: `Shipment Source ${runId}` },
         { id: destinationBranchId, branchCode: `SD${runId.slice(0, 7)}`, name: `Shipment Destination ${runId}` },
+      ],
+    });
+    await prisma.accountingPeriod.createMany({
+      data: [
+        {
+          id: sourcePeriodId,
+          name: `Shipment Source 2026 ${runId}`,
+          fiscalYear: 2026,
+          periodNo: 1,
+          startDate: new Date('2026-01-01T00:00:00.000Z'),
+          endDate: new Date('2026-12-31T23:59:59.999Z'),
+          branchId: sourceBranchId,
+          scopeKey: sourceBranchId,
+          createdBy: actorId,
+        },
+        {
+          id: destinationPeriodId,
+          name: `Shipment Destination 2026 ${runId}`,
+          fiscalYear: 2026,
+          periodNo: 1,
+          startDate: new Date('2026-01-01T00:00:00.000Z'),
+          endDate: new Date('2026-12-31T23:59:59.999Z'),
+          branchId: destinationBranchId,
+          scopeKey: destinationBranchId,
+          createdBy: actorId,
+        },
       ],
     });
     await prisma.unitOfMeasure.create({ data: { id: uomId, code: `SU${runId.slice(0, 8)}`, name: `Unit ${runId}` } });
@@ -136,6 +164,14 @@ describeDatabase('shipment transfer ledger', () => {
     await prisma.shipmentReceiptItem.deleteMany({ where: { shipmentReceipt: { shipmentId } } });
     await prisma.shipmentReceipt.deleteMany({ where: { shipmentId } });
     await prisma.shipmentTransferLayer.deleteMany({ where: { shipmentItem: { shipmentId } } });
+    await prisma.internalTransferLedger.deleteMany({ where: { shipmentId } });
+    const journalIds = (await prisma.journalEntry.findMany({
+      where: { sourceLinks: { some: { sourceId: shipmentId } } },
+      select: { id: true },
+    })).map((journal) => journal.id);
+    await prisma.journalSourceLink.deleteMany({ where: { journalEntryId: { in: journalIds } } });
+    await prisma.journalLine.deleteMany({ where: { journalEntryId: { in: journalIds } } });
+    await prisma.journalEntry.deleteMany({ where: { id: { in: journalIds } } });
     await prisma.stockReservation.deleteMany({ where: { stockRequestId: requestId } });
     await prisma.shipmentItem.deleteMany({ where: { shipmentId } });
     await prisma.shipment.deleteMany({ where: { id: shipmentId } });
@@ -144,6 +180,7 @@ describeDatabase('shipment transfer ledger', () => {
     await prisma.inventoryCostLayer.deleteMany({ where: { inventoryBalance: { branchId: { in: [sourceBranchId, destinationBranchId] } } } });
     await prisma.inventoryBalance.deleteMany({ where: { branchId: { in: [sourceBranchId, destinationBranchId] } } });
     await prisma.inventoryPosting.deleteMany({ where: { branchId: { in: [sourceBranchId, destinationBranchId] } } });
+    await prisma.accountingPeriod.deleteMany({ where: { id: { in: [sourcePeriodId, destinationPeriodId] } } });
     await prisma.inventoryItem.deleteMany({ where: { id: { in: [sourceItemId, destinationItemId] } } });
     await prisma.stockLocation.deleteMany({ where: { id: { in: [sourceLocationId, destinationLocationId] } } });
     await prisma.warehouse.deleteMany({ where: { id: { in: [sourceWarehouseId, destinationWarehouseId] } } });
@@ -167,6 +204,12 @@ describeDatabase('shipment transfer ledger', () => {
 
     expect(results[0].id).toBe(results[1].id);
     expect(await prisma.inventoryPosting.count({ where: { sourceId: shipmentId, type: 'TRANSFER_OUT' } })).toBe(1);
+    const transferLedger = await prisma.internalTransferLedger.findUniqueOrThrow({ where: { shipmentId } });
+    expect(transferLedger.totalValue.toFixed(4)).toBe('1000.0000');
+    expect(transferLedger.receivedValue.toFixed(4)).toBe('0.0000');
+    expect(await prisma.journalEntry.count({
+      where: { postingKey: `INTERNAL_TRANSFER:DISPATCH:${shipmentId}` },
+    })).toBe(1);
     expect(await prisma.auditLog.count({
       where: { resource: 'Shipment', resourceId: shipmentId, action: 'SHIPMENT' },
     })).toBe(1);
@@ -220,6 +263,9 @@ describeDatabase('shipment transfer ledger', () => {
     expect(destinationBalance.onHandQty.toFixed(4)).toBe('3.0000');
     expect(destinationBalance.quarantineQty.toFixed(4)).toBe('1.0000');
     expect(destinationBalance.onHandQty.sub(destinationBalance.quarantineQty).toFixed(4)).toBe('2.0000');
+    const partialLedger = await prisma.internalTransferLedger.findUniqueOrThrow({ where: { shipmentId } });
+    expect(partialLedger.status).toBe('DISCREPANCY');
+    expect(partialLedger.receivedValue.toFixed(4)).toBe('300.0000');
     expect((await inventoryAssetValue()).toFixed(4)).toBe('1300.0000');
   }, 60_000);
 
@@ -261,6 +307,10 @@ describeDatabase('shipment transfer ledger', () => {
     expect(destinationBalance.onHandQty.toFixed(4)).toBe('8.0000');
     expect(destinationBalance.quarantineQty.toFixed(4)).toBe('1.0000');
     expect(destinationItem.stock.toFixed(4)).toBe('8.0000');
+    const finalLedger = await prisma.internalTransferLedger.findUniqueOrThrow({ where: { shipmentId } });
+    expect(finalLedger.status).toBe('DISCREPANCY');
+    expect(finalLedger.receivedValue.toFixed(4)).toBe('1000.0000');
+    expect(await prisma.journalEntry.count({ where: { postingKey: { contains: shipmentId } } })).toBe(3);
     expect((await inventoryAssetValue()).toFixed(4)).toBe('1300.0000');
   }, 60_000);
 });

@@ -56,7 +56,14 @@ export interface ValidatedPosting {
   metadata?: Record<string, unknown>;
 }
 
-export function validateAndNormalizePosting(input: PostJournalInput): ValidatedPosting {
+export interface PostingValidationOptions {
+  allowCrossBranch?: boolean;
+}
+
+export function validateAndNormalizePosting(
+  input: PostJournalInput,
+  options: PostingValidationOptions = {},
+): ValidatedPosting {
   const transactionDate = input.transactionDate instanceof Date
     ? input.transactionDate
     : new Date(input.transactionDate);
@@ -106,7 +113,7 @@ export function validateAndNormalizePosting(input: PostJournalInput): ValidatedP
       throw errors.badRequest('JOURNAL_SCALE_INVALID', `Baris ${index + 1} maksimal memiliki dua angka desimal.`);
     }
     const branchId = line.branchId || input.branchId;
-    if (branchId !== input.branchId) {
+    if (branchId !== input.branchId && !options.allowCrossBranch) {
       throw errors.badRequest('JOURNAL_CROSS_BRANCH_INVALID', 'Satu journal entry hanya boleh berisi satu branch.');
     }
     return {

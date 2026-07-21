@@ -261,3 +261,8 @@ $null
 
 backups/
 scripts/
+
+# The API package exposes this runner through npm scripts; keep it reproducible.
+!apps/api/scripts/
+apps/api/scripts/*
+!apps/api/scripts/run-inventory-concurrency-tests.js
