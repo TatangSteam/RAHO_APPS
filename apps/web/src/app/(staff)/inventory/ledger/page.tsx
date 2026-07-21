@@ -28,10 +28,12 @@ export default function InventoryLedgerPage() {
   const [inboundMode, setInboundMode] = useState<'RECEIPT' | 'OPENING'>('RECEIPT');
   const [receipt, setReceipt] = useState({ inventoryItemId: '', quantity: '', unitCost: '', batchNumber: '', expiryDate: '', sourceId: '' });
   const [issue, setIssue] = useState({ inventoryItemId: '', quantity: '', sourceId: '' });
+  const [reconciliation, setReconciliation] = useState<Row | null>(null);
 
   const canPost = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'].includes(user?.role || '');
   const canPostOpening = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
   const canReverse = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
+  const canReconcile = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
 
   const load = useCallback(async () => {
     if (!branchId) {
@@ -46,22 +48,24 @@ export default function InventoryLedgerPage() {
     try {
       setLoading(true);
       setError('');
-      const [branchResponse, balanceResponse, postingResponse, itemResponse] = await Promise.all([
+      const [branchResponse, balanceResponse, postingResponse, itemResponse, reconciliationResponse] = await Promise.all([
         api.get('/branches', { params: { isActive: true, limit: 100 } }),
         inventoryApi.getLedgerBalances({ branchId, limit: 100 }),
         inventoryApi.getLedgerPostings({ branchId, limit: 100 }),
         inventoryApi.getInventoryItems(branchId),
+        canReconcile ? inventoryApi.reconcileInventory(branchId) : Promise.resolve(null),
       ]);
       setBranches(branchResponse.data?.data || []);
       setBalances(balanceResponse.data?.data?.data || []);
       setPostings(postingResponse.data?.data || []);
       setItems(itemResponse.data?.data?.items || itemResponse.data?.data || []);
+      setReconciliation(reconciliationResponse?.data?.data || null);
     } catch (requestError: any) {
       setError(requestError.response?.data?.error?.message || 'Gagal memuat inventory ledger. Jalankan migration terlebih dahulu.');
     } finally {
       setLoading(false);
     }
-  }, [branchId]);
+  }, [branchId, canReconcile]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -118,7 +122,8 @@ export default function InventoryLedgerPage() {
     available: totals.available + Number(row.availableQty || 0),
     reserved: totals.reserved + Number(row.reservedQty || 0),
     quarantine: totals.quarantine + Number(row.quarantineQty || 0),
-  }), { onHand: 0, available: 0, reserved: 0, quarantine: 0 }), [balances]);
+    inTransit: totals.inTransit + Number(row.inTransitQty || 0),
+  }), { onHand: 0, available: 0, reserved: 0, quarantine: 0, inTransit: 0 }), [balances]);
 
   return <main className={styles.page}>
     <header className={styles.header}><div><h1>Inventory Ledger</h1><p>Saldo per lokasi dan batch, FIFO cost, mutation, serta reversal.</p></div><button className={styles.secondaryButton} onClick={() => void load()} title="Muat ulang"><RefreshCw size={16} /></button></header>
@@ -144,6 +149,7 @@ export default function InventoryLedgerPage() {
     </>}
 
     <div className={styles.summary}>{Object.entries(summary).map(([key, value]) => <div key={key} className={styles.summaryItem}><span>{key}</span><strong>{value.toLocaleString('id-ID', { maximumFractionDigits: 4 })}</strong></div>)}</div>
+    {reconciliation && <div className={styles.summary}><div className={styles.summaryItem}><span>Nilai cost layer</span><strong>Rp {Number(reconciliation.layerValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Nilai in-transit</span><strong>Rp {Number(reconciliation.inTransitValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Total inventory value</span><strong>Rp {Number(reconciliation.totalInventoryValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Mismatch</span><strong>{reconciliation.mismatchCount || 0}</strong></div></div>}
     <nav className={styles.tabs}><button className={`${styles.tab} ${view === 'BALANCE' ? styles.tabActive : ''}`} onClick={() => setView('BALANCE')}>Saldo</button><button className={`${styles.tab} ${view === 'POSTING' ? styles.tabActive : ''}`} onClick={() => setView('POSTING')}>Posting & FIFO</button></nav>
     {error && <div className={styles.error}>{error}</div>}
     {loading ? <div className={styles.loading}>Memuat ledger...</div> : view === 'BALANCE' ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Produk</th><th>Warehouse / Lokasi</th><th>Batch</th><th className={styles.number}>On hand</th><th className={styles.number}>Reserved</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Available</th></tr></thead><tbody>{balances.map((row) => <tr key={row.id}><td>{row.masterProduct?.sku}<br />{row.masterProduct?.name}</td><td>{row.stockLocation?.warehouse?.code} / {row.stockLocation?.code}</td><td>{row.batch?.batchNumber || '-'}</td><td className={styles.number}>{String(row.onHandQty)}</td><td className={styles.number}>{String(row.reservedQty)}</td><td className={styles.number}>{String(row.quarantineQty)}</td><td className={styles.number}>{String(row.availableQty)}</td></tr>)}</tbody></table></div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Nomor / Tanggal</th><th>Type</th><th>Source</th><th>Mutation</th><th className={styles.number}>Actual cost</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{postings.map((posting) => <tr key={posting.id}><td>{posting.postingNumber}<br />{new Date(posting.occurredAt).toLocaleString('id-ID')}</td><td>{posting.type}</td><td>{posting.sourceType}<br />{posting.sourceId}</td><td>{posting.stockMutations?.map((mutation: Row) => `${mutation.inventoryItem?.masterProduct?.name}: ${mutation.quantity}`).join(', ') || '-'}</td><td className={styles.number}>{String(posting.totalCost)}</td><td><span className={posting.status === 'POSTED' ? styles.badge : styles.inactiveBadge}>{posting.status}</span></td><td>{canReverse && posting.type === 'ISSUE' && posting.status === 'POSTED' ? <button className={styles.secondaryButton} disabled={saving} onClick={() => void reverse(posting)} title="Reverse"><RotateCcw size={15} /></button> : '-'}</td></tr>)}</tbody></table></div>}

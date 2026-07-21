@@ -100,6 +100,14 @@ export class ShipmentRetrievalService {
             },
           },
         },
+        internalTransfer: {
+          include: {
+            dispatchInventoryPosting: { select: { postingNumber: true } },
+            receiptInventoryPosting: { select: { postingNumber: true } },
+            dispatchJournalEntry: { select: { journalNumber: true } },
+            receiptJournalEntry: { select: { journalNumber: true } },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -113,7 +121,7 @@ export class ShipmentRetrievalService {
         where: {
           referenceType: { in: ['SHIPMENT', 'Shipment'] },
           referenceId: { in: shipmentIds },
-          type: StockMutationType.RECEIVED,
+          type: { in: [StockMutationType.RECEIVED, StockMutationType.TRANSFER_IN] },
         },
         select: {
           id: true,
@@ -175,6 +183,14 @@ export class ShipmentRetrievalService {
                 },
               },
             },
+          },
+        },
+        internalTransfer: {
+          include: {
+            dispatchInventoryPosting: { select: { postingNumber: true } },
+            receiptInventoryPosting: { select: { postingNumber: true } },
+            dispatchJournalEntry: { select: { journalNumber: true } },
+            receiptJournalEntry: { select: { journalNumber: true } },
           },
         },
       },
@@ -307,6 +323,15 @@ export class ShipmentRetrievalService {
       approvedAt: shipment.approvedAt?.toISOString(),
       createdAt: shipment.createdAt.toISOString(),
       updatedAt: shipment.updatedAt.toISOString(),
+      internalTransfer: shipment.internalTransfer ? {
+        status: shipment.internalTransfer.status,
+        totalValue: shipment.internalTransfer.totalValue.toFixed(4),
+        receivedValue: shipment.internalTransfer.receivedValue.toFixed(4),
+        dispatchInventoryPosting: shipment.internalTransfer.dispatchInventoryPosting?.postingNumber,
+        receiptInventoryPosting: shipment.internalTransfer.receiptInventoryPosting?.postingNumber,
+        dispatchJournal: shipment.internalTransfer.dispatchJournalEntry?.journalNumber,
+        receiptJournal: shipment.internalTransfer.receiptJournalEntry?.journalNumber,
+      } : null,
     };
   }
 

@@ -256,6 +256,45 @@ export async function postJournal(input: PostJournalInput, tx?: DbClient) {
   }
 }
 
+/**
+ * Posting jurnal turunan inventory. Endpoint jurnal umum tidak menggunakan jalur
+ * ini; otorisasi mengikuti business event INVENTORY.POST dan source document wajib.
+ */
+export async function postInventoryDerivedJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  if (posting.sourceLinks.some((source) => source.sourceType.trim().toUpperCase() !== 'INTERNAL_TRANSFER')) {
+    throw errors.badRequest('DERIVED_JOURNAL_SOURCE_INVALID', 'Jurnal turunan inventory wajib memakai source INTERNAL_TRANSFER.');
+  }
+  if (posting.sourceLinks.length !== 1 || posting.lines.length !== 2) {
+    throw errors.badRequest('TRANSFER_JOURNAL_SHAPE_INVALID', 'Jurnal internal transfer wajib memiliki satu source dan dua baris.');
+  }
+  const relation = posting.sourceLinks[0].relationType?.trim().toUpperCase();
+  if (relation !== 'DISPATCH' && relation !== 'RECEIPT') {
+    throw errors.badRequest('TRANSFER_JOURNAL_RELATION_INVALID', 'Relation jurnal internal transfer harus DISPATCH atau RECEIPT.');
+  }
+  const lineByAccount = new Map(posting.lines.map((line) => [line.accountCode, line]));
+  const inventoryLine = lineByAccount.get('1300');
+  const transitLine = lineByAccount.get('1310');
+  if (lineByAccount.size !== 2 || !inventoryLine || !transitLine) {
+    throw errors.badRequest('TRANSFER_JOURNAL_ACCOUNT_INVALID', 'Jurnal internal transfer hanya boleh memakai account aset 1300 dan 1310.');
+  }
+  const directionValid = relation === 'DISPATCH'
+    ? transitLine.debit.isPositive() && inventoryLine.credit.equals(transitLine.debit) && transitLine.credit.isZero() && inventoryLine.debit.isZero()
+    : inventoryLine.debit.isPositive() && transitLine.credit.equals(inventoryLine.debit) && inventoryLine.credit.isZero() && transitLine.debit.isZero();
+  if (!directionValid) {
+    throw errors.badRequest('TRANSFER_JOURNAL_DIRECTION_INVALID', 'Arah debit/kredit jurnal internal transfer tidak sesuai posting policy.');
+  }
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+  await assertPermission(posting.actorUserId, PERMISSIONS.INVENTORY_POST, posting.branchId);
+  const derivedBranches = Array.from(new Set(posting.lines.map((line) => line.branchId))).filter((branchId) => branchId !== posting.branchId);
+  for (const branchId of derivedBranches) {
+    // The counter-branch line is system-derived from the immutable shipment,
+    // but its accounting period must still be open.
+    await findPostingPeriod(tx, branchId, posting.transactionDate);
+  }
+  return postWithinTransaction(tx, posting);
+}
+
 export async function listAccountsService(query: ListAccountsQuery) {
   return prisma.account.findMany({
     where: {

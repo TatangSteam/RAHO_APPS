@@ -182,6 +182,8 @@ enum StockMutationType {
   USED
   RECEIVED
   ADJUSTMENT
+  TRANSFER_OUT
+  TRANSFER_IN
 }
 
 enum InventoryPostingType {
@@ -191,6 +193,8 @@ enum InventoryPostingType {
   ADJUSTMENT_IN
   ADJUSTMENT_OUT
   REVERSAL
+  TRANSFER_OUT
+  TRANSFER_IN
 }
 
 enum InventoryPostingStatus {
@@ -206,6 +210,13 @@ enum InventoryValuationStatus {
 enum InventoryCostAllocationType {
   CONSUMPTION
   REVERSAL
+  TRANSFER_RECEIPT
+}
+
+enum InternalTransferStatus {
+  IN_TRANSIT
+  RECEIVED
+  DISCREPANCY
 }
 
 enum StockRequestStatus {
@@ -459,6 +470,8 @@ model Branch {
   inventoryBalances      InventoryBalance[]
   openingBalances        OpeningBalance[]
   expenses               Expense[]
+  internalTransfersFrom  InternalTransferLedger[]   @relation("InternalTransferFromBranch")
+  internalTransfersTo    InternalTransferLedger[]   @relation("InternalTransferToBranch")
 
   @@index([branchCode])
   @@index([isActive])
@@ -738,17 +751,19 @@ model JournalEntry {
   reversedByEntryId  String?       @unique
   createdAt          DateTime      @default(now())
 
-  branch               Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  accountingPeriod     AccountingPeriod      @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
-  creator              User                  @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  poster               User                  @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
-  reversedByEntry      JournalEntry?         @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
-  reversesEntry        JournalEntry?         @relation("JournalReversal")
+  branch               Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  accountingPeriod     AccountingPeriod        @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  creator              User                    @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  poster               User                    @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
+  reversedByEntry      JournalEntry?           @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
+  reversesEntry        JournalEntry?           @relation("JournalReversal")
   lines                JournalLine[]
   sourceLinks          JournalSourceLink[]
   cashBankTransactions CashBankTransaction[]
   openingBalance       OpeningBalance?
   expense              Expense?
+  transferDispatch     InternalTransferLedger? @relation("TransferDispatchJournal")
+  transferReceipt      InternalTransferLedger? @relation("TransferReceiptJournal")
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -2215,6 +2230,8 @@ model InventoryPosting {
   stockMutations     StockMutation[]
   costAllocations    InventoryCostAllocation[]
   openingBalanceLine OpeningBalanceLine?
+  transferDispatch   InternalTransferLedger?   @relation("TransferDispatchPosting")
+  transferReceipt    InternalTransferLedger?   @relation("TransferReceiptPosting")
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])
@@ -2414,18 +2431,50 @@ model Shipment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  stockRequest  StockRequest          @relation(fields: [stockRequestId], references: [id])
-  fromBranch    Branch                @relation("ShipmentFrom", fields: [fromBranchId], references: [id])
-  toBranch      Branch                @relation("ShipmentTo", fields: [toBranchId], references: [id])
-  items         ShipmentItem[]
-  discrepancies ShipmentDiscrepancy[]
-  overstocks    BranchOverstock[]
+  stockRequest     StockRequest            @relation(fields: [stockRequestId], references: [id])
+  fromBranch       Branch                  @relation("ShipmentFrom", fields: [fromBranchId], references: [id])
+  toBranch         Branch                  @relation("ShipmentTo", fields: [toBranchId], references: [id])
+  items            ShipmentItem[]
+  discrepancies    ShipmentDiscrepancy[]
+  overstocks       BranchOverstock[]
+  internalTransfer InternalTransferLedger?
 
   @@index([toBranchId, status])
   @@index([status])
   @@index([shippedAt])
   @@index([receivedAt])
   @@map("shipments")
+}
+
+model InternalTransferLedger {
+  id                         String                 @id @default(cuid())
+  shipmentId                 String                 @unique
+  fromBranchId               String
+  toBranchId                 String
+  status                     InternalTransferStatus @default(IN_TRANSIT)
+  currency                   String                 @default("IDR")
+  totalValue                 Decimal                @db.Decimal(18, 4)
+  receivedValue              Decimal                @default(0) @db.Decimal(18, 4)
+  dispatchInventoryPostingId String                 @unique
+  receiptInventoryPostingId  String?                @unique
+  dispatchJournalEntryId     String                 @unique
+  receiptJournalEntryId      String?                @unique
+  dispatchedAt               DateTime
+  receivedAt                 DateTime?
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  shipment                 Shipment          @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  fromBranch               Branch            @relation("InternalTransferFromBranch", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranch                 Branch            @relation("InternalTransferToBranch", fields: [toBranchId], references: [id], onDelete: Restrict)
+  dispatchInventoryPosting InventoryPosting  @relation("TransferDispatchPosting", fields: [dispatchInventoryPostingId], references: [id], onDelete: Restrict)
+  receiptInventoryPosting  InventoryPosting? @relation("TransferReceiptPosting", fields: [receiptInventoryPostingId], references: [id], onDelete: Restrict)
+  dispatchJournalEntry     JournalEntry      @relation("TransferDispatchJournal", fields: [dispatchJournalEntryId], references: [id], onDelete: Restrict)
+  receiptJournalEntry      JournalEntry?     @relation("TransferReceiptJournal", fields: [receiptJournalEntryId], references: [id], onDelete: Restrict)
+
+  @@index([fromBranchId, status])
+  @@index([toBranchId, status])
+  @@map("internal_transfer_ledgers")
 }
 
 model ShipmentItem {

@@ -48,6 +48,7 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   StockRequest: 'INVENTORY',
   Shipment: 'INVENTORY',
   Inventory: 'INVENTORY',
+  InternalTransferLedger: 'INVENTORY',
   InventoryItem: 'INVENTORY',
   StockMutation: 'INVENTORY',
   Overstock: 'INVENTORY',

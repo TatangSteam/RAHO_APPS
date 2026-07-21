@@ -650,10 +650,13 @@ export async function listInventoryPostings(actorUserId: string, query: Inventor
 export async function reconcileInventory(actorUserId: string, branchId: string) {
   await assertBranchAccess(actorUserId, branchId);
   await assertPermission(actorUserId, PERMISSIONS.INVENTORY_RECONCILE, branchId);
-  const items = await prisma.inventoryItem.findMany({
-    where: { branchId },
-    include: { balances: { include: { costLayers: true } }, masterProduct: true },
-  });
+  const [items, openTransfers] = await Promise.all([
+    prisma.inventoryItem.findMany({
+      where: { branchId },
+      include: { balances: { include: { costLayers: true } }, masterProduct: true },
+    }),
+    prisma.internalTransferLedger.findMany({ where: { fromBranchId: branchId, status: { in: ['IN_TRANSIT', 'DISCREPANCY'] } } }),
+  ]);
   const results = items.map((item) => {
     const balanceQty = item.balances.reduce((sum, balance) => sum.add(balance.onHandQty), new Prisma.Decimal(0));
     const valuedLayerQty = item.balances.reduce(
@@ -681,6 +684,9 @@ export async function reconcileInventory(actorUserId: string, branchId: string) 
     };
   });
   const mismatches = results.filter((result) => !result.balanceMatchesMirror || !result.layerMatchesBalance);
+  const layerValue = results.reduce((sum, result) => sum.add(result.assetValue), new Prisma.Decimal(0));
+  const inTransitValue = openTransfers.reduce((sum, transfer) => sum.add(transfer.totalValue.sub(transfer.receivedValue)), new Prisma.Decimal(0));
+  const totalInventoryValue = layerValue.add(inTransitValue);
   await logAudit({ userId: actorUserId, branchId, action: 'VERIFY', resource: 'Inventory', resourceId: branchId, afterData: { checked: results.length, mismatches: mismatches.length } });
-  return { checked: results.length, mismatchCount: mismatches.length, mismatches, results };
+  return { checked: results.length, mismatchCount: mismatches.length, layerValue, inTransitValue, totalInventoryValue, mismatches, results };
 }

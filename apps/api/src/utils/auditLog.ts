@@ -115,6 +115,7 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   InventoryBatch: 'INVENTORY',
   InventoryPosting: 'INVENTORY',
   InventoryCostLayer: 'INVENTORY',
+  InternalTransferLedger: 'INVENTORY',
   StockReservation: 'INVENTORY',
   Overstock: 'INVENTORY',
   Referral: 'REFERRAL',

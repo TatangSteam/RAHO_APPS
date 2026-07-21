@@ -7,6 +7,7 @@ import {
   LogisticLocationType,
   LogisticTransactionType,
   Role,
+  Prisma,
   ShipmentStatus,
   StockMutationType,
   StockRequestStatus,
@@ -23,6 +24,7 @@ import {
   logisticStaffRoles,
   stockShipmentRoles,
 } from './logistics.access';
+import { dispatchInternalTransfer, receiveInternalTransfer } from './services/internal-transfer-posting.service';
 
 type LogisticsActor = {
   userId: string;
@@ -1249,33 +1251,35 @@ export class LogisticsService {
         toBranch: true,
         stockRequest: true,
         items: { include: { masterProduct: true } },
+        internalTransfer: true,
       },
     });
 
     if (!shipment) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
-    if (shipment.status !== ShipmentStatus.PREPARING) {
+    if (shipment.status !== ShipmentStatus.PREPARING && !(shipment.status === ShipmentStatus.SHIPPED && shipment.internalTransfer)) {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat dikirim saat PREPARING' };
     }
     if (shipment.fromBranch.type !== BranchType.PUSAT) {
       throw { status: 422, code: 'INVALID_SOURCE_BRANCH', message: 'Sumber shipment harus branch PUSAT' };
     }
     await this.assertManagerBranchAccess(actor, shipment.toBranchId);
+    await this.assertManagerBranchAccess(actor, shipment.fromBranchId);
+
+    if (shipment.status === ShipmentStatus.SHIPPED && shipment.internalTransfer) {
+      return this.formatBranchShipment(shipment);
+    }
 
     const result = await prisma.$transaction(async (tx) => {
-      const changes: MovementChange[] = [];
-      for (const item of shipment.items) {
-        const quantity = Number(item.sentQty);
-        if (quantity <= 0) continue;
-        changes.push(await this.decrementInventoryStock(tx, {
-          branchId: shipment.fromBranchId,
-          masterProductId: item.masterProductId,
-          quantity,
-          userId: actor.userId,
-          referenceType: 'SHIPMENT',
-          referenceId: shipmentId,
-          notes,
-        }));
+      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      if (!locked) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
+      if (locked.status !== ShipmentStatus.PREPARING) {
+        if (locked.status === ShipmentStatus.SHIPPED) {
+          return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { fromBranch: true, toBranch: true, items: { include: { masterProduct: true } }, internalTransfer: true } });
+        }
+        throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat dikirim saat PREPARING' };
       }
+      const transfer = await dispatchInternalTransfer(tx, shipmentId, actor.userId, new Date(), notes);
+      const changes: MovementChange[] = transfer.movements;
 
       await this.createLogisticTransaction(tx, {
         type: LogisticTransactionType.SHIPMENT,
@@ -1317,6 +1321,7 @@ export class LogisticsService {
           fromBranch: true,
           toBranch: true,
           items: { include: { masterProduct: true } },
+          internalTransfer: true,
         },
       });
     });
@@ -1352,24 +1357,38 @@ export class LogisticsService {
         toBranch: true,
         stockRequest: true,
         items: { include: { masterProduct: true } },
+        internalTransfer: true,
       },
     });
 
     if (!shipment) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
-    if (shipment.status !== ShipmentStatus.SHIPPED) {
+    if (shipment.status !== ShipmentStatus.SHIPPED && !([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId)) {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat diterima saat SHIPPED' };
     }
 
     await this.assertBranchReceiverAccess(actor, shipment.toBranchId);
 
+    if ([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId) {
+      return this.formatBranchShipment(shipment);
+    }
+
     if (input.discrepancies?.length) {
       input.discrepancies.forEach((item) => this.requireNotes(item.notes, 'Catatan discrepancy wajib diisi'));
     }
 
-    const receivedMap = new Map((input.receivedItems || []).map((item) => [item.masterProductId, Number(item.receivedQty)]));
-    const hasDiscrepancy = Boolean(input.discrepancies?.length);
+    const receivedMap = new Map(shipment.items.map((item) => [item.masterProductId, Number(item.sentQty)]));
+    (input.receivedItems || []).forEach((item) => receivedMap.set(item.masterProductId, Number(item.receivedQty)));
+    const hasQuantityDifference = shipment.items.some((item) => Number(receivedMap.get(item.masterProductId)) !== Number(item.sentQty));
+    const hasDiscrepancy = Boolean(input.discrepancies?.length) || hasQuantityDifference;
     const result = await prisma.$transaction(async (tx) => {
-      const changes: MovementChange[] = [];
+      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      if (!locked) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
+      if (locked.status !== ShipmentStatus.SHIPPED) {
+        if ([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(locked.status)) {
+          return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { fromBranch: true, toBranch: true, items: { include: { masterProduct: true } }, discrepancies: true, internalTransfer: true } });
+        }
+        throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat diterima saat SHIPPED' };
+      }
 
       for (const item of shipment.items) {
         const receivedQty = receivedMap.has(item.masterProductId)
@@ -1381,18 +1400,10 @@ export class LogisticsService {
           data: { receivedQty },
         });
 
-        if (receivedQty > 0) {
-          changes.push(await this.incrementBranchInventoryStock(tx, {
-            branchId: shipment.toBranchId,
-            masterProductId: item.masterProductId,
-            quantity: receivedQty,
-            userId: actor.userId,
-            referenceType: 'SHIPMENT',
-            referenceId: shipmentId,
-            notes,
-          }));
-        }
       }
+
+      const transferReceipt = await receiveInternalTransfer(tx, shipmentId, actor.userId, new Date(), receivedMap, notes);
+      const changes: MovementChange[] = transferReceipt.movements;
 
       for (const discrepancy of input.discrepancies || []) {
         const product = shipment.items.find((item) => item.masterProductId === discrepancy.masterProductId)?.masterProduct;
@@ -1458,6 +1469,7 @@ export class LogisticsService {
           toBranch: true,
           items: { include: { masterProduct: true } },
           discrepancies: true,
+          internalTransfer: true,
         },
       });
     });
@@ -2572,6 +2584,11 @@ export class LogisticsService {
         discrepancyType: item.discrepancyType,
         notes: item.notes,
       })) || [],
+      internalTransfer: shipment.internalTransfer ? {
+        status: shipment.internalTransfer.status,
+        totalValue: shipment.internalTransfer.totalValue?.toFixed?.(4),
+        receivedValue: shipment.internalTransfer.receivedValue?.toFixed?.(4),
+      } : null,
       createdAt: shipment.createdAt?.toISOString?.(),
       updatedAt: shipment.updatedAt?.toISOString?.(),
     };
