@@ -662,7 +662,7 @@ export interface PurchaseOrderInventoryLine {
 export interface PurchaseOrderInventory {
   id: string;
   poNumber: string;
-  status: 'DRAFT' | 'APPROVED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CANCELLED';
+  status: 'ISSUED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'CLOSED' | 'CANCELLED';
   currency: string;
   orderDate: string;
   supplier: { id: string; supplierCode: string; name: string };

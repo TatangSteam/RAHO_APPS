@@ -1,4 +1,5 @@
 import {
+  AccountType,
   AccountingPeriodStatus,
   Prisma,
 } from '@prisma/client';
@@ -279,8 +280,8 @@ export async function postInventoryDerivedJournal(input: PostJournalInput, tx: D
     throw errors.badRequest('TRANSFER_JOURNAL_ACCOUNT_INVALID', 'Jurnal internal transfer hanya boleh memakai account aset 1300 dan 1310.');
   }
   const directionValid = relation === 'DISPATCH'
-    ? transitLine.debit.isPositive() && inventoryLine.credit.equals(transitLine.debit) && transitLine.credit.isZero() && inventoryLine.debit.isZero()
-    : inventoryLine.debit.isPositive() && transitLine.credit.equals(inventoryLine.debit) && inventoryLine.credit.isZero() && transitLine.debit.isZero();
+    ? transitLine.debit.greaterThan(0) && inventoryLine.credit.equals(transitLine.debit) && transitLine.credit.isZero() && inventoryLine.debit.isZero()
+    : inventoryLine.debit.greaterThan(0) && transitLine.credit.equals(inventoryLine.debit) && inventoryLine.credit.isZero() && transitLine.debit.isZero();
   if (!directionValid) {
     throw errors.badRequest('TRANSFER_JOURNAL_DIRECTION_INVALID', 'Arah debit/kredit jurnal internal transfer tidak sesuai posting policy.');
   }
@@ -291,6 +292,45 @@ export async function postInventoryDerivedJournal(input: PostJournalInput, tx: D
     // The counter-branch line is system-derived from the immutable shipment,
     // but its accounting period must still be open.
     await findPostingPeriod(tx, branchId, posting.transactionDate);
+  }
+  return postWithinTransaction(tx, posting);
+}
+
+/** Strict system-derived posting path for purchasing/AP source documents. */
+export async function postPurchasingDerivedJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  if (posting.sourceLinks.length !== 1 || posting.lines.length !== 2) {
+    throw errors.badRequest('PURCHASING_JOURNAL_SHAPE_INVALID', 'Jurnal purchasing wajib memiliki satu source dan dua baris.');
+  }
+  const sourceType = posting.sourceLinks[0].sourceType.trim().toUpperCase();
+  const policy = {
+    GOODS_RECEIPT: { debit: '1300', credit: '2110', permission: PERMISSIONS.GOODS_RECEIPT_POST },
+    SUPPLIER_INVOICE: { debit: '2110', credit: '2100', permission: PERMISSIONS.AP_INVOICE_POST },
+  }[sourceType];
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+
+  if (policy) {
+    await assertPermission(posting.actorUserId, policy.permission, posting.branchId);
+    const debit = posting.lines.find((line) => line.accountCode === policy.debit);
+    const credit = posting.lines.find((line) => line.accountCode === policy.credit);
+    if (!debit || !credit || !debit.debit.greaterThan(0) || !credit.credit.equals(debit.debit)
+      || !debit.credit.isZero() || !credit.debit.isZero()) {
+      throw errors.badRequest('PURCHASING_JOURNAL_POLICY_INVALID', `Posting ${sourceType} harus debit ${policy.debit} dan kredit ${policy.credit}.`);
+    }
+  } else if (sourceType === 'SUPPLIER_PAYMENT') {
+    await assertPermission(posting.actorUserId, PERMISSIONS.AP_PAY, posting.branchId);
+    const ap = posting.lines.find((line) => line.accountCode === '2100');
+    const cashLine = posting.lines.find((line) => line.accountCode !== '2100');
+    if (!ap || !cashLine || !ap.debit.greaterThan(0) || !cashLine.credit.equals(ap.debit)
+      || !ap.credit.isZero() || !cashLine.debit.isZero()) {
+      throw errors.badRequest('AP_PAYMENT_JOURNAL_POLICY_INVALID', 'Pembayaran supplier harus debit AP 2100 dan kredit akun kas/bank.');
+    }
+    const cashAccount = await tx.account.findUnique({ where: { code: cashLine.accountCode } });
+    if (!cashAccount?.isActive || !cashAccount.allowPosting || cashAccount.type !== AccountType.ASSET) {
+      throw errors.badRequest('AP_PAYMENT_CASH_ACCOUNT_INVALID', 'Akun kredit pembayaran supplier harus akun aset kas/bank aktif.');
+    }
+  } else {
+    throw errors.badRequest('DERIVED_JOURNAL_SOURCE_INVALID', 'Source jurnal purchasing tidak didukung.');
   }
   return postWithinTransaction(tx, posting);
 }

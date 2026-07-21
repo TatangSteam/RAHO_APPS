@@ -11,7 +11,7 @@ describe('opening stock atomic posting contract', () => {
     expect(openingService).toContain('postJournal({');
     expect(openingService).toContain('receiveOpeningInventoryInTransaction(userId');
     expect(openingService).toMatch(/receiveOpeningInventoryInTransaction[\s\S]*?, tx\)/);
-    expect(inventoryService).toContain('type: InventoryPostingType.OPENING');
+    expect(inventoryService).toContain('receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.OPENING)');
     expect(inventoryService).toContain('await tx.inventoryCostLayer.create');
   });
 });

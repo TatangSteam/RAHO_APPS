@@ -294,26 +294,27 @@ export async function postOpeningInventory(actorUserId: string, input: OpeningIn
  * Opening-stock integration point. The caller owns the surrounding database
  * transaction so inventory cost layer and finance journal commit together.
  */
-export async function receiveOpeningInventoryInTransaction(
+async function receiveInboundInventoryInTransaction(
   actorUserId: string,
   input: ReceiveInventoryInput,
   tx: Tx,
+  postingType: InventoryPostingType,
 ) {
   await assertBranchAccess(actorUserId, input.branchId);
   await assertPermission(actorUserId, PERMISSIONS.INVENTORY_POST, input.branchId);
-  const payloadHash = hashPayload({ ...input, postingType: 'OPENING' });
+  const payloadHash = hashPayload({ ...input, postingType });
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing;
 
   const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
-  if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item opening tidak ditemukan dalam branch.');
+  if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item penerimaan tidak ditemukan dalam branch.');
   const product = await tx.masterProduct.findUnique({ where: { id: item.masterProductId } });
   if (!product?.isActive) throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
   const location = await assertLocationForItem(tx, item, input.stockLocationId);
 
   let batchId: string | null = null;
   if (product.tracksBatch) {
-    if (!input.batch) throw errors.badRequest('BATCH_REQUIRED', 'Batch wajib untuk opening stock product ini.');
+    if (!input.batch) throw errors.badRequest('BATCH_REQUIRED', 'Batch wajib untuk penerimaan product ini.');
     if (product.tracksExpiry && !input.batch.expiryDate) throw errors.badRequest('EXPIRY_REQUIRED', 'Expiry date wajib untuk product ini.');
     if (input.batch.manufactureDate && input.batch.expiryDate && input.batch.expiryDate <= input.batch.manufactureDate) {
       throw errors.badRequest('INVALID_BATCH_DATES', 'Expiry date harus setelah manufacture date.');
@@ -328,7 +329,7 @@ export async function receiveOpeningInventoryInTransaction(
       },
       update: {},
     });
-    if (batch.isBlocked) throw errors.unprocessable('BATCH_BLOCKED', 'Batch opening stock sedang diblokir.');
+    if (batch.isBlocked) throw errors.unprocessable('BATCH_BLOCKED', 'Batch penerimaan sedang diblokir.');
     batchId = batch.id;
   } else if (input.batch) {
     throw errors.badRequest('BATCH_NOT_ENABLED', 'Product ini tidak menggunakan batch tracking.');
@@ -354,10 +355,10 @@ export async function receiveOpeningInventoryInTransaction(
   const totalCost = quantity.mul(unitCost);
   const posting = await tx.inventoryPosting.create({
     data: {
-      postingNumber: postingNumber('OPN'),
+      postingNumber: postingNumber(postingType === InventoryPostingType.OPENING ? 'OPN' : 'RCV'),
       idempotencyKey: input.idempotencyKey,
       payloadHash,
-      type: InventoryPostingType.OPENING,
+      type: postingType,
       reasonCode: input.reasonCode,
       sourceType: input.sourceType,
       sourceId: input.sourceId,
@@ -403,6 +404,15 @@ export async function receiveOpeningInventoryInTransaction(
     },
   });
   return { ...posting, stockMutationId: mutation.id, costLayerId: costLayer.id };
+}
+
+export function receiveOpeningInventoryInTransaction(actorUserId: string, input: ReceiveInventoryInput, tx: Tx) {
+  return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.OPENING);
+}
+
+/** Purchasing integration point: receipt, FIFO layer, and journal share one DB transaction. */
+export function receivePurchasedInventoryInTransaction(actorUserId: string, input: ReceiveInventoryInput, tx: Tx) {
+  return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.RECEIPT);
 }
 
 function ensureUniqueIssueLines(input: IssueInventoryInput) {

@@ -8,7 +8,7 @@ import {
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
-  Database, LockKeyhole, Warehouse, PackageCheck,
+  Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -242,6 +242,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/expenses',
         icon: <ReceiptText size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN'],
+      },
+      {
+        label: 'Purchasing & AP',
+        href: '/purchasing',
+        icon: <ShoppingCart size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LOGISTIK'],
       },
     ],
   },

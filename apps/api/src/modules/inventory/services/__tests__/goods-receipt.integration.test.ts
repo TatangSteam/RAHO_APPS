@@ -14,11 +14,13 @@ describeDatabase('purchase Goods Receipt ledger', () => {
   const runId = randomUUID().replace(/-/g, '').slice(0, 14);
   const actorId = `gr_user_${runId}`;
   const branchId = `gr_branch_${runId}`;
+  const accountingPeriodId = `gr_period_${runId}`;
   const warehouseId = `gr_wh_${runId}`;
   const locationId = `gr_loc_${runId}`;
   const uomId = `gr_uom_${runId}`;
   const productId = `gr_product_${runId}`;
   const supplierId = `gr_supplier_${runId}`;
+  const purchaseRequestId = `gr_pr_${runId}`;
   const purchaseOrderId = `gr_po_${runId}`;
   const purchaseOrderItemId = `gr_poi_${runId}`;
   const batchNumber = `LOT-${runId}`;
@@ -34,6 +36,19 @@ describeDatabase('purchase Goods Receipt ledger', () => {
     });
     await prisma.branch.create({
       data: { id: branchId, branchCode: `GR${runId.slice(0, 6)}`, name: `Goods Receipt ${runId}` },
+    });
+    await prisma.accountingPeriod.create({
+      data: {
+        id: accountingPeriodId,
+        name: `Goods Receipt 2026 ${runId}`,
+        fiscalYear: 2026,
+        periodNo: 1,
+        startDate: new Date('2026-01-01T00:00:00.000Z'),
+        endDate: new Date('2026-12-31T23:59:59.999Z'),
+        branchId,
+        scopeKey: branchId,
+        createdBy: actorId,
+      },
     });
     await prisma.warehouse.create({
       data: { id: warehouseId, branchId, code: 'MAIN', name: 'Main', isDefault: true, createdBy: actorId },
@@ -61,30 +76,48 @@ describeDatabase('purchase Goods Receipt ledger', () => {
       },
     });
     await prisma.supplier.create({
-      data: { id: supplierId, supplierCode: `SUP-${runId}`, name: `Supplier ${runId}`, createdBy: actorId },
+      data: { id: supplierId, code: `SUP-${runId}`, name: `Supplier ${runId}`, createdBy: actorId },
+    });
+    await prisma.purchaseRequest.create({
+      data: {
+        id: purchaseRequestId,
+        requestNumber: `PR-${runId}`,
+        postingKey: `PR-POST-${runId}`,
+        payloadHash: runId,
+        branchId,
+        requestDate: new Date('2026-07-01T00:00:00.000Z'),
+        description: 'Purchase request for Goods Receipt integration test.',
+        status: 'CONVERTED',
+        createdBy: actorId,
+      },
     });
     await prisma.purchaseOrder.create({
       data: {
         id: purchaseOrderId,
         poNumber: `PO-${runId}`,
+        postingKey: `PO-POST-${runId}`,
+        payloadHash: runId,
+        purchaseRequestId,
         supplierId,
         branchId,
-        status: PurchaseOrderStatus.APPROVED,
+        status: PurchaseOrderStatus.ISSUED,
         currency: 'IDR',
         orderDate: new Date('2026-07-01T00:00:00.000Z'),
-        approvedBy: actorId,
-        approvedAt: new Date('2026-07-01T01:00:00.000Z'),
         totalAmount: '1255',
         createdBy: actorId,
         items: {
           create: {
             id: purchaseOrderItemId,
-            lineNumber: 1,
+            lineNo: 1,
             masterProductId: productId,
             uomId,
             destinationStockLocationId: locationId,
+            skuSnapshot: `GR-${runId}`,
+            nameSnapshot: `Goods Receipt Product ${runId}`,
+            uomSnapshot: 'unit',
             orderedQty: '10',
-            unitCost: '125.5',
+            unitPrice: '125.5',
+            lineTotal: '1255',
           },
         },
       },
@@ -92,10 +125,12 @@ describeDatabase('purchase Goods Receipt ledger', () => {
   }, 30_000);
 
   afterAll(async () => {
-    const receiptIds = (await prisma.goodsReceipt.findMany({
+    const receiptRows = await prisma.goodsReceipt.findMany({
       where: { purchaseOrderId },
-      select: { id: true },
-    })).map((row) => row.id);
+      select: { id: true, journalEntryId: true },
+    });
+    const receiptIds = receiptRows.map((row) => row.id);
+    const journalIds = receiptRows.map((row) => row.journalEntryId);
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId }] } });
     await prisma.goodsReceiptItem.deleteMany({ where: { goodsReceiptId: { in: receiptIds } } });
     await prisma.goodsReceipt.deleteMany({ where: { id: { in: receiptIds } } });
@@ -107,7 +142,13 @@ describeDatabase('purchase Goods Receipt ledger', () => {
     await prisma.inventoryBatch.deleteMany({ where: { masterProductId: productId } });
     await prisma.purchaseOrderItem.deleteMany({ where: { purchaseOrderId } });
     await prisma.purchaseOrder.deleteMany({ where: { id: purchaseOrderId } });
+    await prisma.purchaseRequest.deleteMany({ where: { id: purchaseRequestId } });
     await prisma.supplier.deleteMany({ where: { id: supplierId } });
+    await prisma.journalSourceLink.deleteMany({ where: { journalEntryId: { in: journalIds } } });
+    await prisma.journalLine.deleteMany({ where: { journalEntryId: { in: journalIds } } });
+    await prisma.journalEntry.deleteMany({ where: { id: { in: journalIds } } });
+    await prisma.journalSequence.deleteMany({ where: { scopeKey: branchId } });
+    await prisma.accountingPeriod.deleteMany({ where: { id: accountingPeriodId } });
     await prisma.masterProduct.deleteMany({ where: { id: productId } });
     await prisma.unitOfMeasure.deleteMany({ where: { id: uomId } });
     await prisma.stockLocation.deleteMany({ where: { id: locationId } });

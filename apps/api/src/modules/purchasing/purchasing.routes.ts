@@ -1,0 +1,23 @@
+import { Router } from 'express';
+import { authenticate } from '@middleware/authenticate';
+import { requirePermission } from '@middleware/requirePermission';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import * as controller from './purchasing.controller';
+
+const router = Router();
+router.use(authenticate);
+router.get('/suppliers', requirePermission(PERMISSIONS.SUPPLIER_READ), controller.suppliers);
+router.post('/suppliers', requirePermission(PERMISSIONS.SUPPLIER_MANAGE), controller.createSupplier);
+router.patch('/suppliers/:id', requirePermission(PERMISSIONS.SUPPLIER_MANAGE), controller.updateSupplier);
+router.get('/purchase-requests', requirePermission(PERMISSIONS.PURCHASE_REQUEST_READ), controller.purchaseRequests);
+router.post('/purchase-requests', requirePermission(PERMISSIONS.PURCHASE_REQUEST_CREATE), controller.createPurchaseRequest);
+router.post('/purchase-requests/:id/submit', requirePermission(PERMISSIONS.PURCHASE_REQUEST_CREATE), controller.submitPurchaseRequest);
+router.post('/purchase-requests/:id/approve', requirePermission(PERMISSIONS.PURCHASE_REQUEST_APPROVE), controller.approvePurchaseRequest);
+router.post('/purchase-requests/:id/reject', requirePermission(PERMISSIONS.PURCHASE_REQUEST_APPROVE), controller.rejectPurchaseRequest);
+router.get('/purchase-orders', requirePermission(PERMISSIONS.PURCHASE_ORDER_READ), controller.purchaseOrders);
+router.post('/purchase-orders', requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), controller.createPurchaseOrder);
+router.post('/purchase-orders/:id/goods-receipts', requirePermission(PERMISSIONS.GOODS_RECEIPT_POST), controller.postGoodsReceipt);
+router.get('/accounts-payable', requirePermission(PERMISSIONS.AP_READ), controller.accountsPayable);
+router.post('/supplier-invoices', requirePermission(PERMISSIONS.AP_INVOICE_POST), controller.postSupplierInvoice);
+router.post('/supplier-invoices/:id/payments', requirePermission(PERMISSIONS.AP_PAY), controller.paySupplierInvoice);
+export default router;

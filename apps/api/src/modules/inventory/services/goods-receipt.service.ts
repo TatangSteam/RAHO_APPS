@@ -6,16 +6,19 @@ import {
   InventoryValuationStatus,
   Prisma,
   PurchaseOrderStatus,
+  SupplierStatus,
   StockMutationType,
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
+import { postPurchasingDerivedJournal } from '@modules/accounting/accounting.service';
 import {
   assertBranchAccess,
   assertPermission,
   getAccessibleBranchIds,
 } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import { buildPurchasingJournal, exactCurrency } from '@modules/purchasing/purchasing.helpers';
 import type {
   GoodsReceiptListQuery,
   PostGoodsReceiptInput,
@@ -107,14 +110,15 @@ async function loadGoodsReceipt(id: string) {
           costLayer: true,
           stockMutation: true,
         },
-        orderBy: [{ purchaseOrderItem: { lineNumber: 'asc' } }, { id: 'asc' }],
+        orderBy: [{ purchaseOrderItem: { lineNo: 'asc' } }, { id: 'asc' }],
       },
+      journalEntry: { select: { id: true, journalNumber: true } },
     },
   });
 }
 
 export async function listReceivablePurchaseOrders(actorUserId: string, query: PurchaseOrderListQuery) {
-  await assertPermission(actorUserId, PERMISSIONS.PURCHASING_PO_READ, query.branchId);
+  await assertPermission(actorUserId, PERMISSIONS.PURCHASE_ORDER_READ, query.branchId);
   const accessibleBranchIds = await getAccessibleBranchIds(actorUserId);
   if (query.branchId) await assertBranchAccess(actorUserId, query.branchId);
   const where: Prisma.PurchaseOrderWhereInput = {
@@ -141,9 +145,9 @@ export async function listReceivablePurchaseOrders(actorUserId: string, query: P
             uom: true,
             destinationStockLocation: { include: { warehouse: true } },
           },
-          orderBy: { lineNumber: 'asc' },
+          orderBy: { lineNo: 'asc' },
         },
-        _count: { select: { receipts: true } },
+        _count: { select: { goodsReceipts: true } },
       },
       orderBy: [{ orderDate: 'desc' }, { id: 'desc' }],
       skip: (query.page - 1) * query.limit,
@@ -154,17 +158,21 @@ export async function listReceivablePurchaseOrders(actorUserId: string, query: P
   return {
     data: rows.map((row) => ({
       ...row,
+      supplier: { ...row.supplier, supplierCode: row.supplier.code },
       items: row.items.map((item) => ({
         ...item,
+        lineNumber: item.lineNo,
+        unitCost: item.unitPrice,
         remainingQty: item.orderedQty.sub(item.receivedQty),
       })),
+      _count: { receipts: row._count.goodsReceipts },
     })),
     meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
   };
 }
 
 export async function listGoodsReceipts(actorUserId: string, query: GoodsReceiptListQuery) {
-  await assertPermission(actorUserId, PERMISSIONS.PURCHASING_GOODS_RECEIPT_READ, query.branchId);
+  await assertPermission(actorUserId, PERMISSIONS.GOODS_RECEIPT_READ, query.branchId);
   const accessibleBranchIds = await getAccessibleBranchIds(actorUserId);
   if (query.branchId) await assertBranchAccess(actorUserId, query.branchId);
   const where: Prisma.GoodsReceiptWhereInput = {
@@ -182,14 +190,18 @@ export async function listGoodsReceipts(actorUserId: string, query: GoodsReceipt
         inventoryPosting: { select: { postingNumber: true } },
         items: { include: { purchaseOrderItem: { include: { masterProduct: true } }, batch: true } },
       },
-      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+      orderBy: [{ receiptDate: 'desc' }, { id: 'desc' }],
       skip: (query.page - 1) * query.limit,
       take: query.limit,
     }),
     prisma.goodsReceipt.count({ where }),
   ]);
   return {
-    data: rows,
+    data: rows.map((row) => ({
+      ...row,
+      receivedAt: row.receiptDate,
+      totalCost: row.totalValue,
+    })),
     meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
   };
 }
@@ -198,7 +210,7 @@ export async function getGoodsReceipt(actorUserId: string, id: string) {
   const scope = await prisma.goodsReceipt.findUnique({ where: { id }, select: { branchId: true } });
   if (!scope) throw errors.notFound('Goods Receipt tidak ditemukan.');
   await assertBranchAccess(actorUserId, scope.branchId);
-  await assertPermission(actorUserId, PERMISSIONS.PURCHASING_GOODS_RECEIPT_READ, scope.branchId);
+  await assertPermission(actorUserId, PERMISSIONS.GOODS_RECEIPT_READ, scope.branchId);
   return loadGoodsReceipt(id);
 }
 
@@ -213,7 +225,7 @@ export async function postGoodsReceipt(
   });
   if (!scope) throw errors.notFound('Purchase Order tidak ditemukan.');
   await assertBranchAccess(actorUserId, scope.branchId);
-  await assertPermission(actorUserId, PERMISSIONS.PURCHASING_GOODS_RECEIPT_POST, scope.branchId);
+  await assertPermission(actorUserId, PERMISSIONS.GOODS_RECEIPT_POST, scope.branchId);
 
   const payloadHash = hashPayload(normalizedPayload(purchaseOrderId, input));
   const result = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
@@ -231,17 +243,17 @@ export async function postGoodsReceipt(
       include: {
         supplier: true,
         branch: true,
-        items: { include: { masterProduct: true }, orderBy: { lineNumber: 'asc' } },
+        items: { include: { masterProduct: true }, orderBy: { lineNo: 'asc' } },
       },
     });
     if (!purchaseOrder) throw errors.notFound('Purchase Order tidak ditemukan.');
     if (
-      purchaseOrder.status !== PurchaseOrderStatus.APPROVED
+      purchaseOrder.status !== PurchaseOrderStatus.ISSUED
       && purchaseOrder.status !== PurchaseOrderStatus.PARTIALLY_RECEIVED
     ) {
       throw errors.conflict('PURCHASE_ORDER_NOT_RECEIVABLE', `PO berstatus ${purchaseOrder.status} dan tidak dapat diterima.`);
     }
-    if (!purchaseOrder.supplier.isActive) {
+    if (purchaseOrder.supplier.status !== SupplierStatus.ACTIVE) {
       throw errors.unprocessable('SUPPLIER_INACTIVE', 'Supplier PO sudah tidak aktif.');
     }
     if (input.receivedAt < purchaseOrder.orderDate) {
@@ -382,8 +394,24 @@ export async function postGoodsReceipt(
     );
     const totalCost = input.lines.reduce((sum, line) => {
       const orderItem = orderItemById.get(line.purchaseOrderItemId)!;
-      return sum.add(new Prisma.Decimal(line.quantity).mul(orderItem.unitCost));
+      return sum.add(new Prisma.Decimal(line.quantity).mul(orderItem.unitPrice));
     }, new Prisma.Decimal(0));
+    const totalValue = exactCurrency(totalCost, 'Nilai Goods Receipt');
+    const generatedReceiptNumber = receiptNumber(purchaseOrder.branch.branchCode);
+    const postedJournal = await postPurchasingDerivedJournal({
+      postingKey: `GOODS_RECEIPT:${receiptId}`,
+      transactionDate: input.receivedAt,
+      branchId: purchaseOrder.branchId,
+      actorUserId,
+      description: `Goods Receipt ${generatedReceiptNumber}`,
+      lines: buildPurchasingJournal('GOODS_RECEIPT', totalValue),
+      sourceLinks: [{
+        sourceType: 'GOODS_RECEIPT',
+        sourceId: receiptId,
+        sourceNumber: generatedReceiptNumber,
+      }],
+      metadata: { purchaseOrderId },
+    }, tx);
     const posting = await tx.inventoryPosting.create({
       data: {
         postingNumber: postingNumber(),
@@ -404,19 +432,21 @@ export async function postGoodsReceipt(
     const receipt = await tx.goodsReceipt.create({
       data: {
         id: receiptId,
-        receiptNumber: receiptNumber(purchaseOrder.branch.branchCode),
+        receiptNumber: generatedReceiptNumber,
         purchaseOrderId,
         branchId: purchaseOrder.branchId,
         idempotencyKey: input.idempotencyKey,
         payloadHash,
+        receiptDate: input.receivedAt,
+        totalValue,
+        journalEntryId: postedJournal.journal.id,
         inventoryPostingId: posting.id,
+        evidenceReference: input.supplierDeliveryNumber,
         supplierDeliveryNumber: input.supplierDeliveryNumber,
         totalQuantity,
         quarantinedQuantity,
-        totalCost,
         notes: input.notes,
-        receivedBy: actorUserId,
-        receivedAt: input.receivedAt,
+        createdBy: actorUserId,
       },
     });
 
@@ -429,7 +459,7 @@ export async function postGoodsReceipt(
       const batchKey = batch?.id ?? 'NO_BATCH';
       const quantity = new Prisma.Decimal(line.quantity);
       const quarantineQty = line.condition === GoodsReceiptCondition.GOOD ? new Prisma.Decimal(0) : quantity;
-      const lineCost = quantity.mul(orderItem.unitCost);
+      const lineCost = quantity.mul(orderItem.unitPrice);
       const balance = await tx.inventoryBalance.upsert({
         where: {
           inventoryItemId_stockLocationId_batchKey: {
@@ -488,7 +518,7 @@ export async function postGoodsReceipt(
           sourceId: receipt.id,
           originalQty: quantity,
           remainingQty: quantity,
-          unitCost: orderItem.unitCost,
+          unitCost: orderItem.unitPrice,
           currency: purchaseOrder.currency,
           valuationStatus: InventoryValuationStatus.VALUED,
           receivedAt: input.receivedAt,
@@ -508,7 +538,7 @@ export async function postGoodsReceipt(
           condition: line.condition,
           quantity,
           quarantineQty,
-          unitCost: orderItem.unitCost,
+          unitCost: orderItem.unitPrice,
           totalCost: lineCost,
           notes: line.notes,
         },
@@ -549,6 +579,7 @@ export async function postGoodsReceipt(
           purchaseOrderId,
           poNumber: purchaseOrder.poNumber,
           inventoryPostingId: posting.id,
+          journalEntryId: postedJournal.journal.id,
           totalQuantity: totalQuantity.toFixed(4),
           quarantinedQuantity: quarantinedQuantity.toFixed(4),
           totalCost: totalCost.toFixed(4),
