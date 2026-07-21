@@ -1,5 +1,5 @@
-import { createHash } from 'crypto';
-import { Prisma, StockRequestStatus, StockReservationStatus } from '@prisma/client';
+import { createHash, randomUUID } from 'crypto';
+import { AuditAction, Prisma, StockRequestStatus, StockReservationStatus } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@modules/iam/authorization.service';
@@ -67,6 +67,7 @@ async function loadRequestResult(requestId: string) {
         },
         orderBy: [{ stockRequestItemId: 'asc' }, { inventoryBalanceId: 'asc' }],
       },
+      shipment: { include: { items: true } },
     },
   });
 }
@@ -212,13 +213,36 @@ export async function approveAndReserveStockRequest(
         approvalPayloadHash: payloadHash,
       },
     });
+
+    const existingShipment = await tx.shipment.findUnique({ where: { stockRequestId: request.id } });
+    const approvedLines = normalized.lines.filter((line) => new Prisma.Decimal(line.approvedQty).greaterThan(0));
+    if (!existingShipment && approvedLines.length > 0) {
+      await tx.shipment.create({
+        data: {
+          shipmentCode: `SHP-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+          stockRequestId: request.id,
+          fromBranchId: input.sourceBranchId,
+          toBranchId: request.branchId,
+          items: {
+            create: approvedLines.map((line) => {
+                const requestItem = requestItems.get(line.stockRequestItemId)!;
+                return {
+                  masterProductId: requestItem.masterProductId,
+                  sentQty: new Prisma.Decimal(line.approvedQty),
+                  requestedQty: requestItem.finalQty ?? requestItem.requestedQty,
+                };
+              }),
+          },
+        },
+      });
+    }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
   const result = await loadRequestResult(requestId);
   await logAudit({
     userId: actorUserId,
     branchId: input.sourceBranchId,
-    action: 'APPROVE',
+    action: AuditAction.STOCK_REQUEST,
     resource: 'StockReservation',
     resourceId: requestId,
     afterData: {
@@ -296,6 +320,11 @@ export async function releaseStockRequestReservations(
           releaseReason: input.reason,
         },
       });
+    }
+
+    const preparingShipment = await tx.shipment.findUnique({ where: { stockRequestId: requestId } });
+    if (preparingShipment?.status === 'PREPARING') {
+      await tx.shipment.delete({ where: { id: preparingShipment.id } });
     }
 
     await tx.stockRequest.update({

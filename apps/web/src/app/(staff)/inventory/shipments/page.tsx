@@ -10,7 +10,7 @@ import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileTe
 import { ShipModal, ReceiveModal, DetailModal, NotesModal, SendShortageModal, EditShipmentModal } from './components';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 
-type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
+type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
 type ShipmentQueryParams = NonNullable<Parameters<typeof inventoryApi.getShipments>[0]>;
 type ApiErrorLike = {
   response?: {
@@ -23,6 +23,7 @@ type ApiErrorLike = {
 const STATUS_LABELS: Record<string, string> = {
   PREPARING: 'Sedang Disiapkan',
   SHIPPED: 'Dikirim',
+  PARTIALLY_RECEIVED: 'Diterima Sebagian',
   RECEIVED: 'Diterima',
   RECEIVED_WITH_ISSUE: 'Diterima (Ada Masalah)',
 };
@@ -220,6 +221,8 @@ export default function ShipmentsPage() {
         return 'bg-amber-500/20 text-amber-400 border-amber-500/30';
       case 'SHIPPED':
         return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'PARTIALLY_RECEIVED':
+        return 'bg-sky-500/20 text-sky-400 border-sky-500/30';
       case 'RECEIVED':
         return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
       case 'RECEIVED_WITH_ISSUE':
@@ -235,6 +238,8 @@ export default function ShipmentsPage() {
         return <Package className="h-3.5 w-3.5" />;
       case 'SHIPPED':
         return <Truck className="h-3.5 w-3.5" />;
+      case 'PARTIALLY_RECEIVED':
+        return <Inbox className="h-3.5 w-3.5" />;
       case 'RECEIVED':
         return <Inbox className="h-3.5 w-3.5" />;
       case 'RECEIVED_WITH_ISSUE':
@@ -245,7 +250,7 @@ export default function ShipmentsPage() {
   };
 
   const canShip = (shipment: Shipment) => 
-    ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && 
+    ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '') &&
     shipment.status === 'PREPARING';
 
   const canEditShipment = (shipment: Shipment) =>
@@ -253,12 +258,13 @@ export default function ShipmentsPage() {
     shipment.status === 'PREPARING';
     
   const canReceive = (shipment: Shipment) =>
-    user?.role === 'ADMIN_CABANG' &&
-    shipment.status === 'SHIPPED';
+    ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'].includes(user?.role || '') &&
+    ['SHIPPED', 'PARTIALLY_RECEIVED'].includes(shipment.status);
 
   const canReviewIssue = (shipment: Shipment) =>
     ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') &&
     shipment.status === 'RECEIVED_WITH_ISSUE' &&
+    !shipment.isLedgerManaged &&
     !shipment.approvedAt;
 
   const openIssueReviewModal = async (decision: ShipmentIssueDecision) => {
@@ -290,6 +296,7 @@ export default function ShipmentsPage() {
     { value: 'ALL', label: 'Semua', icon: <FileText className="h-4 w-4" /> },
     { value: 'PREPARING', label: 'Disiapkan', icon: <Package className="h-4 w-4" /> },
     { value: 'SHIPPED', label: 'Dikirim', icon: <Truck className="h-4 w-4" /> },
+    { value: 'PARTIALLY_RECEIVED', label: 'Sebagian', icon: <Inbox className="h-4 w-4" /> },
     { value: 'RECEIVED', label: 'Diterima', icon: <Inbox className="h-4 w-4" /> },
   ];
 

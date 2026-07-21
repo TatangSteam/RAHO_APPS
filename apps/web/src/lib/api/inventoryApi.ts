@@ -42,9 +42,13 @@ export interface CreateInvoiceInput {
 }
 
 export interface ReceiveShipmentInput {
+  idempotencyKey?: string;
+  isFinal?: boolean;
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
+    quarantineQty?: number;
+    stockLocationId?: string;
     unit?: string;
   }>;
   discrepancies?: Array<{
@@ -61,6 +65,7 @@ export interface ReceiveShipmentInput {
 }
 
 export interface ShipShipmentInput {
+  idempotencyKey?: string;
   notes?: string;
   shipmentPhotoUrl?: string;
   shipmentPhotoName?: string;
@@ -251,6 +256,7 @@ export interface Shipment {
   toBranchAddress?: string | null;
   toBranchType?: string;
   status: string;
+  isLedgerManaged?: boolean;
   notes?: string;
   shipmentPhotoUrl?: string;
   shipmentPhotoName?: string;
@@ -262,6 +268,7 @@ export interface Shipment {
   totalItems?: number;
   hasDiscrepancies?: boolean;
   discrepancyCount?: number;
+  receiptCount?: number;
   items: Array<{
     id: string;
     masterProductId: string;
@@ -272,6 +279,7 @@ export interface Shipment {
     originalRequestedQty?: number; // Original request amount before overstock deduction
     overstockDeducted?: number; // Amount already deducted from overstock
     receivedQty?: number;
+    quarantineQty?: number;
     overstockQty?: number;
     overstockReason?: string;
     unit: string;
@@ -283,11 +291,33 @@ export interface Shipment {
     expectedQty: number;
     receivedQty: number;
     discrepancyType: string;
+    quarantinedQty?: number;
+    status?: 'OPEN' | 'RESOLVED';
     notes?: string;
     photoUrl?: string;
     photoFileName?: string;
     reportedBy?: string;
     createdAt?: string;
+  }>;
+  receipts?: Array<{
+    id: string;
+    receiptNumber: string;
+    isFinal: boolean;
+    totalQuantity: number;
+    quarantinedQuantity: number;
+    totalCost?: number;
+    evidenceFileUrl?: string;
+    evidenceFileName?: string;
+    receivedBy?: string;
+    receivedAt?: string;
+    items?: Array<{
+      masterProductId: string;
+      productName: string;
+      receivedQty: number;
+      quarantineQty: number;
+      unitCost: number;
+      totalCost: number;
+    }>;
   }>;
   stockRequest?: {
     id: string;
@@ -898,7 +928,12 @@ export const inventoryApi = {
    * Supports sending more items than requested (overstock)
    */
   shipShipment: (shipmentId: string, data?: ShipShipmentInput) => {
-    return api.post(`/inventory/shipments/${shipmentId}/ship`, data);
+    const idempotencyKey = data?.idempotencyKey || `SHIP-${shipmentId}-${crypto.randomUUID()}`;
+    return api.post(
+      `/inventory/shipments/${shipmentId}/ship`,
+      { ...data, idempotencyKey },
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    );
   },
 
   /**
@@ -906,7 +941,10 @@ export const inventoryApi = {
    */
   receiveShipment: (shipmentId: string, data: ReceiveShipmentInput) => {
     const formData = new FormData();
+    const idempotencyKey = data.idempotencyKey || `RECEIPT-${shipmentId}-${crypto.randomUUID()}`;
     formData.append('receiptFile', data.receiptFile);
+    formData.append('idempotencyKey', idempotencyKey);
+    formData.append('isFinal', String(data.isFinal ?? true));
 
     if (data.receivedItems) {
       formData.append('receivedItems', JSON.stringify(data.receivedItems));
@@ -920,7 +958,9 @@ export const inventoryApi = {
       formData.append('notes', data.notes);
     }
 
-    return api.post(`/inventory/shipments/${shipmentId}/receive`, formData);
+    return api.post(`/inventory/shipments/${shipmentId}/receive`, formData, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
   },
 
   /**

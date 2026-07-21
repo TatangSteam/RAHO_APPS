@@ -87,6 +87,8 @@ describeDatabase('opening stock and stock request reservations', () => {
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId: { in: [sourceBranchId, destinationBranchId] } }] } });
     await prisma.stockReservation.deleteMany({ where: { stockRequest: { requestedBy: actorId } } });
+    await prisma.shipmentItem.deleteMany({ where: { shipment: { stockRequest: { requestedBy: actorId } } } });
+    await prisma.shipment.deleteMany({ where: { stockRequest: { requestedBy: actorId } } });
     await prisma.stockRequest.deleteMany({ where: { requestedBy: actorId } });
     await prisma.inventoryCostAllocation.deleteMany({ where: { posting: { branchId: sourceBranchId } } });
     await prisma.stockMutation.deleteMany({ where: { inventoryItemId } });

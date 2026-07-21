@@ -66,6 +66,17 @@ export class ShipmentRetrievalService {
             masterProduct: true,
           },
         },
+        receipts: {
+          select: {
+            id: true,
+            receiptNumber: true,
+            isFinal: true,
+            totalQuantity: true,
+            quarantinedQuantity: true,
+            receivedAt: true,
+          },
+          orderBy: { receivedAt: 'asc' },
+        },
         stockRequest: {
           select: {
             id: true,
@@ -135,6 +146,7 @@ export class ShipmentRetrievalService {
             },
           },
         },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       });
 
       // Create a map: shipmentId-masterProductId -> mutation
@@ -165,6 +177,17 @@ export class ShipmentRetrievalService {
           include: {
             masterProduct: true,
           },
+        },
+        receipts: {
+          include: {
+            items: {
+              include: {
+                shipmentItem: { include: { masterProduct: true } },
+              },
+            },
+            discrepancies: true,
+          },
+          orderBy: { receivedAt: 'asc' },
         },
         stockRequest: {
           include: {
@@ -226,6 +249,7 @@ export class ShipmentRetrievalService {
       toBranchAddress: shipment.toBranch.address,
       toBranchType: shipment.stockRequest?.branch?.type,
       status: shipment.status,
+      isLedgerManaged: Boolean(shipment.shipIdempotencyKey || shipment.receipts?.length),
       notes: shipment.notes,
       shipmentPhotoUrl: shipment.shipmentPhotoUrl,
       receiptFileUrl: shipment.receiptFileUrl,
@@ -238,6 +262,7 @@ export class ShipmentRetrievalService {
       ), 0),
       hasDiscrepancies: shipment.discrepancies?.length > 0,
       discrepancyCount: shipment.discrepancies?.length || 0,
+      receiptCount: shipment.receipts?.length || 0,
       items: shipment.items.map((item: any) => {
         // Get original requestedQty and overstock info from StockRequestItem
         let originalRequestedQty = Number(item.sentQty); // Default to sentQty
@@ -291,6 +316,7 @@ export class ShipmentRetrievalService {
           receivedQty: item.receivedQty === null || item.receivedQty === undefined
             ? null
             : formatStockRequestQuantity(item.masterProduct, item.receivedQty),
+          quarantineQty: formatStockRequestQuantity(item.masterProduct, item.quarantineQty || 0),
           stockBefore: stockBefore === null ? null : formatStockRequestQuantity(item.masterProduct, stockBefore), // Stock quantity at destination branch before receiving
           stockAfter: stockAfter === null ? null : formatStockRequestQuantity(item.masterProduct, stockAfter), // Stock quantity at destination branch after receiving
           unit: getStockRequestUnit(item.masterProduct),
@@ -352,11 +378,33 @@ export class ShipmentRetrievalService {
         expectedQty: formatStockRequestQuantity(d.masterProduct, d.expectedQty),
         receivedQty: formatStockRequestQuantity(d.masterProduct, d.receivedQty),
         discrepancyType: d.discrepancyType,
+        quarantinedQty: formatStockRequestQuantity(d.masterProduct, d.quarantinedQty || 0),
+        status: d.status,
         notes: d.notes,
         photoUrl: d.photoUrl,
         photoFileName: d.photoFileName,
         reportedBy: d.reportedBy,
         createdAt: d.createdAt?.toISOString(),
+      })) || [],
+      receipts: shipment.receipts?.map((receipt: any) => ({
+        id: receipt.id,
+        receiptNumber: receipt.receiptNumber,
+        isFinal: receipt.isFinal,
+        totalQuantity: Number(receipt.totalQuantity),
+        quarantinedQuantity: Number(receipt.quarantinedQuantity),
+        totalCost: receipt.totalCost === undefined ? undefined : Number(receipt.totalCost),
+        evidenceFileUrl: receipt.evidenceFileUrl,
+        evidenceFileName: receipt.evidenceFileName,
+        receivedBy: receipt.receivedBy,
+        receivedAt: receipt.receivedAt?.toISOString(),
+        items: receipt.items?.map((item: any) => ({
+          masterProductId: item.shipmentItem.masterProductId,
+          productName: item.shipmentItem.masterProduct.name,
+          receivedQty: Number(item.receivedQty),
+          quarantineQty: Number(item.quarantineQty),
+          unitCost: Number(item.unitCost),
+          totalCost: Number(item.totalCost),
+        })),
       })) || [],
       // Full stock request
       stockRequest: shipment.stockRequest ? {

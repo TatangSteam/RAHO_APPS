@@ -105,6 +105,8 @@ const RESOURCE_MODULE_MAP: Record<string, string> = {
   MasterProduct: 'MASTER_PRODUCT',
   StockRequest: 'INVENTORY',
   Shipment: 'INVENTORY',
+  ShipmentReceipt: 'INVENTORY',
+  ShipmentDiscrepancy: 'INVENTORY',
   Inventory: 'INVENTORY',
   InventoryItem: 'INVENTORY',
   StockMutation: 'INVENTORY',

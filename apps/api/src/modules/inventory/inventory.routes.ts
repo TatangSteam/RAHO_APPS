@@ -676,11 +676,11 @@ router.post(
   shipmentController.shipShipment.bind(shipmentController)
 );
 
-// Receive shipment (ADMIN_CABANG)
+// Receive shipment according to permission and branch scope.
 router.post(
   '/shipments/:shipmentId/receive',
   authenticate,
-  authorize([Role.ADMIN_CABANG]),
+  authorize(canReceiveBranchStock),
   uploadShipmentReceipt.single('receiptFile'),
   shipmentController.receiveShipment.bind(shipmentController)
 );

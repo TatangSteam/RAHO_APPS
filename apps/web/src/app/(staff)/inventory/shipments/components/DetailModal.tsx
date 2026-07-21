@@ -82,7 +82,7 @@ export default function DetailModal({ shipment, onClose, onShip, onReceive, onRe
   const hasIssueHistory = Boolean(
     issueCount || shipment.hasDiscrepancies || shipment.status === 'RECEIVED_WITH_ISSUE' || shipment.approvedAt
   );
-  const hasOpenIssue = shipment.status === 'RECEIVED_WITH_ISSUE' && !shipment.approvedAt;
+  const hasOpenIssue = shipment.status === 'RECEIVED_WITH_ISSUE' && !shipment.approvedAt && !shipment.isLedgerManaged;
   const reviewHistory = (shipment.notes || '')
     .split('\n')
     .map(line => line.trim())

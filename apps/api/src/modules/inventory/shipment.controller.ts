@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ShipmentService } from './shipment.service';
 import { sendSuccess, sendError } from '../../utils/response';
-import { ShipmentStatus, Role, DiscrepancyType } from '@prisma/client';
+import { ShipmentStatus, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 
 const shipmentService = new ShipmentService();
@@ -40,7 +40,8 @@ export class ShipmentController {
   async shipShipment(req: Request, res: Response, next: NextFunction) {
     try {
       const { shipmentId } = req.params;
-      const { notes, shipmentPhotoUrl, shipmentPhotoName, items } = req.body;
+      const { notes, shipmentPhotoUrl, shipmentPhotoName, items, occurredAt } = req.body;
+      const idempotencyKey = req.body.idempotencyKey || req.header('Idempotency-Key');
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -52,6 +53,8 @@ export class ShipmentController {
         shipmentPhotoUrl,
         shipmentPhotoName,
         items,
+        occurredAt,
+        idempotencyKey,
       });
       return sendSuccess(res, result);
     } catch (err: any) {
@@ -74,7 +77,8 @@ export class ShipmentController {
       const { shipmentId } = req.params;
       const receivedItems = parseJsonField<any[]>(req.body.receivedItems, 'receivedItems');
       const discrepancies = parseJsonField<any[]>(req.body.discrepancies, 'discrepancies');
-      const { notes } = req.body;
+      const { notes, isFinal, occurredAt } = req.body;
+      const idempotencyKey = req.body.idempotencyKey || req.header('Idempotency-Key');
       const userId = req.user?.userId;
 
       if (!userId) {
@@ -85,25 +89,13 @@ export class ShipmentController {
         return sendError(res, 400, 'RECEIPT_FILE_REQUIRED', 'File tanda terima wajib diupload');
       }
 
-      // Validate discrepancies if provided
-      if (discrepancies && Array.isArray(discrepancies)) {
-        for (const d of discrepancies) {
-          if (!d.masterProductId || d.expectedQty === undefined || d.receivedQty === undefined || !d.discrepancyType) {
-            return sendError(res, 400, 'INVALID_DISCREPANCY', 'Setiap ketidaksesuaian harus memiliki masterProductId, expectedQty, receivedQty, dan discrepancyType');
-          }
-          
-          // Validate discrepancy type
-          const validTypes: DiscrepancyType[] = ['SHORTAGE', 'DAMAGE', 'WRONG_ITEM', 'OTHER'];
-          if (!validTypes.includes(d.discrepancyType)) {
-            return sendError(res, 400, 'INVALID_DISCREPANCY_TYPE', `Tipe ketidaksesuaian tidak valid. Gunakan: ${validTypes.join(', ')}`);
-          }
-        }
-      }
-
       const result = await shipmentService.receiveShipment(shipmentId, userId, {
         receivedItems,
         discrepancies,
         notes,
+        isFinal,
+        occurredAt,
+        idempotencyKey,
         receiptFile: req.file,
       });
       return sendSuccess(res, result);

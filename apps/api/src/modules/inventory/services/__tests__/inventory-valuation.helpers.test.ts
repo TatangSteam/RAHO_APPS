@@ -14,4 +14,11 @@ describe('inventory asset valuation contract', () => {
     expect(afterReservation.equals(beforeReservation)).toBe(true);
     expect(afterReservation.toFixed(2)).toBe('220000.00');
   });
+
+  it('nilai aset tetap utuh ketika stock masih parsial in-transit', () => {
+    const onHandLayers = [{ remainingQty: '4', unitCost: '125', valuationStatus: 'VALUED' as const }];
+    const transfers = [{ shippedQty: '6', receivedQty: '2', unitCost: '125' }];
+
+    expect(calculateInventoryAssetValue(onHandLayers, transfers).toFixed(4)).toBe('1000.0000');
+  });
 });

@@ -24,6 +24,7 @@ interface ShipModalProps {
 }
 
 export default function ShipModal({ shipment, onClose, onShip, loading }: ShipModalProps) {
+  const [idempotencyKey] = useState(() => `SHIP-${shipment.id}-${crypto.randomUUID()}`);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<ShipmentItemWithOverstock[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -119,6 +120,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
     if (!validate()) return;
 
     const data: ShipShipmentInput = {
+      idempotencyKey,
       notes: notes || undefined,
       items: items.map(item => {
         const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;

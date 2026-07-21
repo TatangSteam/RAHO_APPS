@@ -1,15 +1,24 @@
 // @ts-nocheck
 import { ShipmentStatus, DiscrepancyType, Role, AuditAction } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { errors } from '../../middleware/errorHandler';
 import { logAudit } from '../../utils/auditLog';
 import { ShipmentProcessingService } from './services/shipment-processing.service';
 import { ShipmentRetrievalService } from './services/shipment-retrieval.service';
 import { parseStockRequestQuantity } from './services/stock-request-units';
+import { dispatchShipmentSchema, receiveShipmentLedgerSchema } from './shipment-ledger.schema';
+import {
+  dispatchReservedShipment,
+  hasReservedShipment,
+  receiveReservedShipment,
+} from './services/shipment-ledger.service';
 
 interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
+    quarantineQty?: number;
+    stockLocationId?: string;
     unit?: string;
   }>;
   discrepancies?: Array<{
@@ -23,6 +32,9 @@ interface ReceiveShipmentInput {
     photoFileName?: string;
   }>;
   notes?: string;
+  idempotencyKey?: string;
+  isFinal?: boolean | string;
+  occurredAt?: string | Date;
   receiptFile?: Express.Multer.File;
 }
 
@@ -59,6 +71,8 @@ export class ShipmentService {
       notes?: string;
       shipmentPhotoUrl?: string;
       shipmentPhotoName?: string;
+      idempotencyKey?: string;
+      occurredAt?: string | Date;
       items?: Array<{
         masterProductId: string;
         sentQty: number;
@@ -67,6 +81,14 @@ export class ShipmentService {
       }>;
     }
   ) {
+    if (await hasReservedShipment(shipmentId)) {
+      const input = dispatchShipmentSchema.parse({
+        ...data,
+        idempotencyKey: data?.idempotencyKey,
+        occurredAt: data?.occurredAt,
+      });
+      return dispatchReservedShipment(userId, shipmentId, input);
+    }
     return await this.processingService.shipShipment(shipmentId, userId, data);
   }
 
@@ -75,6 +97,16 @@ export class ShipmentService {
    * Supports receiving with discrepancy reporting
    */
   async receiveShipment(shipmentId: string, userId: string, input: ReceiveShipmentInput = {}) {
+    if (await hasReservedShipment(shipmentId)) {
+      const parsed = receiveShipmentLedgerSchema.parse({
+        ...input,
+        idempotencyKey: input.idempotencyKey,
+        receivedItems: input.receivedItems,
+        discrepancies: input.discrepancies,
+        receiptFile: undefined,
+      });
+      return receiveReservedShipment(userId, shipmentId, parsed, { receiptFile: input.receiptFile });
+    }
     return await this.processingService.receiveShipment(shipmentId, userId, input);
   }
 
@@ -82,6 +114,12 @@ export class ShipmentService {
    * Review shipment issue (by Admin Manager / Super Admin)
    */
   async reviewShipmentIssue(shipmentId: string, userId: string, input: ReviewShipmentIssueInput) {
+    if (await hasReservedShipment(shipmentId)) {
+      throw errors.unprocessable(
+        'LEDGER_DISCREPANCY_REVIEW_REQUIRED',
+        'Discrepancy shipment ledger harus diselesaikan melalui workflow resolution/adjustment agar quarantine dan valuasi tetap konsisten.',
+      );
+    }
     return await this.processingService.reviewShipmentIssue(shipmentId, userId, input);
   }
 

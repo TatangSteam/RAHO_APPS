@@ -236,6 +236,7 @@ enum StockRequestStatus {
 enum StockReservationStatus {
   ACTIVE
   RELEASED
+  CONSUMED
 }
 
 enum PaymentVerificationStatus {
@@ -305,9 +306,15 @@ enum StockAdjustmentReason {
 enum ShipmentStatus {
   PREPARING
   SHIPPED
+  PARTIALLY_RECEIVED
   RECEIVED
   RECEIVED_WITH_ISSUE // Diterima dengan ketidaksesuaian
   APPROVED
+}
+
+enum ShipmentDiscrepancyStatus {
+  OPEN
+  RESOLVED
 }
 
 enum NotificationType {
@@ -2162,10 +2169,11 @@ model InventoryBatch {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 
-  masterProduct  MasterProduct        @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
-  balances       InventoryBalance[]
-  costLayers     InventoryCostLayer[]
-  stockMutations StockMutation[]
+  masterProduct          MasterProduct           @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  balances               InventoryBalance[]
+  costLayers             InventoryCostLayer[]
+  stockMutations         StockMutation[]
+  shipmentTransferLayers ShipmentTransferLayer[]
 
   @@unique([masterProductId, batchNumber])
   @@index([masterProductId, expiryDate])
@@ -2188,14 +2196,16 @@ model InventoryBalance {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  inventoryItem  InventoryItem        @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
-  stockLocation  StockLocation        @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
-  masterProduct  MasterProduct        @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
-  branch         Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  batch          InventoryBatch?      @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  costLayers     InventoryCostLayer[]
-  stockMutations StockMutation[]
-  reservations   StockReservation[]
+  inventoryItem          InventoryItem           @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockLocation          StockLocation           @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
+  masterProduct          MasterProduct           @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  branch                 Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  batch                  InventoryBatch?         @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  costLayers             InventoryCostLayer[]
+  stockMutations         StockMutation[]
+  reservations           StockReservation[]
+  shipmentTransferLayers ShipmentTransferLayer[]
+  shipmentReceiptItems   ShipmentReceiptItem[]
 
   @@unique([inventoryItemId, stockLocationId, batchKey])
   @@index([branchId, masterProductId])
@@ -2232,6 +2242,7 @@ model InventoryPosting {
   openingBalanceLine OpeningBalanceLine?
   transferDispatch   InternalTransferLedger?   @relation("TransferDispatchPosting")
   transferReceipt    InternalTransferLedger?   @relation("TransferReceiptPosting")
+  shipmentReceipt    ShipmentReceipt?
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])
@@ -2254,9 +2265,10 @@ model InventoryCostLayer {
   isVoided           Boolean                  @default(false)
   createdAt          DateTime                 @default(now())
 
-  inventoryBalance InventoryBalance          @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
-  batch            InventoryBatch?           @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  allocations      InventoryCostAllocation[]
+  inventoryBalance       InventoryBalance          @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
+  batch                  InventoryBatch?           @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  allocations            InventoryCostAllocation[]
+  shipmentTransferLayers ShipmentTransferLayer[]
 
   @@index([inventoryBalanceId, receivedAt, id])
   @@index([batchId, receivedAt])
@@ -2388,6 +2400,9 @@ model StockReservation {
   releasedBy         String?
   releasedAt         DateTime?
   releaseReason      String?
+  consumedQty        Decimal                @default(0) @db.Decimal(18, 4)
+  consumedBy         String?
+  consumedAt         DateTime?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
 
@@ -2402,12 +2417,14 @@ model StockReservation {
 }
 
 model Shipment {
-  id             String         @id @default(cuid())
-  shipmentCode   String         @unique
-  stockRequestId String         @unique
-  fromBranchId   String
-  toBranchId     String
-  status         ShipmentStatus @default(PREPARING)
+  id                 String         @id @default(cuid())
+  shipmentCode       String         @unique
+  stockRequestId     String         @unique
+  fromBranchId       String
+  toBranchId         String
+  status             ShipmentStatus @default(PREPARING)
+  shipIdempotencyKey String?        @unique
+  shipPayloadHash    String?
 
   // Shipping details
   shippedAt         DateTime?
@@ -2436,6 +2453,7 @@ model Shipment {
   toBranch         Branch                  @relation("ShipmentTo", fields: [toBranchId], references: [id])
   items            ShipmentItem[]
   discrepancies    ShipmentDiscrepancy[]
+  receipts         ShipmentReceipt[]
   overstocks       BranchOverstock[]
   internalTransfer InternalTransferLedger?
 
@@ -2481,14 +2499,17 @@ model ShipmentItem {
   id              String   @id @default(cuid())
   shipmentId      String
   masterProductId String
-  sentQty         Decimal  @db.Decimal(10, 2)
-  receivedQty     Decimal? @db.Decimal(10, 2) // Actual qty received
-  requestedQty    Decimal? @db.Decimal(10, 2) // Original requested qty (for overstock tracking)
-  overstockQty    Decimal? @db.Decimal(10, 2) // Overstock qty (sentQty - requestedQty)
+  sentQty         Decimal  @db.Decimal(18, 4)
+  receivedQty     Decimal? @db.Decimal(18, 4) // Actual qty received
+  quarantineQty   Decimal  @default(0) @db.Decimal(18, 4)
+  requestedQty    Decimal? @db.Decimal(18, 4) // Original requested qty (for overstock tracking)
+  overstockQty    Decimal? @db.Decimal(18, 4) // Overstock qty (sentQty - requestedQty)
   overstockReason String? // Reason for overstock (required if overstockQty > 0)
 
-  shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  masterProduct MasterProduct @relation(fields: [masterProductId], references: [id])
+  shipment       Shipment                @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  masterProduct  MasterProduct           @relation(fields: [masterProductId], references: [id])
+  transferLayers ShipmentTransferLayer[]
+  receiptItems   ShipmentReceiptItem[]
 
   @@index([shipmentId])
   @@index([masterProductId])
@@ -2602,26 +2623,114 @@ model StockRequestInvoiceItem {
 
 // Discrepancy report for shipments
 model ShipmentDiscrepancy {
-  id              String          @id @default(cuid())
-  shipmentId      String
-  masterProductId String
-  productName     String // Snapshot nama produk
-  expectedQty     Decimal         @db.Decimal(10, 2)
-  receivedQty     Decimal         @db.Decimal(10, 2)
-  discrepancyType DiscrepancyType
-  notes           String?
-  photoUrl        String? // Foto bukti (optional)
-  photoFileName   String?
-  reportedBy      String
-  createdAt       DateTime        @default(now())
+  id                String                    @id @default(cuid())
+  shipmentId        String
+  shipmentReceiptId String?
+  masterProductId   String
+  productName       String // Snapshot nama produk
+  expectedQty       Decimal                   @db.Decimal(18, 4)
+  receivedQty       Decimal                   @db.Decimal(18, 4)
+  discrepancyType   DiscrepancyType
+  quarantinedQty    Decimal                   @default(0) @db.Decimal(18, 4)
+  status            ShipmentDiscrepancyStatus @default(OPEN)
+  notes             String?
+  photoUrl          String? // Foto bukti (optional)
+  photoFileName     String?
+  reportedBy        String
+  resolvedBy        String?
+  resolvedAt        DateTime?
+  resolutionNotes   String?
+  createdAt         DateTime                  @default(now())
 
-  shipment      Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
-  masterProduct MasterProduct @relation(fields: [masterProductId], references: [id])
+  shipment        Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  shipmentReceipt ShipmentReceipt? @relation(fields: [shipmentReceiptId], references: [id], onDelete: Restrict)
+  masterProduct   MasterProduct    @relation(fields: [masterProductId], references: [id])
 
   @@index([shipmentId])
+  @@index([shipmentReceiptId])
+  @@index([shipmentId, status])
   @@index([masterProductId])
   @@index([discrepancyType])
   @@map("shipment_discrepancies")
+}
+
+model ShipmentTransferLayer {
+  id                       String   @id @default(cuid())
+  shipmentItemId           String
+  sourceCostLayerId        String
+  sourceInventoryBalanceId String
+  batchId                  String?
+  shippedQty               Decimal  @db.Decimal(18, 4)
+  receivedQty              Decimal  @default(0) @db.Decimal(18, 4)
+  unitCost                 Decimal  @db.Decimal(18, 4)
+  totalCost                Decimal  @db.Decimal(18, 4)
+  currency                 String   @default("IDR")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  shipmentItem           ShipmentItem          @relation(fields: [shipmentItemId], references: [id], onDelete: Restrict)
+  sourceCostLayer        InventoryCostLayer    @relation(fields: [sourceCostLayerId], references: [id], onDelete: Restrict)
+  sourceInventoryBalance InventoryBalance      @relation(fields: [sourceInventoryBalanceId], references: [id], onDelete: Restrict)
+  batch                  InventoryBatch?       @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  receiptItems           ShipmentReceiptItem[]
+
+  @@unique([shipmentItemId, sourceCostLayerId])
+  @@index([sourceInventoryBalanceId])
+  @@index([shipmentItemId, receivedQty])
+  @@map("shipment_transfer_layers")
+}
+
+model ShipmentReceipt {
+  id                  String   @id @default(cuid())
+  receiptNumber       String   @unique
+  shipmentId          String
+  idempotencyKey      String   @unique
+  payloadHash         String
+  inventoryPostingId  String   @unique
+  isFinal             Boolean  @default(false)
+  totalQuantity       Decimal  @db.Decimal(18, 4)
+  quarantinedQuantity Decimal  @default(0) @db.Decimal(18, 4)
+  totalCost           Decimal  @db.Decimal(18, 4)
+  evidenceFileUrl     String?
+  evidenceFileName    String?
+  evidenceFileSize    Int?
+  evidenceMimeType    String?
+  evidenceChecksum    String?
+  notes               String?
+  receivedBy          String
+  receivedAt          DateTime @default(now())
+  createdAt           DateTime @default(now())
+
+  shipment         Shipment              @relation(fields: [shipmentId], references: [id], onDelete: Restrict)
+  inventoryPosting InventoryPosting      @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
+  items            ShipmentReceiptItem[]
+  discrepancies    ShipmentDiscrepancy[]
+
+  @@index([shipmentId, receivedAt])
+  @@map("shipment_receipts")
+}
+
+model ShipmentReceiptItem {
+  id                 String   @id @default(cuid())
+  shipmentReceiptId  String
+  shipmentItemId     String
+  transferLayerId    String
+  inventoryBalanceId String
+  receivedQty        Decimal  @db.Decimal(18, 4)
+  quarantineQty      Decimal  @default(0) @db.Decimal(18, 4)
+  unitCost           Decimal  @db.Decimal(18, 4)
+  totalCost          Decimal  @db.Decimal(18, 4)
+  createdAt          DateTime @default(now())
+
+  shipmentReceipt  ShipmentReceipt       @relation(fields: [shipmentReceiptId], references: [id], onDelete: Restrict)
+  shipmentItem     ShipmentItem          @relation(fields: [shipmentItemId], references: [id], onDelete: Restrict)
+  transferLayer    ShipmentTransferLayer @relation(fields: [transferLayerId], references: [id], onDelete: Restrict)
+  inventoryBalance InventoryBalance      @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
+
+  @@unique([shipmentReceiptId, shipmentItemId, transferLayerId])
+  @@index([shipmentItemId])
+  @@index([inventoryBalanceId])
+  @@map("shipment_receipt_items")
 }
 
 // ============================================================

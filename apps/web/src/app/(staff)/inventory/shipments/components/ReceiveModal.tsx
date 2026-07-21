@@ -18,8 +18,15 @@ interface ReceiveModalProps {
 }
 
 export default function ReceiveModal({ shipment, onClose, onReceive, loading }: ReceiveModalProps) {
+  const [idempotencyKey] = useState(() => `RECEIPT-${shipment.id}-${crypto.randomUUID()}`);
   const [notes, setNotes] = useState('');
-  const [receivedItems, setReceivedItems] = useState<Array<{ masterProductId: string; receivedQty: number; unit?: string }>>([]);
+  const [isFinal, setIsFinal] = useState(true);
+  const [receivedItems, setReceivedItems] = useState<Array<{
+    masterProductId: string;
+    receivedQty: number;
+    quarantineQty: number;
+    unit?: string;
+  }>>([]);
   const [discrepancies, setDiscrepancies] = useState<Array<{
     masterProductId: string;
     expectedQty: number;
@@ -28,63 +35,111 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
     unit?: string;
     notes: string;
   }>>([]);
-  const [hasDiscrepancy, setHasDiscrepancy] = useState(false);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [receiptError, setReceiptError] = useState('');
+  const [formError, setFormError] = useState('');
+  const hasDiscrepancy = discrepancies.length > 0 || receivedItems.some(item => item.quarantineQty > 0);
 
   // Initialize received items
   useEffect(() => {
     setReceivedItems(
       shipment.items.map(item => ({
         masterProductId: item.masterProductId,
-        receivedQty: item.sentQty,
+        receivedQty: Math.max(0, Number(item.sentQty) - Number(item.receivedQty || 0)),
+        quarantineQty: 0,
         unit: item.unit,
       }))
     );
     setDiscrepancies([]);
-    setHasDiscrepancy(false);
+    setIsFinal(true);
     setReceiptFile(null);
     setReceiptError('');
+    setFormError('');
   }, [shipment]);
 
   const updateReceivedQty = (masterProductId: string, qty: number) => {
+    const originalItem = shipment.items.find(i => i.masterProductId === masterProductId);
+    if (!originalItem) return;
+    const remainingQty = Math.max(0, Number(originalItem.sentQty) - Number(originalItem.receivedQty || 0));
+    const safeQty = Math.min(remainingQty, Math.max(0, qty));
     setReceivedItems(prev => 
       prev.map(item => 
         item.masterProductId === masterProductId 
-          ? { ...item, receivedQty: qty }
+          ? { ...item, receivedQty: safeQty, quarantineQty: Math.min(item.quarantineQty, safeQty) }
           : item
       )
     );
 
-    const originalItem = shipment.items.find(i => i.masterProductId === masterProductId);
-    if (originalItem && qty !== originalItem.sentQty) {
-      // Add or update discrepancy
+    if (isFinal && safeQty < remainingQty) {
       setDiscrepancies(prev => {
         const existing = prev.find(d => d.masterProductId === masterProductId);
         if (existing) {
           return prev.map(d => 
             d.masterProductId === masterProductId 
-              ? { ...d, receivedQty: qty }
+              ? { ...d, receivedQty: Number(originalItem.receivedQty || 0) + safeQty }
               : d
           );
         } else {
           return [...prev, {
             masterProductId,
             expectedQty: originalItem.sentQty,
-            receivedQty: qty,
+            receivedQty: Number(originalItem.receivedQty || 0) + safeQty,
             discrepancyType: 'SHORTAGE' as DiscrepancyType,
             unit: originalItem.unit,
-            notes: '',
+            notes: 'Jumlah diterima kurang dari sisa quantity in-transit.',
           }];
         }
       });
-      setHasDiscrepancy(true);
     } else {
-      // Remove discrepancy if qty matches
-      const newDiscrepancies = discrepancies.filter(d => d.masterProductId !== masterProductId);
-      setDiscrepancies(newDiscrepancies);
-      setHasDiscrepancy(newDiscrepancies.length > 0);
+      setDiscrepancies(prev => prev.filter(
+        d => d.masterProductId !== masterProductId || d.discrepancyType !== 'SHORTAGE'
+      ));
     }
+  };
+
+  const updateQuarantineQty = (masterProductId: string, qty: number) => {
+    const receiptItem = receivedItems.find(item => item.masterProductId === masterProductId);
+    const safeQty = Math.min(receiptItem?.receivedQty || 0, Math.max(0, qty));
+    setReceivedItems(prev => prev.map(item => item.masterProductId === masterProductId
+      ? { ...item, quarantineQty: safeQty }
+      : item));
+    setDiscrepancies(prev => {
+      const shipmentItem = shipment.items.find(item => item.masterProductId === masterProductId)!;
+      const withoutProduct = prev.filter(item => item.masterProductId !== masterProductId);
+      const receivedQty = Number(shipmentItem.receivedQty || 0) + (receiptItem?.receivedQty || 0);
+      if (safeQty === 0 && (!isFinal || receivedQty >= Number(shipmentItem.sentQty))) return withoutProduct;
+      return [...withoutProduct, {
+        masterProductId,
+        expectedQty: shipmentItem.sentQty,
+        receivedQty,
+        discrepancyType: (safeQty > 0 ? 'DAMAGE' : 'SHORTAGE') as DiscrepancyType,
+        unit: shipmentItem.unit,
+        notes: safeQty > 0
+          ? 'Barang rusak ditempatkan pada quarantine.'
+          : 'Jumlah diterima kurang dari sisa quantity in-transit.',
+      }];
+    });
+  };
+
+  const changeReceiptMode = (finalReceipt: boolean) => {
+    setIsFinal(finalReceipt);
+    setDiscrepancies(prev => {
+      const retained = prev.filter(item => item.discrepancyType !== 'SHORTAGE');
+      if (!finalReceipt) return retained;
+      const shortages = shipment.items.flatMap(item => {
+        const eventQty = receivedItems.find(row => row.masterProductId === item.masterProductId)?.receivedQty || 0;
+        const cumulativeQty = Number(item.receivedQty || 0) + eventQty;
+        return cumulativeQty < Number(item.sentQty) ? [{
+          masterProductId: item.masterProductId,
+          expectedQty: item.sentQty,
+          receivedQty: cumulativeQty,
+          discrepancyType: 'SHORTAGE' as DiscrepancyType,
+          unit: item.unit,
+          notes: 'Jumlah diterima kurang dari sisa quantity in-transit.',
+        }] : [];
+      });
+      return [...retained, ...shortages];
+    });
   };
 
   const updateDiscrepancy = (masterProductId: string, field: string, value: string) => {
@@ -132,12 +187,23 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
   };
 
   const handleSubmit = async () => {
+    setFormError('');
     if (!receiptFile) {
       setReceiptError('File tanda terima wajib diupload.');
       return;
     }
+    if (!isFinal && !receivedItems.some(item => item.receivedQty > 0)) {
+      setFormError('Penerimaan parsial harus memiliki minimal satu quantity diterima.');
+      return;
+    }
+    if (discrepancies.some(item => item.notes.trim().length < 3)) {
+      setFormError('Lengkapi catatan ketidaksesuaian sebelum menyimpan.');
+      return;
+    }
 
     const input: ReceiveShipmentInput = {
+      idempotencyKey,
+      isFinal,
       receivedItems,
       notes: notes || undefined,
       receiptFile,
@@ -182,6 +248,23 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                   SHIPPED
                 </span>
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 rounded-lg border border-neutral-200 bg-neutral-100 p-1 dark:border-neutral-700 dark:bg-neutral-800">
+              <button
+                type="button"
+                onClick={() => changeReceiptMode(false)}
+                className={`min-h-10 px-3 text-sm font-semibold transition-colors ${!isFinal ? 'bg-white text-sky-700 shadow-sm dark:bg-neutral-700 dark:text-sky-300' : 'text-neutral-500 dark:text-neutral-400'}`}
+              >
+                Penerimaan parsial
+              </button>
+              <button
+                type="button"
+                onClick={() => changeReceiptMode(true)}
+                className={`min-h-10 px-3 text-sm font-semibold transition-colors ${isFinal ? 'bg-white text-emerald-700 shadow-sm dark:bg-neutral-700 dark:text-emerald-300' : 'text-neutral-500 dark:text-neutral-400'}`}
+              >
+                Penerimaan final
+              </button>
             </div>
 
             {/* Overstock Info Banner - Show if any item has overstock */}
@@ -251,7 +334,11 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               <div className="space-y-3">
                 {shipment.items.map((item) => {
                   const receivedItem = receivedItems.find(r => r.masterProductId === item.masterProductId);
-                  const hasIssue = receivedItem && receivedItem.receivedQty !== item.sentQty;
+                  const alreadyReceivedQty = Number(item.receivedQty || 0);
+                  const remainingQty = Math.max(0, Number(item.sentQty) - alreadyReceivedQty);
+                  const hasIssue = Boolean(receivedItem && (
+                    receivedItem.quarantineQty > 0 || (isFinal && receivedItem.receivedQty < remainingQty)
+                  ));
                   
                   // Calculate overstock info
                   const overstockQty = item.overstockQty || 0;
@@ -285,8 +372,11 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                         </div>
                         <div className="text-right">
                           <span className="text-sm text-neutral-500 dark:text-neutral-400 block">
-                            Dikirim: {item.sentQty} {item.unit}
+                            Sisa: {remainingQty} {item.unit}
                           </span>
+                          {alreadyReceivedQty > 0 && (
+                            <span className="text-xs text-sky-400 block">Sudah diterima: {alreadyReceivedQty}</span>
+                          )}
                           {hasOverstock && (
                             <span className="text-xs text-purple-400 block">
                               (Diminta: {originalRequestedQty}{overstockDeducted > 0 ? `, Overstock lama: -${overstockDeducted}` : ''})
@@ -301,7 +391,9 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                         <input
                           type="number"
                           min="0"
-                          value={receivedItem?.receivedQty || 0}
+                          max={remainingQty}
+                          step="0.0001"
+                          value={receivedItem?.receivedQty ?? 0}
                           onChange={(e) => updateReceivedQty(item.masterProductId, Number(e.target.value))}
                           className={`w-24 px-3 py-2 text-sm rounded-lg border bg-neutral-800/50 text-white focus:outline-none focus:ring-2 transition-all ${
                             hasIssue 
@@ -320,6 +412,21 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                             Tidak sesuai
                           </span>
                         )}
+                      </div>
+                      <div className="mt-3 flex items-center gap-3 border-t border-neutral-700/60 pt-3">
+                        <label className="min-w-[70px] text-sm text-neutral-500 dark:text-neutral-400">
+                          Quarantine:
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={receivedItem?.receivedQty || 0}
+                          step="0.0001"
+                          value={receivedItem?.quarantineQty ?? 0}
+                          onChange={(e) => updateQuarantineQty(item.masterProductId, Number(e.target.value))}
+                          className="w-24 rounded-lg border border-amber-500/40 bg-neutral-800/50 px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                        <span className="text-sm text-neutral-500 dark:text-neutral-400">{item.unit}</span>
                       </div>
                       {/* Show overstock reason if available */}
                       {hasOverstock && (
@@ -387,6 +494,13 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                   })}
                 </div>
               </div>
+            )}
+
+            {formError && (
+              <p className="flex items-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400">
+                <AlertTriangle className="h-4 w-4" />
+                {formError}
+              </p>
             )}
 
             {/* Receipt Upload */}
@@ -502,12 +616,12 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
               ) : hasDiscrepancy ? (
                 <>
                   <AlertTriangle className="h-4 w-4" />
-                  Terima dengan Catatan
+                  {isFinal ? 'Terima Final dengan Catatan' : 'Simpan Parsial dengan Catatan'}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Terima Pengiriman
+                  {isFinal ? 'Terima Pengiriman' : 'Simpan Penerimaan Parsial'}
                 </>
               )}
             </Button>
