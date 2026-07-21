@@ -62,7 +62,7 @@ jobs:
           set -euo pipefail
 
           cd "${GITHUB_WORKSPACE}"
-          src="/home/runneradmin/RAHO_APPS/secrets"
+          src="$HOME/RAHO_APPS/secrets"
           dst="${GITHUB_WORKSPACE}/secrets"
 
           if [[ ! -d "$src" ]]; then
