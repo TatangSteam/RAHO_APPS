@@ -35,10 +35,20 @@ export const finalizeInvoiceSchema = z.object({
 });
 
 export const recordPaymentSchema = z.object({
-  amount: z.number().positive('Amount must be positive'),
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Nominal harus berupa decimal string maksimal dua desimal'),
   paymentMethod: z.enum(['CASH', 'TRANSFER', 'DEBIT', 'CREDIT', 'QRIS', 'OTHER']),
-  paymentReference: z.string().optional(),
-  notes: z.string().optional(),
+  cashBankAccountId: z.string().cuid('Cash/bank account tidak valid'),
+  paymentReference: z.string().trim().max(100).optional(),
+  notes: z.string().trim().max(500).optional(),
+  postingKey: z.string().trim().min(8).max(150),
+});
+
+export const verifyPaymentSchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const rejectPaymentSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
 });
 
 export const cancelInvoiceSchema = z.object({
@@ -50,4 +60,6 @@ export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 export type UpdateInvoiceInput = z.infer<typeof updateInvoiceSchema>;
 export type FinalizeInvoiceInput = z.infer<typeof finalizeInvoiceSchema>;
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
+export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
+export type RejectPaymentInput = z.infer<typeof rejectPaymentSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

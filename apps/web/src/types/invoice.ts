@@ -22,6 +22,17 @@ export interface InvoicePayment {
   paymentMethod: PaymentMethod;
   paymentReference?: string;
   notes?: string;
+  verificationStatus: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verificationReason?: string;
+  verifiedBy?: string;
+  verifiedByName?: string;
+  verifiedAt?: string;
+  cashBankAccount?: {
+    id: string;
+    code: string;
+    name: string;
+    type: 'CASH' | 'BANK';
+  };
   proofFileUrl?: string;
   proofFileName?: string;
   proofFileSize?: number;
@@ -90,6 +101,9 @@ export interface Invoice {
   verifiedAt?: string;
   createdAt: string;
   updatedAt: string;
+  finalizedAt?: string;
+  snapshotVersion?: number;
+  currency?: string;
   
   // Relations
   items: InvoiceItem[];
@@ -112,8 +126,11 @@ export interface CreateInvoiceInput {
 }
 
 export interface RecordPaymentInput {
-  amount: number;
+  amount: string;
   paymentMethod: PaymentMethod;
+  cashBankAccountId: string;
+  postingKey: string;
   paymentReference?: string;
   notes?: string;
+  proof?: File;
 }

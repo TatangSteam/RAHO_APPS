@@ -20,6 +20,13 @@ export interface Invoice {
   references: string[];
   refundAmount: number;
   createdAt: string;
+  pendingPayments?: Array<{
+    id: string;
+    amount: number;
+    method: PaymentMethod;
+    reference?: string;
+    proofUrl?: string;
+  }>;
 }
 
 export interface InvoiceItemForm {
@@ -52,6 +59,7 @@ export const INITIAL_INVOICES: Invoice[] = [
     references: [],
     refundAmount: 0,
     createdAt: '2026-06-30',
+    pendingPayments: [],
   },
 ];
 

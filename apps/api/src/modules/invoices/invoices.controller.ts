@@ -5,10 +5,14 @@ import {
   updateInvoiceSchema,
   finalizeInvoiceSchema,
   recordPaymentSchema,
+  verifyPaymentSchema,
+  rejectPaymentSchema,
   cancelInvoiceSchema,
 } from './invoices.schema';
 import { sendSuccess, sendCreated, sendError } from '../../utils/response';
 import { logger } from '../../lib/logger';
+import { createHash } from 'crypto';
+import { safeDeleteFile, uploadFile } from '../../config/minio';
 
 // ============================================================
 // INVOICE CONTROLLER
@@ -169,18 +173,78 @@ export const invoiceController = {
    * POST /api/v1/invoices/:invoiceId/payment
    */
   async recordPayment(req: Request, res: Response) {
+    let uploadedKey: string | undefined;
     try {
       const { invoiceId } = req.params;
       const validated = recordPaymentSchema.parse(req.body);
       const userId = req.user.userId;
+      const idempotencyKey = req.get('Idempotency-Key');
+      if (!idempotencyKey) {
+        throw { status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Header Idempotency-Key wajib diisi.' };
+      }
+      if (idempotencyKey !== validated.postingKey) {
+        throw { status: 400, code: 'IDEMPOTENCY_KEY_MISMATCH', message: 'Header Idempotency-Key harus sama dengan postingKey.' };
+      }
 
-      const invoice = await invoiceService.recordPayment(invoiceId, validated, req.user);
+      const proofChecksum = req.file ? createHash('sha256').update(req.file.buffer).digest('hex') : undefined;
+      const keyHash = createHash('sha256').update(JSON.stringify({
+        idempotencyKey,
+        invoiceId,
+        amount: validated.amount,
+        paymentMethod: validated.paymentMethod,
+        cashBankAccountId: validated.cashBankAccountId,
+        paymentReference: validated.paymentReference || null,
+        proofChecksum: proofChecksum || null,
+      })).digest('hex');
+      const extension = req.file?.mimetype.split('/')[1]?.replace('jpeg', 'jpg') || 'bin';
+      const evidence = req.file ? {
+        proofFileUrl: `uploads/invoice-payments/${invoiceId}/${keyHash}-${proofChecksum}.${extension}`,
+        proofFileName: req.file.originalname,
+        proofFileSize: req.file.size,
+        proofMimeType: req.file.mimetype,
+        proofChecksum,
+      } : {};
+      if (req.file && evidence.proofFileUrl) {
+        uploadedKey = evidence.proofFileUrl;
+        await uploadFile(req.file.buffer, uploadedKey, req.file.mimetype);
+      }
 
-      logger.info(`Payment recorded for invoice: ${invoice.invoiceNumber}`);
-      return sendSuccess(res, invoice);
+      const result = await invoiceService.recordPayment(invoiceId, validated, evidence, req.user);
+
+      logger.info(`Payment submitted for invoice: ${invoiceId} by ${userId}`);
+      return sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
     } catch (error: any) {
+      if (uploadedKey) await safeDeleteFile(uploadedKey);
       logger.error('Record payment error:', error);
-      return sendError(res, 400, 'RECORD_PAYMENT_ERROR', error.message);
+      return sendError(res, error.status || 400, error.code || 'RECORD_PAYMENT_ERROR', error.message);
+    }
+  },
+
+  async verifyPayment(req: Request, res: Response) {
+    try {
+      const result = await invoiceService.verifyPayment(
+        req.params.paymentId,
+        verifyPaymentSchema.parse(req.body),
+        req.user.userId,
+      );
+      return sendSuccess(res, result);
+    } catch (error: any) {
+      logger.error('Verify payment error:', error);
+      return sendError(res, error.status || 400, error.code || 'VERIFY_PAYMENT_ERROR', error.message);
+    }
+  },
+
+  async rejectPayment(req: Request, res: Response) {
+    try {
+      const result = await invoiceService.rejectPayment(
+        req.params.paymentId,
+        rejectPaymentSchema.parse(req.body),
+        req.user.userId,
+      );
+      return sendSuccess(res, result);
+    } catch (error: any) {
+      logger.error('Reject payment error:', error);
+      return sendError(res, error.status || 400, error.code || 'REJECT_PAYMENT_ERROR', error.message);
     }
   },
 

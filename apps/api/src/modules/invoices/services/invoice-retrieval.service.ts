@@ -45,6 +45,12 @@ export class InvoiceRetrievalService {
               profile: true,
             },
           },
+          verifiedByUser: {
+            include: { profile: true },
+          },
+          cashBankAccount: {
+            select: { id: true, code: true, name: true, type: true },
+          },
         },
       },
     };
@@ -371,6 +377,8 @@ export class InvoiceRetrievalService {
                 profile: true,
               },
             },
+            verifiedByUser: { include: { profile: true } },
+            cashBankAccount: { select: { id: true, code: true, name: true, type: true } },
           },
           orderBy: {
             receivedAt: 'asc',
@@ -434,7 +442,10 @@ export class InvoiceRetrievalService {
       Number(invoice.subtotal || 0) === 0 &&
       displaySubtotal > 0;
 
+    const customerSnapshot = invoice.customerSnapshot as any;
+    const branchSnapshot = invoice.branchSnapshot as any;
     const memberName =
+      customerSnapshot?.name ||
       invoice.member?.user?.profile?.fullName ||
       invoice.member?.user?.email ||
       invoice.member?.memberNo ||
@@ -453,9 +464,12 @@ export class InvoiceRetrievalService {
       invoiceNumber: invoice.invoiceNumber,
       memberId: invoice.memberId,
       memberName,
-      memberNo: invoice.member?.memberNo,
+      memberNo: customerSnapshot?.memberNo || invoice.member?.memberNo,
       branchId: invoice.branchId,
-      branchName: invoice.branch?.name,
+      branchName: branchSnapshot?.name || invoice.branch?.name,
+      currency: invoice.currency || 'IDR',
+      finalizedAt: invoice.finalizedAt?.toISOString(),
+      snapshotVersion: invoice.snapshotVersion,
       
       // Financial
       subtotal: shouldUseDisplaySubtotal ? displaySubtotal : Number(invoice.subtotal),
@@ -505,6 +519,15 @@ export class InvoiceRetrievalService {
         paymentMethod: payment.paymentMethod,
         paymentReference: payment.paymentReference || undefined,
         notes: payment.notes || undefined,
+        cashBankAccount: payment.cashBankAccount || undefined,
+        verificationStatus: payment.verificationStatus,
+        verificationReason: payment.verificationReason || undefined,
+        verifiedBy: payment.verifiedBy || undefined,
+        verifiedByName:
+          payment.verifiedByUser?.profile?.fullName ||
+          payment.verifiedByUser?.email ||
+          undefined,
+        verifiedAt: payment.verifiedAt?.toISOString(),
         proofFileUrl: payment.proofFileUrl ? `/invoices/payment-proof/${payment.id}` : undefined,
         proofFileName: payment.proofFileName || undefined,
         proofFileSize: payment.proofFileSize || undefined,

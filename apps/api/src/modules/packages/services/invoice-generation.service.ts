@@ -5,6 +5,7 @@ import {
   allocateInvoiceItems,
   cloneInvoiceItemsForAllocation,
 } from './invoice-generation.helpers';
+import { createHash } from 'crypto';
 
 type InvoiceTargetStatus = 'PENDING_PAYMENT' | 'PAID';
 type PaymentPlanConfig = {
@@ -186,9 +187,12 @@ export class InvoiceGenerationService {
       });
     }
 
+    const paymentKey = `PACKAGE_INSTALLMENT_PAYMENT:${invoice.id}`;
     await prisma.invoicePayment.create({
       data: {
         invoiceId: invoice.id,
+        idempotencyKey: paymentKey,
+        payloadHash: createHash('sha256').update(paymentKey).digest('hex'),
         amount: paidAmount,
         paymentMethod: paymentData.proofFileUrl ? 'TRANSFER' : 'CASH',
         notes: paymentData.notes || null,
@@ -198,6 +202,8 @@ export class InvoiceGenerationService {
         proofMimeType: paymentData.proofMimeType || null,
         receivedBy: userId,
         receivedAt: now,
+        verificationStatus: 'VERIFIED',
+        verifiedAt: now,
       },
     });
 
@@ -590,9 +596,12 @@ export class InvoiceGenerationService {
 
     const proof = this.getPaymentProof(packages, addOns);
 
+    const paymentKey = `PACKAGE_PAYMENT:${invoiceId}`;
     await prisma.invoicePayment.create({
       data: {
         invoiceId,
+        idempotencyKey: paymentKey,
+        payloadHash: createHash('sha256').update(paymentKey).digest('hex'),
         amount: totalAmount,
         paymentMethod: proof.proofFileUrl ? 'TRANSFER' : 'CASH',
         proofFileUrl: proof.proofFileUrl || null,
@@ -601,6 +610,8 @@ export class InvoiceGenerationService {
         proofMimeType: proof.proofMimeType || null,
         receivedBy: userId,
         receivedAt,
+        verificationStatus: 'VERIFIED',
+        verifiedAt: receivedAt,
       },
     });
   }

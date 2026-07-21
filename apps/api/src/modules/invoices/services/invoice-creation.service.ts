@@ -5,6 +5,7 @@ import type { CreateInvoiceInput } from '../invoices.schema';
 import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';
 import { PERMISSIONS } from '../../iam/permission-catalog';
 import { logAudit } from '../../../utils/auditLog';
+import { Prisma } from '@prisma/client';
 
 /**
  * Service for invoice creation
@@ -28,13 +29,13 @@ export class InvoiceCreationService {
     await assertPermission(user.userId, PERMISSIONS.INVOICE_CREATE, member.registrationBranchId);
 
     // Calculate invoice totals
-    let subtotal = 0;
+    let subtotal = new Prisma.Decimal(0);
     const invoiceItems: any[] = [];
 
     for (const item of items) {
       let description = '';
       let code = '';
-      let pricePerUnit = 0;
+      let pricePerUnit = new Prisma.Decimal(0);
       let quantity = item.quantity || 1;
 
       if (item.itemType === 'PACKAGE') {
@@ -63,7 +64,7 @@ export class InvoiceCreationService {
         }
         
         // Use finalPrice from member package (sudah termasuk diskon jika ada)
-        pricePerUnit = Number(pkg.finalPrice);
+        pricePerUnit = new Prisma.Decimal(pkg.finalPrice);
         quantity = item.quantity || 1;
       } else if (item.itemType === 'ADDON') {
         const addon = await prisma.memberAddOn.findUnique({
@@ -86,7 +87,7 @@ export class InvoiceCreationService {
         };
         
         description = `${addOnLabels[addon.addOnType] || addon.addOnType}`;
-        pricePerUnit = Number(addon.pricePerUnit);
+        pricePerUnit = new Prisma.Decimal(addon.pricePerUnit);
         quantity = addon.quantity || item.quantity || 1;
       } else if (item.itemType === 'NON_THERAPY') {
         const purchase = await (prisma as any).memberNonTherapyPurchase.findUnique({
@@ -100,12 +101,12 @@ export class InvoiceCreationService {
         
         code = purchase.product?.productCode || `PROD-${purchase.id.slice(0, 8)}`;
         description = purchase.product?.name || 'Produk Non-Terapi';
-        pricePerUnit = Number(purchase.pricePerUnit);
+        pricePerUnit = new Prisma.Decimal(purchase.pricePerUnit);
         quantity = purchase.quantity || item.quantity || 1;
       }
 
-      const itemSubtotal = pricePerUnit * quantity;
-      subtotal += itemSubtotal;
+      const itemSubtotal = pricePerUnit.mul(quantity);
+      subtotal = subtotal.plus(itemSubtotal);
 
       invoiceItems.push({
         itemType: item.itemType,
@@ -121,17 +122,17 @@ export class InvoiceCreationService {
     }
 
     // Calculate discount
-    let finalDiscountAmount = discountAmount || 0;
+    let finalDiscountAmount = new Prisma.Decimal(discountAmount || 0);
     if (discountPercent && discountPercent > 0) {
-      finalDiscountAmount = (subtotal * discountPercent) / 100;
+      finalDiscountAmount = subtotal.mul(discountPercent).div(100);
     }
 
     // Calculate tax
-    const taxableAmount = subtotal - finalDiscountAmount;
-    const taxAmount = (taxableAmount * taxPercent) / 100;
+    const taxableAmount = subtotal.minus(finalDiscountAmount);
+    const taxAmount = taxableAmount.mul(taxPercent).div(100);
 
     // Calculate total
-    const totalAmount = taxableAmount + taxAmount;
+    const totalAmount = taxableAmount.plus(taxAmount);
 
     // Get branch code
     const branch = await prisma.branch.findUnique({
@@ -211,13 +212,30 @@ export class InvoiceCreationService {
       throw new Error('Only DRAFT invoices can be updated');
     }
 
+    const discountPercent = data.discountPercent !== undefined
+      ? new Prisma.Decimal(data.discountPercent)
+      : new Prisma.Decimal(invoice.discountPercent || 0);
+    let nextDiscount = data.discountAmount !== undefined
+      ? new Prisma.Decimal(data.discountAmount)
+      : new Prisma.Decimal(invoice.discountAmount || 0);
+    if (discountPercent.greaterThan(0)) nextDiscount = new Prisma.Decimal(invoice.subtotal).mul(discountPercent).div(100);
+    const taxPercent = data.taxPercent !== undefined
+      ? new Prisma.Decimal(data.taxPercent)
+      : new Prisma.Decimal(invoice.taxPercent || 0);
+    const taxable = new Prisma.Decimal(invoice.subtotal).minus(nextDiscount);
+    if (taxable.isNegative()) throw new Error('Discount cannot exceed invoice subtotal');
+    const taxAmount = taxable.mul(taxPercent).div(100);
+    const totalAmount = taxable.plus(taxAmount);
+
     const updated = await (prisma as any).invoice.update({
       where: { id: invoiceId },
       data: {
-        discountPercent: data.discountPercent,
-        discountAmount: data.discountAmount,
+        discountPercent,
+        discountAmount: nextDiscount,
         discountNote: data.discountNote,
-        taxPercent: data.taxPercent,
+        taxPercent,
+        taxAmount,
+        totalAmount,
         dueDate: data.dueDate ? new Date(data.dueDate) : undefined,
         notes: data.notes,
       },

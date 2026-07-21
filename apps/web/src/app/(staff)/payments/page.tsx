@@ -15,6 +15,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { getApiErrorMessage } from '@/lib/api';
 import { invoiceApi } from '@/lib/invoiceApi';
+import { cashBankApi, type CashBankAccount } from '@/lib/cashBankApi';
 import type {
   Invoice as ApiInvoice,
   InvoiceStatus as ApiInvoiceStatus,
@@ -80,11 +81,12 @@ function toPaymentStatus(invoice: ApiInvoice, paidAmount: number, total: number)
 function toPaymentInvoice(invoice: ApiInvoice): Invoice {
   const total = Number(invoice.totalAmount || invoice.subtotal || 0);
   const payments = invoice.payments || [];
-  const paymentTotal = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const verifiedPayments = payments.filter((payment) => payment.verificationStatus === 'VERIFIED');
+  const paymentTotal = verifiedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
   const paidAmount = paymentTotal || Number(invoice.actualPaidAmount || 0);
   const paymentMethods = Array.from(
     new Set(
-      payments.map((payment) => PAYMENT_METHOD_LABEL[payment.paymentMethod]).filter(Boolean),
+      verifiedPayments.map((payment) => PAYMENT_METHOD_LABEL[payment.paymentMethod]).filter(Boolean),
     ),
   );
 
@@ -103,11 +105,20 @@ function toPaymentInvoice(invoice: ApiInvoice): Invoice {
     total,
     paidAmount,
     paymentMethods,
-    references: payments
+    references: verifiedPayments
       .map((payment) => payment.paymentReference)
       .filter((reference): reference is string => Boolean(reference)),
     refundAmount: 0,
     createdAt: invoice.createdAt?.slice(0, 10) || '',
+    pendingPayments: payments
+      .filter((payment) => payment.verificationStatus === 'PENDING')
+      .map((payment) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        method: PAYMENT_METHOD_LABEL[payment.paymentMethod],
+        reference: payment.paymentReference,
+        proofUrl: payment.proofFileUrl,
+      })),
   };
 }
 
@@ -181,6 +192,7 @@ export default function PaymentsPage() {
   const canAccess = role === 'SUPER_ADMIN' || role === 'ADMIN_MANAGER' || role === 'ADMIN_CABANG' || role === 'ADMIN_LAYANAN';
 
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [cashBankAccounts, setCashBankAccounts] = useState<CashBankAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [submittingPayment, setSubmittingPayment] = useState(false);
@@ -192,6 +204,8 @@ export default function PaymentsPage() {
   const [endDate, setEndDate] = useState('');
   const [modal, setModal] = useState<ModalType>(null);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [paymentProof, setPaymentProof] = useState<File | null>(null);
   const [toast, setToast] = useState('');
   const [formError, setFormError] = useState('');
   const [invoiceForm, setInvoiceForm] = useState({
@@ -202,6 +216,7 @@ export default function PaymentsPage() {
   const [paymentForm, setPaymentForm] = useState({
     method: 'Cash' as PaymentMethod,
     amount: '',
+    cashBankAccountId: '',
     reference: '',
     notes: '',
   });
@@ -221,8 +236,12 @@ export default function PaymentsPage() {
     setLoadError('');
 
     try {
-      const result = await invoiceApi.getInvoices({ limit: 100 });
+      const [result, accounts] = await Promise.all([
+        invoiceApi.getInvoices({ limit: 100 }),
+        cashBankApi.listAccounts({ isActive: 'true' }),
+      ]);
       setInvoices(result.data.map(toPaymentInvoice));
+      setCashBankAccounts(accounts);
     } catch (error) {
       setInvoices([]);
       setLoadError(getApiErrorMessage(error));
@@ -258,7 +277,9 @@ export default function PaymentsPage() {
     const balance = Math.max(invoice.total - invoice.paidAmount - invoice.refundAmount, 0);
     setSelectedInvoiceId(invoice.id);
     setFormError('');
-    setPaymentForm({ method: 'Cash', amount: balance > 0 ? String(balance) : '', reference: '', notes: '' });
+    const defaultAccount = cashBankAccounts.find((account) => account.type === 'CASH');
+    setPaymentForm({ method: 'Cash', amount: balance > 0 ? String(balance) : '', cashBankAccountId: defaultAccount?.id || '', reference: '', notes: '' });
+    setPaymentProof(null);
     setReasonForm({ notes: '', reason: '', amount: '' });
     setModal(nextModal);
   };
@@ -298,6 +319,7 @@ export default function PaymentsPage() {
       references: [],
       refundAmount: 0,
       createdAt: new Date().toISOString().slice(0, 10),
+      pendingPayments: [],
     };
 
     setInvoices((current) => [invoice, ...current]);
@@ -319,20 +341,52 @@ export default function PaymentsPage() {
       setFormError('Jumlah pembayaran tidak boleh melebihi sisa tagihan.');
       return;
     }
+    if (!paymentForm.cashBankAccountId) {
+      setFormError('Akun kas/bank wajib dipilih.');
+      return;
+    }
+    if (paymentForm.method !== 'Cash' && !paymentProof) {
+      setFormError('Bukti pembayaran wajib untuk metode non-cash.');
+      return;
+    }
 
     setSubmittingPayment(true);
     setFormError('');
 
     try {
       await invoiceApi.recordPayment(selectedInvoice.id, {
-        amount,
+        amount: amount.toFixed(2),
         paymentMethod: PAYMENT_METHOD_VALUE[paymentForm.method],
+        cashBankAccountId: paymentForm.cashBankAccountId,
+        postingKey: `INVOICE_PAYMENT_SUBMIT:${selectedInvoice.id}:${crypto.randomUUID()}`,
         paymentReference: paymentForm.reference.trim() || undefined,
         notes: paymentForm.notes.trim() || undefined,
+        proof: paymentProof || undefined,
       });
 
       await fetchInvoices();
-      setToast('Pembayaran berhasil diproses');
+      setToast('Pembayaran diajukan dan menunggu verifikasi');
+      setModal(null);
+    } catch (error) {
+      setFormError(getApiErrorMessage(error));
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  const submitVerification = async (approved: boolean) => {
+    if (!selectedPaymentId) return;
+    if (!approved && reasonForm.reason.trim().length < 3) {
+      setFormError('Alasan penolakan minimal 3 karakter.');
+      return;
+    }
+    setSubmittingPayment(true);
+    setFormError('');
+    try {
+      if (approved) await invoiceApi.verifyPayment(selectedPaymentId, reasonForm.notes.trim() || undefined);
+      else await invoiceApi.rejectPayment(selectedPaymentId, reasonForm.reason.trim());
+      await fetchInvoices();
+      setToast(approved ? 'Pembayaran diverifikasi dan diposting' : 'Pembayaran ditolak');
       setModal(null);
     } catch (error) {
       setFormError(getApiErrorMessage(error));
@@ -532,6 +586,36 @@ export default function PaymentsPage() {
                           >
                             Bayar
                           </button>
+                          {(invoice.pendingPayments || []).map((payment) => (
+                            <span key={payment.id} className="inline-flex gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedInvoiceId(invoice.id);
+                                  setSelectedPaymentId(payment.id);
+                                  setReasonForm({ notes: '', reason: '', amount: '' });
+                                  setFormError('');
+                                  setModal('verify');
+                                }}
+                                className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700"
+                              >
+                                Verifikasi {formatCurrency(payment.amount)}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedInvoiceId(invoice.id);
+                                  setSelectedPaymentId(payment.id);
+                                  setReasonForm({ notes: '', reason: '', amount: '' });
+                                  setFormError('');
+                                  setModal('reject');
+                                }}
+                                className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-700"
+                              >
+                                Tolak
+                              </button>
+                            </span>
+                          ))}
                         </div>
                       </td>
                     </tr>
@@ -719,7 +803,32 @@ export default function PaymentsPage() {
       {modal === 'payment' && selectedInvoice && (
         <Modal title="Proses Pembayaran" onClose={() => setModal(null)}>
           <div className="grid gap-4">
-            <Dropdown label="Metode Pembayaran" value={paymentForm.method} options={PAYMENT_METHODS} onChange={(method) => setPaymentForm((current) => ({ ...current, method }))} />
+            <Dropdown
+              label="Metode Pembayaran"
+              value={paymentForm.method}
+              options={PAYMENT_METHODS}
+              onChange={(method) => {
+                const type = method === 'Cash' ? 'CASH' : 'BANK';
+                const account = cashBankAccounts.find((candidate) => candidate.type === type);
+                setPaymentForm((current) => ({ ...current, method, cashBankAccountId: account?.id || '' }));
+              }}
+            />
+            <div>
+              <label htmlFor="cash-bank-account" className="mb-2 block text-sm font-medium">
+                Akun Kas/Bank
+              </label>
+              <select
+                id="cash-bank-account"
+                value={paymentForm.cashBankAccountId}
+                onChange={(event) => setPaymentForm((current) => ({ ...current, cashBankAccountId: event.target.value }))}
+                className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-950"
+              >
+                <option value="">Pilih akun</option>
+                {cashBankAccounts
+                  .filter((account) => account.type === (paymentForm.method === 'Cash' ? 'CASH' : 'BANK'))
+                  .map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
+              </select>
+            </div>
             <div>
               <label htmlFor="payment-amount" className="mb-2 block text-sm font-medium">
                 Jumlah Pembayaran
@@ -731,6 +840,20 @@ export default function PaymentsPage() {
                 className="h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 text-sm dark:border-neutral-700 dark:bg-neutral-950"
               />
             </div>
+            {paymentForm.method !== 'Cash' && (
+              <div>
+                <label htmlFor="payment-proof" className="mb-2 block text-sm font-medium">
+                  Bukti Pembayaran
+                </label>
+                <input
+                  id="payment-proof"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,image/bmp"
+                  onChange={(event) => setPaymentProof(event.target.files?.[0] || null)}
+                  className="block w-full rounded-lg border border-neutral-300 p-2 text-sm dark:border-neutral-700"
+                />
+              </div>
+            )}
             <div>
               <label htmlFor="payment-reference" className="mb-2 block text-sm font-medium">
                 Referensi Transaksi
@@ -776,11 +899,12 @@ export default function PaymentsPage() {
             </p>
             <button
               type="button"
-              onClick={() => updateInvoiceStatus('Verified Approved Terverifikasi', 'Pembayaran berhasil diverifikasi')}
+              onClick={() => void submitVerification(true)}
+              disabled={submittingPayment}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 text-sm font-bold text-white hover:bg-emerald-400"
             >
               <CheckCircle2 size={16} />
-              Simpan Verifikasi
+              {submittingPayment ? 'Mem-posting...' : 'Verifikasi & Posting'}
             </button>
           </div>
         </Modal>
@@ -826,11 +950,12 @@ export default function PaymentsPage() {
             />
             <button
               type="button"
-              onClick={() => updateInvoiceStatus('Rejected Ditolak', 'Pembayaran berhasil ditolak')}
+              onClick={() => void submitVerification(false)}
+              disabled={submittingPayment}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-red-500 px-4 text-sm font-bold text-white hover:bg-red-400"
             >
               <XCircle size={16} />
-              Ya Tolak
+              {submittingPayment ? 'Memproses...' : 'Ya Tolak'}
             </button>
           </div>
         </Modal>

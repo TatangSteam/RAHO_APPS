@@ -52,10 +52,29 @@ export const invoiceApi = {
 
   // Record invoice payment
   recordPayment: async (invoiceId: string, data: RecordPaymentInput) => {
-    const response = await api.post<{ data: Invoice }>(
+    const form = new FormData();
+    form.append('amount', data.amount);
+    form.append('paymentMethod', data.paymentMethod);
+    form.append('cashBankAccountId', data.cashBankAccountId);
+    form.append('postingKey', data.postingKey);
+    if (data.paymentReference) form.append('paymentReference', data.paymentReference);
+    if (data.notes) form.append('notes', data.notes);
+    if (data.proof) form.append('proof', data.proof);
+    const response = await api.post<{ data: { payment: unknown; idempotentReplay: boolean } }>(
       `/invoices/${invoiceId}/payment`,
-      data
+      form,
+      { headers: { 'Idempotency-Key': data.postingKey } },
     );
+    return response.data.data;
+  },
+
+  verifyPayment: async (paymentId: string, reason?: string) => {
+    const response = await api.post(`/invoices/payments/${paymentId}/verify`, { reason });
+    return response.data.data;
+  },
+
+  rejectPayment: async (paymentId: string, reason: string) => {
+    const response = await api.post(`/invoices/payments/${paymentId}/reject`, { reason });
     return response.data.data;
   },
 };

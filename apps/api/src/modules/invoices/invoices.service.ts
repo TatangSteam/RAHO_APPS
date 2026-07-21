@@ -3,6 +3,8 @@ import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
   RecordPaymentInput,
+  VerifyPaymentInput,
+  RejectPaymentInput,
   CancelInvoiceInput,
 } from './invoices.schema';
 import { InvoiceCreationService } from './services/invoice-creation.service';
@@ -94,10 +96,21 @@ export const invoiceService = {
   /**
    * Record payment and mark invoice as PAID
    */
-  async recordPayment(invoiceId: string, data: RecordPaymentInput, user: { userId: string; role: string; branchId: string | null }) {
-    await this.paymentService.assertInvoiceBranch(invoiceId, user.userId);
-    await this.paymentService.recordPayment(invoiceId, data, user.userId);
-    return this.getInvoiceById(invoiceId, user);
+  async recordPayment(
+    invoiceId: string,
+    data: RecordPaymentInput,
+    evidence: { proofFileUrl?: string; proofFileName?: string; proofFileSize?: number; proofMimeType?: string; proofChecksum?: string },
+    user: { userId: string; role: string; branchId: string | null },
+  ) {
+    return this.paymentService.recordPayment(invoiceId, data, evidence, user.userId);
+  },
+
+  async verifyPayment(paymentId: string, data: VerifyPaymentInput, userId: string) {
+    return this.paymentService.verifyPayment(paymentId, data, userId);
+  },
+
+  async rejectPayment(paymentId: string, data: RejectPaymentInput, userId: string) {
+    return this.paymentService.rejectPayment(paymentId, data, userId);
   },
 
   /**

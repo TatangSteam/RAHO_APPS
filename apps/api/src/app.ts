@@ -29,6 +29,7 @@ import referralsRouter from './modules/referrals/referrals.routes';
 import filesRouter from './modules/files/files.routes';
 import iamRouter from './modules/iam/iam.routes';
 import accountingRouter from './modules/accounting/accounting.routes';
+import cashBankRouter from './modules/cash-bank/cash-bank.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -97,6 +98,7 @@ export function createApp(): Application {
   app.use(`${prefix}/auth`, authRouter);
   app.use(`${prefix}/iam`, iamRouter);
   app.use(`${prefix}/accounting`, accountingRouter);
+  app.use(`${prefix}/cash-bank`, cashBankRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

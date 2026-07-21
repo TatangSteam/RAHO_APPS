@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { invoiceController } from './invoices.controller';
 import { authenticate } from '../../middleware/authenticate';
+import { uploadPaymentProof } from '../../middleware/upload';
 
 const router = Router();
 
@@ -28,6 +29,9 @@ router.get(
   '/payment-proof/:paymentId',
   invoiceController.getPaymentProofImage
 );
+
+router.post('/payments/:paymentId/verify', invoiceController.verifyPayment);
+router.post('/payments/:paymentId/reject', invoiceController.rejectPayment);
 
 // Get invoice by package ID (ADMIN, STAFF, MEMBER) - MUST BE BEFORE /:invoiceId
 router.get(
@@ -62,6 +66,7 @@ router.post(
 // Record payment (ADMIN, STAFF)
 router.post(
   '/:invoiceId/payment',
+  uploadPaymentProof.single('proof'),
   invoiceController.recordPayment
 );
 
