@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { AccountType, ExpenseStatus, Prisma } from '@prisma/client';
+import { AccountType, ApprovalDecisionType, ExpenseStatus, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
@@ -8,6 +8,7 @@ import { postJournal } from '@modules/accounting/accounting.service';
 import { extractKeyFromUrl, getPresignedUrl } from '@config/minio';
 import { logAudit } from '@utils/auditLog';
 import type { CreateExpenseInput, ListExpensesQuery } from './expense.schema';
+import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 
 interface ExpenseEvidence {
   fileUrl?: string;
@@ -105,7 +106,17 @@ export async function submitExpense(userId: string, id: string) {
   if (expense.createdBy !== userId) throw errors.forbidden('Hanya maker yang dapat mengajukan expense.');
   if (expense.status !== ExpenseStatus.DRAFT && expense.status !== ExpenseStatus.REJECTED) throw errors.conflict('EXPENSE_STATUS_INVALID', 'Expense tidak dapat diajukan dari status ini.');
   if (!expense.evidenceFileUrl) throw errors.unprocessable('EXPENSE_EVIDENCE_REQUIRED', 'Evidence expense wajib sebelum diajukan.');
-  const updated = await prisma.expense.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: new Date(), rejectionReason: null } });
+  const updated = await prisma.$transaction(async (tx) => {
+    const submittedAt = new Date();
+    const row = await tx.expense.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt, rejectionReason: null } });
+    await startApprovalInTransaction({
+      module: 'EXPENSE', entityType: 'Expense', entityId: row.id, entityNumber: row.expenseNumber,
+      branchId: row.branchId, makerUserId: row.createdBy, amount: row.amount,
+      category: row.category, transactionType: 'EXPENSE',
+      payload: { id: row.id, amount: row.amount.toFixed(2), category: row.category, submittedAt: submittedAt.toISOString() },
+    }, tx);
+    return row;
+  });
   await logAudit({ userId, branchId: expense.branchId, action: 'UPDATE', resource: 'Expense', resourceId: id, entityCode: expense.expenseNumber, beforeData: { status: expense.status }, afterData: { status: updated.status } });
   return updated;
 }
@@ -117,7 +128,14 @@ export async function approveExpense(userId: string, id: string, note?: string) 
   await assertPermission(userId, PERMISSIONS.EXPENSE_APPROVE, expense.branchId);
   if (expense.createdBy === userId) throw errors.forbidden('Maker tidak boleh menyetujui expense sendiri.');
   if (expense.status !== ExpenseStatus.SUBMITTED) throw errors.conflict('EXPENSE_NOT_SUBMITTED', 'Expense belum diajukan.');
-  const updated = await prisma.expense.update({ where: { id }, data: { status: 'APPROVED', approvalNote: note || null, reviewedBy: userId, reviewedAt: new Date() } });
+  const updated = await prisma.$transaction(async (tx) => {
+    const approval = await tx.approvalInstance.findFirst({ where: { entityType: 'Expense', entityId: id, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    if (!approval) throw errors.conflict('EXPENSE_APPROVAL_MISSING', 'Approval expense belum dibuat; submit ulang dokumen.');
+    const decision = await decideApprovalInTransaction({ instanceId: approval.id, actorUserId: userId, decision: ApprovalDecisionType.APPROVE, note }, tx);
+    if (!decision.approved) return { ...expense, approvalStatus: decision.instance.status, approvalStep: decision.instance.currentStep };
+    const row = await tx.expense.update({ where: { id }, data: { status: 'APPROVED', approvalNote: note || null, reviewedBy: userId, reviewedAt: new Date() } });
+    return { ...row, approvalStatus: decision.instance.status, approvalStep: decision.instance.currentStep };
+  });
   await logAudit({ userId, branchId: expense.branchId, action: 'STATUS_CHANGE', resource: 'Expense', resourceId: id, entityCode: expense.expenseNumber, beforeData: { status: expense.status }, afterData: { status: updated.status, approvalNote: note || null } });
   return updated;
 }
@@ -129,7 +147,13 @@ export async function rejectExpense(userId: string, id: string, reason: string) 
   await assertPermission(userId, PERMISSIONS.EXPENSE_APPROVE, expense.branchId);
   if (expense.createdBy === userId) throw errors.forbidden('Maker tidak boleh menolak expense sendiri.');
   if (expense.status !== ExpenseStatus.SUBMITTED) throw errors.conflict('EXPENSE_NOT_SUBMITTED', 'Expense belum diajukan.');
-  const updated = await prisma.expense.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });
+  const updated = await prisma.$transaction(async (tx) => {
+    const approval = await tx.approvalInstance.findFirst({ where: { entityType: 'Expense', entityId: id, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    if (!approval) throw errors.conflict('EXPENSE_APPROVAL_MISSING', 'Approval expense belum dibuat; submit ulang dokumen.');
+    const decision = await decideApprovalInTransaction({ instanceId: approval.id, actorUserId: userId, decision: ApprovalDecisionType.REJECT, note: reason }, tx);
+    const row = await tx.expense.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });
+    return { ...row, approvalStatus: decision.instance.status };
+  });
   await logAudit({ userId, branchId: expense.branchId, action: 'STATUS_CHANGE', resource: 'Expense', resourceId: id, entityCode: expense.expenseNumber, beforeData: { status: expense.status }, afterData: { status: updated.status, rejectionReason: reason } });
   return updated;
 }

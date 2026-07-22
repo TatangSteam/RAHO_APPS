@@ -34,6 +34,8 @@ import openingBalanceRouter from './modules/opening-balance/opening-balance.rout
 import expenseRouter from './modules/expenses/expense.routes';
 import purchasingRouter from './modules/purchasing/purchasing.routes';
 import revenueRouter from './modules/revenue/revenue.routes';
+import approvalRouter from './modules/workflow/approval.routes';
+import stockOpnameRouter from './modules/inventory/stock-opname.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -107,6 +109,7 @@ export function createApp(): Application {
   app.use(`${prefix}/expenses`, expenseRouter);
   app.use(`${prefix}/purchasing`, purchasingRouter);
   app.use(`${prefix}/revenue`, revenueRouter);
+  app.use(`${prefix}/workflow`, approvalRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);
@@ -145,6 +148,7 @@ export function createApp(): Application {
   app.use(`${prefix}/invoices`, invoicesRouter);
 
   // Inventory module
+  app.use(`${prefix}/inventory/stock-opnames`, stockOpnameRouter);
   app.use(`${prefix}/inventory`, inventoryRouter);
 
   // Referrals module

@@ -392,6 +392,27 @@ enum DomainEventStatus {
   FAILED
 }
 
+enum ApprovalInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalDecisionType {
+  APPROVE
+  REJECT
+}
+
+enum StockOpnameStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  POSTED
+  CANCELLED
+}
+
 enum DiscrepancyType {
   SHORTAGE // Kurang
   DAMAGE // Rusak
@@ -592,6 +613,8 @@ model Branch {
   domainEvents            DomainEvent[]
   revenueRecognitions     RevenueRecognition[]
   treatmentBoms           TreatmentBom[]
+  approvalInstances       ApprovalInstance[]
+  stockOpnames            StockOpname[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -646,6 +669,10 @@ model User {
   supplierInvoicesCreated     SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
   supplierPaymentsCreated     SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
   revenuePoliciesCreated      PackageRevenuePolicy[]   @relation("RevenuePolicyCreatedBy")
+  approvalInstancesMade       ApprovalInstance[]       @relation("ApprovalInstanceMaker")
+  approvalDecisions           ApprovalDecision[]       @relation("ApprovalDecisionApprover")
+  approvalAuditLogs           ApprovalAuditLog[]       @relation("ApprovalAuditActor")
+  stockOpnamesCreated         StockOpname[]            @relation("StockOpnameCreatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -903,6 +930,7 @@ model JournalEntry {
   revenueRecognitions       RevenueRecognition[]
   completedTreatmentSession TreatmentSession?         @relation("TreatmentCompletionJournal")
   cancelledTreatmentSession TreatmentSession?         @relation("TreatmentCancellationJournal")
+  stockOpname               StockOpname?
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -1857,6 +1885,117 @@ model Expense {
   @@map("expenses")
 }
 
+// Generic, immutable workflow used by finance, purchasing, and inventory.
+model ApprovalRule {
+  id              String   @id @default(cuid())
+  ruleCode        String   @unique
+  name            String
+  module          String
+  transactionType String   @default("*")
+  branchScopeKey  String   @default("GLOBAL")
+  categoryKey     String   @default("*")
+  minAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  maxAmount       Decimal? @db.Decimal(18, 2)
+  priority        Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  steps     ApprovalRuleStep[]
+  instances ApprovalInstance[]
+
+  @@index([module, transactionType, isActive, priority])
+  @@index([branchScopeKey, categoryKey])
+  @@map("approval_rules")
+}
+
+model ApprovalRuleStep {
+  id                String @id @default(cuid())
+  approvalRuleId    String
+  stepNo            Int
+  name              String
+  permissionCode    String
+  requiredApprovals Int    @default(1)
+
+  rule ApprovalRule @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
+
+  @@unique([approvalRuleId, stepNo])
+  @@map("approval_rule_steps")
+}
+
+model ApprovalInstance {
+  id              String                 @id @default(cuid())
+  entityKey       String                 @unique
+  module          String
+  entityType      String
+  entityId        String
+  entityNumber    String?
+  branchId        String
+  makerUserId     String
+  amount          Decimal                @default(0) @db.Decimal(18, 2)
+  category        String?
+  transactionType String
+  approvalRuleId  String
+  ruleSnapshot    Json
+  payloadHash     String
+  status          ApprovalInstanceStatus @default(PENDING)
+  currentStep     Int                    @default(1)
+  submittedAt     DateTime               @default(now())
+  completedAt     DateTime?
+  rejectedAt      DateTime?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  rule        ApprovalRule       @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
+  branch      Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  maker       User               @relation("ApprovalInstanceMaker", fields: [makerUserId], references: [id], onDelete: Restrict)
+  decisions   ApprovalDecision[]
+  auditLogs   ApprovalAuditLog[]
+  stockOpname StockOpname?
+
+  @@index([module, status, branchId, submittedAt])
+  @@index([entityType, entityId])
+  @@map("approval_instances")
+}
+
+model ApprovalDecision {
+  id                 String               @id @default(cuid())
+  approvalInstanceId String
+  stepNo             Int
+  decision           ApprovalDecisionType
+  approverUserId     String
+  permissionCode     String
+  note               String?
+  decidedAt          DateTime             @default(now())
+
+  instance ApprovalInstance @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  approver User             @relation("ApprovalDecisionApprover", fields: [approverUserId], references: [id], onDelete: Restrict)
+
+  @@unique([approvalInstanceId, stepNo, approverUserId])
+  @@index([approverUserId, decidedAt])
+  @@map("approval_decisions")
+}
+
+model ApprovalAuditLog {
+  id                 String   @id @default(cuid())
+  approvalInstanceId String
+  action             String
+  actorUserId        String
+  stepNo             Int?
+  beforeStatus       String?
+  afterStatus        String
+  metadata           Json?
+  createdAt          DateTime @default(now())
+
+  instance ApprovalInstance @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  actor    User             @relation("ApprovalAuditActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([approvalInstanceId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("approval_audit_logs")
+}
+
 // ============================================================
 // PURCHASING & ACCOUNTS PAYABLE
 // ============================================================
@@ -2775,6 +2914,7 @@ model StockLocation {
   purchaseOrderItems  PurchaseOrderItem[]
   goodsReceiptItems   GoodsReceiptItem[]
   goodsReceiptLines   GoodsReceiptLine[]
+  stockOpnameLines    StockOpnameLine[]
 
   @@unique([warehouseId, code])
   @@index([warehouseId, isActive])
@@ -2843,6 +2983,7 @@ model InventoryItem {
   openingBalanceLines OpeningBalanceLine[]
   goodsReceiptItems   GoodsReceiptItem[]
   goodsReceiptLines   GoodsReceiptLine[]
+  stockOpnameLines    StockOpnameLine[]
 
   @@unique([masterProductId, branchId])
   @@index([branchId, stock])
@@ -2875,6 +3016,7 @@ model StockMutation {
   batch            InventoryBatch?           @relation(fields: [batchId], references: [id], onDelete: Restrict)
   costAllocations  InventoryCostAllocation[]
   goodsReceiptItem GoodsReceiptItem?
+  stockOpnameLines StockOpnameLine[]
 
   @@index([inventoryItemId, createdAt])
   @@index([referenceType, referenceId])
@@ -2903,6 +3045,7 @@ model InventoryBatch {
   stockMutations         StockMutation[]
   shipmentTransferLayers ShipmentTransferLayer[]
   goodsReceiptItems      GoodsReceiptItem[]
+  stockOpnameLines       StockOpnameLine[]
 
   @@unique([masterProductId, batchNumber])
   @@index([masterProductId, expiryDate])
@@ -2978,11 +3121,76 @@ model InventoryPosting {
   treatmentSession         TreatmentSession?         @relation("TreatmentMaterialPosting")
   reversedTreatmentSession TreatmentSession?         @relation("TreatmentMaterialReversalPosting")
   treatmentMaterialUsages  MaterialUsage[]
+  stockOpnameLines         StockOpnameLine[]
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])
   @@index([status, createdAt])
   @@map("inventory_postings")
+}
+
+model StockOpname {
+  id                   String                @id @default(cuid())
+  opnameNumber         String                @unique
+  idempotencyKey       String                @unique
+  payloadHash          String
+  branchId             String
+  status               StockOpnameStatus     @default(DRAFT)
+  reasonCode           StockAdjustmentReason
+  notes                String
+  countedAt            DateTime
+  createdBy            String
+  submittedAt          DateTime?
+  reviewedBy           String?
+  reviewedAt           DateTime?
+  rejectionReason      String?
+  approvalInstanceId   String?               @unique
+  totalAdjustmentValue Decimal               @default(0) @db.Decimal(18, 2)
+  journalEntryId       String?               @unique
+  postedAt             DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  creator          User              @relation("StockOpnameCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  approvalInstance ApprovalInstance? @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  journalEntry     JournalEntry?     @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  lines            StockOpnameLine[]
+
+  @@index([branchId, status, countedAt])
+  @@map("stock_opnames")
+}
+
+model StockOpnameLine {
+  id                 String   @id @default(cuid())
+  stockOpnameId      String
+  lineNo             Int
+  inventoryItemId    String
+  stockLocationId    String
+  batchId            String?
+  batchKey           String   @default("NO_BATCH")
+  systemQty          Decimal  @db.Decimal(18, 4)
+  physicalQty        Decimal  @db.Decimal(18, 4)
+  differenceQty      Decimal  @db.Decimal(18, 4)
+  positiveUnitCost   Decimal? @db.Decimal(18, 4)
+  actualCost         Decimal? @db.Decimal(18, 4)
+  inventoryPostingId String?
+  stockMutationId    String?
+  notes              String?
+  createdAt          DateTime @default(now())
+
+  stockOpname      StockOpname       @relation(fields: [stockOpnameId], references: [id], onDelete: Restrict)
+  inventoryItem    InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
+  stockLocation    StockLocation     @relation(fields: [stockLocationId], references: [id], onDelete: Restrict)
+  batch            InventoryBatch?   @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  inventoryPosting InventoryPosting? @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
+  stockMutation    StockMutation?    @relation(fields: [stockMutationId], references: [id], onDelete: Restrict)
+
+  @@unique([stockOpnameId, lineNo])
+  @@unique([stockOpnameId, inventoryItemId, stockLocationId, batchKey])
+  @@index([inventoryItemId, stockLocationId])
+  @@index([inventoryPostingId])
+  @@map("stock_opname_lines")
 }
 
 model InventoryCostLayer {

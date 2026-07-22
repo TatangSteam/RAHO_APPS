@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { Prisma, PurchaseRequestStatus, SupplierStatus } from '@prisma/client';
+import { ApprovalDecisionType, Prisma, PurchaseRequestStatus, SupplierStatus } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
@@ -12,6 +12,7 @@ import type {
   ApprovePurchaseRequestInput, CreateGoodsReceiptInput, CreatePurchaseOrderInput, CreatePurchaseRequestInput,
   CreateSupplierInput, CreateSupplierInvoiceInput, CreateSupplierPaymentInput, UpdateSupplierInput,
 } from './purchasing.schema';
+import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 
 type Tx = Prisma.TransactionClient;
 const id = (prefix: string) => `${prefix}/${new Date().getUTCFullYear()}/${randomUUID().slice(0, 8).toUpperCase()}`;
@@ -87,7 +88,17 @@ export async function submitPurchaseRequest(userId: string, requestId: string) {
   await assertBranchAccess(userId, row.branchId); await assertPermission(userId, PERMISSIONS.PURCHASE_REQUEST_CREATE, row.branchId);
   if (row.createdBy !== userId) throw errors.forbidden('Hanya maker yang dapat mengajukan PR.');
   if (row.status !== PurchaseRequestStatus.DRAFT && row.status !== PurchaseRequestStatus.REJECTED) throw errors.conflict('PURCHASE_REQUEST_STATUS_INVALID', 'PR tidak dapat diajukan dari status ini.');
-  const result = await prisma.purchaseRequest.update({ where: { id: requestId }, data: { status: 'SUBMITTED', submittedAt: new Date(), rejectionReason: null } });
+  const result = await prisma.$transaction(async (tx) => {
+    const submittedAt = new Date();
+    const submitted = await tx.purchaseRequest.update({ where: { id: requestId }, data: { status: 'SUBMITTED', submittedAt, rejectionReason: null } });
+    const amount = row.items.reduce((sum, line) => sum.add(line.requestedQty.mul(line.estimatedUnitCost)), new Prisma.Decimal(0)).toDecimalPlaces(2);
+    await startApprovalInTransaction({
+      module: 'PURCHASE_REQUEST', entityType: 'PurchaseRequest', entityId: row.id, entityNumber: row.requestNumber,
+      branchId: row.branchId, makerUserId: row.createdBy, amount, transactionType: 'PURCHASE_REQUEST',
+      payload: { id: row.id, amount: amount.toFixed(2), items: row.items.map((line) => ({ id: line.id, quantity: line.requestedQty.toFixed(4), unitCost: line.estimatedUnitCost.toFixed(4) })), submittedAt: submittedAt.toISOString() },
+    }, tx);
+    return submitted;
+  });
   await logAudit({ userId, branchId: row.branchId, action: 'STATUS_CHANGE', resource: 'PurchaseRequest', resourceId: row.id, entityCode: row.requestNumber, beforeData: { status: row.status }, afterData: { status: result.status } });
   return result;
 }
@@ -105,6 +116,10 @@ export async function approvePurchaseRequest(userId: string, requestId: string, 
   }
   if (![...approved.values()].some((qty) => qty.greaterThan(0))) throw errors.unprocessable('PURCHASE_REQUEST_EMPTY_APPROVAL', 'Minimal satu baris harus disetujui.');
   return prisma.$transaction(async (tx) => {
+    const approval = await tx.approvalInstance.findFirst({ where: { entityType: 'PurchaseRequest', entityId: requestId, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    if (!approval) throw errors.conflict('PURCHASE_REQUEST_APPROVAL_MISSING', 'Approval PR belum dibuat; submit ulang dokumen.');
+    const decision = await decideApprovalInTransaction({ instanceId: approval.id, actorUserId: userId, decision: ApprovalDecisionType.APPROVE, note: input.note }, tx);
+    if (!decision.approved) return { ...row, approvalStatus: decision.instance.status, approvalStep: decision.instance.currentStep };
     for (const line of row.items) await tx.purchaseRequestItem.update({ where: { id: line.id }, data: { approvedQty: approved.get(line.id)! } });
     const result = await tx.purchaseRequest.update({ where: { id: requestId }, data: { status: 'APPROVED', approvalNote: input.note, reviewedBy: userId, reviewedAt: new Date() } });
     await tx.auditLog.create({ data: { userId, branchId: row.branchId, action: 'STATUS_CHANGE', module: 'PURCHASING', resource: 'PurchaseRequest', resourceId: row.id, entityType: 'PurchaseRequest', entityId: row.id, entityCode: row.requestNumber, description: `PR ${row.requestNumber} disetujui.`, afterData: { status: 'APPROVED', approvalNote: input.note || null } } });
@@ -117,7 +132,12 @@ export async function rejectPurchaseRequest(userId: string, requestId: string, r
   await assertBranchAccess(userId, row.branchId); await assertPermission(userId, PERMISSIONS.PURCHASE_REQUEST_APPROVE, row.branchId);
   if (row.createdBy === userId) throw errors.forbidden('Maker tidak boleh menolak PR sendiri.');
   if (row.status !== PurchaseRequestStatus.SUBMITTED) throw errors.conflict('PURCHASE_REQUEST_NOT_SUBMITTED', 'PR belum diajukan.');
-  const result = await prisma.purchaseRequest.update({ where: { id: requestId }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });
+  const result = await prisma.$transaction(async (tx) => {
+    const approval = await tx.approvalInstance.findFirst({ where: { entityType: 'PurchaseRequest', entityId: requestId, status: 'PENDING' }, orderBy: { createdAt: 'desc' } });
+    if (!approval) throw errors.conflict('PURCHASE_REQUEST_APPROVAL_MISSING', 'Approval PR belum dibuat; submit ulang dokumen.');
+    await decideApprovalInTransaction({ instanceId: approval.id, actorUserId: userId, decision: ApprovalDecisionType.REJECT, note: reason }, tx);
+    return tx.purchaseRequest.update({ where: { id: requestId }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });
+  });
   await logAudit({ userId, branchId: row.branchId, action: 'STATUS_CHANGE', resource: 'PurchaseRequest', resourceId: row.id, entityCode: row.requestNumber, afterData: { status: result.status, reason } });
   return result;
 }

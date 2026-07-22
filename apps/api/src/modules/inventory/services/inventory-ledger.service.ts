@@ -50,7 +50,7 @@ function hashPayload(value: unknown): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function postingNumber(prefix: 'OPN' | 'RCV' | 'ISS' | 'REV'): string {
+function postingNumber(prefix: 'OPN' | 'RCV' | 'ISS' | 'REV' | 'ADJ'): string {
   return `INV-${prefix}-${Date.now()}-${randomUUID().slice(0, 8).toUpperCase()}`;
 }
 
@@ -301,7 +301,13 @@ async function receiveInboundInventoryInTransaction(
   postingType: InventoryPostingType,
 ) {
   await assertBranchAccess(actorUserId, input.branchId);
-  await assertPermission(actorUserId, PERMISSIONS.INVENTORY_POST, input.branchId);
+  await assertPermission(
+    actorUserId,
+    postingType === InventoryPostingType.ADJUSTMENT_IN
+      ? PERMISSIONS.INVENTORY_ADJUSTMENT_POST
+      : PERMISSIONS.INVENTORY_POST,
+    input.branchId,
+  );
   const payloadHash = hashPayload({ ...input, postingType });
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing;
@@ -355,7 +361,7 @@ async function receiveInboundInventoryInTransaction(
   const totalCost = quantity.mul(unitCost);
   const posting = await tx.inventoryPosting.create({
     data: {
-      postingNumber: postingNumber(postingType === InventoryPostingType.OPENING ? 'OPN' : 'RCV'),
+      postingNumber: postingNumber(postingType === InventoryPostingType.OPENING ? 'OPN' : postingType === InventoryPostingType.ADJUSTMENT_IN ? 'ADJ' : 'RCV'),
       idempotencyKey: input.idempotencyKey,
       payloadHash,
       type: postingType,
@@ -375,7 +381,7 @@ async function receiveInboundInventoryInTransaction(
   const mutation = await tx.stockMutation.create({
     data: {
       inventoryItemId: item.id,
-      type: StockMutationType.RECEIVED,
+      type: postingType === InventoryPostingType.ADJUSTMENT_IN ? StockMutationType.ADJUSTMENT : StockMutationType.RECEIVED,
       quantity,
       stockBefore: item.stock,
       stockAfter: item.stock.add(quantity),
@@ -415,6 +421,10 @@ export function receivePurchasedInventoryInTransaction(actorUserId: string, inpu
   return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.RECEIPT);
 }
 
+export function receiveAdjustmentInventoryInTransaction(actorUserId: string, input: ReceiveInventoryInput, tx: Tx) {
+  return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.ADJUSTMENT_IN);
+}
+
 function ensureUniqueIssueLines(input: IssueInventoryInput) {
   const keys = input.lines.map((line) => `${line.inventoryItemId}:${line.stockLocationId ?? ''}:${line.batchId ?? ''}`);
   if (new Set(keys).size !== keys.length) throw errors.badRequest('DUPLICATE_ISSUE_LINE', 'Inventory item/location/batch tidak boleh duplikat dalam satu posting.');
@@ -424,10 +434,15 @@ export async function issueInventoryInTransaction(
   actorUserId: string,
   input: IssueInventoryInput,
   tx: Tx,
+  options: { postingType?: InventoryPostingType; mutationType?: StockMutationType } = {},
 ): Promise<string> {
   ensureUniqueIssueLines(input);
   const normalizedLines = [...input.lines].sort((a, b) => `${a.inventoryItemId}:${a.batchId ?? ''}`.localeCompare(`${b.inventoryItemId}:${b.batchId ?? ''}`));
-  const payloadHash = hashPayload({ ...input, lines: normalizedLines });
+  const postingType = options.postingType || InventoryPostingType.ISSUE;
+  const mutationType = options.mutationType || StockMutationType.USED;
+  const payloadHash = hashPayload(postingType === InventoryPostingType.ISSUE && mutationType === StockMutationType.USED
+    ? { ...input, lines: normalizedLines }
+    : { ...input, lines: normalizedLines, postingType, mutationType });
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing.id;
 
@@ -439,8 +454,8 @@ export async function issueInventoryInTransaction(
 
   const posting = await tx.inventoryPosting.create({
     data: {
-      postingNumber: postingNumber('ISS'), idempotencyKey: input.idempotencyKey, payloadHash,
-      type: InventoryPostingType.ISSUE, reasonCode: input.reasonCode, sourceType: input.sourceType,
+      postingNumber: postingNumber(postingType === InventoryPostingType.ADJUSTMENT_OUT ? 'ADJ' : 'ISS'), idempotencyKey: input.idempotencyKey, payloadHash,
+      type: postingType, reasonCode: input.reasonCode, sourceType: input.sourceType,
       sourceId: input.sourceId, sourceNumber: input.sourceNumber, branchId: input.branchId,
       costCenterCode: input.costCenterCode, occurredAt: input.occurredAt, postedBy: actorUserId,
     },
@@ -474,7 +489,7 @@ export async function issueInventoryInTransaction(
     const stockBefore = item.stock;
     const mutation = await tx.stockMutation.create({
       data: {
-        inventoryItemId: item.id, type: StockMutationType.USED, quantity,
+        inventoryItemId: item.id, type: mutationType, quantity,
         stockBefore, stockAfter: stockBefore.sub(quantity), referenceType: input.sourceType,
         referenceId: input.sourceId, notes: input.reasonCode, createdBy: actorUserId,
         inventoryPostingId: posting.id,
@@ -519,6 +534,13 @@ export async function issueInventoryInTransaction(
 
   await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingCost } });
   return posting.id;
+}
+
+export function issueAdjustmentInventoryInTransaction(actorUserId: string, input: IssueInventoryInput, tx: Tx) {
+  return issueInventoryInTransaction(actorUserId, input, tx, {
+    postingType: InventoryPostingType.ADJUSTMENT_OUT,
+    mutationType: StockMutationType.ADJUSTMENT,
+  });
 }
 
 export async function issueInventory(actorUserId: string, input: IssueInventoryInput) {

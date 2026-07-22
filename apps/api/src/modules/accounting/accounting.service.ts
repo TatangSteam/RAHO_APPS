@@ -501,6 +501,46 @@ export async function reverseTreatmentCompletionJournalInTransaction(input: {
   return posted;
 }
 
+/** Strict system-derived journal for an approved stock opname adjustment. */
+export async function postStockOpnameJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  const source = posting.sourceLinks[0];
+  if (posting.sourceLinks.length !== 1 || source.sourceType.trim().toUpperCase() !== 'STOCK_OPNAME') {
+    throw errors.badRequest('STOCK_OPNAME_JOURNAL_SOURCE_INVALID', 'Jurnal opname wajib memakai satu source STOCK_OPNAME.');
+  }
+  const byRole = (role: string) => posting.lines.filter((line) => line.metadata?.opnameRole === role);
+  const total = (role: string, side: 'debit' | 'credit') => byRole(role)
+    .reduce((sum, line) => sum.add(line[side]), new Prisma.Decimal(0));
+  const increase = total('INVENTORY_INCREASE', 'debit');
+  const gain = total('ADJUSTMENT_GAIN', 'credit');
+  const loss = total('ADJUSTMENT_LOSS', 'debit');
+  const decrease = total('INVENTORY_DECREASE', 'credit');
+  if (!increase.equals(gain) || !loss.equals(decrease) || (!increase.greaterThan(0) && !loss.greaterThan(0))) {
+    throw errors.badRequest('STOCK_OPNAME_JOURNAL_POLICY_INVALID', 'Nilai adjustment masuk/keluar tidak balanced terhadap gain/loss.');
+  }
+  const accountPolicy: Record<string, { code: string; type: AccountType; side: 'debit' | 'credit' }> = {
+    INVENTORY_INCREASE: { code: '1300', type: AccountType.ASSET, side: 'debit' },
+    ADJUSTMENT_GAIN: { code: '4300', type: AccountType.REVENUE, side: 'credit' },
+    ADJUSTMENT_LOSS: { code: '5300', type: AccountType.EXPENSE, side: 'debit' },
+    INVENTORY_DECREASE: { code: '1300', type: AccountType.ASSET, side: 'credit' },
+  };
+  const accounts = await tx.account.findMany({
+    where: { code: { in: ['1300', '4300', '5300'] }, isActive: true, allowPosting: true },
+    select: { code: true, type: true },
+  });
+  const accountTypes = new Map(accounts.map((account) => [account.code, account.type]));
+  if (posting.lines.some((line) => {
+    const policy = accountPolicy[String(line.metadata?.opnameRole)];
+    return !policy || line.accountCode !== policy.code || accountTypes.get(line.accountCode) !== policy.type
+      || !line[policy.side].greaterThan(0) || !line[policy.side === 'debit' ? 'credit' : 'debit'].isZero();
+  })) {
+    throw errors.badRequest('STOCK_OPNAME_JOURNAL_ACCOUNT_INVALID', 'Akun atau arah posting stock opname tidak sesuai policy.');
+  }
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+  await assertPermission(posting.actorUserId, PERMISSIONS.INVENTORY_ADJUSTMENT_POST, posting.branchId);
+  return postWithinTransaction(tx, posting);
+}
+
 export async function listAccountsService(query: ListAccountsQuery) {
   return prisma.account.findMany({
     where: {

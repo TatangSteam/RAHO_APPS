@@ -10,6 +10,7 @@ import {
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
   Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
   ListTree,
+  ClipboardCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -56,6 +57,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/inventory/ledger',
         icon: <Database size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Stock Opname',
+        href: '/inventory/stock-opnames',
+        icon: <ClipboardCheck size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
       },
       {
         label: 'Dashboard',
@@ -261,6 +268,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/revenue-recognition',
         icon: <BadgeDollarSign size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+      },
+      {
+        label: 'Approval Inbox',
+        href: '/approvals',
+        icon: <ListChecks size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
       },
     ],
   },

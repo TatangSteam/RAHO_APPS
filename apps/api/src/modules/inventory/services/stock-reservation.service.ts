@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'crypto';
-import { AuditAction, Prisma, StockRequestStatus, StockReservationStatus } from '@prisma/client';
+import { ApprovalDecisionType, AuditAction, Prisma, StockRequestStatus, StockReservationStatus } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@modules/iam/authorization.service';
@@ -10,6 +10,7 @@ import type {
   ReleaseStockReservationInput,
   StockReservationQuery,
 } from '../stock-reservation.schema';
+import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -131,6 +132,17 @@ export async function approveAndReserveStockRequest(
     if (request.status !== StockRequestStatus.PENDING) {
       throw errors.conflict('INVALID_STOCK_REQUEST_STATUS', `Stock request berstatus ${request.status} dan tidak dapat di-approve.`);
     }
+
+    const approval = await startApprovalInTransaction({
+      module: 'STOCK_REQUEST', entityType: 'StockRequest', entityId: request.id, entityNumber: request.requestCode,
+      branchId: request.branchId, makerUserId: request.requestedBy, amount: 0,
+      category: input.sourceBranchId, transactionType: 'STOCK_REQUEST',
+      payload: { id: request.id, items: [...request.items].sort((a, b) => a.id.localeCompare(b.id)).map((item) => ({ id: item.id, requestedQty: item.requestedQty.toFixed(2), finalQty: item.finalQty?.toFixed(2) || null })) },
+    }, tx);
+    const decision = await decideApprovalInTransaction({
+      instanceId: approval.instance.id, actorUserId, decision: ApprovalDecisionType.APPROVE, note: input.reviewNotes,
+    }, tx);
+    if (!decision.approved) return;
 
     const requestItems = new Map(request.items.map((item) => [item.id, item]));
     if (requestItems.size !== normalized.lines.length || normalized.lines.some((line) => !requestItems.has(line.stockRequestItemId))) {
