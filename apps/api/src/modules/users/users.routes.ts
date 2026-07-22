@@ -83,7 +83,7 @@ usersRouter.get(
 usersRouter.get(
   '/staff/:role',
   authenticate,
-  requirePermission(PERMISSIONS.IAM_USER_READ),
+  requirePermission(PERMISSIONS.CLINICAL_STAFF_DIRECTORY_READ),
   getStaffByRole,
 );
 

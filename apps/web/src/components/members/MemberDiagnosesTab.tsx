@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Trash2, Stethoscope, User, FileText, Info, AlertTriangle, Loader2, ChevronDown, Check, Edit } from 'lucide-react';
+import { X, Plus, Trash2, Stethoscope, User, FileText, Info, AlertTriangle, Loader2, ChevronDown, Check, Edit, RefreshCw } from 'lucide-react';
 import { diagnosisApi } from '@/lib/diagnosisApi';
 import { usersApi } from '@/lib/usersApi';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
@@ -79,6 +79,8 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDiagnosis, setEditingDiagnosis] = useState<Diagnosis | null>(null);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
+  const [doctorsError, setDoctorsError] = useState<string | null>(null);
   const [categoryOptions, setCategoryOptions] = useState(DEFAULT_CATEGORY_OPTIONS);
   const [submitting, setSubmitting] = useState(false);
   const [deletingDiagnosisId, setDeletingDiagnosisId] = useState<string | null>(null);
@@ -107,6 +109,22 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
   const [additionalExams, setAdditionalExams] = useState<Array<{ key: string; value: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
+  const loadDoctors = useCallback(async () => {
+    try {
+      setDoctorsLoading(true);
+      setDoctorsError(null);
+      const branchIdToUse = memberBranchId || user?.branchId || undefined;
+      const data = await usersApi.getDoctors(branchIdToUse);
+      setDoctors(data);
+    } catch (error) {
+      devError('Failed to load doctors:', error);
+      setDoctors([]);
+      setDoctorsError('Daftar dokter gagal dimuat.');
+    } finally {
+      setDoctorsLoading(false);
+    }
+  }, [memberBranchId, user?.branchId]);
+
   useEffect(() => {
     setMounted(true);
     return () => setMounted(false);
@@ -114,9 +132,14 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
 
   useEffect(() => {
     loadDiagnoses();
-    loadDoctors();
     loadCategoryOptions();
   }, [memberId]);
+
+  useEffect(() => {
+    if (showCreateModal) {
+      loadDoctors();
+    }
+  }, [showCreateModal, loadDoctors]);
 
   useEffect(() => {
     if (showCreateModal) {
@@ -137,16 +160,6 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       showToast.error('Gagal memuat data diagnosa');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadDoctors = async () => {
-    try {
-      const branchIdToUse = memberBranchId || user?.branchId || undefined;
-      const data = await usersApi.getDoctors(branchIdToUse);
-      setDoctors(data);
-    } catch (error) {
-      devError('Failed to load doctors:', error);
     }
   };
 
@@ -404,22 +417,47 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
 
             {/* Dokter Pemeriksa */}
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+              <label htmlFor="diagnosis-doctor" className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
                 <User className="h-4 w-4" /> Dokter Pemeriksa <span className="text-red-500">*</span>
               </label>
               <select
+                id="diagnosis-doctor"
                 value={formData.doktorPemeriksa}
                 onChange={(e) => setFormData({ ...formData, doktorPemeriksa: e.target.value })}
                 className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+                disabled={doctorsLoading || Boolean(doctorsError) || doctors.length === 0}
+                aria-busy={doctorsLoading}
                 required
               >
-                <option value="">Pilih dokter...</option>
+                <option value="">
+                  {doctorsLoading
+                    ? 'Memuat daftar dokter...'
+                    : doctorsError
+                      ? 'Daftar dokter gagal dimuat'
+                      : doctors.length === 0
+                        ? 'Belum ada dokter aktif di cabang ini'
+                        : 'Pilih dokter...'}
+                </option>
                 {doctors.map((doctor) => (
                   <option key={doctor.userId} value={doctor.userId}>
                     {doctor.fullName} ({doctor.staffCode})
                   </option>
                 ))}
               </select>
+              {doctorsError && (
+                <div className="flex items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 dark:border-red-500/30 dark:bg-red-500/10">
+                  <p className="text-xs text-red-700 dark:text-red-300">{doctorsError}</p>
+                  <button
+                    type="button"
+                    onClick={loadDoctors}
+                    className="inline-flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-red-700 hover:bg-red-100 dark:text-red-300 dark:hover:bg-red-500/20"
+                    title="Muat ulang daftar dokter"
+                    aria-label="Muat ulang daftar dokter"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Diagnosa */}

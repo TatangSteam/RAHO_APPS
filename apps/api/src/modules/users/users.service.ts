@@ -642,156 +642,37 @@ export async function softDeleteUserService(userId: string) {
  */
 export async function getStaffByRoleService(
   role: Role,
-  branchId?: string,
+  branchId: string | undefined,
+  actorUserId: string,
 ) {
-  // For DOCTOR and NURSE, include both StaffBranch (multi-branch) AND primary branchId
-  // Also include ADMIN_CABANG users who can act as doctors/nurses
-  if ((role === Role.DOCTOR || role === Role.NURSE) && branchId) {
-    // Get staff with the specific role
-    // Check BOTH primary branchId AND staff_branches table
-    const roleStaff = await prisma.user.findMany({
-      where: {
-        role,
-        isActive: true,
+  const accessibleBranchIds = await getAccessibleBranchIds(actorUserId);
+
+  if (
+    branchId &&
+    accessibleBranchIds !== null &&
+    !accessibleBranchIds.includes(branchId)
+  ) {
+    throw errors.forbidden('Anda tidak memiliki akses ke cabang ini.');
+  }
+
+  const scopedBranchIds = branchId ? [branchId] : accessibleBranchIds;
+  const branchScope: Prisma.UserWhereInput = scopedBranchIds === null
+    ? {}
+    : {
         OR: [
-          { branchId }, // Primary branch
-          { 
-            staffBranches: {
-              some: {
-                branchId
-              }
-            }
-          } // Multi-branch assignment
-        ]
-      },
-      select: {
-        id: true,
-        staffCode: true,
-        role: true,
-        profile: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: { profile: { fullName: 'asc' } },
-    });
+          { branchId: { in: scopedBranchIds } },
+          { staffBranches: { some: { branchId: { in: scopedBranchIds } } } },
+        ],
+      };
 
-    // Also get ADMIN_CABANG users from the same branch (they can act as doctor/nurse)
-    const adminCabangStaff = await prisma.user.findMany({
-      where: {
-        role: Role.ADMIN_CABANG,
-        isActive: true,
-        OR: [
-          { branchId },
-          { 
-            staffBranches: {
-              some: {
-                branchId
-              }
-            }
-          }
-        ]
-      },
-      select: {
-        id: true,
-        staffCode: true,
-        role: true,
-        profile: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: { profile: { fullName: 'asc' } },
-    });
+  const roles = role === Role.DOCTOR || role === Role.NURSE || role === Role.ADMIN_LAYANAN
+    ? [role, Role.ADMIN_CABANG]
+    : [role];
 
-    // Combine both lists
-    const combinedStaff = [
-      ...roleStaff.map((s) => ({
-        userId: s.id,
-        staffCode: s.staffCode || '',
-        fullName: s.profile?.fullName || '',
-        role: s.role,
-      })),
-      ...adminCabangStaff.map((s) => ({
-        userId: s.id,
-        staffCode: s.staffCode || '',
-        fullName: `${s.profile?.fullName || ''} (Admin Cabang)`,
-        role: s.role,
-      })),
-    ];
-
-    return combinedStaff;
-  }
-
-  // For DOCTOR and NURSE without branchId, return all active staff
-  // This is useful for ADMIN_MANAGER who can see all doctors/nurses
-  if ((role === Role.DOCTOR || role === Role.NURSE) && !branchId) {
-    const staff = await prisma.user.findMany({
-      where: {
-        role: { in: [role, Role.ADMIN_CABANG] }, // Include ADMIN_CABANG
-        isActive: true,
-      },
-      select: {
-        id: true,
-        staffCode: true,
-        role: true,
-        profile: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: { profile: { fullName: 'asc' } },
-    });
-
-    return staff.map((s) => ({
-      userId: s.id,
-      staffCode: s.staffCode,
-      fullName: s.role === Role.ADMIN_CABANG 
-        ? `${s.profile?.fullName || ''} (Admin Cabang)` 
-        : s.profile?.fullName || '',
-      role: s.role,
-    }));
-  }
-
-  // For ADMIN_LAYANAN, also include ADMIN_CABANG (they can act as admin layanan)
-  if (role === Role.ADMIN_LAYANAN) {
-    const staff = await prisma.user.findMany({
-      where: {
-        role: { in: [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG] },
-        isActive: true,
-        ...(branchId ? { branchId } : {}),
-      },
-      select: {
-        id: true,
-        staffCode: true,
-        role: true,
-        profile: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-      orderBy: { profile: { fullName: 'asc' } },
-    });
-
-    return staff.map((s) => ({
-      userId: s.id,
-      staffCode: s.staffCode,
-      fullName: s.role === Role.ADMIN_CABANG 
-        ? `${s.profile?.fullName || ''} (Admin Cabang)` 
-        : s.profile?.fullName || '',
-      role: s.role,
-    }));
-  }
-
-  // For other roles, use branchId directly
   const where: Prisma.UserWhereInput = {
-    role,
+    role: { in: roles },
     isActive: true,
-    ...(branchId ? { branchId } : {}),
+    ...branchScope,
   };
 
   const staff = await prisma.user.findMany({
@@ -799,6 +680,7 @@ export async function getStaffByRoleService(
     select: {
       id: true,
       staffCode: true,
+      role: true,
       profile: {
         select: {
           fullName: true,
@@ -810,8 +692,11 @@ export async function getStaffByRoleService(
 
   return staff.map((s) => ({
     userId: s.id,
-    staffCode: s.staffCode,
-    fullName: s.profile?.fullName || '',
+    staffCode: s.staffCode || '',
+    fullName: s.role === Role.ADMIN_CABANG
+      ? `${s.profile?.fullName || ''} (Admin Cabang)`
+      : s.profile?.fullName || '',
+    role: s.role,
   }));
 }
 

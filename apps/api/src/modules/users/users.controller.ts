@@ -307,6 +307,7 @@ export async function getStaffByRole(req: Request, res: Response, next: NextFunc
     const staff = await getStaffByRoleService(
       role as Role,
       branchId as string | undefined,
+      req.user.userId,
     );
 
     sendSuccess(res, staff);
