@@ -40,6 +40,8 @@ services:
       POSTGRES_DB: raho-db
     volumes:
       - raho_pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U raho_user -d raho-db"]
       interval: 10s
@@ -107,7 +109,7 @@ services:
       MINIO_BUCKET_INVOICES: raho-invoices
       MINIO_PUBLIC_URL: http://minio:9000
       MINIO_USE_SSL: "false"
-      CORS_ORIGIN: ${CORS_ORIGIN:-https://erp.rahopremier.id,http://38.147.122.167}
+      CORS_ORIGIN: ${CORS_ORIGIN:-https://erp.rahopremier.id}
       JWT_ACCESS_EXPIRES: 15m
       JWT_REFRESH_EXPIRES: 7d
       RATE_LIMIT_WINDOW_MS: 900000
