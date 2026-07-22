@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { assertBranchAccess } from '../assertBranchAccess';
 import { prisma } from '@lib/prisma';
 import { sendError } from '@utils/response';
+import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
@@ -25,6 +26,11 @@ jest.mock('@lib/logger', () => ({
 }));
 
 jest.mock('@utils/response');
+jest.mock('@modules/iam/authorization.service', () => ({
+  getAccessibleBranchIds: jest.fn(),
+}));
+
+const mockedAccessibleBranches = getAccessibleBranchIds as jest.MockedFunction<typeof getAccessibleBranchIds>;
 
 function makeRequest(overrides: Partial<Request> = {}): Partial<Request> {
   return {
@@ -51,6 +57,7 @@ describe('assertBranchAccess middleware', () => {
     mockResponse = {};
     mockNext = jest.fn();
     jest.clearAllMocks();
+    mockedAccessibleBranches.mockResolvedValue(['branch-1']);
     (prisma.staffBranch.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.member.findUnique as jest.Mock).mockResolvedValue({
@@ -78,6 +85,7 @@ describe('assertBranchAccess middleware', () => {
       },
     });
 
+    mockedAccessibleBranches.mockResolvedValue(null);
     await assertBranchAccess(request as Request, mockResponse as Response, mockNext);
 
     expect(mockNext).toHaveBeenCalled();
@@ -93,9 +101,7 @@ describe('assertBranchAccess middleware', () => {
       },
     });
 
-    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([
-      { branchId: 'branch-2' },
-    ]);
+    mockedAccessibleBranches.mockResolvedValue(['branch-2']);
     (prisma.member.findUnique as jest.Mock).mockResolvedValue({
       id: 'member-1',
       registrationBranchId: 'branch-2',
@@ -117,9 +123,7 @@ describe('assertBranchAccess middleware', () => {
       },
     });
 
-    (prisma.managerBranch.findMany as jest.Mock).mockResolvedValue([
-      { branchId: 'branch-1' },
-    ]);
+    mockedAccessibleBranches.mockResolvedValue(['branch-1']);
     (prisma.member.findUnique as jest.Mock).mockResolvedValue({
       id: 'member-1',
       registrationBranchId: 'branch-2',
@@ -155,9 +159,7 @@ describe('assertBranchAccess middleware', () => {
       },
     });
 
-    (prisma.staffBranch.findMany as jest.Mock).mockResolvedValue([
-      { branchId: 'branch-2' },
-    ]);
+    mockedAccessibleBranches.mockResolvedValue(['branch-1', 'branch-2']);
     (prisma.member.findUnique as jest.Mock).mockResolvedValue({
       id: 'member-1',
       registrationBranchId: 'branch-2',
@@ -191,13 +193,14 @@ describe('assertBranchAccess middleware', () => {
       },
     });
 
+    mockedAccessibleBranches.mockResolvedValue([]);
     await assertBranchAccess(request as Request, mockResponse as Response, mockNext);
 
     expect(sendError).toHaveBeenCalledWith(
       mockResponse,
       403,
       'BRANCH_ACCESS_DENIED',
-      'Anda tidak memiliki akses ke member ini.',
+      'Anda belum memiliki branch scope.',
     );
     expect(mockNext).not.toHaveBeenCalled();
   });
