@@ -18,13 +18,13 @@ describeDatabase('AC-003 supplier credit purchase through payment PostgreSQL', (
   const cashAccountId = `ac003_cash_${suffix}`;
 
   beforeAll(async () => {
-    const accounts = await prisma.account.findMany({ where: { code: { in: ['1101', '1300', '2110', '2100'] }, isActive: true, allowPosting: true } });
+    const accounts = await prisma.account.findMany({ where: { code: { in: ['1110', '1300', '2110', '2100'] }, isActive: true, allowPosting: true } });
     const byCode = new Map(accounts.map((account) => [account.code, account]));
-    if (byCode.size !== 4) throw new Error('AC-003 integration memerlukan account 1101, 1300, 2110, dan 2100 dari migration/seed essential.');
+    if (byCode.size !== 4) throw new Error('AC-003 integration memerlukan account 1110, 1300, 2110, dan 2100 dari migration kanonis.');
     await prisma.user.create({ data: { id: actorId, email: `ac003-${suffix}@test.local`, password: 'test-only', role: Role.SUPER_ADMIN } });
     await prisma.branch.create({ data: { id: branchId, branchCode: `A3${suffix.slice(0, 6)}`, name: `AC-003 ${suffix}` } });
     await prisma.accountingPeriod.create({ data: { id: periodId, name: `AC-003 2026 ${suffix}`, fiscalYear: 2026, periodNo: 7, startDate: new Date('2026-07-01T00:00:00.000Z'), endDate: new Date('2026-07-31T23:59:59.999Z'), branchId, scopeKey: branchId, createdBy: actorId } });
-    await prisma.cashBankAccount.create({ data: { id: cashAccountId, code: `AC3-${suffix}`, name: `AC-003 Bank ${suffix}`, type: 'BANK', branchId, coaAccountId: byCode.get('1101')!.id, createdBy: actorId } });
+    await prisma.cashBankAccount.create({ data: { id: cashAccountId, code: `AC3-${suffix}`, name: `AC-003 Bank ${suffix}`, type: 'BANK', branchId, coaAccountId: byCode.get('1110')!.id, createdBy: actorId } });
     await prisma.supplier.create({ data: { id: supplierId, code: `AC3SUP-${suffix}`, name: `AC-003 Supplier ${suffix}`, createdBy: actorId } });
     await prisma.purchaseRequest.create({ data: { id: requestId, requestNumber: `AC3-PR-${suffix}`, postingKey: `AC3:PR:${suffix}`, payloadHash: suffix, branchId, requestDate: new Date('2026-07-01T00:00:00.000Z'), description: 'AC-003 PostgreSQL gate', status: 'CONVERTED', createdBy: actorId } });
     await prisma.purchaseOrder.create({ data: { id: orderId, poNumber: `AC3-PO-${suffix}`, postingKey: `AC3:PO:${suffix}`, payloadHash: suffix, purchaseRequestId: requestId, supplierId, branchId, status: 'RECEIVED', orderDate: new Date('2026-07-01T00:00:00.000Z'), totalAmount: '1000.00', createdBy: actorId } });

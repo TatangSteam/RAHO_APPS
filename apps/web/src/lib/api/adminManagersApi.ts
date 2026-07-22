@@ -59,28 +59,38 @@ export interface AdminManagersResponse {
 }
 
 export interface ImpersonateResponse {
-  token: string;  // Backend returns 'token', not 'accessToken'
-  user?: {
-    id: string;
-    email: string;
-    role: string;
-    fullName: string;
-    branchId?: string | null;
-    adminManagerAccessScope?: AdminManagerAccessScope | null;
-    branches?: string[];
-  };
+  token: string;
   targetUser: {
     id: string;
     email: string;
     role: string;
     fullName: string;
     branchId?: string | null;
+    branchCode?: string | null;
     adminManagerAccessScope?: AdminManagerAccessScope | null;
+    branches?: Array<{
+      id: string;
+      branchCode: string;
+      name: string;
+    }>;
   };
   originalUser?: {
     id: string;
     email: string;
     role: string;
+  };
+}
+
+export interface StopImpersonationResponse {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    fullName: string;
+    branchId?: string | null;
+    branchCode?: string | null;
+    adminManagerAccessScope?: AdminManagerAccessScope | null;
   };
 }
 
@@ -197,7 +207,7 @@ export const adminManagersApi = {
   /**
    * Stop impersonation
    */
-  stopImpersonation: async (): Promise<{ accessToken: string }> => {
+  stopImpersonation: async (): Promise<StopImpersonationResponse> => {
     const response = await api.post('/admin/stop-impersonation');
     return response.data.data;
   },

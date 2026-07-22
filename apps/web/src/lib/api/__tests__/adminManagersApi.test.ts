@@ -14,12 +14,15 @@ describe('adminManagersApi', () => {
         data: {
           data: {
             token: 'mock-jwt-token',
-            user: {
+            targetUser: {
               id: userId,
               email: 'manager@test.com',
               fullName: 'Test Manager',
               role: 'ADMIN_MANAGER',
-              branches: ['branch-1', 'branch-2']
+              branches: [
+                { id: 'branch-1', branchCode: 'JKT', name: 'Jakarta' },
+                { id: 'branch-2', branchCode: 'BDG', name: 'Bandung' },
+              ],
             }
           }
         }
@@ -46,7 +49,7 @@ describe('adminManagersApi', () => {
         data: {
           data: {
             token: 'mock-jwt-token',
-            user: {
+            targetUser: {
               id: userId,
               email: 'admincabang@test.com',
               fullName: 'Test Admin Cabang',
@@ -78,12 +81,12 @@ describe('adminManagersApi', () => {
         data: {
           data: {
             token: 'mock-jwt-token',
-            user: {
+            targetUser: {
               id: userId,
               email: 'manager@test.com',
               fullName: 'Test Manager',
               role: 'ADMIN_MANAGER',
-              branches: ['branch-1']
+              branches: [{ id: 'branch-1', branchCode: 'JKT', name: 'Jakarta' }],
             }
           }
         }
@@ -96,11 +99,11 @@ describe('adminManagersApi', () => {
 
       // Assert
       expect(result).toHaveProperty('token');
-      expect(result).toHaveProperty('user');
-      expect(result.user).toHaveProperty('id');
-      expect(result.user).toHaveProperty('email');
-      expect(result.user).toHaveProperty('fullName');
-      expect(result.user).toHaveProperty('role');
+      expect(result).toHaveProperty('targetUser');
+      expect(result.targetUser).toHaveProperty('id');
+      expect(result.targetUser).toHaveProperty('email');
+      expect(result.targetUser).toHaveProperty('fullName');
+      expect(result.targetUser).toHaveProperty('role');
     });
   });
 
@@ -110,7 +113,13 @@ describe('adminManagersApi', () => {
       const mockResponse = {
         data: {
           data: {
-            token: 'original-jwt-token'
+            token: 'original-jwt-token',
+            user: {
+              id: 'super-admin-id',
+              email: 'superadmin@test.com',
+              fullName: 'Super Admin',
+              role: 'SUPER_ADMIN',
+            },
           }
         }
       };

@@ -46,6 +46,56 @@ export function evaluateOpening(opening: {
   return { balanced, postedLinksValid, makerCheckerValid, ready: opening.status === 'POSTED' && balanced && postedLinksValid && makerCheckerValid };
 }
 
+export function evaluateInventoryMutationChain(
+  currentStock: Prisma.Decimal.Value,
+  mutations: Array<{
+    id: string;
+    quantity: Prisma.Decimal.Value;
+    stockBefore: Prisma.Decimal.Value;
+    stockAfter: Prisma.Decimal.Value;
+  }>,
+) {
+  const issues: Array<{ mutationId?: string; reason: string }> = [];
+
+  if (mutations.length === 0) {
+    if (!D(currentStock).isZero()) issues.push({ reason: 'NON_ZERO_STOCK_WITHOUT_MUTATION' });
+    return { valid: issues.length === 0, issues };
+  }
+
+  mutations.forEach((mutation, index) => {
+    const before = D(mutation.stockBefore);
+    const after = D(mutation.stockAfter);
+    if (!after.sub(before).abs().equals(D(mutation.quantity))) {
+      issues.push({ mutationId: mutation.id, reason: 'QUANTITY_DOES_NOT_MATCH_STOCK_DELTA' });
+    }
+    if (index > 0 && !D(mutations[index - 1].stockAfter).equals(before)) {
+      issues.push({ mutationId: mutation.id, reason: 'MUTATION_CHAIN_DISCONTINUITY' });
+    }
+  });
+
+  if (!D(mutations[mutations.length - 1].stockAfter).equals(currentStock)) {
+    issues.push({ mutationId: mutations[mutations.length - 1].id, reason: 'LATEST_MUTATION_DOES_NOT_MATCH_STOCK' });
+  }
+  return { valid: issues.length === 0, issues };
+}
+
+export function evaluateInventoryValue(
+  layerValue: Prisma.Decimal.Value,
+  inTransitValue: Prisma.Decimal.Value,
+  ledgerValue: Prisma.Decimal.Value,
+) {
+  const subledgerValue = D(layerValue).add(inTransitValue).toDecimalPlaces(2);
+  const normalizedLedgerValue = D(ledgerValue).toDecimalPlaces(2);
+  return {
+    layerValue: D(layerValue),
+    inTransitValue: D(inTransitValue),
+    subledgerValue,
+    ledgerValue: normalizedLedgerValue,
+    difference: subledgerValue.sub(normalizedLedgerValue),
+    matches: subledgerValue.equals(normalizedLedgerValue),
+  };
+}
+
 export function summarizeGate(checks: GateCheck[]) {
   const blockers = checks.filter((check) => check.status === 'FAIL' && check.severity === 'BLOCKER');
   const warnings = checks.filter((check) => check.status === 'FAIL' && check.severity === 'WARNING');

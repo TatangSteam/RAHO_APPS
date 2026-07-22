@@ -7,6 +7,8 @@ import {
 } from '../admin.controller';
 import { ImpersonationService } from '../services/impersonation.service';
 import { sendSuccess } from '@utils/response';
+import { verifyAccessToken } from '@lib/jwt';
+import { logAudit } from '@utils/auditLog';
 import { Role } from '@prisma/client';
 
 // Mock dependencies
@@ -29,7 +31,7 @@ describe('Impersonation Error Cases - Integration Tests', () => {
   let mockVerifyAccessToken: jest.Mock;
   let mockLogAudit: jest.Mock;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     mockRequest = {
       params: {},
       query: {},
@@ -43,17 +45,19 @@ describe('Impersonation Error Cases - Integration Tests', () => {
     mockNext = jest.fn();
     mockSendSuccess = sendSuccess as jest.MockedFunction<typeof sendSuccess>;
     
-    // Mock JWT verification
-    const jwtModule = await import('@lib/jwt');
-    mockVerifyAccessToken = jest.fn();
-    (jwtModule.verifyAccessToken as any) = mockVerifyAccessToken;
-    
-    // Mock audit log
-    const auditModule = await import('@utils/auditLog');
-    mockLogAudit = jest.fn().mockResolvedValue(undefined);
-    (auditModule.logAudit as any) = mockLogAudit;
-    
     jest.clearAllMocks();
+    mockVerifyAccessToken = verifyAccessToken as jest.Mock;
+    mockLogAudit = logAudit as jest.Mock;
+    mockLogAudit.mockResolvedValue(undefined);
+    mockVerifyAccessToken.mockReturnValue({
+      userId: 'super-admin-id',
+      email: 'superadmin@raho.id',
+      role: Role.SUPER_ADMIN,
+      branchId: null,
+      branchCode: null,
+      fullName: 'Super Admin',
+      staffCode: null,
+    });
   });
 
   // ══════════════════════════════════════════════════════════════

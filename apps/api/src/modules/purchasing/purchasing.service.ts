@@ -15,9 +15,40 @@ import type {
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 
 type Tx = Prisma.TransactionClient;
+const MAX_TRANSACTION_ATTEMPTS = 3;
 const id = (prefix: string) => `${prefix}/${new Date().getUTCFullYear()}/${randomUUID().slice(0, 8).toUpperCase()}`;
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const serialized = (input: Record<string, unknown>) => hash(input);
+
+function isRetryableTransactionError(error: unknown) {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  const message = error instanceof Error ? error.message : String(error);
+  return code === 'P2002' || code === 'P2034' || /40001|40P01|serialization|deadlock|write conflict/i.test(message);
+}
+
+async function withTransactionRetry<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableTransactionError(error) || attempt === MAX_TRANSACTION_ATTEMPTS) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10 * attempt + Math.floor(Math.random() * 15)));
+    }
+  }
+  throw lastError;
+}
+
+function supplierPaymentReplayResult<T extends { supplierInvoice: { status: string; balanceAmount: Prisma.Decimal } }>(replay: T) {
+  const { supplierInvoice, ...supplierPayment } = replay;
+  return {
+    supplierPayment,
+    invoiceStatus: supplierInvoice.status,
+    balanceAmount: supplierInvoice.balanceAmount.toFixed(2),
+    idempotentReplay: true,
+  };
+}
 
 async function readableBranches(userId: string, permission: string) {
   const accessible = await getAccessibleBranchIds(userId);
@@ -181,7 +212,7 @@ export async function postGoodsReceipt(userId: string, purchaseOrderId: string, 
     if (replay.payloadHash !== payloadHash) throw errors.conflict('GOODS_RECEIPT_KEY_REUSED', 'Idempotency key receipt digunakan untuk payload berbeda.');
     return { goodsReceipt: replay, idempotentReplay: true };
   }
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "purchase_orders" WHERE "id" = ${purchaseOrderId} FOR UPDATE`);
     const concurrentReplay = await tx.goodsReceipt.findUnique({ where: { idempotencyKey: input.idempotencyKey }, include: { lines: true, journalEntry: true } });
     if (concurrentReplay) {
@@ -221,7 +252,7 @@ export async function postGoodsReceipt(userId: string, purchaseOrderId: string, 
     await tx.purchaseOrder.update({ where: { id: po.id }, data: { status: purchaseOrderStatus(aggregate._sum.orderedQty!, aggregate._sum.receivedQty!) } });
     await tx.auditLog.create({ data: { userId, branchId: po.branchId, action: 'CREATE', module: 'PURCHASING', resource: 'GoodsReceipt', resourceId: receiptId, entityType: 'GoodsReceipt', entityId: receiptId, entityCode: receiptNumber, description: `Goods Receipt ${receiptNumber} diposting.`, afterData: { purchaseOrderId: po.id, totalValue: totalValue.toFixed(2), journalEntryId: posted.journal.id } } });
     return { goodsReceipt: await tx.goodsReceipt.findUniqueOrThrow({ where: { id: receiptId }, include: { lines: true, journalEntry: true } }), idempotentReplay: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function postSupplierInvoice(userId: string, input: CreateSupplierInvoiceInput) {
@@ -231,7 +262,7 @@ export async function postSupplierInvoice(userId: string, input: CreateSupplierI
   const payloadHash = serialized({ ...input, invoiceDate: input.invoiceDate.toISOString(), dueDate: input.dueDate.toISOString() });
   const replay = await prisma.supplierInvoice.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true } });
   if (replay) { if (replay.payloadHash !== payloadHash) throw errors.conflict('SUPPLIER_INVOICE_KEY_REUSED', 'Posting key invoice supplier digunakan untuk payload berbeda.'); return { supplierInvoice: replay, idempotentReplay: true }; }
-  return prisma.$transaction(async (tx) => {
+  return withTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "purchase_orders" WHERE "id" = ${po.id} FOR UPDATE`);
     const concurrentReplay = await tx.supplierInvoice.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true } });
     if (concurrentReplay) {
@@ -252,7 +283,7 @@ export async function postSupplierInvoice(userId: string, input: CreateSupplierI
     const supplierInvoice = await tx.supplierInvoice.create({ data: { id: invoiceId, invoiceNumber, supplierInvoiceNumber: input.supplierInvoiceNumber, postingKey: input.postingKey, payloadHash, purchaseOrderId: po.id, supplierId: po.supplierId, branchId: po.branchId, invoiceDate: input.invoiceDate, dueDate: input.dueDate, amount, balanceAmount: amount, grniAccountId: accountByCode.get('2110')!.id, apAccountId: accountByCode.get('2100')!.id, journalEntryId: posted.journal.id, evidenceReference: input.evidenceReference, createdBy: userId }, include: { journalEntry: true, supplier: true } });
     await tx.auditLog.create({ data: { userId, branchId: po.branchId, action: 'CREATE', module: 'ACCOUNTS_PAYABLE', resource: 'SupplierInvoice', resourceId: supplierInvoice.id, entityType: 'SupplierInvoice', entityId: supplierInvoice.id, entityCode: supplierInvoice.invoiceNumber, description: `Supplier invoice ${supplierInvoice.invoiceNumber} diposting.`, afterData: { amount: amount.toFixed(2), journalEntryId: posted.journal.id } } });
     return { supplierInvoice, idempotentReplay: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function paySupplierInvoice(userId: string, supplierInvoiceId: string, input: CreateSupplierPaymentInput) {
@@ -260,14 +291,14 @@ export async function paySupplierInvoice(userId: string, supplierInvoiceId: stri
   if (!scope) throw errors.notFound('Supplier invoice tidak ditemukan.');
   await assertBranchAccess(userId, scope.branchId); await assertPermission(userId, PERMISSIONS.AP_PAY, scope.branchId);
   const payloadHash = serialized({ supplierInvoiceId, ...input, paymentDate: input.paymentDate.toISOString() });
-  const replay = await prisma.supplierPayment.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true, cashBankTransaction: true } });
-  if (replay) { if (replay.payloadHash !== payloadHash) throw errors.conflict('SUPPLIER_PAYMENT_KEY_REUSED', 'Posting key payment supplier digunakan untuk payload berbeda.'); return { supplierPayment: replay, idempotentReplay: true }; }
-  return prisma.$transaction(async (tx) => {
+  const replay = await prisma.supplierPayment.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true, cashBankTransaction: true, supplierInvoice: { select: { status: true, balanceAmount: true } } } });
+  if (replay) { if (replay.payloadHash !== payloadHash) throw errors.conflict('SUPPLIER_PAYMENT_KEY_REUSED', 'Posting key payment supplier digunakan untuk payload berbeda.'); return supplierPaymentReplayResult(replay); }
+  return withTransactionRetry(() => prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "supplier_invoices" WHERE "id" = ${supplierInvoiceId} FOR UPDATE`);
-    const concurrentReplay = await tx.supplierPayment.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true, cashBankTransaction: true } });
+    const concurrentReplay = await tx.supplierPayment.findUnique({ where: { postingKey: input.postingKey }, include: { journalEntry: true, cashBankTransaction: true, supplierInvoice: { select: { status: true, balanceAmount: true } } } });
     if (concurrentReplay) {
       if (concurrentReplay.payloadHash !== payloadHash) throw errors.conflict('SUPPLIER_PAYMENT_KEY_REUSED', 'Posting key payment supplier digunakan untuk payload berbeda.');
-      return { supplierPayment: concurrentReplay, idempotentReplay: true };
+      return supplierPaymentReplayResult(concurrentReplay);
     }
     const invoice = await tx.supplierInvoice.findUnique({ where: { id: supplierInvoiceId }, include: { apAccount: true } });
     const cash = await tx.cashBankAccount.findUnique({ where: { id: input.cashBankAccountId }, include: { coaAccount: true } });
@@ -283,7 +314,7 @@ export async function paySupplierInvoice(userId: string, supplierInvoiceId: stri
     await tx.supplierInvoice.update({ where: { id: invoice.id }, data: { paidAmount, balanceAmount, status: supplierInvoiceStatus(balanceAmount, paidAmount) } });
     await tx.auditLog.create({ data: { userId, branchId: invoice.branchId, action: 'CREATE', module: 'ACCOUNTS_PAYABLE', resource: 'SupplierPayment', resourceId: paymentId, entityType: 'SupplierPayment', entityId: paymentId, entityCode: paymentNumber, description: `Pembayaran supplier ${paymentNumber} diposting.`, afterData: { amount: amount.toFixed(2), balanceAmount: balanceAmount.toFixed(2), journalEntryId: posted.journal.id, cashBankTransactionId: cashTransaction.id } } });
     return { supplierPayment, invoiceStatus: supplierInvoiceStatus(balanceAmount, paidAmount), balanceAmount: balanceAmount.toFixed(2), idempotentReplay: false };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 }
 
 export async function listPurchaseRequests(userId: string, branchId?: string) {

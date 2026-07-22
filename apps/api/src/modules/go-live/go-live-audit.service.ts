@@ -1,7 +1,15 @@
 import { AccountingPeriodStatus, InventoryValuationStatus, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
-import { evaluateJournal, evaluateOpening, gate, summarizeGate, type GateCheck } from './go-live-audit.helpers';
+import {
+  evaluateInventoryMutationChain,
+  evaluateInventoryValue,
+  evaluateJournal,
+  evaluateOpening,
+  gate,
+  summarizeGate,
+  type GateCheck,
+} from './go-live-audit.helpers';
 
 const D = (value: Prisma.Decimal.Value = 0) => new Prisma.Decimal(value);
 
@@ -58,7 +66,18 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   const lockedWithoutAudit = await prisma.accountingPeriod.findMany({ where: { status: 'LOCKED', OR: [{ closedAt: null }, { closedBy: null }] }, select: { id: true, name: true, scopeKey: true } });
   checks.push(gate('PERIOD-002', 'Period lock memiliki actor dan timestamp', lockedWithoutAudit.length === 0, `${lockedWithoutAudit.length} periode LOCKED kehilangan metadata.`, lockedWithoutAudit));
 
-  const inventoryItems = await prisma.inventoryItem.findMany({ select: { id: true, stock: true, masterProduct: { select: { sku: true, name: true } }, balances: { include: { costLayers: true } } } });
+  const inventoryItems = await prisma.inventoryItem.findMany({
+    select: {
+      id: true,
+      stock: true,
+      masterProduct: { select: { sku: true, name: true } },
+      balances: { include: { costLayers: true } },
+      stockMutations: {
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: { id: true, quantity: true, stockBefore: true, stockAfter: true },
+      },
+    },
+  });
   const inventoryMismatch = inventoryItems.flatMap((item) => {
     const onHand = item.balances.reduce((sum, balance) => sum.add(balance.onHandQty), D(0));
     const layerQty = item.balances.reduce((sum, balance) => sum.add(balance.costLayers.filter((layer) => !layer.isVoided).reduce((subtotal, layer) => subtotal.add(layer.remainingQty), D(0))), D(0));
@@ -71,6 +90,44 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
 
   const pendingValuations = await prisma.inventoryCostLayer.findMany({ where: { isVoided: false, remainingQty: { gt: 0 }, OR: [{ valuationStatus: InventoryValuationStatus.PENDING_VALUATION }, { unitCost: null }] }, select: { id: true, sourceType: true, sourceId: true, remainingQty: true } });
   checks.push(gate('INV-003', 'Seluruh stok aktif memiliki valuation', pendingValuations.length === 0, `${pendingValuations.length} cost layer masih pending valuation.`, pendingValuations));
+
+  const mutationMismatch = inventoryItems.flatMap((item) => {
+    const result = evaluateInventoryMutationChain(item.stock, item.stockMutations);
+    return result.valid ? [] : [{ inventoryItemId: item.id, sku: item.masterProduct.sku, issues: result.issues }];
+  });
+  checks.push(gate('INV-004', 'Mutation chain cocok dengan compatibility stock', mutationMismatch.length === 0, `${inventoryItems.length} item diperiksa; ${mutationMismatch.length} mutation chain tidak konsisten.`, mutationMismatch));
+
+  const [openTransfers, inventoryLedger] = await Promise.all([
+    prisma.internalTransferLedger.findMany({
+      where: { status: { in: ['IN_TRANSIT', 'DISCREPANCY'] } },
+      select: { id: true, shipmentId: true, totalValue: true, receivedValue: true },
+    }),
+    prisma.journalLine.aggregate({
+      where: { account: { code: { in: ['1300', '1310'] } }, journalEntry: { status: 'POSTED' } },
+      _sum: { debit: true, credit: true },
+    }),
+  ]);
+  const layerValue = inventoryItems.reduce(
+    (sum, item) => sum.add(item.balances.flatMap((balance) => balance.costLayers)
+      .filter((layer) => !layer.isVoided && layer.unitCost !== null)
+      .reduce((layerSum, layer) => layerSum.add(layer.remainingQty.mul(layer.unitCost!)), D(0))),
+    D(0),
+  );
+  const inTransitValue = openTransfers.reduce((sum, transfer) => sum.add(transfer.totalValue.sub(transfer.receivedValue)), D(0));
+  const ledgerValue = D(inventoryLedger._sum.debit || 0).sub(inventoryLedger._sum.credit || 0);
+  const valuation = evaluateInventoryValue(layerValue, inTransitValue, ledgerValue);
+  checks.push(gate(
+    'INV-005',
+    'FIFO valuation dan in-transit cocok dengan inventory control ledger',
+    valuation.matches,
+    `Subledger ${valuation.subledgerValue.toFixed(2)}; ledger ${valuation.ledgerValue.toFixed(2)}; selisih ${valuation.difference.toFixed(2)}.`,
+    {
+      layerValue: valuation.layerValue.toFixed(2),
+      inTransitValue: valuation.inTransitValue.toFixed(2),
+      openTransferCount: openTransfers.length,
+      accountCodes: ['1300', '1310'],
+    },
+  ));
 
   const [permissions, templates, activeStaff] = await Promise.all([
     prisma.permission.findMany({ where: { isActive: true }, select: { code: true } }),

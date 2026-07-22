@@ -266,8 +266,12 @@ scripts/
 !apps/api/scripts/
 apps/api/scripts/*
 !apps/api/scripts/run-inventory-concurrency-tests.js
+!apps/api/scripts/run-go-live-database-tests.cjs
+!apps/api/scripts/run-regression-tests.cjs
 !apps/api/scripts/go-live-audit.ts
 !apps/api/scripts/backup-database.sh
 !apps/api/scripts/verify-database-restore.sh
+!apps/api/scripts/rehearse-database-backup.cjs
 !apps/api/scripts/backup-object-storage.sh
 !apps/api/scripts/verify-object-storage-restore.sh
+!apps/api/scripts/rehearse-object-storage-backup.cjs

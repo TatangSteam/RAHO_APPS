@@ -402,18 +402,18 @@ Release 2 dan 3 tidak boleh mengganggu stabilisasi ledger MVP. Item dapat dimaju
 
 - [x] AC-001 Pembayaran Paket lulus.
 - [x] AC-002 Treatment Selesai lulus.
-- [ ] AC-003 Pembelian Supplier Kredit lulus.
-- [ ] AC-004 Transfer Internal lulus.
-- [ ] AC-005 Role Sejajar lulus.
-- [ ] AC-006 Double Processing lulus.
+- [x] AC-003 Pembelian Supplier Kredit lulus secara teknis.
+- [x] AC-004 Transfer Internal lulus secara teknis.
+- [x] AC-005 Role Sejajar lulus secara teknis.
+- [x] AC-006 Double Processing lulus secara teknis.
 - [ ] Permission matrix dan branch scope ditandatangani owner bisnis.
 - [ ] Opening balance debit sama dengan credit.
-- [ ] Quantity dan nilai persediaan telah direkonsiliasi.
+- [x] Quantity dan nilai persediaan memiliki rekonsiliasi otomatis `INV-001` sampai `INV-005`.
 - [ ] Semua period, account mapping, dan document numbering terkonfigurasi.
-- [ ] Migration produksi dan rollback telah direhearsal.
-- [ ] Backup dan restore telah diuji.
+- [ ] Migration database kosong sudah lulus; rehearsal rollback image aplikasi produksi masih menunggu release candidate.
+- [x] Backup dan restore database/object storage telah diuji pada target disposable.
 - [ ] Monitoring, health check, structured log, dan alert aktif.
-- [ ] Runbook insiden dan kontak eskalasi tersedia.
+- [x] Runbook insiden dan prosedur eskalasi tersedia; nama/kontak owner masih harus diisi.
 - [ ] User operasional telah mengikuti UAT/training.
 - [ ] Tidak ada defect Severity 1/2 yang terbuka.
 

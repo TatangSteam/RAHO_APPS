@@ -49,7 +49,9 @@ describe('MemberRegistrationService duplicate checks', () => {
   });
 
   it('rejects an NIK that is already registered globally', async () => {
-    prismaMock.member.findUnique.mockResolvedValue({ id: 'existing-member' });
+    prismaMock.member.findUnique.mockImplementation(({ where }: any) => (
+      where.nik ? { id: 'existing-member' } : null
+    ));
 
     await expect(
       new MemberRegistrationService().createMember(

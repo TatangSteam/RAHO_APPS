@@ -4,18 +4,15 @@ import React, { createContext, useContext, useState, useCallback, useEffect, Rea
 import { useRouter } from 'next/navigation';
 import { adminManagersApi } from '@/lib/api/adminManagersApi';
 import { showToast } from '@/lib/toast';
-import { getDefaultRoute, type AdminManagerAccessScope, type Role } from '@/types/auth';
+import { useAuthStore } from '@/stores/authStore';
+import {
+  getDefaultRoute,
+  type AdminManagerAccessScope,
+  type AuthUser,
+  type Role,
+} from '@/types/auth';
 
 // Types
-interface AuthUser {
-  id: string;
-  email: string;
-  role: string;
-  adminManagerAccessScope?: AdminManagerAccessScope | null;
-  fullName?: string;
-  branchId?: string | null;
-}
-
 interface ImpersonatedUser {
   id: string;
   email: string;
@@ -23,6 +20,7 @@ interface ImpersonatedUser {
   adminManagerAccessScope?: AdminManagerAccessScope | null;
   fullName?: string;
   branchId?: string | null;
+  branchCode?: string | null;
 }
 
 interface ImpersonationChainItem {
@@ -49,6 +47,38 @@ interface ImpersonationContextType extends ImpersonationState {
 
 // Create context
 const ImpersonationContext = createContext<ImpersonationContextType | undefined>(undefined);
+
+function toAuthUser(user: ImpersonatedUser): AuthUser {
+  return {
+    userId: user.id,
+    id: user.id,
+    email: user.email,
+    role: user.role as Role,
+    branchId: user.branchId ?? null,
+    branchCode: user.branchCode ?? null,
+    adminManagerAccessScope: user.adminManagerAccessScope ?? null,
+    fullName: user.fullName || user.email,
+    staffCode: null,
+  };
+}
+
+function toChainItem(user: AuthUser | ImpersonatedUser): ImpersonationChainItem {
+  return {
+    userId: 'userId' in user ? user.userId : user.id,
+    email: user.email,
+    role: user.role,
+    fullName: user.fullName,
+  };
+}
+
+function setAuthCookie(user: ImpersonatedUser): void {
+  const cookiePayload = btoa(JSON.stringify({
+    role: user.role,
+    userId: user.id,
+    adminManagerAccessScope: user.adminManagerAccessScope,
+  }));
+  document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=28800; SameSite=Lax`;
+}
 
 // Helper to extract error message
 function extractErrorMessage(error: any): string {
@@ -81,6 +111,12 @@ function extractErrorMessage(error: any): string {
 // Provider component
 export function ImpersonationProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
+  const {
+    user: authUser,
+    accessToken,
+    refreshToken,
+    setAuth,
+  } = useAuthStore();
   
   const [state, setState] = useState<ImpersonationState>({
     isImpersonating: false,
@@ -126,47 +162,32 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       const response = await adminManagersApi.impersonateUser(userId, targetRole);
       
       // Store new token
-      const currentToken = localStorage.getItem('accessToken');
-      const currentUser = localStorage.getItem('user');
-      
       // Save original user info if not already impersonating
       let originalUser = state.originalUser;
       let chain = [...state.impersonationChain];
-      
-      if (!state.isImpersonating && currentUser) {
-        originalUser = JSON.parse(currentUser);
-        chain = [];
+
+      if (!state.isImpersonating && authUser) {
+        originalUser = authUser;
+        chain = [toChainItem(authUser)];
       }
-      
-      // Add current user to chain
-      if (currentUser) {
-        const current = JSON.parse(currentUser);
-        chain.push({
-          userId: current.id,
-          email: current.email,
-          role: current.role,
-          fullName: current.fullName,
-        });
+
+      const targetChainItem = toChainItem(response.targetUser);
+      if (chain.at(-1)?.userId !== targetChainItem.userId) {
+        chain.push(targetChainItem);
       }
-      
-      // Update localStorage with new token
-      localStorage.setItem('accessToken', response.token);
-      localStorage.setItem('user', JSON.stringify(response.targetUser));
-      const cookiePayload = btoa(
-        JSON.stringify({
-          role: response.targetUser.role,
-          userId: response.targetUser.id,
-          adminManagerAccessScope: response.targetUser.adminManagerAccessScope,
-        }),
-      );
-      document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=28800; SameSite=Lax`;
+
+      setAuth(toAuthUser(response.targetUser), {
+        accessToken: response.token,
+        refreshToken: refreshToken || '',
+      });
+      setAuthCookie(response.targetUser);
       
       // Store impersonation data
       const impersonationData = {
         originalUser,
         impersonatedUser: response.targetUser,
         chain,
-        previousToken: currentToken,
+        previousToken: accessToken,
       };
       localStorage.setItem('impersonation', JSON.stringify(impersonationData));
       
@@ -199,7 +220,16 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       showToast.error(errorMessage);
       throw error;
     }
-  }, [router, state.isImpersonating, state.originalUser, state.impersonationChain]);
+  }, [
+    accessToken,
+    authUser,
+    refreshToken,
+    router,
+    setAuth,
+    state.isImpersonating,
+    state.originalUser,
+    state.impersonationChain,
+  ]);
 
   // Stop impersonation
   const stopImpersonation = useCallback(async () => {
@@ -208,39 +238,44 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
     try {
       const response = await adminManagersApi.stopImpersonation();
       
-      // Get impersonation data
-      const impersonationData = localStorage.getItem('impersonation');
-      let originalUser = state.originalUser;
-      
-      if (impersonationData) {
-        const data = JSON.parse(impersonationData);
-        originalUser = data.originalUser;
+      const returnedUser = response.user as ImpersonatedUser;
+      const nextChain = state.impersonationChain.slice(0, -1);
+      const stillImpersonating = nextChain.length > 1;
+
+      setAuth(toAuthUser(returnedUser), {
+        accessToken: response.token,
+        refreshToken: refreshToken || '',
+      });
+      setAuthCookie(returnedUser);
+
+      if (stillImpersonating) {
+        localStorage.setItem('impersonation', JSON.stringify({
+          originalUser: state.originalUser,
+          impersonatedUser: returnedUser,
+          chain: nextChain,
+          previousToken: accessToken,
+        }));
+      } else {
+        localStorage.removeItem('impersonation');
       }
-      
-      // Restore original token
-      localStorage.setItem('accessToken', response.accessToken);
-      
-      if (originalUser) {
-        localStorage.setItem('user', JSON.stringify(originalUser));
-      }
-      
-      // Clear impersonation data
-      localStorage.removeItem('impersonation');
-      
-      // Update state
+
       setState({
-        isImpersonating: false,
-        originalUser: null,
-        impersonatedUser: null,
-        impersonationChain: [],
+        isImpersonating: stillImpersonating,
+        originalUser: stillImpersonating ? state.originalUser : null,
+        impersonatedUser: stillImpersonating ? returnedUser : null,
+        impersonationChain: stillImpersonating ? nextChain : [],
         loading: false,
         error: null,
       });
-      
-      showToast.success('Berhasil kembali ke akun asli');
-      
-      // Redirect to admin managers page
-      router.push('/admin/managers');
+
+      showToast.success(stillImpersonating
+        ? `Berhasil kembali sebagai ${returnedUser.fullName || returnedUser.email}`
+        : 'Berhasil kembali ke akun asli');
+
+      router.push(getDefaultRoute(
+        returnedUser.role as Role,
+        returnedUser.adminManagerAccessScope,
+      ));
       
       // Force page reload
       setTimeout(() => {
@@ -253,7 +288,14 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
       showToast.error(errorMessage);
       throw error;
     }
-  }, [router, state.originalUser]);
+  }, [
+    accessToken,
+    refreshToken,
+    router,
+    setAuth,
+    state.impersonationChain,
+    state.originalUser,
+  ]);
 
   // Clear error
   const clearError = useCallback(() => {

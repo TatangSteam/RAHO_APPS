@@ -1,7 +1,13 @@
-import { customAlphabet } from 'nanoid';
+import { randomInt } from 'node:crypto';
 
-const nanoid = customAlphabet('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 4);
-const nanoid5 = customAlphabet('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789', 5);
+const RANDOM_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+
+function randomCode(length: number): string {
+  return Array.from(
+    { length },
+    () => RANDOM_ALPHABET[randomInt(RANDOM_ALPHABET.length)],
+  ).join('');
+}
 
 /** Format: YYMM (e.g., "2604" for April 2026) */
 function getYYMM(): string {
@@ -66,7 +72,7 @@ const ROLE_PREFIX: Record<string, string> = {
  */
 export function generateStaffCode(role: string): string {
   const prefix = ROLE_PREFIX[role] ?? 'STF';
-  return `${prefix}-${getYYYYMMDD()}-${nanoid()}`;
+  return `${prefix}-${getYYYYMMDD()}-${randomCode(4)}`;
 }
 
 // ── Package ───────────────────────────────────────────────────
@@ -82,7 +88,7 @@ const PACKAGE_TYPE_CODE: Record<string, string> = {
  */
 export function generatePackageCode(branchCode: string, packageType: string): string {
   const typeCode = PACKAGE_TYPE_CODE[packageType] ?? 'UNK';
-  return `PKG-${branchCode}-${typeCode}-${getYYMM()}-${nanoid5()}`;
+  return `PKG-${branchCode}-${typeCode}-${getYYMM()}-${randomCode(5)}`;
 }
 
 // ── Encounter ─────────────────────────────────────────────────
@@ -92,7 +98,7 @@ export function generatePackageCode(branchCode: string, packageType: string): st
  * @example ENC-PST-2604-AB3Z9
  */
 export function generateEncounterCode(branchCode: string): string {
-  return `ENC-${branchCode}-${getYYMM()}-${nanoid5()}`;
+  return `ENC-${branchCode}-${getYYMM()}-${randomCode(5)}`;
 }
 
 // ── Session ───────────────────────────────────────────────────
@@ -102,7 +108,7 @@ export function generateEncounterCode(branchCode: string): string {
  * @example SES-PST-03-2604-P9QR2
  */
 export function generateSessionCode(branchCode: string, infusKe: number): string {
-  return `SES-${branchCode}-${String(infusKe).padStart(2, '0')}-${getYYMM()}-${nanoid5()}`;
+  return `SES-${branchCode}-${String(infusKe).padStart(2, '0')}-${getYYMM()}-${randomCode(5)}`;
 }
 
 // ── Diagnosis ─────────────────────────────────────────────────
@@ -157,7 +163,7 @@ export function generateRequestCode(branchCode: string, sequence: number): strin
  * @example SHP-PST-BDG-2604-X9KZ
  */
 export function generateShipmentCode(fromCode: string, toCode: string): string {
-  return `SHP-${fromCode}-${toCode}-${getYYMM()}-${nanoid()}`;
+  return `SHP-${fromCode}-${toCode}-${getYYMM()}-${randomCode(4)}`;
 }
 
 // ── Invoice ───────────────────────────────────────────────────

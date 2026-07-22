@@ -10,6 +10,9 @@ jest.mock('../../../lib/prisma', () => ({
     treatmentSession: {
       findUnique: jest.fn(),
     },
+    managerBranch: {
+      findFirst: jest.fn(),
+    },
   },
 }));
 
@@ -83,6 +86,7 @@ describe('SessionsController branch context', () => {
     (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
       branchId: 'managed-branch',
     });
+    (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue({ id: 'assignment-1' });
     sessionsServiceMock.getSessionById.mockResolvedValue({
       session: { sessionId: 'session-1' },
     });
@@ -113,6 +117,7 @@ describe('SessionsController branch context', () => {
     (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
       branchId: 'other-branch',
     });
+    (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue(null);
 
     const req = {
       params: { sessionId: 'session-1' },

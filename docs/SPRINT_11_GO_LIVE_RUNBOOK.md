@@ -25,6 +25,8 @@ Logistics, dan Product Owner menandatangani evidence.
 3. Jalankan:
 
    ```bash
+   npm --prefix apps/api run test:regression
+   npm --prefix apps/web test -- --runInBand
    npm --prefix apps/api run test:go-live:contracts
    npm run type-check:all
    npm run build:api
@@ -68,6 +70,36 @@ npm --prefix apps/api run storage:restore:verify
 
 Catat durasi backup, RPO, durasi restore/RTO, checksum dump, jumlah object, dan
 hasil audit setelah restore.
+
+Untuk workstation Windows/Linux yang memakai container development, gunakan
+runner lintas OS berikut. Runner hanya boleh menghapus target yang namanya
+mengandung `restore`, `rehearsal`, atau `test`:
+
+```powershell
+$env:SOURCE_DATABASE='raho_sprint11_rehearsal'
+$env:RESTORE_DATABASE='raho_sprint11_restore_test'
+npm --prefix apps/api run db:backup:rehearse -- ../../backups/sprint11/database
+
+$env:MINIO_BUCKET='raho-uploads'
+$env:MINIO_RESTORE_BUCKET='raho-restore-rehearsal'
+npm --prefix apps/api run storage:backup:rehearse -- ../../backups/sprint11/object-storage
+```
+
+Evidence JSON, checksum, dan manifest wajib disimpan di media terpisah dari host
+aplikasi. Database dan bucket restore harus tetap disposable.
+
+## 3A. Developer B data-integrity gate
+
+1. Terapkan seluruh migration pada database disposable baru.
+2. Jalankan `npm --prefix apps/api run test:go-live:database`.
+3. Jalankan `npm --prefix apps/api run test:regression`. Seluruh file test harus
+   selesai; suite yang skip karena membutuhkan PostgreSQL wajib tercakup pada
+   command database di langkah 2.
+4. Pastikan suite logistics-to-treatment mencakup dispatch, receipt, FIFO,
+   treatment completion, duplicate retry, dan cancellation reversal.
+5. Jalankan `npm --prefix apps/api run go-live:audit` pada snapshot UAT final.
+6. Gate `INV-001` sampai `INV-005` wajib PASS. `INV-005` membandingkan FIFO
+   layer plus in-transit terhadap akun kontrol persediaan `1300` dan `1310`.
 
 ## 4. Opening-data rehearsal
 

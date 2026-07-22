@@ -1,33 +1,34 @@
 # UAT Sign-Off MVP ERP RAHO
 
-**Release candidate:** `[commit SHA / tag]`  
-**Environment:** `[UAT URL]`  
-**Tanggal pengujian:** `[Asia/Jakarta]`  
-**Dataset:** `[snapshot/import ID dan checksum]`
+**Release candidate:** `[isi commit SHA/tag setelah release candidate dibekukan]`
 
-## Acceptance evidence
+**Environment:** Database dan object-storage rehearsal lokal
 
-| AC | Skenario | Automated contract | DB/E2E evidence | Business signer | Status |
-|---|---|---|---|---|---|
-| AC-001 | Pembayaran paket; kas dan deferred, bukan omzet | `[link]` | `[link]` | Finance | PENDING |
-| AC-002 | Treatment atomic: omzet, stok, HPP, jurnal | `[link]` | `[link]` | Finance + Operations | PENDING |
-| AC-003 | PO hingga pembayaran supplier kredit | `[link]` | `[link]` | Finance + Logistics | PENDING |
-| AC-004 | Transfer internal menjaga total nilai aset | `[link]` | `[link]` | Logistics | PENDING |
-| AC-005 | Role sejajar dan horizontal branch isolation | `[link]` | `[link]` | Product Owner | PENDING |
-| AC-006 | Retry/concurrency tidak membuat posting ganda | `[link]` | `[link]` | Product Owner | PENDING |
+**Tanggal technical acceptance:** 22 Juli 2026 (Asia/Jakarta)
+**Status dokumen:** TECHNICAL PASS / BUSINESS SIGN-OFF PENDING
 
-## Operational acceptance
+## Acceptance Evidence
 
-- [ ] Finance reconciliation berstatus `READY`.
-- [ ] Opening debit sama dengan kredit.
-- [ ] Quantity/value inventory cocok dengan ledger.
-- [ ] Closed period menolak posting; reopen diaudit; LOCKED tidak dapat dibuka.
-- [ ] Permission matrix dan branch scope diuji dengan positive/negative scenario.
-- [ ] Protected evidence tidak dapat diakses lintas user/cabang.
-- [ ] Backup database dan object storage tervalidasi.
-- [ ] Restore ke target disposable berhasil dan audit setelah restore `READY`.
-- [ ] Tidak ada defect Severity 1/2 terbuka.
-- [ ] Runbook, monitoring, rollback, dan kontak eskalasi diterima.
+| AC | Skenario | Automated evidence | Technical status | Business signer |
+|---|---|---|---|---|
+| AC-001 | Pembayaran paket membentuk kas dan deferred, bukan omzet | Payment posting PostgreSQL integration + revenue contract | PASS | Finance |
+| AC-002 | Treatment atomik: omzet, stok, HPP, jurnal | Logistics-to-treatment E2E + duplicate completion + cancellation | PASS | Finance + Operations |
+| AC-003 | PO sampai pembayaran supplier kredit | Purchasing PostgreSQL integration + retry concurrency | PASS | Finance + Logistics |
+| AC-004 | Transfer internal menjaga total nilai aset | Internal transfer concurrency + FIFO transfer value | PASS | Logistics |
+| AC-005 | Role sejajar dan horizontal branch isolation | Permission, branch scope, anti-self-escalation, DB-backed impersonation context, nested frontend restore | PASS | Product Owner |
+| AC-006 | Retry/concurrency tidak membuat posting ganda | Payment, AP, shipment, receipt, treatment, FIFO contention | PASS | Product Owner |
+
+## Operational Acceptance
+
+- [x] Migration dari database kosong berhasil untuk seluruh 78 migration.
+- [x] Quantity, bucket, FIFO layer, mutation chain, dan valuation control tersedia pada go-live audit.
+- [x] Backup dan restore database tervalidasi pada target disposable.
+- [x] Backup dan restore object storage tervalidasi pada bucket disposable.
+- [ ] Go-live audit pada snapshot data UAT final berstatus `READY`.
+- [ ] Trial Balance, opening balance, kas/bank, dan inventory valuation ditandatangani pemilik data.
+- [ ] Permission matrix diuji oleh perwakilan setiap role pada environment UAT.
+- [ ] Tidak ada defect Severity 1/2 terbuka pada saat keputusan go/no-go.
+- [ ] Runbook, monitoring, rollback, RPO, dan RTO diterima Incident Commander.
 
 ## Signatures
 
@@ -40,4 +41,4 @@
 | Incident Commander |  | PENDING |  |  |
 
 Dokumen tidak boleh diubah menjadi `SIGNED` hanya berdasarkan test otomatis.
-Persetujuan wajib diberikan oleh pemilik bisnis yang tercantum di atas.
+Persetujuan wajib diberikan langsung oleh pemilik bisnis pada tabel di atas.
