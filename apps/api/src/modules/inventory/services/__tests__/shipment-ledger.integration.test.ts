@@ -4,6 +4,7 @@ import { prisma } from '@lib/prisma';
 import { postOpeningInventory } from '../inventory-ledger.service';
 import { approveAndReserveStockRequest } from '../stock-reservation.service';
 import { dispatchReservedShipment, receiveReservedShipment } from '../shipment-ledger.service';
+import { resolveShipmentDiscrepancy } from '../inventory-discrepancy-homecare.service';
 
 const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describe : describe.skip;
 
@@ -312,5 +313,45 @@ describeDatabase('shipment transfer ledger', () => {
     expect(finalLedger.receivedValue.toFixed(4)).toBe('1000.0000');
     expect(await prisma.journalEntry.count({ where: { postingKey: { contains: shipmentId } } })).toBe(3);
     expect((await inventoryAssetValue()).toFixed(4)).toBe('1300.0000');
+  }, 60_000);
+
+  it('resolves quarantine consistently across receipt, shipment item, balance, and transfer status', async () => {
+    const discrepancy = await prisma.shipmentDiscrepancy.findFirstOrThrow({
+      where: { shipmentId, status: 'OPEN', quarantinedQty: { gt: 0 } },
+    });
+    const input = {
+      idempotencyKey: `SHIP-DISCREPANCY-RELEASE-${runId}`,
+      action: 'RELEASE_TO_STOCK' as const,
+      quantity: '1',
+      notes: 'Barang hasil inspeksi dinyatakan layak',
+    };
+    const first = await resolveShipmentDiscrepancy(actorId, discrepancy.id, input);
+    const replay = await resolveShipmentDiscrepancy(actorId, discrepancy.id, input);
+    const otherOpenDiscrepancies = await prisma.shipmentDiscrepancy.findMany({
+      where: { shipmentId, status: 'OPEN' },
+    });
+    for (const open of otherOpenDiscrepancies) {
+      await resolveShipmentDiscrepancy(actorId, open.id, {
+        idempotencyKey: `SHIP-DISCREPANCY-NO-STOCK-${runId}-${open.id}`,
+        action: 'NO_STOCK_ACTION',
+        notes: 'Selisih non-quarantine sudah dikonfirmasi',
+      });
+    }
+
+    expect(first.idempotentReplay).toBe(false);
+    expect(replay.idempotentReplay).toBe(true);
+    const [shipment, receiptItem, balance, transfer] = await Promise.all([
+      prisma.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { items: true } }),
+      prisma.shipmentReceiptItem.findFirstOrThrow({ where: { shipmentReceiptId: discrepancy.shipmentReceiptId!, quarantineQty: '0' } }),
+      prisma.inventoryBalance.findFirstOrThrow({ where: { inventoryItemId: destinationItemId } }),
+      prisma.internalTransferLedger.findUniqueOrThrow({ where: { shipmentId } }),
+    ]);
+    expect(shipment.status).toBe('RECEIVED');
+    expect(shipment.items[0].quarantineQty.toFixed(4)).toBe('0.0000');
+    expect(receiptItem.quarantineQty.toFixed(4)).toBe('0.0000');
+    expect(balance.quarantineQty.toFixed(4)).toBe('0.0000');
+    expect(transfer.status).toBe('RECEIVED');
+    expect(await prisma.inventoryPosting.count({ where: { sourceType: 'SHIPMENT_DISCREPANCY', sourceId: discrepancy.id } })).toBe(0);
+    expect(await prisma.journalEntry.count({ where: { postingKey: `SHIPMENT_DISCREPANCY:${discrepancy.id}` } })).toBe(0);
   }, 60_000);
 });

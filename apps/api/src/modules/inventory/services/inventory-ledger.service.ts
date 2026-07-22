@@ -99,6 +99,20 @@ async function assertLocationForItem(tx: Tx, item: LockedInventoryItem, requeste
   return location;
 }
 
+async function assertLocationNotUnderOpname(tx: Tx, stockLocationId: string, bypassOpnameId?: string) {
+  const active = await tx.stockOpname.findFirst({
+    where: {
+      stockLocationId,
+      status: { in: ['COUNTING', 'PENDING_APPROVAL', 'APPROVED'] },
+      ...(bypassOpnameId ? { id: { not: bypassOpnameId } } : {}),
+    },
+    select: { opnameNumber: true },
+  });
+  if (active) {
+    throw errors.conflict('STOCK_LOCATION_OPNAME_LOCKED', `Stock location dikunci oleh opname ${active.opnameNumber}.`);
+  }
+}
+
 async function lockInventoryItems(tx: Tx, ids: string[]): Promise<LockedInventoryItem[]> {
   const orderedIds = [...new Set(ids)].sort();
   if (orderedIds.length === 0) return [];
@@ -207,6 +221,7 @@ async function postInboundInventory(
     const product = await tx.masterProduct.findUnique({ where: { id: item.masterProductId } });
     if (!product?.isActive) throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
     const location = await assertLocationForItem(tx, item, input.stockLocationId);
+    await assertLocationNotUnderOpname(tx, location.id);
 
     let batchId: string | null = null;
     if (product.tracksBatch) {
@@ -299,6 +314,7 @@ async function receiveInboundInventoryInTransaction(
   input: ReceiveInventoryInput,
   tx: Tx,
   postingType: InventoryPostingType,
+  stockOpnameBypassId?: string,
 ) {
   await assertBranchAccess(actorUserId, input.branchId);
   await assertPermission(
@@ -317,6 +333,7 @@ async function receiveInboundInventoryInTransaction(
   const product = await tx.masterProduct.findUnique({ where: { id: item.masterProductId } });
   if (!product?.isActive) throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
   const location = await assertLocationForItem(tx, item, input.stockLocationId);
+  await assertLocationNotUnderOpname(tx, location.id, stockOpnameBypassId);
 
   let batchId: string | null = null;
   if (product.tracksBatch) {
@@ -421,8 +438,19 @@ export function receivePurchasedInventoryInTransaction(actorUserId: string, inpu
   return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.RECEIPT);
 }
 
-export function receiveAdjustmentInventoryInTransaction(actorUserId: string, input: ReceiveInventoryInput, tx: Tx) {
-  return receiveInboundInventoryInTransaction(actorUserId, input, tx, InventoryPostingType.ADJUSTMENT_IN);
+export function receiveAdjustmentInventoryInTransaction(
+  actorUserId: string,
+  input: ReceiveInventoryInput,
+  tx: Tx,
+  stockOpnameBypassId?: string,
+) {
+  return receiveInboundInventoryInTransaction(
+    actorUserId,
+    input,
+    tx,
+    InventoryPostingType.ADJUSTMENT_IN,
+    stockOpnameBypassId,
+  );
 }
 
 function ensureUniqueIssueLines(input: IssueInventoryInput) {
@@ -434,7 +462,7 @@ export async function issueInventoryInTransaction(
   actorUserId: string,
   input: IssueInventoryInput,
   tx: Tx,
-  options: { postingType?: InventoryPostingType; mutationType?: StockMutationType } = {},
+  options: { postingType?: InventoryPostingType; mutationType?: StockMutationType; stockOpnameBypassId?: string } = {},
 ): Promise<string> {
   ensureUniqueIssueLines(input);
   const normalizedLines = [...input.lines].sort((a, b) => `${a.inventoryItemId}:${a.batchId ?? ''}`.localeCompare(`${b.inventoryItemId}:${b.batchId ?? ''}`));
@@ -465,6 +493,7 @@ export async function issueInventoryInTransaction(
   for (const line of normalizedLines) {
     const item = itemMap.get(line.inventoryItemId)!;
     const location = await assertLocationForItem(tx, item, line.stockLocationId);
+    await assertLocationNotUnderOpname(tx, location.id, options.stockOpnameBypassId);
     const quantity = new Prisma.Decimal(line.quantity);
     const balances = await lockBalances(tx, item.id, location.id, line.batchId);
     const available = balances.reduce(
@@ -536,10 +565,16 @@ export async function issueInventoryInTransaction(
   return posting.id;
 }
 
-export function issueAdjustmentInventoryInTransaction(actorUserId: string, input: IssueInventoryInput, tx: Tx) {
+export function issueAdjustmentInventoryInTransaction(
+  actorUserId: string,
+  input: IssueInventoryInput,
+  tx: Tx,
+  stockOpnameBypassId?: string,
+) {
   return issueInventoryInTransaction(actorUserId, input, tx, {
     postingType: InventoryPostingType.ADJUSTMENT_OUT,
     mutationType: StockMutationType.ADJUSTMENT,
+    stockOpnameBypassId,
   });
 }
 

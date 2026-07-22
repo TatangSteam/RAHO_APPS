@@ -189,6 +189,13 @@ export class InventoryItemsService {
    * Creates stock mutation and updates inventory
    */
   async adjustStock(itemId: string, adjustment: number, notes: string | undefined, userId: string) {
+    throw {
+      status: 410,
+      code: 'LEGACY_STOCK_ADJUSTMENT_DISABLED',
+      message: 'Adjustment langsung dinonaktifkan. Gunakan dokumen Inventory Adjustment dengan approval dan posting jurnal.',
+    };
+
+    /* c8 ignore start -- retained temporarily for response compatibility during client migration */
     // Get inventory item
     const item = await prisma.inventoryItem.findUnique({
       where: { id: itemId },
@@ -275,6 +282,7 @@ export class InventoryItemsService {
       },
       mutationId: result.mutation.id,
     };
+    /* c8 ignore stop */
   }
 
   /**
@@ -457,6 +465,13 @@ export class InventoryItemsService {
     minThreshold?: number;
     storageLocation?: string;
   }, userId: string) {
+    if (data.stock !== undefined) {
+      throw {
+        status: 410,
+        code: 'DIRECT_STOCK_UPDATE_DISABLED',
+        message: 'Perubahan stock langsung dinonaktifkan. Gunakan Inventory Adjustment atau Stock Opname.',
+      };
+    }
     // Get current item
     const currentItem = await prisma.inventoryItem.findUnique({
       where: { id: itemId },

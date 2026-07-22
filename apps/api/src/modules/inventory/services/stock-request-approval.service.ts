@@ -12,6 +12,7 @@ import {
   getStockRequestUnit,
   parseStockRequestQuantity,
 } from './stock-request-units';
+import { decideApprovalInTransaction, submitApprovalInTransaction } from '../../approvals/approval.service';
 
 interface InvoiceItemInput {
   masterProductId: string;
@@ -263,7 +264,7 @@ export class StockRequestApprovalService {
    */
   async createInvoice(requestId: string, userId: string, invoiceData: CreateInvoiceInput) {
     const request = await this.getRequestWithValidation(requestId, ['PENDING']);
-    const user = await this.validateManagerPermission(userId, request.branchId);
+    await this.validateManagerPermission(userId, request.branchId);
 
     // Both PREMIER and PARTNERSHIP branches now use the same invoice flow
     if (request.branch.type !== BranchType.PREMIER && request.branch.type !== BranchType.PARTNERSHIP) {
@@ -299,6 +300,32 @@ export class StockRequestApprovalService {
     );
     const approvalPlan = getStockRequestInvoiceApprovalPlan(subtotal, invoiceData.paymentMode);
     const { isFreeRequest, isDebtRequest } = approvalPlan;
+    const approval = await prisma.$transaction(async (tx) => {
+      const submitted = await submitApprovalInTransaction(tx, {
+        subjectType: 'STOCK_REQUEST',
+        subjectId: request.id,
+        branchId: request.branchId,
+        makerId: request.requestedBy,
+        amount: subtotal,
+        transactionType: 'STOCK_REQUEST',
+        metadata: { requestCode: request.requestCode, branchType: request.branch.type },
+      });
+      if (submitted.status === 'APPROVED') return submitted;
+      return decideApprovalInTransaction(tx, {
+        subjectType: 'STOCK_REQUEST',
+        subjectId: request.id,
+        actorUserId: userId,
+        decision: 'APPROVE',
+        note: invoiceData.notes?.trim() || 'Permintaan stok disetujui',
+      });
+    });
+    if (approval.status !== 'APPROVED') {
+      throw {
+        status: 409,
+        code: 'STOCK_REQUEST_APPROVAL_PENDING',
+        message: 'Langkah approval tersimpan dan masih menunggu approver berikutnya.',
+      };
+    }
     const now = new Date();
     const senderBranch = (isFreeRequest || isDebtRequest) ? await this.getOrCreateExternalBranch() : null;
     const shipmentCode = (isFreeRequest || isDebtRequest)
@@ -1174,32 +1201,25 @@ export class StockRequestApprovalService {
     const request = await this.getRequestWithValidation(requestId, ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED']);
     const user = await this.validateManagerPermission(userId, request.branchId);
 
-    // Update request status
-    const updatedRequest = await prisma.stockRequest.update({
-      where: { id: requestId },
-      data: {
-        status: 'REJECTED',
-        reviewedBy: userId,
-        reviewedAt: new Date(),
-        reviewNotes,
-      },
-      include: {
-        items: {
-          include: {
-            masterProduct: true,
-          },
+    const updatedRequest = await prisma.$transaction(async (tx) => {
+      await submitApprovalInTransaction(tx, {
+        subjectType: 'STOCK_REQUEST', subjectId: request.id, branchId: request.branchId,
+        makerId: request.requestedBy, amount: request.invoice?.totalAmount || 0,
+        transactionType: 'STOCK_REQUEST', metadata: { requestCode: request.requestCode },
+      });
+      await decideApprovalInTransaction(tx, {
+        subjectType: 'STOCK_REQUEST', subjectId: request.id, actorUserId: userId,
+        decision: 'REJECT', note: reviewNotes,
+      });
+      return tx.stockRequest.update({
+        where: { id: requestId },
+        data: { status: 'REJECTED', reviewedBy: userId, reviewedAt: new Date(), reviewNotes },
+        include: {
+          items: { include: { masterProduct: true } },
+          branch: true,
+          invoice: { include: { items: { include: { masterProduct: true } } } },
         },
-        branch: true,
-        invoice: {
-          include: {
-            items: {
-              include: {
-                masterProduct: true,
-              },
-            },
-          },
-        },
-      },
+      });
     });
 
     // Audit log

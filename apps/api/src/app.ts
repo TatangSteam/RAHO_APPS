@@ -34,7 +34,7 @@ import openingBalanceRouter from './modules/opening-balance/opening-balance.rout
 import expenseRouter from './modules/expenses/expense.routes';
 import purchasingRouter from './modules/purchasing/purchasing.routes';
 import revenueRouter from './modules/revenue/revenue.routes';
-import approvalRouter from './modules/workflow/approval.routes';
+import workflowApprovalRouter from './modules/workflow/approval.routes';
 import stockOpnameRouter from './modules/inventory/stock-opname.routes';
 
 export function createApp(): Application {
@@ -109,7 +109,7 @@ export function createApp(): Application {
   app.use(`${prefix}/expenses`, expenseRouter);
   app.use(`${prefix}/purchasing`, purchasingRouter);
   app.use(`${prefix}/revenue`, revenueRouter);
-  app.use(`${prefix}/workflow`, approvalRouter);
+  app.use(`${prefix}/workflow`, workflowApprovalRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

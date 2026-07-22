@@ -5,12 +5,11 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Users, Activity, Package, Boxes,
   Bell, MessageSquare, ChevronLeft, X,
-  LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
+  LogOut, ClipboardList, ClipboardCheck, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
   Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
   ListTree,
-  ClipboardCheck,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -115,6 +114,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/inventory/stock-mutations',
         icon: <History size={20} />,
         roles: ALL_STAFF,
+      },
+      {
+        label: 'Adjustment & Opname',
+        href: '/inventory/controls',
+        icon: <ClipboardCheck size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
       {
         label: 'Riwayat Penggunaan Barang',

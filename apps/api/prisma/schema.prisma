@@ -213,6 +213,34 @@ enum InventoryCostAllocationType {
   TRANSFER_RECEIPT
 }
 
+enum InventoryAdjustmentDirection {
+  IN
+  OUT
+}
+
+enum InventoryAdjustmentStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  POSTED
+  CANCELLED
+}
+
+enum StockOpnameResolution {
+  PENDING
+  ADJUST
+  RECOUNT
+  ACCEPTED
+}
+
+enum DiscrepancyResolutionAction {
+  RELEASE_TO_STOCK
+  RETURN_TO_SENDER
+  WRITE_OFF
+  NO_STOCK_ACTION
+}
+
 enum TreatmentBomStatus {
   DRAFT
   ACTIVE
@@ -406,7 +434,9 @@ enum ApprovalDecisionType {
 
 enum StockOpnameStatus {
   DRAFT
+  COUNTING
   SUBMITTED
+  PENDING_APPROVAL
   APPROVED
   REJECTED
   POSTED
@@ -1947,12 +1977,13 @@ model ApprovalInstance {
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
 
-  rule        ApprovalRule       @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
-  branch      Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  maker       User               @relation("ApprovalInstanceMaker", fields: [makerUserId], references: [id], onDelete: Restrict)
-  decisions   ApprovalDecision[]
-  auditLogs   ApprovalAuditLog[]
-  stockOpname StockOpname?
+  rule                ApprovalRule         @relation(fields: [approvalRuleId], references: [id], onDelete: Restrict)
+  branch              Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  maker               User                 @relation("ApprovalInstanceMaker", fields: [makerUserId], references: [id], onDelete: Restrict)
+  decisions           ApprovalDecision[]
+  auditLogs           ApprovalAuditLog[]
+  stockOpname         StockOpname?
+  inventoryAdjustment InventoryAdjustment?
 
   @@index([module, status, branchId, submittedAt])
   @@index([entityType, entityId])
@@ -3135,19 +3166,30 @@ model StockOpname {
   idempotencyKey       String                @unique
   payloadHash          String
   branchId             String
+  warehouseId          String?
+  stockLocationId      String?
   status               StockOpnameStatus     @default(DRAFT)
   reasonCode           StockAdjustmentReason
   notes                String
   countedAt            DateTime
+  snapshotAt           DateTime              @default(now())
+  lockToken            String?               @unique
   createdBy            String
+  startedBy            String?
   submittedAt          DateTime?
   reviewedBy           String?
   reviewedAt           DateTime?
+  approvedBy           String?
+  approvedAt           DateTime?
   rejectionReason      String?
   approvalInstanceId   String?               @unique
+  adjustmentId         String?               @unique
   totalAdjustmentValue Decimal               @default(0) @db.Decimal(18, 2)
   journalEntryId       String?               @unique
+  postedBy             String?
   postedAt             DateTime?
+  cancelledBy          String?
+  cancelledAt          DateTime?
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
 
@@ -3158,26 +3200,36 @@ model StockOpname {
   lines            StockOpnameLine[]
 
   @@index([branchId, status, countedAt])
+  @@index([stockLocationId, status])
   @@map("stock_opnames")
 }
 
 model StockOpnameLine {
-  id                 String   @id @default(cuid())
+  id                 String                @id @default(cuid())
   stockOpnameId      String
   lineNo             Int
   inventoryItemId    String
   stockLocationId    String
+  inventoryBalanceId String?
   batchId            String?
-  batchKey           String   @default("NO_BATCH")
-  systemQty          Decimal  @db.Decimal(18, 4)
-  physicalQty        Decimal  @db.Decimal(18, 4)
-  differenceQty      Decimal  @db.Decimal(18, 4)
-  positiveUnitCost   Decimal? @db.Decimal(18, 4)
-  actualCost         Decimal? @db.Decimal(18, 4)
+  batchKey           String                @default("NO_BATCH")
+  systemQty          Decimal               @db.Decimal(18, 4)
+  systemUnitCost     Decimal               @default(0) @db.Decimal(18, 4)
+  systemValue        Decimal               @default(0) @db.Decimal(18, 2)
+  physicalQty        Decimal               @db.Decimal(18, 4)
+  differenceQty      Decimal               @db.Decimal(18, 4)
+  positiveUnitCost   Decimal?              @db.Decimal(18, 4)
+  resolvedUnitCost   Decimal?              @db.Decimal(18, 4)
+  resolution         StockOpnameResolution @default(PENDING)
+  resolutionNote     String?
+  countedBy          String?
+  countedAt          DateTime?
+  actualCost         Decimal?              @db.Decimal(18, 4)
   inventoryPostingId String?
   stockMutationId    String?
   notes              String?
-  createdAt          DateTime @default(now())
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
 
   stockOpname      StockOpname       @relation(fields: [stockOpnameId], references: [id], onDelete: Restrict)
   inventoryItem    InventoryItem     @relation(fields: [inventoryItemId], references: [id], onDelete: Restrict)
@@ -3188,6 +3240,7 @@ model StockOpnameLine {
 
   @@unique([stockOpnameId, lineNo])
   @@unique([stockOpnameId, inventoryItemId, stockLocationId, batchKey])
+  @@unique([stockOpnameId, inventoryBalanceId])
   @@index([inventoryItemId, stockLocationId])
   @@index([inventoryPostingId])
   @@map("stock_opname_lines")
@@ -3242,6 +3295,84 @@ model InventoryCostAllocation {
   @@index([costLayerId, createdAt])
   @@index([stockMutationId])
   @@map("inventory_cost_allocations")
+}
+
+model InventoryAdjustmentReasonCode {
+  id                String                        @id @default(cuid())
+  code              String                        @unique
+  name              String
+  direction         InventoryAdjustmentDirection?
+  requiresApproval  Boolean                       @default(true)
+  approvalThreshold Decimal                       @default(0) @db.Decimal(18, 2)
+  gainAccountCode   String                        @default("4300")
+  lossAccountCode   String                        @default("5210")
+  isActive          Boolean                       @default(true)
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
+
+  @@index([isActive, direction])
+  @@map("inventory_adjustment_reason_codes")
+}
+
+model InventoryAdjustment {
+  id                  String                    @id @default(cuid())
+  adjustmentNumber    String                    @unique
+  idempotencyKey      String                    @unique
+  payloadHash         String
+  branchId            String
+  stockLocationId     String
+  reasonCode          String
+  status              InventoryAdjustmentStatus @default(DRAFT)
+  description         String
+  totalEstimatedValue Decimal                   @default(0) @db.Decimal(18, 2)
+  totalPostedValue    Decimal                   @default(0) @db.Decimal(18, 2)
+  approvalInstanceId  String?                   @unique
+  sourceType          String                    @default("MANUAL_ADJUSTMENT")
+  sourceId            String?
+  stockOpnameId       String?
+  inboundPostingId    String?                   @unique
+  outboundPostingId   String?                   @unique
+  journalEntryId      String?                   @unique
+  submittedAt         DateTime?
+  approvedAt          DateTime?
+  approvedBy          String?
+  rejectionReason     String?
+  postedAt            DateTime?
+  postedBy            String?
+  createdBy           String
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+
+  lines            InventoryAdjustmentLine[]
+  approvalInstance ApprovalInstance?         @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+
+  @@index([branchId, status, createdAt])
+  @@index([stockLocationId, status])
+  @@index([stockOpnameId])
+  @@map("inventory_adjustments")
+}
+
+model InventoryAdjustmentLine {
+  id                    String                       @id @default(cuid())
+  inventoryAdjustmentId String
+  lineNo                Int
+  inventoryItemId       String
+  batchId               String?
+  direction             InventoryAdjustmentDirection
+  quantity              Decimal                      @db.Decimal(18, 4)
+  unitCost              Decimal?                     @db.Decimal(18, 4)
+  estimatedValue        Decimal                      @default(0) @db.Decimal(18, 2)
+  postedValue           Decimal                      @default(0) @db.Decimal(18, 2)
+  inventoryPostingId    String?
+  notes                 String?
+  createdAt             DateTime                     @default(now())
+
+  adjustment InventoryAdjustment @relation(fields: [inventoryAdjustmentId], references: [id], onDelete: Restrict)
+
+  @@unique([inventoryAdjustmentId, lineNo])
+  @@index([inventoryItemId, batchId])
+  @@index([inventoryPostingId])
+  @@map("inventory_adjustment_lines")
 }
 
 model StockRequest {
@@ -3563,24 +3694,29 @@ model StockRequestInvoiceItem {
 
 // Discrepancy report for shipments
 model ShipmentDiscrepancy {
-  id                String                    @id @default(cuid())
-  shipmentId        String
-  shipmentReceiptId String?
-  masterProductId   String
-  productName       String // Snapshot nama produk
-  expectedQty       Decimal                   @db.Decimal(18, 4)
-  receivedQty       Decimal                   @db.Decimal(18, 4)
-  discrepancyType   DiscrepancyType
-  quarantinedQty    Decimal                   @default(0) @db.Decimal(18, 4)
-  status            ShipmentDiscrepancyStatus @default(OPEN)
-  notes             String?
-  photoUrl          String? // Foto bukti (optional)
-  photoFileName     String?
-  reportedBy        String
-  resolvedBy        String?
-  resolvedAt        DateTime?
-  resolutionNotes   String?
-  createdAt         DateTime                  @default(now())
+  id                 String                       @id @default(cuid())
+  shipmentId         String
+  shipmentReceiptId  String?
+  masterProductId    String
+  productName        String // Snapshot nama produk
+  expectedQty        Decimal                      @db.Decimal(18, 4)
+  receivedQty        Decimal                      @db.Decimal(18, 4)
+  discrepancyType    DiscrepancyType
+  quarantinedQty     Decimal                      @default(0) @db.Decimal(18, 4)
+  status             ShipmentDiscrepancyStatus    @default(OPEN)
+  notes              String?
+  photoUrl           String? // Foto bukti (optional)
+  photoFileName      String?
+  reportedBy         String
+  resolvedBy         String?
+  resolvedAt         DateTime?
+  resolutionNotes    String?
+  resolutionAction   DiscrepancyResolutionAction?
+  resolutionQty      Decimal?                     @db.Decimal(18, 4)
+  resolutionKey      String?                      @unique
+  inventoryPostingId String?                      @unique
+  journalEntryId     String?                      @unique
+  createdAt          DateTime                     @default(now())
 
   shipment        Shipment         @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
   shipmentReceipt ShipmentReceipt? @relation(fields: [shipmentReceiptId], references: [id], onDelete: Restrict)
@@ -3947,6 +4083,7 @@ model HomecareBagUsage {
   teamId    String
 
   treatmentSessionId String?
+  multiBagUsageId    String?
   usedBy             String
   status             HomecareBagUsageStatus @default(COMPLETED)
   usageDate          DateTime               @default(now())
@@ -3963,10 +4100,12 @@ model HomecareBagUsage {
   bag   HomecareBag            @relation(fields: [bagId], references: [id])
   items HomecareBagUsageItem[]
 
+  @@unique([treatmentSessionId, bagId])
   @@index([bagId])
   @@index([teamId])
   @@index([usedBy])
   @@index([treatmentSessionId])
+  @@index([multiBagUsageId])
   @@index([usageDate])
   @@map("homecare_bag_usages")
 }
@@ -4078,6 +4217,28 @@ model HomecareBagOpnameItem {
   @@index([opnameId])
   @@index([masterProductId])
   @@map("homecare_bag_opname_items")
+}
+
+model HomecareMultiBagUsage {
+  id                 String                 @id @default(cuid())
+  completionNumber   String                 @unique
+  idempotencyKey     String                 @unique
+  payloadHash        String
+  treatmentSessionId String                 @unique
+  teamId             String
+  branchId           String
+  status             HomecareBagUsageStatus @default(COMPLETED)
+  usageIds           Json
+  bagCount           Int
+  totalItemLines     Int
+  notes              String
+  completedBy        String
+  completedAt        DateTime               @default(now())
+  createdAt          DateTime               @default(now())
+
+  @@index([teamId, completedAt])
+  @@index([branchId, completedAt])
+  @@map("homecare_multi_bag_usages")
 }
 
 model LogisticStockTransaction {

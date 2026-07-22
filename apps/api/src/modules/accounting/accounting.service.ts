@@ -296,6 +296,59 @@ export async function postInventoryDerivedJournal(input: PostJournalInput, tx: D
   return postWithinTransaction(tx, posting);
 }
 
+/** Strict posting path for approved inventory adjustment and stock opname. */
+export async function postInventoryAdjustmentDerivedJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  if (posting.sourceLinks.length !== 1) {
+    throw errors.badRequest('ADJUSTMENT_JOURNAL_SOURCE_INVALID', 'Jurnal adjustment wajib memiliki satu source document.');
+  }
+  const sourceType = posting.sourceLinks[0].sourceType.trim().toUpperCase();
+  if (!['INVENTORY_ADJUSTMENT', 'STOCK_OPNAME', 'SHIPMENT_DISCREPANCY'].includes(sourceType)) {
+    throw errors.badRequest('ADJUSTMENT_JOURNAL_SOURCE_INVALID', 'Source jurnal adjustment tidak didukung.');
+  }
+  const allowedRoles = new Set(['INVENTORY_IN', 'INVENTORY_OUT', 'GAIN', 'LOSS']);
+  if (posting.lines.some((line) => !allowedRoles.has(String(line.metadata?.adjustmentRole)))) {
+    throw errors.badRequest('ADJUSTMENT_JOURNAL_ROLE_INVALID', 'Role baris jurnal adjustment tidak valid.');
+  }
+  const sum = (role: string, side: 'debit' | 'credit') => posting.lines
+    .filter((line) => line.metadata?.adjustmentRole === role)
+    .reduce((total, line) => total.add(line[side]), new Prisma.Decimal(0));
+  const inventoryDebit = sum('INVENTORY_IN', 'debit');
+  const inventoryCredit = sum('INVENTORY_OUT', 'credit');
+  const gainCredit = sum('GAIN', 'credit');
+  const lossDebit = sum('LOSS', 'debit');
+  const invalidDirection = posting.lines.some((line) => (
+    (line.metadata?.adjustmentRole === 'GAIN' && (!line.debit.isZero() || !line.credit.greaterThan(0)))
+    || (line.metadata?.adjustmentRole === 'LOSS' && (!line.credit.isZero() || !line.debit.greaterThan(0)))
+    || (line.metadata?.adjustmentRole === 'INVENTORY_IN' && (line.accountCode !== '1300' || !line.debit.greaterThan(0) || !line.credit.isZero()))
+    || (line.metadata?.adjustmentRole === 'INVENTORY_OUT' && (line.accountCode !== '1300' || !line.credit.greaterThan(0) || !line.debit.isZero()))
+  ));
+  if (invalidDirection || !inventoryDebit.equals(gainCredit) || !inventoryCredit.equals(lossDebit)
+    || (!inventoryDebit.greaterThan(0) && !inventoryCredit.greaterThan(0))) {
+    throw errors.badRequest(
+      'ADJUSTMENT_JOURNAL_POLICY_INVALID',
+      'Adjustment masuk harus debit inventory/kredit gain dan adjustment keluar harus debit loss/kredit inventory.',
+    );
+  }
+  const accountCodes = [...new Set(posting.lines.map((line) => line.accountCode))];
+  const accounts = await tx.account.findMany({ where: { code: { in: accountCodes }, isActive: true, allowPosting: true }, select: { code: true, type: true } });
+  const accountTypes = new Map(accounts.map((account) => [account.code, account.type]));
+  if (posting.lines.some((line) => {
+    const role = String(line.metadata?.adjustmentRole);
+    const expected = role.startsWith('INVENTORY_') ? AccountType.ASSET : role === 'GAIN' ? AccountType.REVENUE : AccountType.EXPENSE;
+    return accountTypes.get(line.accountCode) !== expected;
+  })) {
+    throw errors.badRequest('ADJUSTMENT_JOURNAL_ACCOUNT_INVALID', 'Tipe akun jurnal adjustment tidak sesuai mapping reason code.');
+  }
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+  await assertPermission(
+    posting.actorUserId,
+    sourceType === 'SHIPMENT_DISCREPANCY' ? PERMISSIONS.INVENTORY_DISCREPANCY_RESOLVE : PERMISSIONS.INVENTORY_ADJUSTMENT_POST,
+    posting.branchId,
+  );
+  return postWithinTransaction(tx, posting);
+}
+
 /** Strict system-derived posting path for purchasing/AP source documents. */
 export async function postPurchasingDerivedJournal(input: PostJournalInput, tx: DbClient) {
   const posting = validateAndNormalizePosting(input);

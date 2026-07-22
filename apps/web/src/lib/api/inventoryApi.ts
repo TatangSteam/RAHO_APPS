@@ -1223,6 +1223,38 @@ export const inventoryApi = {
   },
 
   // ============================================================
+  // SPRINT 9 INVENTORY CONTROL
+  // ============================================================
+
+  getAdjustmentReasons: () => api.get('/inventory/controls/adjustment-reasons'),
+
+  getAdjustments: (params?: { branchId?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/inventory/controls/adjustments', { params }),
+
+  createAdjustment: (data: Record<string, unknown>) => api.post('/inventory/controls/adjustments', data),
+  submitAdjustment: (id: string) => api.post(`/inventory/controls/adjustments/${id}/submit`),
+  decideAdjustment: (id: string, decision: 'APPROVE' | 'REJECT', note: string) =>
+    api.post(`/inventory/controls/adjustments/${id}/decision`, { decision, note }),
+  postAdjustment: (id: string) => api.post(`/inventory/controls/adjustments/${id}/post`),
+
+  getStockOpnames: (params?: { branchId?: string; status?: string; page?: number; limit?: number }) =>
+    api.get('/inventory/controls/stock-opnames', { params }),
+  startStockOpname: (data: { branchId: string; stockLocationId: string; notes?: string }) =>
+    api.post('/inventory/controls/stock-opnames', data),
+  countStockOpname: (id: string, lines: Array<Record<string, unknown>>) =>
+    api.patch(`/inventory/controls/stock-opnames/${id}/count`, { lines }),
+  submitStockOpname: (id: string) => api.post(`/inventory/controls/stock-opnames/${id}/submit`),
+  decideStockOpname: (id: string, decision: 'APPROVE' | 'REJECT', note: string) =>
+    api.post(`/inventory/controls/stock-opnames/${id}/decision`, { decision, note }),
+  postStockOpname: (id: string) => api.post(`/inventory/controls/stock-opnames/${id}/post`),
+  cancelStockOpname: (id: string, note: string) => api.post(`/inventory/controls/stock-opnames/${id}/cancel`, { note }),
+
+  resolveShipmentDiscrepancy: (id: string, data: Record<string, unknown>) =>
+    api.post(`/inventory/shipment-discrepancies/${id}/resolve`, data),
+  completeMultiBagUsage: (data: Record<string, unknown>) =>
+    api.post('/inventory/homecare-multi-bag-usages/complete', data),
+
+  // ============================================================
   // EXPORT
   // ============================================================
 

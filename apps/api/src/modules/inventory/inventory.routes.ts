@@ -9,6 +9,7 @@ import { InventoryLedgerController } from './inventory-ledger.controller';
 import { StockReservationController } from './stock-reservation.controller';
 import { GoodsReceiptController } from './goods-receipt.controller';
 import { TreatmentBomController } from './treatment-bom.controller';
+import { InventoryControlController } from './inventory-control.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
@@ -62,6 +63,7 @@ const inventoryLedgerController = new InventoryLedgerController();
 const stockReservationController = new StockReservationController();
 const goodsReceiptController = new GoodsReceiptController();
 const treatmentBomController = new TreatmentBomController();
+const inventoryControlController = new InventoryControlController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -75,6 +77,23 @@ const ALLSTAFF: Role[] = [
 
 const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK, Role.ADMIN_CABANG];
 const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
+
+// Sprint 9 inventory control: approval-based adjustment and locked stock opname.
+router.get('/controls/adjustment-reasons', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_READ), inventoryControlController.reasons.bind(inventoryControlController));
+router.get('/controls/adjustments', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_READ), inventoryControlController.listAdjustments.bind(inventoryControlController));
+router.post('/controls/adjustments', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_CREATE), inventoryControlController.createAdjustment.bind(inventoryControlController));
+router.post('/controls/adjustments/:id/submit', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_CREATE), inventoryControlController.submitAdjustment.bind(inventoryControlController));
+router.post('/controls/adjustments/:id/decision', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_APPROVE), inventoryControlController.decideAdjustment.bind(inventoryControlController));
+router.post('/controls/adjustments/:id/post', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_POST), inventoryControlController.postAdjustment.bind(inventoryControlController));
+router.get('/controls/stock-opnames', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_READ), inventoryControlController.listOpnames.bind(inventoryControlController));
+router.post('/controls/stock-opnames', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_COUNT), inventoryControlController.startOpname.bind(inventoryControlController));
+router.patch('/controls/stock-opnames/:id/count', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_COUNT), inventoryControlController.countOpname.bind(inventoryControlController));
+router.post('/controls/stock-opnames/:id/submit', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_COUNT), inventoryControlController.submitOpname.bind(inventoryControlController));
+router.post('/controls/stock-opnames/:id/decision', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_APPROVE), inventoryControlController.decideOpname.bind(inventoryControlController));
+router.post('/controls/stock-opnames/:id/post', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_POST), inventoryControlController.postOpname.bind(inventoryControlController));
+router.post('/controls/stock-opnames/:id/cancel', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPNAME_COUNT), inventoryControlController.cancelOpname.bind(inventoryControlController));
+router.post('/shipment-discrepancies/:id/resolve', authenticate, requirePermission(PERMISSIONS.INVENTORY_DISCREPANCY_RESOLVE), inventoryControlController.resolveDiscrepancy.bind(inventoryControlController));
+router.post('/homecare-multi-bag-usages/complete', authenticate, requirePermission(PERMISSIONS.HOMECARE_MULTI_BAG_COMPLETE), inventoryControlController.completeMultiBagUsage.bind(inventoryControlController));
 
 // ============================================================
 // MASTER PRODUCTS (for inventory modal)
