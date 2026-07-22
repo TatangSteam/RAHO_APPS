@@ -227,6 +227,10 @@ export class SessionsService {
     return this.materialUsageService.getMaterialUsages(sessionId);
   }
 
+  async deleteMaterialUsage(sessionId: string, usageId: string, userId: string, branchId: string) {
+    return this.materialUsageService.deleteMaterialUsage(sessionId, usageId, userId, branchId);
+  }
+
   // ============================================================
   // STEP 6: PHOTO UPLOAD
   // ============================================================

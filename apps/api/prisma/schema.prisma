@@ -213,6 +213,35 @@ enum InventoryCostAllocationType {
   TRANSFER_RECEIPT
 }
 
+enum TreatmentBomStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum MaterialUsageStatus {
+  DRAFT
+  CONSUMED
+  REVERSED
+}
+
+enum MaterialDeviationReason {
+  CLINICAL_ADJUSTMENT
+  PATIENT_CONDITION
+  MATERIAL_SUBSTITUTION
+  WASTE_DAMAGE
+  STOCK_AVAILABILITY
+  OTHER
+}
+
+enum IntegrationEventStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
 enum InternalTransferStatus {
   IN_TRANSIT
   RECEIVED
@@ -556,6 +585,7 @@ model Branch {
   packageRevenueContracts PackageRevenueContract[]
   domainEvents            DomainEvent[]
   revenueRecognitions     RevenueRecognition[]
+  treatmentBoms           TreatmentBom[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -1133,6 +1163,7 @@ model PackagePricing {
   branch         Branch?               @relation(fields: [branchId], references: [id])
   memberPackages MemberPackage[]
   revenuePolicy  PackageRevenuePolicy?
+  treatmentBoms  TreatmentBom[]
 
   @@unique([branchId, packageType, boosterType, serviceType, totalSessions, productCode], map: "package_pricing_identity_unique")
   @@index([branchId, isActive])
@@ -2199,29 +2230,33 @@ model Encounter {
 }
 
 model TreatmentSession {
-  id               String      @id @default(cuid())
-  sessionCode      String      @unique
-  encounterId      String
-  branchId         String
-  infusKe          Int
-  branchInfusKe    Int
-  pelaksanaan      SessionType
-  treatmentDate    DateTime
-  isCompleted      Boolean     @default(false)
-  adminLayananId   String
-  doctorId         String // Primary doctor (backward compatibility)
-  nurseId          String // Primary nurse (backward compatibility)
-  boosterPackageId String?
-  boosterType      String?
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                String      @id @default(cuid())
+  sessionCode       String      @unique
+  encounterId       String
+  branchId          String
+  infusKe           Int
+  branchInfusKe     Int
+  pelaksanaan       SessionType
+  treatmentDate     DateTime
+  isCompleted       Boolean     @default(false)
+  adminLayananId    String
+  doctorId          String // Primary doctor (backward compatibility)
+  nurseId           String // Primary nurse (backward compatibility)
+  boosterPackageId  String?
+  boosterType       String?
+  completedAt       DateTime?
+  completedBy       String?
+  materialPostingId String?     @unique
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
-  encounter      Encounter      @relation(fields: [encounterId], references: [id])
-  branch         Branch         @relation(fields: [branchId], references: [id])
-  adminLayanan   User           @relation("SessionAdmin", fields: [adminLayananId], references: [id])
-  doctor         User           @relation("SessionDoctor", fields: [doctorId], references: [id])
-  nurse          User           @relation("SessionNurse", fields: [nurseId], references: [id])
-  boosterPackage MemberPackage? @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+  encounter       Encounter         @relation(fields: [encounterId], references: [id])
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  adminLayanan    User              @relation("SessionAdmin", fields: [adminLayananId], references: [id])
+  doctor          User              @relation("SessionDoctor", fields: [doctorId], references: [id])
+  nurse           User              @relation("SessionNurse", fields: [nurseId], references: [id])
+  boosterPackage  MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+  materialPosting InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
 
   therapyPlan      TherapyPlan?
   vitalSigns       VitalSign[]
@@ -2436,20 +2471,113 @@ model InfusionExecution {
 }
 
 model MaterialUsage {
-  id                 String   @id @default(cuid())
-  treatmentSessionId String
-  inventoryItemId    String
-  quantity           Decimal  @db.Decimal(10, 2)
-  unit               String
-  recordedBy         String
-  createdAt          DateTime @default(now())
+  id                  String                   @id @default(cuid())
+  usageKey            String?                  @unique
+  treatmentSessionId  String
+  inventoryItemId     String
+  treatmentBomItemId  String?
+  quantity            Decimal                  @db.Decimal(18, 4)
+  unit                String
+  baseQuantity        Decimal                  @default(0) @db.Decimal(18, 4)
+  recommendedQuantity Decimal?                 @db.Decimal(18, 4)
+  deviationReason     MaterialDeviationReason?
+  deviationNotes      String?                  @db.Text
+  status              MaterialUsageStatus      @default(DRAFT)
+  inventoryPostingId  String?
+  actualUnitCost      Decimal?                 @db.Decimal(18, 4)
+  totalActualCost     Decimal?                 @db.Decimal(18, 4)
+  isLegacyConsumption Boolean                  @default(false)
+  consumedAt          DateTime?
+  recordedBy          String
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
 
-  session       TreatmentSession @relation(fields: [treatmentSessionId], references: [id])
-  inventoryItem InventoryItem    @relation(fields: [inventoryItemId], references: [id])
+  session          TreatmentSession  @relation(fields: [treatmentSessionId], references: [id])
+  inventoryItem    InventoryItem     @relation(fields: [inventoryItemId], references: [id])
+  treatmentBomItem TreatmentBomItem? @relation(fields: [treatmentBomItemId], references: [id], onDelete: SetNull)
+  inventoryPosting InventoryPosting? @relation(fields: [inventoryPostingId], references: [id], onDelete: Restrict)
 
-  @@index([treatmentSessionId])
+  @@index([treatmentSessionId, status])
   @@index([inventoryItemId])
+  @@index([treatmentBomItemId])
+  @@index([inventoryPostingId])
   @@map("material_usages")
+}
+
+model TreatmentBom {
+  id               String             @id @default(cuid())
+  bomCode          String             @unique
+  packagePricingId String
+  branchId         String?
+  branchScopeKey   String             @default("GLOBAL")
+  version          Int
+  status           TreatmentBomStatus @default(DRAFT)
+  effectiveFrom    DateTime?
+  effectiveTo      DateTime?
+  notes            String?            @db.Text
+  createdBy        String
+  activatedBy      String?
+  activatedAt      DateTime?
+  supersededById   String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  packagePricing PackagePricing     @relation(fields: [packagePricingId], references: [id], onDelete: Restrict)
+  branch         Branch?            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  items          TreatmentBomItem[]
+  supersededBy   TreatmentBom?      @relation("TreatmentBomVersioning", fields: [supersededById], references: [id], onDelete: Restrict)
+  supersedes     TreatmentBom[]     @relation("TreatmentBomVersioning")
+
+  @@unique([packagePricingId, branchScopeKey, version])
+  @@index([packagePricingId, branchScopeKey, status])
+  @@index([branchId, status])
+  @@index([effectiveFrom, effectiveTo])
+  @@map("treatment_boms")
+}
+
+model TreatmentBomItem {
+  id                  String   @id @default(cuid())
+  treatmentBomId      String
+  masterProductId     String
+  recommendedQuantity Decimal  @db.Decimal(18, 4)
+  unitSnapshot        String
+  tolerancePercent    Decimal  @default(0) @db.Decimal(5, 2)
+  isRequired          Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  notes               String?  @db.Text
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  treatmentBom   TreatmentBom    @relation(fields: [treatmentBomId], references: [id], onDelete: Cascade)
+  masterProduct  MasterProduct   @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  materialUsages MaterialUsage[]
+
+  @@unique([treatmentBomId, masterProductId])
+  @@index([masterProductId])
+  @@map("treatment_bom_items")
+}
+
+model IntegrationEvent {
+  id            String                 @id @default(cuid())
+  eventType     String
+  eventVersion  Int                    @default(1)
+  aggregateType String
+  aggregateId   String
+  branchId      String?
+  payload       Json
+  status        IntegrationEventStatus @default(PENDING)
+  attempts      Int                    @default(0)
+  availableAt   DateTime               @default(now())
+  processedAt   DateTime?
+  lastError     String?                @db.Text
+  occurredAt    DateTime
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  @@unique([eventType, aggregateId])
+  @@index([status, availableAt, createdAt])
+  @@index([branchId, occurredAt])
+  @@map("integration_events")
 }
 
 model SessionPhoto {
@@ -2575,6 +2703,7 @@ model MasterProduct {
   inventoryBalances        InventoryBalance[]
   purchaseRequestItems     PurchaseRequestItem[]
   purchaseOrderItems       PurchaseOrderItem[]
+  treatmentBomItems        TreatmentBomItem[]
 
   @@index([category, isActive])
   @@index([isActive])
@@ -2812,17 +2941,19 @@ model InventoryPosting {
   reversalOfId   String?                @unique
   createdAt      DateTime               @default(now())
 
-  branch             Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  reversalOf         InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversedBy         InventoryPosting?         @relation("InventoryPostingReversal")
-  stockMutations     StockMutation[]
-  costAllocations    InventoryCostAllocation[]
-  openingBalanceLine OpeningBalanceLine?
-  goodsReceiptLine   GoodsReceiptLine?
-  transferDispatch   InternalTransferLedger?   @relation("TransferDispatchPosting")
-  transferReceipt    InternalTransferLedger?   @relation("TransferReceiptPosting")
-  shipmentReceipt    ShipmentReceipt?
-  goodsReceipt       GoodsReceipt?
+  branch                  Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  reversalOf              InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy              InventoryPosting?         @relation("InventoryPostingReversal")
+  stockMutations          StockMutation[]
+  costAllocations         InventoryCostAllocation[]
+  openingBalanceLine      OpeningBalanceLine?
+  goodsReceiptLine        GoodsReceiptLine?
+  transferDispatch        InternalTransferLedger?   @relation("TransferDispatchPosting")
+  transferReceipt         InternalTransferLedger?   @relation("TransferReceiptPosting")
+  shipmentReceipt         ShipmentReceipt?
+  goodsReceipt            GoodsReceipt?
+  treatmentSession        TreatmentSession?         @relation("TreatmentMaterialPosting")
+  treatmentMaterialUsages MaterialUsage[]
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])

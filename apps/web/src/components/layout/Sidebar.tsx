@@ -9,6 +9,7 @@ import {
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
   Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
+  ListTree,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -136,6 +137,12 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Goods Receipt',
         href: '/inventory/goods-receipts',
         icon: <PackageCheck size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+      },
+      {
+        label: 'Treatment BOM',
+        href: '/inventory/treatment-boms',
+        icon: <ListTree size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
       },
       {

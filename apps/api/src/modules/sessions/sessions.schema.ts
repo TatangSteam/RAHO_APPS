@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SessionType, VitalType, VitalTiming, BottleType, EMRNoteType, DiagnosisCategory } from '@prisma/client';
+import { SessionType, VitalType, VitalTiming, BottleType, EMRNoteType, DiagnosisCategory, MaterialDeviationReason } from '@prisma/client';
 
 // BoosterType enum values (not exported from Prisma because not used as field type in any model)
 // These values match the BoosterType enum in schema.prisma
@@ -268,9 +268,15 @@ export type CreateInfusionInput = z.infer<typeof createInfusionSchema>;
 
 export const createMaterialUsageSchema = z.object({
   inventoryItemId: z.string().cuid(),
-  quantity: z.number().positive(),
-  unit: z.string(),
-  recordedBy: z.string().cuid(),
+  quantity: z.union([z.string(), z.number()])
+    .transform((value) => String(value).trim())
+    .refine((value) => /^\d+(?:\.\d{1,4})?$/.test(value) && Number(value) > 0, {
+      message: 'Quantity harus lebih besar dari nol dan maksimal 4 angka desimal',
+    }),
+  unit: z.string().trim().min(1).max(40).optional(),
+  recordedBy: z.string().cuid().optional(),
+  deviationReason: z.nativeEnum(MaterialDeviationReason).optional(),
+  deviationNotes: z.string().trim().max(2000).optional(),
 });
 
 export type CreateMaterialUsageInput = z.infer<typeof createMaterialUsageSchema>;

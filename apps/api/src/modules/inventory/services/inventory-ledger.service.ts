@@ -420,106 +420,115 @@ function ensureUniqueIssueLines(input: IssueInventoryInput) {
   if (new Set(keys).size !== keys.length) throw errors.badRequest('DUPLICATE_ISSUE_LINE', 'Inventory item/location/batch tidak boleh duplikat dalam satu posting.');
 }
 
+export async function issueInventoryInTransaction(
+  actorUserId: string,
+  input: IssueInventoryInput,
+  tx: Tx,
+): Promise<string> {
+  ensureUniqueIssueLines(input);
+  const normalizedLines = [...input.lines].sort((a, b) => `${a.inventoryItemId}:${a.batchId ?? ''}`.localeCompare(`${b.inventoryItemId}:${b.batchId ?? ''}`));
+  const payloadHash = hashPayload({ ...input, lines: normalizedLines });
+  const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
+  if (existing) return existing.id;
+
+  const items = await lockInventoryItems(tx, normalizedLines.map((line) => line.inventoryItemId));
+  const itemMap = new Map(items.map((item) => [item.id, item]));
+  if (items.length !== new Set(normalizedLines.map((line) => line.inventoryItemId)).size || items.some((item) => item.branchId !== input.branchId)) {
+    throw errors.notFound('Satu atau lebih inventory item tidak ditemukan dalam branch.');
+  }
+
+  const posting = await tx.inventoryPosting.create({
+    data: {
+      postingNumber: postingNumber('ISS'), idempotencyKey: input.idempotencyKey, payloadHash,
+      type: InventoryPostingType.ISSUE, reasonCode: input.reasonCode, sourceType: input.sourceType,
+      sourceId: input.sourceId, sourceNumber: input.sourceNumber, branchId: input.branchId,
+      costCenterCode: input.costCenterCode, occurredAt: input.occurredAt, postedBy: actorUserId,
+    },
+  });
+
+  let postingCost = new Prisma.Decimal(0);
+  for (const line of normalizedLines) {
+    const item = itemMap.get(line.inventoryItemId)!;
+    const location = await assertLocationForItem(tx, item, line.stockLocationId);
+    const quantity = new Prisma.Decimal(line.quantity);
+    const balances = await lockBalances(tx, item.id, location.id, line.batchId);
+    const available = balances.reduce(
+      (sum, balance) => sum.add(balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty)),
+      new Prisma.Decimal(0),
+    );
+    if (available.lessThan(quantity)) {
+      throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', `Stok tersedia hanya ${available.toFixed(4)} unit.`);
+    }
+
+    const layers = await lockValidLayers(tx, item.id, location.id, input.occurredAt, line.batchId);
+    const allocations = allocateFifo(quantity, capLayersToAvailableBalances(layers, balances));
+    const lineCost = sumAllocationCost(allocations);
+    postingCost = postingCost.add(lineCost);
+
+    const mirrorUpdate = await tx.inventoryItem.updateMany({
+      where: { id: item.id, stock: { gte: quantity } },
+      data: { stock: { decrement: quantity } },
+    });
+    if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', 'Compatibility stock tidak mencukupi.');
+
+    const stockBefore = item.stock;
+    const mutation = await tx.stockMutation.create({
+      data: {
+        inventoryItemId: item.id, type: StockMutationType.USED, quantity,
+        stockBefore, stockAfter: stockBefore.sub(quantity), referenceType: input.sourceType,
+        referenceId: input.sourceId, notes: input.reasonCode, createdBy: actorUserId,
+        inventoryPostingId: posting.id,
+        inventoryBalanceId: allocations.length === 1 ? allocations[0].inventoryBalanceId : null,
+        batchId: line.batchId ?? (new Set(allocations.map((allocation) => allocation.batchId)).size === 1 ? allocations[0].batchId : null),
+        actualCost: lineCost,
+      },
+    });
+
+    const quantityByBalance = new Map<string, Prisma.Decimal>();
+    for (const allocation of allocations) {
+      quantityByBalance.set(
+        allocation.inventoryBalanceId,
+        (quantityByBalance.get(allocation.inventoryBalanceId) ?? new Prisma.Decimal(0)).add(allocation.quantity),
+      );
+      const layerUpdate = await tx.inventoryCostLayer.updateMany({
+        where: { id: allocation.layerId, remainingQty: { gte: allocation.quantity }, isVoided: false },
+        data: { remainingQty: { decrement: allocation.quantity } },
+      });
+      if (layerUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Cost layer berubah saat diproses.');
+      await tx.inventoryCostAllocation.create({
+        data: {
+          postingId: posting.id, stockMutationId: mutation.id, costLayerId: allocation.layerId,
+          type: InventoryCostAllocationType.CONSUMPTION, quantity: allocation.quantity,
+          unitCost: allocation.unitCost, totalCost: allocation.totalCost,
+        },
+      });
+    }
+
+    for (const [balanceId, allocatedQuantity] of quantityByBalance) {
+      const lockedBalance = balances.find((balance) => balance.id === balanceId);
+      if (!lockedBalance) throw errors.conflict('INVENTORY_BALANCE_MISSING', 'Inventory balance allocation tidak ditemukan.');
+      const minimumOnHand = allocatedQuantity.add(lockedBalance.reservedQty).add(lockedBalance.quarantineQty);
+      const balanceUpdate = await tx.inventoryBalance.updateMany({
+        where: { id: balanceId, onHandQty: { gte: minimumOnHand } },
+        data: { onHandQty: { decrement: allocatedQuantity }, version: { increment: 1 } },
+      });
+      if (balanceUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Inventory balance berubah saat diproses.');
+    }
+    item.stock = item.stock.sub(quantity);
+  }
+
+  await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingCost } });
+  return posting.id;
+}
+
 export async function issueInventory(actorUserId: string, input: IssueInventoryInput) {
   ensureUniqueIssueLines(input);
   await assertBranchAccess(actorUserId, input.branchId);
   await assertPermission(actorUserId, PERMISSIONS.INVENTORY_POST, input.branchId);
-  const normalizedLines = [...input.lines].sort((a, b) => `${a.inventoryItemId}:${a.batchId ?? ''}`.localeCompare(`${b.inventoryItemId}:${b.batchId ?? ''}`));
-  const payloadHash = hashPayload({ ...input, lines: normalizedLines });
-
-  const postingId = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
-    const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
-    if (existing) return existing.id;
-
-    const items = await lockInventoryItems(tx, normalizedLines.map((line) => line.inventoryItemId));
-    const itemMap = new Map(items.map((item) => [item.id, item]));
-    if (items.length !== new Set(normalizedLines.map((line) => line.inventoryItemId)).size || items.some((item) => item.branchId !== input.branchId)) {
-      throw errors.notFound('Satu atau lebih inventory item tidak ditemukan dalam branch.');
-    }
-
-    const posting = await tx.inventoryPosting.create({
-      data: {
-        postingNumber: postingNumber('ISS'), idempotencyKey: input.idempotencyKey, payloadHash,
-        type: InventoryPostingType.ISSUE, reasonCode: input.reasonCode, sourceType: input.sourceType,
-        sourceId: input.sourceId, sourceNumber: input.sourceNumber, branchId: input.branchId,
-        costCenterCode: input.costCenterCode, occurredAt: input.occurredAt, postedBy: actorUserId,
-      },
-    });
-
-    let postingCost = new Prisma.Decimal(0);
-    for (const line of normalizedLines) {
-      const item = itemMap.get(line.inventoryItemId)!;
-      const location = await assertLocationForItem(tx, item, line.stockLocationId);
-      const quantity = new Prisma.Decimal(line.quantity);
-      const balances = await lockBalances(tx, item.id, location.id, line.batchId);
-      const available = balances.reduce(
-        (sum, balance) => sum.add(balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty)),
-        new Prisma.Decimal(0),
-      );
-      if (available.lessThan(quantity)) {
-        throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', `Stok tersedia hanya ${available.toFixed(4)} unit.`);
-      }
-
-      const layers = await lockValidLayers(tx, item.id, location.id, input.occurredAt, line.batchId);
-      const allocations = allocateFifo(quantity, capLayersToAvailableBalances(layers, balances));
-      const lineCost = sumAllocationCost(allocations);
-      postingCost = postingCost.add(lineCost);
-
-      const mirrorUpdate = await tx.inventoryItem.updateMany({
-        where: { id: item.id, stock: { gte: quantity } },
-        data: { stock: { decrement: quantity } },
-      });
-      if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', 'Compatibility stock tidak mencukupi.');
-
-      const stockBefore = item.stock;
-      const mutation = await tx.stockMutation.create({
-        data: {
-          inventoryItemId: item.id, type: StockMutationType.USED, quantity,
-          stockBefore, stockAfter: stockBefore.sub(quantity), referenceType: input.sourceType,
-          referenceId: input.sourceId, notes: input.reasonCode, createdBy: actorUserId,
-          inventoryPostingId: posting.id,
-          inventoryBalanceId: allocations.length === 1 ? allocations[0].inventoryBalanceId : null,
-          batchId: line.batchId ?? (new Set(allocations.map((allocation) => allocation.batchId)).size === 1 ? allocations[0].batchId : null),
-          actualCost: lineCost,
-        },
-      });
-
-      const quantityByBalance = new Map<string, Prisma.Decimal>();
-      for (const allocation of allocations) {
-        quantityByBalance.set(
-          allocation.inventoryBalanceId,
-          (quantityByBalance.get(allocation.inventoryBalanceId) ?? new Prisma.Decimal(0)).add(allocation.quantity),
-        );
-        const layerUpdate = await tx.inventoryCostLayer.updateMany({
-          where: { id: allocation.layerId, remainingQty: { gte: allocation.quantity }, isVoided: false },
-          data: { remainingQty: { decrement: allocation.quantity } },
-        });
-        if (layerUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Cost layer berubah saat diproses.');
-        await tx.inventoryCostAllocation.create({
-          data: {
-            postingId: posting.id, stockMutationId: mutation.id, costLayerId: allocation.layerId,
-            type: InventoryCostAllocationType.CONSUMPTION, quantity: allocation.quantity,
-            unitCost: allocation.unitCost, totalCost: allocation.totalCost,
-          },
-        });
-      }
-
-      for (const [balanceId, allocatedQuantity] of quantityByBalance) {
-        const lockedBalance = balances.find((balance) => balance.id === balanceId);
-        if (!lockedBalance) throw errors.conflict('INVENTORY_BALANCE_MISSING', 'Inventory balance allocation tidak ditemukan.');
-        const minimumOnHand = allocatedQuantity.add(lockedBalance.reservedQty).add(lockedBalance.quarantineQty);
-        const balanceUpdate = await tx.inventoryBalance.updateMany({
-          where: { id: balanceId, onHandQty: { gte: minimumOnHand } },
-          data: { onHandQty: { decrement: allocatedQuantity }, version: { increment: 1 } },
-        });
-        if (balanceUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Inventory balance berubah saat diproses.');
-      }
-      item.stock = item.stock.sub(quantity);
-    }
-
-    await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingCost } });
-    return posting.id;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
+  const postingId = await withTransactionRetry(() => prisma.$transaction(
+    (tx) => issueInventoryInTransaction(actorUserId, input, tx),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  ));
 
   const result = await loadPostingResult(postingId);
   await logAudit({ userId: actorUserId, branchId: input.branchId, action: 'CREATE', resource: 'InventoryPosting', resourceId: postingId, afterData: { type: 'ISSUE', sourceType: input.sourceType, sourceId: input.sourceId, totalCost: result.totalCost } });

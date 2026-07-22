@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
-import { useAuthStore } from '@/stores/authStore';
 import { inventoryApi, type InventoryItemWithStock } from '@/lib/api/inventoryApi';
-import { materialsApi } from '@/lib/materialsApi';
+import {
+  materialsApi,
+  type MaterialDeviationReason,
+  type MaterialRecommendation,
+  type MaterialRecommendationsResponse,
+} from '@/lib/materialsApi';
 import { devError } from '@/lib/logger';
+import { AlertTriangle, ClipboardCheck, Trash2 } from 'lucide-react';
 
 interface MaterialUsage {
   id: string;
@@ -14,6 +19,12 @@ interface MaterialUsage {
   unit: string;
   recordedBy: string;
   createdAt: string;
+  recommendedQuantity?: number | null;
+  deviationReason?: MaterialDeviationReason | null;
+  deviationNotes?: string | null;
+  status?: 'DRAFT' | 'CONSUMED' | 'REVERSED';
+  actualUnitCost?: number | null;
+  totalActualCost?: number | null;
   inventoryItem: {
     id: string;
     masterProduct: {
@@ -106,7 +117,6 @@ export default function Step6Materials({
   isLocked,
   onComplete,
 }: Step6MaterialsProps) {
-  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(true);
   const [inventoryItems, setInventoryItems] = useState<InventoryItemWithStock[]>([]);
@@ -114,6 +124,10 @@ export default function Step6Materials({
   const [quantity, setQuantity] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [recommendations, setRecommendations] = useState<MaterialRecommendationsResponse | null>(null);
+  const [loadingRecommendations, setLoadingRecommendations] = useState(true);
+  const [deviationReason, setDeviationReason] = useState<MaterialDeviationReason | ''>('');
+  const [deviationNotes, setDeviationNotes] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadInventoryItems = useCallback(async () => {
@@ -138,6 +152,38 @@ export default function Step6Materials({
     void loadInventoryItems();
   }, [loadInventoryItems]);
 
+  const loadRecommendations = useCallback(async () => {
+    try {
+      setLoadingRecommendations(true);
+      setRecommendations(await materialsApi.getRecommendations(sessionId));
+    } catch (error) {
+      devError('Error loading treatment BOM recommendations:', error);
+      setRecommendations(null);
+    } finally {
+      setLoadingRecommendations(false);
+    }
+  }, [sessionId]);
+
+  useEffect(() => {
+    void loadRecommendations();
+  }, [loadRecommendations]);
+
+  const selectedRecommendation = useMemo(
+    () => recommendations?.items.find(
+      (item) => item.inventoryItemId === selectedItem?.id || item.masterProductId === selectedItem?.masterProductId,
+    ) ?? null,
+    [recommendations, selectedItem],
+  );
+
+  const isDeviation = useMemo(() => {
+    if (!selectedItem || !quantity || !recommendations?.hasActiveBom) return false;
+    if (!selectedRecommendation) return true;
+    const recommended = Number(selectedRecommendation.recommendedQuantity);
+    const tolerance = recommended * Number(selectedRecommendation.tolerancePercent) / 100;
+    const actual = Number(quantity);
+    return actual < recommended - tolerance || actual > recommended + tolerance;
+  }, [quantity, recommendations?.hasActiveBom, selectedItem, selectedRecommendation]);
+
   // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -155,6 +201,16 @@ export default function Step6Materials({
       return;
     }
 
+    if (isDeviation && !deviationReason) {
+      showToast.error('Pilih alasan deviasi dari Treatment BOM');
+      return;
+    }
+
+    if (deviationReason === 'OTHER' && !deviationNotes.trim()) {
+      showToast.error('Catatan wajib diisi untuk alasan Lainnya');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -162,19 +218,45 @@ export default function Step6Materials({
         inventoryItemId: selectedItem.id,
         quantity: Number(quantity),
         unit: selectedItem.masterProduct.usageUnit,
-        recordedBy: user?.userId || '',
+        deviationReason: deviationReason || undefined,
+        deviationNotes: deviationNotes.trim() || undefined,
       });
 
-      showToast.success('Material berhasil ditambahkan');
+      showToast.success('Material aktual berhasil disimpan sebagai draft');
       setSelectedItem(null);
       setQuantity('');
       setSearchTerm('');
+      setDeviationReason('');
+      setDeviationNotes('');
       onComplete();
     } catch (error: any) {
       devError('Error adding material:', error);
       showToast.error(error.message || 'Gagal menambah material');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const useRecommendation = (recommendation: MaterialRecommendation) => {
+    const item = inventoryItems.find((inventoryItem) => inventoryItem.id === recommendation.inventoryItemId);
+    if (!item) {
+      showToast.error('Material rekomendasi belum tersedia pada inventory cabang');
+      return;
+    }
+    setSelectedItem(item);
+    setQuantity(recommendation.recommendedQuantity);
+    setDeviationReason('');
+    setDeviationNotes('');
+  };
+
+  const handleDeleteMaterial = async (usageId: string) => {
+    try {
+      await materialsApi.deleteMaterial(sessionId, usageId);
+      showToast.success('Draft material dihapus');
+      onComplete();
+    } catch (error: any) {
+      devError('Error deleting material usage:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal menghapus draft material');
     }
   };
 
@@ -311,6 +393,92 @@ export default function Step6Materials({
         </div>
       </div>
 
+      {/* Treatment BOM recommendations */}
+      <div
+        style={{
+          marginBottom: '24px',
+          borderTop: '1px solid rgba(148,163,184,0.2)',
+          borderBottom: '1px solid rgba(148,163,184,0.2)',
+        }}
+      >
+        <div style={{ padding: '12px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <ClipboardCheck size={17} color="#60a5fa" />
+          <strong style={{ fontSize: '14px', color: '#cbd5e1' }}>Rekomendasi Treatment BOM</strong>
+          {recommendations?.boms.map((bom) => (
+            <span
+              key={bom.id}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '4px',
+                background: 'rgba(59,130,246,0.12)',
+                color: '#93c5fd',
+                fontSize: '11px',
+              }}
+            >
+              {bom.bomCode}
+            </span>
+          ))}
+        </div>
+
+        {loadingRecommendations ? (
+          <p style={{ padding: '0 0 12px', fontSize: '13px', color: '#94a3b8' }}>Memuat rekomendasi...</p>
+        ) : recommendations?.hasActiveBom ? (
+          <div style={{ display: 'grid' }}>
+            {recommendations.items.map((recommendation) => {
+              const recorded = materials.some(
+                (material) => material.inventoryItem.masterProduct.id === recommendation.masterProductId,
+              );
+              return (
+                <div
+                  key={recommendation.masterProductId}
+                  style={{
+                    minHeight: '48px',
+                    padding: '9px 0',
+                    borderTop: '1px solid rgba(148,163,184,0.1)',
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(180px, 1fr) 120px 140px',
+                    gap: '12px',
+                    alignItems: 'center',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ color: '#e2e8f0', fontSize: '13px', fontWeight: 600 }}>{recommendation.productName}</p>
+                    <p style={{ color: '#64748b', fontSize: '11px' }}>
+                      {recommendation.isRequired ? 'Wajib' : 'Opsional'} · toleransi {Number(recommendation.tolerancePercent).toFixed(0)}%
+                    </p>
+                  </div>
+                  <span style={{ color: '#bfdbfe', fontSize: '13px', fontWeight: 700 }}>
+                    {Number(recommendation.recommendedQuantity).toFixed(2)} {recommendation.unit}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => useRecommendation(recommendation)}
+                    disabled={!recommendation.isAvailable || recorded}
+                    style={{
+                      minHeight: '32px',
+                      border: '1px solid rgba(96,165,250,0.35)',
+                      borderRadius: '5px',
+                      background: recorded ? 'rgba(34,197,94,0.1)' : 'transparent',
+                      color: recorded ? '#86efac' : '#93c5fd',
+                      cursor: !recommendation.isAvailable || recorded ? 'not-allowed' : 'pointer',
+                      opacity: !recommendation.isAvailable && !recorded ? 0.5 : 1,
+                      fontSize: '12px',
+                      fontWeight: 600,
+                    }}
+                  >
+                    {recorded ? 'Sudah dicatat' : recommendation.isAvailable ? 'Gunakan' : 'Stok tidak tersedia'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p style={{ padding: '0 0 12px', fontSize: '13px', color: '#94a3b8' }}>
+            Belum ada Treatment BOM aktif untuk paket sesi ini.
+          </p>
+        )}
+      </div>
+
       {/* Existing Materials */}
       {materials.length > 0 && (
         <div style={{ marginBottom: '24px' }}>
@@ -356,11 +524,46 @@ export default function Step6Materials({
                       <p style={{ fontSize: '12px', color: '#94a3b8' }}>{cat.category}</p>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <p style={{ fontSize: '16px', fontWeight: '700', color: '#60a5fa' }}>
-                      {material.quantity}{' '}
-                      <span style={{ fontSize: '12px', color: '#94a3b8' }}>{material.unit}</span>
-                    </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <p style={{ fontSize: '16px', fontWeight: '700', color: '#60a5fa' }}>
+                        {material.quantity}{' '}
+                        <span style={{ fontSize: '12px', color: '#94a3b8' }}>{material.unit}</span>
+                      </p>
+                      <p style={{ fontSize: '11px', color: material.status === 'CONSUMED' ? '#86efac' : '#fbbf24' }}>
+                        {material.status === 'CONSUMED' ? 'FIFO consumed' : 'Draft'}
+                        {material.totalActualCost != null
+                          ? ` · Rp ${Number(material.totalActualCost).toLocaleString('id-ID')}`
+                          : ''}
+                      </p>
+                      {material.deviationReason && (
+                        <p style={{ fontSize: '11px', color: '#fca5a5' }}>
+                          Deviasi: {material.deviationReason.replaceAll('_', ' ')}
+                        </p>
+                      )}
+                    </div>
+                    {material.status !== 'CONSUMED' && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMaterial(material.id)}
+                        title="Hapus draft material"
+                        aria-label={`Hapus ${material.inventoryItem.masterProduct.name}`}
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: '1px solid rgba(248,113,113,0.35)',
+                          borderRadius: '5px',
+                          background: 'transparent',
+                          color: '#fca5a5',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -579,6 +782,9 @@ export default function Step6Materials({
                               onClick={() => {
                                 if (!isOutOfStock) {
                                   setSelectedItem(item);
+                                  setQuantity('');
+                                  setDeviationReason('');
+                                  setDeviationNotes('');
                                   setIsDropdownOpen(false);
                                   setSearchTerm('');
                                 }
@@ -734,6 +940,73 @@ export default function Step6Materials({
             {loading ? '⏳ Menambah...' : '➕ Tambah'}
           </button>
         </div>
+
+        {isDeviation && (
+          <div
+            style={{
+              marginTop: '14px',
+              paddingTop: '14px',
+              borderTop: '1px solid rgba(245,158,11,0.25)',
+              display: 'grid',
+              gridTemplateColumns: '220px minmax(220px, 1fr)',
+              gap: '12px',
+            }}
+          >
+            <div>
+              <label
+                htmlFor="material-deviation-reason"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 700, color: '#fbbf24', marginBottom: '7px' }}
+              >
+                <AlertTriangle size={14} /> Alasan deviasi
+              </label>
+              <select
+                id="material-deviation-reason"
+                value={deviationReason}
+                onChange={(event) => setDeviationReason(event.target.value as MaterialDeviationReason | '')}
+                style={{
+                  width: '100%',
+                  minHeight: '40px',
+                  padding: '8px 10px',
+                  border: '1px solid rgba(245,158,11,0.35)',
+                  borderRadius: '5px',
+                  background: '#0f172a',
+                  color: '#f1f5f9',
+                }}
+                required
+              >
+                <option value="">Pilih alasan</option>
+                <option value="CLINICAL_ADJUSTMENT">Penyesuaian klinis</option>
+                <option value="PATIENT_CONDITION">Kondisi pasien</option>
+                <option value="MATERIAL_SUBSTITUTION">Substitusi material</option>
+                <option value="WASTE_DAMAGE">Waste atau kerusakan</option>
+                <option value="STOCK_AVAILABILITY">Ketersediaan stok</option>
+                <option value="OTHER">Lainnya</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="material-deviation-notes" style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#cbd5e1', marginBottom: '7px' }}>
+                Catatan deviasi {deviationReason === 'OTHER' ? '*' : ''}
+              </label>
+              <input
+                id="material-deviation-notes"
+                type="text"
+                value={deviationNotes}
+                onChange={(event) => setDeviationNotes(event.target.value)}
+                maxLength={2000}
+                placeholder="Catatan klinis atau operasional"
+                style={{
+                  width: '100%',
+                  minHeight: '40px',
+                  padding: '8px 10px',
+                  border: '1px solid rgba(148,163,184,0.3)',
+                  borderRadius: '5px',
+                  background: '#0f172a',
+                  color: '#f1f5f9',
+                }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Selected Item Info */}
         {selectedItem && (

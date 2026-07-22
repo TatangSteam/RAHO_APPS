@@ -17,6 +17,7 @@ import { SessionExportService } from './services/session-export.service';
 import { SupportingPhotosService } from './services/supporting-photos.service';
 import { Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { getSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
@@ -716,12 +717,38 @@ export class SessionsController {
   async getMaterialUsages(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.getMaterialUsages(sessionId);
       return sendSuccess(res, result);
     } catch (err: any) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
+      next(err);
+    }
+  }
+
+  async deleteMaterialUsage(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId, usageId } = req.params;
+      const branchId = await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      return sendSuccess(
+        res,
+        await sessionsService.deleteMaterialUsage(sessionId, usageId, req.user!.userId, branchId),
+      );
+    } catch (err: any) {
+      if (err.status) return sendError(res, err.status, err.code, err.message);
+      next(err);
+    }
+  }
+
+  async getMaterialRecommendations(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      return sendSuccess(res, await getSessionMaterialRecommendations(req.user!.userId, sessionId));
+    } catch (err: any) {
+      if (err.status) return sendError(res, err.status, err.code, err.message);
       next(err);
     }
   }

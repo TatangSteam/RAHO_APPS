@@ -8,11 +8,14 @@ import { InventoryMasterController } from './inventory-master.controller';
 import { InventoryLedgerController } from './inventory-ledger.controller';
 import { StockReservationController } from './stock-reservation.controller';
 import { GoodsReceiptController } from './goods-receipt.controller';
+import { TreatmentBomController } from './treatment-bom.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
 import { uploadPaymentProof, uploadShipmentReceipt } from '../../middleware/upload';
 import { Role } from '@prisma/client';
+import { requirePermission } from '../../middleware/requirePermission';
+import { PERMISSIONS } from '../iam/permission-catalog';
 import {
   canManageCentralStock,
   canReceiveBranchStock,
@@ -58,6 +61,7 @@ const inventoryMasterController = new InventoryMasterController();
 const inventoryLedgerController = new InventoryLedgerController();
 const stockReservationController = new StockReservationController();
 const goodsReceiptController = new GoodsReceiptController();
+const treatmentBomController = new TreatmentBomController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -120,6 +124,16 @@ router.post('/conversions/preview', authenticate, authorize(ALLSTAFF), inventory
 router.get('/batches', authenticate, authorize(ALLSTAFF), inventoryMasterController.listBatches.bind(inventoryMasterController));
 router.post('/batches', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createBatch.bind(inventoryMasterController));
 router.patch('/batches/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateBatch.bind(inventoryMasterController));
+
+// ============================================================
+// TREATMENT BOM
+// ============================================================
+
+router.get('/treatment-boms', authenticate, requirePermission(PERMISSIONS.TREATMENT_BOM_READ), treatmentBomController.list.bind(treatmentBomController));
+router.get('/treatment-boms/:bomId', authenticate, requirePermission(PERMISSIONS.TREATMENT_BOM_READ), treatmentBomController.get.bind(treatmentBomController));
+router.post('/treatment-boms', authenticate, requirePermission(PERMISSIONS.TREATMENT_BOM_MANAGE), treatmentBomController.create.bind(treatmentBomController));
+router.patch('/treatment-boms/:bomId', authenticate, requirePermission(PERMISSIONS.TREATMENT_BOM_MANAGE), treatmentBomController.update.bind(treatmentBomController));
+router.post('/treatment-boms/:bomId/activate', authenticate, requirePermission(PERMISSIONS.TREATMENT_BOM_MANAGE), treatmentBomController.activate.bind(treatmentBomController));
 
 // ============================================================
 // INVENTORY LEDGER AND FIFO

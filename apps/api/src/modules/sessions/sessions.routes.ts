@@ -219,6 +219,13 @@ router.get(
 // STEP 5: MATERIAL USAGE
 // ============================================================
 
+router.get(
+  '/:sessionId/material-recommendations',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.getMaterialRecommendations.bind(controller)
+);
+
 router.post(
   '/:sessionId/materials',
   authenticate,
@@ -231,6 +238,13 @@ router.get(
   authenticate,
   authorize(ALLSTAFF),
   controller.getMaterialUsages.bind(controller)
+);
+
+router.delete(
+  '/:sessionId/materials/:usageId',
+  authenticate,
+  authorize(ALLSTAFF),
+  controller.deleteMaterialUsage.bind(controller)
 );
 
 // ============================================================
