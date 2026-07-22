@@ -180,7 +180,7 @@ services:
     depends_on:
       - postgres
     entrypoint: ["/usr/local/bin/entrypoint.sh"]
-    command: ["npx", "prisma", "migrate", "deploy"]
+    command: ["sh", "prisma/deploy-with-recovery.sh"]
     environment:
       NODE_ENV: production
     secrets:
