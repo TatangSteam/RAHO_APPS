@@ -895,6 +895,7 @@ model JournalEntry {
   supplierPayment          SupplierPayment?
   deferredRevenueMovements DeferredRevenueMovement[]
   revenueRecognitions      RevenueRecognition[]
+  treatmentCompletion      TreatmentSession?         @relation("TreatmentCompletionJournal")
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -2230,33 +2231,38 @@ model Encounter {
 }
 
 model TreatmentSession {
-  id                String      @id @default(cuid())
-  sessionCode       String      @unique
-  encounterId       String
-  branchId          String
-  infusKe           Int
-  branchInfusKe     Int
-  pelaksanaan       SessionType
-  treatmentDate     DateTime
-  isCompleted       Boolean     @default(false)
-  adminLayananId    String
-  doctorId          String // Primary doctor (backward compatibility)
-  nurseId           String // Primary nurse (backward compatibility)
-  boosterPackageId  String?
-  boosterType       String?
-  completedAt       DateTime?
-  completedBy       String?
-  materialPostingId String?     @unique
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                       String      @id @default(cuid())
+  sessionCode              String      @unique
+  encounterId              String
+  branchId                 String
+  infusKe                  Int
+  branchInfusKe            Int
+  pelaksanaan              SessionType
+  treatmentDate            DateTime
+  isCompleted              Boolean     @default(false)
+  adminLayananId           String
+  doctorId                 String // Primary doctor (backward compatibility)
+  nurseId                  String // Primary nurse (backward compatibility)
+  boosterPackageId         String?
+  boosterType              String?
+  completedAt              DateTime?
+  completedBy              String?
+  materialPostingId        String?     @unique
+  completionJournalEntryId String?     @unique
+  recognizedRevenue        Decimal?    @db.Decimal(18, 2)
+  hppAmount                Decimal?    @db.Decimal(18, 2)
+  grossProfit              Decimal?    @db.Decimal(18, 2)
+  createdAt                DateTime    @default(now())
+  updatedAt                DateTime    @updatedAt
 
-  encounter       Encounter         @relation(fields: [encounterId], references: [id])
-  branch          Branch            @relation(fields: [branchId], references: [id])
-  adminLayanan    User              @relation("SessionAdmin", fields: [adminLayananId], references: [id])
-  doctor          User              @relation("SessionDoctor", fields: [doctorId], references: [id])
-  nurse           User              @relation("SessionNurse", fields: [nurseId], references: [id])
-  boosterPackage  MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
-  materialPosting InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
+  encounter         Encounter         @relation(fields: [encounterId], references: [id])
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  adminLayanan      User              @relation("SessionAdmin", fields: [adminLayananId], references: [id])
+  doctor            User              @relation("SessionDoctor", fields: [doctorId], references: [id])
+  nurse             User              @relation("SessionNurse", fields: [nurseId], references: [id])
+  boosterPackage    MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+  materialPosting   InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
+  completionJournal JournalEntry?     @relation("TreatmentCompletionJournal", fields: [completionJournalEntryId], references: [id], onDelete: Restrict)
 
   therapyPlan      TherapyPlan?
   vitalSigns       VitalSign[]

@@ -335,6 +335,71 @@ export async function postPurchasingDerivedJournal(input: PostJournalInput, tx: 
   return postWithinTransaction(tx, posting);
 }
 
+/** Strict posting path for the atomic treatment completion business event. */
+export async function postTreatmentCompletionJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  const source = posting.sourceLinks[0];
+  if (posting.sourceLinks.length !== 1 || source.sourceType.trim().toUpperCase() !== 'TREATMENT_SESSION') {
+    throw errors.badRequest(
+      'TREATMENT_JOURNAL_SOURCE_INVALID',
+      'Jurnal treatment completion wajib memiliki satu source TREATMENT_SESSION.',
+    );
+  }
+
+  const roles = posting.lines.map((line) => String(line.metadata?.treatmentRole || ''));
+  const allowedRoles = new Set(['DEFERRED_RELEASE', 'REVENUE', 'HPP', 'INVENTORY']);
+  if (roles.some((role) => !allowedRoles.has(role))) {
+    throw errors.badRequest('TREATMENT_JOURNAL_ROLE_INVALID', 'Role baris jurnal treatment tidak valid.');
+  }
+  const sum = (role: string, side: 'debit' | 'credit') => posting.lines
+    .filter((line) => line.metadata?.treatmentRole === role)
+    .reduce((total, line) => total.add(line[side]), new Prisma.Decimal(0));
+  const deferredDebit = sum('DEFERRED_RELEASE', 'debit');
+  const revenueCredit = sum('REVENUE', 'credit');
+  const hppDebit = sum('HPP', 'debit');
+  const inventoryCredit = sum('INVENTORY', 'credit');
+  if (!deferredDebit.greaterThan(0) || !deferredDebit.equals(revenueCredit)
+    || !hppDebit.equals(inventoryCredit)) {
+    throw errors.badRequest(
+      'TREATMENT_JOURNAL_POLICY_INVALID',
+      'Deferred release/revenue dan HPP/inventory harus berpasangan dan balanced.',
+    );
+  }
+  if (posting.lines.some((line) => {
+    const role = String(line.metadata?.treatmentRole);
+    if (role === 'DEFERRED_RELEASE' || role === 'HPP') return !line.debit.greaterThan(0) || !line.credit.isZero();
+    return !line.credit.greaterThan(0) || !line.debit.isZero();
+  })) {
+    throw errors.badRequest('TREATMENT_JOURNAL_DIRECTION_INVALID', 'Arah debit/kredit jurnal treatment tidak valid.');
+  }
+  const hppAccountsValid = posting.lines
+    .filter((line) => line.metadata?.treatmentRole === 'HPP' || line.metadata?.treatmentRole === 'INVENTORY')
+    .every((line) => line.accountCode === (line.metadata?.treatmentRole === 'HPP' ? '5100' : '1300'));
+  if (!hppAccountsValid) {
+    throw errors.badRequest('TREATMENT_HPP_ACCOUNT_INVALID', 'Posting HPP harus debit 5100 dan kredit inventory 1300.');
+  }
+
+  const accountCodes = Array.from(new Set(posting.lines.map((line) => line.accountCode)));
+  const accounts = await tx.account.findMany({
+    where: { code: { in: accountCodes }, isActive: true, allowPosting: true },
+    select: { code: true, type: true },
+  });
+  const accountByCode = new Map(accounts.map((account) => [account.code, account.type]));
+  const typeForRole: Record<string, AccountType> = {
+    DEFERRED_RELEASE: AccountType.LIABILITY,
+    REVENUE: AccountType.REVENUE,
+    HPP: AccountType.EXPENSE,
+    INVENTORY: AccountType.ASSET,
+  };
+  if (posting.lines.some((line) => accountByCode.get(line.accountCode) !== typeForRole[String(line.metadata?.treatmentRole)])) {
+    throw errors.badRequest('TREATMENT_JOURNAL_ACCOUNT_TYPE_INVALID', 'Tipe akun jurnal treatment tidak sesuai posting policy.');
+  }
+
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+  await assertPermission(posting.actorUserId, PERMISSIONS.TREATMENT_MATERIAL_CONSUME, posting.branchId);
+  return postWithinTransaction(tx, posting);
+}
+
 export async function listAccountsService(query: ListAccountsQuery) {
   return prisma.account.findMany({
     where: {

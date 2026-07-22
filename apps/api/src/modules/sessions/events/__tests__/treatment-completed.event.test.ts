@@ -5,7 +5,7 @@ import {
 } from '../treatment-completed.event';
 
 describe('TREATMENT_COMPLETED event contract', () => {
-  it('keeps package revenue pending for downstream finance processing', () => {
+  it('carries posted revenue, HPP and journal traceability', () => {
     const payload = buildTreatmentCompletedEventPayload({
       occurredAt: '2026-07-22T04:00:00.000Z',
       session: {
@@ -25,18 +25,22 @@ describe('TREATMENT_COMPLETED event contract', () => {
         materials: [],
       },
       finance: {
-        revenueRecognitionStatus: 'PENDING',
-        recognizedRevenue: '0.00',
-        journalEntryId: null,
+        revenueRecognitionStatus: 'POSTED',
+        recognizedRevenue: '1000000.00',
+        hppAmount: '200.00',
+        grossProfit: '999800.00',
+        journalEntryId: 'journal-1',
       },
     });
 
     expect(payload.eventType).toBe(TREATMENT_COMPLETED_EVENT_TYPE);
     expect(payload.eventVersion).toBe(TREATMENT_COMPLETED_EVENT_VERSION);
     expect(payload.finance).toEqual({
-      revenueRecognitionStatus: 'PENDING',
-      recognizedRevenue: '0.00',
-      journalEntryId: null,
+      revenueRecognitionStatus: 'POSTED',
+      recognizedRevenue: '1000000.00',
+      hppAmount: '200.00',
+      grossProfit: '999800.00',
+      journalEntryId: 'journal-1',
     });
   });
 });

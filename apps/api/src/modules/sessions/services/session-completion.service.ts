@@ -10,7 +10,10 @@ import { assertBranchAccess, assertPermission } from '@modules/iam/authorization
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { issueInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
 import { resolveSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
-import { createTreatmentCompletedEventInTransaction } from '@modules/revenue/revenue.service';
+import {
+  createTreatmentCompletedEventInTransaction,
+  postTreatmentCompletionRevenueInTransaction,
+} from '@modules/revenue/revenue.service';
 import { logAudit } from '@utils/auditLog';
 import {
   buildTreatmentCompletedEventPayload,
@@ -105,6 +108,10 @@ export class SessionCompletionService {
           isCompleted: true,
           completedAt: session.completedAt,
           materialPostingId: session.materialPostingId,
+          completionJournalEntryId: session.completionJournalEntryId,
+          recognizedRevenue: session.recognizedRevenue,
+          hppAmount: session.hppAmount,
+          grossProfit: session.grossProfit,
           eventId: existingEvent.id,
           eventStatus: existingEvent.status,
           domainEventId: existingRevenueEvent.id,
@@ -207,16 +214,6 @@ export class SessionCompletionService {
         new Prisma.Decimal(0),
       );
 
-      await tx.treatmentSession.update({
-        where: { id: session.id },
-        data: {
-          isCompleted: true,
-          completedAt,
-          completedBy: userId,
-          materialPostingId,
-        },
-      });
-
       const revenueEvent = await createTreatmentCompletedEventInTransaction({
         sessionId: session.id,
         sessionCode: session.sessionCode,
@@ -227,6 +224,31 @@ export class SessionCompletionService {
         packageIds: [session.encounter.memberPackageId, session.boosterPackageId]
           .filter((value): value is string => Boolean(value)),
       }, tx);
+
+      const finance = await postTreatmentCompletionRevenueInTransaction({
+        actorUserId: userId,
+        eventId: revenueEvent.event.id,
+        sessionId: session.id,
+        sessionCode: session.sessionCode,
+        branchId: session.branchId,
+        completedAt,
+        hppAmount: totalActualMaterialCost,
+        inventoryPostingId: materialPostingId,
+      }, tx);
+
+      await tx.treatmentSession.update({
+        where: { id: session.id },
+        data: {
+          isCompleted: true,
+          completedAt,
+          completedBy: userId,
+          materialPostingId,
+          completionJournalEntryId: finance.journal.id,
+          recognizedRevenue: finance.recognizedRevenue,
+          hppAmount: finance.hppAmount,
+          grossProfit: finance.grossProfit,
+        },
+      });
 
       const payload = buildTreatmentCompletedEventPayload({
         occurredAt: completedAt.toISOString(),
@@ -261,9 +283,11 @@ export class SessionCompletionService {
           })),
         },
         finance: {
-          revenueRecognitionStatus: 'PENDING',
-          recognizedRevenue: '0.00',
-          journalEntryId: null,
+          revenueRecognitionStatus: 'POSTED',
+          recognizedRevenue: finance.recognizedRevenue.toFixed(2),
+          hppAmount: finance.hppAmount.toFixed(2),
+          grossProfit: finance.grossProfit.toFixed(2),
+          journalEntryId: finance.journal.id,
         },
       });
       const event = await tx.integrationEvent.create({
@@ -274,8 +298,10 @@ export class SessionCompletionService {
           aggregateId: session.id,
           branchId: session.branchId,
           payload: payload as unknown as Prisma.InputJsonValue,
-          status: IntegrationEventStatus.PENDING,
+          status: IntegrationEventStatus.PROCESSED,
           occurredAt: completedAt,
+          processedAt: completedAt,
+          attempts: 1,
         },
       });
       return {
@@ -285,6 +311,10 @@ export class SessionCompletionService {
         completedAt,
         materialPostingId,
         totalActualMaterialCost,
+        completionJournalEntryId: finance.journal.id,
+        recognizedRevenue: finance.recognizedRevenue,
+        hppAmount: finance.hppAmount,
+        grossProfit: finance.grossProfit,
         eventId: event.id,
         eventStatus: event.status,
         domainEventId: revenueEvent.event.id,
@@ -305,7 +335,11 @@ export class SessionCompletionService {
         eventId: result.eventId,
         eventStatus: result.eventStatus,
         domainEventId: result.domainEventId,
-        revenueRecognitionStatus: 'PENDING',
+        completionJournalEntryId: result.completionJournalEntryId,
+        recognizedRevenue: result.recognizedRevenue,
+        hppAmount: result.hppAmount,
+        grossProfit: result.grossProfit,
+        revenueRecognitionStatus: 'POSTED',
       },
     });
     return result;

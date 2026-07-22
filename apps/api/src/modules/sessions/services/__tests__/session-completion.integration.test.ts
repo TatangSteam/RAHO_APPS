@@ -35,6 +35,9 @@ describeDatabase('treatment completion FIFO integration', () => {
   const bomId = `treat_bom_${runId}`;
   const bomItemId = `treat_bom_item_${runId}`;
   const materialUsageId = `treat_usage_${runId}`;
+  const valuationId = `treat_valuation_${runId}`;
+  const contractId = `treat_contract_${runId}`;
+  const periodId = `treat_period_${runId}`;
   const service = new SessionCompletionService();
 
   beforeAll(async () => {
@@ -139,6 +142,45 @@ describeDatabase('treatment completion FIFO integration', () => {
         finalPrice: '1000000',
         status: PackageStatus.ACTIVE,
         assignedBy: actorId,
+      },
+    });
+    await prisma.packageBenefitValuation.create({
+      data: {
+        id: valuationId,
+        memberPackageId,
+        standaloneBenefitValue: '1000000',
+        allocatedConsideration: '1000000',
+        totalSessions: 1,
+        regularSessionRevenue: '1000000',
+        finalSessionRevenue: '1000000',
+        deferredRevenueAccountCode: '2200',
+        revenueAccountCode: '4100',
+        allocationSnapshot: { testRun: runId },
+      },
+    });
+    await prisma.packageRevenueContract.create({
+      data: {
+        id: contractId,
+        memberPackageId,
+        valuationId,
+        branchId,
+        totalConsideration: '1000000',
+        fundedDeferredAmount: '1000000',
+        remainingDeferredAmount: '1000000',
+        status: 'ACTIVE',
+      },
+    });
+    await prisma.accountingPeriod.create({
+      data: {
+        id: periodId,
+        name: `July 2026 ${runId}`,
+        fiscalYear: 2026,
+        periodNo: 7,
+        startDate: new Date('2026-07-01T00:00:00.000Z'),
+        endDate: new Date('2026-07-31T23:59:59.999Z'),
+        branchId,
+        scopeKey: branchId,
+        createdBy: actorId,
       },
     });
     await prisma.encounter.create({
@@ -252,6 +294,7 @@ describeDatabase('treatment completion FIFO integration', () => {
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId }] } });
     await prisma.integrationEvent.deleteMany({ where: { aggregateId: sessionId } });
+    await prisma.deferredRevenueMovement.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.revenueRecognition.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.domainEvent.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.materialUsage.deleteMany({ where: { treatmentSessionId: sessionId } });
@@ -260,9 +303,16 @@ describeDatabase('treatment completion FIFO integration', () => {
     await prisma.infusionExecution.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.therapyPlan.deleteMany({ where: { treatmentSessionId: sessionId } });
     await prisma.treatmentSession.deleteMany({ where: { id: sessionId } });
+    await prisma.journalSourceLink.deleteMany({ where: { journalEntry: { branchId } } });
+    await prisma.journalLine.deleteMany({ where: { journalEntry: { branchId } } });
+    await prisma.journalEntry.deleteMany({ where: { branchId } });
+    await prisma.journalSequence.deleteMany({ where: { scopeKey: branchId } });
+    await prisma.accountingPeriod.deleteMany({ where: { id: periodId } });
     await prisma.encounter.deleteMany({ where: { id: encounterId } });
     await prisma.treatmentBomItem.deleteMany({ where: { treatmentBomId: bomId } });
     await prisma.treatmentBom.deleteMany({ where: { id: bomId } });
+    await prisma.packageRevenueContract.deleteMany({ where: { id: contractId } });
+    await prisma.packageBenefitValuation.deleteMany({ where: { id: valuationId } });
     await prisma.memberPackage.deleteMany({ where: { id: memberPackageId } });
     await prisma.packagePricing.deleteMany({ where: { id: pricingId } });
     await prisma.inventoryCostAllocation.deleteMany({ where: { posting: { branchId } } });
@@ -281,7 +331,7 @@ describeDatabase('treatment completion FIFO integration', () => {
     await prisma.$disconnect();
   }, 45_000);
 
-  it('consumes FIFO once, emits one pending event, and does not recognize package revenue', async () => {
+  it('consumes FIFO and posts revenue/HPP once under concurrent completion', async () => {
     const journalCountBefore = await prisma.journalEntry.count({ where: { branchId } });
     const results = await Promise.all([
       service.completeSession(sessionId, actorId),
@@ -316,12 +366,19 @@ describeDatabase('treatment completion FIFO integration', () => {
     const event = await prisma.integrationEvent.findUniqueOrThrow({
       where: { eventType_aggregateId: { eventType: 'TREATMENT_COMPLETED', aggregateId: sessionId } },
     });
-    expect(event.status).toBe('PENDING');
+    expect(event.status).toBe('PROCESSED');
     expect((event.payload as any).finance).toEqual({
-      revenueRecognitionStatus: 'PENDING',
-      recognizedRevenue: '0.00',
-      journalEntryId: null,
+      revenueRecognitionStatus: 'POSTED',
+      recognizedRevenue: '1000000.00',
+      hppAmount: '200.00',
+      grossProfit: '999800.00',
+      journalEntryId: expect.any(String),
     });
-    expect(await prisma.journalEntry.count({ where: { branchId } })).toBe(journalCountBefore);
+    expect(await prisma.journalEntry.count({ where: { branchId } })).toBe(journalCountBefore + 1);
+    const completed = await prisma.treatmentSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(completed.recognizedRevenue?.toFixed(2)).toBe('1000000.00');
+    expect(completed.hppAmount?.toFixed(2)).toBe('200.00');
+    expect(completed.grossProfit?.toFixed(2)).toBe('999800.00');
+    expect(await prisma.revenueRecognition.count({ where: { treatmentSessionId: sessionId, status: 'POSTED' } })).toBe(1);
   }, 60_000);
 });

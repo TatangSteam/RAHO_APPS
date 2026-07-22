@@ -1,10 +1,17 @@
-import { AccountType, PackageRevenueContractStatus, Prisma } from '@prisma/client';
+import {
+  AccountType,
+  DomainEventStatus,
+  PackageRevenueContractStatus,
+  Prisma,
+  RevenueRecognitionStatus,
+} from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import { postTreatmentCompletionJournal } from '@modules/accounting/accounting.service';
 import { allocateConsideration, calculatePerSessionRevenue, revenueForOrdinal, treatmentCompletedEventPayload } from './revenue.helpers';
-import type { RevenueListQuery, UpsertRevenuePolicyInput } from './revenue.schema';
+import type { ProfitabilityQuery, RevenueListQuery, UpsertRevenuePolicyInput } from './revenue.schema';
 
 type Tx = Prisma.TransactionClient;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -148,6 +155,151 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
   return reservations;
 }
 
+type TreatmentRecognitionRow = Prisma.RevenueRecognitionGetPayload<{
+  include: { contract: { include: { valuation: true } } };
+}>;
+
+export function buildTreatmentCompletionJournalLines(
+  recognitions: Array<Pick<TreatmentRecognitionRow, 'amount'> & {
+    contract: { valuation: Pick<TreatmentRecognitionRow['contract']['valuation'], 'deferredRevenueAccountCode' | 'revenueAccountCode'> };
+  }>,
+  hppInput: Prisma.Decimal.Value,
+) {
+  const debitByAccount = new Map<string, Prisma.Decimal>();
+  const creditByAccount = new Map<string, Prisma.Decimal>();
+  for (const recognition of recognitions) {
+    const deferredCode = recognition.contract.valuation.deferredRevenueAccountCode.toUpperCase();
+    const revenueCode = recognition.contract.valuation.revenueAccountCode.toUpperCase();
+    debitByAccount.set(deferredCode, (debitByAccount.get(deferredCode) || new Prisma.Decimal(0)).add(recognition.amount));
+    creditByAccount.set(revenueCode, (creditByAccount.get(revenueCode) || new Prisma.Decimal(0)).add(recognition.amount));
+  }
+  const lines = [
+    ...[...debitByAccount.entries()].map(([accountCode, debit]) => ({
+      accountCode, debit, metadata: { treatmentRole: 'DEFERRED_RELEASE' },
+    })),
+    ...[...creditByAccount.entries()].map(([accountCode, credit]) => ({
+      accountCode, credit, metadata: { treatmentRole: 'REVENUE' },
+    })),
+  ];
+  const hppAmount = new Prisma.Decimal(hppInput).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  if (hppAmount.greaterThan(0)) {
+    lines.push(
+      { accountCode: '5100', debit: hppAmount, metadata: { treatmentRole: 'HPP' } },
+      { accountCode: '1300', credit: hppAmount, metadata: { treatmentRole: 'INVENTORY' } },
+    );
+  }
+  return lines;
+}
+
+/** Posts deferred release, revenue and HPP inside the caller's completion transaction. */
+export async function postTreatmentCompletionRevenueInTransaction(input: {
+  actorUserId: string;
+  eventId: string;
+  sessionId: string;
+  sessionCode: string;
+  branchId: string;
+  completedAt: Date;
+  hppAmount: Prisma.Decimal;
+  inventoryPostingId: string | null;
+}, tx: Tx) {
+  const event = await tx.domainEvent.findUnique({ where: { id: input.eventId } });
+  if (!event || event.status !== DomainEventStatus.PENDING) {
+    throw errors.conflict('TREATMENT_REVENUE_EVENT_STATE_INVALID', 'Event revenue treatment tidak berada pada status PENDING.');
+  }
+  const payload = event.payload as { packageIds?: string[] };
+  const packageIds = Array.from(new Set(payload.packageIds || []));
+  if (!packageIds.length) {
+    throw errors.unprocessable('TREATMENT_PACKAGE_REQUIRED', 'Treatment completion memerlukan paket revenue yang valid.');
+  }
+
+  await reserveTreatmentCompletedRevenue(event.id, tx);
+  const contracts = await tx.packageRevenueContract.findMany({
+    where: { memberPackageId: { in: packageIds }, status: PackageRevenueContractStatus.ACTIVE },
+    select: { memberPackageId: true },
+  });
+  if (new Set(contracts.map((contract) => contract.memberPackageId)).size !== packageIds.length) {
+    throw errors.unprocessable(
+      'PACKAGE_DEFERRED_REVENUE_NOT_READY',
+      'Seluruh paket treatment harus memiliki deferred revenue aktif sebelum sesi diselesaikan.',
+    );
+  }
+  const recognitions = await tx.revenueRecognition.findMany({
+    where: { domainEventId: event.id, status: RevenueRecognitionStatus.RESERVED },
+    include: { contract: { include: { valuation: true } } },
+    orderBy: { id: 'asc' },
+  });
+  if (recognitions.length !== packageIds.length) {
+    throw errors.unprocessable('REVENUE_RECOGNITION_INCOMPLETE', 'Revenue per sesi tidak dapat dialokasikan untuk seluruh paket.');
+  }
+
+  const recognizedRevenue = recognitions.reduce(
+    (sum, recognition) => sum.add(recognition.amount),
+    new Prisma.Decimal(0),
+  );
+  const hppAmount = input.hppAmount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const grossProfit = recognizedRevenue.sub(hppAmount);
+  const posted = await postTreatmentCompletionJournal({
+    postingKey: `TREATMENT_COMPLETION:${input.sessionId}`,
+    transactionDate: input.completedAt,
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    description: `Revenue dan HPP treatment ${input.sessionCode}`,
+    costCenterCode: input.branchId,
+    lines: buildTreatmentCompletionJournalLines(recognitions, hppAmount),
+    sourceLinks: [{
+      sourceType: 'TREATMENT_SESSION',
+      sourceId: input.sessionId,
+      sourceNumber: input.sessionCode,
+      relationType: 'PRIMARY',
+    }],
+    metadata: {
+      domainEventId: event.id,
+      inventoryPostingId: input.inventoryPostingId,
+      recognizedRevenue: recognizedRevenue.toFixed(2),
+      hppAmount: hppAmount.toFixed(2),
+      grossProfit: grossProfit.toFixed(2),
+    },
+  }, tx);
+
+  for (const recognition of recognitions) {
+    const remaining = recognition.contract.remainingDeferredAmount.sub(recognition.amount);
+    if (remaining.isNegative()) {
+      throw errors.conflict('DEFERRED_REVENUE_NEGATIVE', 'Recognition melebihi saldo deferred revenue.');
+    }
+    await tx.deferredRevenueMovement.create({
+      data: {
+        movementKey: `TREATMENT_COMPLETED:${input.sessionId}:PACKAGE:${recognition.memberPackageId}`,
+        contractId: recognition.contractId,
+        memberPackageId: recognition.memberPackageId,
+        treatmentSessionId: input.sessionId,
+        journalEntryId: posted.journal.id,
+        type: 'RECOGNITION',
+        amount: recognition.amount,
+        occurredAt: input.completedAt,
+        metadata: json({ domainEventId: event.id, sessionOrdinal: recognition.sessionOrdinal }),
+      },
+    });
+    await tx.packageRevenueContract.update({
+      where: { id: recognition.contractId },
+      data: {
+        recognizedAmount: recognition.contract.recognizedAmount.add(recognition.amount),
+        remainingDeferredAmount: remaining,
+        recognizedSessions: recognition.contract.recognizedSessions + 1,
+        status: remaining.isZero() ? PackageRevenueContractStatus.FULLY_RECOGNIZED : PackageRevenueContractStatus.ACTIVE,
+      },
+    });
+    await tx.revenueRecognition.update({
+      where: { id: recognition.id },
+      data: { status: RevenueRecognitionStatus.POSTED, journalEntryId: posted.journal.id, recognizedAt: input.completedAt },
+    });
+  }
+  await tx.domainEvent.update({
+    where: { id: event.id },
+    data: { status: DomainEventStatus.PROCESSED, processedAt: input.completedAt, failureReason: null },
+  });
+  return { journal: posted.journal, recognizedRevenue, hppAmount, grossProfit, recognitions };
+}
+
 async function readableBranches(actorUserId: string) {
   const accessible = await getAccessibleBranchIds(actorUserId);
   const candidates = accessible === null ? (await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })).map((row) => row.id) : accessible;
@@ -164,4 +316,58 @@ export async function listTreatmentEvents(actorUserId: string, branchId?: string
   const branches = await readableBranches(actorUserId);
   if (branchId && !branches.includes(branchId)) throw errors.forbidden('Tidak memiliki akses event cabang ini.');
   return prisma.domainEvent.findMany({ where: { eventType: 'TREATMENT_COMPLETED', branchId: branchId || { in: branches } }, include: { recognitions: true }, orderBy: { occurredAt: 'desc' }, take: 100 });
+}
+
+export async function getTreatmentProfitability(actorUserId: string, query: ProfitabilityQuery) {
+  const branches = await readableBranches(actorUserId);
+  if (query.branchId) {
+    await assertBranchAccess(actorUserId, query.branchId);
+    if (!branches.includes(query.branchId)) throw errors.forbidden('Tidak memiliki akses profitability cabang ini.');
+  }
+  const rows = await prisma.treatmentSession.findMany({
+    where: {
+      isCompleted: true,
+      completionJournalEntryId: { not: null },
+      branchId: query.branchId || { in: branches },
+      ...(query.from || query.to ? { completedAt: {
+        ...(query.from ? { gte: query.from } : {}),
+        ...(query.to ? { lte: query.to } : {}),
+      } } : {}),
+    },
+    select: {
+      id: true,
+      sessionCode: true,
+      branchId: true,
+      treatmentDate: true,
+      completedAt: true,
+      materialPostingId: true,
+      completionJournalEntryId: true,
+      recognizedRevenue: true,
+      hppAmount: true,
+      grossProfit: true,
+      branch: { select: { branchCode: true, name: true } },
+    },
+    orderBy: { completedAt: 'desc' },
+    take: 500,
+  });
+  const totalRevenue = rows.reduce((sum, row) => sum.add(row.recognizedRevenue || 0), new Prisma.Decimal(0));
+  const totalHpp = rows.reduce((sum, row) => sum.add(row.hppAmount || 0), new Prisma.Decimal(0));
+  const grossProfit = rows.reduce((sum, row) => sum.add(row.grossProfit || 0), new Prisma.Decimal(0));
+  return {
+    summary: {
+      sessionCount: rows.length,
+      recognizedRevenue: totalRevenue.toFixed(2),
+      hppAmount: totalHpp.toFixed(2),
+      grossProfit: grossProfit.toFixed(2),
+      grossMarginPercent: totalRevenue.greaterThan(0)
+        ? grossProfit.div(totalRevenue).mul(100).toDecimalPlaces(2).toFixed(2)
+        : '0.00',
+    },
+    sessions: rows.map((row) => ({
+      ...row,
+      recognizedRevenue: row.recognizedRevenue?.toFixed(2) || '0.00',
+      hppAmount: row.hppAmount?.toFixed(2) || '0.00',
+      grossProfit: row.grossProfit?.toFixed(2) || '0.00',
+    })),
+  };
 }
