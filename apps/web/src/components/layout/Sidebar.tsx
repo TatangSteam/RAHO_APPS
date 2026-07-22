@@ -245,6 +245,12 @@ const MENU_GROUPS: MenuGroup[] = [
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
       {
+        label: 'Finance Reports',
+        href: '/finance-reports',
+        icon: <BarChart3 size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
+      },
+      {
         label: 'Kas & Bank',
         href: '/cash-bank',
         icon: <CreditCard size={20} />,

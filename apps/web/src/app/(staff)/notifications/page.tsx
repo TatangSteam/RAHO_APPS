@@ -16,6 +16,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { ManagerNotificationRow } from '@/components/notifications/ManagerNotificationRow';
 import { NotificationsEmptyState } from '@/components/notifications/NotificationsEmptyState';
 import { NotificationSummaryCard } from '@/components/notifications/NotificationSummaryCard';
+import { SystemNotifications } from '@/components/notifications/SystemNotifications';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -44,21 +45,7 @@ export default function NotificationsPage() {
 
   if (!isManager) {
     return (
-      <div className="mx-auto flex max-w-5xl flex-col gap-6">
-        <div className="rounded-lg border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-950">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-neutral-100 text-neutral-600 dark:bg-neutral-900 dark:text-neutral-300">
-              <Bell className="h-5 w-5" />
-            </span>
-            <div>
-              <h1 className="text-xl font-semibold text-neutral-950 dark:text-white">Notifikasi</h1>
-              <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                Belum ada notifikasi khusus untuk role ini.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div className="mx-auto flex max-w-5xl flex-col gap-6"><SystemNotifications /></div>
     );
   }
 
@@ -85,6 +72,7 @@ export default function NotificationsPage() {
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <SystemNotifications />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2 text-sm font-semibold text-amber-700 dark:text-amber-400">

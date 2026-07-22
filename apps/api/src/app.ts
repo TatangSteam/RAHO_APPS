@@ -36,6 +36,8 @@ import purchasingRouter from './modules/purchasing/purchasing.routes';
 import revenueRouter from './modules/revenue/revenue.routes';
 import workflowApprovalRouter from './modules/workflow/approval.routes';
 import stockOpnameRouter from './modules/inventory/stock-opname.routes';
+import financeReportRouter from './modules/finance-report/finance-report.routes';
+import notificationRouter from './modules/notifications/notification.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -110,6 +112,8 @@ export function createApp(): Application {
   app.use(`${prefix}/purchasing`, purchasingRouter);
   app.use(`${prefix}/revenue`, revenueRouter);
   app.use(`${prefix}/workflow`, workflowApprovalRouter);
+  app.use(`${prefix}/finance-reports`, financeReportRouter);
+  app.use(`${prefix}/notifications`, notificationRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

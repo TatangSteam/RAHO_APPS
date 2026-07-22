@@ -15,6 +15,7 @@ import {
 import { PERMISSIONS, type PermissionCode } from '@modules/iam/permission-catalog';
 import { logAudit } from '@utils/auditLog';
 import type { ApprovalInboxQuery, CreateApprovalRuleInput } from './approval.schema';
+import { createNotification, notifyApprovers } from '@modules/notifications/notification.service';
 
 export type ApprovalTx = Prisma.TransactionClient;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
@@ -90,6 +91,14 @@ export async function startApprovalInTransaction(input: StartApprovalInput, tx: 
     },
     include: { rule: { include: { steps: { orderBy: { stepNo: 'asc' } } } }, decisions: true },
   });
+  const firstStep = instance.rule.steps[0];
+  await notifyApprovers(tx, {
+    permissionCode: firstStep.permissionCode,
+    branchId: input.branchId,
+    makerUserId: input.makerUserId,
+    entityNumber: input.entityNumber || input.entityId,
+    stepName: firstStep.name,
+  });
   return { instance, idempotentReplay: false };
 }
 
@@ -127,6 +136,7 @@ export async function decideApprovalInTransaction(input: {
   if (input.decision === ApprovalDecisionType.REJECT) {
     const rejected = await tx.approvalInstance.update({ where: { id: instance.id }, data: { status: ApprovalInstanceStatus.REJECTED, rejectedAt: decidedAt, completedAt: decidedAt } });
     await tx.approvalAuditLog.create({ data: { approvalInstanceId: instance.id, action: 'REJECTED', actorUserId: input.actorUserId, stepNo: step.stepNo, beforeStatus: instance.status, afterStatus: rejected.status, metadata: json({ note: input.note }) } });
+    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval ditolak', body: `${instance.entityNumber || instance.entityId} ditolak: ${input.note}`, deepLink: '/approvals' });
     return { instance: rejected, isFinal: true, approved: false };
   }
   const approvalsAtStep = instance.decisions.filter((decision) => decision.stepNo === step.stepNo && decision.decision === ApprovalDecisionType.APPROVE).length + 1;
@@ -142,6 +152,12 @@ export async function decideApprovalInTransaction(input: {
       : { currentStep: step.stepNo + 1 },
   });
   await tx.approvalAuditLog.create({ data: { approvalInstanceId: instance.id, action: finalStep ? 'APPROVED' : 'STEP_ADVANCED', actorUserId: input.actorUserId, stepNo: step.stepNo, beforeStatus: instance.status, afterStatus: updated.status, metadata: json({ nextStep: finalStep ? null : step.stepNo + 1, note: input.note || null }) } });
+  if (finalStep) {
+    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval disetujui', body: `${instance.entityNumber || instance.entityId} telah disetujui.`, deepLink: '/approvals' });
+  } else {
+    const nextStep = instance.rule.steps.find((candidate) => candidate.stepNo === step.stepNo + 1)!;
+    await notifyApprovers(tx, { permissionCode: nextStep.permissionCode, branchId: instance.branchId, makerUserId: instance.makerUserId, entityNumber: instance.entityNumber || instance.entityId, stepName: nextStep.name });
+  }
   return { instance: updated, isFinal: finalStep, approved: finalStep };
 }
 

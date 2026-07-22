@@ -11,6 +11,7 @@ import {
   calculatePaymentState,
   paymentPayloadHash,
 } from './payment-posting.helpers';
+import { createNotification } from '@modules/notifications/notification.service';
 
 interface PaymentEvidence {
   proofFileUrl?: string;
@@ -410,6 +411,13 @@ export class InvoicePaymentService {
           afterData: json({ status: 'REJECTED', reason: data.reason }),
           description: `Pembayaran invoice ${candidate.invoice.invoiceNumber} ditolak.`,
         },
+      });
+      await createNotification(tx, {
+        userId: payment.receivedBy,
+        type: 'INVOICE',
+        title: 'Pembayaran ditolak',
+        body: `Pembayaran invoice ${candidate.invoice.invoiceNumber} ditolak: ${data.reason}`,
+        deepLink: `/invoices/${candidate.invoice.id}`,
       });
       return { payment: updated, idempotentReplay: false };
     });
