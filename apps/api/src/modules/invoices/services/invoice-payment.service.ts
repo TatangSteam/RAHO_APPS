@@ -5,6 +5,7 @@ import type { RecordPaymentInput, RejectPaymentInput, VerifyPaymentInput } from 
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { postJournal } from '@modules/accounting/accounting.service';
+import { fundPackageDeferredRevenueInTransaction } from '@modules/revenue/revenue.service';
 import {
   assertPaymentMethodAccountType,
   calculatePaymentState,
@@ -346,6 +347,14 @@ export class InvoicePaymentService {
           verifiedAt: state.isFullyPaid ? verifiedAt : null,
         },
       });
+      const deferredRevenueMovements = await fundPackageDeferredRevenueInTransaction({
+        actorUserId: userId,
+        invoicePaymentId: payment.id,
+        invoiceId: payment.invoice.id,
+        paymentAmount: payment.amount,
+        journalEntryId: posted.journal.id,
+        occurredAt: verifiedAt,
+      }, tx);
       await tx.auditLog.create({
         data: {
           userId,
@@ -358,11 +367,11 @@ export class InvoicePaymentService {
           entityId: payment.invoice.id,
           entityCode: payment.invoice.invoiceNumber,
           beforeData: json({ status: 'PENDING' }),
-          afterData: json({ status: 'VERIFIED', verifiedTotal: state.verifiedTotal.toFixed(2), journalEntryId: posted.journal.id }),
+          afterData: json({ status: 'VERIFIED', verifiedTotal: state.verifiedTotal.toFixed(2), journalEntryId: posted.journal.id, deferredRevenueMovementCount: deferredRevenueMovements.length }),
           description: `Pembayaran invoice ${payment.invoice.invoiceNumber} diverifikasi dan diposting.`,
         },
       });
-      return { payment: updatedPayment, cashBankTransaction: cashTransaction, journal: posted.journal, idempotentReplay: false };
+      return { payment: updatedPayment, cashBankTransaction: cashTransaction, journal: posted.journal, deferredRevenueMovements, idempotentReplay: false };
     });
   }
 

@@ -604,36 +604,36 @@ export class RoleDashboardService {
         },
       }),
       // Current period revenue
-      prisma.invoice.aggregate({
+      prisma.revenueRecognition.aggregate({
         where: {
           branchId: { in: branchIds },
-          status: 'PAID',
-          paidAt: { gte: start, lte: end },
+          status: 'POSTED',
+          recognizedAt: { gte: start, lte: end },
         },
-        _sum: { totalAmount: true },
+        _sum: { amount: true },
       }),
       // Previous period revenue
-      prisma.invoice.aggregate({
+      prisma.revenueRecognition.aggregate({
         where: {
           branchId: { in: branchIds },
-          status: 'PAID',
-          paidAt: { gte: prevStart, lte: prevEnd },
+          status: 'POSTED',
+          recognizedAt: { gte: prevStart, lte: prevEnd },
         },
-        _sum: { totalAmount: true },
+        _sum: { amount: true },
       }),
     ]);
 
     // Total revenue (all time)
-    const totalRevenueResult = await prisma.invoice.aggregate({
+    const totalRevenueResult = await prisma.revenueRecognition.aggregate({
       where: {
         branchId: { in: branchIds },
-        status: 'PAID',
+        status: 'POSTED',
       },
-      _sum: { totalAmount: true },
+      _sum: { amount: true },
     });
 
-    const monthlyRevenue = Number(currentRevenue._sum.totalAmount || 0);
-    const prevMonthlyRevenue = Number(previousRevenue._sum.totalAmount || 0);
+    const monthlyRevenue = Number(currentRevenue._sum.amount || 0);
+    const prevMonthlyRevenue = Number(previousRevenue._sum.amount || 0);
     const revenueGrowth = prevMonthlyRevenue > 0 
       ? ((monthlyRevenue - prevMonthlyRevenue) / prevMonthlyRevenue) * 100 
       : 0;
@@ -684,21 +684,21 @@ export class RoleDashboardService {
               isCompleted: true,
             },
           }),
-          prisma.invoice.aggregate({
+          prisma.revenueRecognition.aggregate({
             where: {
               branchId: branch.id,
-              status: 'PAID',
-              paidAt: { gte: start, lte: end },
+              status: 'POSTED',
+              recognizedAt: { gte: start, lte: end },
             },
-            _sum: { totalAmount: true },
+            _sum: { amount: true },
           }),
-          prisma.invoice.aggregate({
+          prisma.revenueRecognition.aggregate({
             where: {
               branchId: branch.id,
-              status: 'PAID',
-              paidAt: { gte: prevStart, lte: prevEnd },
+              status: 'POSTED',
+              recognizedAt: { gte: prevStart, lte: prevEnd },
             },
-            _sum: { totalAmount: true },
+            _sum: { amount: true },
           }),
           prisma.memberPackage.count({
             where: {
@@ -715,8 +715,8 @@ export class RoleDashboardService {
           }),
         ]);
 
-        const branchMonthlyRevenue = Number(branchRevenue._sum.totalAmount || 0);
-        const branchPrevMonthlyRevenue = Number(branchPrevRevenue._sum.totalAmount || 0);
+        const branchMonthlyRevenue = Number(branchRevenue._sum.amount || 0);
+        const branchPrevMonthlyRevenue = Number(branchPrevRevenue._sum.amount || 0);
         const branchGrowth = branchPrevMonthlyRevenue > 0
           ? ((branchMonthlyRevenue - branchPrevMonthlyRevenue) / branchPrevMonthlyRevenue) * 100
           : 0;
@@ -750,7 +750,7 @@ export class RoleDashboardService {
         totalBranches: branchIds.length,
         totalMembers,
         activeMembers,
-        totalRevenue: Number(totalRevenueResult._sum.totalAmount || 0),
+        totalRevenue: Number(totalRevenueResult._sum.amount || 0),
         monthlyRevenue,
         revenueGrowth: Math.round(revenueGrowth * 10) / 10,
         totalSessions,
@@ -902,9 +902,9 @@ export class RoleDashboardService {
       prisma.memberPackage.count({
         where: { branchId, createdAt: { gte: weekAgo } },
       }),
-      prisma.invoice.aggregate({
-        where: { branchId, status: 'PAID', paidAt: { gte: weekAgo } },
-        _sum: { totalAmount: true },
+      prisma.revenueRecognition.aggregate({
+        where: { branchId, status: 'POSTED', recognizedAt: { gte: weekAgo } },
+        _sum: { amount: true },
       }),
     ]);
 
@@ -943,7 +943,7 @@ export class RoleDashboardService {
         sessionsCompleted: weeklySessionsCompleted,
         newMembers: weeklyNewMembers,
         packagesSold: weeklyPackagesSold,
-        revenue: Number(weeklyRevenue._sum.totalAmount || 0),
+        revenue: Number(weeklyRevenue._sum.amount || 0),
       },
     };
   }

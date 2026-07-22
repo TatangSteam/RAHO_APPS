@@ -1,6 +1,8 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { createTreatmentCompletedEventInTransaction } from '@modules/revenue/revenue.service';
 
 export class SessionCompletionService {
   private hasDoctorEvaluation(evaluation: any): boolean {
@@ -25,6 +27,7 @@ export class SessionCompletionService {
         materials: true,
         photo: true,
         evaluation: true,
+        encounter: { select: { memberId: true, memberPackageId: true } },
       },
     });
 
@@ -83,24 +86,33 @@ export class SessionCompletionService {
       };
     }
 
-    // Complete session
-    const updatedSession = await prisma.treatmentSession.update({
-      where: { id: sessionId },
-      data: { isCompleted: true },
-    });
-
-    await logAudit({
-      userId,
-      action: AuditAction.UPDATE,
-      resource: 'TreatmentSession',
-      resourceId: sessionId,
-      meta: { action: 'COMPLETE_SESSION' },
-    });
+    // Completion flag and outbox event are committed atomically. Revenue remains
+    // deferred; Sprint 8 consumes the event together with FIFO/HPP posting.
+    const completion = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "treatment_sessions" WHERE "id" = ${sessionId} FOR UPDATE`);
+      const locked = await tx.treatmentSession.findUnique({ where: { id: sessionId } });
+      if (!locked) throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
+      if (locked.isCompleted) throw { status: 409, code: 'SESSION_ALREADY_COMPLETED', message: 'Sesi sudah diselesaikan' };
+      const updatedSession = await tx.treatmentSession.update({ where: { id: sessionId }, data: { isCompleted: true } });
+      const completedAt = new Date();
+      const emitted = await createTreatmentCompletedEventInTransaction({
+        sessionId: session.id,
+        sessionCode: session.sessionCode,
+        branchId: session.branchId,
+        memberId: session.encounter.memberId,
+        treatmentDate: session.treatmentDate,
+        completedAt,
+        packageIds: [session.encounter.memberPackageId, session.boosterPackageId].filter((value): value is string => Boolean(value)),
+      }, tx);
+      await tx.auditLog.create({ data: { userId, branchId: session.branchId, action: AuditAction.UPDATE, module: 'TREATMENT', resource: 'TreatmentSession', resourceId: session.id, entityType: 'TreatmentSession', entityId: session.id, entityCode: session.sessionCode, description: `Sesi ${session.sessionCode} selesai dan event TREATMENT_COMPLETED dibuat.`, afterData: { isCompleted: true, domainEventId: emitted.event.id } } });
+      return { updatedSession, emitted };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 
     return {
-      sessionId: updatedSession.id,
-      sessionCode: updatedSession.sessionCode,
-      isCompleted: updatedSession.isCompleted,
+      sessionId: completion.updatedSession.id,
+      sessionCode: completion.updatedSession.sessionCode,
+      isCompleted: completion.updatedSession.isCompleted,
+      event: { id: completion.emitted.event.id, eventType: completion.emitted.event.eventType, status: completion.emitted.event.status },
       message: 'Sesi terapi berhasil diselesaikan',
     };
   }

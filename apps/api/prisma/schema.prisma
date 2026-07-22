@@ -328,6 +328,35 @@ enum SupplierInvoiceStatus {
   PAID
 }
 
+enum RevenueRecognitionMethod {
+  PER_SESSION
+}
+
+enum PackageRevenueContractStatus {
+  UNFUNDED
+  ACTIVE
+  FULLY_RECOGNIZED
+  CANCELLED
+}
+
+enum DeferredRevenueMovementType {
+  FUNDING
+  RECOGNITION
+  REVERSAL
+}
+
+enum RevenueRecognitionStatus {
+  RESERVED
+  POSTED
+  REVERSED
+}
+
+enum DomainEventStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
 enum DiscrepancyType {
   SHORTAGE // Kurang
   DAMAGE // Rusak
@@ -486,44 +515,47 @@ model Branch {
   updatedAt      DateTime   @updatedAt
 
   // Relations
-  users                  User[]
-  members                Member[]
-  branchMemberAccess     BranchMemberAccess[]
-  memberPackages         MemberPackage[]
-  memberAddOns           MemberAddOn[]
-  nonTherapyPurchases    MemberNonTherapyPurchase[]
-  invoices               Invoice[]
-  packagePricings        PackagePricing[]
-  inventoryItems         InventoryItem[]
-  stockRequests          StockRequest[]             @relation("StockRequestDestination")
-  stockRequestsFulfilled StockRequest[]             @relation("StockRequestSource")
-  shipmentsFrom          Shipment[]                 @relation("ShipmentFrom")
-  shipmentsTo            Shipment[]                 @relation("ShipmentTo")
-  encounters             Encounter[]
-  treatmentSessions      TreatmentSession[]
-  managerBranches        ManagerBranch[]
-  staffBranches          StaffBranch[]              @relation("StaffBranches")
-  referralCodes          ReferralCode[]
-  auditLogs              AuditLog[]
-  permissionOverrides    UserPermissionOverride[]
-  accountingPeriods      AccountingPeriod[]
-  journalEntries         JournalEntry[]
-  journalLines           JournalLine[]
-  cashBankAccounts       CashBankAccount[]
-  cashBankTransactions   CashBankTransaction[]
-  overstocks             BranchOverstock[]
-  warehouses             Warehouse[]
-  inventoryPostings      InventoryPosting[]
-  inventoryBalances      InventoryBalance[]
-  openingBalances        OpeningBalance[]
-  expenses               Expense[]
-  internalTransfersFrom  InternalTransferLedger[]   @relation("InternalTransferFromBranch")
-  internalTransfersTo    InternalTransferLedger[]   @relation("InternalTransferToBranch")
-  purchaseRequests       PurchaseRequest[]
-  purchaseOrders         PurchaseOrder[]
-  goodsReceipts          GoodsReceipt[]
-  supplierInvoices       SupplierInvoice[]
-  supplierPayments       SupplierPayment[]
+  users                   User[]
+  members                 Member[]
+  branchMemberAccess      BranchMemberAccess[]
+  memberPackages          MemberPackage[]
+  memberAddOns            MemberAddOn[]
+  nonTherapyPurchases     MemberNonTherapyPurchase[]
+  invoices                Invoice[]
+  packagePricings         PackagePricing[]
+  inventoryItems          InventoryItem[]
+  stockRequests           StockRequest[]             @relation("StockRequestDestination")
+  stockRequestsFulfilled  StockRequest[]             @relation("StockRequestSource")
+  shipmentsFrom           Shipment[]                 @relation("ShipmentFrom")
+  shipmentsTo             Shipment[]                 @relation("ShipmentTo")
+  encounters              Encounter[]
+  treatmentSessions       TreatmentSession[]
+  managerBranches         ManagerBranch[]
+  staffBranches           StaffBranch[]              @relation("StaffBranches")
+  referralCodes           ReferralCode[]
+  auditLogs               AuditLog[]
+  permissionOverrides     UserPermissionOverride[]
+  accountingPeriods       AccountingPeriod[]
+  journalEntries          JournalEntry[]
+  journalLines            JournalLine[]
+  cashBankAccounts        CashBankAccount[]
+  cashBankTransactions    CashBankTransaction[]
+  overstocks              BranchOverstock[]
+  warehouses              Warehouse[]
+  inventoryPostings       InventoryPosting[]
+  inventoryBalances       InventoryBalance[]
+  openingBalances         OpeningBalance[]
+  expenses                Expense[]
+  internalTransfersFrom   InternalTransferLedger[]   @relation("InternalTransferFromBranch")
+  internalTransfersTo     InternalTransferLedger[]   @relation("InternalTransferToBranch")
+  purchaseRequests        PurchaseRequest[]
+  purchaseOrders          PurchaseOrder[]
+  goodsReceipts           GoodsReceipt[]
+  supplierInvoices        SupplierInvoice[]
+  supplierPayments        SupplierPayment[]
+  packageRevenueContracts PackageRevenueContract[]
+  domainEvents            DomainEvent[]
+  revenueRecognitions     RevenueRecognition[]
 
   @@index([branchCode])
   @@index([isActive])
@@ -577,6 +609,7 @@ model User {
   goodsReceiptsCreated        GoodsReceipt[]           @relation("GoodsReceiptCreatedBy")
   supplierInvoicesCreated     SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
   supplierPaymentsCreated     SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
+  revenuePoliciesCreated      PackageRevenuePolicy[]   @relation("RevenuePolicyCreatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -751,14 +784,16 @@ model Account {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  parent                 Account?             @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children               Account[]            @relation("AccountHierarchy")
-  lines                  JournalLine[]
-  cashBankAccounts       CashBankAccount[]
-  openingBalanceLines    OpeningBalanceLine[]
-  expenses               Expense[]
-  supplierInvoiceDebits  SupplierInvoice[]    @relation("SupplierInvoiceGrniAccount")
-  supplierInvoiceCredits SupplierInvoice[]    @relation("SupplierInvoiceApAccount")
+  parent                  Account?               @relation("AccountHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children                Account[]              @relation("AccountHierarchy")
+  lines                   JournalLine[]
+  cashBankAccounts        CashBankAccount[]
+  openingBalanceLines     OpeningBalanceLine[]
+  expenses                Expense[]
+  supplierInvoiceDebits   SupplierInvoice[]      @relation("SupplierInvoiceGrniAccount")
+  supplierInvoiceCredits  SupplierInvoice[]      @relation("SupplierInvoiceApAccount")
+  revenuePolicies         PackageRevenuePolicy[] @relation("RevenuePolicyRevenueAccount")
+  deferredRevenuePolicies PackageRevenuePolicy[] @relation("RevenuePolicyDeferredAccount")
 
   @@index([type, isActive])
   @@index([parentId])
@@ -812,22 +847,24 @@ model JournalEntry {
   reversedByEntryId  String?       @unique
   createdAt          DateTime      @default(now())
 
-  branch               Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  accountingPeriod     AccountingPeriod        @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
-  creator              User                    @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  poster               User                    @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
-  reversedByEntry      JournalEntry?           @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
-  reversesEntry        JournalEntry?           @relation("JournalReversal")
-  lines                JournalLine[]
-  sourceLinks          JournalSourceLink[]
-  cashBankTransactions CashBankTransaction[]
-  openingBalance       OpeningBalance?
-  expense              Expense?
-  transferDispatch     InternalTransferLedger? @relation("TransferDispatchJournal")
-  transferReceipt      InternalTransferLedger? @relation("TransferReceiptJournal")
-  goodsReceipt         GoodsReceipt?
-  supplierInvoice      SupplierInvoice?
-  supplierPayment      SupplierPayment?
+  branch                   Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  accountingPeriod         AccountingPeriod          @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  creator                  User                      @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  poster                   User                      @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
+  reversedByEntry          JournalEntry?             @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
+  reversesEntry            JournalEntry?             @relation("JournalReversal")
+  lines                    JournalLine[]
+  sourceLinks              JournalSourceLink[]
+  cashBankTransactions     CashBankTransaction[]
+  openingBalance           OpeningBalance?
+  expense                  Expense?
+  transferDispatch         InternalTransferLedger?   @relation("TransferDispatchJournal")
+  transferReceipt          InternalTransferLedger?   @relation("TransferReceiptJournal")
+  goodsReceipt             GoodsReceipt?
+  supplierInvoice          SupplierInvoice?
+  supplierPayment          SupplierPayment?
+  deferredRevenueMovements DeferredRevenueMovement[]
+  revenueRecognitions      RevenueRecognition[]
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -1093,8 +1130,9 @@ model PackagePricing {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  branch         Branch?         @relation(fields: [branchId], references: [id])
+  branch         Branch?               @relation(fields: [branchId], references: [id])
   memberPackages MemberPackage[]
+  revenuePolicy  PackageRevenuePolicy?
 
   @@unique([branchId, packageType, boosterType, serviceType, totalSessions, productCode], map: "package_pricing_identity_unique")
   @@index([branchId, isActive])
@@ -1156,19 +1194,23 @@ model MemberPackage {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  member           Member                    @relation(fields: [memberId], references: [id])
-  branch           Branch                    @relation(fields: [branchId], references: [id])
-  packagePricing   PackagePricing?           @relation(fields: [packagePricingId], references: [id])
-  assignedByUser   User                      @relation("PackageAssignedBy", fields: [assignedBy], references: [id])
-  verifiedByUser   User?                     @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
-  rejectedByUser   User?                     @relation("PackageRejectedBy", fields: [rejectedBy], references: [id])
-  refundedByUser   User?                     @relation("PackageRefundedBy", fields: [refundedBy], references: [id])
-  upgradedFrom     MemberPackage?            @relation("PackageUpgrade", fields: [upgradedFromId], references: [id], onDelete: SetNull)
-  upgrades         MemberPackage[]           @relation("PackageUpgrade")
-  encounters       Encounter[]               @relation("EncounterBasicPackage")
-  boosterSessions  TreatmentSession[]        @relation("SessionBoosterPackage")
-  addOns           MemberAddOn[]
-  incentiveRecords ReferralIncentiveRecord[]
+  member                   Member                    @relation(fields: [memberId], references: [id])
+  branch                   Branch                    @relation(fields: [branchId], references: [id])
+  packagePricing           PackagePricing?           @relation(fields: [packagePricingId], references: [id])
+  assignedByUser           User                      @relation("PackageAssignedBy", fields: [assignedBy], references: [id])
+  verifiedByUser           User?                     @relation("PackageVerifiedBy", fields: [verifiedBy], references: [id])
+  rejectedByUser           User?                     @relation("PackageRejectedBy", fields: [rejectedBy], references: [id])
+  refundedByUser           User?                     @relation("PackageRefundedBy", fields: [refundedBy], references: [id])
+  upgradedFrom             MemberPackage?            @relation("PackageUpgrade", fields: [upgradedFromId], references: [id], onDelete: SetNull)
+  upgrades                 MemberPackage[]           @relation("PackageUpgrade")
+  encounters               Encounter[]               @relation("EncounterBasicPackage")
+  boosterSessions          TreatmentSession[]        @relation("SessionBoosterPackage")
+  addOns                   MemberAddOn[]
+  incentiveRecords         ReferralIncentiveRecord[]
+  benefitValuation         PackageBenefitValuation?
+  revenueContract          PackageRevenueContract?
+  deferredRevenueMovements DeferredRevenueMovement[]
+  revenueRecognitions      RevenueRecognition[]
 
   @@index([memberId, status])
   @@index([branchId, status])
@@ -1179,6 +1221,165 @@ model MemberPackage {
   @@index([refundedAt])
   @@index([refundProofUrl])
   @@map("member_packages")
+}
+
+// ============================================================
+// DEFERRED REVENUE & REVENUE RECOGNITION
+// ============================================================
+
+model PackageRevenuePolicy {
+  id                       String                   @id @default(cuid())
+  packagePricingId         String                   @unique
+  version                  Int                      @default(1)
+  recognitionMethod        RevenueRecognitionMethod @default(PER_SESSION)
+  deferredRevenueAccountId String
+  revenueAccountId         String
+  isActive                 Boolean                  @default(true)
+  effectiveFrom            DateTime                 @default(now())
+  effectiveTo              DateTime?
+  createdBy                String
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+
+  packagePricing         PackagePricing            @relation(fields: [packagePricingId], references: [id], onDelete: Restrict)
+  deferredRevenueAccount Account                   @relation("RevenuePolicyDeferredAccount", fields: [deferredRevenueAccountId], references: [id], onDelete: Restrict)
+  revenueAccount         Account                   @relation("RevenuePolicyRevenueAccount", fields: [revenueAccountId], references: [id], onDelete: Restrict)
+  creator                User                      @relation("RevenuePolicyCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  valuations             PackageBenefitValuation[]
+
+  @@index([isActive, effectiveFrom])
+  @@map("package_revenue_policies")
+}
+
+model PackageBenefitValuation {
+  id                         String                   @id @default(cuid())
+  memberPackageId            String                   @unique
+  policyId                   String?
+  policyVersion              Int                      @default(1)
+  recognitionMethod          RevenueRecognitionMethod @default(PER_SESSION)
+  standaloneBenefitValue     Decimal                  @db.Decimal(18, 2)
+  allocatedConsideration     Decimal                  @db.Decimal(18, 2)
+  totalSessions              Int
+  regularSessionRevenue      Decimal                  @db.Decimal(18, 2)
+  finalSessionRevenue        Decimal                  @db.Decimal(18, 2)
+  deferredRevenueAccountCode String                   @default("2200")
+  revenueAccountCode         String                   @default("4100")
+  allocationSnapshot         Json
+  valuedAt                   DateTime                 @default(now())
+  createdAt                  DateTime                 @default(now())
+
+  memberPackage MemberPackage           @relation(fields: [memberPackageId], references: [id], onDelete: Restrict)
+  policy        PackageRevenuePolicy?   @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  contract      PackageRevenueContract?
+
+  @@index([policyId, valuedAt])
+  @@map("package_benefit_valuations")
+}
+
+model PackageRevenueContract {
+  id                      String                       @id @default(cuid())
+  memberPackageId         String                       @unique
+  valuationId             String                       @unique
+  branchId                String
+  totalConsideration      Decimal                      @db.Decimal(18, 2)
+  fundedDeferredAmount    Decimal                      @default(0) @db.Decimal(18, 2)
+  recognizedAmount        Decimal                      @default(0) @db.Decimal(18, 2)
+  remainingDeferredAmount Decimal                      @default(0) @db.Decimal(18, 2)
+  recognizedSessions      Int                          @default(0)
+  status                  PackageRevenueContractStatus @default(UNFUNDED)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+
+  memberPackage MemberPackage             @relation(fields: [memberPackageId], references: [id], onDelete: Restrict)
+  valuation     PackageBenefitValuation   @relation(fields: [valuationId], references: [id], onDelete: Restrict)
+  branch        Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  movements     DeferredRevenueMovement[]
+  recognitions  RevenueRecognition[]
+
+  @@index([branchId, status])
+  @@map("package_revenue_contracts")
+}
+
+model DeferredRevenueMovement {
+  id                 String                      @id @default(cuid())
+  movementKey        String                      @unique
+  contractId         String
+  memberPackageId    String
+  invoicePaymentId   String?
+  treatmentSessionId String?
+  journalEntryId     String?
+  type               DeferredRevenueMovementType
+  amount             Decimal                     @db.Decimal(18, 2)
+  occurredAt         DateTime                    @default(now())
+  metadata           Json?
+  createdAt          DateTime                    @default(now())
+
+  contract         PackageRevenueContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  memberPackage    MemberPackage          @relation(fields: [memberPackageId], references: [id], onDelete: Restrict)
+  invoicePayment   InvoicePayment?        @relation(fields: [invoicePaymentId], references: [id], onDelete: Restrict)
+  treatmentSession TreatmentSession?      @relation(fields: [treatmentSessionId], references: [id], onDelete: Restrict)
+  journalEntry     JournalEntry?          @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([invoicePaymentId, memberPackageId, type])
+  @@index([contractId, occurredAt])
+  @@index([treatmentSessionId])
+  @@map("deferred_revenue_movements")
+}
+
+model DomainEvent {
+  id                 String            @id @default(cuid())
+  eventKey           String            @unique
+  eventType          String
+  aggregateType      String
+  aggregateId        String
+  branchId           String
+  treatmentSessionId String?           @unique
+  payloadHash        String
+  payload            Json
+  status             DomainEventStatus @default(PENDING)
+  occurredAt         DateTime          @default(now())
+  processedAt        DateTime?
+  failureReason      String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  branch           Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  treatmentSession TreatmentSession?    @relation(fields: [treatmentSessionId], references: [id], onDelete: Restrict)
+  recognitions     RevenueRecognition[]
+
+  @@index([eventType, status, occurredAt])
+  @@index([aggregateType, aggregateId])
+  @@map("domain_events")
+}
+
+model RevenueRecognition {
+  id                 String                   @id @default(cuid())
+  recognitionKey     String                   @unique
+  domainEventId      String
+  treatmentSessionId String
+  memberPackageId    String
+  contractId         String
+  branchId           String
+  sessionOrdinal     Int
+  amount             Decimal                  @db.Decimal(18, 2)
+  status             RevenueRecognitionStatus @default(RESERVED)
+  journalEntryId     String?
+  recognizedAt       DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  domainEvent      DomainEvent            @relation(fields: [domainEventId], references: [id], onDelete: Restrict)
+  treatmentSession TreatmentSession       @relation(fields: [treatmentSessionId], references: [id], onDelete: Restrict)
+  memberPackage    MemberPackage          @relation(fields: [memberPackageId], references: [id], onDelete: Restrict)
+  contract         PackageRevenueContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  branch           Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  journalEntry     JournalEntry?          @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+
+  @@unique([treatmentSessionId, memberPackageId])
+  @@index([journalEntryId])
+  @@index([contractId, status])
+  @@index([branchId, recognizedAt])
+  @@map("revenue_recognitions")
 }
 
 model MemberAddOn {
@@ -1420,11 +1621,12 @@ model InvoicePayment {
   receivedAt DateTime @default(now())
   createdAt  DateTime @default(now())
 
-  invoice             Invoice              @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  receivedByUser      User                 @relation("PaymentReceivedBy", fields: [receivedBy], references: [id])
-  verifiedByUser      User?                @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id])
-  cashBankAccount     CashBankAccount?     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
-  cashBankTransaction CashBankTransaction?
+  invoice                  Invoice                   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  receivedByUser           User                      @relation("PaymentReceivedBy", fields: [receivedBy], references: [id])
+  verifiedByUser           User?                     @relation("PaymentVerifiedBy", fields: [verifiedBy], references: [id])
+  cashBankAccount          CashBankAccount?          @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  cashBankTransaction      CashBankTransaction?
+  deferredRevenueMovements DeferredRevenueMovement[]
 
   @@index([invoiceId])
   @@index([invoiceId, verificationStatus])
@@ -2031,8 +2233,11 @@ model TreatmentSession {
   evaluation       DoctorEvaluation?
 
   // Multiple doctors and nurses support
-  sessionDoctors SessionDoctor[]
-  sessionNurses  SessionNurse[]
+  sessionDoctors           SessionDoctor[]
+  sessionNurses            SessionNurse[]
+  completedEvent           DomainEvent?
+  revenueRecognitions      RevenueRecognition[]
+  deferredRevenueMovements DeferredRevenueMovement[]
 
   @@index([encounterId])
   @@index([branchId, treatmentDate])

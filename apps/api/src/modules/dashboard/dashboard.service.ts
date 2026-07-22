@@ -54,24 +54,24 @@ export class DashboardService {
    * Get revenue statistics
    */
   private async getRevenueStats(branchId: string, startDate: Date, endDate: Date) {
-    // Total revenue from paid invoices
-    const invoices = await prisma.invoice.findMany({
+    // Revenue is sourced from posted recognition, never from package payment.
+    const recognitions = await prisma.revenueRecognition.findMany({
       where: {
         branchId,
-        status: 'PAID',
-        paidAt: {
+        status: 'POSTED',
+        recognizedAt: {
           gte: startDate,
           lte: endDate,
         },
       },
       select: {
-        totalAmount: true,
-        paidAt: true,
+        amount: true,
+        recognizedAt: true,
       },
     });
 
-    const totalRevenue = invoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
-    const transactionCount = invoices.length;
+    const totalRevenue = recognitions.reduce((sum, row) => sum + Number(row.amount), 0);
+    const transactionCount = recognitions.length;
     const averageTransaction = transactionCount > 0 ? totalRevenue / transactionCount : 0;
 
     // Get previous period for comparison
@@ -80,21 +80,21 @@ export class DashboardService {
     prevStart.setDate(prevStart.getDate() - periodDays);
     const prevEnd = new Date(startDate);
 
-    const prevInvoices = await prisma.invoice.findMany({
+    const previousRecognitions = await prisma.revenueRecognition.findMany({
       where: {
         branchId,
-        status: 'PAID',
-        paidAt: {
+        status: 'POSTED',
+        recognizedAt: {
           gte: prevStart,
           lte: prevEnd,
         },
       },
       select: {
-        totalAmount: true,
+        amount: true,
       },
     });
 
-    const prevRevenue = prevInvoices.reduce((sum, inv) => sum + Number(inv.totalAmount), 0);
+    const prevRevenue = previousRecognitions.reduce((sum, row) => sum + Number(row.amount), 0);
     const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0;
 
     // Revenue by day for chart
@@ -113,30 +113,30 @@ export class DashboardService {
    * Get revenue grouped by day
    */
   private async getRevenueByDay(branchId: string, startDate: Date, endDate: Date) {
-    const invoices = await prisma.invoice.findMany({
+    const recognitions = await prisma.revenueRecognition.findMany({
       where: {
         branchId,
-        status: 'PAID',
-        paidAt: {
+        status: 'POSTED',
+        recognizedAt: {
           gte: startDate,
           lte: endDate,
         },
       },
       select: {
-        totalAmount: true,
-        paidAt: true,
+        amount: true,
+        recognizedAt: true,
       },
       orderBy: {
-        paidAt: 'asc',
+        recognizedAt: 'asc',
       },
     });
 
     // Group by date
     const revenueMap = new Map<string, number>();
-    invoices.forEach((inv) => {
-      const date = inv.paidAt!.toISOString().split('T')[0];
+    recognitions.forEach((row) => {
+      const date = row.recognizedAt!.toISOString().split('T')[0];
       const current = revenueMap.get(date) || 0;
-      revenueMap.set(date, current + Number(inv.totalAmount));
+      revenueMap.set(date, current + Number(row.amount));
     });
 
     return Array.from(revenueMap.entries()).map(([date, amount]) => ({
@@ -333,9 +333,6 @@ export class DashboardService {
         },
       },
       _count: true,
-      _sum: {
-        finalPrice: true,
-      },
       orderBy: {
         _count: {
           packageCode: 'desc',
@@ -344,10 +341,17 @@ export class DashboardService {
       take: limit,
     });
 
-    return packages.map((p) => ({
-      packageCode: p.packageCode,
-      count: p._count,
-      totalRevenue: Number(p._sum.finalPrice || 0),
+    return Promise.all(packages.map(async (p) => {
+      const recognized = await prisma.revenueRecognition.aggregate({
+        where: {
+          branchId,
+          status: 'POSTED',
+          recognizedAt: { gte: startDate, lte: endDate },
+          memberPackage: { packageCode: p.packageCode },
+        },
+        _sum: { amount: true },
+      });
+      return { packageCode: p.packageCode, count: p._count, totalRevenue: Number(recognized._sum.amount || 0) };
     }));
   }
 

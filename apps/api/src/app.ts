@@ -33,6 +33,7 @@ import cashBankRouter from './modules/cash-bank/cash-bank.routes';
 import openingBalanceRouter from './modules/opening-balance/opening-balance.routes';
 import expenseRouter from './modules/expenses/expense.routes';
 import purchasingRouter from './modules/purchasing/purchasing.routes';
+import revenueRouter from './modules/revenue/revenue.routes';
 
 export function createApp(): Application {
   const app = express();
@@ -105,6 +106,7 @@ export function createApp(): Application {
   app.use(`${prefix}/opening-balances`, openingBalanceRouter);
   app.use(`${prefix}/expenses`, expenseRouter);
   app.use(`${prefix}/purchasing`, purchasingRouter);
+  app.use(`${prefix}/revenue`, revenueRouter);
 
   // Dashboard routes
   app.use(`${prefix}/dashboard`, dashboardRouter);

@@ -102,23 +102,23 @@ export class SystemStatsService {
         }).catch(() => 0),
         
         // Total revenue from active branches only
-        prisma.invoice.aggregate({
+        prisma.revenueRecognition.aggregate({
           where: {
-            status: 'PAID',
+            status: 'POSTED',
             branch: { isActive: true },
           },
-          _sum: { totalAmount: true },
-        }).catch(() => ({ _sum: { totalAmount: null } })),
+          _sum: { amount: true },
+        }).catch(() => ({ _sum: { amount: null } })),
         
         // Monthly revenue from active branches only
-        prisma.invoice.aggregate({
+        prisma.revenueRecognition.aggregate({
           where: {
-            status: 'PAID',
+            status: 'POSTED',
             branch: { isActive: true },
-            paidAt: { gte: firstDayOfMonth },
+            recognizedAt: { gte: firstDayOfMonth },
           },
-          _sum: { totalAmount: true },
-        }).catch(() => ({ _sum: { totalAmount: null } })),
+          _sum: { amount: true },
+        }).catch(() => ({ _sum: { amount: null } })),
         
         // Users by role
         prisma.user.groupBy({
@@ -155,8 +155,8 @@ export class SystemStatsService {
         activeMembers,
         totalProducts,
         activeProducts,
-        totalRevenue: Number(totalRevenue._sum.totalAmount || 0),
-        monthlyRevenue: Number(monthlyRevenue._sum.totalAmount || 0),
+        totalRevenue: Number(totalRevenue._sum.amount || 0),
+        monthlyRevenue: Number(monthlyRevenue._sum.amount || 0),
         totalSessions,
         monthlySessions,
         usersByRole: usersByRole.map(item => ({

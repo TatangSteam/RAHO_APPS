@@ -27,24 +27,24 @@ export class BranchPerformanceService {
     const performance = await Promise.all(
       branches.map(async (branch) => {
         // Calculate revenue
-        const revenue = await prisma.memberPackage.aggregate({
+        const revenue = await prisma.revenueRecognition.aggregate({
           where: {
             branchId: branch.id,
-            status: 'ACTIVE',
+            status: 'POSTED',
           },
-          _sum: { finalPrice: true },
+          _sum: { amount: true },
         });
 
         // Calculate monthly revenue
-        const monthlyRevenue = await prisma.memberPackage.aggregate({
+        const monthlyRevenue = await prisma.revenueRecognition.aggregate({
           where: {
             branchId: branch.id,
-            status: 'ACTIVE',
-            paidAt: {
+            status: 'POSTED',
+            recognizedAt: {
               gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
             },
           },
-          _sum: { finalPrice: true },
+          _sum: { amount: true },
         });
 
         return {
@@ -55,8 +55,8 @@ export class BranchPerformanceService {
             totalMembers: branch.members.length,
             totalUsers: branch.users.length,
             totalPackages: branch.packages.length,
-            totalRevenue: Number(revenue._sum.finalPrice || 0),
-            monthlyRevenue: Number(monthlyRevenue._sum.finalPrice || 0),
+            totalRevenue: Number(revenue._sum.amount || 0),
+            monthlyRevenue: Number(monthlyRevenue._sum.amount || 0),
           },
         };
       })

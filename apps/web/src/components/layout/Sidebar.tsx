@@ -8,7 +8,7 @@ import {
   LogOut, ClipboardList, FileText, Shield, Building2, CreditCard,
   UserCog, Truck, BarChart3, History, ListChecks, Loader2,
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
-  Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart,
+  Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -248,6 +248,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/purchasing',
         icon: <ShoppingCart size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LOGISTIK'],
+      },
+      {
+        label: 'Deferred Revenue',
+        href: '/revenue-recognition',
+        icon: <BadgeDollarSign size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER'],
       },
     ],
   },
