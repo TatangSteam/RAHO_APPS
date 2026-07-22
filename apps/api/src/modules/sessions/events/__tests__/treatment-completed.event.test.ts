@@ -28,6 +28,7 @@ describe('TREATMENT_COMPLETED event contract', () => {
         revenueRecognitionStatus: 'POSTED',
         recognizedRevenue: '1000000.00',
         materialCost: '200.00',
+        hppAmount: '200.00',
         grossProfit: '999800.00',
         journalEntryId: 'journal-1',
       },
@@ -39,6 +40,7 @@ describe('TREATMENT_COMPLETED event contract', () => {
       revenueRecognitionStatus: 'POSTED',
       recognizedRevenue: '1000000.00',
       materialCost: '200.00',
+      hppAmount: '200.00',
       grossProfit: '999800.00',
       journalEntryId: 'journal-1',
     });

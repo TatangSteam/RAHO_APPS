@@ -10,4 +10,5 @@ router.get('/policies', requirePermission(PERMISSIONS.DEFERRED_REVENUE_READ), co
 router.put('/policies', requirePermission(PERMISSIONS.REVENUE_POLICY_MANAGE), controller.savePolicy);
 router.get('/contracts', requirePermission(PERMISSIONS.DEFERRED_REVENUE_READ), controller.contracts);
 router.get('/events', requirePermission(PERMISSIONS.DEFERRED_REVENUE_READ), controller.events);
+router.get('/profitability', requirePermission(PERMISSIONS.DEFERRED_REVENUE_READ), controller.profitability);
 export default router;

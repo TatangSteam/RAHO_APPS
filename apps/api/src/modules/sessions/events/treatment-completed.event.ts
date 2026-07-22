@@ -1,5 +1,5 @@
 export const TREATMENT_COMPLETED_EVENT_TYPE = 'TREATMENT_COMPLETED' as const;
-export const TREATMENT_COMPLETED_EVENT_VERSION = 1 as const;
+export const TREATMENT_COMPLETED_EVENT_VERSION = 2 as const;
 
 export interface TreatmentCompletedMaterialPayload {
   materialUsageId: string;
@@ -41,6 +41,7 @@ export interface TreatmentCompletedEventPayload {
     revenueRecognitionStatus: 'POSTED';
     recognizedRevenue: string;
     materialCost: string;
+    hppAmount: string;
     grossProfit: string;
     journalEntryId: string | null;
   };

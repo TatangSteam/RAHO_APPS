@@ -2,10 +2,7 @@ CREATE TYPE "TreatmentCompletionStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED', 'CA
 
 ALTER TABLE "treatment_sessions"
   ADD COLUMN "completionStatus" "TreatmentCompletionStatus" NOT NULL DEFAULT 'IN_PROGRESS',
-  ADD COLUMN "completionJournalEntryId" TEXT,
-  ADD COLUMN "recognizedRevenue" DECIMAL(18,2) NOT NULL DEFAULT 0,
   ADD COLUMN "materialCost" DECIMAL(18,2) NOT NULL DEFAULT 0,
-  ADD COLUMN "grossProfit" DECIMAL(18,2) NOT NULL DEFAULT 0,
   ADD COLUMN "cancelledAt" TIMESTAMP(3),
   ADD COLUMN "cancelledBy" TEXT,
   ADD COLUMN "cancellationIdempotencyKey" TEXT,
@@ -14,11 +11,27 @@ ALTER TABLE "treatment_sessions"
   ADD COLUMN "cancellationJournalEntryId" TEXT;
 
 UPDATE "treatment_sessions"
-SET "completionStatus" = 'COMPLETED'
-WHERE "isCompleted" = true;
+SET
+  "completionStatus" = CASE WHEN "isCompleted" = true THEN 'COMPLETED'::"TreatmentCompletionStatus" ELSE "completionStatus" END,
+  "recognizedRevenue" = COALESCE("recognizedRevenue", 0),
+  "materialCost" = COALESCE("hppAmount", 0),
+  "grossProfit" = COALESCE("grossProfit", COALESCE("recognizedRevenue", 0) - COALESCE("hppAmount", 0));
 
-CREATE UNIQUE INDEX "treatment_sessions_completionJournalEntryId_key"
-  ON "treatment_sessions"("completionJournalEntryId");
+ALTER TABLE "treatment_sessions"
+  DROP CONSTRAINT "treatment_sessions_finance_nonnegative_check",
+  DROP CONSTRAINT "treatment_sessions_gross_profit_check",
+  ALTER COLUMN "recognizedRevenue" SET DEFAULT 0,
+  ALTER COLUMN "recognizedRevenue" SET NOT NULL,
+  ALTER COLUMN "grossProfit" SET DEFAULT 0,
+  ALTER COLUMN "grossProfit" SET NOT NULL,
+  DROP COLUMN "hppAmount";
+
+ALTER TABLE "treatment_sessions"
+  ADD CONSTRAINT "treatment_sessions_finance_nonnegative_check"
+    CHECK ("recognizedRevenue" >= 0 AND "materialCost" >= 0),
+  ADD CONSTRAINT "treatment_sessions_gross_profit_check"
+    CHECK ("grossProfit" = "recognizedRevenue" - "materialCost");
+
 CREATE UNIQUE INDEX "treatment_sessions_cancellationIdempotencyKey_key"
   ON "treatment_sessions"("cancellationIdempotencyKey");
 CREATE UNIQUE INDEX "treatment_sessions_materialReversalPostingId_key"
@@ -28,9 +41,6 @@ CREATE UNIQUE INDEX "treatment_sessions_cancellationJournalEntryId_key"
 CREATE INDEX "treatment_sessions_completionStatus_completedAt_idx"
   ON "treatment_sessions"("completionStatus", "completedAt");
 
-ALTER TABLE "treatment_sessions"
-  ADD CONSTRAINT "treatment_sessions_completionJournalEntryId_fkey"
-  FOREIGN KEY ("completionJournalEntryId") REFERENCES "journal_entries"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "treatment_sessions"
   ADD CONSTRAINT "treatment_sessions_materialReversalPostingId_fkey"
   FOREIGN KEY ("materialReversalPostingId") REFERENCES "inventory_postings"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

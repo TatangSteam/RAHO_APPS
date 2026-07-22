@@ -23,6 +23,8 @@ Unique key berikut mencegah pengakuan atau posting ganda:
 
 Pembatalan completion adalah reversal immutable. Proses ini mengembalikan quantity ke FIFO layer asal, membalik jurnal completion, mengembalikan recognized revenue ke deferred revenue, melepaskan pemakaian sesi package, dan menulis event `TREATMENT_COMPLETION_CANCELLED`. Alasan dan idempotency key wajib tersedia.
 
+Snapshot completion menyimpan `completionJournalEntryId`, `materialPostingId`, recognized revenue, material cost/HPP, dan gross profit. Endpoint `GET /revenue/profitability` membaca snapshot berstatus `COMPLETED` dengan branch scope; response tetap memakai nama `hppAmount` untuk kompatibilitas UI.
+
 ## Upgrade data
 
 Migration membuat baseline valuation/contract untuk package lama. Funding historis tanpa journal link ditandai `SPRINT_7_BACKFILL` dan wajib direkonsiliasi ke opening balance akun 2200 sebelum go-live.

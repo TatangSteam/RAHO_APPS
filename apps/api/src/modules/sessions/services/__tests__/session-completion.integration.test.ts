@@ -409,6 +409,7 @@ describeDatabase('treatment completion FIFO integration', () => {
       revenueRecognitionStatus: 'POSTED',
       recognizedRevenue: '1000000.00',
       materialCost: '200.00',
+      hppAmount: '200.00',
       grossProfit: '999800.00',
       journalEntryId: results[0].journalEntryId,
     });

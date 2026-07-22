@@ -294,6 +294,7 @@ export class SessionCompletionService {
           revenueRecognitionStatus: 'POSTED',
           recognizedRevenue: finance.recognizedRevenue.toFixed(2),
           materialCost: finance.materialCost.toFixed(2),
+          hppAmount: finance.materialCost.toFixed(2),
           grossProfit: finance.grossProfit.toFixed(2),
           journalEntryId: finance.journalEntryId,
         },
