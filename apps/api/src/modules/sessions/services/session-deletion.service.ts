@@ -1,4 +1,4 @@
-import { AuditAction, PackageStatus, StockMutationType } from '@prisma/client';
+import { AuditAction, PackageStatus, StockMutationType, TreatmentCompletionStatus } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
@@ -66,6 +66,13 @@ export class SessionDeletionService {
 
     if (!session) {
       throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
+    }
+    if (session.isCompleted || session.completionStatus !== TreatmentCompletionStatus.IN_PROGRESS) {
+      throw {
+        status: 409,
+        code: 'POSTED_SESSION_IMMUTABLE',
+        message: 'Sesi yang sudah diposting tidak dapat dihapus. Gunakan workflow pembatalan completion untuk membuat reversal.',
+      };
     }
 
     const materialUsageIds = session.materials.map((material) => material.id);

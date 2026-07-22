@@ -27,6 +27,13 @@ export class SessionDetailsService {
     if (!session) {
       throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
     }
+    if (session.isCompleted) {
+      throw {
+        status: 409,
+        code: 'POSTED_SESSION_IMMUTABLE',
+        message: 'Data sesi yang sudah diposting tidak dapat diubah.',
+      };
+    }
 
     if (session.branchId !== branchId) {
       throw {

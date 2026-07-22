@@ -38,9 +38,11 @@ export interface TreatmentCompletedEventPayload {
     materials: TreatmentCompletedMaterialPayload[];
   };
   finance: {
-    revenueRecognitionStatus: 'PENDING';
-    recognizedRevenue: '0.00';
-    journalEntryId: null;
+    revenueRecognitionStatus: 'POSTED';
+    recognizedRevenue: string;
+    materialCost: string;
+    grossProfit: string;
+    journalEntryId: string | null;
   };
 }
 

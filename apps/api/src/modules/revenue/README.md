@@ -7,17 +7,21 @@
 - Valuasi menyimpan consideration, jumlah sesi, nilai sesi reguler, selisih pembulatan sesi terakhir, serta snapshot akun/policy.
 - Tidak ada service Sprint 7 yang mem-posting ke akun revenue `4100`.
 
-## Event contract
+## Sprint 8 posting contract
 
-Completion treatment dan event outbox `TREATMENT_COMPLETED:{sessionId}` berada dalam satu serializable transaction. Payload memuat branch, member, session, treatment date, completion time, serta package IDs.
+Completion treatment menjalankan validasi material, konsumsi FIFO, actual cost, pelepasan deferred revenue, revenue recognition, jurnal revenue/HPP, perubahan status sesi, outbox event, dan audit log dalam satu serializable transaction.
 
-`reserveTreatmentCompletedRevenue()` adalah kontrak consumer untuk Sprint 8. Unique key berikut mencegah pengakuan ganda:
+Jurnal completion menggabungkan debit deferred revenue/kredit revenue sesuai policy serta debit `5100` HPP/kredit `1300` Persediaan berdasarkan actual FIFO cost.
+
+Unique key berikut mencegah pengakuan atau posting ganda:
 
 - `domain_events.eventKey`;
 - `revenue_recognitions.recognitionKey`;
 - `(treatmentSessionId, memberPackageId)`.
+- `journal_entries.postingKey`;
+- `inventory_postings.idempotencyKey`.
 
-Reservation belum memperbarui saldo kontrak dan belum membuat jurnal. Sprint 8 akan mem-posting deferred release, HPP, FIFO usage, dan completion dalam satu transaction.
+Pembatalan completion adalah reversal immutable. Proses ini mengembalikan quantity ke FIFO layer asal, membalik jurnal completion, mengembalikan recognized revenue ke deferred revenue, melepaskan pemakaian sesi package, dan menulis event `TREATMENT_COMPLETION_CANCELLED`. Alasan dan idempotency key wajib tersedia.
 
 ## Upgrade data
 

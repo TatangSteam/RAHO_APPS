@@ -380,6 +380,12 @@ enum RevenueRecognitionStatus {
   REVERSED
 }
 
+enum TreatmentCompletionStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
 enum DomainEventStatus {
   PENDING
   PROCESSED
@@ -877,24 +883,26 @@ model JournalEntry {
   reversedByEntryId  String?       @unique
   createdAt          DateTime      @default(now())
 
-  branch                   Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  accountingPeriod         AccountingPeriod          @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
-  creator                  User                      @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  poster                   User                      @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
-  reversedByEntry          JournalEntry?             @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
-  reversesEntry            JournalEntry?             @relation("JournalReversal")
-  lines                    JournalLine[]
-  sourceLinks              JournalSourceLink[]
-  cashBankTransactions     CashBankTransaction[]
-  openingBalance           OpeningBalance?
-  expense                  Expense?
-  transferDispatch         InternalTransferLedger?   @relation("TransferDispatchJournal")
-  transferReceipt          InternalTransferLedger?   @relation("TransferReceiptJournal")
-  goodsReceipt             GoodsReceipt?
-  supplierInvoice          SupplierInvoice?
-  supplierPayment          SupplierPayment?
-  deferredRevenueMovements DeferredRevenueMovement[]
-  revenueRecognitions      RevenueRecognition[]
+  branch                    Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  accountingPeriod          AccountingPeriod          @relation(fields: [accountingPeriodId], references: [id], onDelete: Restrict)
+  creator                   User                      @relation("JournalEntryCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  poster                    User                      @relation("JournalEntryPostedBy", fields: [postedBy], references: [id], onDelete: Restrict)
+  reversedByEntry           JournalEntry?             @relation("JournalReversal", fields: [reversedByEntryId], references: [id], onDelete: Restrict)
+  reversesEntry             JournalEntry?             @relation("JournalReversal")
+  lines                     JournalLine[]
+  sourceLinks               JournalSourceLink[]
+  cashBankTransactions      CashBankTransaction[]
+  openingBalance            OpeningBalance?
+  expense                   Expense?
+  transferDispatch          InternalTransferLedger?   @relation("TransferDispatchJournal")
+  transferReceipt           InternalTransferLedger?   @relation("TransferReceiptJournal")
+  goodsReceipt              GoodsReceipt?
+  supplierInvoice           SupplierInvoice?
+  supplierPayment           SupplierPayment?
+  deferredRevenueMovements  DeferredRevenueMovement[]
+  revenueRecognitions       RevenueRecognition[]
+  completedTreatmentSession TreatmentSession?         @relation("TreatmentCompletionJournal")
+  cancelledTreatmentSession TreatmentSession?         @relation("TreatmentCancellationJournal")
 
   @@index([branchId, transactionDate])
   @@index([accountingPeriodId, status])
@@ -2230,33 +2238,47 @@ model Encounter {
 }
 
 model TreatmentSession {
-  id                String      @id @default(cuid())
-  sessionCode       String      @unique
-  encounterId       String
-  branchId          String
-  infusKe           Int
-  branchInfusKe     Int
-  pelaksanaan       SessionType
-  treatmentDate     DateTime
-  isCompleted       Boolean     @default(false)
-  adminLayananId    String
-  doctorId          String // Primary doctor (backward compatibility)
-  nurseId           String // Primary nurse (backward compatibility)
-  boosterPackageId  String?
-  boosterType       String?
-  completedAt       DateTime?
-  completedBy       String?
-  materialPostingId String?     @unique
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
+  id                         String                    @id @default(cuid())
+  sessionCode                String                    @unique
+  encounterId                String
+  branchId                   String
+  infusKe                    Int
+  branchInfusKe              Int
+  pelaksanaan                SessionType
+  treatmentDate              DateTime
+  isCompleted                Boolean                   @default(false)
+  completionStatus           TreatmentCompletionStatus @default(IN_PROGRESS)
+  adminLayananId             String
+  doctorId                   String // Primary doctor (backward compatibility)
+  nurseId                    String // Primary nurse (backward compatibility)
+  boosterPackageId           String?
+  boosterType                String?
+  completedAt                DateTime?
+  completedBy                String?
+  materialPostingId          String?                   @unique
+  completionJournalEntryId   String?                   @unique
+  recognizedRevenue          Decimal                   @default(0) @db.Decimal(18, 2)
+  materialCost               Decimal                   @default(0) @db.Decimal(18, 2)
+  grossProfit                Decimal                   @default(0) @db.Decimal(18, 2)
+  cancelledAt                DateTime?
+  cancelledBy                String?
+  cancellationIdempotencyKey String?                   @unique
+  cancellationReason         String?                   @db.Text
+  materialReversalPostingId  String?                   @unique
+  cancellationJournalEntryId String?                   @unique
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
 
-  encounter       Encounter         @relation(fields: [encounterId], references: [id])
-  branch          Branch            @relation(fields: [branchId], references: [id])
-  adminLayanan    User              @relation("SessionAdmin", fields: [adminLayananId], references: [id])
-  doctor          User              @relation("SessionDoctor", fields: [doctorId], references: [id])
-  nurse           User              @relation("SessionNurse", fields: [nurseId], references: [id])
-  boosterPackage  MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
-  materialPosting InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
+  encounter               Encounter         @relation(fields: [encounterId], references: [id])
+  branch                  Branch            @relation(fields: [branchId], references: [id])
+  adminLayanan            User              @relation("SessionAdmin", fields: [adminLayananId], references: [id])
+  doctor                  User              @relation("SessionDoctor", fields: [doctorId], references: [id])
+  nurse                   User              @relation("SessionNurse", fields: [nurseId], references: [id])
+  boosterPackage          MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+  materialPosting         InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
+  materialReversalPosting InventoryPosting? @relation("TreatmentMaterialReversalPosting", fields: [materialReversalPostingId], references: [id], onDelete: Restrict)
+  completionJournal       JournalEntry?     @relation("TreatmentCompletionJournal", fields: [completionJournalEntryId], references: [id], onDelete: Restrict)
+  cancellationJournal     JournalEntry?     @relation("TreatmentCancellationJournal", fields: [cancellationJournalEntryId], references: [id], onDelete: Restrict)
 
   therapyPlan      TherapyPlan?
   vitalSigns       VitalSign[]
@@ -2279,6 +2301,7 @@ model TreatmentSession {
   @@index([branchId, branchInfusKe])
   @@index([doctorId, treatmentDate])
   @@index([isCompleted])
+  @@index([completionStatus, completedAt])
   @@map("treatment_sessions")
 }
 
@@ -2941,19 +2964,20 @@ model InventoryPosting {
   reversalOfId   String?                @unique
   createdAt      DateTime               @default(now())
 
-  branch                  Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  reversalOf              InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
-  reversedBy              InventoryPosting?         @relation("InventoryPostingReversal")
-  stockMutations          StockMutation[]
-  costAllocations         InventoryCostAllocation[]
-  openingBalanceLine      OpeningBalanceLine?
-  goodsReceiptLine        GoodsReceiptLine?
-  transferDispatch        InternalTransferLedger?   @relation("TransferDispatchPosting")
-  transferReceipt         InternalTransferLedger?   @relation("TransferReceiptPosting")
-  shipmentReceipt         ShipmentReceipt?
-  goodsReceipt            GoodsReceipt?
-  treatmentSession        TreatmentSession?         @relation("TreatmentMaterialPosting")
-  treatmentMaterialUsages MaterialUsage[]
+  branch                   Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  reversalOf               InventoryPosting?         @relation("InventoryPostingReversal", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversedBy               InventoryPosting?         @relation("InventoryPostingReversal")
+  stockMutations           StockMutation[]
+  costAllocations          InventoryCostAllocation[]
+  openingBalanceLine       OpeningBalanceLine?
+  goodsReceiptLine         GoodsReceiptLine?
+  transferDispatch         InternalTransferLedger?   @relation("TransferDispatchPosting")
+  transferReceipt          InternalTransferLedger?   @relation("TransferReceiptPosting")
+  shipmentReceipt          ShipmentReceipt?
+  goodsReceipt             GoodsReceipt?
+  treatmentSession         TreatmentSession?         @relation("TreatmentMaterialPosting")
+  reversedTreatmentSession TreatmentSession?         @relation("TreatmentMaterialReversalPosting")
+  treatmentMaterialUsages  MaterialUsage[]
 
   @@index([sourceType, sourceId])
   @@index([branchId, occurredAt])

@@ -2,15 +2,24 @@ import {
   AuditAction,
   IntegrationEventStatus,
   MaterialUsageStatus,
+  PackageStatus,
   Prisma,
+  TreatmentCompletionStatus,
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
-import { issueInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
+import {
+  issueInventoryInTransaction,
+  reverseInventoryPostingInTransaction,
+} from '@modules/inventory/services/inventory-ledger.service';
 import { resolveSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
-import { createTreatmentCompletedEventInTransaction } from '@modules/revenue/revenue.service';
+import {
+  createTreatmentCompletedEventInTransaction,
+  postTreatmentCompletionFinancialsInTransaction,
+  reverseTreatmentCompletionFinancialsInTransaction,
+} from '@modules/revenue/revenue.service';
 import { logAudit } from '@utils/auditLog';
 import {
   buildTreatmentCompletedEventPayload,
@@ -18,6 +27,7 @@ import {
   TREATMENT_COMPLETED_EVENT_VERSION,
 } from '../events/treatment-completed.event';
 import { requiresMaterialDeviationReason } from './material-usage.helpers';
+import type { CancelSessionCompletionInput } from '../sessions.schema';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
 
@@ -86,6 +96,9 @@ export class SessionCompletionService {
         },
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
+      if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
+        throw errors.conflict('SESSION_COMPLETION_CANCELLED', 'Completion sesi ini sudah dibatalkan dan tidak dapat diposting ulang.');
+      }
       if (session.isCompleted) {
         const [existingEvent, existingRevenueEvent] = await Promise.all([
           tx.integrationEvent.findUnique({
@@ -105,6 +118,10 @@ export class SessionCompletionService {
           isCompleted: true,
           completedAt: session.completedAt,
           materialPostingId: session.materialPostingId,
+          journalEntryId: session.completionJournalEntryId,
+          recognizedRevenue: session.recognizedRevenue,
+          materialCost: session.materialCost,
+          grossProfit: session.grossProfit,
           eventId: existingEvent.id,
           eventStatus: existingEvent.status,
           domainEventId: existingRevenueEvent.id,
@@ -207,16 +224,6 @@ export class SessionCompletionService {
         new Prisma.Decimal(0),
       );
 
-      await tx.treatmentSession.update({
-        where: { id: session.id },
-        data: {
-          isCompleted: true,
-          completedAt,
-          completedBy: userId,
-          materialPostingId,
-        },
-      });
-
       const revenueEvent = await createTreatmentCompletedEventInTransaction({
         sessionId: session.id,
         sessionCode: session.sessionCode,
@@ -227,6 +234,29 @@ export class SessionCompletionService {
         packageIds: [session.encounter.memberPackageId, session.boosterPackageId]
           .filter((value): value is string => Boolean(value)),
       }, tx);
+
+      const finance = await postTreatmentCompletionFinancialsInTransaction({
+        actorUserId: userId,
+        eventId: revenueEvent.event.id,
+        inventoryPostingId: materialPostingId,
+        materialCost: totalActualMaterialCost,
+        occurredAt: completedAt,
+      }, tx);
+
+      await tx.treatmentSession.update({
+        where: { id: session.id },
+        data: {
+          isCompleted: true,
+          completionStatus: TreatmentCompletionStatus.COMPLETED,
+          completedAt,
+          completedBy: userId,
+          materialPostingId,
+          completionJournalEntryId: finance.journalEntryId,
+          recognizedRevenue: finance.recognizedRevenue,
+          materialCost: finance.materialCost,
+          grossProfit: finance.grossProfit,
+        },
+      });
 
       const payload = buildTreatmentCompletedEventPayload({
         occurredAt: completedAt.toISOString(),
@@ -261,9 +291,11 @@ export class SessionCompletionService {
           })),
         },
         finance: {
-          revenueRecognitionStatus: 'PENDING',
-          recognizedRevenue: '0.00',
-          journalEntryId: null,
+          revenueRecognitionStatus: 'POSTED',
+          recognizedRevenue: finance.recognizedRevenue.toFixed(2),
+          materialCost: finance.materialCost.toFixed(2),
+          grossProfit: finance.grossProfit.toFixed(2),
+          journalEntryId: finance.journalEntryId,
         },
       });
       const event = await tx.integrationEvent.create({
@@ -288,6 +320,10 @@ export class SessionCompletionService {
         eventId: event.id,
         eventStatus: event.status,
         domainEventId: revenueEvent.event.id,
+        journalEntryId: finance.journalEntryId,
+        recognizedRevenue: finance.recognizedRevenue,
+        materialCost: finance.materialCost,
+        grossProfit: finance.grossProfit,
         idempotentReplay: false,
         message: 'Sesi terapi berhasil diselesaikan',
       };
@@ -305,10 +341,184 @@ export class SessionCompletionService {
         eventId: result.eventId,
         eventStatus: result.eventStatus,
         domainEventId: result.domainEventId,
-        revenueRecognitionStatus: 'PENDING',
+        journalEntryId: result.journalEntryId,
+        recognizedRevenue: result.recognizedRevenue,
+        materialCost: result.materialCost,
+        grossProfit: result.grossProfit,
+        revenueRecognitionStatus: 'POSTED',
       },
     });
     return result;
+  }
+
+  async cancelCompletion(sessionId: string, userId: string, input: CancelSessionCompletionInput) {
+    const scope = await prisma.treatmentSession.findUnique({
+      where: { id: sessionId },
+      select: { branchId: true },
+    });
+    if (!scope) throw errors.notFound('Sesi tidak ditemukan.');
+    await assertBranchAccess(userId, scope.branchId);
+    await assertPermission(userId, PERMISSIONS.TREATMENT_COMPLETION_REVERSE, scope.branchId);
+
+    return withCompletionRetry(() => prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`
+        SELECT "id" FROM "treatment_sessions" WHERE "id" = ${sessionId} FOR UPDATE
+      `);
+      const session = await tx.treatmentSession.findUnique({
+        where: { id: sessionId },
+        include: { encounter: { select: { memberPackageId: true } } },
+      });
+      if (!session) throw errors.notFound('Sesi tidak ditemukan.');
+      const cancellationKey = `TREATMENT-CANCEL:${session.id}:${input.idempotencyKey}`;
+      if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
+        if (session.cancellationIdempotencyKey !== cancellationKey) {
+          throw errors.conflict(
+            'SESSION_CANCELLATION_ALREADY_POSTED',
+            'Completion sudah dibatalkan dengan idempotency key berbeda.',
+          );
+        }
+        return {
+          sessionId: session.id,
+          sessionCode: session.sessionCode,
+          completionStatus: session.completionStatus,
+          inventoryReversalPostingId: session.materialReversalPostingId,
+          cancellationJournalEntryId: session.cancellationJournalEntryId,
+          idempotentReplay: true,
+          message: 'Pembatalan completion sudah diproses.',
+        };
+      }
+      if (session.completionStatus !== TreatmentCompletionStatus.COMPLETED || !session.isCompleted) {
+        throw errors.conflict('SESSION_NOT_COMPLETED', 'Hanya sesi yang sudah selesai yang dapat dibatalkan melalui reversal.');
+      }
+      if (!session.completionJournalEntryId
+        && (session.recognizedRevenue.greaterThan(0) || session.materialCost.greaterThan(0))) {
+        throw errors.conflict('TREATMENT_COMPLETION_JOURNAL_MISSING', 'Jurnal completion tidak ditemukan. Pembatalan dihentikan untuk menjaga integritas ledger.');
+      }
+
+      const cancelledAt = new Date();
+      let inventoryReversalPostingId: string | null = null;
+      if (session.materialPostingId) {
+        inventoryReversalPostingId = await reverseInventoryPostingInTransaction(userId, session.materialPostingId, {
+          idempotencyKey: cancellationKey,
+          reasonCode: 'TREATMENT_COMPLETION_CANCELLED',
+          occurredAt: cancelledAt,
+        }, tx);
+        await tx.materialUsage.updateMany({
+          where: { treatmentSessionId: session.id, status: MaterialUsageStatus.CONSUMED },
+          data: { status: MaterialUsageStatus.REVERSED },
+        });
+      }
+
+      const financeReversal = session.completionJournalEntryId
+        ? await reverseTreatmentCompletionFinancialsInTransaction({
+            actorUserId: userId,
+            sessionId: session.id,
+            sessionCode: session.sessionCode,
+            branchId: session.branchId,
+            originalJournalEntryId: session.completionJournalEntryId,
+            reason: input.reason,
+            occurredAt: cancelledAt,
+          }, tx)
+        : null;
+
+      const packageIds = [session.encounter.memberPackageId, session.boosterPackageId]
+        .filter((value): value is string => Boolean(value))
+        .sort();
+      if (packageIds.length > 0) {
+        await tx.$queryRaw(Prisma.sql`
+          SELECT "id" FROM "member_packages"
+          WHERE "id" IN (${Prisma.join(packageIds)}) ORDER BY "id" FOR UPDATE
+        `);
+        const packages = await tx.memberPackage.findMany({
+          where: { id: { in: packageIds } },
+          orderBy: { id: 'asc' },
+        });
+        for (const memberPackage of packages) {
+          const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
+          const reactivate = memberPackage.status === PackageStatus.EXPIRED
+            && usedSessions < memberPackage.totalSessions;
+          await tx.memberPackage.update({
+            where: { id: memberPackage.id },
+            data: {
+              usedSessions,
+              status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
+              expiredAt: reactivate ? null : memberPackage.expiredAt,
+            },
+          });
+        }
+      }
+
+      const cancellationEvent = await tx.integrationEvent.create({
+        data: {
+          eventType: 'TREATMENT_COMPLETION_CANCELLED',
+          eventVersion: 1,
+          aggregateType: 'TreatmentSession',
+          aggregateId: session.id,
+          branchId: session.branchId,
+          status: IntegrationEventStatus.PENDING,
+          occurredAt: cancelledAt,
+          payload: {
+            sessionId: session.id,
+            sessionCode: session.sessionCode,
+            reason: input.reason,
+            originalInventoryPostingId: session.materialPostingId,
+            inventoryReversalPostingId,
+            originalJournalEntryId: session.completionJournalEntryId,
+            cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
+            releasedRevenue: financeReversal?.releasedRevenue.toFixed(2) ?? '0.00',
+          },
+        },
+      });
+      await tx.treatmentSession.update({
+        where: { id: session.id },
+        data: {
+          completionStatus: TreatmentCompletionStatus.CANCELLED,
+          cancelledAt,
+          cancelledBy: userId,
+          cancellationIdempotencyKey: cancellationKey,
+          cancellationReason: input.reason,
+          materialReversalPostingId: inventoryReversalPostingId,
+          cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          branchId: session.branchId,
+          action: AuditAction.UPDATE,
+          module: 'TREATMENT',
+          resource: 'TreatmentSession',
+          resourceId: session.id,
+          entityType: 'TreatmentSession',
+          entityId: session.id,
+          entityCode: session.sessionCode,
+          description: `Completion treatment ${session.sessionCode} dibatalkan melalui reversal.`,
+          beforeData: {
+            completionStatus: session.completionStatus,
+            materialPostingId: session.materialPostingId,
+            completionJournalEntryId: session.completionJournalEntryId,
+          },
+          afterData: {
+            completionStatus: TreatmentCompletionStatus.CANCELLED,
+            inventoryReversalPostingId,
+            cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
+            cancellationEventId: cancellationEvent.id,
+            reason: input.reason,
+          },
+        },
+      });
+      return {
+        sessionId: session.id,
+        sessionCode: session.sessionCode,
+        completionStatus: TreatmentCompletionStatus.CANCELLED,
+        inventoryReversalPostingId,
+        cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
+        releasedRevenue: financeReversal?.releasedRevenue ?? new Prisma.Decimal(0),
+        eventId: cancellationEvent.id,
+        idempotentReplay: false,
+        message: 'Completion sesi berhasil dibatalkan dan seluruh posting telah dibalik.',
+      };
+    }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   }
 
   async saveProgress(sessionId: string, userId: string) {

@@ -400,8 +400,8 @@ Release 2 dan 3 tidak boleh mengganggu stabilisasi ledger MVP. Item dapat dimaju
 
 ## 14. Checklist Go-Live MVP
 
-- [ ] AC-001 Pembayaran Paket lulus.
-- [ ] AC-002 Treatment Selesai lulus.
+- [x] AC-001 Pembayaran Paket lulus.
+- [x] AC-002 Treatment Selesai lulus.
 - [ ] AC-003 Pembelian Supplier Kredit lulus.
 - [ ] AC-004 Transfer Internal lulus.
 - [ ] AC-005 Role Sejajar lulus.

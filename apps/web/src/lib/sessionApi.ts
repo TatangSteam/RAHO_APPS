@@ -237,4 +237,17 @@ export const sessionApi = {
     const response = await api.patch(`/treatment-sessions/${sessionId}/complete`);
     return response.data.data;
   },
+
+  cancelCompletion: async (sessionId: string, input: { idempotencyKey: string; reason: string }): Promise<{
+    sessionId: string;
+    sessionCode: string;
+    completionStatus: 'CANCELLED';
+    inventoryReversalPostingId: string | null;
+    cancellationJournalEntryId: string | null;
+    idempotentReplay: boolean;
+    message: string;
+  }> => {
+    const response = await api.post(`/treatment-sessions/${sessionId}/cancel-completion`, input);
+    return response.data.data;
+  },
 };

@@ -129,6 +129,15 @@ export interface Session {
   pelaksanaan: SessionType;
   treatmentDate: string;
   isCompleted: boolean;
+  completionStatus?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  completedAt?: string | null;
+  recognizedRevenue?: string;
+  materialCost?: string;
+  grossProfit?: string;
+  completionJournalEntryId?: string | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+  cancellationJournalEntryId?: string | null;
   member: SessionMember;
   memberPackage: SessionMemberPackage;
   adminLayanan: SessionStaff;

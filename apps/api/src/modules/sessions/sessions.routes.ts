@@ -21,6 +21,7 @@ const ALLSTAFF: Role[] = [
 
 const SESSION_CREATORS: Role[] = ALLSTAFF.filter((role) => role !== Role.DOCTOR);
 const MEDICAL_STAFF: Role[] = [Role.DOCTOR, Role.NURSE];
+const COMPLETION_REVERSERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
 
 // ============================================================
 // SESSION ROUTES
@@ -371,6 +372,13 @@ router.patch(
   authenticate,
   authorize(ALLSTAFF),
   controller.completeSession.bind(controller)
+);
+
+router.post(
+  '/:sessionId/cancel-completion',
+  authenticate,
+  authorize(COMPLETION_REVERSERS),
+  controller.cancelCompletion.bind(controller)
 );
 
 export default router;

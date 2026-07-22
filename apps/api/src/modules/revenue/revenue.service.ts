@@ -1,6 +1,10 @@
 import { AccountType, PackageRevenueContractStatus, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
+import {
+  postTreatmentCompletionDerivedJournal,
+  reverseTreatmentCompletionJournalInTransaction,
+} from '@modules/accounting/accounting.service';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { allocateConsideration, calculatePerSessionRevenue, revenueForOrdinal, treatmentCompletedEventPayload } from './revenue.helpers';
@@ -131,21 +135,326 @@ export async function createTreatmentCompletedEventInTransaction(input: {
 export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) {
   const event = await tx.domainEvent.findUnique({ where: { id: eventId }, include: { treatmentSession: { include: { encounter: true } } } });
   if (!event || event.eventType !== 'TREATMENT_COMPLETED' || !event.treatmentSession) throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
-  const packageIds = [event.treatmentSession.encounter.memberPackageId, event.treatmentSession.boosterPackageId].filter((value): value is string => Boolean(value));
-  const contracts = await tx.packageRevenueContract.findMany({ where: { memberPackageId: { in: packageIds }, status: 'ACTIVE' }, include: { valuation: true }, orderBy: { id: 'asc' } });
+  const packageIds = [...new Set(
+    [event.treatmentSession.encounter.memberPackageId, event.treatmentSession.boosterPackageId]
+      .filter((value): value is string => Boolean(value)),
+  )];
+  const [packages, contracts] = await Promise.all([
+    tx.memberPackage.findMany({
+      where: { id: { in: packageIds } },
+      select: { id: true, finalPrice: true },
+    }),
+    tx.packageRevenueContract.findMany({
+      where: { memberPackageId: { in: packageIds } },
+      include: { valuation: true },
+      orderBy: { id: 'asc' },
+    }),
+  ]);
+  const contractByPackage = new Map(contracts.map((contract) => [contract.memberPackageId, contract]));
+  const missingFundedContract = packages.find((pkg) =>
+    pkg.finalPrice.greaterThan(0) && !contractByPackage.has(pkg.id)
+  );
+  if (missingFundedContract) {
+    throw errors.unprocessable(
+      'TREATMENT_REVENUE_CONTRACT_MISSING',
+      'Paket berbayar belum memiliki kontrak deferred revenue. Verifikasi pembayaran sebelum menyelesaikan treatment.',
+    );
+  }
   const reservations = [];
-  for (const contract of contracts) {
-    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "package_revenue_contracts" WHERE "id" = ${contract.id} FOR UPDATE`);
+  for (const candidate of contracts) {
+    if (candidate.totalConsideration.isZero()) continue;
+    if (candidate.status !== PackageRevenueContractStatus.ACTIVE) {
+      throw errors.unprocessable(
+        'TREATMENT_DEFERRED_REVENUE_UNAVAILABLE',
+        'Deferred revenue paket belum aktif atau sudah habis. Completion treatment tidak dapat diposting.',
+      );
+    }
+    const contractId = candidate.id;
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "package_revenue_contracts" WHERE "id" = ${contractId} FOR UPDATE`);
+    const contract = await tx.packageRevenueContract.findUniqueOrThrow({
+      where: { id: contractId },
+      include: { valuation: true },
+    });
+    if (contract.status !== PackageRevenueContractStatus.ACTIVE) {
+      throw errors.unprocessable(
+        'TREATMENT_DEFERRED_REVENUE_UNAVAILABLE',
+        'Deferred revenue paket berubah saat completion diproses. Silakan ulangi setelah rekonsiliasi pembayaran.',
+      );
+    }
     const recognitionKey = `TREATMENT_COMPLETED:${event.treatmentSession.id}:PACKAGE:${contract.memberPackageId}`;
     const existing = await tx.revenueRecognition.findUnique({ where: { recognitionKey } });
     if (existing) { reservations.push(existing); continue; }
     const ordinal = contract.recognizedSessions + 1;
     const scheduled = revenueForOrdinal(contract.valuation.regularSessionRevenue, contract.valuation.finalSessionRevenue, ordinal, contract.valuation.totalSessions);
-    const amount = Prisma.Decimal.min(scheduled, contract.remainingDeferredAmount);
+    if (contract.remainingDeferredAmount.lessThan(scheduled)) {
+      throw errors.unprocessable(
+        'TREATMENT_DEFERRED_REVENUE_INSUFFICIENT',
+        `Deferred revenue paket tidak cukup untuk revenue sesi ke-${ordinal}.`,
+      );
+    }
+    const amount = scheduled;
     if (!amount.greaterThan(0)) continue;
     reservations.push(await tx.revenueRecognition.create({ data: { recognitionKey, domainEventId: event.id, treatmentSessionId: event.treatmentSession.id, memberPackageId: contract.memberPackageId, contractId: contract.id, branchId: event.branchId, sessionOrdinal: ordinal, amount } }));
   }
   return reservations;
+}
+
+function addAmount(target: Map<string, Prisma.Decimal>, accountCode: string, amount: Prisma.Decimal) {
+  target.set(accountCode, (target.get(accountCode) || new Prisma.Decimal(0)).add(amount));
+}
+
+/** Posts deferred release, revenue and FIFO HPP in the caller's completion transaction. */
+export async function postTreatmentCompletionFinancialsInTransaction(input: {
+  actorUserId: string;
+  eventId: string;
+  inventoryPostingId: string | null;
+  materialCost: Prisma.Decimal;
+  occurredAt: Date;
+}, tx: Tx) {
+  const event = await tx.domainEvent.findUnique({
+    where: { id: input.eventId },
+    include: { treatmentSession: true },
+  });
+  if (!event?.treatmentSession || event.eventType !== 'TREATMENT_COMPLETED') {
+    throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
+  }
+
+  await reserveTreatmentCompletedRevenue(event.id, tx);
+  const recognitions = await tx.revenueRecognition.findMany({
+    where: { domainEventId: event.id },
+    include: { contract: { include: { valuation: true } } },
+    orderBy: { id: 'asc' },
+  });
+  const postedRecognitions = recognitions.filter((row) => row.status === 'POSTED');
+  if (postedRecognitions.length > 0) {
+    if (postedRecognitions.length !== recognitions.length) {
+      throw errors.conflict('TREATMENT_FINANCE_PARTIAL_POSTING', 'Recognition treatment hanya terposting sebagian. Rekonsiliasi diperlukan.');
+    }
+    const journalIds = [...new Set(postedRecognitions.map((row) => row.journalEntryId).filter(Boolean))];
+    if (journalIds.length !== 1) {
+      throw errors.conflict('TREATMENT_FINANCE_TRACE_INVALID', 'Recognition treatment memiliki referensi jurnal yang tidak konsisten.');
+    }
+    const totalRevenue = postedRecognitions.reduce(
+      (sum, row) => sum.add(row.amount),
+      new Prisma.Decimal(0),
+    );
+    return {
+      journalEntryId: journalIds[0]!,
+      recognizedRevenue: totalRevenue,
+      materialCost: input.materialCost.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      grossProfit: totalRevenue.sub(input.materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      recognitionCount: postedRecognitions.length,
+      idempotentReplay: true,
+    };
+  }
+
+  const pendingRecognitions = recognitions.filter((row) => row.status === 'RESERVED');
+  const recognizedRevenue = pendingRecognitions.reduce(
+    (sum, row) => sum.add(row.amount),
+    new Prisma.Decimal(0),
+  ).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const materialCost = input.materialCost.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const deferredByAccount = new Map<string, Prisma.Decimal>();
+  const revenueByAccount = new Map<string, Prisma.Decimal>();
+  for (const recognition of pendingRecognitions) {
+    addAmount(deferredByAccount, recognition.contract.valuation.deferredRevenueAccountCode, recognition.amount);
+    addAmount(revenueByAccount, recognition.contract.valuation.revenueAccountCode, recognition.amount);
+  }
+
+  const lines = [
+    ...[...deferredByAccount].map(([accountCode, amount]) => ({
+      accountCode,
+      debit: amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      description: `Pelepasan deferred revenue ${event.treatmentSession!.sessionCode}`,
+    })),
+    ...[...revenueByAccount].map(([accountCode, amount]) => ({
+      accountCode,
+      credit: amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+      description: `Revenue treatment ${event.treatmentSession!.sessionCode}`,
+    })),
+    ...(materialCost.greaterThan(0) ? [
+      { accountCode: '5100', debit: materialCost, description: `HPP treatment ${event.treatmentSession.sessionCode}` },
+      { accountCode: '1300', credit: materialCost, description: `Persediaan terpakai ${event.treatmentSession.sessionCode}` },
+    ] : []),
+  ];
+
+  let journalEntryId: string | null = null;
+  if (lines.length > 0) {
+    const posted = await postTreatmentCompletionDerivedJournal({
+      postingKey: `TREATMENT_COMPLETION:${event.treatmentSession.id}`,
+      transactionDate: input.occurredAt,
+      branchId: event.branchId,
+      actorUserId: input.actorUserId,
+      description: `Completion treatment ${event.treatmentSession.sessionCode}`,
+      costCenterCode: event.branchId,
+      lines,
+      sourceLinks: [
+        {
+          sourceType: 'TREATMENT_SESSION',
+          sourceId: event.treatmentSession.id,
+          sourceNumber: event.treatmentSession.sessionCode,
+        },
+        ...(input.inventoryPostingId ? [{
+          sourceType: 'INVENTORY_POSTING',
+          sourceId: input.inventoryPostingId,
+          relationType: 'MATERIAL_USAGE',
+        }] : []),
+        { sourceType: 'DOMAIN_EVENT', sourceId: event.id, relationType: 'TRIGGER' },
+      ],
+      metadata: {
+        eventId: event.id,
+        recognizedRevenue: recognizedRevenue.toFixed(2),
+        materialCost: materialCost.toFixed(2),
+        grossProfit: recognizedRevenue.sub(materialCost).toFixed(2),
+      },
+    }, tx);
+    journalEntryId = posted.journal.id;
+  }
+
+  for (const recognition of pendingRecognitions) {
+    if (!journalEntryId) {
+      throw errors.conflict('TREATMENT_REVENUE_JOURNAL_MISSING', 'Recognition revenue membutuhkan jurnal completion.');
+    }
+    const contract = await tx.packageRevenueContract.findUniqueOrThrow({ where: { id: recognition.contractId } });
+    const nextRecognized = contract.recognizedAmount.add(recognition.amount);
+    const nextRemaining = Prisma.Decimal.max(contract.remainingDeferredAmount.sub(recognition.amount), 0);
+    const nextSessions = contract.recognizedSessions + 1;
+    await tx.revenueRecognition.update({
+      where: { id: recognition.id },
+      data: { status: 'POSTED', journalEntryId, recognizedAt: input.occurredAt },
+    });
+    await tx.deferredRevenueMovement.create({
+      data: {
+        movementKey: `${recognition.recognitionKey}:RECOGNITION`,
+        contractId: recognition.contractId,
+        memberPackageId: recognition.memberPackageId,
+        treatmentSessionId: recognition.treatmentSessionId,
+        journalEntryId,
+        type: 'RECOGNITION',
+        amount: recognition.amount,
+        occurredAt: input.occurredAt,
+        metadata: json({ domainEventId: event.id, sessionOrdinal: recognition.sessionOrdinal }),
+      },
+    });
+    await tx.packageRevenueContract.update({
+      where: { id: contract.id },
+      data: {
+        recognizedAmount: nextRecognized,
+        remainingDeferredAmount: nextRemaining,
+        recognizedSessions: nextSessions,
+        status: nextRemaining.isZero()
+          ? PackageRevenueContractStatus.FULLY_RECOGNIZED
+          : PackageRevenueContractStatus.ACTIVE,
+      },
+    });
+  }
+
+  await tx.domainEvent.update({
+    where: { id: event.id },
+    data: { status: 'PROCESSED', processedAt: input.occurredAt, failureReason: null },
+  });
+  await tx.auditLog.create({
+    data: {
+      userId: input.actorUserId,
+      branchId: event.branchId,
+      action: 'CREATE',
+      module: 'REVENUE',
+      resource: 'TreatmentCompletionPosting',
+      resourceId: event.treatmentSession.id,
+      entityType: 'TreatmentSession',
+      entityId: event.treatmentSession.id,
+      entityCode: event.treatmentSession.sessionCode,
+      description: `Revenue dan HPP treatment ${event.treatmentSession.sessionCode} diposting.`,
+      afterData: json({
+        journalEntryId,
+        recognizedRevenue: recognizedRevenue.toFixed(2),
+        materialCost: materialCost.toFixed(2),
+        grossProfit: recognizedRevenue.sub(materialCost).toFixed(2),
+      }),
+    },
+  });
+  return {
+    journalEntryId,
+    recognizedRevenue,
+    materialCost,
+    grossProfit: recognizedRevenue.sub(materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+    recognitionCount: pendingRecognitions.length,
+    idempotentReplay: false,
+  };
+}
+
+/** Releases recognized revenue and reverses the completion journal atomically. */
+export async function reverseTreatmentCompletionFinancialsInTransaction(input: {
+  actorUserId: string;
+  sessionId: string;
+  sessionCode: string;
+  branchId: string;
+  originalJournalEntryId: string;
+  reason: string;
+  occurredAt: Date;
+}, tx: Tx) {
+  const recognitions = await tx.revenueRecognition.findMany({
+    where: { treatmentSessionId: input.sessionId, status: 'POSTED' },
+    orderBy: [{ contractId: 'asc' }, { id: 'asc' }],
+  });
+  for (const recognition of recognitions) {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "package_revenue_contracts" WHERE "id" = ${recognition.contractId} FOR UPDATE
+    `);
+  }
+  const reversal = await reverseTreatmentCompletionJournalInTransaction({
+    originalJournalEntryId: input.originalJournalEntryId,
+    postingKey: `TREATMENT_COMPLETION_REVERSAL:${input.sessionId}`,
+    transactionDate: input.occurredAt,
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    sessionId: input.sessionId,
+    sessionCode: input.sessionCode,
+    reason: input.reason,
+  }, tx);
+
+  for (const recognition of recognitions) {
+    const contract = await tx.packageRevenueContract.findUniqueOrThrow({ where: { id: recognition.contractId } });
+    await tx.deferredRevenueMovement.create({
+      data: {
+        movementKey: `${recognition.recognitionKey}:REVERSAL`,
+        contractId: recognition.contractId,
+        memberPackageId: recognition.memberPackageId,
+        treatmentSessionId: recognition.treatmentSessionId,
+        journalEntryId: reversal.journal.id,
+        type: 'REVERSAL',
+        amount: recognition.amount,
+        occurredAt: input.occurredAt,
+        metadata: json({ reason: input.reason, recognitionId: recognition.id }),
+      },
+    });
+    await tx.revenueRecognition.update({
+      where: { id: recognition.id },
+      data: { status: 'REVERSED' },
+    });
+    const nextRecognized = Prisma.Decimal.max(contract.recognizedAmount.sub(recognition.amount), 0);
+    const nextRemaining = Prisma.Decimal.min(
+      contract.remainingDeferredAmount.add(recognition.amount),
+      contract.fundedDeferredAmount,
+    );
+    await tx.packageRevenueContract.update({
+      where: { id: contract.id },
+      data: {
+        recognizedAmount: nextRecognized,
+        remainingDeferredAmount: nextRemaining,
+        recognizedSessions: Math.max(0, contract.recognizedSessions - 1),
+        status: contract.fundedDeferredAmount.greaterThan(0)
+          ? PackageRevenueContractStatus.ACTIVE
+          : PackageRevenueContractStatus.UNFUNDED,
+      },
+    });
+  }
+  return {
+    journalEntryId: reversal.journal.id,
+    releasedRevenue: recognitions.reduce((sum, row) => sum.add(row.amount), new Prisma.Decimal(0)),
+    recognitionCount: recognitions.length,
+    idempotentReplay: reversal.idempotentReplay,
+  };
 }
 
 async function readableBranches(actorUserId: string) {

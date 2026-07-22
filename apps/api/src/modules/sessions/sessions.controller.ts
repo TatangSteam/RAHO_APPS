@@ -10,6 +10,7 @@ import {
   createEvaluationSchema,
   updateSessionDetailsSchema,
   updateSessionBoosterPackageSchema,
+  cancelSessionCompletionSchema,
   type CreateSessionInput,
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
@@ -818,6 +819,20 @@ export class SessionsController {
     try {
       const { sessionId } = req.params;
       const result = await sessionsService.completeSession(sessionId, req.user!.userId);
+      return sendSuccess(res, result);
+    } catch (err: any) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message, err.errors);
+      }
+      next(err);
+    }
+  }
+
+  async cancelCompletion(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { sessionId } = req.params;
+      const input = cancelSessionCompletionSchema.parse(req.body);
+      const result = await sessionsService.cancelCompletion(sessionId, req.user!.userId, input);
       return sendSuccess(res, result);
     } catch (err: any) {
       if (err.status) {

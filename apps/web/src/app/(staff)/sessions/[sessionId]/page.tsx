@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import { memberApi } from '@/lib/memberApi';
@@ -20,6 +21,7 @@ import Step8VitalAfter from '@/components/sessions/Step8VitalAfter';
 import Step8ComplaintsRecommendations from '@/components/sessions/Step8ComplaintsRecommendations';
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
 import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
+import { RotateCcw, X } from 'lucide-react';
 
 type BoosterPackageOption = {
   packageId: string;
@@ -92,6 +94,10 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [completing, setCompleting] = useState(false);
+  const [showCancellationModal, setShowCancellationModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [cancellationKey, setCancellationKey] = useState('');
+  const [cancellingCompletion, setCancellingCompletion] = useState(false);
   const [showStaffInfo, setShowStaffInfo] = useState(false);
   const [showTherapyPlanEditModal, setShowTherapyPlanEditModal] = useState(false);
   const [therapyPlanSetForEdit, setTherapyPlanSetForEdit] = useState<TherapyPlan[]>([]);
@@ -409,6 +415,37 @@ export default function SessionDetailPage() {
     }
   };
 
+  const closeCancellationModal = () => {
+    if (cancellingCompletion) return;
+    setShowCancellationModal(false);
+    setCancellationReason('');
+    setCancellationKey('');
+  };
+
+  const handleCancelCompletion = async () => {
+    const reason = cancellationReason.trim();
+    if (reason.length < 5) {
+      showToast.error('Alasan pembatalan minimal 5 karakter');
+      return;
+    }
+    const idempotencyKey = cancellationKey || crypto.randomUUID();
+    if (!cancellationKey) setCancellationKey(idempotencyKey);
+    try {
+      setCancellingCompletion(true);
+      const result = await sessionApi.cancelCompletion(sessionId, { idempotencyKey, reason });
+      showToast.success(result.message);
+      setShowCancellationModal(false);
+      setCancellationReason('');
+      setCancellationKey('');
+      await loadSessionDetail();
+    } catch (error: any) {
+      devError('Error cancelling treatment completion:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal membatalkan completion sesi');
+    } finally {
+      setCancellingCompletion(false);
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ padding: '48px', textAlign: 'center' }}>
@@ -422,6 +459,8 @@ export default function SessionDetailPage() {
 
   const { session: sessionInfo, steps } = session;
   const canEditSessionBoosterPackage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
+  const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
   // Check if step can be accessed
@@ -489,8 +528,11 @@ export default function SessionDetailPage() {
           </div>
           
           {sessionInfo.isCompleted && (
-            <span className="badge badge-success" style={{ fontSize: '14px', padding: '8px 16px' }}>
-              ✓ Sesi Selesai
+            <span
+              className={isCompletionCancelled ? 'badge badge-danger' : 'badge badge-success'}
+              style={{ fontSize: '14px', padding: '8px 16px' }}
+            >
+              {isCompletionCancelled ? 'Completion Dibatalkan' : 'Sesi Selesai'}
             </span>
           )}
         </div>
@@ -945,7 +987,7 @@ export default function SessionDetailPage() {
       </div>
 
       {/* Session Completed Banner */}
-      {sessionInfo.isCompleted && (
+      {sessionInfo.isCompleted && !isCompletionCancelled && (
         <div style={{
           marginTop: '32px',
           padding: '32px',
@@ -983,14 +1025,101 @@ export default function SessionDetailPage() {
           }}>
             Sesi terapi ini telah diselesaikan dan tercatat dalam sistem.
           </p>
-          <button
-            onClick={() => router.push(`/members/${session.session.member.memberId}`)}
-            className="btn btn-secondary"
-            style={{ padding: '12px 24px' }}
-          >
-            ← Kembali ke Profil Member
-          </button>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => router.push(`/members/${session.session.member.memberId}`)}
+              className="btn btn-secondary"
+              style={{ padding: '12px 24px' }}
+            >
+              Kembali ke Profil Member
+            </button>
+            {canCancelCompletion && (
+              <button
+                type="button"
+                onClick={() => setShowCancellationModal(true)}
+                className="btn btn-danger"
+                style={{ padding: '12px 24px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <RotateCcw size={18} />
+                Batalkan Completion
+              </button>
+            )}
+          </div>
         </div>
+      )}
+
+      {sessionInfo.isCompleted && isCompletionCancelled && (
+        <div className="card" style={{ marginTop: '32px', padding: '24px', borderColor: 'rgba(239, 68, 68, 0.45)' }}>
+          <h3 style={{ fontSize: '18px', fontWeight: 700, color: '#ef4444', marginBottom: '8px' }}>
+            Completion Dibatalkan
+          </h3>
+          <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+            {sessionInfo.cancellationReason || 'Posting revenue, HPP, dan persediaan telah dibalik.'}
+          </p>
+        </div>
+      )}
+
+      {showCancellationModal && typeof document !== 'undefined' && createPortal(
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 1200,
+          background: 'rgba(0, 0, 0, 0.68)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+        }}>
+          <div className="card" style={{ width: '100%', maxWidth: '520px', padding: '24px', borderRadius: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Batalkan Completion</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
+                  Revenue, HPP, dan konsumsi FIFO akan dibalik dalam satu transaksi.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeCancellationModal}
+                disabled={cancellingCompletion}
+                aria-label="Tutup"
+                title="Tutup"
+                style={{ border: 0, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <label htmlFor="completion-cancellation-reason" style={{ display: 'block', marginTop: '20px', marginBottom: '8px', fontWeight: 600 }}>
+              Alasan pembatalan
+            </label>
+            <textarea
+              id="completion-cancellation-reason"
+              value={cancellationReason}
+              onChange={(event) => setCancellationReason(event.target.value)}
+              disabled={cancellingCompletion}
+              rows={4}
+              maxLength={1000}
+              autoFocus
+              style={{ width: '100%', resize: 'vertical' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
+              <button type="button" className="btn btn-secondary" onClick={closeCancellationModal} disabled={cancellingCompletion}>
+                Tutup
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleCancelCompletion}
+                disabled={cancellingCompletion || cancellationReason.trim().length < 5}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              >
+                <RotateCcw size={18} />
+                {cancellingCompletion ? 'Membalik posting...' : 'Konfirmasi Pembatalan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
       {showBoosterEditModal && (

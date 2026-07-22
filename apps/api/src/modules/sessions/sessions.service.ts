@@ -10,6 +10,7 @@ import type {
   CreateEvaluationInput,
   UpdateSessionBoosterPackageInput,
   UpdateSessionDetailsInput,
+  CancelSessionCompletionInput,
 } from './sessions.schema';
 
 // Import modular services
@@ -269,6 +270,10 @@ export class SessionsService {
 
   async completeSession(sessionId: string, userId: string) {
     return this.completionService.completeSession(sessionId, userId);
+  }
+
+  async cancelCompletion(sessionId: string, userId: string, input: CancelSessionCompletionInput) {
+    return this.completionService.cancelCompletion(sessionId, userId, input);
   }
 
   async saveProgress(sessionId: string, userId: string) {

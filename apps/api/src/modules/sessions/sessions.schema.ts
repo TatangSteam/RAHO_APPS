@@ -309,3 +309,10 @@ export const createEvaluationSchema = z.object({
 });
 
 export type CreateEvaluationInput = z.infer<typeof createEvaluationSchema>;
+
+export const cancelSessionCompletionSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
+  reason: z.string().trim().min(5).max(1000),
+});
+
+export type CancelSessionCompletionInput = z.infer<typeof cancelSessionCompletionSchema>;

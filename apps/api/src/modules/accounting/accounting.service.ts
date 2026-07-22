@@ -335,6 +335,134 @@ export async function postPurchasingDerivedJournal(input: PostJournalInput, tx: 
   return postWithinTransaction(tx, posting);
 }
 
+/** Strict system-derived posting path for an atomic treatment completion. */
+export async function postTreatmentCompletionDerivedJournal(input: PostJournalInput, tx: DbClient) {
+  const posting = validateAndNormalizePosting(input);
+  const treatmentSources = posting.sourceLinks.filter(
+    (source) => source.sourceType.trim().toUpperCase() === 'TREATMENT_SESSION',
+  );
+  const allowedSources = new Set(['TREATMENT_SESSION', 'INVENTORY_POSTING', 'DOMAIN_EVENT']);
+  if (treatmentSources.length !== 1 || posting.sourceLinks.some(
+    (source) => !allowedSources.has(source.sourceType.trim().toUpperCase()),
+  )) {
+    throw errors.badRequest(
+      'TREATMENT_JOURNAL_SOURCE_INVALID',
+      'Jurnal completion wajib memiliki satu source TREATMENT_SESSION dan hanya boleh menautkan posting inventory atau domain event terkait.',
+    );
+  }
+
+  const hppLine = posting.lines.find((line) => line.accountCode === '5100');
+  const inventoryLine = posting.lines.find((line) => line.accountCode === '1300');
+  if (Boolean(hppLine) !== Boolean(inventoryLine)
+    || (hppLine && inventoryLine && (
+      !hppLine.debit.greaterThan(0)
+      || !inventoryLine.credit.equals(hppLine.debit)
+      || !hppLine.credit.isZero()
+      || !inventoryLine.debit.isZero()
+    ))) {
+    throw errors.badRequest(
+      'TREATMENT_HPP_JOURNAL_INVALID',
+      'Komponen HPP treatment harus debit 5100 dan kredit 1300 dengan nilai yang sama.',
+    );
+  }
+
+  const deferredDebit = posting.lines
+    .filter((line) => line.accountCode !== '5100')
+    .reduce((sum, line) => sum.add(line.debit), new Prisma.Decimal(0));
+  const revenueCredit = posting.lines
+    .filter((line) => line.accountCode !== '1300')
+    .reduce((sum, line) => sum.add(line.credit), new Prisma.Decimal(0));
+  if (!deferredDebit.equals(revenueCredit)) {
+    throw errors.badRequest(
+      'TREATMENT_REVENUE_JOURNAL_INVALID',
+      'Debit deferred revenue dan kredit revenue treatment harus bernilai sama.',
+    );
+  }
+
+  await assertBranchAccess(posting.actorUserId, posting.branchId);
+  await assertPermission(posting.actorUserId, PERMISSIONS.TREATMENT_MATERIAL_CONSUME, posting.branchId);
+  return postWithinTransaction(tx, posting);
+}
+
+/** Reverses the immutable completion journal inside the caller's transaction. */
+export async function reverseTreatmentCompletionJournalInTransaction(input: {
+  originalJournalEntryId: string;
+  postingKey: string;
+  transactionDate: Date;
+  branchId: string;
+  actorUserId: string;
+  sessionId: string;
+  sessionCode: string;
+  reason: string;
+}, tx: DbClient) {
+  await assertBranchAccess(input.actorUserId, input.branchId);
+  await assertPermission(input.actorUserId, PERMISSIONS.TREATMENT_COMPLETION_REVERSE, input.branchId);
+  await tx.$queryRaw(Prisma.sql`
+    SELECT "id" FROM "journal_entries" WHERE "id" = ${input.originalJournalEntryId} FOR UPDATE
+  `);
+  const original = await tx.journalEntry.findUnique({
+    where: { id: input.originalJournalEntryId },
+    include: {
+      ...journalInclude,
+      lines: {
+        include: { account: { select: { id: true, code: true, name: true, type: true, normalBalance: true } } },
+        orderBy: { lineNo: 'asc' },
+      },
+    },
+  });
+  if (!original || original.branchId !== input.branchId) {
+    throw errors.notFound('Jurnal completion treatment tidak ditemukan.');
+  }
+  if (original.status === 'REVERSED') {
+    if (!original.reversedByEntryId) {
+      throw errors.conflict('JOURNAL_REVERSAL_TRACE_MISSING', 'Jurnal sudah dibalik tetapi referensi jurnal reversal tidak tersedia.');
+    }
+    const replay = await tx.journalEntry.findUnique({
+      where: { id: original.reversedByEntryId },
+      include: journalInclude,
+    });
+    if (!replay) throw errors.conflict('JOURNAL_REVERSAL_MISSING', 'Jurnal reversal tidak ditemukan.');
+    return { journal: formatJournal(replay), idempotentReplay: true };
+  }
+
+  const reversalPosting = validateAndNormalizePosting({
+    postingKey: input.postingKey,
+    transactionDate: input.transactionDate,
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    description: `Reversal ${original.journalNumber}: ${input.reason}`,
+    lines: original.lines.map((line) => ({
+      accountCode: line.account.code,
+      debit: line.credit,
+      credit: line.debit,
+      branchId: line.branchId,
+      costCenterCode: line.costCenterCode || undefined,
+      description: `Reversal: ${line.description || original.description}`,
+    })),
+    sourceLinks: [{
+      sourceType: 'TREATMENT_SESSION',
+      sourceId: input.sessionId,
+      sourceNumber: input.sessionCode,
+      relationType: 'REVERSAL',
+    }],
+    metadata: {
+      originalJournalEntryId: original.id,
+      originalJournalNumber: original.journalNumber,
+      reason: input.reason,
+    },
+  });
+  const posted = await postWithinTransaction(tx, reversalPosting);
+  await tx.journalEntry.update({
+    where: { id: original.id },
+    data: {
+      status: 'REVERSED',
+      reversedAt: input.transactionDate,
+      reversedByEntryId: posted.journal.id,
+    },
+  });
+  return posted;
+}
+
 export async function listAccountsService(query: ListAccountsQuery) {
   return prisma.account.findMany({
     where: {

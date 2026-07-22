@@ -535,85 +535,132 @@ export async function issueInventory(actorUserId: string, input: IssueInventoryI
   return result;
 }
 
+export async function reverseInventoryPostingInTransaction(
+  actorUserId: string,
+  postingId: string,
+  input: ReverseInventoryPostingInput,
+  tx: Tx,
+) {
+  const payloadHash = hashPayload({ postingId, ...input });
+  const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
+  if (existing) return existing.id;
+  const [lockedOriginal] = await tx.$queryRaw<Array<{ id: string; status: InventoryPostingStatus }>>(Prisma.sql`
+    SELECT "id", "status" FROM "inventory_postings" WHERE "id" = ${postingId} FOR UPDATE
+  `);
+  if (!lockedOriginal) throw errors.notFound('Inventory posting tidak ditemukan.');
+  if (lockedOriginal.status === InventoryPostingStatus.REVERSED) {
+    throw errors.conflict('POSTING_ALREADY_REVERSED', 'Posting sudah dibalik.');
+  }
+  const original = await tx.inventoryPosting.findUniqueOrThrow({ where: { id: postingId } });
+  if (original.type !== InventoryPostingType.ISSUE) {
+    throw errors.badRequest('REVERSAL_NOT_SUPPORTED', 'Reversal hanya didukung untuk posting ISSUE.');
+  }
+
+  const mutations = await tx.stockMutation.findMany({
+    where: { inventoryPostingId: postingId },
+    include: { costAllocations: { where: { type: InventoryCostAllocationType.CONSUMPTION } } },
+    orderBy: { id: 'asc' },
+  });
+  if (mutations.length === 0 || mutations.some((mutation) => mutation.costAllocations.length === 0)) {
+    throw errors.conflict('ALLOCATION_TRACE_MISSING', 'Allocation posting asal tidak lengkap.');
+  }
+  await lockInventoryItems(tx, mutations.map((mutation) => mutation.inventoryItemId));
+  const layerIds = [...new Set(
+    mutations.flatMap((mutation) => mutation.costAllocations.map((allocation) => allocation.costLayerId)),
+  )].sort();
+  if (layerIds.length > 0) {
+    await tx.$queryRaw(Prisma.sql`
+      SELECT "id" FROM "inventory_cost_layers"
+      WHERE "id" IN (${Prisma.join(layerIds)}) ORDER BY "id" FOR UPDATE
+    `);
+  }
+
+  const reversal = await tx.inventoryPosting.create({
+    data: {
+      postingNumber: postingNumber('REV'),
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+      type: InventoryPostingType.REVERSAL,
+      reasonCode: input.reasonCode,
+      sourceType: 'INVENTORY_POSTING',
+      sourceId: postingId,
+      branchId: original.branchId,
+      occurredAt: input.occurredAt,
+      totalCost: original.totalCost.neg(),
+      postedBy: actorUserId,
+      reversalOfId: postingId,
+    },
+  });
+
+  for (const mutation of mutations) {
+    const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: mutation.inventoryItemId } });
+    await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: { increment: mutation.quantity } } });
+    const reversalMutation = await tx.stockMutation.create({
+      data: {
+        inventoryItemId: item.id,
+        type: StockMutationType.ADJUSTMENT,
+        quantity: mutation.quantity,
+        stockBefore: item.stock,
+        stockAfter: item.stock.add(mutation.quantity),
+        referenceType: 'INVENTORY_POSTING',
+        referenceId: postingId,
+        notes: input.reasonCode,
+        createdBy: actorUserId,
+        inventoryPostingId: reversal.id,
+        inventoryBalanceId: mutation.inventoryBalanceId,
+        batchId: mutation.batchId,
+        actualCost: mutation.actualCost?.neg(),
+      },
+    });
+
+    const balanceQuantities = new Map<string, Prisma.Decimal>();
+    for (const allocation of mutation.costAllocations) {
+      const layer = await tx.inventoryCostLayer.findUniqueOrThrow({ where: { id: allocation.costLayerId } });
+      await tx.inventoryCostLayer.update({
+        where: { id: layer.id },
+        data: { remainingQty: { increment: allocation.quantity } },
+      });
+      balanceQuantities.set(
+        layer.inventoryBalanceId,
+        (balanceQuantities.get(layer.inventoryBalanceId) ?? new Prisma.Decimal(0)).add(allocation.quantity),
+      );
+      await tx.inventoryCostAllocation.create({
+        data: {
+          postingId: reversal.id,
+          stockMutationId: reversalMutation.id,
+          costLayerId: layer.id,
+          type: InventoryCostAllocationType.REVERSAL,
+          quantity: allocation.quantity,
+          unitCost: allocation.unitCost,
+          totalCost: allocation.totalCost,
+          reversalOfId: allocation.id,
+        },
+      });
+    }
+    for (const [balanceId, quantity] of balanceQuantities) {
+      await tx.inventoryBalance.update({
+        where: { id: balanceId },
+        data: { onHandQty: { increment: quantity }, version: { increment: 1 } },
+      });
+    }
+  }
+
+  await tx.inventoryPosting.update({
+    where: { id: postingId },
+    data: { status: InventoryPostingStatus.REVERSED, reversedAt: input.occurredAt },
+  });
+  return reversal.id;
+}
+
 export async function reverseInventoryPosting(actorUserId: string, postingId: string, input: ReverseInventoryPostingInput) {
   const original = await prisma.inventoryPosting.findUnique({ where: { id: postingId } });
   if (!original) throw errors.notFound('Inventory posting tidak ditemukan.');
   await assertBranchAccess(actorUserId, original.branchId);
   await assertPermission(actorUserId, PERMISSIONS.INVENTORY_REVERSE, original.branchId);
-  if (original.type !== InventoryPostingType.ISSUE) throw errors.badRequest('REVERSAL_NOT_SUPPORTED', 'Sprint 3 hanya mendukung reversal untuk posting ISSUE.');
-  const payloadHash = hashPayload({ postingId, ...input });
-
-  const reversalId = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
-    const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
-    if (existing) return existing.id;
-    const [lockedOriginal] = await tx.$queryRaw<Array<{ id: string; status: InventoryPostingStatus }>>(Prisma.sql`
-      SELECT "id", "status" FROM "inventory_postings" WHERE "id" = ${postingId} FOR UPDATE
-    `);
-    if (!lockedOriginal) throw errors.notFound('Inventory posting tidak ditemukan.');
-    if (lockedOriginal.status === InventoryPostingStatus.REVERSED) throw errors.conflict('POSTING_ALREADY_REVERSED', 'Posting sudah dibalik.');
-
-    const mutations = await tx.stockMutation.findMany({
-      where: { inventoryPostingId: postingId },
-      include: { costAllocations: { where: { type: InventoryCostAllocationType.CONSUMPTION } } },
-      orderBy: { id: 'asc' },
-    });
-    if (mutations.length === 0 || mutations.some((mutation) => mutation.costAllocations.length === 0)) {
-      throw errors.conflict('ALLOCATION_TRACE_MISSING', 'Allocation posting asal tidak lengkap.');
-    }
-    await lockInventoryItems(tx, mutations.map((mutation) => mutation.inventoryItemId));
-    const balanceIds = [...new Set(mutations.flatMap((mutation) => mutation.costAllocations.map((allocation) => allocation.costLayerId)))].sort();
-    if (balanceIds.length > 0) {
-      await tx.$queryRaw(Prisma.sql`
-        SELECT "id" FROM "inventory_cost_layers" WHERE "id" IN (${Prisma.join(balanceIds)}) ORDER BY "id" FOR UPDATE
-      `);
-    }
-
-    const reversal = await tx.inventoryPosting.create({
-      data: {
-        postingNumber: postingNumber('REV'), idempotencyKey: input.idempotencyKey, payloadHash,
-        type: InventoryPostingType.REVERSAL, reasonCode: input.reasonCode, sourceType: 'INVENTORY_POSTING',
-        sourceId: postingId, branchId: original.branchId, occurredAt: input.occurredAt,
-        totalCost: original.totalCost.neg(), postedBy: actorUserId, reversalOfId: postingId,
-      },
-    });
-
-    for (const mutation of mutations) {
-      const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: mutation.inventoryItemId } });
-      await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: { increment: mutation.quantity } } });
-      const reversalMutation = await tx.stockMutation.create({
-        data: {
-          inventoryItemId: item.id, type: StockMutationType.ADJUSTMENT, quantity: mutation.quantity,
-          stockBefore: item.stock, stockAfter: item.stock.add(mutation.quantity), referenceType: 'INVENTORY_POSTING',
-          referenceId: postingId, notes: input.reasonCode, createdBy: actorUserId,
-          inventoryPostingId: reversal.id, inventoryBalanceId: mutation.inventoryBalanceId,
-          batchId: mutation.batchId, actualCost: mutation.actualCost?.neg(),
-        },
-      });
-
-      const balanceQuantities = new Map<string, Prisma.Decimal>();
-      for (const allocation of mutation.costAllocations) {
-        const layer = await tx.inventoryCostLayer.findUniqueOrThrow({ where: { id: allocation.costLayerId } });
-        await tx.inventoryCostLayer.update({ where: { id: layer.id }, data: { remainingQty: { increment: allocation.quantity } } });
-        balanceQuantities.set(
-          layer.inventoryBalanceId,
-          (balanceQuantities.get(layer.inventoryBalanceId) ?? new Prisma.Decimal(0)).add(allocation.quantity),
-        );
-        await tx.inventoryCostAllocation.create({
-          data: {
-            postingId: reversal.id, stockMutationId: reversalMutation.id, costLayerId: layer.id,
-            type: InventoryCostAllocationType.REVERSAL, quantity: allocation.quantity,
-            unitCost: allocation.unitCost, totalCost: allocation.totalCost, reversalOfId: allocation.id,
-          },
-        });
-      }
-      for (const [balanceId, quantity] of balanceQuantities) {
-        await tx.inventoryBalance.update({ where: { id: balanceId }, data: { onHandQty: { increment: quantity }, version: { increment: 1 } } });
-      }
-    }
-
-    await tx.inventoryPosting.update({ where: { id: postingId }, data: { status: InventoryPostingStatus.REVERSED, reversedAt: input.occurredAt } });
-    return reversal.id;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
+  const reversalId = await withTransactionRetry(() => prisma.$transaction(
+    (tx) => reverseInventoryPostingInTransaction(actorUserId, postingId, input, tx),
+    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+  ));
 
   const result = await loadPostingResult(reversalId);
   await logAudit({ userId: actorUserId, branchId: original.branchId, action: 'UPDATE', resource: 'InventoryPosting', resourceId: reversalId, beforeData: { postingId, status: original.status }, afterData: { reversalId, status: 'REVERSED' } });
