@@ -2694,6 +2694,7 @@ model MaterialUsage {
   @@index([inventoryItemId])
   @@index([treatmentBomItemId])
   @@index([inventoryPostingId])
+  @@index([status, consumedAt])
   @@map("material_usages")
 }
 
@@ -3054,6 +3055,7 @@ model StockMutation {
   @@index([type])
   @@index([createdAt])
   @@index([inventoryPostingId])
+  @@index([inventoryItemId, inventoryPostingId])
   @@index([inventoryBalanceId])
   @@index([batchId])
   @@map("stock_mutations")
@@ -3433,6 +3435,7 @@ model StockRequest {
   @@index([status])
   @@index([requestedBy])
   @@index([createdAt])
+  @@index([branchId, createdAt])
   @@map("stock_requests")
 }
 
@@ -3532,6 +3535,8 @@ model Shipment {
   @@index([status])
   @@index([shippedAt])
   @@index([receivedAt])
+  @@index([fromBranchId, createdAt])
+  @@index([toBranchId, createdAt])
   @@map("shipments")
 }
 
@@ -3723,6 +3728,7 @@ model ShipmentDiscrepancy {
   masterProduct   MasterProduct    @relation(fields: [masterProductId], references: [id])
 
   @@index([shipmentId])
+  @@index([shipmentId, createdAt])
   @@index([shipmentReceiptId])
   @@index([shipmentId, status])
   @@index([masterProductId])

@@ -10,6 +10,7 @@ import { StockReservationController } from './stock-reservation.controller';
 import { GoodsReceiptController } from './goods-receipt.controller';
 import { TreatmentBomController } from './treatment-bom.controller';
 import { InventoryControlController } from './inventory-control.controller';
+import { LogisticsReportController } from './logistics-report.controller';
 import { authenticate } from '../../middleware/authenticate';
 import { authorize } from '../../middleware/authorize';
 import { validate, validateQuery } from '../../middleware/validate';
@@ -64,6 +65,7 @@ const stockReservationController = new StockReservationController();
 const goodsReceiptController = new GoodsReceiptController();
 const treatmentBomController = new TreatmentBomController();
 const inventoryControlController = new InventoryControlController();
+const logisticsReportController = new LogisticsReportController();
 
 const ALLSTAFF: Role[] = [
   Role.SUPER_ADMIN,
@@ -158,6 +160,9 @@ router.post('/treatment-boms/:bomId/activate', authenticate, requirePermission(P
 // INVENTORY LEDGER AND FIFO
 // ============================================================
 
+router.get('/reports/logistics-dashboard', authenticate, requirePermission(PERMISSIONS.INVENTORY_READ), logisticsReportController.dashboard.bind(logisticsReportController));
+router.get('/reports/stock-card', authenticate, requirePermission(PERMISSIONS.INVENTORY_READ), logisticsReportController.stockCard.bind(logisticsReportController));
+router.get('/reports/valuation', authenticate, requirePermission(PERMISSIONS.INVENTORY_READ), logisticsReportController.valuation.bind(logisticsReportController));
 router.get('/ledger/balances', authenticate, authorize(ALLSTAFF), inventoryLedgerController.balances.bind(inventoryLedgerController));
 router.get('/ledger/postings', authenticate, authorize(ALLSTAFF), inventoryLedgerController.postings.bind(inventoryLedgerController));
 router.get('/ledger/reconciliation', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.reconcile.bind(inventoryLedgerController));

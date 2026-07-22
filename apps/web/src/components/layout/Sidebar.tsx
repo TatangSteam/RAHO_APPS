@@ -104,6 +104,12 @@ const MENU_GROUPS: MenuGroup[] = [
     title: 'Inventori',
     items: [
       {
+        label: 'Dashboard Logistik',
+        href: '/inventory/dashboard',
+        icon: <BarChart3 size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'],
+      },
+      {
         label: 'Stok',
         href: '/inventory',
         icon: <Boxes size={20} />,
