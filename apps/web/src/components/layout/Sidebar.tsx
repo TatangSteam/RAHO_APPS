@@ -357,6 +357,11 @@ export function Sidebar({
   if (!user) return null;
 
   const role = user.role as Role;
+  const displayedRoleLabel =
+    user.roleTemplateName ||
+    (user.staffCode?.startsWith('FN-') || user.email.toLowerCase() === 'finance@raho.id'
+      ? 'Finance'
+      : getRoleLabel(role));
   const isMemberViewOnlyAdminManager =
     role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
@@ -593,7 +598,7 @@ export function Sidebar({
               {user.fullName}
             </p>
             <span className={clsx('text-xs font-medium', getRoleTextColor(role))}>
-              {getRoleLabel(role)}
+              {displayedRoleLabel}
             </span>
             {user.branchCode && (
               <span className="text-xs text-neutral-500 dark:text-neutral-400">
@@ -629,7 +634,7 @@ export function Sidebar({
           {hoveredItem === 'user-profile' && (
             <Tooltip>
               <div className="font-semibold mb-0.5">{user.fullName}</div>
-              <div className={clsx('text-xs', getRoleTextColor(role))}>{getRoleLabel(role)}</div>
+              <div className={clsx('text-xs', getRoleTextColor(role))}>{displayedRoleLabel}</div>
               {user.branchCode && <div className="text-[10px] text-neutral-500">Cab. {user.branchCode}</div>}
               <div className="text-[10px] text-amber-500 mt-1">Klik untuk lihat profil</div>
             </Tooltip>

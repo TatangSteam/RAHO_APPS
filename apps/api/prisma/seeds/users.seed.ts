@@ -53,6 +53,7 @@ const FINANCE_DUMMY_PERMISSION_CODES = [
   PERMISSIONS.PURCHASE_REQUEST_CREATE,
   PERMISSIONS.PURCHASE_REQUEST_APPROVE,
   PERMISSIONS.PURCHASE_ORDER_READ,
+  PERMISSIONS.PURCHASE_ORDER_CREATE,
   PERMISSIONS.GOODS_RECEIPT_READ,
   PERMISSIONS.AP_READ,
   PERMISSIONS.AP_INVOICE_POST,
@@ -105,13 +106,13 @@ async function ensureFinanceDummyRoleTemplate(prisma: PrismaClient) {
   const template = await prisma.roleTemplate.upsert({
     where: { code: FINANCE_DUMMY_TEMPLATE_CODE },
     update: {
-      name: 'Finance Dummy',
+      name: 'Finance',
       description: 'Finance-only permission template for development and UAT.',
       isActive: true,
     },
     create: {
       code: FINANCE_DUMMY_TEMPLATE_CODE,
-      name: 'Finance Dummy',
+      name: 'Finance',
       description: 'Finance-only permission template for development and UAT.',
       isSystem: false,
       isActive: true,

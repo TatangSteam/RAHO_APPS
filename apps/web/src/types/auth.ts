@@ -24,6 +24,7 @@ export interface AuthUser {
   adminManagerAccessScope?: AdminManagerAccessScope | null;
   fullName: string;
   staffCode: string | null;
+  roleTemplateName?: string | null;
   avatarUrl?: string | null;
 }
 

@@ -9,6 +9,7 @@ import { extractKeyFromUrl, getPresignedUrl } from '@config/minio';
 import { logAudit } from '@utils/auditLog';
 import type { CreateExpenseInput, ListExpensesQuery } from './expense.schema';
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
+import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 
 interface ExpenseEvidence {
   fileUrl?: string;
@@ -106,8 +107,39 @@ export async function submitExpense(userId: string, id: string) {
   if (expense.createdBy !== userId) throw errors.forbidden('Hanya maker yang dapat mengajukan expense.');
   if (expense.status !== ExpenseStatus.DRAFT && expense.status !== ExpenseStatus.REJECTED) throw errors.conflict('EXPENSE_STATUS_INVALID', 'Expense tidak dapat diajukan dari status ini.');
   if (!expense.evidenceFileUrl) throw errors.unprocessable('EXPENSE_EVIDENCE_REQUIRED', 'Evidence expense wajib sebelum diajukan.');
+  const autonomousFinance = await isAutonomousFinanceUser(userId);
   const updated = await prisma.$transaction(async (tx) => {
     const submittedAt = new Date();
+    if (autonomousFinance) {
+      const row = await tx.expense.update({
+        where: { id },
+        data: {
+          status: 'APPROVED',
+          submittedAt,
+          rejectionReason: null,
+          approvalNote: 'Disetujui otomatis oleh kebijakan Finance autonomous.',
+          reviewedBy: userId,
+          reviewedAt: submittedAt,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId,
+          branchId: expense.branchId,
+          action: 'STATUS_CHANGE',
+          module: 'EXPENSE',
+          resource: 'Expense',
+          resourceId: expense.id,
+          entityType: 'Expense',
+          entityId: expense.id,
+          entityCode: expense.expenseNumber,
+          description: `Expense ${expense.expenseNumber} disetujui otomatis oleh Finance.`,
+          beforeData: { status: expense.status },
+          afterData: { status: 'APPROVED', policy: 'FINANCE_AUTONOMOUS' },
+        },
+      });
+      return row;
+    }
     const row = await tx.expense.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt, rejectionReason: null } });
     await startApprovalInTransaction({
       module: 'EXPENSE', entityType: 'Expense', entityId: row.id, entityNumber: row.expenseNumber,

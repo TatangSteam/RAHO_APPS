@@ -4,6 +4,7 @@ import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import { postJournal } from '@modules/accounting/accounting.service';
 import { receiveOpeningInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
 import { logAudit } from '@utils/auditLog';
@@ -162,6 +163,7 @@ export async function postOpeningBalance(userId: string, id: string) {
   await assertBranchAccess(userId, candidate.branchId);
   await assertPermission(userId, PERMISSIONS.OPENING_BALANCE_POST, candidate.branchId);
   await assertPermission(userId, PERMISSIONS.JOURNAL_POST, candidate.branchId);
+  const autonomousFinance = await isAutonomousFinanceUser(userId);
 
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "opening_balances" WHERE "id" = ${id} FOR UPDATE`);
@@ -175,7 +177,9 @@ export async function postOpeningBalance(userId: string, id: string) {
       return { openingBalance: formatOpening(replay), idempotentReplay: true };
     }
     if (opening.status !== OpeningBalanceStatus.SUBMITTED) throw errors.conflict('OPENING_NOT_SUBMITTED', 'Opening balance belum diajukan.');
-    if (opening.createdBy === userId) throw errors.forbidden('Maker tidak boleh mem-posting opening balance sendiri.');
+    if (opening.createdBy === userId && !autonomousFinance) {
+      throw errors.forbidden('Maker tidak boleh mem-posting opening balance sendiri.');
+    }
 
     const posted = await postJournal({
       postingKey: `OPENING_BALANCE:${opening.id}`,

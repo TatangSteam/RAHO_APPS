@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { BookOpen, CalendarRange, Landmark, Link2 } from 'lucide-react';
+import { BookOpen, CalendarRange, CheckCircle2, Landmark, Layers3, Link2, Plus, Search, WalletCards } from 'lucide-react';
 import { accountingApi, Account, AccountingPeriod, Journal } from '@/lib/accountingApi';
 import { api } from '@/lib/api';
 import { showToast } from '@/lib/toast';
@@ -20,6 +20,8 @@ export default function AccountingPage() {
   const [showAccountForm, setShowAccountForm] = useState(false);
   const [showPeriodForm, setShowPeriodForm] = useState(false);
   const [showJournalForm, setShowJournalForm] = useState(false);
+  const [accountSearch, setAccountSearch] = useState('');
+  const [accountType, setAccountType] = useState<'ALL' | Account['type']>('ALL');
 
   const reload = async () => {
     setLoading(true);
@@ -40,27 +42,59 @@ export default function AccountingPage() {
   const canManageAccounts = permissionCodes.has('ACCOUNT.MANAGE');
   const canManagePeriods = permissionCodes.has('ACCOUNTING_PERIOD.MANAGE');
   const canPostJournal = permissionCodes.has('JOURNAL.POST');
+  const filteredAccounts = useMemo(() => accounts.filter((account) => {
+    const matchesSearch = `${account.code} ${account.name}`.toLowerCase().includes(accountSearch.toLowerCase());
+    return matchesSearch && (accountType === 'ALL' || account.type === accountType);
+  }), [accounts, accountSearch, accountType]);
+  const activeAccounts = accounts.filter((account) => account.isActive).length;
+  const postingAccounts = accounts.filter((account) => account.isActive && account.allowPosting).length;
+  const openPeriods = periods.filter((period) => period.status === 'OPEN').length;
 
-  return <div className="mx-auto max-w-7xl space-y-5">
-    <header>
-      <h1 className="flex items-center gap-2 text-2xl font-semibold"><Landmark /> Accounting Foundation</h1>
-      <p className="mt-1 text-sm text-neutral-500">Chart of Accounts, periode, jurnal balanced, dan traceability source document.</p>
+  return <div className="mx-auto max-w-7xl space-y-6 pb-10">
+    <header className="relative overflow-hidden rounded-3xl border border-neutral-200 bg-gradient-to-br from-white via-blue-50/50 to-indigo-50 p-6 shadow-sm dark:border-neutral-800 dark:from-neutral-900 dark:via-blue-950/20 dark:to-neutral-900 md:p-8">
+      <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-500/10 blur-3xl" />
+      <div className="relative flex items-start gap-4">
+        <div className="rounded-2xl bg-blue-600 p-3 text-white shadow-lg shadow-blue-600/20"><Landmark size={26}/></div>
+        <div><p className="mb-1 text-xs font-semibold uppercase tracking-[0.18em] text-blue-600 dark:text-blue-400">Finance workspace</p>
+          <h1 className="text-2xl font-bold tracking-tight text-neutral-950 dark:text-white md:text-3xl">Accounting Foundation</h1>
+          <p className="mt-2 max-w-2xl text-sm text-neutral-600 dark:text-neutral-300">Kelola struktur akun, periode akuntansi, dan jurnal dalam satu ruang kerja yang terhubung.</p>
+        </div>
+      </div>
     </header>
-    <div className="flex gap-2 border-b dark:border-neutral-800">
+
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard icon={<Layers3 size={20}/>} label="Total akun" value={accounts.length} hint="Seluruh chart of accounts" tone="blue"/>
+      <MetricCard icon={<CheckCircle2 size={20}/>} label="Akun aktif" value={activeAccounts} hint={`${accounts.length - activeAccounts} akun nonaktif`} tone="emerald"/>
+      <MetricCard icon={<WalletCards size={20}/>} label="Siap posting" value={postingAccounts} hint="Akun detail aktif" tone="violet"/>
+      <MetricCard icon={<CalendarRange size={20}/>} label="Periode terbuka" value={openPeriods} hint={`${journals.length} jurnal tercatat`} tone="amber"/>
+    </div>
+
+    <div className="inline-flex rounded-xl border border-neutral-200 bg-neutral-100/80 p-1 dark:border-neutral-800 dark:bg-neutral-900">
       <TabButton active={tab === 'accounts'} onClick={() => setTab('accounts')}><BookOpen size={16} /> COA</TabButton>
       <TabButton active={tab === 'periods'} onClick={() => setTab('periods')}><CalendarRange size={16} /> Periode</TabButton>
       <TabButton active={tab === 'journals'} onClick={() => setTab('journals')}><Link2 size={16} /> Jurnal</TabButton>
     </div>
     {loading ? <p className="text-sm text-neutral-500">Memuat ledger…</p> : <>
       {tab === 'accounts' && <section className="space-y-4">
-        <ActionHeader title={`${accounts.length} account`} action={canManageAccounts ? 'Tambah account' : undefined} onClick={() => setShowAccountForm((value) => !value)} />
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div><h2 className="text-lg font-semibold text-neutral-950 dark:text-white">Chart of Accounts</h2><p className="text-sm text-neutral-500">{filteredAccounts.length} dari {accounts.length} akun ditampilkan</p></div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16}/><input value={accountSearch} onChange={(event) => setAccountSearch(event.target.value)} placeholder="Cari kode atau nama…" className="h-10 w-full rounded-xl border border-neutral-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-neutral-700 dark:bg-neutral-900 sm:w-64"/></div>
+            <select value={accountType} onChange={(event) => setAccountType(event.target.value as typeof accountType)} className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none focus:border-blue-500 dark:border-neutral-700 dark:bg-neutral-900"><option value="ALL">Semua tipe</option>{(['ASSET','LIABILITY','EQUITY','REVENUE','EXPENSE'] as const).map((type) => <option key={type}>{type}</option>)}</select>
+            {canManageAccounts && <button onClick={() => setShowAccountForm((value) => !value)} className="flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm shadow-blue-600/20 transition hover:bg-blue-700"><Plus size={16}/> Tambah akun</button>}
+          </div>
+        </div>
         {showAccountForm && <AccountForm accounts={accounts} onSaved={async () => { setShowAccountForm(false); await reload(); }} />}
-        <div className="overflow-x-auto rounded-xl border bg-white dark:border-neutral-800 dark:bg-neutral-900"><table className="w-full text-sm">
-          <thead className="bg-neutral-50 text-left dark:bg-neutral-950"><tr><Th>Kode</Th><Th>Nama</Th><Th>Tipe</Th><Th>Normal</Th><Th>Posting</Th><Th>Status</Th></tr></thead>
-          <tbody>{accounts.map((account) => <tr key={account.id} className="border-t dark:border-neutral-800">
-            <Td><code>{account.code}</code></Td><Td><span style={{ paddingLeft: `${Math.max(0, account.level - 1) * 16}px` }}>{account.name}</span></Td><Td>{account.type}</Td><Td>{account.normalBalance}</Td><Td>{account.allowPosting ? 'Ya' : 'Header'}</Td><Td>{account.isActive ? 'Aktif' : 'Nonaktif'}</Td>
+        <div className="max-h-[640px] overflow-auto rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900"><table className="w-full min-w-[760px] text-sm">
+          <thead className="sticky top-0 z-10 bg-neutral-50/95 text-left text-[11px] uppercase tracking-wider text-neutral-500 backdrop-blur dark:bg-neutral-950/95"><tr><Th>Kode</Th><Th>Nama akun</Th><Th>Tipe</Th><Th>Saldo normal</Th><Th>Kebijakan posting</Th><Th>Status</Th></tr></thead>
+          <tbody>{filteredAccounts.map((account) => <tr key={account.id} className="group border-t border-neutral-100 transition-colors hover:bg-blue-50/60 dark:border-neutral-800 dark:hover:bg-blue-950/20">
+            <Td><code className="rounded-md bg-neutral-100 px-2 py-1 font-semibold text-neutral-700 dark:bg-neutral-800 dark:text-neutral-200">{account.code}</code></Td>
+            <Td><div className="flex items-center gap-2" style={{ paddingLeft: `${Math.max(0, account.level - 1) * 18}px` }}>{account.level > 1 && <span className="h-px w-3 bg-neutral-300 dark:bg-neutral-600"/>}<span className={account.allowPosting ? 'font-medium' : 'font-semibold text-neutral-950 dark:text-white'}>{account.name}</span></div></Td>
+            <Td><TypeBadge type={account.type}/></Td><Td><span className="text-xs font-medium text-neutral-600 dark:text-neutral-300">{account.normalBalance}</span></Td>
+            <Td>{account.allowPosting ? <Badge label="Posting aktif" tone="green"/> : <Badge label="Header" tone="slate"/>}</Td>
+            <Td>{account.isActive ? <Badge label="Aktif" tone="blue"/> : <Badge label="Nonaktif" tone="red"/>}</Td>
           </tr>)}</tbody>
-        </table></div>
+        </table>{filteredAccounts.length === 0 && <div className="p-10 text-center text-sm text-neutral-500">Tidak ada akun yang cocok dengan pencarian.</div>}</div>
       </section>}
 
       {tab === 'periods' && <section className="space-y-4">
@@ -106,10 +140,23 @@ function JournalForm({ accounts, branches, onSaved }: { accounts: Account[]; bra
 }
 
 function ActionHeader({ title, action, onClick }: { title: string; action?: string; onClick: () => void }) { return <div className="flex items-center justify-between"><h2 className="font-semibold">{title}</h2>{action && <button onClick={onClick} className="rounded-lg bg-blue-600 px-3 py-2 text-sm text-white">{action}</button>}</div>; }
-function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) { return <button onClick={onClick} className={`flex items-center gap-2 border-b-2 px-4 py-3 text-sm ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-neutral-500'}`}>{children}</button>; }
-function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="grid gap-1 text-sm">{label}<input required className="rounded-lg border bg-transparent px-3 py-2" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
-function Select({ label, value, options, labels = {}, required = true, onChange }: { label: string; value: string; options: string[]; labels?: Record<string,string>; required?: boolean; onChange: (value: string) => void }) { return <label className="grid gap-1 text-sm">{label}<select required={required} className="rounded-lg border bg-transparent px-3 py-2" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option} value={option}>{labels[option] || option || 'GLOBAL / pilih'}</option>)}</select></label>; }
+function TabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) { return <button onClick={onClick} className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition ${active ? 'bg-white text-blue-600 shadow-sm dark:bg-neutral-800 dark:text-blue-400' : 'text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-200'}`}>{children}</button>; }
+function Input({ label, value, onChange, type = 'text' }: { label: string; value: string; onChange: (value: string) => void; type?: string }) { return <label className="grid gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-200">{label}<input required className="h-11 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-neutral-700 dark:bg-neutral-950" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></label>; }
+function Select({ label, value, options, labels = {}, required = true, onChange }: { label: string; value: string; options: string[]; labels?: Record<string,string>; required?: boolean; onChange: (value: string) => void }) { return <label className="grid gap-1.5 text-sm font-medium text-neutral-700 dark:text-neutral-200">{label}<select required={required} className="h-11 rounded-xl border border-neutral-300 bg-white px-3 text-sm font-normal outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-neutral-700 dark:bg-neutral-950" value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option key={option} value={option}>{labels[option] || option || 'GLOBAL / pilih'}</option>)}</select></label>; }
 function Status({ value }: { value: string }) { return <span className={`rounded-full px-2 py-1 text-xs ${value === 'OPEN' ? 'bg-green-100 text-green-700' : value === 'LOCKED' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{value}</span>; }
 function SmallButton({ onClick, children }: { onClick: () => void; children: React.ReactNode }) { return <button onClick={onClick} className="rounded border px-2 py-1 text-xs dark:border-neutral-700">{children}</button>; }
 function Th({ children }: { children: React.ReactNode }) { return <th className="px-4 py-3 font-medium">{children}</th>; }
 function Td({ children }: { children: React.ReactNode }) { return <td className="px-4 py-3">{children}</td>; }
+
+function MetricCard({ icon, label, value, hint, tone }: { icon: React.ReactNode; label: string; value: number; hint: string; tone: 'blue' | 'emerald' | 'violet' | 'amber' }) {
+  const tones = { blue: 'bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400', emerald: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400', violet: 'bg-violet-100 text-violet-600 dark:bg-violet-950 dark:text-violet-400', amber: 'bg-amber-100 text-amber-600 dark:bg-amber-950 dark:text-amber-400' };
+  return <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-neutral-800 dark:bg-neutral-900"><div className="flex items-start justify-between"><div><p className="text-xs font-medium text-neutral-500">{label}</p><p className="mt-1 text-2xl font-bold tracking-tight text-neutral-950 dark:text-white">{value}</p></div><div className={`rounded-xl p-2.5 ${tones[tone]}`}>{icon}</div></div><p className="mt-3 text-xs text-neutral-500">{hint}</p></div>;
+}
+function Badge({ label, tone }: { label: string; tone: 'green' | 'blue' | 'slate' | 'red' }) {
+  const tones = { green: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', blue: 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300', slate: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300', red: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' };
+  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${tones[tone]}`}>{label}</span>;
+}
+function TypeBadge({ type }: { type: Account['type'] }) {
+  const tones: Record<Account['type'], string> = { ASSET: 'bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300', LIABILITY: 'bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-300', EQUITY: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300', REVENUE: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300', EXPENSE: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' };
+  return <span className={`inline-flex rounded-lg px-2 py-1 text-[11px] font-bold tracking-wide ${tones[type]}`}>{type}</span>;
+}

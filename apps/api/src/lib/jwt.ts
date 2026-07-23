@@ -21,6 +21,7 @@ export interface JwtPayload {
   adminManagerAccessScope?: string | null;
   fullName: string;
   staffCode: string | null;
+  roleTemplateName?: string | null;
   branches?: string[]; // Multi-branch assignment for staff
   impersonating?: ImpersonationData;
 }

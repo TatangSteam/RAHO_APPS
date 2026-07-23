@@ -7,11 +7,17 @@ import { branchesApi, type Branch } from '@/lib/api/branchesApi';
 import { cashBankApi, type CashBankAccount } from '@/lib/cashBankApi';
 import { purchasingApi, type PurchaseOrder, type PurchaseRequest, type Supplier, type SupplierInvoice } from '@/lib/purchasingApi';
 import { showToast } from '@/lib/toast';
+import { useAuthStore } from '@/stores/authStore';
 
 type MasterProduct = { id: string; sku: string; name: string; baseUnit?: string; unit?: string; isActive?: boolean };
 type PrLine = { masterProductId: string; requestedQty: string; estimatedUnitCost: string };
 
 export default function PurchasingPage() {
+  const user = useAuthStore((state) => state.user);
+  const isFinance =
+    user?.roleTemplateName === 'Finance' ||
+    user?.staffCode?.startsWith('FN-') === true ||
+    user?.email.toLowerCase() === 'finance@raho.id';
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [requests, setRequests] = useState<PurchaseRequest[]>([]);
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -23,6 +29,7 @@ export default function PurchasingPage() {
   const [loading, setLoading] = useState(true);
   const [showCreatePr, setShowCreatePr] = useState(false);
   const [approvalPr, setApprovalPr] = useState<PurchaseRequest | null>(null);
+  const [createPoPr, setCreatePoPr] = useState<PurchaseRequest | null>(null);
 
   const reload = async () => {
     setLoading(true);
@@ -56,8 +63,8 @@ export default function PurchasingPage() {
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header>
-      <h1 className="flex items-center gap-2 text-2xl font-semibold"><ShoppingCart /> Purchasing & Accounts Payable</h1>
-      <p className="mt-1 text-sm text-neutral-500">Alur auditabel PR → PO → Goods Receipt/GRNI → supplier invoice/AP → pembayaran kas/bank.</p>
+      <h1 className="flex items-center gap-2 text-2xl font-semibold text-neutral-950 dark:text-neutral-50"><ShoppingCart className="text-blue-600 dark:text-blue-400" /> Purchasing & Accounts Payable</h1>
+      <p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">Alur auditabel PR → PO → Goods Receipt/GRNI → supplier invoice/AP → pembayaran kas/bank.</p>
     </header>
     <div className="flex gap-2">{(['PR','PO','AP','SUPPLIER'] as const).map((value) =>
       <button key={value} onClick={() => setTab(value)} className={`rounded-lg px-4 py-2 text-sm ${tab === value ? 'bg-blue-600 text-white' : 'border'}`}>{value === 'SUPPLIER' ? 'Supplier' : value}</button>)}
@@ -66,7 +73,7 @@ export default function PurchasingPage() {
     {loading ? <p>Memuat…</p> : <>
       {tab === 'PR' && <section className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="font-semibold">Purchase Request</h2><p className="text-sm text-neutral-500">Maker membuat dan mengajukan PR; approver yang berbeda memberikan keputusan.</p></div>
+          <div><h2 className="font-semibold text-neutral-950 dark:text-neutral-50">Purchase Request</h2><p className="text-sm text-neutral-600 dark:text-neutral-300">{isFinance ? 'Finance mengelola PR secara mandiri. Finalisasi langsung menyetujui seluruh quantity.' : 'Maker membuat dan mengajukan PR; approver yang berbeda memberikan keputusan.'}</p></div>
           <button onClick={() => setShowCreatePr(true)} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white"><Plus size={16}/> Buat PR</button>
         </div>
         <Table headers={['PR','Tanggal','Keterangan','Maker','Status','Aksi']}>
@@ -77,9 +84,9 @@ export default function PurchasingPage() {
             <Cell>{row.creator?.email || '-'}</Cell>
             <Cell><Status value={row.status}/></Cell>
             <Cell><div className="flex flex-wrap gap-2">
-              {['DRAFT','REJECTED'].includes(row.status) && <Small onClick={() => act(() => purchasingApi.submitRequest(row.id), 'PR diajukan untuk persetujuan.')}>Ajukan</Small>}
-              {row.status === 'SUBMITTED' && <><Small onClick={() => setApprovalPr(row)}>Review</Small><Small onClick={() => { const reason = prompt('Alasan penolakan (minimal 3 karakter)'); if (reason) void act(() => purchasingApi.rejectRequest(row.id, reason), 'PR ditolak.'); }}>Tolak</Small></>}
-              {row.status === 'APPROVED' && <Small onClick={() => { const supplierId = promptSupplier(suppliers); if (supplierId) void act(() => purchasingApi.createOrder(row.id, supplierId), 'PO diterbitkan.'); }}>Buat PO</Small>}
+              {['DRAFT','REJECTED'].includes(row.status) && <Small onClick={() => act(() => purchasingApi.submitRequest(row.id), isFinance ? 'PR langsung disetujui dan siap dibuatkan PO.' : 'PR diajukan untuk persetujuan.')}>{isFinance ? 'Finalisasi PR' : 'Ajukan'}</Small>}
+              {row.status === 'SUBMITTED' && <><Small onClick={() => setApprovalPr(row)}>{isFinance ? 'Finalisasi' : 'Review'}</Small>{!isFinance && <Small onClick={() => { const reason = prompt('Alasan penolakan (minimal 3 karakter)'); if (reason) void act(() => purchasingApi.rejectRequest(row.id, reason), 'PR ditolak.'); }}>Tolak</Small>}</>}
+              {row.status === 'APPROVED' && <Small onClick={() => setCreatePoPr(row)}>Buat PO</Small>}
             </div></Cell>
           </tr>)}
         </Table>
@@ -90,7 +97,8 @@ export default function PurchasingPage() {
     </>}
 
     {showCreatePr && <CreatePrModal branches={branches} products={products} onClose={() => setShowCreatePr(false)} onSaved={async () => { setShowCreatePr(false); await reload(); }}/>}
-    {approvalPr && <ApprovalModal request={approvalPr} onClose={() => setApprovalPr(null)} onApproved={async () => { setApprovalPr(null); await reload(); }}/>}
+    {approvalPr && <ApprovalModal request={approvalPr} isFinance={isFinance} onClose={() => setApprovalPr(null)} onApproved={async () => { setApprovalPr(null); await reload(); }}/>}
+    {createPoPr && <CreatePoModal request={createPoPr} suppliers={suppliers} onClose={() => setCreatePoPr(null)} onSaved={async () => { setCreatePoPr(null); setTab('PO'); await reload(); }}/>}
   </div>;
 }
 
@@ -130,8 +138,27 @@ function CreatePrModal({ branches, products, onClose, onSaved }: { branches: Bra
         {lines.map((line, index) => <div key={index} className="grid gap-2 rounded-lg border p-3 md:grid-cols-[1fr_120px_180px_auto]">
           <select required value={line.masterProductId} onChange={(e) => setLine(index, { masterProductId: e.target.value })} className={inputClass}><option value="">Pilih produk</option>{products.filter((p) => !lines.some((l, i) => i !== index && l.masterProductId === p.id)).map((row) => <option key={row.id} value={row.id}>{row.sku} — {row.name} ({row.baseUnit || row.unit || '-'})</option>)}</select>
           <input required type="number" min="0.0001" step="0.0001" value={line.requestedQty} onChange={(e) => setLine(index, { requestedQty: e.target.value })} className={inputClass} placeholder="Qty"/>
-          <input required type="number" min="0" step="0.0001" value={line.estimatedUnitCost} onChange={(e) => setLine(index, { estimatedUnitCost: e.target.value })} className={inputClass} placeholder="Estimasi harga/unit"/>
-          <button type="button" disabled={lines.length === 1} onClick={() => setLines((old) => old.filter((_, i) => i !== index))} className="px-2 text-red-600 disabled:opacity-30">Hapus</button>
+          <div className="relative">
+            <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-medium text-neutral-500 dark:text-neutral-400">Rp</span>
+            <input
+              required
+              type="text"
+              inputMode="numeric"
+              value={formatRupiahInput(line.estimatedUnitCost)}
+              onChange={(e) => setLine(index, { estimatedUnitCost: onlyDigits(e.target.value) })}
+              className={`${inputClass} pl-10 text-right tabular-nums`}
+              placeholder="0"
+              aria-label="Estimasi harga per unit"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={lines.length === 1}
+            onClick={() => setLines((old) => old.filter((_, i) => i !== index))}
+            className="rounded-lg border border-red-600 bg-red-50 px-3 py-2 font-semibold text-red-700 shadow-sm transition-colors hover:bg-red-600 hover:text-white disabled:cursor-not-allowed disabled:border-neutral-400 disabled:bg-neutral-100 disabled:text-neutral-500 disabled:shadow-none dark:border-red-500 dark:bg-red-950/60 dark:text-red-300 dark:hover:bg-red-600 dark:hover:text-white dark:disabled:border-neutral-700 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
+          >
+            Hapus
+          </button>
         </div>)}
       </div>
       <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2">Batal</button><button disabled={saving || !branches.length || !products.length} className="rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Menyimpan…' : 'Simpan DRAFT'}</button></div>
@@ -139,7 +166,7 @@ function CreatePrModal({ branches, products, onClose, onSaved }: { branches: Bra
   </Modal>;
 }
 
-function ApprovalModal({ request, onClose, onApproved }: { request: PurchaseRequest; onClose: () => void; onApproved: () => Promise<void> }) {
+function ApprovalModal({ request, isFinance, onClose, onApproved }: { request: PurchaseRequest; isFinance: boolean; onClose: () => void; onApproved: () => Promise<void> }) {
   const [quantities, setQuantities] = useState<Record<string, string>>(Object.fromEntries(request.items.map((item) => [item.id, item.requestedQty])));
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
@@ -155,14 +182,58 @@ function ApprovalModal({ request, onClose, onApproved }: { request: PurchaseRequ
     <div className="space-y-4">
       {request.items.map((item) => <div key={item.id} className="grid items-end gap-3 rounded-lg border p-3 md:grid-cols-[1fr_180px]"><div><b>{item.masterProduct?.sku || 'Item'} — {item.masterProduct?.name || item.description}</b><small className="block text-neutral-500">Diminta: {item.requestedQty} {item.masterProduct?.baseUnit || item.masterProduct?.unit || ''}</small></div><Field label="Quantity disetujui"><input type="number" min="0" step="0.0001" value={quantities[item.id]} onChange={(e) => setQuantities((old) => ({ ...old, [item.id]: e.target.value }))} className={inputClass}/></Field></div>)}
       <Field label="Catatan approver"><textarea value={note} onChange={(e) => setNote(e.target.value)} className={inputClass} rows={3} placeholder="Opsional"/></Field>
-      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">Maker tidak boleh menyetujui PR buatannya sendiri. Server akan menolak percobaan self-approval.</div>
-      <div className="flex justify-end gap-2"><button onClick={onClose} className="rounded-lg border px-4 py-2">Batal</button><button disabled={saving} onClick={() => void approve()} className="rounded-lg bg-emerald-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Memproses…' : 'Setujui PR'}</button></div>
+      <div className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">{isFinance ? 'Finance bertanggung jawab penuh. Finalisasi langsung menyetujui PR tanpa approval role lain.' : 'Maker tidak boleh menyetujui PR buatannya sendiri. Server akan menolak percobaan self-approval.'}</div>
+      <div className="flex justify-end gap-2"><button onClick={onClose} className="rounded-lg border px-4 py-2">Batal</button><button disabled={saving} onClick={() => void approve()} className="rounded-lg bg-emerald-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Memproses…' : isFinance ? 'Finalisasi PR' : 'Setujui PR'}</button></div>
     </div>
   </Modal>;
 }
 
+function CreatePoModal({ request, suppliers, onClose, onSaved }: { request: PurchaseRequest; suppliers: Supplier[]; onClose: () => void; onSaved: () => Promise<void> }) {
+  const activeSuppliers = suppliers.filter((supplier) => supplier.status === 'ACTIVE');
+  const [supplierId, setSupplierId] = useState(activeSuppliers[0]?.id || '');
+  const [saving, setSaving] = useState(false);
+  const total = request.items.reduce(
+    (sum, item) => sum + Number(item.requestedQty) * Number(item.estimatedUnitCost || 0),
+    0,
+  );
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    try {
+      const result = await purchasingApi.createOrder(request.id, supplierId);
+      showToast.success(`PO ${result.purchaseOrder.poNumber} berhasil dibuat.`);
+      await onSaved();
+    } catch (error: any) {
+      showToast.error(apiMessage(error, 'Gagal membuat Purchase Order.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <Modal title="Buat Purchase Order" subtitle={`Konversi ${request.requestNumber} menjadi PO.`} onClose={onClose}>
+    <form onSubmit={submit} className="space-y-4">
+      <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+        <div className="text-sm text-blue-700 dark:text-blue-300">Nomor PO</div>
+        <div className="mt-1 font-semibold text-blue-950 dark:text-blue-100">Dibuat otomatis setelah disimpan</div>
+      </div>
+      <Field label="Supplier aktif">
+        <select required value={supplierId} onChange={(event) => setSupplierId(event.target.value)} className={inputClass}>
+          <option value="">Pilih supplier</option>
+          {activeSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}
+        </select>
+      </Field>
+      <div className="rounded-xl border p-4 text-sm">
+        <div className="mb-2 font-semibold">Ringkasan PR</div>
+        {request.items.map((item) => <div key={item.id} className="flex justify-between gap-4 border-t py-2 first:border-t-0"><span>{item.masterProduct?.sku || item.description} · {item.requestedQty}</span><span className="tabular-nums">Rp {money(String(Number(item.requestedQty) * Number(item.estimatedUnitCost || 0)))}</span></div>)}
+        <div className="flex justify-between border-t pt-3 font-semibold"><span>Total PO</span><span className="tabular-nums">Rp {money(String(total))}</span></div>
+      </div>
+      {activeSuppliers.length === 0 && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-300">Tidak ada supplier aktif. Aktifkan atau buat supplier terlebih dahulu.</p>}
+      <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="rounded-lg border px-4 py-2">Batal</button><button disabled={saving || !supplierId} className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white disabled:opacity-50">{saving ? 'Membuat PO…' : 'Buat PO Otomatis'}</button></div>
+    </form>
+  </Modal>;
+}
+
 function Modal({ title, subtitle, onClose, children }: { title: string; subtitle: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-2xl dark:bg-neutral-900"><div className="mb-5 flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold">{title}</h2><p className="text-sm text-neutral-500">{subtitle}</p></div><button onClick={onClose} aria-label="Tutup"><X/></button></div>{children}</div></div>;
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"><div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-neutral-200 bg-white p-5 text-neutral-950 shadow-2xl dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-50"><div className="mb-5 flex items-start justify-between gap-4"><div><h2 className="text-xl font-semibold text-neutral-950 dark:text-white">{title}</h2><p className="mt-1 text-sm text-neutral-600 dark:text-neutral-300">{subtitle}</p></div><button onClick={onClose} aria-label="Tutup" className="rounded-lg p-1 text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800"><X/></button></div>{children}</div></div>;
 }
 function SupplierForm({ onSaved }: { onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({ code: '', name: '', paymentTermsDays: '30' });
@@ -172,12 +243,13 @@ function SupplierForm({ onSaved }: { onSaved: () => Promise<void> }) {
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) { return <div className="overflow-x-auto rounded-xl border bg-white dark:bg-neutral-900"><table className="w-full text-sm"><thead><tr className="text-left">{headers.map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
 function Cell({ children }: { children: React.ReactNode }) { return <td className="p-3 align-top">{children}</td>; }
 function Small({ children, onClick }: { children: React.ReactNode; onClick: () => void }) { return <button onClick={onClick} className="rounded border px-2 py-1 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800">{children}</button>; }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block space-y-1"><span className="text-sm font-medium">{label}</span>{children}</label>; }
+function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="block space-y-1"><span className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">{label}</span>{children}</label>; }
 function Status({ value }: { value: string }) { const color = value === 'APPROVED' || value === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : value === 'REJECTED' || value === 'BLOCKED' ? 'bg-red-100 text-red-700' : value === 'SUBMITTED' ? 'bg-amber-100 text-amber-700' : 'bg-neutral-100 text-neutral-700'; return <span className={`rounded-full px-2 py-1 text-xs font-medium ${color}`}>{value}</span>; }
-const inputClass = 'w-full rounded-lg border bg-transparent px-3 py-2';
+const inputClass = 'w-full rounded-lg border border-neutral-400 bg-white px-3 py-2 text-neutral-950 placeholder:text-neutral-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 [color-scheme:light] dark:border-neutral-600 dark:bg-neutral-950 dark:text-neutral-50 dark:placeholder:text-neutral-400 dark:[color-scheme:dark]';
 const date = (value: string) => new Date(value).toLocaleDateString('id-ID');
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: string) => new Intl.NumberFormat('id-ID').format(Number(value));
+const onlyDigits = (value: string) => value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+const formatRupiahInput = (value: string) => value ? new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Number(value)) : '';
 const apiMessage = (error: any, fallback: string) => error.response?.data?.error?.message || fallback;
-function promptSupplier(rows: Supplier[]) { const code = prompt(`Kode supplier:\n${rows.filter((r) => r.status === 'ACTIVE').map((r) => `${r.code} — ${r.name}`).join('\n')}`)?.toUpperCase(); return rows.find((row) => row.code === code)?.id; }
 function promptCash(rows: CashBankAccount[]) { const code = prompt(`Kode kas/bank:\n${rows.map((r) => `${r.code} — ${r.name}`).join('\n')}`)?.toUpperCase(); return rows.find((row) => row.code === code)?.id; }

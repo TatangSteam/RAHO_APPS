@@ -14,6 +14,7 @@ export interface AuthUser {
   adminManagerAccessScope?: string | null;
   fullName: string;
   staffCode: string | null;
+  roleTemplateName?: string | null;
 }
 
 function getAuditedBranchId(user: { role: string; branchId: string | null }) {
@@ -28,6 +29,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     include: {
       profile: { select: { fullName: true, avatarUrl: true } },
       branch: { select: { id: true, branchCode: true } },
+      roleTemplate: { select: { name: true } },
     },
   });
 
@@ -118,6 +120,7 @@ export async function loginService(input: LoginInput, ipAddress?: string, userAg
     adminManagerAccessScope: user.role === 'ADMIN_MANAGER' ? user.adminManagerAccessScope : null,
     fullName: user.profile?.fullName ?? '',
     staffCode: user.staffCode,
+    roleTemplateName: user.roleTemplate?.name ?? null,
   };
 
   const tokens = generateTokenPair(payload);
@@ -145,6 +148,7 @@ export async function refreshService(refreshToken: string) {
     include: {
       profile: { select: { fullName: true } },
       branch: { select: { branchCode: true } },
+      roleTemplate: { select: { name: true } },
     },
   });
 
@@ -161,6 +165,7 @@ export async function refreshService(refreshToken: string) {
     adminManagerAccessScope: user.role === 'ADMIN_MANAGER' ? user.adminManagerAccessScope : null,
     fullName: user.profile?.fullName ?? '',
     staffCode: user.staffCode,
+    roleTemplateName: user.roleTemplate?.name ?? null,
   };
 
   return generateTokenPair(payload);
