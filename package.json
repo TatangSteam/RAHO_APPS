@@ -6,7 +6,7 @@
   "scripts": {
     "dev:api": "npm run dev --prefix apps/api",
     "dev:web": "npm run dev --prefix apps/web",
-    "dev": "start-servers",
+    "dev": "concurrently --kill-others-on-fail --names API,WEB --prefix-colors blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
     "build:api": "npm run build --prefix apps/api",
     "build:web": "npm run build --prefix apps/web",
     "db:migrate": "npm run db:migrate --prefix apps/api",
@@ -32,6 +32,7 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "@types/node": "^25.6.0"
+    "@types/node": "^25.6.0",
+    "concurrently": "^9.2.4"
   }
 }

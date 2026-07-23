@@ -4,18 +4,18 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
-  padding: 24px;
-  background: #f9fafb;
-  min-height: 100vh;
+  width: 100%;
+  color: var(--text-primary);
 }
 
 /* ── Header ─────────────────────────────────────────────────── */
 
 .header {
-  background: white;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .headerContent {
@@ -28,13 +28,13 @@
 .headerTitle h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 4px 0;
 }
 
 .headerTitle p {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -79,19 +79,21 @@
 }
 
 .statCard {
-  background: white;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   align-items: center;
   gap: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   transition: all 0.2s ease;
 }
 
 .statCard:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-color: var(--border-secondary);
+  box-shadow: var(--shadow-md);
 }
 
 .statIcon {
@@ -110,27 +112,28 @@
 .statValue {
   font-size: 28px;
   font-weight: 700;
-  color: #111827;
+  color: var(--text-primary);
   line-height: 1;
   margin-bottom: 4px;
 }
 
 .statLabel {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
 /* ── Filters ────────────────────────────────────────────────── */
 
 .filtersSection {
-  background: white;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   gap: 16px;
   align-items: center;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   flex-wrap: wrap;
 }
 
@@ -141,20 +144,20 @@
   align-items: center;
   gap: 10px;
   padding: 10px 16px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-input);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   transition: all 0.2s ease;
 }
 
 .searchBox:focus-within {
   border-color: #3b82f6;
-  background: white;
+  background: var(--surface-card);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .searchBox svg {
-  color: #9ca3af;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -163,12 +166,12 @@
   border: none;
   background: transparent;
   font-size: 14px;
-  color: #111827;
+  color: var(--text-primary);
   outline: none;
 }
 
 .searchBox input::placeholder {
-  color: #9ca3af;
+  color: var(--text-muted);
 }
 
 .filterGroup {
@@ -178,17 +181,17 @@
 }
 
 .filterGroup svg {
-  color: #6b7280;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .filterGroup select {
   padding: 10px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
-  background: white;
+  background: var(--surface-input);
   font-size: 14px;
-  color: #111827;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 180px;
@@ -207,9 +210,10 @@
 /* ── Table Container ────────────────────────────────────────── */
 
 .tableContainer {
-  background: white;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
@@ -242,20 +246,20 @@
 
 .loadingState p,
 .emptyState p {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 14px;
   margin: 8px 0 0 0;
 }
 
 .emptyState svg {
-  color: #d1d5db;
+  color: var(--text-muted);
   margin-bottom: 16px;
 }
 
 .emptyState h3 {
   font-size: 18px;
   font-weight: 600;
-  color: #111827;
+  color: var(--text-primary);
   margin: 0 0 8px 0;
 }
 
@@ -271,8 +275,8 @@
 }
 
 .branchAdminsTable thead {
-  background: #f9fafb;
-  border-bottom: 2px solid #e5e7eb;
+  background: var(--surface-secondary);
+  border-bottom: 2px solid var(--surface-border);
 }
 
 .branchAdminsTable th {
@@ -280,18 +284,18 @@
   text-align: left;
   font-size: 13px;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .branchAdminsTable tbody tr {
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--surface-border);
   transition: background 0.15s ease;
 }
 
 .branchAdminsTable tbody tr:hover {
-  background: #f9fafb;
+  background: var(--surface-hover);
 }
 
 .branchAdminsTable tbody tr:last-child {
@@ -301,7 +305,7 @@
 .branchAdminsTable td {
   padding: 16px 20px;
   font-size: 14px;
-  color: #374151;
+  color: var(--text-primary);
   vertical-align: middle;
 }
 
@@ -329,11 +333,11 @@
 
 .fullName {
   font-weight: 500;
-  color: #111827;
+  color: var(--text-primary);
 }
 
 .email {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -346,15 +350,15 @@
 .branchCode {
   font-size: 11px;
   font-weight: 600;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
   padding: 4px 8px;
   border-radius: 4px;
 }
 
 .branchName {
   font-size: 13px;
-  color: #374151;
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -369,17 +373,17 @@
 }
 
 .statusBadge.active {
-  background: #d1fae5;
-  color: #065f46;
+  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
 }
 
 .statusBadge.inactive {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.14);
+  color: #ef4444;
 }
 
 .date {
-  color: #6b7280;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -402,9 +406,9 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--surface-border);
   border-radius: 6px;
-  background: white;
+  background: var(--surface-card);
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 14px;
@@ -412,7 +416,7 @@
 
 .actionBtn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 
 .actionBtn.edit {
@@ -421,7 +425,7 @@
 }
 
 .actionBtn.edit:hover {
-  background: #eff6ff;
+  background: rgba(59, 130, 246, 0.12);
 }
 
 .actionBtn.deactivate {
@@ -430,7 +434,7 @@
 }
 
 .actionBtn.deactivate:hover {
-  background: #fef2f2;
+  background: rgba(239, 68, 68, 0.12);
 }
 
 /* ── Pagination ─────────────────────────────────────────────── */
@@ -440,7 +444,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--surface-border);
 }
 
 .pageBtn {
@@ -448,18 +452,18 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: white;
-  border: 1px solid #e5e7eb;
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .pageBtn:hover:not(:disabled) {
-  background: #f9fafb;
+  background: var(--surface-hover);
   border-color: #3b82f6;
   color: #3b82f6;
 }
@@ -471,7 +475,7 @@
 
 .pageInfo {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -484,10 +488,6 @@
 }
 
 @media (max-width: 768px) {
-  .branchAdminsTab {
-    padding: 16px;
-  }
-
   .headerContent {
     flex-direction: column;
     align-items: stretch;
