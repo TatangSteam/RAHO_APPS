@@ -7,6 +7,8 @@
 **Tanggal technical acceptance:** 22 Juli 2026 (Asia/Jakarta)
 **Status dokumen:** TECHNICAL PASS / BUSINESS SIGN-OFF PENDING
 
+**User test scenarios:** [Sprint 1-11](./UAT_USER_TEST_SCENARIOS_SPRINT_1_11.md)
+
 ## Acceptance Evidence
 
 | AC | Skenario | Automated evidence | Technical status | Business signer |
@@ -24,6 +26,7 @@
 - [x] Quantity, bucket, FIFO layer, mutation chain, dan valuation control tersedia pada go-live audit.
 - [x] Backup dan restore database tervalidasi pada target disposable.
 - [x] Backup dan restore object storage tervalidasi pada bucket disposable.
+- [ ] Seluruh 65 user test scenario Sprint 1-11 telah dieksekusi dan berstatus PASS.
 - [ ] Go-live audit pada snapshot data UAT final berstatus `READY`.
 - [ ] Trial Balance, opening balance, kas/bank, dan inventory valuation ditandatangani pemilik data.
 - [ ] Permission matrix diuji oleh perwakilan setiap role pada environment UAT.
