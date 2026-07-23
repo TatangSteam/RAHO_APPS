@@ -90,9 +90,13 @@ export function getDefaultRoute(role: Role, adminManagerAccessScope?: AdminManag
   if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
     return '/members';
   }
+
+  if (role === 'ADMIN_LOGISTIK') {
+    return '/inventory/master-data';
+  }
   
   // All staff roles get main dashboard
-  if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'].includes(role)) {
+  if (['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'].includes(role)) {
     return '/dashboard';
   }
   

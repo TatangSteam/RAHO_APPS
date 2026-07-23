@@ -65,6 +65,11 @@ export default function DashboardPage() {
       router.push('/dashboard/admin-manager');
       return;
     }
+
+    if (user.role === 'ADMIN_LOGISTIK') {
+      router.replace('/inventory/master-data');
+      return;
+    }
     
     // Only ADMIN_CABANG can access this dashboard
     if (user.role !== 'ADMIN_CABANG') {
@@ -250,4 +255,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
