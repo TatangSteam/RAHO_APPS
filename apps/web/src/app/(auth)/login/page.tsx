@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -25,7 +24,6 @@ type LoginForm = z.infer<typeof loginSchema>;
 // ── Component ─────────────────────────────────────────────────
 
 export default function LoginPage() {
-  const router = useRouter();
   const { setAuth } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -74,9 +72,10 @@ export default function LoginPage() {
       );
       document.cookie = `raho-auth-token=${cookiePayload}; path=/; max-age=${7 * 24 * 3600}; SameSite=Lax`;
 
-      // Redirect based on role
-      router.push(getDefaultRoute(result.user.role, result.user.adminManagerAccessScope));
-      router.refresh();
+      // Use one full navigation after the cookie and persisted auth state are ready.
+      // Calling router.push() followed by router.refresh() can refresh /login first,
+      // causing middleware to send ADMIN_LOGISTIK through the generic /dashboard route.
+      window.location.replace(getDefaultRoute(result.user.role, result.user.adminManagerAccessScope));
     } catch (err: any) {
       const code = getApiErrorCode(err);
       if (code === 'RATE_LIMIT_EXCEEDED') {

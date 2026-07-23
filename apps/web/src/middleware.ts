@@ -34,6 +34,13 @@ const STAFF_ROUTES = [
   '/referrals',
 ];
 
+function getRoleHomePath(role: string | null, adminManagerAccessScope: string | null): string {
+  if (role === 'MEMBER') return '/me/dashboard';
+  if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') return '/members';
+  if (role === 'ADMIN_LOGISTIK') return '/inventory/master-data';
+  return '/dashboard';
+}
+
 export function middleware(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
@@ -79,11 +86,7 @@ export function middleware(request: NextRequest): NextResponse {
   // Already logged in → redirect away from login page
   if (isPublicRoute) {
     middlewareLog('[Middleware] Public route, redirecting logged-in user');
-    if (role === 'MEMBER') return NextResponse.redirect(new URL('/me/dashboard', request.url));
-    if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
-      return NextResponse.redirect(new URL('/members', request.url));
-    }
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL(getRoleHomePath(role, adminManagerAccessScope), request.url));
   }
 
   // MEMBER trying to access staff routes
@@ -110,10 +113,7 @@ export function middleware(request: NextRequest): NextResponse {
   // Staff trying to access member-only routes
   if (role !== 'MEMBER' && isMemberRoute) {
     middlewareLog('[Middleware] Staff trying to access member route, redirecting');
-    if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') {
-      return NextResponse.redirect(new URL('/members', request.url));
-    }
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL(getRoleHomePath(role, adminManagerAccessScope), request.url));
   }
 
   middlewareLog('[Middleware] Allowing access to:', pathname);
