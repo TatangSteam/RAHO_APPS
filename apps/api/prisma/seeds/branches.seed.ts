@@ -142,7 +142,7 @@ export async function assignBranchesToManager(prisma: PrismaClient) {
   console.log('🔗 Assigning branches to Admin Manager...');
 
   const adminManager = await prisma.user.findUnique({
-    where: { email: 'manager@raho.id' },
+    where: { email: 'manager1@raho.id' },
   });
 
   if (!adminManager) {

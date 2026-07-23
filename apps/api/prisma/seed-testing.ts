@@ -308,7 +308,7 @@ async function main(): Promise<void> {
     // Log all users
     const allUsersForAudit = await prisma.user.findMany();
     for (const user of allUsersForAudit) {
-      if (user.email !== 'superadmin@raho.id' && user.email !== 'manager@raho.id') {
+      if (!['superadmin@raho.id', 'manager1@raho.id', 'manager2@raho.id'].includes(user.email)) {
         const shouldIncludeBranch = user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER';
         await createAuditLog(
           superAdminUser.id, 
@@ -365,36 +365,38 @@ async function main(): Promise<void> {
     console.log('📧 Test accounts:');
     console.log('  ADMIN ACCOUNTS:');
     console.log('    superadmin@raho.id   → SuP3r4Dm1n  [SUPER_ADMIN]');
-    console.log('    manager@raho.id      → Manager@123     [ADMIN_MANAGER]');
-    console.log('  JAKARTA BRANCH:');
-    console.log('    admincabang.jakarta@raho.id  → AdminCabang@123 [ADMIN_CABANG]');
-    console.log('    adminlayanan.jakarta@raho.id → AdminLayanan@123[ADMIN_LAYANAN]');
-    console.log('    dokter.jakarta@raho.id       → Dokter@123      [DOCTOR]');
-    console.log('    nakes.jakarta@raho.id        → Nakes@123       [NURSE]');
-    console.log('  BANDUNG BRANCH:');
-    console.log('    admincabang.bandung@raho.id  → AdminCabang@123 [ADMIN_CABANG]');
-    console.log('    adminlayanan.bandung@raho.id → AdminLayanan@123[ADMIN_LAYANAN]');
-    console.log('    dokter.bandung@raho.id       → Dokter@123      [DOCTOR]');
-    console.log('    nakes.bandung@raho.id        → Nakes@123       [NURSE]');
-    console.log('  SURABAYA BRANCH:');
-    console.log('    admincabang.surabaya@raho.id  → AdminCabang@123 [ADMIN_CABANG]');
-    console.log('    adminlayanan.surabaya@raho.id → AdminLayanan@123[ADMIN_LAYANAN]');
-    console.log('    dokter.surabaya@raho.id       → Dokter@123      [DOCTOR]');
-    console.log('    nakes.surabaya@raho.id        → Nakes@123       [NURSE]');
+    console.log('    manager1@raho.id      → Manager@123       [ADMIN_MANAGER]');
+    console.log('    manager2@raho.id      → Manager@123       [ADMIN_MANAGER]');
+    console.log('    adminlogistik@raho.id → AdminLogistik@123 [ADMIN_LOGISTIK]');
+    console.log('    finance@raho.id       → Finance@123       [FINANCE_DUMMY]');
+    console.log('  BRANCH ADMINS:');
+    console.log('    admincabang.pst@raho.id  → AdminCabang@123  [ADMIN_CABANG]');
+    console.log('    adminlayanan.pst@raho.id → AdminLayanan@123 [ADMIN_LAYANAN]');
+    console.log('    admincabang.bdg@raho.id  → AdminCabang@123  [ADMIN_CABANG]');
+    console.log('    adminlayanan.bdg@raho.id → AdminLayanan@123 [ADMIN_LAYANAN]');
+    console.log('    admincabang.sby@raho.id  → AdminCabang@123  [ADMIN_CABANG]');
+    console.log('    adminlayanan.sby@raho.id → AdminLayanan@123 [ADMIN_LAYANAN]');
+    console.log('  CLINICAL STAFF:');
+    console.log('    dokter@raho.id  → Dokter@123 [DOCTOR]');
+    console.log('    dokter2@raho.id → Dokter@123 [DOCTOR]');
+    console.log('    dokter3@raho.id → Dokter@123 [DOCTOR]');
+    console.log('    nakes@raho.id   → Nakes@123  [NURSE]');
+    console.log('    nakes2@raho.id  → Nakes@123  [NURSE]');
+    console.log('    nakes3@raho.id  → Nakes@123  [NURSE]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');
     console.log(`  • ${3} branches (Jakarta, Bandung, Surabaya)`);
-    console.log(`  • ${2} admin users + ${12} branch staff`);
-    console.log(`  • ${3} referral codes`);
+    console.log(`  • ${17} seeded staff users`);
+    console.log(`  • ${8} referral codes`);
     console.log(`  • Package pricings (BASIC + BOOSTER) for all branches`);
-    console.log(`  • 28 test members with packages`);
+    console.log(`  • 30 test members with packages`);
     console.log(`  • ${invoicesGenerated} invoices`);
     console.log(`  • ${auditLogCount} audit log entries`);
     console.log('\n✅ System is ready for testing!');
     console.log('\n💡 Testing tips:');
     console.log('  • Member accounts: budi.santoso@example.com → member123');
     console.log('  • Test multi-branch by logging in with different branch users');
-    console.log('  • Dashboard testing: admincabang.jakarta@raho.id');
+    console.log('  • Dashboard testing: admincabang.pst@raho.id');
     console.log('  • Audit log testing: superadmin@raho.id');
   } catch (error) {
     console.error('\n❌ Seeding failed:', error);

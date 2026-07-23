@@ -101,15 +101,18 @@ async function main(): Promise<void> {
     console.log('──────────────────────────────────────────');
     console.log('📧 Admin accounts:');
     console.log('  superadmin@raho.id   → SuP3r4Dm1n  [SUPER_ADMIN]');
-    console.log('  manager@raho.id      → Manager@123     [ADMIN_MANAGER]');
+    console.log('  manager1@raho.id      → Manager@123       [ADMIN_MANAGER]');
+    console.log('  manager2@raho.id      → Manager@123       [ADMIN_MANAGER]');
+    console.log('  adminlogistik@raho.id → AdminLogistik@123 [ADMIN_LOGISTIK]');
+    console.log('  finance@raho.id       → Finance@123       [FINANCE_DUMMY]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');
     console.log(`  • ${products.length} master products (sesuai List Barang RAHO)`);
     console.log(`  • ${3} branches (Jakarta, Bandung, Surabaya)`);
-    console.log(`  • ${2} admin users + ${12} branch staff`);
-    console.log(`  • ${3} referral codes`);
+    console.log(`  • ${17} seeded staff users`);
+    console.log(`  • ${8} referral codes`);
     console.log(`  • Package pricings (BASIC + BOOSTER) for all branches`);
-    console.log(`  • 28 test members with packages`);
+    console.log(`  • 30 test members with packages`);
     console.log(`  • ${invoicesGenerated} invoices`);
     
     const auditLogCount = await prisma.auditLog.count();
@@ -264,7 +267,7 @@ async function createAuditLogs(prisma: PrismaClient) {
   // Log all users
   const allUsers = await prisma.user.findMany();
   for (const user of allUsers) {
-    if (user.email !== 'superadmin@raho.id' && user.email !== 'manager@raho.id') {
+    if (!['superadmin@raho.id', 'manager1@raho.id', 'manager2@raho.id'].includes(user.email)) {
       const shouldIncludeBranch = user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN_MANAGER';
       await createAuditLog(
         superAdminUser.id, 
