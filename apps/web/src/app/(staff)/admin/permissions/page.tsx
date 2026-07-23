@@ -25,6 +25,7 @@ export default function PermissionManagementPage() {
   const [selectedBranchIds, setSelectedBranchIds] = useState<Set<string>>(new Set());
   const [selectedUserId, setSelectedUserId] = useState('');
   const [userAccess, setUserAccess] = useState<UserAccess | null>(null);
+  const [userAccessLoading, setUserAccessLoading] = useState(false);
   const [overrides, setOverrides] = useState<Record<string, 'INHERIT' | 'ALLOW' | 'DENY'>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -53,18 +54,27 @@ export default function PermissionManagementPage() {
   useEffect(() => {
     if (!selectedUserId) {
       setUserAccess(null);
+      setUserAccessLoading(false);
       return;
     }
-    iamApi.userAccess(selectedUserId).then((access) => {
-      setUserAccess(access);
-      setSelectedBranchIds(new Set(access.accessibleBranchIds || []));
-      const next: Record<string, 'INHERIT' | 'ALLOW' | 'DENY'> = {};
-      permissions.forEach((permission) => { next[permission.code] = 'INHERIT'; });
-      access.permissionOverrides
-        .filter((item) => !item.branchId)
-        .forEach((item) => { next[item.permission.code] = item.effect; });
-      setOverrides(next);
-    }).catch(() => showToast.error('Gagal memuat akses user.'));
+    setUserAccess(null);
+    setUserAccessLoading(true);
+    iamApi.userAccess(selectedUserId)
+      .then((access) => {
+        setUserAccess(access);
+        setSelectedBranchIds(new Set(access.accessibleBranchIds || []));
+        const next: Record<string, 'INHERIT' | 'ALLOW' | 'DENY'> = {};
+        permissions.forEach((permission) => { next[permission.code] = 'INHERIT'; });
+        access.permissionOverrides
+          .filter((item) => !item.branchId)
+          .forEach((item) => { next[item.permission.code] = item.effect; });
+        setOverrides(next);
+      })
+      .catch(() => {
+        setUserAccess(null);
+        showToast.error('Gagal memuat akses user.');
+      })
+      .finally(() => setUserAccessLoading(false));
   }, [selectedUserId, permissions]);
 
   const grouped = useMemo(() => permissions.reduce<Record<string, Permission[]>>((acc, permission) => {
@@ -144,12 +154,31 @@ export default function PermissionManagementPage() {
             </select>
           </label>
           <label className="grid gap-1 text-sm">Role template
-            <select className="rounded-lg border bg-transparent px-3 py-2" disabled={!userAccess} value={userAccess?.roleTemplateId || ''} onChange={(event) => setUserAccess((current) => current ? { ...current, roleTemplateId: event.target.value || null } : current)}>
-              <option value="">Default sesuai base role</option>
+            <select
+              className="rounded-lg border bg-transparent px-3 py-2 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!userAccess || userAccessLoading}
+              value={userAccess?.roleTemplateId || ''}
+              onChange={(event) => setUserAccess((current) => current ? { ...current, roleTemplateId: event.target.value || null } : current)}
+            >
+              <option value="">
+                {userAccessLoading
+                  ? 'Memuat akses user...'
+                  : selectedUserId
+                    ? 'Default sesuai base role'
+                    : 'Pilih user terlebih dahulu'}
+              </option>
               {templates.filter((item) => item.isActive).map((template) => <option key={template.id} value={template.id}>{template.name}</option>)}
             </select>
           </label>
         </div>
+        {!selectedUserId && (
+          <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+            Pilih user terlebih dahulu untuk mengaktifkan pilihan Role template.
+          </p>
+        )}
+        {userAccessLoading && (
+          <p className="mt-3 text-xs text-neutral-500">Memuat Role template dan permission user…</p>
+        )}
         {userAccess && <div className="mt-5">
           <div className="mb-5">
             <p className="mb-2 text-sm font-medium">Branch scope</p>
