@@ -97,6 +97,7 @@ const ACTION_OPTIONS = [
   'SHIPMENT',
   'RECEIVE_SHIPMENT',
   'STOCK_ADJUSTMENT',
+  'ACCESS_DENIED',
 ];
 
 const MODULE_OPTIONS = [
@@ -113,6 +114,14 @@ const MODULE_OPTIONS = [
   'HARGA_PAKET',
   'REFERRAL',
   'UPLOAD_DOCUMENT',
+  'IAM',
+  'ACCOUNTING',
+  'CASH_BANK',
+  'EXPENSE',
+  'PURCHASING',
+  'ACCOUNTS_PAYABLE',
+  'REVENUE',
+  'PLATFORM',
 ];
 
 const ROLE_OPTIONS = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'];
@@ -145,7 +154,7 @@ function formatJsonValue(value: unknown): string {
 }
 
 function getActionClass(action: string): string {
-  if (['DELETE', 'REJECT_PAYMENT', 'LOGIN_FAILED', 'CANCEL'].includes(action)) {
+  if (['DELETE', 'REJECT_PAYMENT', 'LOGIN_FAILED', 'CANCEL', 'ACCESS_DENIED'].includes(action)) {
     return 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300';
   }
   if (['CREATE', 'VERIFY_PAYMENT', 'COMPLETE', 'RECEIVE_SHIPMENT'].includes(action)) {
@@ -371,6 +380,8 @@ export default function AuditLogsPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
   const [mounted, setMounted] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [canAccess, setCanAccess] = useState(false);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -389,12 +400,12 @@ export default function AuditLogsPage() {
   const [search, setSearch] = useState('');
   const [action, setAction] = useState('');
   const [module, setModule] = useState('');
+  const [actor, setActor] = useState('');
+  const [resource, setResource] = useState('');
   const [role, setRole] = useState('');
   const [branchId, setBranchId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-
-  const canAccess = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const queryParams = useMemo(() => {
     const params: Record<string, string | number> = {
@@ -404,12 +415,14 @@ export default function AuditLogsPage() {
     if (search) params.search = search;
     if (action) params.action = action;
     if (module) params.module = module;
+    if (actor) params.actor = actor;
+    if (resource) params.resource = resource;
     if (role) params.role = role;
     if (branchId) params.branchId = branchId;
     if (startDate) params.startDate = startDate;
     if (endDate) params.endDate = endDate;
     return params;
-  }, [action, branchId, endDate, module, page, role, search, startDate]);
+  }, [action, actor, branchId, endDate, module, page, resource, role, search, startDate]);
 
   const exportParams = useMemo(() => {
     const params = { ...queryParams };
@@ -428,7 +441,7 @@ export default function AuditLogsPage() {
   }, []);
 
   const loadAuditLogs = useCallback(async () => {
-    if (!canAccess) return;
+    if (!accessChecked || !canAccess) return;
 
     try {
       setLoading(true);
@@ -443,7 +456,7 @@ export default function AuditLogsPage() {
     } finally {
       setLoading(false);
     }
-  }, [canAccess, queryParams]);
+  }, [accessChecked, canAccess, queryParams]);
 
   useEffect(() => {
     setMounted(true);
@@ -457,20 +470,33 @@ export default function AuditLogsPage() {
       return;
     }
 
-    if (!canAccess) {
-      showToast.error('Audit log hanya dapat diakses Super Admin dan Admin Manager');
+    let cancelled = false;
+    void api.get('/iam/me').then((response) => {
+      if (cancelled) return;
+      const allowed = (response.data?.data?.permissions || []).includes('AUDIT.READ');
+      setCanAccess(allowed);
+      setAccessChecked(true);
+      if (!allowed) {
+        showToast.error('Permission AUDIT.READ diperlukan');
+        router.push('/dashboard');
+        return;
+      }
+      void loadBranches();
+    }).catch((error: any) => {
+      if (cancelled) return;
+      setAccessChecked(true);
+      showToast.error(error.response?.data?.error?.message || 'Gagal memeriksa akses audit log');
       router.push('/dashboard');
-      return;
-    }
+    });
 
-    loadBranches();
-  }, [accessToken, canAccess, loadBranches, mounted, router, user]);
+    return () => { cancelled = true; };
+  }, [accessToken, loadBranches, mounted, router, user]);
 
   useEffect(() => {
-    if (mounted && canAccess) {
+    if (mounted && accessChecked && canAccess) {
       loadAuditLogs();
     }
-  }, [canAccess, loadAuditLogs, mounted]);
+  }, [accessChecked, canAccess, loadAuditLogs, mounted]);
 
   const applySearch = () => {
     setPage(1);
@@ -482,6 +508,8 @@ export default function AuditLogsPage() {
     setSearch('');
     setAction('');
     setModule('');
+    setActor('');
+    setResource('');
     setRole('');
     setBranchId('');
     setStartDate('');
@@ -528,7 +556,7 @@ export default function AuditLogsPage() {
     }
   };
 
-  if (!mounted) return null;
+  if (!mounted || !accessChecked || !canAccess) return null;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -645,7 +673,35 @@ export default function AuditLogsPage() {
           </select>
         </div>
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
+          <div className="relative">
+            <UserRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              value={actor}
+              onChange={(event) => {
+                setActor(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Actor / email"
+              className="h-10 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:border-amber-500"
+            />
+          </div>
+
+          <div className="relative">
+            <Database className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              type="text"
+              value={resource}
+              onChange={(event) => {
+                setResource(event.target.value);
+                setPage(1);
+              }}
+              placeholder="Resource, contoh Warehouse"
+              className="h-10 w-full rounded-lg border border-neutral-200 bg-white pl-9 pr-3 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-amber-400 dark:border-neutral-800 dark:bg-neutral-950 dark:text-neutral-100 dark:focus:border-amber-500"
+            />
+          </div>
+
           <div className="relative">
             <Building2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
             <select

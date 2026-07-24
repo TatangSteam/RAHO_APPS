@@ -101,25 +101,25 @@ router.post('/homecare-multi-bag-usages/complete', authenticate, requirePermissi
 // MASTER PRODUCTS (for inventory modal)
 // ============================================================
 
-// Get master products for inventory modal (accessible by ADMIN_ROLES)
+// Reading master products is operational access; mutations require manage access.
 router.get(
   '/master-products',
   authenticate,
-  authorize(ADMIN_ROLES),
+  requirePermission(PERMISSIONS.INVENTORY_READ),
   inventoryController.getMasterProducts.bind(inventoryController)
 );
 
 router.post(
   '/master-products',
   authenticate,
-  authorize(ADMIN_ROLES),
+  requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE),
   inventoryMasterController.createProduct.bind(inventoryMasterController)
 );
 
 router.patch(
   '/master-products/:productId',
   authenticate,
-  authorize(ADMIN_ROLES),
+  requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE),
   inventoryMasterController.updateProduct.bind(inventoryMasterController)
 );
 
@@ -128,23 +128,23 @@ router.patch(
 // ============================================================
 
 router.get('/warehouses', authenticate, authorize(ALLSTAFF), inventoryMasterController.listWarehouses.bind(inventoryMasterController));
-router.post('/warehouses', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createWarehouse.bind(inventoryMasterController));
-router.patch('/warehouses/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateWarehouse.bind(inventoryMasterController));
-router.delete('/warehouses/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.deactivateWarehouse.bind(inventoryMasterController));
+router.post('/warehouses', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.createWarehouse.bind(inventoryMasterController));
+router.patch('/warehouses/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.updateWarehouse.bind(inventoryMasterController));
+router.delete('/warehouses/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.deactivateWarehouse.bind(inventoryMasterController));
 
 router.get('/stock-locations', authenticate, authorize(ALLSTAFF), inventoryMasterController.listLocations.bind(inventoryMasterController));
-router.post('/stock-locations', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createLocation.bind(inventoryMasterController));
-router.patch('/stock-locations/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateLocation.bind(inventoryMasterController));
-router.delete('/stock-locations/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.deactivateLocation.bind(inventoryMasterController));
+router.post('/stock-locations', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.createLocation.bind(inventoryMasterController));
+router.patch('/stock-locations/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.updateLocation.bind(inventoryMasterController));
+router.delete('/stock-locations/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.deactivateLocation.bind(inventoryMasterController));
 
 router.get('/uoms', authenticate, authorize(ALLSTAFF), inventoryMasterController.listUoms.bind(inventoryMasterController));
-router.post('/uoms', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createUom.bind(inventoryMasterController));
-router.patch('/uoms/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateUom.bind(inventoryMasterController));
+router.post('/uoms', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.createUom.bind(inventoryMasterController));
+router.patch('/uoms/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.updateUom.bind(inventoryMasterController));
 router.post('/conversions/preview', authenticate, authorize(ALLSTAFF), inventoryMasterController.previewConversion.bind(inventoryMasterController));
 
 router.get('/batches', authenticate, authorize(ALLSTAFF), inventoryMasterController.listBatches.bind(inventoryMasterController));
-router.post('/batches', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.createBatch.bind(inventoryMasterController));
-router.patch('/batches/:id', authenticate, authorize(ADMIN_ROLES), inventoryMasterController.updateBatch.bind(inventoryMasterController));
+router.post('/batches', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.createBatch.bind(inventoryMasterController));
+router.patch('/batches/:id', authenticate, requirePermission(PERMISSIONS.INVENTORY_MASTER_MANAGE), inventoryMasterController.updateBatch.bind(inventoryMasterController));
 
 // ============================================================
 // TREATMENT BOM

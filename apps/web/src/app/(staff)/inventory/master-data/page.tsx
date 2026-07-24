@@ -20,6 +20,7 @@ export default function InventoryMasterDataPage() {
   const [uoms, setUoms] = useState<Row[]>([]);
   const [products, setProducts] = useState<Row[]>([]);
   const [batches, setBatches] = useState<Row[]>([]);
+  const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -28,26 +29,42 @@ export default function InventoryMasterDataPage() {
   const [uomForm, setUomForm] = useState({ code: '', name: '', category: 'GENERAL', precision: 4 });
   const [productForm, setProductForm] = useState({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', tracksBatch: false, tracksExpiry: false });
   const [batchForm, setBatchForm] = useState({ masterProductId: '', batchNumber: '', manufactureDate: '', expiryDate: '' });
+  const [conversionForm, setConversionForm] = useState({ productId: '', baseUomId: '', usageUomId: '', factor: '1' });
+  const [previewForm, setPreviewForm] = useState({ quantity: '', factor: '1', direction: 'BASE_TO_USAGE' as 'BASE_TO_USAGE' | 'USAGE_TO_BASE' });
+  const [previewResult, setPreviewResult] = useState('');
 
-  const canManage = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
+  const canManage = permissions.has('INVENTORY.MASTER.MANAGE');
 
   const load = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
-      const [branchResponse, warehouseResponse, uomResponse, productResponse, batchResponse] = await Promise.all([
+      const accessResponse = await api.get('/iam/me');
+      const effectivePermissions = new Set<string>(accessResponse.data.data?.permissions || []);
+      setPermissions(effectivePermissions);
+
+      const uomResponse = await inventoryApi.getUoms();
+      setUoms(uomResponse.data?.data || []);
+      const productResponse = await inventoryApi.getMasterProducts();
+      setProducts(productResponse.data?.data?.products || []);
+
+      if (!effectivePermissions.has('INVENTORY.MASTER.MANAGE')) {
+        setTab('UOM');
+        setBranches([]);
+        setWarehouses([]);
+        setBatches([]);
+        return;
+      }
+
+      const [branchResponse, warehouseResponse, batchResponse] = await Promise.all([
         api.get('/branches', { params: { isActive: true, limit: 100 } }),
         inventoryApi.getWarehouses(branchId ? { branchId } : undefined),
-        inventoryApi.getUoms(),
-        inventoryApi.getMasterProducts(),
         inventoryApi.getBatches(),
       ]);
       const branchRows = branchResponse.data?.data || [];
       setBranches(branchRows);
       if (!branchId && branchRows[0]?.id) setBranchId(branchRows[0].id);
       setWarehouses(warehouseResponse.data?.data || []);
-      setUoms(uomResponse.data?.data || []);
-      setProducts(productResponse.data?.data?.products || []);
       setBatches(batchResponse.data?.data || []);
     } catch (requestError: any) {
       setError(requestError.response?.data?.error?.message || 'Gagal memuat master inventory.');
@@ -93,6 +110,37 @@ export default function InventoryMasterDataPage() {
   };
 
   const activeProducts = useMemo(() => products.filter((product) => product.isActive), [products]);
+  const selectedConversionProduct = useMemo(
+    () => products.find((product) => product.id === conversionForm.productId),
+    [conversionForm.productId, products],
+  );
+
+  const selectConversionProduct = (productId: string) => {
+    const product = products.find((row) => row.id === productId);
+    const factor = product ? String(product.conversionFactor) : '1';
+    setConversionForm({
+      productId,
+      baseUomId: product?.baseUomId || '',
+      usageUomId: product?.usageUomId || '',
+      factor,
+    });
+    setPreviewForm((current) => ({ ...current, factor }));
+    setPreviewResult('');
+  };
+
+  const previewConversion = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      setSaving(true);
+      const response = await inventoryApi.previewConversion(previewForm);
+      setPreviewResult(response.data?.data?.result || '');
+    } catch (requestError: any) {
+      setPreviewResult('');
+      showToast.error(requestError.response?.data?.error?.message || 'Preview konversi gagal.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <main className={styles.page}>
@@ -101,12 +149,15 @@ export default function InventoryMasterDataPage() {
         <button className={styles.secondaryButton} onClick={() => void load()} title="Muat ulang"><RefreshCw size={16} /></button>
       </header>
 
-      <div className={styles.toolbar}>
+      {canManage && <div className={styles.toolbar}>
         <label className={styles.field}><span>Cabang</span><select className={styles.select} value={branchId} onChange={(event) => setBranchId(event.target.value)}>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} - {branch.name}</option>)}</select></label>
-      </div>
+      </div>}
 
       <nav className={styles.tabs} aria-label="Master inventory">
-        {([['WAREHOUSE', 'Warehouse & Lokasi'], ['UOM', 'UOM'], ['PRODUCT', 'Produk'], ['BATCH', 'Batch']] as const).map(([value, label]) => <button key={value} className={`${styles.tab} ${tab === value ? styles.tabActive : ''}`} onClick={() => setTab(value)}>{label}</button>)}
+        {(canManage
+          ? ([['WAREHOUSE', 'Warehouse & Lokasi'], ['UOM', 'UOM'], ['PRODUCT', 'Produk'], ['BATCH', 'Batch']] as const)
+          : ([['UOM', 'UOM & Preview Konversi']] as const)
+        ).map(([value, label]) => <button key={value} className={`${styles.tab} ${tab === value ? styles.tabActive : ''}`} onClick={() => setTab(value)}>{label}</button>)}
       </nav>
 
       {error && <div className={styles.error}>{error}</div>}
@@ -137,6 +188,33 @@ export default function InventoryMasterDataPage() {
               <button className={styles.button} disabled={saving}><Plus size={15} /> UOM</button>
             </form>}
             <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Kode</th><th>Nama</th><th>Kategori</th><th>Presisi</th><th>Status</th></tr></thead><tbody>{uoms.map((uom) => <tr key={uom.id}><td>{uom.code}</td><td>{uom.name}</td><td>{uom.category || '-'}</td><td>{uom.precision}</td><td><span className={uom.isActive ? styles.badge : styles.inactiveBadge}>{uom.isActive ? 'Aktif' : 'Nonaktif'}</span></td></tr>)}</tbody></table></div>
+            {canManage && <>
+              <h2>Konfigurasi conversion produk</h2>
+              <form className={styles.form} onSubmit={(event) => void submit(
+                event,
+                () => inventoryApi.updateMasterProduct(conversionForm.productId, {
+                  baseUomId: conversionForm.baseUomId,
+                  usageUomId: conversionForm.usageUomId,
+                  conversionFactor: conversionForm.factor,
+                }),
+                () => undefined,
+              )}>
+                <label className={styles.field}><span>Produk</span><select className={styles.select} required value={conversionForm.productId} onChange={(event) => selectConversionProduct(event.target.value)}><option value="">Pilih produk</option>{activeProducts.map((product) => <option key={product.id} value={product.id}>{product.sku} - {product.name}</option>)}</select></label>
+                <label className={styles.field}><span>Base UOM</span><select className={styles.select} required value={conversionForm.baseUomId} onChange={(event) => setConversionForm({ ...conversionForm, baseUomId: event.target.value })}><option value="">Pilih</option>{uoms.filter((uom) => uom.isActive).map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
+                <label className={styles.field}><span>Usage UOM</span><select className={styles.select} required value={conversionForm.usageUomId} onChange={(event) => setConversionForm({ ...conversionForm, usageUomId: event.target.value })}><option value="">Pilih</option>{uoms.filter((uom) => uom.isActive).map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
+                <label className={styles.field}><span>1 base = usage</span><input className={styles.input} required inputMode="decimal" value={conversionForm.factor} onChange={(event) => { const factor = event.target.value; setConversionForm({ ...conversionForm, factor }); setPreviewForm((current) => ({ ...current, factor })); }} /></label>
+                <button className={styles.button} disabled={saving || !conversionForm.productId}><Plus size={15} /> Simpan Conversion</button>
+              </form>
+            </>}
+            <h2>Preview conversion</h2>
+            <form className={styles.form} onSubmit={(event) => void previewConversion(event)}>
+              <label className={styles.field}><span>Produk (opsional)</span><select className={styles.select} value={conversionForm.productId} onChange={(event) => selectConversionProduct(event.target.value)}><option value="">Input faktor manual</option>{activeProducts.map((product) => <option key={product.id} value={product.id}>{product.sku} - {product.name}</option>)}</select></label>
+              <label className={styles.field}><span>Quantity</span><input className={styles.input} required inputMode="decimal" value={previewForm.quantity} onChange={(event) => setPreviewForm({ ...previewForm, quantity: event.target.value })} /></label>
+              <label className={styles.field}><span>Faktor</span><input className={styles.input} required inputMode="decimal" value={previewForm.factor} onChange={(event) => setPreviewForm({ ...previewForm, factor: event.target.value })} /></label>
+              <label className={styles.field}><span>Arah</span><select className={styles.select} value={previewForm.direction} onChange={(event) => setPreviewForm({ ...previewForm, direction: event.target.value as 'BASE_TO_USAGE' | 'USAGE_TO_BASE' })}><option value="BASE_TO_USAGE">Base → Usage</option><option value="USAGE_TO_BASE">Usage → Base</option></select></label>
+              <button className={styles.button} disabled={saving}>Preview</button>
+              {previewResult && <output className={styles.badge}>Hasil: {previewResult} {previewForm.direction === 'BASE_TO_USAGE' ? selectedConversionProduct?.usageUom?.code || 'usage unit' : selectedConversionProduct?.baseUom?.code || 'base unit'}</output>}
+            </form>
           </section>}
 
           {tab === 'PRODUCT' && <section>
@@ -151,7 +229,7 @@ export default function InventoryMasterDataPage() {
               <label><input type="checkbox" disabled={!productForm.tracksBatch} checked={productForm.tracksExpiry} onChange={(event) => setProductForm({ ...productForm, tracksExpiry: event.target.checked })} /> Expiry</label>
               <button className={styles.button} disabled={saving}><Plus size={15} /> Produk</button>
             </form>}
-            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>SKU</th><th>Produk</th><th>Kategori</th><th>Konversi</th><th>Tracking</th><th>Status</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.sku || '-'}</td><td>{product.name}</td><td>{product.category}</td><td>{product.baseUnit} x {String(product.conversionFactor)} {product.usageUnit}</td><td>{product.tracksBatch ? `Batch${product.tracksExpiry ? ' + Expiry' : ''}` : '-'}</td><td><span className={product.isActive ? styles.badge : styles.inactiveBadge}>{product.isActive ? 'Aktif' : 'Nonaktif'}</span></td></tr>)}</tbody></table></div>
+            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>SKU</th><th>Produk</th><th>Kategori</th><th>Konversi</th><th>Tracking</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.sku || '-'}</td><td>{product.name}</td><td>{product.category}</td><td>{product.baseUnit} x {String(product.conversionFactor)} {product.usageUnit}</td><td>{product.tracksBatch ? `Batch${product.tracksExpiry ? ' + Expiry' : ''}` : '-'}</td><td><span className={product.isActive ? styles.badge : styles.inactiveBadge}>{product.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && product.isActive ? <button className={styles.dangerButton} title="Nonaktifkan produk" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.updateMasterProduct(product.id, { isActive: false }), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
           </section>}
 
           {tab === 'BATCH' && <section>

@@ -78,7 +78,17 @@ function getStringQuery(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-async function buildAuditWhere(req: Request, permission: PermissionCode = PERMISSIONS.AUDIT_READ): Promise<AuditWhere> {
+function appendAndFilter(where: AuditWhere, filter: Record<string, unknown>): void {
+  const filters = Array.isArray(where.AND) ? [...where.AND] : [];
+  if (where.OR) {
+    filters.push({ OR: where.OR });
+    delete where.OR;
+  }
+  filters.push(filter);
+  where.AND = filters;
+}
+
+export async function buildAuditWhere(req: Request, permission: PermissionCode = PERMISSIONS.AUDIT_READ): Promise<AuditWhere> {
   const where: AuditWhere = {};
   const branchId = getStringQuery(req.query.branchId);
   const accessibleBranchIds = await getAccessibleBranchIds(req.user.userId);
@@ -106,16 +116,33 @@ async function buildAuditWhere(req: Request, permission: PermissionCode = PERMIS
   const module = getStringQuery(req.query.module);
   if (module) where.module = module;
 
+  const resource = getStringQuery(req.query.resource);
+  if (resource) where.resource = resource;
+
   const userId = getStringQuery(req.query.userId);
   if (userId) where.userId = userId;
 
   const roleFilter = getStringQuery(req.query.role);
   if (roleFilter) {
-    where.OR = [
-      ...((where.OR as unknown[]) ?? []),
-      { userRole: roleFilter },
-      { user: { role: roleFilter } },
-    ];
+    appendAndFilter(where, {
+      OR: [
+        { userRole: roleFilter },
+        { user: { role: roleFilter } },
+      ],
+    });
+  }
+
+  const actor = getStringQuery(req.query.actor);
+  if (actor) {
+    appendAndFilter(where, {
+      OR: [
+        { userName: { contains: actor, mode: 'insensitive' } },
+        { user: { email: { contains: actor, mode: 'insensitive' } } },
+        { user: { profile: { fullName: { contains: actor, mode: 'insensitive' } } } },
+        { meta: { path: ['actorSnapshot', 'email'], string_contains: actor } },
+        { meta: { path: ['actorSnapshot', 'fullName'], string_contains: actor } },
+      ],
+    });
   }
 
   const startDate = parseDateFilter(req.query.startDate);
@@ -146,12 +173,7 @@ async function buildAuditWhere(req: Request, permission: PermissionCode = PERMIS
       ],
     };
 
-    if (where.OR) {
-      where.AND = [{ OR: where.OR }, searchFilter];
-      delete where.OR;
-    } else {
-      Object.assign(where, searchFilter);
-    }
+    appendAndFilter(where, searchFilter);
   }
 
   return where;

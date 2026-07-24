@@ -111,6 +111,7 @@ export async function createBranch(req: Request, res: Response, next: NextFuncti
       action: 'CREATE',
       resource: 'Branch',
       resourceId: branch.id,
+      afterData: branch,
       meta: { branchCode: branch.branchCode, name: branch.name },
       ipAddress: req.ip,
       userAgent: req.get('user-agent'),
@@ -128,6 +129,7 @@ export async function updateBranch(req: Request, res: Response, next: NextFuncti
   try {
     const input = updateBranchSchema.parse(req.body);
     const userRole = req.user.role;
+    const before = await prisma.branch.findUnique({ where: { id: req.params.branchId } });
     const branch = await updateBranchService(req.params.branchId, input, userRole);
 
     await logAudit({
@@ -136,6 +138,8 @@ export async function updateBranch(req: Request, res: Response, next: NextFuncti
       action: 'UPDATE',
       resource: 'Branch',
       resourceId: branch.id,
+      beforeData: before,
+      afterData: branch,
       meta: {
         changes: input,
         ...(input.branchCode !== undefined || input.autoGenerateBranchCode
@@ -214,7 +218,7 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
       res.status(400).json({ success: false, message: 'managerId is required' });
       return;
     }
-    assertNotSelf(req.user.userId, managerId, 'menambah branch scope');
+    await assertNotSelf(req.user.userId, managerId, 'menambah branch scope');
 
     const result = await assignManagerToBranchService(branchId, managerId, accessScope);
 
@@ -239,7 +243,7 @@ export async function assignManagerToBranch(req: Request, res: Response, next: N
 export async function updateManagerBranchAccessScope(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId, managerId } = req.params;
-    assertNotSelf(req.user.userId, managerId, 'mengubah branch scope');
+    await assertNotSelf(req.user.userId, managerId, 'mengubah branch scope');
     const { accessScope } = req.body;
 
     const result = await updateManagerBranchAccessScopeService(branchId, managerId, accessScope);
@@ -269,7 +273,7 @@ export async function updateManagerBranchAccessScope(req: Request, res: Response
 export async function unassignManagerFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { branchId, managerId } = req.params;
-    assertNotSelf(req.user.userId, managerId, 'menghapus branch scope');
+    await assertNotSelf(req.user.userId, managerId, 'menghapus branch scope');
 
     const result = await unassignManagerFromBranchService(branchId, managerId);
 

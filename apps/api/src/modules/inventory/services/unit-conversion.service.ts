@@ -1,9 +1,31 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
+import type { ConversionPreviewInput } from '../inventory-master.schema';
 
 /**
  * Service for handling unit conversions in inventory system
  */
 export class UnitConversionService {
+  static preview(input: ConversionPreviewInput): {
+    quantity: string;
+    factor: string;
+    direction: ConversionPreviewInput['direction'];
+    result: string;
+  } {
+    const quantity = new Prisma.Decimal(input.quantity);
+    const factor = new Prisma.Decimal(input.factor);
+    const result = input.direction === 'BASE_TO_USAGE'
+      ? quantity.mul(factor)
+      : quantity.div(factor);
+
+    return {
+      quantity: quantity.toFixed(),
+      factor: factor.toFixed(),
+      direction: input.direction,
+      result: result.toDecimalPlaces(6).toFixed(),
+    };
+  }
+
   /**
    * Convert from base unit to usage unit
    * Example: 2 botol × 500ml/botol = 1000ml

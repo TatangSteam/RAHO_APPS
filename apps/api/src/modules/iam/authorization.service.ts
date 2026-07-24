@@ -1,6 +1,7 @@
 import { PermissionEffect, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { AppError, errors } from '@middleware/errorHandler';
+import { logAudit } from '@utils/auditLog';
 import { PERMISSIONS, PermissionCode } from './permission-catalog';
 
 export interface AuthorizationActor {
@@ -166,8 +167,23 @@ export async function assertTargetInActorScope(actorUserId: string, targetUserId
   }
 }
 
-export function assertNotSelf(actorUserId: string, targetUserId: string, action: string): void {
+export async function assertNotSelf(actorUserId: string, targetUserId: string, action: string): Promise<void> {
   if (actorUserId === targetUserId) {
+    await logAudit({
+      userId: actorUserId,
+      action: 'ACCESS_DENIED',
+      module: 'IAM',
+      resource: 'SecurityEvent',
+      resourceId: targetUserId,
+      entityType: 'User',
+      entityId: targetUserId,
+      description: `Self-escalation ditolak: ${action}.`,
+      metadata: {
+        eventType: 'SELF_ESCALATION_DENIED',
+        attemptedAction: action,
+        targetUserId,
+      },
+    });
     throw errors.forbidden(`Anda tidak dapat ${action} akun sendiri.`);
   }
 }

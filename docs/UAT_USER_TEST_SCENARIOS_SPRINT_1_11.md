@@ -246,7 +246,7 @@ Evidence: detail dua produk, error SKU duplicate, dan status nonaktif.
 |---:|---|---|
 | 1 | Buat UOM VIAL precision 4 dan BOX precision 0. | Kedua UOM tersimpan dengan precision yang benar. |
 | 2 | Set conversion produk: 1 BOX = 10 VIAL. | Conversion aktif dan terikat ke produk yang benar. |
-| 3 | Preview 2 BOX ke base UOM. | Hasil tepat 20 VIAL. |
+| 3 | Preview 2 BOX ke usage UOM. | Hasil tepat 20 VIAL. |
 | 4 | Preview 15 VIAL ke BOX jika arah konversi didukung. | Hasil 1.5 BOX atau ditampilkan sesuai precision/rule yang dikonfigurasi. |
 | 5 | Masukkan faktor nol/negatif. | Validasi menolak faktor tidak valid tanpa menyimpan perubahan. |
 

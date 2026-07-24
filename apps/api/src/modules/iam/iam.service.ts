@@ -46,7 +46,7 @@ export async function assignUserRoleTemplateService(
   targetUserId: string,
   input: AssignUserRoleTemplateInput,
 ) {
-  assertNotSelf(actorUserId, targetUserId, 'mengubah role template');
+  await assertNotSelf(actorUserId, targetUserId, 'mengubah role template');
   await assertTargetInActorScope(actorUserId, targetUserId);
 
   const target = await prisma.user.findUnique({
@@ -224,7 +224,7 @@ export async function replaceUserOverridesService(
   targetUserId: string,
   input: ReplaceUserOverridesInput,
 ) {
-  assertNotSelf(actorUserId, targetUserId, 'mengubah permission');
+  await assertNotSelf(actorUserId, targetUserId, 'mengubah permission');
   await assertTargetInActorScope(actorUserId, targetUserId);
 
   const codes = input.overrides.map((override) => override.permissionCode);
@@ -283,7 +283,7 @@ export async function replaceUserBranchScopeService(
   targetUserId: string,
   input: ReplaceUserBranchScopeInput,
 ) {
-  assertNotSelf(actorUserId, targetUserId, 'mengubah branch scope');
+  await assertNotSelf(actorUserId, targetUserId, 'mengubah branch scope');
   await assertTargetInActorScope(actorUserId, targetUserId);
   const target = await prisma.user.findUnique({ where: { id: targetUserId }, select: { role: true, branchId: true } });
   if (!target) throw errors.notFound('User tidak ditemukan.');

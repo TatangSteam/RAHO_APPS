@@ -1,5 +1,4 @@
 import { NextFunction, Request, Response } from 'express';
-import { Prisma } from '@prisma/client';
 import { sendCreated, sendSuccess } from '@utils/response';
 import {
   conversionPreviewSchema,
@@ -33,6 +32,7 @@ import {
   updateUom,
   updateWarehouse,
 } from './services/inventory-master.service';
+import { UnitConversionService } from './services/unit-conversion.service';
 
 export class InventoryMasterController {
   async listWarehouses(req: Request, res: Response, next: NextFunction) {
@@ -77,10 +77,7 @@ export class InventoryMasterController {
   async previewConversion(req: Request, res: Response, next: NextFunction) {
     try {
       const input = conversionPreviewSchema.parse(req.body);
-      const quantity = new Prisma.Decimal(input.quantity);
-      const factor = new Prisma.Decimal(input.factor);
-      const result = input.direction === 'BASE_TO_USAGE' ? quantity.mul(factor) : quantity.div(factor);
-      sendSuccess(res, { quantity: quantity.toFixed(), factor: factor.toFixed(), direction: input.direction, result: result.toDecimalPlaces(6).toFixed() });
+      sendSuccess(res, UnitConversionService.preview(input));
     } catch (error) { next(error); }
   }
   async listBatches(req: Request, res: Response, next: NextFunction) {
@@ -93,4 +90,3 @@ export class InventoryMasterController {
     try { sendSuccess(res, await updateBatch(req.user.userId, req.params.id, updateBatchSchema.parse(req.body))); } catch (error) { next(error); }
   }
 }
-

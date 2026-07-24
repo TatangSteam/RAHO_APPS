@@ -4,8 +4,8 @@ import { z } from 'zod';
 const code = z.string().trim().min(1).max(40).transform((value) => value.toUpperCase());
 const positiveDecimal = z.union([z.string(), z.number()])
   .transform((value) => String(value).trim())
-  .refine((value) => /^\d+(?:\.\d{1,6})?$/.test(value) && Number(value) > 0, {
-    message: 'Nilai harus lebih besar dari nol dan maksimal 6 angka desimal',
+  .refine((value) => /^\d{1,12}(?:\.\d{1,6})?$/.test(value) && Number(value) > 0, {
+    message: 'Nilai harus lebih besar dari nol, maksimal 12 digit utuh dan 6 angka desimal',
   });
 
 export const masterListQuerySchema = z.object({
@@ -110,5 +110,6 @@ export type CreateUomInput = z.infer<typeof createUomSchema>;
 export type UpdateUomInput = z.infer<typeof updateUomSchema>;
 export type CreateMasterProductInput = z.infer<typeof createMasterProductSchema>;
 export type UpdateMasterProductInput = z.infer<typeof updateMasterProductSchema>;
+export type ConversionPreviewInput = z.infer<typeof conversionPreviewSchema>;
 export type CreateBatchInput = z.infer<typeof createBatchSchema>;
 export type UpdateBatchInput = z.infer<typeof updateBatchSchema>;

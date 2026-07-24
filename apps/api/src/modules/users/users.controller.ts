@@ -115,7 +115,7 @@ export async function updateUser(req: Request, res: Response, next: NextFunction
       req.user.userId === req.params.userId &&
       ['email', 'password', 'role', 'branchId', 'isActive'].some((field) => field in input)
     ) {
-      assertNotSelf(req.user.userId, req.params.userId, 'mengubah akses atau status');
+      await assertNotSelf(req.user.userId, req.params.userId, 'mengubah akses atau status');
     }
     const { password, ...inputForLog } = input;
     console.log('🔍 [UsersController] Parsed input:', {
@@ -160,7 +160,7 @@ export async function deactivateUser(req: Request, res: Response, next: NextFunc
     console.log('🔍 [UsersController] Caller role:', req.user.role);
     
     // Get target user to check their role
-    assertNotSelf(req.user.userId, req.params.userId, 'menonaktifkan');
+    await assertNotSelf(req.user.userId, req.params.userId, 'menonaktifkan');
     const targetUser = await getUserService(req.params.userId, req.user.userId);
     
     // ADMIN_CABANG cannot deactivate other ADMIN_CABANG
@@ -233,7 +233,7 @@ export async function changePassword(req: Request, res: Response, next: NextFunc
 
 export async function resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    assertNotSelf(req.user.userId, req.params.userId, 'me-reset password');
+    await assertNotSelf(req.user.userId, req.params.userId, 'me-reset password');
     await assertTargetInActorScope(req.user.userId, req.params.userId);
     const input = resetPasswordSchema.parse(req.body);
     await resetPasswordService(req.params.userId, input);
@@ -406,7 +406,7 @@ export async function getUserBranches(req: Request, res: Response, next: NextFun
 export async function assignUserToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { userId } = req.params;
-    assertNotSelf(req.user.userId, userId, 'mengubah branch scope');
+    await assertNotSelf(req.user.userId, userId, 'mengubah branch scope');
     await assertTargetInActorScope(req.user.userId, userId);
     const { branchId } = req.body;
 
@@ -443,7 +443,7 @@ export async function assignUserToBranch(req: Request, res: Response, next: Next
 export async function removeUserFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { userId, branchId } = req.params;
-    assertNotSelf(req.user.userId, userId, 'mengubah branch scope');
+    await assertNotSelf(req.user.userId, userId, 'mengubah branch scope');
     await assertTargetInActorScope(req.user.userId, userId);
     await assertBranchAccess(req.user.userId, branchId);
 
@@ -484,7 +484,7 @@ export async function getAvailableBranchesForUser(req: Request, res: Response, n
 export async function setPrimaryBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { userId, branchId } = req.params;
-    assertNotSelf(req.user.userId, userId, 'mengubah branch utama');
+    await assertNotSelf(req.user.userId, userId, 'mengubah branch utama');
     await assertTargetInActorScope(req.user.userId, userId);
     await assertBranchAccess(req.user.userId, branchId);
 
@@ -590,7 +590,7 @@ export async function getUserCredentials(req: Request, res: Response, next: Next
 export async function updateUserEmail(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { userId } = req.params;
-    assertNotSelf(req.user.userId, userId, 'mengubah email');
+    await assertNotSelf(req.user.userId, userId, 'mengubah email');
     await assertTargetInActorScope(req.user.userId, userId);
     const { email } = req.body;
 
@@ -684,7 +684,7 @@ export async function getDoctorsByBranch(req: Request, res: Response, next: Next
 export async function assignDoctorToBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { doctorId } = req.params;
-    assertNotSelf(req.user.userId, doctorId, 'mengubah branch scope');
+    await assertNotSelf(req.user.userId, doctorId, 'mengubah branch scope');
     await assertTargetInActorScope(req.user.userId, doctorId);
     const { branchId } = req.body;
 
@@ -713,7 +713,7 @@ export async function assignDoctorToBranch(req: Request, res: Response, next: Ne
 export async function removeDoctorFromBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { doctorId, branchId } = req.params;
-    assertNotSelf(req.user.userId, doctorId, 'mengubah branch scope');
+    await assertNotSelf(req.user.userId, doctorId, 'mengubah branch scope');
     await assertTargetInActorScope(req.user.userId, doctorId);
     await assertBranchAccess(req.user.userId, branchId);
 
@@ -755,7 +755,7 @@ export async function getManagedBranches(req: Request, res: Response, next: Next
  */
 export async function addManagedBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    assertNotSelf(req.user.userId, req.user.userId, 'menambah branch scope');
+    await assertNotSelf(req.user.userId, req.user.userId, 'menambah branch scope');
     const { branchId } = req.body;
 
     if (!branchId) {
@@ -776,7 +776,7 @@ export async function addManagedBranch(req: Request, res: Response, next: NextFu
  */
 export async function removeManagedBranch(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    assertNotSelf(req.user.userId, req.user.userId, 'menghapus branch scope');
+    await assertNotSelf(req.user.userId, req.user.userId, 'menghapus branch scope');
     const { branchId } = req.params;
 
     const result = await doctorBranchService.removeManagedBranch(req.user.userId, branchId);

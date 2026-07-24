@@ -506,6 +506,7 @@ enum AuditAction {
   SHIPMENT
   RECEIVE_SHIPMENT
   STOCK_ADJUSTMENT
+  ACCESS_DENIED
 }
 
 enum OverstockStatus {
@@ -2871,7 +2872,7 @@ model MasterProduct {
   unit                 String // Legacy field, kept for backward compatibility
   baseUnit             String          @map("base_unit") // Storage unit (botol, box, pack)
   usageUnit            String          @map("usage_unit") // Usage unit (ml, tablet, gram)
-  conversionFactor     Decimal         @default(1.0) @map("conversion_factor") @db.Decimal(10, 4) // How many usage units per base unit
+  conversionFactor     Decimal         @default(1.0) @map("conversion_factor") @db.Decimal(18, 6) // How many usage units per base unit
   baseUomId            String?
   usageUomId           String?
   description          String?

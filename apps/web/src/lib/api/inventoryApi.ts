@@ -780,6 +780,14 @@ export const inventoryApi = {
     return api.post('/inventory/uoms', data);
   },
 
+  previewConversion: (data: {
+    quantity: string;
+    factor: string;
+    direction: 'BASE_TO_USAGE' | 'USAGE_TO_BASE';
+  }) => {
+    return api.post('/inventory/conversions/preview', data);
+  },
+
   getBatches: (params?: { masterProductId?: string; includeBlocked?: boolean }) => {
     return api.get('/inventory/batches', { params });
   },

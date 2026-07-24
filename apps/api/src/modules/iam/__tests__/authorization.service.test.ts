@@ -1,5 +1,6 @@
 import { PermissionEffect, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { logAudit } from '@utils/auditLog';
 import { assertNotSelf, getEffectivePermissionCodes } from '../authorization.service';
 
 jest.mock('@lib/prisma', () => ({
@@ -9,15 +10,26 @@ jest.mock('@lib/prisma', () => ({
     userPermissionOverride: { findMany: jest.fn() },
   },
 }));
+jest.mock('@utils/auditLog', () => ({
+  logAudit: jest.fn().mockResolvedValue(undefined),
+}));
 
 describe('IAM anti-self-escalation', () => {
-  it('rejects sensitive mutations against the actor account', () => {
-    expect(() => assertNotSelf('user-a', 'user-a', 'mengubah permission'))
-      .toThrow('Anda tidak dapat mengubah permission akun sendiri.');
+  it('rejects sensitive mutations against the actor account', async () => {
+    await expect(assertNotSelf('user-a', 'user-a', 'mengubah permission'))
+      .rejects.toThrow('Anda tidak dapat mengubah permission akun sendiri.');
+    expect(logAudit).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 'user-a',
+      action: 'ACCESS_DENIED',
+      module: 'IAM',
+      resource: 'SecurityEvent',
+      resourceId: 'user-a',
+      metadata: expect.objectContaining({ eventType: 'SELF_ESCALATION_DENIED' }),
+    }));
   });
 
-  it('allows mutations against another account', () => {
-    expect(() => assertNotSelf('user-a', 'user-b', 'mengubah permission')).not.toThrow();
+  it('allows mutations against another account', async () => {
+    await expect(assertNotSelf('user-a', 'user-b', 'mengubah permission')).resolves.toBeUndefined();
   });
 });
 

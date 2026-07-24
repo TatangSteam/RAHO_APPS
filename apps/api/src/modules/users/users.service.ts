@@ -339,7 +339,7 @@ export async function updateUserService(
     callerUserId === userId &&
     ['email', 'password', 'role', 'branchId', 'isActive'].some((field) => field in input)
   ) {
-    assertNotSelf(callerUserId, userId, 'mengubah akses atau status');
+    await assertNotSelf(callerUserId, userId, 'mengubah akses atau status');
   }
   await assertTargetInActorScope(callerUserId, userId);
 
