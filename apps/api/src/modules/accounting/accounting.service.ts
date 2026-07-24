@@ -665,7 +665,11 @@ export async function createAccountingPeriodService(actorUserId: string, input: 
   const period = await prisma.$transaction(async (tx) => {
     // Prevent two concurrent requests in the same scope from both passing the
     // overlap check before either period is committed.
-    await tx.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`accounting-period:${scopeKey}`}))`);
+    // PostgreSQL returns `void` from pg_advisory_xact_lock. Cast it so Prisma
+    // can deserialize the query result while the transaction-scoped lock is held.
+    await tx.$queryRaw<{ lockResult: string | null }[]>(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`accounting-period:${scopeKey}`}))::text AS "lockResult"`,
+    );
     const overlap = await tx.accountingPeriod.findFirst({
       where: { scopeKey, startDate: { lte: end }, endDate: { gte: start } },
     });
