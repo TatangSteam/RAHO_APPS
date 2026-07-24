@@ -30,7 +30,7 @@ export const receiveInventorySchema = z.object({
   sourceId: z.string().trim().min(1).max(160),
   sourceNumber: z.string().trim().max(160).optional(),
   reasonCode: z.string().trim().min(1).max(80).default('RECEIPT'),
-  occurredAt: z.coerce.date().default(() => new Date()),
+  occurredAt: z.coerce.date().optional(),
   costCenterCode: z.string().trim().max(80).optional(),
 });
 

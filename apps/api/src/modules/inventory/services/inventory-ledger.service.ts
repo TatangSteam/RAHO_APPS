@@ -12,6 +12,7 @@ import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { logAudit } from '@utils/auditLog';
+import { findPostingPeriod } from '@modules/accounting/accounting.service';
 import type {
   InventoryLedgerQuery,
   IssueInventoryInput,
@@ -189,14 +190,42 @@ function capLayersToAvailableBalances(layers: LockedLayer[], balances: LockedBal
   });
 }
 
+async function attachSourceCostLayers<T extends { branchId: string; sourceType: string; sourceId: string }>(postings: T[]) {
+  if (postings.length === 0) return [];
+  const sourcePairs = Array.from(new Map(postings.map((posting) => [
+    JSON.stringify([posting.branchId, posting.sourceType, posting.sourceId]),
+    {
+      sourceType: posting.sourceType,
+      sourceId: posting.sourceId,
+      inventoryBalance: { branchId: posting.branchId },
+    },
+  ])).values());
+  const layers = await prisma.inventoryCostLayer.findMany({
+    where: { OR: sourcePairs },
+    include: { batch: true, inventoryBalance: { select: { branchId: true } } },
+    orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
+  });
+  const bySource = new Map<string, typeof layers>();
+  for (const layer of layers) {
+    const scopedKey = JSON.stringify([layer.inventoryBalance.branchId, layer.sourceType, layer.sourceId]);
+    bySource.set(scopedKey, [...(bySource.get(scopedKey) ?? []), layer]);
+  }
+  return postings.map((posting) => ({
+    ...posting,
+    costLayers: bySource.get(JSON.stringify([posting.branchId, posting.sourceType, posting.sourceId])) ?? [],
+  }));
+}
+
 async function loadPostingResult(postingId: string) {
-  return prisma.inventoryPosting.findUniqueOrThrow({
+  const posting = await prisma.inventoryPosting.findUniqueOrThrow({
     where: { id: postingId },
     include: {
       stockMutations: { include: { inventoryItem: { include: { masterProduct: true } }, batch: true } },
       costAllocations: { include: { costLayer: true } },
     },
   });
+  const [result] = await attachSourceCostLayers([posting]);
+  return result;
 }
 
 async function postInboundInventory(
@@ -210,11 +239,19 @@ async function postInboundInventory(
     type === InventoryPostingType.OPENING ? PERMISSIONS.INVENTORY_OPENING_POST : PERMISSIONS.INVENTORY_POST,
     input.branchId,
   );
-  const payloadHash = hashPayload({ type, ...input });
+  const occurredAt = input.occurredAt ?? new Date();
+  const payloadHash = hashPayload({
+    type,
+    ...input,
+    occurredAt: input.occurredAt?.toISOString() ?? null,
+  });
 
   const postingId = await withTransactionRetry(() => prisma.$transaction(async (tx) => {
     const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
     if (existing) return existing.id;
+    if (type === InventoryPostingType.OPENING) {
+      await findPostingPeriod(tx, input.branchId, occurredAt);
+    }
 
     const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
     if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item tidak ditemukan dalam branch.');
@@ -265,7 +302,7 @@ async function postInboundInventory(
         postingNumber: postingNumber(type === InventoryPostingType.OPENING ? 'OPN' : 'RCV'), idempotencyKey: input.idempotencyKey, payloadHash,
         type, reasonCode: input.reasonCode, sourceType: input.sourceType,
         sourceId: input.sourceId, sourceNumber: input.sourceNumber, branchId: input.branchId,
-        costCenterCode: input.costCenterCode, occurredAt: input.occurredAt, totalCost, postedBy: actorUserId,
+        costCenterCode: input.costCenterCode, occurredAt, totalCost, postedBy: actorUserId,
       },
     });
     await tx.inventoryBalance.update({ where: { id: balance.id }, data: { onHandQty: { increment: quantity }, version: { increment: 1 } } });
@@ -282,7 +319,7 @@ async function postInboundInventory(
       data: {
         inventoryBalanceId: balance.id, batchId, sourceType: input.sourceType, sourceId: input.sourceId,
         originalQty: quantity, remainingQty: quantity, unitCost, currency: input.currency,
-        valuationStatus: InventoryValuationStatus.VALUED, receivedAt: input.occurredAt,
+        valuationStatus: InventoryValuationStatus.VALUED, receivedAt: occurredAt,
       },
     });
     return mutation.inventoryPostingId!;
@@ -324,9 +361,17 @@ async function receiveInboundInventoryInTransaction(
       : PERMISSIONS.INVENTORY_POST,
     input.branchId,
   );
-  const payloadHash = hashPayload({ ...input, postingType });
+  const occurredAt = input.occurredAt ?? new Date();
+  const payloadHash = hashPayload({
+    ...input,
+    postingType,
+    occurredAt: input.occurredAt?.toISOString() ?? null,
+  });
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing;
+  if (postingType === InventoryPostingType.OPENING) {
+    await findPostingPeriod(tx, input.branchId, occurredAt);
+  }
 
   const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
   if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item penerimaan tidak ditemukan dalam branch.');
@@ -388,7 +433,7 @@ async function receiveInboundInventoryInTransaction(
       sourceNumber: input.sourceNumber,
       branchId: input.branchId,
       costCenterCode: input.costCenterCode,
-      occurredAt: input.occurredAt,
+      occurredAt,
       totalCost,
       postedBy: actorUserId,
     },
@@ -423,7 +468,7 @@ async function receiveInboundInventoryInTransaction(
       unitCost,
       currency: input.currency,
       valuationStatus: InventoryValuationStatus.VALUED,
-      receivedAt: input.occurredAt,
+      receivedAt: occurredAt,
     },
   });
   return { ...posting, stockMutationId: mutation.id, costLayerId: costLayer.id };
@@ -761,13 +806,14 @@ export async function listInventoryPostings(actorUserId: string, query: Inventor
   const where: Prisma.InventoryPostingWhereInput = query.branchId
     ? { branchId: query.branchId }
     : accessible === null ? {} : { branchId: { in: accessible } };
-  return prisma.inventoryPosting.findMany({
+  const postings = await prisma.inventoryPosting.findMany({
     where,
     include: { stockMutations: { include: { inventoryItem: { include: { masterProduct: true } }, batch: true } }, costAllocations: true },
     orderBy: [{ occurredAt: 'desc' }, { id: 'desc' }],
     skip: (query.page - 1) * query.limit,
     take: query.limit,
   });
+  return attachSourceCostLayers(postings);
 }
 
 export async function reconcileInventory(actorUserId: string, branchId: string) {

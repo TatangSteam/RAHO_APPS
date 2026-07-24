@@ -166,7 +166,7 @@ router.get('/reports/valuation', authenticate, requirePermission(PERMISSIONS.INV
 router.get('/ledger/balances', authenticate, authorize(ALLSTAFF), inventoryLedgerController.balances.bind(inventoryLedgerController));
 router.get('/ledger/postings', authenticate, authorize(ALLSTAFF), inventoryLedgerController.postings.bind(inventoryLedgerController));
 router.get('/ledger/reconciliation', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.reconcile.bind(inventoryLedgerController));
-router.post('/ledger/opening-stock', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.opening.bind(inventoryLedgerController));
+router.post('/ledger/opening-stock', authenticate, requirePermission(PERMISSIONS.INVENTORY_OPENING_POST), inventoryLedgerController.opening.bind(inventoryLedgerController));
 router.post('/ledger/receipts', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.receive.bind(inventoryLedgerController));
 router.post('/ledger/issues', authenticate, authorize(ADMIN_ROLES), inventoryLedgerController.issue.bind(inventoryLedgerController));
 router.post('/ledger/postings/:postingId/reverse', authenticate, authorize(MANAGER_ROLES), inventoryLedgerController.reverse.bind(inventoryLedgerController));

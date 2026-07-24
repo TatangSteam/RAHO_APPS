@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
-import { Prisma, ProductCategory, Role } from '@prisma/client';
+import { AccountingPeriodStatus, Prisma, ProductCategory, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
-import { issueInventory, postOpeningInventory } from '../inventory-ledger.service';
+import { issueInventory, listInventoryPostings, postOpeningInventory } from '../inventory-ledger.service';
 import { approveAndReserveStockRequest, releaseStockRequestReservations } from '../stock-reservation.service';
 
 const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describe : describe.skip;
@@ -16,6 +16,8 @@ describeDatabase('opening stock and stock request reservations', () => {
   const uomId = `reserve_uom_${runId}`;
   const productId = `reserve_product_${runId}`;
   const inventoryItemId = `reserve_item_${runId}`;
+  const periodId = `reserve_period_${runId}`;
+  const openingOccurredAt = new Date('2026-07-24T03:00:00.000Z');
 
   const assetValue = async () => {
     const layers = await prisma.inventoryCostLayer.findMany({
@@ -52,6 +54,20 @@ describeDatabase('opening stock and stock request reservations', () => {
         { id: destinationBranchId, branchCode: `RD${runId.slice(0, 7)}`, name: `Reservation Destination ${runId}` },
       ],
     });
+    await prisma.accountingPeriod.create({
+      data: {
+        id: periodId,
+        name: `UAT Opening ${runId}`,
+        fiscalYear: 2026,
+        periodNo: 1,
+        startDate: new Date('2026-01-01T00:00:00.000Z'),
+        endDate: new Date('2026-12-31T23:59:59.999Z'),
+        branchId: sourceBranchId,
+        scopeKey: sourceBranchId,
+        status: AccountingPeriodStatus.OPEN,
+        createdBy: actorId,
+      },
+    });
     await prisma.unitOfMeasure.create({ data: { id: uomId, code: `RU${runId.slice(0, 8)}`, name: `Unit ${runId}` } });
     await prisma.masterProduct.create({
       data: {
@@ -65,6 +81,8 @@ describeDatabase('opening stock and stock request reservations', () => {
         baseUomId: uomId,
         usageUomId: uomId,
         conversionFactor: '1',
+        tracksBatch: true,
+        tracksExpiry: true,
       },
     });
     await prisma.warehouse.create({
@@ -96,36 +114,113 @@ describeDatabase('opening stock and stock request reservations', () => {
     await prisma.inventoryBalance.deleteMany({ where: { branchId: sourceBranchId } });
     await prisma.inventoryPosting.deleteMany({ where: { branchId: sourceBranchId } });
     await prisma.inventoryItem.deleteMany({ where: { id: inventoryItemId } });
+    await prisma.inventoryBatch.deleteMany({ where: { masterProductId: productId } });
     await prisma.stockLocation.deleteMany({ where: { warehouseId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
     await prisma.masterProduct.deleteMany({ where: { id: productId } });
     await prisma.unitOfMeasure.deleteMany({ where: { id: uomId } });
+    await prisma.accountingPeriod.deleteMany({ where: { id: periodId } });
     await prisma.branch.deleteMany({ where: { id: { in: [sourceBranchId, destinationBranchId] } } });
     await prisma.user.deleteMany({ where: { id: actorId } });
     await prisma.$disconnect();
   }, 30_000);
 
   it('posts valued opening stock and creates its cost layer atomically', async () => {
-    const result = await postOpeningInventory(actorId, {
-      idempotencyKey: `OPENING-${runId}`,
+    const idempotencyKey = `OPENING-${runId}`;
+    const sourceId = `OPENING-DOC-${runId}`;
+    const input = {
+      idempotencyKey,
       branchId: sourceBranchId,
       inventoryItemId,
       stockLocationId: locationId,
       quantity: '10',
-      unitCost: '125',
+      unitCost: '100',
       currency: 'IDR',
-      sourceId: `OPENING-DOC-${runId}`,
+      sourceId,
       sourceNumber: `OB-${runId}`,
-      occurredAt: new Date(),
-    });
+      batch: {
+        batchNumber: 'BAT-OLD',
+        expiryDate: new Date('2027-12-31T00:00:00.000Z'),
+      },
+    } as const;
+    const beforeCounts = {
+      postings: await prisma.inventoryPosting.count({ where: { branchId: sourceBranchId } }),
+      mutations: await prisma.stockMutation.count({ where: { inventoryItemId } }),
+      layers: await prisma.inventoryCostLayer.count({ where: { inventoryBalance: { branchId: sourceBranchId } } }),
+    };
+
+    const result = await postOpeningInventory(actorId, input);
+    const replay = await postOpeningInventory(actorId, input);
 
     expect(result.type).toBe('OPENING');
-    expect(result.totalCost.toFixed(4)).toBe('1250.0000');
-    const layer = await prisma.inventoryCostLayer.findFirstOrThrow({ where: { sourceId: `OPENING-DOC-${runId}` } });
+    expect(result.sourceType).toBe('OPENING_STOCK');
+    expect(result.sourceId).toBe(sourceId);
+    expect(result.totalCost.toFixed(4)).toBe('1000.0000');
+    expect(replay.id).toBe(result.id);
+    expect(result.costLayers).toHaveLength(1);
+
+    const balance = await prisma.inventoryBalance.findFirstOrThrow({
+      where: { inventoryItemId, batch: { batchNumber: 'BAT-OLD' } },
+    });
+    expect(balance.onHandQty.toFixed(4)).toBe('10.0000');
+    expect(balance.reservedQty.toFixed(4)).toBe('0.0000');
+    expect(balance.quarantineQty.toFixed(4)).toBe('0.0000');
+
+    const mutation = await prisma.stockMutation.findFirstOrThrow({ where: { inventoryPostingId: result.id } });
+    expect(mutation.type).toBe('RECEIVED');
+    expect(mutation.stockBefore.toFixed(4)).toBe('0.0000');
+    expect(mutation.stockAfter.toFixed(4)).toBe('10.0000');
+
+    const layer = await prisma.inventoryCostLayer.findFirstOrThrow({ where: { sourceId } });
     expect(layer.originalQty.toFixed(4)).toBe('10.0000');
     expect(layer.remainingQty.toFixed(4)).toBe('10.0000');
-    expect(layer.unitCost?.toFixed(4)).toBe('125.0000');
-    expect((await assetValue()).toFixed(4)).toBe('1250.0000');
+    expect(layer.unitCost?.toFixed(4)).toBe('100.0000');
+    expect((await assetValue()).toFixed(4)).toBe('1000.0000');
+    const listed = await listInventoryPostings(actorId, {
+      branchId: sourceBranchId,
+      page: 1,
+      limit: 25,
+    });
+    expect(listed.find((posting) => posting.id === result.id)?.costLayers).toHaveLength(1);
+
+    expect(await prisma.inventoryPosting.count({ where: { branchId: sourceBranchId } })).toBe(beforeCounts.postings + 1);
+    expect(await prisma.stockMutation.count({ where: { inventoryItemId } })).toBe(beforeCounts.mutations + 1);
+    expect(await prisma.inventoryCostLayer.count({ where: { inventoryBalance: { branchId: sourceBranchId } } })).toBe(beforeCounts.layers + 1);
+
+    await expect(postOpeningInventory(actorId, { ...input, quantity: '11' }))
+      .rejects.toMatchObject({ code: 'IDEMPOTENCY_CONFLICT' });
+  });
+
+  it('rejects a new opening posting outside an OPEN accounting period', async () => {
+    await prisma.accountingPeriod.update({
+      where: { id: periodId },
+      data: { status: AccountingPeriodStatus.CLOSED },
+    });
+    const beforePostingCount = await prisma.inventoryPosting.count({ where: { branchId: sourceBranchId } });
+
+    try {
+      await expect(postOpeningInventory(actorId, {
+        idempotencyKey: `OPENING-CLOSED-${runId}`,
+        branchId: sourceBranchId,
+        inventoryItemId,
+        stockLocationId: locationId,
+        quantity: '1',
+        unitCost: '100',
+        currency: 'IDR',
+        sourceId: `OPENING-CLOSED-DOC-${runId}`,
+        occurredAt: openingOccurredAt,
+        batch: {
+          batchNumber: 'BAT-CLOSED',
+          expiryDate: new Date('2027-12-31T00:00:00.000Z'),
+        },
+      })).rejects.toMatchObject({ code: 'ACCOUNTING_PERIOD_CLOSED' });
+      expect(await prisma.inventoryPosting.count({ where: { branchId: sourceBranchId } })).toBe(beforePostingCount);
+    } finally {
+      await prisma.accountingPeriod.update({
+        where: { id: periodId },
+        data: { status: AccountingPeriodStatus.OPEN },
+      });
+    }
   });
 
   it('supports partial approval and release without changing inventory asset value', async () => {
@@ -193,7 +288,7 @@ describeDatabase('opening stock and stock request reservations', () => {
     const balance = await prisma.inventoryBalance.findFirstOrThrow({ where: { inventoryItemId } });
     expect(balance.onHandQty.toFixed(4)).toBe('10.0000');
     expect(balance.reservedQty.toFixed(4)).toBe('7.0000');
-    expect((await assetValue()).toFixed(4)).toBe('1250.0000');
+    expect((await assetValue()).toFixed(4)).toBe('1000.0000');
 
     await expect(issueInventory(actorId, {
       idempotencyKey: `ISSUE-BLOCKED-${runId}`,

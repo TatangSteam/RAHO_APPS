@@ -84,7 +84,7 @@ function postingPayloadHash(posting: ValidatedPosting) {
   return createHash('sha256').update(JSON.stringify(payload)).digest('hex');
 }
 
-async function findPostingPeriod(tx: DbClient, branchId: string, transactionDate: Date) {
+export async function findPostingPeriod(tx: DbClient, branchId: string, transactionDate: Date) {
   const dateWhere = { startDate: { lte: transactionDate }, endDate: { gte: transactionDate } };
   const branchPeriod = await tx.accountingPeriod.findFirst({
     where: { scopeKey: branchId, ...dateWhere },
