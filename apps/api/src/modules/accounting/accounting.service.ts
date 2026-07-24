@@ -20,7 +20,9 @@ import type {
   ListAccountsQuery,
   ListJournalsQuery,
   UpdateAccountInput,
+  UpdateAccountingPeriodInput,
   UpdateAccountingPeriodStatusInput,
+  ReverseManualJournalInput,
 } from './accounting.schema';
 import {
   PostJournalInput,
@@ -255,6 +257,61 @@ export async function postJournal(input: PostJournalInput, tx?: DbClient) {
     }
     throw error;
   }
+}
+
+export async function reverseManualJournalService(
+  actorUserId: string,
+  journalId: string,
+  input: ReverseManualJournalInput,
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "journal_entries" WHERE "id" = ${journalId} FOR UPDATE`);
+    const original = await tx.journalEntry.findUnique({
+      where: { id: journalId },
+      include: journalInclude,
+    });
+    if (!original) throw errors.notFound('Jurnal tidak ditemukan.');
+    await assertBranchAccess(actorUserId, original.branchId);
+    await assertPermission(actorUserId, PERMISSIONS.JOURNAL_POST, original.branchId);
+    if (original.status === 'REVERSED') {
+      throw errors.conflict('JOURNAL_ALREADY_REVERSED', 'Jurnal ini sudah dibalik.');
+    }
+    const primarySource = original.sourceLinks.find((source) => source.relationType === 'PRIMARY');
+    if (primarySource?.sourceType !== 'MANUAL_JOURNAL') {
+      throw errors.conflict('SYSTEM_JOURNAL_REVERSAL_FORBIDDEN', 'Jurnal otomatis harus dikoreksi dari dokumen sumbernya.');
+    }
+    const posting = validateAndNormalizePosting({
+      postingKey: `MANUAL_JOURNAL_REVERSAL:${input.requestId}`,
+      transactionDate: input.transactionDate,
+      branchId: original.branchId,
+      actorUserId,
+      description: `Reversal ${original.journalNumber}: ${input.reason}`,
+      lines: original.lines.map((line) => ({
+        accountCode: line.account.code,
+        debit: line.credit,
+        credit: line.debit,
+        branchId: original.branchId,
+        description: `Reversal: ${line.description || original.description}`,
+      })),
+      sourceLinks: [{
+        sourceType: 'MANUAL_JOURNAL',
+        sourceId: original.id,
+        sourceNumber: original.journalNumber,
+        relationType: 'REVERSAL',
+      }],
+      metadata: { originalJournalEntryId: original.id, reason: input.reason },
+    });
+    const reversed = await postWithinTransaction(tx, posting);
+    await tx.journalEntry.update({
+      where: { id: original.id },
+      data: {
+        status: 'REVERSED',
+        reversedAt: input.transactionDate,
+        reversedByEntryId: reversed.journal.id,
+      },
+    });
+    return reversed;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 /**
@@ -645,6 +702,31 @@ export async function updateAccountService(actorUserId: string, id: string, inpu
   return updated;
 }
 
+export async function deleteAccountService(actorUserId: string, id: string) {
+  await assertPermission(actorUserId, PERMISSIONS.ACCOUNT_MANAGE);
+  const before = await prisma.account.findUnique({
+    where: { id },
+    include: { _count: { select: { children: true, lines: true } } },
+  });
+  if (!before) throw errors.notFound('Account tidak ditemukan.');
+  if (before._count.children > 0) {
+    throw errors.conflict('ACCOUNT_HAS_CHILDREN', 'Account masih memiliki child dan tidak dapat dihapus.');
+  }
+  if (before._count.lines > 0) {
+    throw errors.conflict('ACCOUNT_ALREADY_POSTED', 'Account sudah digunakan dalam jurnal. Nonaktifkan account, jangan menghapusnya.');
+  }
+  try {
+    await prisma.account.delete({ where: { id } });
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2003') {
+      throw errors.conflict('ACCOUNT_IN_USE', 'Account sudah dipakai oleh modul lain. Nonaktifkan account, jangan menghapusnya.');
+    }
+    throw error;
+  }
+  await logAudit({ userId: actorUserId, action: 'DELETE', module: 'ACCOUNTING', resource: 'Account', resourceId: id, entityCode: before.code, beforeData: before, description: `Akun ${before.code} dihapus.` });
+  return { id, deleted: true };
+}
+
 function normalizePeriodDates(startDate: Date, endDate: Date) {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -690,6 +772,67 @@ export async function createAccountingPeriodService(actorUserId: string, input: 
   });
   await logAudit({ userId: actorUserId, branchId: input.branchId, action: 'CREATE', module: 'ACCOUNTING', resource: 'AccountingPeriod', resourceId: period.id, entityCode: `${period.fiscalYear}-${period.periodNo}`, afterData: period, description: `Periode ${period.name} dibuat.` });
   return period;
+}
+
+export async function updateAccountingPeriodService(actorUserId: string, id: string, input: UpdateAccountingPeriodInput) {
+  const before = await prisma.accountingPeriod.findUnique({
+    where: { id },
+    include: { _count: { select: { journalEntries: true } } },
+  });
+  if (!before) throw errors.notFound('Periode akuntansi tidak ditemukan.');
+  if (before.branchId) {
+    await assertBranchAccess(actorUserId, before.branchId);
+    await assertPermission(actorUserId, PERMISSIONS.ACCOUNTING_PERIOD_MANAGE, before.branchId);
+  } else {
+    await assertPermission(actorUserId, PERMISSIONS.ACCOUNTING_PERIOD_MANAGE);
+  }
+  if (before.status !== AccountingPeriodStatus.OPEN) {
+    throw errors.conflict('ACCOUNTING_PERIOD_NOT_EDITABLE', 'Hanya periode OPEN yang dapat diedit.');
+  }
+  if (before._count.journalEntries > 0) {
+    throw errors.conflict('ACCOUNTING_PERIOD_IN_USE', 'Periode sudah memiliki jurnal dan tidak dapat mengubah identitas atau tanggal.');
+  }
+  const start = input.startDate ? normalizePeriodDates(input.startDate, input.endDate || before.endDate).start : before.startDate;
+  const end = input.endDate ? normalizePeriodDates(input.startDate || before.startDate, input.endDate).end : before.endDate;
+  if (end < start) throw errors.badRequest('ACCOUNTING_PERIOD_DATE_INVALID', 'Tanggal akhir harus sama atau setelah tanggal mulai.');
+  const fiscalYear = input.fiscalYear ?? before.fiscalYear;
+  const periodNo = input.periodNo ?? before.periodNo;
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<{ lockResult: string | null }[]>(
+      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`accounting-period:${before.scopeKey}`}))::text AS "lockResult"`,
+    );
+    const overlap = await tx.accountingPeriod.findFirst({
+      where: { id: { not: id }, scopeKey: before.scopeKey, startDate: { lte: end }, endDate: { gte: start } },
+    });
+    if (overlap) throw errors.conflict('ACCOUNTING_PERIOD_OVERLAP', `Periode bertumpang tindih dengan ${overlap.name}.`);
+    return tx.accountingPeriod.update({
+      where: { id },
+      data: { name: input.name, fiscalYear, periodNo, startDate: start, endDate: end },
+      include: { branch: { select: { id: true, branchCode: true, name: true } } },
+    });
+  });
+  await logAudit({ userId: actorUserId, branchId: before.branchId, action: 'UPDATE', module: 'ACCOUNTING', resource: 'AccountingPeriod', resourceId: id, entityCode: `${updated.fiscalYear}-${updated.periodNo}`, beforeData: before, afterData: updated, description: `Periode ${before.name} diperbarui.` });
+  return updated;
+}
+
+export async function deleteAccountingPeriodService(actorUserId: string, id: string) {
+  const before = await prisma.accountingPeriod.findUnique({
+    where: { id },
+    include: { _count: { select: { journalEntries: true } } },
+  });
+  if (!before) throw errors.notFound('Periode akuntansi tidak ditemukan.');
+  if (before.branchId) {
+    await assertBranchAccess(actorUserId, before.branchId);
+    await assertPermission(actorUserId, PERMISSIONS.ACCOUNTING_PERIOD_MANAGE, before.branchId);
+  } else {
+    await assertPermission(actorUserId, PERMISSIONS.ACCOUNTING_PERIOD_MANAGE);
+  }
+  if (before.status === AccountingPeriodStatus.LOCKED || before._count.journalEntries > 0) {
+    throw errors.conflict('ACCOUNTING_PERIOD_IN_USE', 'Periode LOCKED atau yang sudah memiliki jurnal tidak dapat dihapus.');
+  }
+  await prisma.accountingPeriod.delete({ where: { id } });
+  await logAudit({ userId: actorUserId, branchId: before.branchId, action: 'DELETE', module: 'ACCOUNTING', resource: 'AccountingPeriod', resourceId: id, entityCode: `${before.fiscalYear}-${before.periodNo}`, beforeData: before, description: `Periode ${before.name} dihapus.` });
+  return { id, deleted: true };
 }
 
 export async function updateAccountingPeriodStatusService(actorUserId: string, id: string, input: UpdateAccountingPeriodStatusInput) {

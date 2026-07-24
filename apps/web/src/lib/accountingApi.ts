@@ -53,8 +53,12 @@ const unwrap = <T>(response: { data: { data: T } }) => response.data.data;
 export const accountingApi = {
   async accounts() { return unwrap<Account[]>(await api.get('/accounting/accounts')); },
   async createAccount(data: Record<string, unknown>) { return unwrap<Account>(await api.post('/accounting/accounts', data)); },
+  async updateAccount(id: string, data: Record<string, unknown>) { return unwrap<Account>(await api.patch(`/accounting/accounts/${id}`, data)); },
+  async deleteAccount(id: string) { return unwrap<{ id: string; deleted: boolean }>(await api.delete(`/accounting/accounts/${id}`)); },
   async periods() { return unwrap<AccountingPeriod[]>(await api.get('/accounting/periods')); },
   async createPeriod(data: Record<string, unknown>) { return unwrap<AccountingPeriod>(await api.post('/accounting/periods', data)); },
+  async updatePeriod(id: string, data: Record<string, unknown>) { return unwrap<AccountingPeriod>(await api.patch(`/accounting/periods/${id}`, data)); },
+  async deletePeriod(id: string) { return unwrap<{ id: string; deleted: boolean }>(await api.delete(`/accounting/periods/${id}`)); },
   async setPeriodStatus(id: string, status: AccountingPeriod['status'], reason: string) {
     return unwrap<AccountingPeriod>(await api.patch(`/accounting/periods/${id}/status`, { status, reason }));
   },
@@ -66,5 +70,13 @@ export const accountingApi = {
     return unwrap<{ journal: Journal; idempotentReplay: boolean }>(await api.post('/accounting/journals', data, {
       headers: { 'Idempotency-Key': `MANUAL_JOURNAL:${String(data.requestId || '')}` },
     }));
+  },
+  async reverseJournal(id: string, reason: string) {
+    const requestId = crypto.randomUUID();
+    return unwrap<{ journal: Journal; idempotentReplay: boolean }>(await api.post(`/accounting/journals/${id}/reverse`, {
+      transactionDate: new Date().toISOString().slice(0, 10),
+      reason,
+      requestId,
+    }, { headers: { 'Idempotency-Key': `MANUAL_JOURNAL_REVERSAL:${requestId}` } }));
   },
 };

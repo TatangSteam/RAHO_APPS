@@ -7,6 +7,8 @@ import {
   listAccountsQuerySchema,
   listJournalsQuerySchema,
   postManualJournalSchema,
+  reverseManualJournalSchema,
+  updateAccountingPeriodSchema,
   updateAccountSchema,
   updateAccountingPeriodStatusSchema,
 } from './accounting.schema';
@@ -19,6 +21,10 @@ import {
   listAccountsService,
   listJournalsService,
   postJournal,
+  deleteAccountService,
+  deleteAccountingPeriodService,
+  reverseManualJournalService,
+  updateAccountingPeriodService,
   updateAccountService,
   updateAccountingPeriodStatusService,
 } from './accounting.service';
@@ -34,6 +40,9 @@ export async function createAccount(req: Request, res: Response, next: NextFunct
 export async function updateAccount(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await updateAccountService(req.user.userId, req.params.id, updateAccountSchema.parse(req.body))); } catch (error) { next(error); }
 }
+export async function deleteAccount(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await deleteAccountService(req.user.userId, req.params.id)); } catch (error) { next(error); }
+}
 export async function listPeriods(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await listAccountingPeriodsService(req.user.userId, listAccountingPeriodsQuerySchema.parse(req.query))); } catch (error) { next(error); }
 }
@@ -42,6 +51,12 @@ export async function createPeriod(req: Request, res: Response, next: NextFuncti
 }
 export async function updatePeriodStatus(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await updateAccountingPeriodStatusService(req.user.userId, req.params.id, updateAccountingPeriodStatusSchema.parse(req.body))); } catch (error) { next(error); }
+}
+export async function updatePeriod(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await updateAccountingPeriodService(req.user.userId, req.params.id, updateAccountingPeriodSchema.parse(req.body))); } catch (error) { next(error); }
+}
+export async function deletePeriod(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await deleteAccountingPeriodService(req.user.userId, req.params.id)); } catch (error) { next(error); }
 }
 export async function postManualJournal(req: Request, res: Response, next: NextFunction) {
   try {
@@ -72,6 +87,16 @@ export async function postManualJournal(req: Request, res: Response, next: NextF
 }
 export async function listJournals(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await listJournalsService(req.user.userId, listJournalsQuerySchema.parse(req.query))); } catch (error) { next(error); }
+}
+export async function reverseManualJournal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = reverseManualJournalSchema.parse(req.body);
+    const postingKey = `MANUAL_JOURNAL_REVERSAL:${input.requestId}`;
+    if (req.get('Idempotency-Key') !== postingKey) {
+      throw errors.badRequest('IDEMPOTENCY_KEY_MISMATCH', 'Header Idempotency-Key reversal tidak sesuai.');
+    }
+    sendCreated(res, await reverseManualJournalService(req.user.userId, req.params.id, input));
+  } catch (error) { next(error); }
 }
 export async function getJournal(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await getJournalService(req.user.userId, req.params.id)); } catch (error) { next(error); }
