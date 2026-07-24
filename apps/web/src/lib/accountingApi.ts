@@ -64,7 +64,7 @@ export const accountingApi = {
   },
   async postJournal(data: Record<string, unknown>) {
     return unwrap<{ journal: Journal; idempotentReplay: boolean }>(await api.post('/accounting/journals', data, {
-      headers: { 'Idempotency-Key': String(data.postingKey || '') },
+      headers: { 'Idempotency-Key': `MANUAL_JOURNAL:${String(data.requestId || '')}` },
     }));
   },
 };

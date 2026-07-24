@@ -6,7 +6,7 @@ import {
   listAccountingPeriodsQuerySchema,
   listAccountsQuerySchema,
   listJournalsQuerySchema,
-  postJournalSchema,
+  postManualJournalSchema,
   updateAccountSchema,
   updateAccountingPeriodStatusSchema,
 } from './accounting.schema';
@@ -45,13 +45,28 @@ export async function updatePeriodStatus(req: Request, res: Response, next: Next
 }
 export async function postManualJournal(req: Request, res: Response, next: NextFunction) {
   try {
-    const input = postJournalSchema.parse(req.body);
+    const input = postManualJournalSchema.parse(req.body);
+    const postingKey = `MANUAL_JOURNAL:${input.requestId}`;
     const idempotencyKey = req.get('Idempotency-Key');
     if (!idempotencyKey) throw errors.badRequest('IDEMPOTENCY_KEY_REQUIRED', 'Header Idempotency-Key wajib diisi.');
-    if (idempotencyKey !== input.postingKey) {
-      throw errors.badRequest('IDEMPOTENCY_KEY_MISMATCH', 'Header Idempotency-Key harus sama dengan postingKey.');
+    if (idempotencyKey !== postingKey) {
+      throw errors.badRequest('IDEMPOTENCY_KEY_MISMATCH', 'Header Idempotency-Key tidak sesuai dengan request jurnal manual.');
     }
-    const result = await postJournal({ ...input, actorUserId: req.user.userId } as PostJournalInput);
+    const dateCode = input.transactionDate.toISOString().slice(0, 10).replaceAll('-', '');
+    const sourceId = `MJ-${dateCode}-${input.requestId.slice(0, 8).toUpperCase()}`;
+    const { requestId, ...journalInput } = input;
+    const result = await postJournal({
+      ...journalInput,
+      postingKey,
+      sourceLinks: [{
+        sourceType: 'MANUAL_JOURNAL',
+        sourceId,
+        sourceNumber: sourceId,
+        relationType: 'PRIMARY',
+      }],
+      metadata: { ...(journalInput.metadata || {}), manualRequestId: requestId },
+      actorUserId: req.user.userId,
+    } as PostJournalInput);
     sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
   } catch (error) { next(error); }
 }
