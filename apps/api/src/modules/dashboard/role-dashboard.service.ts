@@ -98,7 +98,6 @@ export interface AdminLayananDashboardData {
     invoiceId: string;
     invoiceNumber: string;
     memberName: string;
-    amount: number;
     daysOverdue: number;
   }>;
   membersNeedFollowup: Array<{
@@ -112,7 +111,6 @@ export interface AdminLayananDashboardData {
     sessionsCompleted: number;
     newMembers: number;
     packagesSold: number;
-    revenue: number;
   };
 }
 
@@ -836,7 +834,6 @@ export class RoleDashboardService {
       select: {
         id: true,
         invoiceNumber: true,
-        totalAmount: true,
         createdAt: true,
         member: {
           select: {
@@ -892,7 +889,7 @@ export class RoleDashboardService {
     }).slice(0, 10);
 
     // Weekly stats
-    const [weeklySessionsCompleted, weeklyNewMembers, weeklyPackagesSold, weeklyRevenue] = await Promise.all([
+    const [weeklySessionsCompleted, weeklyNewMembers, weeklyPackagesSold] = await Promise.all([
       prisma.treatmentSession.count({
         where: { branchId, treatmentDate: { gte: weekAgo }, isCompleted: true },
       }),
@@ -901,10 +898,6 @@ export class RoleDashboardService {
       }),
       prisma.memberPackage.count({
         where: { branchId, createdAt: { gte: weekAgo } },
-      }),
-      prisma.revenueRecognition.aggregate({
-        where: { branchId, status: 'POSTED', recognizedAt: { gte: weekAgo } },
-        _sum: { amount: true },
       }),
     ]);
 
@@ -929,7 +922,6 @@ export class RoleDashboardService {
         invoiceId: inv.id,
         invoiceNumber: inv.invoiceNumber,
         memberName: inv.member.user.profile?.fullName || 'Unknown',
-        amount: Number(inv.totalAmount),
         daysOverdue: Math.floor((Date.now() - inv.createdAt.getTime()) / (1000 * 60 * 60 * 24)),
       })),
       membersNeedFollowup: inactiveMembers.map(m => ({
@@ -943,7 +935,6 @@ export class RoleDashboardService {
         sessionsCompleted: weeklySessionsCompleted,
         newMembers: weeklyNewMembers,
         packagesSold: weeklyPackagesSold,
-        revenue: Number(weeklyRevenue._sum.amount || 0),
       },
     };
   }

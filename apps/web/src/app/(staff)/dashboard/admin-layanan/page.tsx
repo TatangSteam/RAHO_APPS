@@ -57,15 +57,6 @@ export default function AdminLayananDashboardPage() {
 
   if (!data) return null;
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
-
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
@@ -109,8 +100,8 @@ export default function AdminLayananDashboardPage() {
           />
           <StatCard 
             icon={<TrendingUp className="h-5 w-5" />}
-            label="Revenue Minggu Ini"
-            value={formatCurrency(data.weeklyStats.revenue)}
+            label="Paket Minggu Ini"
+            value={data.weeklyStats.packagesSold}
             color="purple"
           />
         </div>
@@ -216,11 +207,7 @@ export default function AdminLayananDashboardPage() {
                         {payment.invoiceNumber} • {payment.daysOverdue} hari
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-semibold text-amber-600 dark:text-amber-400">
-                        {formatCurrency(payment.amount)}
-                      </div>
-                    </div>
+                    <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-semibold text-amber-600 dark:text-amber-400">Perlu verifikasi</span>
                   </div>
                 ))}
               </div>
@@ -282,7 +269,7 @@ export default function AdminLayananDashboardPage() {
             Statistik Minggu Ini
           </h2>
           
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-white/50 dark:bg-neutral-800/50 rounded-xl">
               <div className="text-2xl font-bold text-neutral-900 dark:text-white">
                 {data.weeklyStats.sessionsCompleted}
@@ -300,12 +287,6 @@ export default function AdminLayananDashboardPage() {
                 {data.weeklyStats.packagesSold}
               </div>
               <div className="text-sm text-neutral-500">Paket Terjual</div>
-            </div>
-            <div className="text-center p-4 bg-white/50 dark:bg-neutral-800/50 rounded-xl">
-              <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
-                {formatCurrency(data.weeklyStats.revenue)}
-              </div>
-              <div className="text-sm text-neutral-500">Revenue</div>
             </div>
           </div>
         </div>

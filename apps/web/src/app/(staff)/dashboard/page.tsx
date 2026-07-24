@@ -2,11 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { 
-  LayoutDashboard, TrendingUp, TrendingDown, Package, Users, 
-  CreditCard, CheckCircle2, Clock, UserPlus, UsersRound,
-  ChevronRight, BarChart3
+  LayoutDashboard, Package, Users, CreditCard, CheckCircle2,
+  Clock, UserPlus, UsersRound
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { dashboardApi, type DashboardStats } from '@/lib/dashboardApi';
@@ -15,7 +13,7 @@ import {
   getDashboardRangeLabel,
   type DashboardDateRange,
 } from '@/lib/dashboardPresentation';
-import { formatCurrency, formatNumberWithDots } from '@/lib/formatNumber';
+import { formatNumberWithDots } from '@/lib/formatNumber';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 
@@ -23,8 +21,6 @@ import { DashboardDateRangeFilter } from '@/components/dashboard/DashboardDateRa
 import { DashboardErrorState } from '@/components/dashboard/DashboardErrorState';
 import { DashboardLoadingState } from '@/components/dashboard/DashboardLoadingState';
 import { DashboardStatCard as StatCard } from '@/components/dashboard/DashboardStatCard';
-import RevenueChart from '@/components/dashboard/RevenueChart';
-import RecentTransactions from '@/components/dashboard/RecentTransactions';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -138,35 +134,6 @@ export default function DashboardPage() {
           <DashboardDateRangeFilter value={dateRange} onChange={setDateRange} />
         </div>
 
-        {/* Revenue Card - Full Width */}
-        <div className="bg-gradient-to-br from-violet-500/10 to-purple-500/5 dark:from-violet-500/20 dark:to-purple-500/10 rounded-2xl border border-violet-500/20 p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-10 h-10 bg-violet-500/20 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="h-5 w-5 text-violet-500" />
-                </div>
-                <span className="text-sm font-medium text-neutral-600 dark:text-neutral-400">Total Revenue</span>
-              </div>
-              <div className="text-3xl md:text-4xl font-bold text-neutral-900 dark:text-white">
-                {formatCurrency(stats.revenue.totalRevenue)}
-              </div>
-            </div>
-            <div className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold ${
-              stats.revenue.revenueGrowth >= 0 
-                ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' 
-                : 'bg-red-500/15 text-red-600 dark:text-red-400'
-            }`}>
-              {stats.revenue.revenueGrowth >= 0 ? (
-                <TrendingUp className="h-4 w-4" />
-              ) : (
-                <TrendingDown className="h-4 w-4" />
-              )}
-              {Math.abs(stats.revenue.revenueGrowth).toFixed(1)}%
-            </div>
-          </div>
-        </div>
-
         {/* Main Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
           <StatCard 
@@ -185,9 +152,9 @@ export default function DashboardPage() {
           />
           <StatCard 
             icon={<CreditCard className="h-5 w-5" />}
-            label="Transaksi"
+            label="Aktivitas Pembayaran"
             value={formatNumberWithDots(stats.revenue.transactionCount)}
-            subtitle={`Rata-rata ${formatCurrency(stats.revenue.averageTransaction)}`}
+            subtitle="Jumlah transaksi tercatat"
             color="emerald"
           />
         </div>
@@ -222,35 +189,6 @@ export default function DashboardPage() {
           />
         </div>
 
-        {/* Revenue Chart */}
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-5 md:p-6 mb-8">
-          <div className="flex items-center gap-2 mb-4">
-            <BarChart3 className="h-5 w-5 text-blue-500" />
-            <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
-              Grafik Revenue
-            </h2>
-          </div>
-          <RevenueChart data={stats.revenue.revenueByDay} />
-        </div>
-
-        {/* Recent Transactions */}
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-5 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-emerald-500" />
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">
-                Transaksi Terbaru
-              </h2>
-            </div>
-            <Link 
-              href="/members"
-              className="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1"
-            >
-              Lihat Semua <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-          <RecentTransactions transactions={stats.recentTransactions} />
-        </div>
       </div>
     </div>
   );

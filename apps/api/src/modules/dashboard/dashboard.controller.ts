@@ -63,6 +63,15 @@ export class DashboardController {
 
       console.log('Fetching dashboard stats for branch:', branchId);
       const stats = await dashboardService.getBranchDashboard(branchId, startDate, endDate);
+
+      // Operational roles receive counts only, never monetary dashboard data.
+      if (userRole === 'ADMIN_CABANG' || userRole === 'ADMIN_LAYANAN' || userRole === 'DOCTOR' || userRole === 'NURSE') {
+        const { revenue: financialRevenue, recentTransactions, topPackages, ...operationalStats } = stats;
+        return sendSuccess(res, {
+          ...operationalStats,
+          revenue: { transactionCount: financialRevenue.transactionCount },
+        });
+      }
       
       console.log('✅ Dashboard stats retrieved successfully');
       return sendSuccess(res, stats);

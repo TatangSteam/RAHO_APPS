@@ -153,7 +153,6 @@ export interface AdminLayananDashboardData {
     invoiceId: string;
     invoiceNumber: string;
     memberName: string;
-    amount: number;
     daysOverdue: number;
   }>;
   membersNeedFollowup: Array<{
@@ -167,7 +166,6 @@ export interface AdminLayananDashboardData {
     sessionsCompleted: number;
     newMembers: number;
     packagesSold: number;
-    revenue: number;
   };
 }
 
