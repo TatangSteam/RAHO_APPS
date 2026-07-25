@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Plus, RefreshCw, Trash2, Warehouse as WarehouseIcon } from 'lucide-react';
 import { api } from '@/lib/api';
 import { inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
@@ -24,8 +24,7 @@ export default function InventoryMasterDataPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [warehouseForm, setWarehouseForm] = useState({ code: '', name: '', isDefault: false });
-  const [locationForm, setLocationForm] = useState({ warehouseId: '', code: '', name: '' });
+  const [warehouseForm, setWarehouseForm] = useState({ code: '', name: '' });
   const [uomForm, setUomForm] = useState({ code: '', name: '', category: 'GENERAL', precision: 4 });
   const [productForm, setProductForm] = useState({ sku: '', name: '', category: 'CONSUMABLE', baseUomId: '', usageUomId: '', conversionFactor: '1', tracksBatch: false, tracksExpiry: false });
   const [batchForm, setBatchForm] = useState({ masterProductId: '', batchNumber: '', manufactureDate: '', expiryDate: '' });
@@ -100,7 +99,7 @@ export default function InventoryMasterDataPage() {
         name: 'Warehouse Utama',
         isDefault: true,
       });
-      showToast.success('Warehouse dan lokasi utama berhasil disiapkan.');
+      showToast.success('Warehouse utama berhasil disiapkan.');
       await load();
     } catch (requestError: any) {
       showToast.error(requestError.response?.data?.error?.message || 'Gagal menyiapkan warehouse utama.');
@@ -145,7 +144,7 @@ export default function InventoryMasterDataPage() {
   return (
     <main className={styles.page}>
       <header className={styles.header}>
-        <div><h1>Master Inventori</h1><p>Warehouse, lokasi, satuan, produk, konversi, dan batch.</p></div>
+        <div><h1>Master Inventori</h1><p>Warehouse, satuan, produk, konversi, dan batch.</p></div>
         <button className={styles.secondaryButton} onClick={() => void load()} title="Muat ulang"><RefreshCw size={16} /></button>
       </header>
 
@@ -155,7 +154,7 @@ export default function InventoryMasterDataPage() {
 
       <nav className={styles.tabs} aria-label="Master inventory">
         {(canManage
-          ? ([['WAREHOUSE', 'Warehouse & Lokasi'], ['UOM', 'UOM'], ['PRODUCT', 'Produk'], ['BATCH', 'Batch']] as const)
+          ? ([['WAREHOUSE', 'Warehouse'], ['UOM', 'UOM'], ['PRODUCT', 'Produk'], ['BATCH', 'Batch']] as const)
           : ([['UOM', 'UOM & Preview Konversi']] as const)
         ).map(([value, label]) => <button key={value} className={`${styles.tab} ${tab === value ? styles.tabActive : ''}`} onClick={() => setTab(value)}>{label}</button>)}
       </nav>
@@ -164,19 +163,21 @@ export default function InventoryMasterDataPage() {
       {loading ? <div className={styles.loading}>Memuat master data...</div> : (
         <>
           {tab === 'WAREHOUSE' && <section>
-            {canManage && <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createWarehouse({ branchId, ...warehouseForm }), () => setWarehouseForm({ code: '', name: '', isDefault: false }))}>
-              <label className={styles.field}><span>Kode warehouse</span><input className={styles.input} required value={warehouseForm.code} onChange={(event) => setWarehouseForm({ ...warehouseForm, code: event.target.value })} /></label>
-              <label className={styles.field}><span>Nama</span><input className={styles.input} required value={warehouseForm.name} onChange={(event) => setWarehouseForm({ ...warehouseForm, name: event.target.value })} /></label>
-              <label><input type="checkbox" checked={warehouseForm.isDefault} onChange={(event) => setWarehouseForm({ ...warehouseForm, isDefault: event.target.checked })} /> Default</label>
-              <button className={styles.button} disabled={saving || !branchId}><Plus size={15} /> Warehouse</button>
-            </form>}
-            {canManage && <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createStockLocation(locationForm), () => setLocationForm({ warehouseId: '', code: '', name: '' }))}>
-              <label className={styles.field}><span>Warehouse</span><select className={styles.select} required disabled={warehouses.length === 0} value={locationForm.warehouseId} onChange={(event) => setLocationForm({ ...locationForm, warehouseId: event.target.value })}><option value="">{warehouses.length === 0 ? 'Buat warehouse terlebih dahulu' : 'Pilih'}</option>{warehouses.filter((warehouse) => warehouse.isActive).map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.code} - {warehouse.name}</option>)}</select></label>
-              <label className={styles.field}><span>Kode lokasi</span><input className={styles.input} required value={locationForm.code} onChange={(event) => setLocationForm({ ...locationForm, code: event.target.value })} /></label>
-              <label className={styles.field}><span>Nama lokasi</span><input className={styles.input} required value={locationForm.name} onChange={(event) => setLocationForm({ ...locationForm, name: event.target.value })} /></label>
-              <button className={styles.button} disabled={saving || warehouses.length === 0}><Plus size={15} /> Lokasi</button>
-            </form>}
-            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Kode</th><th>Warehouse</th><th>Cabang</th><th>Lokasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{warehouses.length === 0 ? <tr><td colSpan={6}><div className={styles.emptyState}><strong>Belum ada warehouse untuk cabang ini.</strong><span>Siapkan penyimpanan utama agar lokasi dan transaksi inventory dapat digunakan.</span>{canManage && <button type="button" className={styles.button} disabled={saving || !branchId} onClick={() => void createDefaultStorage()}><Plus size={15} /> Siapkan Warehouse Default</button>}</div></td></tr> : warehouses.map((warehouse) => <tr key={warehouse.id}><td>{warehouse.code}</td><td>{warehouse.name}</td><td>{warehouse.branch?.name}</td><td>{warehouse.locations?.map((location: Row) => `${location.code} - ${location.name}`).join(', ') || '-'}</td><td><span className={warehouse.isActive ? styles.badge : styles.inactiveBadge}>{warehouse.isDefault ? 'Default' : warehouse.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && !warehouse.isDefault && warehouse.isActive ? <button className={styles.dangerButton} title="Nonaktifkan" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.deactivateWarehouse(warehouse.id), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
+            {canManage && <div className={styles.formCard}>
+              <div className={styles.formCardHeader}>
+                <WarehouseIcon size={20} aria-hidden="true" />
+                <div>
+                  <h2>Tambah Warehouse</h2>
+                  <p>Lokasi utama dibuat otomatis. Anda tidak perlu mengatur lokasi stok secara terpisah.</p>
+                </div>
+              </div>
+              <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createWarehouse({ branchId, ...warehouseForm }), () => setWarehouseForm({ code: '', name: '' }))}>
+                <label className={styles.field}><span>Kode warehouse</span><input className={styles.input} required value={warehouseForm.code} onChange={(event) => setWarehouseForm({ ...warehouseForm, code: event.target.value })} placeholder="Contoh: WH-PST" /></label>
+                <label className={styles.field}><span>Nama warehouse</span><input className={styles.input} required value={warehouseForm.name} onChange={(event) => setWarehouseForm({ ...warehouseForm, name: event.target.value })} placeholder="Contoh: Warehouse Pusat" /></label>
+                <button className={styles.button} disabled={saving || !branchId}><Plus size={15} /> Tambah Warehouse</button>
+              </form>
+            </div>}
+            <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Kode</th><th>Warehouse</th><th>Cabang</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{warehouses.length === 0 ? <tr><td colSpan={5}><div className={styles.emptyState}><strong>Belum ada warehouse untuk cabang ini.</strong><span>Siapkan warehouse utama agar transaksi inventory dapat digunakan.</span>{canManage && <button type="button" className={styles.button} disabled={saving || !branchId} onClick={() => void createDefaultStorage()}><Plus size={15} /> Siapkan Warehouse Default</button>}</div></td></tr> : warehouses.map((warehouse) => <tr key={warehouse.id}><td>{warehouse.code}</td><td>{warehouse.name}</td><td>{warehouse.branch?.name}</td><td><span className={warehouse.isActive ? styles.badge : styles.inactiveBadge}>{warehouse.isDefault ? 'Default' : warehouse.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && !warehouse.isDefault && warehouse.isActive ? <button className={styles.dangerButton} title="Nonaktifkan" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.deactivateWarehouse(warehouse.id), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
           </section>}
 
           {tab === 'UOM' && <section>

@@ -6,37 +6,19 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { inventoryApi, type Shipment, type ReceiveShipmentInput, type ShipShipmentInput, type ShipmentIssueDecision, type UpdateShipmentInput } from '@/lib/api/inventoryApi';
-import { Truck, Package, RefreshCw, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight, Edit3 } from 'lucide-react';
+import { Truck, Package, Calendar, Send, Inbox, AlertTriangle, FileText, ChevronRight, Edit3 } from 'lucide-react';
 import { ShipModal, ReceiveModal, DetailModal, NotesModal, SendShortageModal, EditShipmentModal } from './components';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
+import { getShipmentApiErrorMessage } from './shipmentErrorPresentation';
 
 type ShipmentStatus = 'ALL' | 'PREPARING' | 'SHIPPED' | 'PARTIALLY_RECEIVED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE';
 type ShipmentQueryParams = NonNullable<Parameters<typeof inventoryApi.getShipments>[0]>;
-type ApiErrorLike = {
-  response?: {
-    data?: {
-      message?: string;
-    };
-  };
-};
-
 const STATUS_LABELS: Record<string, string> = {
   PREPARING: 'Sedang Disiapkan',
   SHIPPED: 'Dikirim',
   PARTIALLY_RECEIVED: 'Diterima Sebagian',
   RECEIVED: 'Diterima',
   RECEIVED_WITH_ISSUE: 'Diterima (Ada Masalah)',
-};
-
-const getApiErrorMessage = (error: unknown, fallback: string) => {
-  if (typeof error === 'object' && error !== null && 'response' in error) {
-    const response = (error as ApiErrorLike).response;
-    if (typeof response?.data?.message === 'string') {
-      return response.data.message;
-    }
-  }
-
-  return fallback;
 };
 
 export default function ShipmentsPage() {
@@ -117,7 +99,7 @@ export default function ShipmentsPage() {
       closeModal();
       fetchShipments();
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal mengirim pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal mengirim pengiriman'));
     } finally {
       setActionLoading(false);
     }
@@ -134,7 +116,7 @@ export default function ShipmentsPage() {
       closeModal();
       fetchShipments();
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal menerima pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal menerima pengiriman'));
     } finally {
       setActionLoading(false);
     }
@@ -157,7 +139,7 @@ export default function ShipmentsPage() {
       closeModal();
       fetchShipments();
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal memperbarui pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal memperbarui pengiriman'));
     } finally {
       setActionLoading(false);
     }
@@ -190,7 +172,7 @@ export default function ShipmentsPage() {
         setSelectedShipment(detail as Shipment);
       }
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
     } finally {
       setDetailLoading(false);
     }
@@ -209,7 +191,7 @@ export default function ShipmentsPage() {
         setSelectedShipment(detail as Shipment);
       }
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal memuat detail pengiriman'));
     } finally {
       setDetailLoading(false);
     }
@@ -286,7 +268,7 @@ export default function ShipmentsPage() {
       closeModal();
       fetchShipments();
     } catch (error: unknown) {
-      showToast.error(getApiErrorMessage(error, 'Gagal memproses tindak lanjut pengiriman'));
+      showToast.error(getShipmentApiErrorMessage(error, 'Gagal memproses tindak lanjut pengiriman'));
     } finally {
       setActionLoading(false);
     }

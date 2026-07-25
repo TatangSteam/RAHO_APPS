@@ -44,6 +44,10 @@ type LockedBalance = {
 };
 
 type LockedLayer = FifoLayerInput;
+type InboundInventoryInput = ReceiveInventoryInput | (OpeningInventoryInput & {
+  sourceType: string;
+  reasonCode: string;
+});
 
 const MAX_TRANSACTION_ATTEMPTS = 3;
 
@@ -124,6 +128,75 @@ async function lockInventoryItems(tx: Tx, ids: string[]): Promise<LockedInventor
     ORDER BY "id"
     FOR UPDATE
   `);
+}
+
+async function resolveInboundInventoryItem(
+  tx: Tx,
+  input: InboundInventoryInput,
+  type: InventoryPostingType,
+): Promise<LockedInventoryItem> {
+  if (input.inventoryItemId) {
+    const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
+    if (!item || item.branchId !== input.branchId) {
+      throw errors.notFound('Inventory item tidak ditemukan dalam branch.');
+    }
+    return item;
+  }
+
+  const masterProductId = 'masterProductId' in input ? input.masterProductId : undefined;
+  if (type !== InventoryPostingType.OPENING || !masterProductId) {
+    throw errors.badRequest('INVENTORY_ITEM_REQUIRED', 'Inventory item wajib dipilih.');
+  }
+
+  const product = await tx.masterProduct.findUnique({
+    where: { id: masterProductId },
+    select: { id: true, isActive: true },
+  });
+  if (!product?.isActive) {
+    throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
+  }
+
+  const warehouse = await tx.warehouse.findFirst({
+    where: { branchId: input.branchId, isActive: true },
+    include: {
+      locations: {
+        where: { isActive: true },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+        take: 1,
+      },
+    },
+    orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+  });
+  const location = warehouse?.locations[0];
+  if (!warehouse || !location) {
+    throw errors.badRequest('WAREHOUSE_REQUIRED', 'Buat warehouse cabang terlebih dahulu sebelum opening stock.');
+  }
+
+  let inventoryItem = await tx.inventoryItem.findUnique({
+    where: { masterProductId_branchId: { masterProductId, branchId: input.branchId } },
+    select: { id: true, stockLocationId: true },
+  });
+  if (!inventoryItem) {
+    inventoryItem = await tx.inventoryItem.create({
+      data: {
+        masterProductId,
+        branchId: input.branchId,
+        warehouseId: warehouse.id,
+        stockLocationId: location.id,
+      },
+      select: { id: true, stockLocationId: true },
+    });
+  } else if (!inventoryItem.stockLocationId) {
+    inventoryItem = await tx.inventoryItem.update({
+      where: { id: inventoryItem.id },
+      data: { warehouseId: warehouse.id, stockLocationId: location.id },
+      select: { id: true, stockLocationId: true },
+    });
+  }
+
+  const [lockedItem] = await lockInventoryItems(tx, [inventoryItem.id]);
+  if (!lockedItem) throw errors.notFound('Inventory item gagal disiapkan untuk branch.');
+  return lockedItem;
 }
 
 async function lockBalances(
@@ -230,7 +303,7 @@ async function loadPostingResult(postingId: string) {
 
 async function postInboundInventory(
   actorUserId: string,
-  input: ReceiveInventoryInput,
+  input: InboundInventoryInput,
   type: InventoryPostingType,
 ) {
   await assertBranchAccess(actorUserId, input.branchId);
@@ -253,8 +326,7 @@ async function postInboundInventory(
       await findPostingPeriod(tx, input.branchId, occurredAt);
     }
 
-    const [item] = await lockInventoryItems(tx, [input.inventoryItemId]);
-    if (!item || item.branchId !== input.branchId) throw errors.notFound('Inventory item tidak ditemukan dalam branch.');
+    const item = await resolveInboundInventoryItem(tx, input, type);
     const product = await tx.masterProduct.findUnique({ where: { id: item.masterProductId } });
     if (!product?.isActive) throw errors.badRequest('INVALID_PRODUCT', 'Product tidak aktif atau tidak ditemukan.');
     const location = await assertLocationForItem(tx, item, input.stockLocationId);

@@ -84,11 +84,9 @@ export async function createWarehouse(userId: string, input: CreateWarehouseInpu
         createdBy: userId,
       },
     });
-    if (makeDefault) {
-      await tx.stockLocation.create({
-        data: { warehouseId: warehouse.id, code: 'DEFAULT', name: 'Lokasi Utama', isDefault: true, createdBy: userId },
-      });
-    }
+    await tx.stockLocation.create({
+      data: { warehouseId: warehouse.id, code: 'DEFAULT', name: 'Lokasi Utama', isDefault: true, createdBy: userId },
+    });
     return warehouse;
   });
   await logAudit({ userId, branchId: input.branchId, action: 'CREATE', resource: 'Warehouse', resourceId: created.id, afterData: created });

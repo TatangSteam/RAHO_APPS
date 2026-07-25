@@ -15,6 +15,7 @@ describeDatabase('opening stock and stock request reservations', () => {
   const locationId = `reserve_loc_${runId}`;
   const uomId = `reserve_uom_${runId}`;
   const productId = `reserve_product_${runId}`;
+  const unlinkedProductId = `reserve_unlinked_product_${runId}`;
   const inventoryItemId = `reserve_item_${runId}`;
   const periodId = `reserve_period_${runId}`;
   const openingOccurredAt = new Date('2026-07-24T03:00:00.000Z');
@@ -85,6 +86,22 @@ describeDatabase('opening stock and stock request reservations', () => {
         tracksExpiry: true,
       },
     });
+    await prisma.masterProduct.create({
+      data: {
+        id: unlinkedProductId,
+        sku: `UNLINKED-${runId}`,
+        name: `Unlinked Opening Product ${runId}`,
+        category: ProductCategory.CONSUMABLE,
+        unit: 'unit',
+        baseUnit: 'unit',
+        usageUnit: 'unit',
+        baseUomId: uomId,
+        usageUomId: uomId,
+        conversionFactor: '1',
+        tracksBatch: true,
+        tracksExpiry: true,
+      },
+    });
     await prisma.warehouse.create({
       data: { id: warehouseId, branchId: sourceBranchId, code: 'MAIN', name: 'Main', isDefault: true, createdBy: actorId },
     });
@@ -109,15 +126,15 @@ describeDatabase('opening stock and stock request reservations', () => {
     await prisma.shipment.deleteMany({ where: { stockRequest: { requestedBy: actorId } } });
     await prisma.stockRequest.deleteMany({ where: { requestedBy: actorId } });
     await prisma.inventoryCostAllocation.deleteMany({ where: { posting: { branchId: sourceBranchId } } });
-    await prisma.stockMutation.deleteMany({ where: { inventoryItemId } });
+    await prisma.stockMutation.deleteMany({ where: { inventoryItem: { branchId: sourceBranchId } } });
     await prisma.inventoryCostLayer.deleteMany({ where: { inventoryBalance: { branchId: sourceBranchId } } });
     await prisma.inventoryBalance.deleteMany({ where: { branchId: sourceBranchId } });
     await prisma.inventoryPosting.deleteMany({ where: { branchId: sourceBranchId } });
-    await prisma.inventoryItem.deleteMany({ where: { id: inventoryItemId } });
-    await prisma.inventoryBatch.deleteMany({ where: { masterProductId: productId } });
+    await prisma.inventoryItem.deleteMany({ where: { branchId: sourceBranchId } });
+    await prisma.inventoryBatch.deleteMany({ where: { masterProductId: { in: [productId, unlinkedProductId] } } });
     await prisma.stockLocation.deleteMany({ where: { warehouseId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
-    await prisma.masterProduct.deleteMany({ where: { id: productId } });
+    await prisma.masterProduct.deleteMany({ where: { id: { in: [productId, unlinkedProductId] } } });
     await prisma.unitOfMeasure.deleteMany({ where: { id: uomId } });
     await prisma.accountingPeriod.deleteMany({ where: { id: periodId } });
     await prisma.branch.deleteMany({ where: { id: { in: [sourceBranchId, destinationBranchId] } } });
@@ -313,4 +330,44 @@ describeDatabase('opening stock and stock request reservations', () => {
     expect(afterIssue.onHandQty.toFixed(4)).toBe('7.0000');
     expect(afterIssue.reservedQty.toFixed(4)).toBe('7.0000');
   }, 60_000);
+
+  it('automatically links a master product to the branch during opening stock', async () => {
+    expect(await prisma.inventoryItem.findUnique({
+      where: {
+        masterProductId_branchId: {
+          masterProductId: unlinkedProductId,
+          branchId: sourceBranchId,
+        },
+      },
+    })).toBeNull();
+
+    const result = await postOpeningInventory(actorId, {
+      idempotencyKey: `OPENING-AUTO-LINK-${runId}`,
+      branchId: sourceBranchId,
+      masterProductId: unlinkedProductId,
+      quantity: '2',
+      unitCost: '50',
+      currency: 'IDR',
+      sourceId: `OPENING-AUTO-LINK-DOC-${runId}`,
+      occurredAt: openingOccurredAt,
+      batch: {
+        batchNumber: 'BAT-AUTO-LINK',
+        expiryDate: new Date('2027-12-31T00:00:00.000Z'),
+      },
+    });
+
+    const item = await prisma.inventoryItem.findUniqueOrThrow({
+      where: {
+        masterProductId_branchId: {
+          masterProductId: unlinkedProductId,
+          branchId: sourceBranchId,
+        },
+      },
+    });
+    expect(item.warehouseId).toBe(warehouseId);
+    expect(item.stockLocationId).toBe(locationId);
+    expect(item.stock.toFixed(4)).toBe('2.0000');
+    expect(result.stockMutations[0]?.inventoryItemId).toBe(item.id);
+    expect(result.costLayers).toHaveLength(1);
+  });
 });

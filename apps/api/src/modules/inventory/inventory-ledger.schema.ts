@@ -37,6 +37,25 @@ export const receiveInventorySchema = z.object({
 export const openingInventorySchema = receiveInventorySchema.omit({
   sourceType: true,
   reasonCode: true,
+  inventoryItemId: true,
+}).extend({
+  inventoryItemId: z.string().trim().min(1).optional(),
+  masterProductId: z.string().trim().min(1).optional(),
+}).superRefine((value, ctx) => {
+  if (!value.inventoryItemId && !value.masterProductId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['masterProductId'],
+      message: 'Pilih product untuk opening stock',
+    });
+  }
+  if (value.inventoryItemId && value.masterProductId) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['masterProductId'],
+      message: 'Gunakan inventory item atau master product, bukan keduanya',
+    });
+  }
 });
 
 export const issueInventorySchema = z.object({

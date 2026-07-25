@@ -7,6 +7,7 @@ import { inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import styles from '../operations.module.css';
+import { extractCollectionRows } from './stockReservationPresentation';
 
 type Row = Record<string, any>;
 type DraftLine = { approvedQty: string; stockLocationId: string };
@@ -49,7 +50,7 @@ export default function StockReservationsPage() {
       setLoading(true);
       setError('');
       const branchResponse = await api.get('/branches', { params: { isActive: true, limit: 100 } });
-      const branchRows = branchResponse.data?.data || [];
+      const branchRows = extractCollectionRows<Row>(branchResponse.data);
       setBranches(branchRows);
       const selectedBranchId = sourceBranchId || branchRows[0]?.id || '';
       if (!sourceBranchId && selectedBranchId) setSourceBranchId(selectedBranchId);
@@ -60,16 +61,17 @@ export default function StockReservationsPage() {
         inventoryApi.getLedgerBalances({ branchId: selectedBranchId, limit: 100 }),
         inventoryApi.getStockReservations({ sourceBranchId: selectedBranchId, status: 'ACTIVE', limit: 100 }),
       ]);
-      const requestRows = requestResponse.data?.data || [];
-      const balanceRows = balanceResponse.data?.data?.data || [];
+      const requestRows = extractCollectionRows<Row>(requestResponse.data);
+      const balanceRows = extractCollectionRows<Row>(balanceResponse.data);
+      const reservationRows = extractCollectionRows<Row>(reservationResponse.data);
       setRequests(requestRows);
       setBalances(balanceRows);
-      setReservations(reservationResponse.data?.data?.data || []);
+      setReservations(reservationRows);
 
       const nextDrafts: Record<string, Record<string, DraftLine>> = {};
       requestRows.forEach((request: Row) => {
         nextDrafts[request.id] = {};
-        request.items.forEach((item: Row) => {
+        extractCollectionRows<Row>(request.items).forEach((item: Row) => {
           const locations = availableByLocation(balanceRows, item.masterProductId);
           const location = locations[0];
           const requested = Number(item.finalQty ?? item.requestedQty ?? 0);
@@ -100,7 +102,7 @@ export default function StockReservationsPage() {
   };
 
   const approve = async (request: Row) => {
-    const lines = request.items.map((item: Row) => ({
+    const lines = extractCollectionRows<Row>(request.items).map((item: Row) => ({
       stockRequestItemId: item.id,
       approvedQty: drafts[request.id]?.[item.id]?.approvedQty || '0',
       stockLocationId: drafts[request.id]?.[item.id]?.stockLocationId || undefined,
@@ -163,7 +165,7 @@ export default function StockReservationsPage() {
         <div className={styles.sectionHeader}><h2>Menunggu approval</h2><span>{requests.length} request</span></div>
         <div className={styles.requestList}>{requests.length === 0 ? <div className={styles.empty}>Tidak ada request pending.</div> : requests.map((request) => <article className={styles.requestCard} key={request.id}>
           <div className={styles.requestHeader}><div><strong>{request.requestCode}</strong><span>{request.branchName}</span></div><span className={styles.warningBadge}>PENDING</span></div>
-          <div className={styles.lineGrid}>{request.items.map((item: Row) => {
+          <div className={styles.lineGrid}>{extractCollectionRows<Row>(request.items).map((item: Row) => {
             const locations = availableByLocation(balances, item.masterProductId);
             const draft = drafts[request.id]?.[item.id] || { approvedQty: '0', stockLocationId: '' };
             const selectedLocation = locations.find((location) => location.id === draft.stockLocationId);

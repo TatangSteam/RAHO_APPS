@@ -196,24 +196,24 @@ Evidence: permission efektif sebelum/sesudah override, response self-escalation,
 
 Evidence: daftar cabang, pesan duplikasi, dan audit create/update/deactivate.
 
-### UAT-S01-04 - Warehouse dan stock location
+### UAT-S01-04 - Warehouse dan lokasi utama otomatis
 
 | Field | Value |
 |---|---|
 | Actors | `USR-LOG-MAKER`, `USR-AC-A` |
-| Channel | UI `/inventory/master-data`, tab `Warehouse & Lokasi` |
+| Channel | UI `/inventory/master-data`, tab `Warehouse` |
 | Preconditions | `BR-PUSAT` dan `BR-A` aktif |
 | Mapping | Inventory master, `AUTH-01`, `BR-01` |
 
 | Step | Action | Expected result |
 |---:|---|---|
-| 1 | Buat `WH-PUSAT` sebagai warehouse default `BR-PUSAT`. | Warehouse aktif, terikat ke Pusat, dan ditandai default. |
-| 2 | Buat `WH-A`, `LOC-A-GOOD`, dan `LOC-A-QUAR` untuk Cabang A. | Lokasi tampil di bawah warehouse yang benar. |
-| 3 | Coba membuat lokasi Cabang A di warehouse Pusat. | Server menolak cross-branch relationship. |
-| 4 | Login `USR-AC-A` dan lihat master. | Hanya master dalam scope yang dapat digunakan untuk transaksi Cabang A. |
-| 5 | Coba nonaktifkan warehouse default yang masih dipakai. | Sistem menolak atau meminta penggantian default; referensi transaksi tidak rusak. |
+| 1 | Buat `WH-PUSAT` untuk `BR-PUSAT`. | Warehouse aktif, terikat ke Pusat, ditandai default jika menjadi warehouse pertama, dan mempunyai `Lokasi Utama` internal. |
+| 2 | Buat `WH-A` untuk Cabang A. | Warehouse aktif dan `Lokasi Utama` dibuat otomatis tanpa input tambahan. |
+| 3 | Coba membuat warehouse Cabang A dengan kode yang sama. | Server menolak duplikasi tanpa membuat record kedua. |
+| 4 | Login `USR-AC-A` dan lihat master. | Hanya warehouse dalam scope Cabang A yang dapat digunakan. |
+| 5 | Coba nonaktifkan warehouse default yang masih dipakai. | Sistem menolak; referensi transaksi tidak rusak. |
 
-Evidence: struktur warehouse-location, response cross-branch, dan audit.
+Evidence: daftar warehouse per cabang, lokasi utama otomatis dari response API, pesan duplikasi, dan audit.
 
 ### UAT-S01-05 - Product, category, batch/expiry flags
 
@@ -332,13 +332,13 @@ Evidence: journal number, lines balanced, response unbalanced, source link.
 |---|---|
 | Actors | `USR-LOG-APPROVER` |
 | Channel | UI `/inventory/ledger` atau API opening stock |
-| Preconditions | Master `PRD-VITC`, `LOC-PST-GOOD`, `BAT-OLD`; period `OPEN` |
+| Preconditions | Master `PRD-VITC`, warehouse Pusat dengan lokasi utama otomatis, `BAT-OLD`; period `OPEN`. Inventory item cabang belum wajib tersedia. |
 | Test data | 10 VIAL x 100.00 |
 | Mapping | Inventory ledger foundation, `INV-01` sampai `INV-04` |
 
 | Step | Action | Expected result |
 |---:|---|---|
-| 1 | Post opening stock 10 VIAL pada `BAT-OLD`. | Posting `OPENING` berhasil dan mempunyai source reference. |
+| 1 | Pilih `PRD-VITC`, lalu post opening stock 10 VIAL pada `BAT-OLD`. | Product tampil walaupun belum mempunyai inventory item cabang; posting `OPENING` berhasil, inventory item cabang dibuat otomatis, dan source reference tersimpan. |
 | 2 | Buka balance produk-lokasi-batch. | On-hand dan available bertambah 10; reserved/quarantine sesuai nol. |
 | 3 | Buka mutation dan cost layer. | Mutation `RECEIVED`/opening mencatat before 0 after 10; layer original=remaining=10, unit cost 100.00. |
 | 4 | Retry dengan idempotency key dan payload sama. | Record yang sama dikembalikan; tidak ada quantity/layer kedua. |
