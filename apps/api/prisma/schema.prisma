@@ -704,6 +704,8 @@ model User {
   approvalDecisions           ApprovalDecision[]       @relation("ApprovalDecisionApprover")
   approvalAuditLogs           ApprovalAuditLog[]       @relation("ApprovalAuditActor")
   stockOpnamesCreated         StockOpname[]            @relation("StockOpnameCreatedBy")
+  zohoConnectionsCreated      ZohoConnection[]         @relation("ZohoConnectionCreatedBy")
+  zohoConnectionsUpdated      ZohoConnection[]         @relation("ZohoConnectionUpdatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -733,6 +735,31 @@ model User {
   @@index([roleTemplateId])
   @@index([staffCode])
   @@map("users")
+}
+
+model ZohoConnection {
+  id                    String    @id @default(cuid())
+  organizationId        String    @unique
+  organizationName      String
+  dataCenter            String
+  apiDomain             String
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  scopes                String
+  isActive              Boolean   @default(true)
+  lastCheckedAt         DateTime?
+  lastError             String?
+  createdById           String
+  updatedById           String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  createdBy User @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
+  updatedBy User @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
+
+  @@index([isActive])
+  @@map("zoho_connections")
 }
 
 model UserProfile {

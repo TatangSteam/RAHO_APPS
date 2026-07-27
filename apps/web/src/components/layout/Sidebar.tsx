@@ -10,6 +10,7 @@ import {
   FileSpreadsheet, ShieldCheck, Landmark, ReceiptText, Scale,
   Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
   ListTree,
+  PlugZap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -320,6 +321,12 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/admin/audit-logs',
         icon: <ClipboardList size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'],
+      },
+      {
+        label: 'Integrasi Zoho',
+        href: '/admin/integrations/zoho',
+        icon: <PlugZap size={20} />,
+        roles: ['SUPER_ADMIN'],
       },
     ],
   },

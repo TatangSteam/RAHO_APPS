@@ -30,6 +30,14 @@ const envSchema = z.object({
   RATE_LIMIT_MAX: z.coerce.number().default(100),
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
   E2E_DISABLE_RATE_LIMIT: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+
+  ZOHO_CLIENT_ID: z.string().optional(),
+  ZOHO_CLIENT_SECRET: z.string().optional(),
+  ZOHO_REDIRECT_URI: z.string().url().optional(),
+  ZOHO_TOKEN_ENCRYPTION_KEY: z.string().min(32).optional(),
+  ZOHO_ACCOUNTS_BASE_URL: z.string().url().default('https://accounts.zoho.com'),
+  ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
+  ZOHO_WEB_REDIRECT_URL: z.string().url().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
