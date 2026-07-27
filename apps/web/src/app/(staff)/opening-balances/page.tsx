@@ -77,7 +77,10 @@ export default function OpeningBalancesPage() {
   };
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
+    <div className="mx-auto max-w-7xl space-y-6
+      [&_select]:text-neutral-900 [&_option]:bg-white [&_option]:text-neutral-900
+      dark:[&_select]:text-neutral-100 dark:[&_select]:[color-scheme:dark]
+      dark:[&_option]:bg-neutral-900 dark:[&_option]:text-neutral-100">
       <header className="flex items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold"><Scale /> Opening Balance</h1>
@@ -280,7 +283,7 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
 
   return (
     <form onSubmit={submit} className="space-y-3 rounded-xl border bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid min-w-0 gap-3 md:grid-cols-3">
         <Field label="Cabang">
           <select required disabled={Boolean(existing)} value={form.branchId} onChange={(event) => setForm({ ...form, branchId: event.target.value })}>
             <option value="">Pilih cabang</option>
@@ -291,36 +294,36 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
         <Field label="Keterangan"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></Field>
       </div>
       <div className="space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div><h3 className="font-semibold">Rincian saldo awal</h3><p className="text-xs text-neutral-500">Tambahkan baris debit dan kredit seperti lembar kerja jurnal.</p></div>
           <button type="button" onClick={() => setLines((current) => [...current, { type: 'GENERAL', accountCode: '', description: '', debit: '0', credit: '0' }])} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><Plus size={15} /> Tambah baris</button>
         </div>
         {lines.map((line, index) => (
-          <div key={index} className="space-y-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
-            <div className="grid gap-3 md:grid-cols-[160px_1fr_1fr_auto]">
-              <label className="grid gap-1 text-xs font-medium">Jenis saldo
-                <select value={line.type} onChange={(event) => changeType(index, event.target.value as OpeningLine['type'])} className="h-10 rounded-lg border bg-transparent px-2 text-sm">
+          <div key={index} className="min-w-0 space-y-4 rounded-xl border border-neutral-200 p-4 dark:border-neutral-800">
+            <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[180px_minmax(240px,1fr)_minmax(280px,1fr)_44px]">
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Jenis saldo
+                <select value={line.type} onChange={(event) => changeType(index, event.target.value as OpeningLine['type'])} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm">
                   <option value="GENERAL">Umum</option><option value="CASH_BANK">Kas / Bank</option><option value="INVENTORY">Persediaan</option><option value="AR">Piutang</option><option value="AP">Utang</option><option value="DEPOSIT">Deposit</option><option value="DEFERRED_REVENUE">Pendapatan diterima di muka</option>
                 </select>
               </label>
-              <label className="grid gap-1 text-xs font-medium">Akun
-                <select required value={line.accountCode} onChange={(event) => updateLine(index, { accountCode: event.target.value })} className="h-10 rounded-lg border bg-transparent px-2 text-sm">
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Akun
+                <select required value={line.accountCode} onChange={(event) => updateLine(index, { accountCode: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm">
                   <option value="">Pilih akun</option>
                   {accounts.map((account) => <option key={account.id} value={account.code}>{account.code} — {account.name}</option>)}
                 </select>
               </label>
-              <label className="grid gap-1 text-xs font-medium">Keterangan
-                <input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-10 rounded-lg border bg-transparent px-3 text-sm" placeholder="Contoh: Saldo awal kas" />
+              <label className="grid min-w-0 gap-1 text-xs font-medium md:col-span-2 xl:col-span-1">Keterangan
+                <input required value={line.description} onChange={(event) => updateLine(index, { description: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" placeholder="Contoh: Saldo awal kas" />
               </label>
-              <button type="button" disabled={lines.length <= 2} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} className="self-end rounded-lg border p-2.5 text-red-600 disabled:opacity-30" title="Hapus baris"><Trash2 size={16} /></button>
+              <button type="button" disabled={lines.length <= 2} onClick={() => setLines((current) => current.filter((_, lineIndex) => lineIndex !== index))} className="h-10 w-11 self-end justify-self-end rounded-lg border text-red-600 disabled:cursor-not-allowed disabled:opacity-30 md:col-start-2 xl:col-start-auto" title={lines.length <= 2 ? 'Minimal dua baris diperlukan' : 'Hapus baris'}><Trash2 className="mx-auto" size={16} /></button>
             </div>
 
             {line.type === 'CASH_BANK' && (
-              <label className="grid gap-1 text-xs font-medium">Rekening kas/bank
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Rekening kas/bank
                 <select required value={line.cashBankAccountId || ''} onChange={(event) => {
                   const selected = cashAccounts.find((account) => account.id === event.target.value);
                   updateLine(index, { cashBankAccountId: event.target.value, accountCode: selected?.coaAccount.code || line.accountCode });
-                }} className="h-10 rounded-lg border bg-transparent px-2 text-sm">
+                }} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm">
                   <option value="">Pilih rekening</option>
                   {cashAccounts.map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
                 </select>
@@ -328,27 +331,27 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
             )}
 
             {['AR', 'AP', 'DEPOSIT', 'DEFERRED_REVENUE'].includes(line.type) && (
-              <label className="grid gap-1 text-xs font-medium">Referensi pihak/dokumen
-                <input value={line.counterpartyRef || ''} onChange={(event) => updateLine(index, { counterpartyRef: event.target.value })} className="h-10 rounded-lg border bg-transparent px-3 text-sm" placeholder="Contoh: INV-001, Supplier ABC, atau kontrak member" />
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Referensi pihak/dokumen
+                <input value={line.counterpartyRef || ''} onChange={(event) => updateLine(index, { counterpartyRef: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" placeholder="Contoh: INV-001, Supplier ABC, atau kontrak member" />
               </label>
             )}
 
             {line.type === 'INVENTORY' && (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-                <label className="grid gap-1 text-xs font-medium">Item persediaan<select required value={line.inventoryItemId || ''} onChange={(event) => updateLine(index, { inventoryItemId: event.target.value })} className="h-10 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih item</option>{items.map((item) => <option key={item.id} value={item.id}>{item.masterProduct?.sku || '-'} — {item.masterProduct?.name || item.id}</option>)}</select></label>
-                <label className="grid gap-1 text-xs font-medium">Lokasi stok<select required value={line.stockLocationId || ''} onChange={(event) => updateLine(index, { stockLocationId: event.target.value })} className="h-10 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih lokasi</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code ? `${location.code} — ` : ''}{location.name}</option>)}</select></label>
-                <label className="grid gap-1 text-xs font-medium">Jumlah<input required type="number" min="0" step="0.0001" value={line.quantity || ''} onChange={(event) => updateLine(index, { quantity: event.target.value })} className="h-10 rounded-lg border bg-transparent px-3 text-sm" /></label>
-                <label className="grid gap-1 text-xs font-medium">Harga per unit<input required type="number" min="0" step="0.0001" value={line.unitCost || ''} onChange={(event) => updateLine(index, { unitCost: event.target.value })} className="h-10 rounded-lg border bg-transparent px-3 text-sm" /></label>
-                <label className="grid gap-1 text-xs font-medium">Batch (opsional)<input value={line.batchNumber || ''} onChange={(event) => updateLine(index, { batchNumber: event.target.value })} className="h-10 rounded-lg border bg-transparent px-3 text-sm" /></label>
+              <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-5">
+                <label className="grid min-w-0 gap-1 text-xs font-medium">Item persediaan<select required value={line.inventoryItemId || ''} onChange={(event) => updateLine(index, { inventoryItemId: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih item</option>{items.map((item) => <option key={item.id} value={item.id}>{item.masterProduct?.sku || '-'} — {item.masterProduct?.name || item.id}</option>)}</select></label>
+                <label className="grid min-w-0 gap-1 text-xs font-medium">Lokasi stok<select required value={line.stockLocationId || ''} onChange={(event) => updateLine(index, { stockLocationId: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih lokasi</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code ? `${location.code} — ` : ''}{location.name}</option>)}</select></label>
+                <label className="grid min-w-0 gap-1 text-xs font-medium">Jumlah<input required type="number" min="0" step="0.0001" value={line.quantity || ''} onChange={(event) => updateLine(index, { quantity: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>
+                <label className="grid min-w-0 gap-1 text-xs font-medium">Harga per unit<input required type="number" min="0" step="0.0001" value={line.unitCost || ''} onChange={(event) => updateLine(index, { unitCost: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>
+                <label className="grid min-w-0 gap-1 text-xs font-medium">Batch (opsional)<input value={line.batchNumber || ''} onChange={(event) => updateLine(index, { batchNumber: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>
               </div>
             )}
 
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1 text-xs font-medium">Debit
-                <div className="relative"><span className="absolute left-3 top-2.5 text-sm text-neutral-500">Rp</span><input type="number" min="0" step="0.01" disabled={line.type === 'INVENTORY'} value={line.debit} onChange={(event) => updateLine(index, { debit: event.target.value, credit: Number(event.target.value) > 0 ? '0' : line.credit })} className="h-10 w-full rounded-lg border bg-transparent pl-10 pr-3 text-right text-sm" /></div>
+            <div className="grid min-w-0 gap-3 md:grid-cols-2">
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Debit
+                <div className="relative min-w-0"><span className="absolute left-3 top-2.5 text-sm text-neutral-500">Rp</span><input type="number" min="0" step="0.01" disabled={line.type === 'INVENTORY'} value={line.debit} onChange={(event) => updateLine(index, { debit: event.target.value, credit: Number(event.target.value) > 0 ? '0' : line.credit })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent pl-10 pr-3 text-right text-sm" /></div>
               </label>
-              <label className="grid gap-1 text-xs font-medium">Kredit
-                <div className="relative"><span className="absolute left-3 top-2.5 text-sm text-neutral-500">Rp</span><input type="number" min="0" step="0.01" disabled={line.type === 'INVENTORY'} value={line.credit} onChange={(event) => updateLine(index, { credit: event.target.value, debit: Number(event.target.value) > 0 ? '0' : line.debit })} className="h-10 w-full rounded-lg border bg-transparent pl-10 pr-3 text-right text-sm" /></div>
+              <label className="grid min-w-0 gap-1 text-xs font-medium">Kredit
+                <div className="relative min-w-0"><span className="absolute left-3 top-2.5 text-sm text-neutral-500">Rp</span><input type="number" min="0" step="0.01" disabled={line.type === 'INVENTORY'} value={line.credit} onChange={(event) => updateLine(index, { credit: event.target.value, debit: Number(event.target.value) > 0 ? '0' : line.debit })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent pl-10 pr-3 text-right text-sm" /></div>
               </label>
             </div>
           </div>
