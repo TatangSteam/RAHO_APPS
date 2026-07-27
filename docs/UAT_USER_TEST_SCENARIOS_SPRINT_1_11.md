@@ -294,7 +294,7 @@ Evidence: account tree, error account non-posting/nonaktif, audit perubahan.
 
 | Field | Value |
 |---|---|
-| Actors | `USR-FIN-APPROVER` |
+| Actors | `USR-FIN-MAKER` (Autonomous Finance) |
 | Channel | UI `/accounting`, bagian Period |
 | Preconditions | Satu period UAT untuk bulan transaksi belum ada |
 | Mapping | `FIN-02` |
@@ -397,8 +397,8 @@ Evidence: invoice snapshot, dua payment ID, outstanding per tahap.
 
 | Step | Action | Expected result |
 |---:|---|---|
-| 1 | Buka protected payment proof sebagai approver. | File dapat dilihat; URL/object tidak public. |
-| 2 | Verifikasi payment ke cash/bank account yang dipilih. | Payment verified satu kali. |
+| 1 | Buka protected payment proof sebagai Finance. | File dapat dilihat; URL/object tidak public. |
+| 2 | Finance memverifikasi payment buatannya ke cash/bank account yang dipilih. | Self-verification diizinkan untuk role template Finance; payment verified satu kali. |
 | 3 | Buka cash/bank ledger. | Ada receipt 600.00 dengan source payment yang sama. |
 | 4 | Buka journal dari source payment. | Journal posted, debit/credit balanced, branch dan period benar. |
 | 5 | Ulangi verify pada payment sama. | Tidak membuat cash transaction atau journal kedua. |
@@ -409,14 +409,14 @@ Evidence: payment proof access, cash transaction ID, journal number, count sebel
 
 | Field | Value |
 |---|---|
-| Actors | `USR-FIN-APPROVER`, `USR-FIN-MAKER` |
+| Actors | `USR-FIN-MAKER` (Autonomous Finance) |
 | Channel | UI `/payments` |
 | Preconditions | Payment baru dengan bukti tidak valid |
 | Mapping | Payment rejection, AC-006 |
 
 | Step | Action | Expected result |
 |---:|---|---|
-| 1 | Reject payment dengan alasan wajib. | Status rejected, alasan terlihat, invoice outstanding tidak berkurang. |
+| 1 | Finance reject payment buatannya dengan alasan wajib. | Self-rejection diizinkan untuk role template Finance; status rejected, alasan terlihat, invoice outstanding tidak berkurang. |
 | 2 | Periksa cash/bank dan journal. | Tidak ada posting finansial untuk payment rejected. |
 | 3 | Submit ulang bukti sesuai flow yang tersedia. | Payment kembali dapat direview tanpa menghapus histori reject. |
 | 4 | Kirim dua request verify bersamaan. | Maksimal satu posting; request lain replay/conflict yang aman. |
@@ -483,30 +483,30 @@ Evidence: dua response concurrency, saldo akhir, original/reversal posting IDs.
 
 ## 9. Sprint 4 - Opening Balance, Expense, Stock Request, dan Reservation
 
-### UAT-S04-01 - Opening balance balanced dengan maker-checker
+### UAT-S04-01 - Opening balance balanced oleh Autonomous Finance
 
 | Field | Value |
 |---|---|
-| Actors | `USR-FIN-MAKER`, `USR-FIN-APPROVER` |
+| Actors | `USR-FIN-MAKER` (Autonomous Finance) |
 | Channel | UI `/opening-balances` |
 | Preconditions | Period cutover `OPEN`; account mapping tersedia |
-| Mapping | Opening cash/bank, inventory, AR, AP, deposit, deferred; `MCK-01` |
+| Mapping | Opening cash/bank, inventory, AR, AP, deposit, deferred; Autonomous Finance exception atas `MCK-01` |
 
 | Step | Action | Expected result |
 |---:|---|---|
 | 1 | Maker membuat opening dengan total debit 5,000.00 dan credit 5,000.00 menggunakan beberapa line type. | Status `DRAFT`; source line tersimpan. |
 | 2 | Maker submit. | Status `SUBMITTED`; submitted actor/time tercatat. |
-| 3 | Maker mencoba post dokumen sendiri. | Ditolak oleh maker-checker. |
-| 4 | Approver berbeda memeriksa dan post. | Status `POSTED`; journal balanced dan source links tersedia. |
+| 3 | Finance memeriksa lalu post dokumen buatannya sendiri. | Self-post diizinkan untuk role template Finance; status `POSTED`, journal balanced, dan source links tersedia. |
+| 4 | Ulangi post dokumen yang sama. | Menjadi idempotent replay; tidak membuat journal atau subledger kedua. |
 | 5 | Buka cash/bank serta inventory line terkait. | Subledger yang relevan terbentuk satu kali sesuai opening. |
 
-Evidence: opening number, maker/checker IDs, journal, subledger references.
+Evidence: opening number, Finance actor/reviewer ID yang sama, journal, subledger references, dan hasil retry.
 
 ### UAT-S04-02 - Opening tidak balanced, reject, dan resubmit
 
 | Field | Value |
 |---|---|
-| Actors | `USR-FIN-MAKER`, `USR-FIN-APPROVER` |
+| Actors | `USR-FIN-MAKER` (Autonomous Finance) |
 | Channel | UI `/opening-balances` |
 | Preconditions | Opening draft baru |
 | Mapping | `FIN-01`, opening rejection |
@@ -515,7 +515,7 @@ Evidence: opening number, maker/checker IDs, journal, subledger references.
 |---:|---|---|
 | 1 | Masukkan debit 1,000.00 dan credit 999.00. | Submit/post ditolak karena tidak balanced. |
 | 2 | Koreksi menjadi balanced dan submit. | Status `SUBMITTED`. |
-| 3 | Approver reject dengan alasan. | Status `REJECTED`, alasan dan reviewer tersimpan. |
+| 3 | Finance reject dokumen buatannya dengan alasan. | Self-rejection diizinkan untuk role template Finance; status `REJECTED`, alasan dan reviewer tersimpan. |
 | 4 | Maker memperbaiki lalu submit ulang. | Status kembali `SUBMITTED`; histori reject tetap tersedia. |
 | 5 | Post dua kali. | Posting kedua menjadi replay/tidak membuat journal kedua. |
 

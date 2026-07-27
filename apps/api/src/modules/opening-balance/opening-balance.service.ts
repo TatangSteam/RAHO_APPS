@@ -8,7 +8,7 @@ import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import { postJournal } from '@modules/accounting/accounting.service';
 import { receiveOpeningInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
 import { logAudit } from '@utils/auditLog';
-import type { CreateOpeningBalanceInput, ListOpeningBalancesQuery } from './opening-balance.schema';
+import type { CreateOpeningBalanceInput, ListOpeningBalancesQuery, UpdateOpeningBalanceInput } from './opening-balance.schema';
 import { calculateOpeningTotals, hasExactCurrencyPrecision, openingInventoryValue } from './opening-balance.helpers';
 
 const includeOpening = {
@@ -39,6 +39,7 @@ function formatOpening(row: any) {
     totalCredit: row.totalCredit.toFixed(2),
     lines: row.lines.map((line: any) => ({
       ...line,
+      accountCode: line.account.code,
       debit: line.debit.toFixed(2),
       credit: line.credit.toFixed(2),
       quantity: line.quantity?.toFixed(4),
@@ -152,9 +153,108 @@ export async function submitOpeningBalance(userId: string, id: string) {
   if (opening.status !== OpeningBalanceStatus.DRAFT && opening.status !== OpeningBalanceStatus.REJECTED) {
     throw errors.conflict('OPENING_STATUS_INVALID', 'Hanya opening balance DRAFT/REJECTED yang dapat diajukan.');
   }
-  const updated = await prisma.openingBalance.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: new Date(), rejectionReason: null } });
+  const updated = await prisma.openingBalance.update({ where: { id }, data: { status: 'SUBMITTED', submittedAt: new Date() } });
   await logAudit({ userId, branchId: opening.branchId, action: 'UPDATE', resource: 'OpeningBalance', resourceId: id, entityCode: opening.documentNumber, beforeData: { status: opening.status }, afterData: { status: updated.status } });
   return updated;
+}
+
+export async function updateOpeningBalance(userId: string, id: string, input: UpdateOpeningBalanceInput) {
+  const opening = await prisma.openingBalance.findUnique({ where: { id } });
+  if (!opening) throw errors.notFound('Opening balance tidak ditemukan.');
+  await assertBranchAccess(userId, opening.branchId);
+  await assertPermission(userId, PERMISSIONS.OPENING_BALANCE_MANAGE, opening.branchId);
+  if (opening.createdBy !== userId) throw errors.forbidden('Hanya maker yang dapat mengubah opening balance.');
+  if (opening.status !== OpeningBalanceStatus.DRAFT && opening.status !== OpeningBalanceStatus.REJECTED) {
+    throw errors.conflict('OPENING_EDIT_STATUS_INVALID', 'Hanya opening balance DRAFT/REJECTED yang dapat diubah.');
+  }
+
+  const accountCodes = [...new Set(input.lines.map((line) => line.accountCode.toUpperCase()))];
+  const accounts = await prisma.account.findMany({ where: { code: { in: accountCodes }, isActive: true, allowPosting: true } });
+  const accountByCode = new Map(accounts.map((account) => [account.code, account]));
+  const missing = accountCodes.filter((code) => !accountByCode.has(code));
+  if (missing.length) throw errors.badRequest('OPENING_ACCOUNT_INVALID', `Account tidak aktif/postable: ${missing.join(', ')}.`);
+
+  const { debit: totalDebit, credit: totalCredit } = calculateOpeningTotals(input.lines);
+  if (!totalDebit.equals(totalCredit) || totalDebit.lessThanOrEqualTo(0)) {
+    throw errors.unprocessable('OPENING_NOT_BALANCED', `Opening balance tidak seimbang: debit ${totalDebit.toFixed(2)}, kredit ${totalCredit.toFixed(2)}.`);
+  }
+
+  const normalized = [] as Array<any>;
+  for (const [index, line] of input.lines.entries()) {
+    const debit = new Prisma.Decimal(line.debit);
+    const credit = new Prisma.Decimal(line.credit);
+    const account = accountByCode.get(line.accountCode.toUpperCase())!;
+    if (line.type === 'CASH_BANK') {
+      const cash = await prisma.cashBankAccount.findUnique({ where: { id: line.cashBankAccountId! } });
+      if (!cash?.isActive || cash.branchId !== opening.branchId || cash.coaAccountId !== account.id || !credit.isZero()) {
+        throw errors.badRequest('OPENING_CASH_INVALID', `Line ${index + 1}: akun kas/bank, COA, branch, atau sisi debit tidak valid.`);
+      }
+    }
+    if (line.type === 'INVENTORY') {
+      const item = await prisma.inventoryItem.findUnique({ where: { id: line.inventoryItemId! } });
+      const location = await prisma.stockLocation.findUnique({ where: { id: line.stockLocationId! }, include: { warehouse: true } });
+      const quantity = new Prisma.Decimal(line.quantity!);
+      const unitCost = new Prisma.Decimal(line.unitCost!);
+      if (!item || item.branchId !== opening.branchId || !location?.isActive || location.warehouse.branchId !== opening.branchId || !credit.isZero()) {
+        throw errors.badRequest('OPENING_INVENTORY_INVALID', `Line ${index + 1}: item/lokasi/branch atau sisi debit tidak valid.`);
+      }
+      const inventoryValue = openingInventoryValue(quantity, unitCost);
+      if (!hasExactCurrencyPrecision(inventoryValue) || !inventoryValue.equals(debit)) {
+        throw errors.unprocessable('OPENING_INVENTORY_VALUE_MISMATCH', `Line ${index + 1}: quantity × unit cost harus tepat dua desimal dan sama dengan debit.`);
+      }
+    }
+    normalized.push({
+      lineNo: index + 1,
+      type: line.type,
+      accountId: account.id,
+      description: line.description,
+      debit,
+      credit,
+      counterpartyRef: line.counterpartyRef,
+      cashBankAccountId: line.cashBankAccountId,
+      inventoryItemId: line.inventoryItemId,
+      stockLocationId: line.stockLocationId,
+      quantity: line.quantity ? new Prisma.Decimal(line.quantity) : null,
+      unitCost: line.unitCost ? new Prisma.Decimal(line.unitCost) : null,
+      batchNumber: line.batchNumber,
+      manufactureDate: line.manufactureDate,
+      expiryDate: line.expiryDate,
+    });
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "opening_balances" WHERE "id" = ${id} FOR UPDATE`);
+    const locked = await tx.openingBalance.findUniqueOrThrow({ where: { id } });
+    if (locked.status !== OpeningBalanceStatus.DRAFT && locked.status !== OpeningBalanceStatus.REJECTED) {
+      throw errors.conflict('OPENING_EDIT_STATUS_INVALID', 'Status berubah; opening balance tidak dapat diedit.');
+    }
+    await tx.openingBalanceLine.deleteMany({ where: { openingBalanceId: id } });
+    await tx.openingBalanceLine.createMany({
+      data: normalized.map((line) => ({ ...line, openingBalanceId: id })),
+    });
+    await tx.openingBalance.update({
+      where: { id },
+      data: { description: input.description, totalDebit, totalCredit },
+    });
+    await tx.auditLog.create({
+      data: {
+        userId,
+        branchId: opening.branchId,
+        action: 'UPDATE',
+        module: 'ACCOUNTING',
+        resource: 'OpeningBalance',
+        resourceId: id,
+        entityType: 'OpeningBalance',
+        entityId: id,
+        entityCode: opening.documentNumber,
+        beforeData: { status: opening.status, totalDebit: opening.totalDebit.toFixed(2), totalCredit: opening.totalCredit.toFixed(2) },
+        afterData: { status: opening.status, totalDebit: totalDebit.toFixed(2), totalCredit: totalCredit.toFixed(2) },
+        description: `Opening balance ${opening.documentNumber} dikoreksi.`,
+      },
+    });
+    return tx.openingBalance.findUniqueOrThrow({ where: { id }, include: includeOpening });
+  });
+  return formatOpening(updated);
 }
 
 export async function postOpeningBalance(userId: string, id: string) {
@@ -271,7 +371,10 @@ export async function rejectOpeningBalance(userId: string, id: string, reason: s
   if (!opening) throw errors.notFound('Opening balance tidak ditemukan.');
   await assertBranchAccess(userId, opening.branchId);
   await assertPermission(userId, PERMISSIONS.OPENING_BALANCE_POST, opening.branchId);
-  if (opening.createdBy === userId) throw errors.forbidden('Maker tidak boleh menolak opening balance sendiri.');
+  const autonomousFinance = await isAutonomousFinanceUser(userId);
+  if (opening.createdBy === userId && !autonomousFinance) {
+    throw errors.forbidden('Maker non-Finance tidak boleh menolak opening balance sendiri.');
+  }
   if (opening.status !== OpeningBalanceStatus.SUBMITTED) throw errors.conflict('OPENING_NOT_SUBMITTED', 'Opening balance belum diajukan.');
   const updated = await prisma.openingBalance.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });
   await logAudit({ userId, branchId: opening.branchId, action: 'STATUS_CHANGE', resource: 'OpeningBalance', resourceId: id, entityCode: opening.documentNumber, beforeData: { status: opening.status }, afterData: { status: updated.status, rejectionReason: reason } });
@@ -286,5 +389,25 @@ export async function listOpeningBalances(userId: string, query: ListOpeningBala
     include: includeOpening,
     orderBy: [{ balanceDate: 'desc' }, { createdAt: 'desc' }],
   });
-  return rows.map(formatOpening);
+  const historyRows = rows.length === 0 ? [] : await prisma.auditLog.findMany({
+    where: { resource: 'OpeningBalance', resourceId: { in: rows.map((row) => row.id) } },
+    select: {
+      id: true,
+      resourceId: true,
+      action: true,
+      beforeData: true,
+      afterData: true,
+      description: true,
+      createdAt: true,
+      user: { select: { id: true, email: true, profile: { select: { fullName: true } } } },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  const historyByOpening = new Map<string, typeof historyRows>();
+  for (const history of historyRows) {
+    const bucket = historyByOpening.get(history.resourceId) || [];
+    bucket.push(history);
+    historyByOpening.set(history.resourceId, bucket);
+  }
+  return rows.map((row) => ({ ...formatOpening(row), history: historyByOpening.get(row.id) || [] }));
 }

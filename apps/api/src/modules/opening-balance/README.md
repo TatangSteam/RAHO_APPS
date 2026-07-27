@@ -1,8 +1,15 @@
 # Sprint 4 — Opening Balance
 
 Alur dokumen: `DRAFT -> SUBMITTED -> POSTED` atau `SUBMITTED -> REJECTED`.
-Maker hanya dapat membuat/mengajukan; checker yang berbeda wajib memiliki
-`OPENING_BALANCE.POST` dan `JOURNAL.POST`.
+User dengan role template aktif `FINANCE` atau `FINANCE_DUMMY` mengelola alur
+end-to-end dan dapat post/reject dokumen buatannya sendiri. Role lain tetap
+memerlukan checker berbeda dengan permission `OPENING_BALANCE.POST` dan
+`JOURNAL.POST`.
+
+Dokumen berstatus `DRAFT` atau `REJECTED` dapat dikoreksi oleh maker melalui
+`PATCH /opening-balances/:id`. Penggantian lines dilakukan atomik, divalidasi
+ulang agar balanced, dan dicatat pada audit history sebelum dapat diajukan
+kembali.
 
 Saat posting, satu Prisma transaction melakukan seluruh perubahan berikut:
 

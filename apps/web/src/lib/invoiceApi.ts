@@ -50,6 +50,14 @@ export const invoiceApi = {
     return response.data.data;
   },
 
+  finalizeInvoice: async (invoiceId: string, dueDate?: string) => {
+    const response = await api.post<{ data: Invoice }>(
+      `/invoices/${invoiceId}/finalize`,
+      dueDate ? { dueDate: new Date(`${dueDate}T00:00:00.000Z`).toISOString() } : {},
+    );
+    return response.data.data;
+  },
+
   // Record invoice payment
   recordPayment: async (invoiceId: string, data: RecordPaymentInput) => {
     const form = new FormData();
@@ -69,7 +77,14 @@ export const invoiceApi = {
   },
 
   verifyPayment: async (paymentId: string, reason?: string) => {
-    const response = await api.post(`/invoices/payments/${paymentId}/verify`, { reason });
+    const response = await api.post<{
+      data: {
+        payment: { id: string; verificationStatus: string };
+        cashBankTransaction: { id: string; transactionNumber: string } | null;
+        journal?: { id: string; journalNumber: string };
+        idempotentReplay: boolean;
+      };
+    }>(`/invoices/payments/${paymentId}/verify`, { reason });
     return response.data.data;
   },
 

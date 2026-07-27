@@ -13,7 +13,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
-import { getApiErrorMessage } from '@/lib/api';
+import { api, getApiErrorMessage } from '@/lib/api';
 import { invoiceApi } from '@/lib/invoiceApi';
 import { cashBankApi, type CashBankAccount } from '@/lib/cashBankApi';
 import type {
@@ -37,7 +37,7 @@ import {
   type PaymentMethod,
 } from './paymentPresentation';
 
-type ModalType = 'invoice' | 'detail' | 'payment' | 'verify' | 'approve' | 'reject' | 'refund' | null;
+type ModalType = 'invoice' | 'detail' | 'finalize' | 'payment' | 'verify' | 'approve' | 'reject' | 'refund' | null;
 
 const PAYMENT_METHOD_LABEL: Record<ApiPaymentMethod, PaymentMethod> = {
   CASH: 'Cash',
@@ -110,6 +110,7 @@ function toPaymentInvoice(invoice: ApiInvoice): Invoice {
       .filter((reference): reference is string => Boolean(reference)),
     refundAmount: 0,
     createdAt: invoice.createdAt?.slice(0, 10) || '',
+    isDraft: invoice.status === 'DRAFT',
     pendingPayments: payments
       .filter((payment) => payment.verificationStatus === 'PENDING')
       .map((payment) => ({
@@ -119,6 +120,15 @@ function toPaymentInvoice(invoice: ApiInvoice): Invoice {
         reference: payment.paymentReference,
         proofUrl: payment.proofFileUrl,
       })),
+    payments: payments.map((payment) => ({
+      id: payment.id,
+      amount: Number(payment.amount),
+      method: PAYMENT_METHOD_LABEL[payment.paymentMethod],
+      reference: payment.paymentReference,
+      proofUrl: payment.proofFileUrl,
+      status: payment.verificationStatus,
+      rejectionReason: payment.verificationReason,
+    })),
   };
 }
 
@@ -206,7 +216,16 @@ export default function PaymentsPage() {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
   const [paymentProof, setPaymentProof] = useState<File | null>(null);
+  const [protectedProofPreview, setProtectedProofPreview] = useState<string | null>(null);
+  const [proofPreviewError, setProofPreviewError] = useState('');
   const [toast, setToast] = useState('');
+  const [postingEvidence, setPostingEvidence] = useState<{
+    paymentId: string;
+    cashTransactionId?: string;
+    cashTransactionNumber?: string;
+    journalNumber?: string;
+    idempotentReplay: boolean;
+  } | null>(null);
   const [formError, setFormError] = useState('');
   const [invoiceForm, setInvoiceForm] = useState({
     memberName: '',
@@ -225,6 +244,7 @@ export default function PaymentsPage() {
     reason: '',
     amount: '',
   });
+  const [dueDate, setDueDate] = useState('');
 
   const fetchInvoices = useCallback(async () => {
     if (!canAccess) {
@@ -254,6 +274,37 @@ export default function PaymentsPage() {
     void fetchInvoices();
   }, [fetchInvoices]);
 
+  useEffect(() => {
+    if (modal !== 'verify' || !selectedPaymentId) {
+      setProofPreviewError('');
+      return;
+    }
+    const payment = invoices
+      .flatMap((invoice) => invoice.payments || [])
+      .find((item) => item.id === selectedPaymentId);
+    if (!payment?.proofUrl) {
+      setProtectedProofPreview(null);
+      setProofPreviewError('');
+      return;
+    }
+    setProtectedProofPreview(null);
+    setProofPreviewError('');
+    let objectUrl: string | null = null;
+    void api.get(payment.proofUrl, { responseType: 'blob' })
+      .then((response) => {
+        objectUrl = URL.createObjectURL(response.data);
+        setProtectedProofPreview(objectUrl);
+        setProofPreviewError('');
+      })
+      .catch((error) => {
+        setProtectedProofPreview(null);
+        setProofPreviewError(getApiErrorMessage(error));
+      });
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [invoices, modal, selectedPaymentId]);
+
   const selectedInvoice = useMemo(
     () => invoices.find((invoice) => invoice.id === selectedInvoiceId) || null,
     [invoices, selectedInvoiceId],
@@ -274,14 +325,31 @@ export default function PaymentsPage() {
   };
 
   const openInvoiceModal = (invoice: Invoice, nextModal: ModalType) => {
-    const balance = Math.max(invoice.total - invoice.paidAmount - invoice.refundAmount, 0);
+    const balance = remainingAmount(invoice);
     setSelectedInvoiceId(invoice.id);
     setFormError('');
     const defaultAccount = cashBankAccounts.find((account) => account.type === 'CASH');
     setPaymentForm({ method: 'Cash', amount: balance > 0 ? String(balance) : '', cashBankAccountId: defaultAccount?.id || '', reference: '', notes: '' });
     setPaymentProof(null);
     setReasonForm({ notes: '', reason: '', amount: '' });
+    setDueDate('');
     setModal(nextModal);
+  };
+
+  const submitFinalize = async () => {
+    if (!selectedInvoice) return;
+    setSubmittingPayment(true);
+    setFormError('');
+    try {
+      await invoiceApi.finalizeInvoice(selectedInvoice.id, dueDate || undefined);
+      await fetchInvoices();
+      setToast(`Invoice ${selectedInvoice.invoiceNumber || selectedInvoice.id} difinalisasi; snapshot terkunci`);
+      setModal(null);
+    } catch (error) {
+      setFormError(getApiErrorMessage(error));
+    } finally {
+      setSubmittingPayment(false);
+    }
   };
 
   const addInvoiceItem = () => {
@@ -336,7 +404,7 @@ export default function PaymentsPage() {
       return;
     }
 
-    const balance = Math.max(selectedInvoice.total - selectedInvoice.paidAmount - selectedInvoice.refundAmount, 0);
+    const balance = remainingAmount(selectedInvoice);
     if (balance > 0 && amount > balance) {
       setFormError('Jumlah pembayaran tidak boleh melebihi sisa tagihan.');
       return;
@@ -383,10 +451,21 @@ export default function PaymentsPage() {
     setSubmittingPayment(true);
     setFormError('');
     try {
-      if (approved) await invoiceApi.verifyPayment(selectedPaymentId, reasonForm.notes.trim() || undefined);
-      else await invoiceApi.rejectPayment(selectedPaymentId, reasonForm.reason.trim());
+      if (approved) {
+        const result = await invoiceApi.verifyPayment(selectedPaymentId, reasonForm.notes.trim() || undefined);
+        setPostingEvidence({
+          paymentId: result.payment.id,
+          cashTransactionId: result.cashBankTransaction?.id,
+          cashTransactionNumber: result.cashBankTransaction?.transactionNumber,
+          journalNumber: result.journal?.journalNumber,
+          idempotentReplay: result.idempotentReplay,
+        });
+      } else {
+        await invoiceApi.rejectPayment(selectedPaymentId, reasonForm.reason.trim());
+        setPostingEvidence(null);
+      }
       await fetchInvoices();
-      setToast(approved ? 'Pembayaran diverifikasi dan diposting' : 'Pembayaran ditolak');
+      setToast(approved ? 'Pembayaran diverifikasi; evidence posting tersedia di layar' : 'Pembayaran ditolak');
       setModal(null);
     } catch (error) {
       setFormError(getApiErrorMessage(error));
@@ -450,6 +529,24 @@ export default function PaymentsPage() {
       )}
 
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
+        {postingEvidence && (
+          <section className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-100">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="font-bold">Evidence payment posting</p>
+                <p className="mt-1">Payment ID: <code>{postingEvidence.paymentId}</code></p>
+                <p>Cash transaction ID: <code>{postingEvidence.cashTransactionId || '-'}</code></p>
+                <p>Cash transaction: <code>{postingEvidence.cashTransactionNumber || '-'}</code></p>
+                <p>Journal number: <code>{postingEvidence.journalNumber || 'lihat transaksi kas/bank'}</code></p>
+                <p>Mode: {postingEvidence.idempotentReplay ? 'IDEMPOTENT REPLAY — tidak membuat posting baru' : 'POSTING BARU'}</p>
+              </div>
+              <div className="flex gap-2">
+                <a href="/cash-bank" className="rounded-md border border-emerald-400 px-3 py-2 font-semibold">Buka Kas/Bank</a>
+                <a href="/accounting" className="rounded-md border border-emerald-400 px-3 py-2 font-semibold">Buka Accounting</a>
+              </div>
+            </div>
+          </section>
+        )}
         <header className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
           <div>
             <p className="text-sm font-semibold uppercase text-amber-600 dark:text-amber-400">
@@ -578,10 +675,19 @@ export default function PaymentsPage() {
                           <button type="button" onClick={() => openInvoiceModal(invoice, 'detail')} className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 dark:border-neutral-700">
                             Detail
                           </button>
+                          {invoice.isDraft && (
+                            <button
+                              type="button"
+                              onClick={() => openInvoiceModal(invoice, 'finalize')}
+                              className="rounded-md border border-blue-300 px-3 py-1.5 text-xs font-semibold text-blue-700 dark:text-blue-300"
+                            >
+                              Finalisasi
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => openInvoiceModal(invoice, 'payment')}
-                            disabled={remainingAmount(invoice) <= 0 || invoice.status === 'Dibatalkan'}
+                            disabled={invoice.isDraft || remainingAmount(invoice) <= 0 || invoice.status === 'Dibatalkan'}
                             className="rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700"
                           >
                             Bayar
@@ -753,6 +859,35 @@ export default function PaymentsPage() {
         </Modal>
       )}
 
+      {modal === 'finalize' && selectedInvoice && (
+        <Modal title="Finalisasi Invoice" onClose={() => setModal(null)}>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">
+              <p className="font-semibold">{selectedInvoice.invoiceNumber || selectedInvoice.id}</p>
+              <p className="mt-1">Total {formatCurrency(selectedInvoice.total)}. Setelah finalisasi, snapshot item dan nominal terkunci.</p>
+            </div>
+            <label className="block text-sm font-medium">
+              Jatuh tempo (opsional)
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(event) => setDueDate(event.target.value)}
+                className="mt-2 h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 dark:border-neutral-700 dark:bg-neutral-950"
+              />
+            </label>
+            {formError && <p className="text-sm text-red-600">{formError}</p>}
+            <button
+              type="button"
+              disabled={submittingPayment}
+              onClick={submitFinalize}
+              className="w-full rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
+            >
+              {submittingPayment ? 'Memproses...' : 'Finalisasi & Kunci Snapshot'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {modal === 'detail' && selectedInvoice && (
         <Modal title="Detail Invoice" onClose={() => setModal(null)}>
           <div className="grid gap-4">
@@ -775,8 +910,46 @@ export default function PaymentsPage() {
             </div>
             <div>
               <h3 className="mb-2 text-sm font-bold">Pembayaran</h3>
-              <p className="text-sm">Metode: {selectedInvoice.paymentMethods.join(', ') || '-'}</p>
-              <p className="text-sm">Referensi: {selectedInvoice.references.join(', ') || '-'}</p>
+              {(selectedInvoice.payments || []).length === 0 ? (
+                <p className="text-sm text-neutral-500">Belum ada pembayaran.</p>
+              ) : (selectedInvoice.payments || []).map((payment) => (
+                <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-100 py-2 text-sm dark:border-neutral-800">
+                  <div>
+                    <code>{payment.id}</code>
+                    <p>{payment.method} · {formatCurrency(payment.amount)} · {payment.status}</p>
+                    {payment.reference && <p className="text-xs text-neutral-500">{payment.reference}</p>}
+                    {payment.status === 'REJECTED' && (
+                      <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-300">
+                        Alasan: {payment.rejectionReason || 'Tidak tersedia'}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                  {payment.status === 'REJECTED' && (
+                    <button
+                      type="button"
+                      onClick={() => openInvoiceModal(selectedInvoice, 'payment')}
+                      className="rounded-md border border-amber-300 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-300"
+                    >
+                      Submit ulang bukti
+                    </button>
+                  )}
+                  {payment.status === 'VERIFIED' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedPaymentId(payment.id);
+                        setReasonForm({ notes: 'Uji retry idempotensi', reason: '', amount: '' });
+                        setModal('verify');
+                      }}
+                      className="rounded-md border border-emerald-300 px-3 py-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+                    >
+                      Uji retry
+                    </button>
+                  )}
+                  </div>
+                </div>
+              ))}
             </div>
             <div className="flex gap-2">
               <button
@@ -894,9 +1067,39 @@ export default function PaymentsPage() {
       {modal === 'verify' && selectedInvoice && (
         <Modal title="Verifikasi Pembayaran" onClose={() => setModal(null)}>
           <div className="grid gap-4">
-            <p className="text-sm text-neutral-600 dark:text-neutral-300">
-              Invoice {selectedInvoice.id} siap diverifikasi oleh manager.
-            </p>
+            {(() => {
+              const payment = (selectedInvoice.payments || []).find((item) => item.id === selectedPaymentId);
+              return <>
+                <div className="rounded-lg border border-neutral-200 p-3 text-sm dark:border-neutral-800">
+                  <p>Invoice: <strong>{selectedInvoice.invoiceNumber || selectedInvoice.id}</strong></p>
+                  <p>Payment ID: <code>{payment?.id || selectedPaymentId}</code></p>
+                  <p>Nominal: <strong>{formatCurrency(payment?.amount || 0)}</strong></p>
+                  <p>Status: <strong>{payment?.status || 'PENDING'}</strong></p>
+                </div>
+                {payment?.proofUrl ? (
+                  <div>
+                    <p className="mb-2 text-sm font-semibold">Bukti pembayaran terlindungi</p>
+                    {protectedProofPreview ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={protectedProofPreview} alt={`Bukti pembayaran ${payment.id}`} className="max-h-72 w-full rounded-lg border object-contain dark:border-neutral-700" />
+                    ) : proofPreviewError ? (
+                      <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-300">
+                        Bukti tidak dapat dibuka: {proofPreviewError}
+                      </p>
+                    ) : (
+                      <p className="text-sm text-neutral-500">Memuat bukti pembayaran...</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-neutral-500">Pembayaran cash atau tidak memiliki file bukti.</p>
+                )}
+                {payment?.status === 'VERIFIED' && (
+                  <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    Ini adalah uji retry. Sistem harus mengembalikan posting lama tanpa membuat cash transaction atau jurnal baru.
+                  </p>
+                )}
+              </>;
+            })()}
             <button
               type="button"
               onClick={() => void submitVerification(true)}

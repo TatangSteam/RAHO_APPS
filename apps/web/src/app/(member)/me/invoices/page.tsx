@@ -192,6 +192,51 @@ export default function MemberInvoicesPage() {
                         </span>
                       </div>
                     ))}
+
+                    <div style={{
+                      display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+                      gap: 8, marginTop: 14,
+                    }}>
+                      {[
+                        ['Terverifikasi', inv.verifiedAmount],
+                        ['Menunggu verifikasi', inv.pendingAmount],
+                        ['Outstanding', inv.outstandingAmount],
+                      ].map(([label, amount]) => (
+                        <div key={String(label)} style={{
+                          padding: 10, borderRadius: 8, background: 'var(--surface-ground)',
+                        }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</div>
+                          <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>
+                            Rp {formatNumber(Number(amount))}
+                          </strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    {inv.payments.length > 0 && (
+                      <div style={{ marginTop: 14 }}>
+                        <div style={{ marginBottom: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                          Riwayat Pembayaran
+                        </div>
+                        {inv.payments.map((payment) => (
+                          <div key={payment.id} style={{
+                            display: 'flex', justifyContent: 'space-between', gap: 12,
+                            padding: '9px 0', borderTop: '1px solid var(--surface-border)',
+                          }}>
+                            <div>
+                              <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--color-primary-400)' }}>{payment.id}</div>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                {payment.paymentMethod}{payment.paymentReference ? ` · ${payment.paymentReference}` : ''}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <strong style={{ fontSize: 13 }}>Rp {formatNumber(payment.amount)}</strong>
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{payment.verificationStatus}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     
                     {/* Payment Info */}
                     {inv.paidAt && (

@@ -46,6 +46,15 @@ describe('paymentPresentation', () => {
     ).toBe(300000);
 
     expect(remainingAmount({ ...invoices[0], paidAmount: 100000, refundAmount: 50000 })).toBe(150000);
+    expect(remainingAmount({
+      ...invoices[0],
+      total: 1000,
+      pendingPayments: [{
+        id: 'PAY-01',
+        amount: 600,
+        method: 'Transfer',
+      }],
+    })).toBe(400);
   });
 
   it('filters invoices by search, status, method, and date range', () => {

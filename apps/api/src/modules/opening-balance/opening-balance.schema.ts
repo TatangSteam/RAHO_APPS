@@ -36,6 +36,11 @@ export const createOpeningBalanceSchema = z.object({
   lines: z.array(openingBalanceLineSchema).min(2).max(500),
 });
 
+export const updateOpeningBalanceSchema = z.object({
+  description: z.string().trim().min(3).max(250),
+  lines: z.array(openingBalanceLineSchema).min(2).max(500),
+});
+
 export const rejectOpeningBalanceSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export const listOpeningBalancesQuerySchema = z.object({
   branchId: z.string().cuid().optional(),
@@ -43,4 +48,5 @@ export const listOpeningBalancesQuerySchema = z.object({
 });
 
 export type CreateOpeningBalanceInput = z.infer<typeof createOpeningBalanceSchema>;
+export type UpdateOpeningBalanceInput = z.infer<typeof updateOpeningBalanceSchema>;
 export type ListOpeningBalancesQuery = z.infer<typeof listOpeningBalancesQuerySchema>;

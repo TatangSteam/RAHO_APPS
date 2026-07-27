@@ -192,6 +192,19 @@ export interface MemberInvoice {
   memberPhone: string
   paymentProofUrl: string | null
   paymentProofFileName: string | null
+  verifiedAmount: number
+  pendingAmount: number
+  outstandingAmount: number
+  payments: {
+    id: string
+    amount: number
+    paymentMethod: string
+    paymentReference: string | null
+    verificationStatus: string
+    receivedAt: string
+    proofFileUrl: string | null
+    proofFileName: string | null
+  }[]
   items: { description: string; quantity: number; pricePerUnit: number; totalAmount: number }[]
 }
 

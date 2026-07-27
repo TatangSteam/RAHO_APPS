@@ -17,10 +17,12 @@ Payment PENDING --verify-----------> VERIFIED + cash/bank ledger + journal
 protected evidence image. Evidence is stored under a private object key and is
 read only through the scoped `/invoices/payment-proof/:paymentId` endpoint.
 
-`POST /invoices/payments/:paymentId/verify` is the posting boundary. The maker
-cannot verify or reject their own payment. Verification locks the invoice and
-payment rows, validates the remaining balance, and commits these records in one
-database transaction:
+`POST /invoices/payments/:paymentId/verify` is the posting boundary. Users with
+an active `FINANCE` or `FINANCE_DUMMY` role template own the finance workflow
+end-to-end and may verify or reject their own payment. Other roles retain the
+maker-checker restriction. Verification locks the invoice and payment rows,
+validates the remaining balance, and commits these records in one database
+transaction:
 
 - payment status `VERIFIED`;
 - invoice verified total and partial/full status;

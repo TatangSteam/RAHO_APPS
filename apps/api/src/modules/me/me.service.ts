@@ -422,11 +422,16 @@ export async function getMemberInvoicesService(
         },
         payments: {
           select: {
+            id: true,
+            amount: true,
+            paymentMethod: true,
+            paymentReference: true,
+            verificationStatus: true,
+            receivedAt: true,
             proofFileUrl: true,
             proofFileName: true,
           },
           orderBy: { createdAt: 'desc' },
-          take: 1,
         },
         member: {
           select: {
@@ -446,7 +451,14 @@ export async function getMemberInvoicesService(
   ]);
 
   return {
-    data: invoices.map((inv) => ({
+    data: invoices.map((inv) => {
+      const verifiedAmount = inv.payments
+        .filter((payment) => payment.verificationStatus === 'VERIFIED')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      const pendingAmount = inv.payments
+        .filter((payment) => payment.verificationStatus === 'PENDING')
+        .reduce((sum, payment) => sum + Number(payment.amount), 0);
+      return ({
       id: inv.id,
       invoiceNumber: inv.invoiceNumber,
       status: inv.status,
@@ -461,13 +473,27 @@ export async function getMemberInvoicesService(
       memberPhone: inv.member?.user?.profile?.phone ?? '',
       paymentProofUrl: inv.payments[0]?.proofFileUrl ?? null,
       paymentProofFileName: inv.payments[0]?.proofFileName ?? null,
+      verifiedAmount,
+      pendingAmount,
+      outstandingAmount: Math.max(Number(inv.totalAmount) - verifiedAmount - pendingAmount, 0),
+      payments: inv.payments.map((payment) => ({
+        id: payment.id,
+        amount: Number(payment.amount),
+        paymentMethod: payment.paymentMethod,
+        paymentReference: payment.paymentReference,
+        verificationStatus: payment.verificationStatus,
+        receivedAt: payment.receivedAt,
+        proofFileUrl: payment.proofFileUrl ? `/invoices/payment-proof/${payment.id}` : null,
+        proofFileName: payment.proofFileName,
+      })),
       items: inv.items.map((item) => ({
         description: item.description,
         quantity: item.quantity,
         pricePerUnit: Number(item.pricePerUnit),
         totalAmount: Number(item.totalAmount),
       })),
-    })),
+      });
+    }),
     total,
   };
 }

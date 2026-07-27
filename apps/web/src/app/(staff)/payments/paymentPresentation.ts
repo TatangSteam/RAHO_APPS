@@ -20,12 +20,22 @@ export interface Invoice {
   references: string[];
   refundAmount: number;
   createdAt: string;
+  isDraft?: boolean;
   pendingPayments?: Array<{
     id: string;
     amount: number;
     method: PaymentMethod;
     reference?: string;
     proofUrl?: string;
+  }>;
+  payments?: Array<{
+    id: string;
+    amount: number;
+    method: PaymentMethod;
+    reference?: string;
+    proofUrl?: string;
+    status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+    rejectionReason?: string;
   }>;
 }
 
@@ -76,7 +86,11 @@ export function calculateTotal(items: InvoiceItem[]) {
 }
 
 export function remainingAmount(invoice: Invoice) {
-  return Math.max(invoice.total - invoice.paidAmount - invoice.refundAmount, 0);
+  const pendingAmount = (invoice.pendingPayments || []).reduce(
+    (sum, payment) => sum + payment.amount,
+    0,
+  );
+  return Math.max(invoice.total - invoice.paidAmount - pendingAmount - invoice.refundAmount, 0);
 }
 
 export function matchingProducts(query: string) {

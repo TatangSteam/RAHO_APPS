@@ -5,6 +5,7 @@ import type { RecordPaymentInput, RejectPaymentInput, VerifyPaymentInput } from 
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { postJournal } from '@modules/accounting/accounting.service';
+import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import { fundPackageDeferredRevenueInTransaction } from '@modules/revenue/revenue.service';
 import {
   assertPaymentMethodAccountType,
@@ -250,6 +251,7 @@ export class InvoicePaymentService {
     if (!candidate) throw errors.notFound('Pembayaran tidak ditemukan.');
     await assertBranchAccess(userId, candidate.invoice.branchId);
     await assertPermission(userId, PERMISSIONS.PAYMENT_VERIFY, candidate.invoice.branchId);
+    const canSelfReview = await isAutonomousFinanceUser(userId);
 
     return prisma.$transaction(async (tx) => {
       const identity = await tx.invoicePayment.findUnique({ where: { id: paymentId }, select: { invoiceId: true } });
@@ -271,7 +273,7 @@ export class InvoicePaymentService {
       if (payment.verificationStatus === PaymentVerificationStatus.REJECTED) {
         throw errors.conflict('PAYMENT_ALREADY_REJECTED', 'Pembayaran sudah ditolak.');
       }
-      if (payment.receivedBy === userId) {
+      if (payment.receivedBy === userId && !canSelfReview) {
         throw errors.forbidden('Maker pembayaran tidak boleh memverifikasi transaksinya sendiri.');
       }
       const account = payment.cashBankAccount;
@@ -384,7 +386,10 @@ export class InvoicePaymentService {
     if (!candidate) throw errors.notFound('Pembayaran tidak ditemukan.');
     await assertBranchAccess(userId, candidate.invoice.branchId);
     await assertPermission(userId, PERMISSIONS.PAYMENT_REJECT, candidate.invoice.branchId);
-    if (candidate.receivedBy === userId) throw errors.forbidden('Maker pembayaran tidak boleh menolak transaksinya sendiri.');
+    const canSelfReview = await isAutonomousFinanceUser(userId);
+    if (candidate.receivedBy === userId && !canSelfReview) {
+      throw errors.forbidden('Maker pembayaran non-Finance tidak boleh menolak transaksinya sendiri.');
+    }
 
     return prisma.$transaction(async (tx) => {
       await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "invoice_payments" WHERE "id" = ${paymentId} FOR UPDATE`);
