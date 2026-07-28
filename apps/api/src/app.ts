@@ -51,14 +51,30 @@ export function createApp(): Application {
 
   // ── CORS ───────────────────────────────────────────────────
   const allowedOrigins = env.CORS_ORIGIN.split(',').map(o => o.trim());
+  const isDevelopmentLocalOrigin = (origin: string): boolean => {
+    if (env.NODE_ENV !== 'development') return false;
+    try {
+      const { hostname, protocol } = new URL(origin);
+      if (!['http:', 'https:'].includes(protocol)) return false;
+      return hostname === 'localhost'
+        || hostname === '127.0.0.1'
+        || hostname === '[::1]'
+        || /^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)
+        || /^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)
+        || /^172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}$/.test(hostname);
+    } catch {
+      return false;
+    }
+  };
   app.use(
     cors({
       origin: (origin, callback) => {
         // Allow requests with no origin (like mobile apps or curl)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.includes(origin)) {
+        if (allowedOrigins.includes(origin) || isDevelopmentLocalOrigin(origin)) {
           callback(null, true);
         } else {
+          logger.warn('CORS origin rejected', { origin });
           callback(new Error('Not allowed by CORS'));
         }
       },

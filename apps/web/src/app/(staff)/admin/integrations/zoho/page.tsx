@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Building2, CheckCircle2, CircleAlert, ExternalLink, Loader2, PlugZap, RefreshCw, Unplug } from 'lucide-react';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -23,6 +24,12 @@ type Status = {
   connections: Connection[];
 };
 
+function apiErrorMessage(error: unknown, fallback: string): string {
+  if (!axios.isAxiosError(error)) return fallback;
+  const message = error.response?.data?.error?.message;
+  return typeof message === 'string' ? message : fallback;
+}
+
 export default function ZohoIntegrationPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -35,8 +42,8 @@ export default function ZohoIntegrationPage() {
     try {
       const response = await api.get<{ data: Status }>('/integrations/zoho/status');
       setStatus(response.data.data);
-    } catch {
-      toast.error('Gagal memuat status integrasi Zoho.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Gagal memuat status integrasi Zoho. Pastikan API dapat diakses dari alamat browser ini.'));
     } finally {
       setLoading(false);
     }
@@ -60,8 +67,8 @@ export default function ZohoIntegrationPage() {
     try {
       const response = await api.get<{ data: { authorizationUrl: string } }>('/integrations/zoho/connect');
       window.location.assign(response.data.data.authorizationUrl);
-    } catch {
-      toast.error('Tidak dapat memulai otorisasi. Periksa konfigurasi server.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Tidak dapat memulai otorisasi. Periksa koneksi API dan konfigurasi CORS.'));
       setAction(null);
     }
   }
@@ -72,8 +79,8 @@ export default function ZohoIntegrationPage() {
       await api.post('/integrations/zoho/test');
       toast.success('Koneksi Zoho aktif dan dapat digunakan.');
       await load();
-    } catch {
-      toast.error('Pemeriksaan koneksi Zoho gagal.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Pemeriksaan koneksi Zoho gagal.'));
     } finally { setAction(null); }
   }
 
