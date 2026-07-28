@@ -115,10 +115,10 @@ services:
       RATE_LIMIT_WINDOW_MS: 60000
       RATE_LIMIT_MAX: 100
       AUTH_RATE_LIMIT_MAX: 10
-      ZOHO_REDIRECT_URI: http://localhost:3000/api/zoho/callback
+      ZOHO_REDIRECT_URI: https://erp.rahopremier.id/api/zoho/callback
       ZOHO_ACCOUNTS_BASE_URL: https://accounts.zoho.com
       ZOHO_API_BASE_URL: https://www.zohoapis.com
-      ZOHO_WEB_REDIRECT_URL: http://localhost:3000/admin/integrations/zoho
+      ZOHO_WEB_REDIRECT_URL: https://erp.rahopremier.id/admin/integrations/zoho
     depends_on:
       - postgres
       - minio
