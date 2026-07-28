@@ -92,6 +92,26 @@ async function fetchAll(client: ZohoClient) {
   };
 }
 
+async function fetchContactExternalIdField(client: ZohoClient) {
+  const fields = await client.listAll<ZohoRecord>('/books/v3/settings/fields', 'fields', {
+    entity: 'contact',
+    filter_custom_fields: true,
+    skip_inactive_fields: true,
+  });
+  const matches = fields.filter((field) => {
+    const identity = `${text(field, 'label') || ''} ${text(field, 'api_name') || ''}`
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ');
+    return identity.includes('raho') && (identity.includes('external') || identity.includes('id'));
+  });
+  if (matches.length !== 1) return null;
+  return {
+    fieldId: text(matches[0], 'field_id') || null,
+    apiName: text(matches[0], 'api_name') || null,
+    isUnique: matches[0].is_unique === true,
+  };
+}
+
 async function replaceResource(
   connectionId: string,
   resourceType: ZohoDiscoveryResourceType,
@@ -165,8 +185,11 @@ async function replaceResource(
 
 export async function runDiscovery() {
   const client = await getActiveZohoClient(true);
-  const organizations = await fetchOrganizations(client);
-  const resources = await fetchAll(client);
+  const [organizations, resources, contactExternalIdField] = await Promise.all([
+    fetchOrganizations(client),
+    fetchAll(client),
+    fetchContactExternalIdField(client),
+  ]);
 
   await replaceResource(client.connection.id, ZohoDiscoveryResourceType.ORGANIZATION, organizations);
   for (const [resourceType, items] of Object.entries(resources)) {
@@ -181,6 +204,9 @@ export async function runDiscovery() {
       organizationCurrencyId: selectedPayload ? text(selectedPayload, 'currency_id') : undefined,
       organizationCurrencyCode: selectedPayload ? text(selectedPayload, 'currency_code') : undefined,
       organizationTimeZone: selectedPayload ? text(selectedPayload, 'time_zone') : undefined,
+      contactExternalIdFieldId: contactExternalIdField?.fieldId ?? null,
+      contactExternalIdApiName: contactExternalIdField?.apiName ?? null,
+      contactExternalIdIsUnique: contactExternalIdField?.isUnique ?? null,
       discoveryLastRunAt: new Date(),
       lastCheckedAt: new Date(),
       lastError: null,
@@ -205,6 +231,16 @@ export async function getDiscovery(resourceType?: ZohoDiscoveryResourceType) {
   return {
     organizationId: connection.organizationId,
     lastRunAt: connection.discoveryLastRunAt,
+    contactExternalIdField: {
+      fieldId: connection.contactExternalIdFieldId,
+      apiName: connection.contactExternalIdApiName,
+      isUnique: connection.contactExternalIdIsUnique,
+      ready: Boolean(
+        connection.contactExternalIdFieldId
+        && connection.contactExternalIdApiName
+        && connection.contactExternalIdIsUnique,
+      ),
+    },
     counts: Object.fromEntries(counts.map((entry) => [entry.resourceType, entry._count._all])),
     items,
   };

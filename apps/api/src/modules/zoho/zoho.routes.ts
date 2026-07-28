@@ -14,6 +14,12 @@ router.post('/events/:id/retry', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY),
 router.post('/events/:id/ignore', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.ignoreEvent);
 router.get('/discovery', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.discovery);
 router.post('/discovery/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.runDiscovery);
+router.get('/contacts', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.contacts);
+router.get('/contacts/:entityType/:id/preview', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.previewContact);
+router.post('/contacts/:entityType/:id/match', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.matchContact);
+router.post('/contacts/:entityType/:id/enqueue', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.enqueueContact);
+router.post('/contacts/reviews/:id/approve', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.approveContactReview);
+router.post('/contacts/reviews/:id/reject', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.rejectContactReview);
 router.get('/connect', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.connect);
 router.post('/test', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.test);
 router.post('/organizations/:id/activate', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.activate);

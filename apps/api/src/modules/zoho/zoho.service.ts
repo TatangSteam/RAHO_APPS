@@ -134,6 +134,7 @@ export async function getStatus() {
       id: true, organizationId: true, organizationName: true, dataCenter: true,
       scopes: true, scopeVersion: true, isActive: true, lastCheckedAt: true, lastError: true,
       organizationCurrencyCode: true, organizationTimeZone: true, discoveryLastRunAt: true,
+      contactExternalIdFieldId: true, contactExternalIdApiName: true, contactExternalIdIsUnique: true,
       createdAt: true, updatedAt: true,
     },
   });
@@ -149,6 +150,14 @@ export async function getStatus() {
       return {
         ...connection,
         missingScopes,
+        contactSyncReady: Boolean(
+          (env.ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID && env.ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_API_NAME)
+          || (
+            connection.contactExternalIdFieldId
+            && connection.contactExternalIdApiName
+            && connection.contactExternalIdIsUnique
+          )
+        ),
         reconnectRequired:
           connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION || missingScopes.length > 0,
       };

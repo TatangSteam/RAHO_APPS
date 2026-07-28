@@ -297,6 +297,12 @@ enum ZohoDiscoveryResourceType {
   PAYMENT_MODE
 }
 
+enum ZohoMappingReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum InternalTransferStatus {
   IN_TRANSIT
   RECEIVED
@@ -765,32 +771,36 @@ model User {
 }
 
 model ZohoConnection {
-  id                       String    @id @default(cuid())
-  organizationId           String    @unique
-  organizationName         String
-  dataCenter               String
-  apiDomain                String
-  encryptedAccessToken     String
-  encryptedRefreshToken    String
-  accessTokenExpiresAt     DateTime
-  scopes                   String
-  scopeVersion             Int       @default(1)
-  isActive                 Boolean   @default(true)
-  organizationCurrencyId   String?
-  organizationCurrencyCode String?
-  organizationTimeZone     String?
-  discoveryLastRunAt       DateTime?
-  lastCheckedAt            DateTime?
-  lastError                String?
-  createdById              String
-  updatedById              String
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  id                        String    @id @default(cuid())
+  organizationId            String    @unique
+  organizationName          String
+  dataCenter                String
+  apiDomain                 String
+  encryptedAccessToken      String
+  encryptedRefreshToken     String
+  accessTokenExpiresAt      DateTime
+  scopes                    String
+  scopeVersion              Int       @default(1)
+  isActive                  Boolean   @default(true)
+  organizationCurrencyId    String?
+  organizationCurrencyCode  String?
+  organizationTimeZone      String?
+  discoveryLastRunAt        DateTime?
+  contactExternalIdFieldId  String?
+  contactExternalIdApiName  String?
+  contactExternalIdIsUnique Boolean?
+  lastCheckedAt             DateTime?
+  lastError                 String?
+  createdById               String
+  updatedById               String
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   createdBy      User                 @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
   updatedBy      User                 @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
   entityMappings ZohoEntityMapping[]
   discoveryCache ZohoDiscoveryCache[]
+  mappingReviews ZohoMappingReview[]
 
   @@index([isActive])
   @@map("zoho_connections")
@@ -2910,6 +2920,29 @@ model ZohoDiscoveryCache {
   @@unique([zohoConnectionId, resourceType, zohoId])
   @@index([resourceType, isActive, name])
   @@map("zoho_discovery_cache")
+}
+
+model ZohoMappingReview {
+  id                     String                  @id @default(cuid())
+  zohoConnectionId       String
+  entityType             String
+  localEntityId          String
+  localDisplayName       String
+  expectedZohoEntityType String
+  candidates             Json
+  reason                 String                  @db.Text
+  status                 ZohoMappingReviewStatus @default(PENDING)
+  resolvedZohoEntityId   String?
+  resolvedById           String?
+  resolvedAt             DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+
+  connection ZohoConnection @relation(fields: [zohoConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([zohoConnectionId, entityType, localEntityId])
+  @@index([status, entityType, createdAt])
+  @@map("zoho_mapping_reviews")
 }
 
 model SessionPhoto {

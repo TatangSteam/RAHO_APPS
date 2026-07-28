@@ -14,6 +14,7 @@ import type {
 } from './purchasing.schema';
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
+import { enqueueContactSafely } from '@modules/zoho/zoho.contact.service';
 
 type Tx = Prisma.TransactionClient;
 const MAX_TRANSACTION_ATTEMPTS = 3;
@@ -68,6 +69,7 @@ export async function createSupplier(userId: string, input: CreateSupplierInput)
     phone: input.phone, email: input.email, address: input.address, paymentTermsDays: input.paymentTermsDays, createdBy: userId,
   } });
   await logAudit({ userId, action: 'CREATE', resource: 'Supplier', resourceId: supplier.id, entityCode: supplier.code, afterData: supplier });
+  await enqueueContactSafely('SUPPLIER', supplier.id);
   return supplier;
 }
 
@@ -77,6 +79,7 @@ export async function updateSupplier(userId: string, supplierId: string, input: 
   if (!before) throw errors.notFound('Supplier tidak ditemukan.');
   const supplier = await prisma.supplier.update({ where: { id: supplierId }, data: { ...input, code: input.code?.toUpperCase() } });
   await logAudit({ userId, action: 'UPDATE', resource: 'Supplier', resourceId: supplier.id, entityCode: supplier.code, beforeData: before, afterData: supplier });
+  await enqueueContactSafely('SUPPLIER', supplier.id);
   return supplier;
 }
 

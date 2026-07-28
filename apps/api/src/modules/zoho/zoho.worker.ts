@@ -13,6 +13,8 @@ export const ZOHO_SYNC_EVENT_TYPES = [
   'TREATMENT_COMPLETED',
   'TREATMENT_COMPLETION_CANCELLED',
   'PARTNERSHIP_GOODS_SHIPPED',
+  'MEMBER_CONTACT_UPSERTED',
+  'SUPPLIER_CONTACT_UPSERTED',
 ] as const;
 const workerId = `${os.hostname()}:${process.pid}`;
 let timer: NodeJS.Timeout | null = null;
@@ -62,7 +64,16 @@ export async function claimZohoEvents(limit = env.ZOHO_SYNC_BATCH_SIZE): Promise
   });
 }
 
+async function nextAttemptNo(eventId: string): Promise<number> {
+  const latest = await prisma.zohoSyncAttempt.aggregate({
+    where: { integrationEventId: eventId },
+    _max: { attemptNo: true },
+  });
+  return (latest._max.attemptNo || 0) + 1;
+}
+
 async function finishDryRun(event: IntegrationEvent): Promise<void> {
+  const attemptNo = await nextAttemptNo(event.id);
   const requestSummary = sanitizeForAudit({
     eventType: event.eventType,
     aggregateType: event.aggregateType,
@@ -74,7 +85,7 @@ async function finishDryRun(event: IntegrationEvent): Promise<void> {
     prisma.zohoSyncAttempt.create({
       data: {
         integrationEventId: event.id,
-        attemptNo: event.attempts,
+        attemptNo,
         workerId,
         status: 'DRY_RUN',
         requestSummary,
@@ -101,10 +112,11 @@ export async function processClaimedZohoEvent(event: IntegrationEvent): Promise<
     return;
   }
 
+  const attemptNo = await nextAttemptNo(event.id);
   const attempt = await prisma.zohoSyncAttempt.create({
     data: {
       integrationEventId: event.id,
-      attemptNo: event.attempts,
+      attemptNo,
       workerId,
       status: 'PROCESSING',
       requestSummary: sanitizeForAudit({

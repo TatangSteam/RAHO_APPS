@@ -5,6 +5,7 @@ import { sendSuccess } from '@utils/response';
 import * as service from './zoho.service';
 import * as queueService from './zoho.queue.service';
 import * as discoveryService from './zoho.discovery.service';
+import * as contactService from './zoho.contact.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -20,6 +21,17 @@ const ignoreSchema = z.object({
 
 const discoveryQuerySchema = z.object({
   resourceType: z.nativeEnum(ZohoDiscoveryResourceType).optional(),
+});
+
+const contactListSchema = z.object({
+  entityType: z.enum(['MEMBER', 'SUPPLIER']).default('MEMBER'),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const approveReviewSchema = z.object({
+  zohoContactId: z.string().trim().min(1).max(100),
 });
 
 export async function connect(req: Request, res: Response, next: NextFunction) {
@@ -88,4 +100,47 @@ export async function discovery(req: Request, res: Response, next: NextFunction)
 
 export async function runDiscovery(_req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await discoveryService.runDiscovery()); } catch (error) { next(error); }
+}
+
+export async function contacts(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = contactListSchema.parse(req.query);
+    sendSuccess(res, await contactService.listContactMappings({
+      ...query,
+      entityType: query.entityType ?? 'MEMBER',
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function previewContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await contactService.previewContact(req.params.entityType, req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function matchContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await contactService.findContactMatch(req.params.entityType, req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function enqueueContact(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await contactService.enqueueContact(req.params.entityType, req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function approveContactReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = approveReviewSchema.parse(req.body);
+    sendSuccess(res, await contactService.approveContactReview(req.user.userId, req.params.id, body.zohoContactId));
+  } catch (error) { next(error); }
+}
+
+export async function rejectContactReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await contactService.rejectContactReview(req.user.userId, req.params.id));
+  } catch (error) { next(error); }
 }

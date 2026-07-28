@@ -9,6 +9,7 @@ import {
   hasMatchingMemberName,
   parseMemberBirthDate,
 } from './member-registration.helpers';
+import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
 
 const HASH_ROUNDS = 12;
 
@@ -243,6 +244,7 @@ export class MemberUpdateService {
       resourceId: memberId,
       meta: { changes: data },
     });
+    await enqueueContactSafely('MEMBER', memberId);
 
     return this.formatMemberData(updated);
   }
@@ -276,6 +278,7 @@ export class MemberUpdateService {
       resourceId: memberId,
       meta: { memberNo: member.memberNo },
     });
+    await enqueueContactSafely('MEMBER', memberId);
 
     return { message: 'Member berhasil dihapus' };
   }

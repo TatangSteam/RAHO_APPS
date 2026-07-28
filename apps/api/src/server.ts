@@ -3,6 +3,7 @@ import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { startZohoWorker, stopZohoWorker } from '@modules/zoho/zoho.worker';
+import { registerZohoHandlers } from '@modules/zoho/zoho.handlers';
 
 async function bootstrap(): Promise<void> {
   // ── Verify Database Connection ─────────────────────────────
@@ -23,6 +24,7 @@ async function bootstrap(): Promise<void> {
     logger.info(`   API prefix  : ${env.API_PREFIX}`);
     logger.info(`   Health      : http://localhost:${env.PORT}/health`);
   });
+  registerZohoHandlers();
   startZohoWorker();
 
   // ── Graceful Shutdown ─────────────────────────────────────

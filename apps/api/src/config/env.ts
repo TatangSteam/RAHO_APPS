@@ -38,7 +38,15 @@ const envSchema = z.object({
   ZOHO_ACCOUNTS_BASE_URL: z.string().url().default('https://accounts.zoho.com'),
   ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
   ZOHO_WEB_REDIRECT_URL: z.string().url().optional(),
-  ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(2),
+  ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(3),
+  ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID: z.preprocess(
+    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    z.string().trim().min(1).optional(),
+  ),
+  ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_API_NAME: z.preprocess(
+    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    z.string().trim().regex(/^cf_[a-z0-9_]+$/i).optional(),
+  ),
   ZOHO_SYNC_DRY_RUN: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   ZOHO_SYNC_WORKER_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   ZOHO_SYNC_WORKER_INTERVAL_MS: z.coerce.number().int().min(1_000).default(5_000),

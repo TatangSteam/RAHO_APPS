@@ -16,13 +16,14 @@ import {
   RefreshCw,
   RotateCcw,
   Unplug,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type Tab = 'connection' | 'queue' | 'discovery';
+type Tab = 'connection' | 'queue' | 'discovery' | 'contacts';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 
 type Connection = {
@@ -37,6 +38,7 @@ type Connection = {
   reconnectRequired: boolean;
   organizationCurrencyCode: string | null;
   discoveryLastRunAt: string | null;
+  contactSyncReady: boolean;
 };
 type Status = {
   configured: boolean;
@@ -86,6 +88,39 @@ type DiscoveryData = {
   lastRunAt: string | null;
   counts: Record<string, number>;
   items: DiscoveryItem[];
+  contactExternalIdField: {
+    fieldId: string | null;
+    apiName: string | null;
+    isUnique: boolean | null;
+    ready: boolean;
+  };
+};
+type ContactCandidate = {
+  contact_id: string;
+  contact_name: string;
+  contact_type: string;
+  email?: string;
+  phone?: string;
+};
+type ContactReview = {
+  id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string;
+  candidates: ContactCandidate[];
+};
+type ContactMappingRow = {
+  entityType: 'MEMBER' | 'SUPPLIER';
+  id: string;
+  code: string;
+  name: string;
+  email: string | null;
+  isActive: boolean;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  review: ContactReview | null;
+};
+type ContactData = {
+  items: ContactMappingRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
 };
 
 const eventStatuses: Array<EventStatus | ''> = [
@@ -128,6 +163,15 @@ export default function ZohoIntegrationPage() {
   const [status, setStatus] = useState<Status | null>(null);
   const [queue, setQueue] = useState<QueueData | null>(null);
   const [discovery, setDiscovery] = useState<DiscoveryData | null>(null);
+  const [contacts, setContacts] = useState<ContactData | null>(null);
+  const [contactEntityType, setContactEntityType] = useState<'MEMBER' | 'SUPPLIER'>('MEMBER');
+  const [contactSearch, setContactSearch] = useState('');
+  const [contactPreview, setContactPreview] = useState<{
+    snapshot: { displayName: string; externalKey: string };
+    payload: unknown;
+    excludedFields: string[];
+    liveCreateReady: boolean;
+  } | null>(null);
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,6 +194,17 @@ export default function ZohoIntegrationPage() {
     setDiscovery(response.data.data);
   }, []);
 
+  const loadContacts = useCallback(async () => {
+    const response = await api.get<{ data: ContactData }>('/integrations/zoho/contacts', {
+      params: {
+        entityType: contactEntityType,
+        limit: 50,
+        ...(contactSearch.trim() ? { search: contactSearch.trim() } : {}),
+      },
+    });
+    setContacts(response.data.data);
+  }, [contactEntityType, contactSearch]);
+
   useEffect(() => {
     if (user && !['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'].includes(user.role)) router.replace('/dashboard');
   }, [router, user]);
@@ -163,7 +218,8 @@ export default function ZohoIntegrationPage() {
   useEffect(() => {
     if (tab === 'queue') void loadQueue().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat antrean Zoho.')));
     if (tab === 'discovery') void loadDiscovery().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat master Zoho.')));
-  }, [loadDiscovery, loadQueue, tab]);
+    if (tab === 'contacts') void loadContacts().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat mapping contact.')));
+  }, [loadContacts, loadDiscovery, loadQueue, tab]);
 
   useEffect(() => {
     const result = searchParams.get('zoho');
@@ -257,6 +313,70 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
+  async function previewContact(row: ContactMappingRow) {
+    setAction(`preview:${row.id}`);
+    try {
+      const response = await api.get<{ data: typeof contactPreview }>(
+        `/integrations/zoho/contacts/${row.entityType}/${row.id}/preview`,
+      );
+      setContactPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview contact gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function findContactMatch(row: ContactMappingRow) {
+    setAction(`match:${row.id}`);
+    try {
+      const response = await api.post<{ data: { decision: { kind: string } } }>(
+        `/integrations/zoho/contacts/${row.entityType}/${row.id}/match`,
+      );
+      toast.success(response.data.data.decision.kind === 'REVIEW'
+        ? 'Kandidat ditemukan dan menunggu review.'
+        : response.data.data.decision.kind === 'AUTO_MATCH'
+          ? 'External RAHO ID cocok.'
+          : 'Tidak ada kandidat; contact baru dapat dibuat.');
+      await loadContacts();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Pencarian contact Zoho gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueContact(row: ContactMappingRow) {
+    setAction(`sync:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/contacts/${row.entityType}/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Contact masuk antrean dry-run.' : 'Contact masuk antrean sinkronisasi.');
+      await loadContacts();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Contact gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function approveReview(row: ContactMappingRow, zohoContactId: string) {
+    if (!row.review) return;
+    setAction(`review:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/contacts/reviews/${row.review.id}/approve`, { zohoContactId });
+      toast.success('Mapping disetujui dan update contact masuk antrean.');
+      await loadContacts();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping tidak dapat disetujui.'));
+    } finally { setAction(null); }
+  }
+
+  async function rejectReview(row: ContactMappingRow) {
+    if (!row.review) return;
+    setAction(`review:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/contacts/reviews/${row.review.id}/reject`);
+      toast.success('Kandidat ditolak. Contact dapat dibuat baru melalui antrean.');
+      await loadContacts();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Review tidak dapat ditolak.'));
+    } finally { setAction(null); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -277,6 +397,7 @@ export default function ZohoIntegrationPage() {
           ['connection', 'Koneksi', PlugZap],
           ['queue', 'Antrean Sinkronisasi', List],
           ['discovery', 'Master Zoho', Database],
+          ['contacts', 'Customer & Vendor', Users],
         ] as const).map(([value, label, Icon]) => (
           <button
             key={value}
@@ -358,6 +479,11 @@ export default function ZohoIntegrationPage() {
                             Hubungkan ulang untuk scope baru: {connection.missingScopes.join(', ') || 'versi izin terbaru'}
                           </p>
                         )}
+                        {!connection.contactSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Contact live belum siap: buat custom field contact unik “RAHO External ID”, lalu jalankan discovery.
+                          </p>
+                        )}
                         {connection.lastError && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
                       </div>
                     </div>
@@ -432,6 +558,11 @@ export default function ZohoIntegrationPage() {
               </div>
             ))}
           </div>
+          {discovery && !discovery.contactExternalIdField.ready && (
+            <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+              Custom field contact unik “RAHO External ID” belum ditemukan. Field ini wajib agar retry tidak membuat customer/vendor ganda.
+            </div>
+          )}
           {!!discovery?.items.length && (
             <div className="mt-5 max-h-96 overflow-auto rounded-xl border dark:border-neutral-700">
               {discovery.items.map((item) => (
@@ -442,6 +573,91 @@ export default function ZohoIntegrationPage() {
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {tab === 'contacts' && (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="font-semibold">Mapping Customer dan Vendor</h2>
+              <p className="text-sm text-neutral-500">
+                Member menjadi customer; supplier menjadi vendor. Data klinis tidak dikirim.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={contactEntityType}
+                onChange={(event) => setContactEntityType(event.target.value as 'MEMBER' | 'SUPPLIER')}
+                className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+              >
+                <option value="MEMBER">Member / Customer</option>
+                <option value="SUPPLIER">Supplier / Vendor</option>
+              </select>
+              <input
+                value={contactSearch}
+                onChange={(event) => setContactSearch(event.target.value)}
+                onKeyDown={(event) => { if (event.key === 'Enter') void loadContacts(); }}
+                placeholder="Cari nama, kode, email"
+                className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+              />
+              <button onClick={() => void loadContacts()} className="rounded-lg border p-2 dark:border-neutral-700"><RefreshCw size={18} /></button>
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b text-xs uppercase text-neutral-500">
+                <tr><th className="p-3">ERP</th><th className="p-3">Mapping Zoho</th><th className="p-3">Review</th><th className="p-3">Aksi</th></tr>
+              </thead>
+              <tbody>
+                {contacts?.items.map((row) => (
+                  <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                    <td className="p-3">
+                      <span className="block font-semibold">{row.name}</span>
+                      <span className="block text-xs text-neutral-500">{row.code} · {row.email || '-'}</span>
+                    </td>
+                    <td className="p-3">
+                      {row.mapping ? (
+                        <>
+                          <span className="block font-mono text-xs">{row.mapping.zohoEntityId}</span>
+                          <span className="text-xs text-emerald-600">{row.mapping.status}</span>
+                        </>
+                      ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
+                    </td>
+                    <td className="min-w-64 p-3">
+                      {row.review?.status === 'PENDING' ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-amber-700">{row.review.reason}</p>
+                          {row.review.candidates.map((candidate) => (
+                            <div key={candidate.contact_id} className="flex items-center justify-between gap-2 rounded border p-2 dark:border-neutral-700">
+                              <span className="text-xs">{candidate.contact_name}<br />{candidate.email || candidate.phone || candidate.contact_id}</span>
+                              <button onClick={() => void approveReview(row, String(candidate.contact_id))} disabled={!!action} className="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">Pilih</button>
+                            </div>
+                          ))}
+                          <button onClick={() => void rejectReview(row)} disabled={!!action} className="text-xs font-semibold text-red-600">Tolak semua kandidat</button>
+                        </div>
+                      ) : <span className="text-xs text-neutral-500">{row.review?.status || '-'}</span>}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex min-w-52 flex-wrap gap-2">
+                        <button onClick={() => void previewContact(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Preview</button>
+                        {!row.mapping && row.review?.status !== 'PENDING' && (
+                          <button onClick={() => void findContactMatch(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Cari Zoho</button>
+                        )}
+                        {row.review?.status !== 'PENDING' && (
+                          <button onClick={() => void enqueueContact(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                            {status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!contacts?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Tidak ada data contact.</p>}
+          </div>
         </section>
       )}
 
@@ -477,6 +693,27 @@ export default function ZohoIntegrationPage() {
                 </button>
               )}
               <button onClick={() => setSelectedEvent(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {contactPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setContactPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview contact: {contactPreview.snapshot.displayName}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{contactPreview.snapshot.externalKey}</p>
+            {!contactPreview.liveCreateReady && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                Live create diblok sampai ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID diisi.
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload yang boleh dikirim</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">{JSON.stringify(contactPreview.payload, null, 2)}</pre>
+            <p className="mt-4 text-sm font-semibold">Field yang sengaja dilarang</p>
+            <p className="mt-1 text-xs text-red-600">{contactPreview.excludedFields.join(', ')}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setContactPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
             </div>
           </div>
         </div>

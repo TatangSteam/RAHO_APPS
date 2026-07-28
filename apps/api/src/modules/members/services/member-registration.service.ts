@@ -12,6 +12,7 @@ import {
   parseMemberBirthDate,
   resolveMemberIdentityNumber,
 } from './member-registration.helpers';
+import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
 
 /**
  * Service for member registration
@@ -375,6 +376,7 @@ export class MemberRegistrationService {
       resourceId: result.member.id,
       meta: { memberNo },
     });
+    await enqueueContactSafely('MEMBER', result.member.id);
 
     return {
       memberId: result.member.id,

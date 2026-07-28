@@ -59,7 +59,11 @@ describe('Zoho Sprint 2 scope versioning', () => {
     expect(missing).toContain('ZohoBooks.accountants.READ');
   });
 
-  it('declares all read-only scopes for Sprint 2', () => {
-    expect(ZOHO_REQUIRED_SCOPES.every((scope) => scope.endsWith('.READ'))).toBe(true);
+  it('retains all read-only scopes introduced in Sprint 2', () => {
+    expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
+      'ZohoBooks.settings.READ',
+      'ZohoBooks.banking.READ',
+      'ZohoBooks.accountants.READ',
+    ]));
   });
 });

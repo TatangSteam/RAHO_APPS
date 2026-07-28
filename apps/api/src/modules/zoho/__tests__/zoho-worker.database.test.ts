@@ -46,5 +46,21 @@ describe('Zoho worker database integration', () => {
     expect(stored.syncAttempts[0].status).toBe('DRY_RUN');
     expect(JSON.stringify(stored.syncAttempts[0].requestSummary)).not.toContain('must-not-be-stored');
     expect(JSON.stringify(stored.syncAttempts[0].requestSummary)).toContain('[REDACTED]');
+
+    const replay = await prisma.integrationEvent.update({
+      where: { id: event.id },
+      data: {
+        status: 'PROCESSING',
+        attempts: 1,
+        lockedBy: 'jest-replay',
+        leaseUntil: new Date(Date.now() + 60_000),
+      },
+    });
+    await processClaimedZohoEvent(replay);
+    const attempts = await prisma.zohoSyncAttempt.findMany({
+      where: { integrationEventId: event.id },
+      orderBy: { attemptNo: 'asc' },
+    });
+    expect(attempts.map((attempt) => attempt.attemptNo)).toEqual([1, 2]);
   });
 });

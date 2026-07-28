@@ -6,12 +6,14 @@ import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { normalizeZohoError, ZohoApiError } from './zoho.error';
 
-export const ZOHO_SCOPE_VERSION = 2;
+export const ZOHO_SCOPE_VERSION = 3;
 export const ZOHO_REQUIRED_SCOPES = [
   'ZohoBooks.settings.READ',
   'ZohoBooks.banking.READ',
   'ZohoBooks.accountants.READ',
   'ZohoBooks.contacts.READ',
+  'ZohoBooks.contacts.CREATE',
+  'ZohoBooks.contacts.UPDATE',
   'ZohoBooks.items.READ',
   'ZohoBooks.invoices.READ',
 ] as const;
@@ -38,6 +40,7 @@ type RequestOptions = {
   params?: Record<string, unknown>;
   data?: unknown;
   organizationScoped?: boolean;
+  headers?: Record<string, string>;
 };
 
 const refreshInFlight = new Map<string, Promise<string>>();
@@ -172,7 +175,7 @@ export class ZohoClient {
       const config: AxiosRequestConfig = {
         method: options.method || 'GET',
         url: new URL(path, this.connection.apiDomain).toString(),
-        headers: { Authorization: `Zoho-oauthtoken ${token}` },
+        headers: { Authorization: `Zoho-oauthtoken ${token}`, ...(options.headers || {}) },
         params,
         data: options.data,
         timeout: 20_000,
