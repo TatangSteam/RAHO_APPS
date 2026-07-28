@@ -73,7 +73,12 @@ export class ShipmentProcessingService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    if (!user || ![
+      Role.SUPER_ADMIN,
+      Role.ADMIN_MANAGER,
+      Role.ADMIN_LOGISTIK,
+      Role.FINANCE_LOGISTICS_CONTROLLER,
+    ].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -118,13 +123,10 @@ export class ShipmentProcessingService {
     }
 
     // For ADMIN_MANAGER, validate they manage the destination branch
-    if (user.role === Role.ADMIN_MANAGER) {
-      const managerBranch = await prisma.managerBranch.findFirst({
-        where: {
-          userId,
-          branchId: shipment.toBranchId,
-        },
-      });
+    if ([Role.ADMIN_MANAGER, Role.FINANCE_LOGISTICS_CONTROLLER].includes(user.role)) {
+      const managerBranch = user.role === Role.ADMIN_MANAGER
+        ? await prisma.managerBranch.findFirst({ where: { userId, branchId: shipment.toBranchId } })
+        : await prisma.staffBranch.findFirst({ where: { userId, branchId: shipment.toBranchId } });
 
       if (!managerBranch) {
         throw {
@@ -134,7 +136,9 @@ export class ShipmentProcessingService {
         };
       }
       if (shipment.fromBranch.branchCode !== 'EXT') {
-        const sourceAccess = await prisma.managerBranch.findFirst({ where: { userId, branchId: shipment.fromBranchId } });
+        const sourceAccess = user.role === Role.ADMIN_MANAGER
+          ? await prisma.managerBranch.findFirst({ where: { userId, branchId: shipment.fromBranchId } })
+          : await prisma.staffBranch.findFirst({ where: { userId, branchId: shipment.fromBranchId } });
         if (!sourceAccess) throw { status: 403, code: 'SOURCE_BRANCH_ACCESS_DENIED', message: 'Anda tidak memiliki akses ke cabang sumber pengiriman' };
       }
     }

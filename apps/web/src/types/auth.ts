@@ -8,6 +8,7 @@ export type Role =
   | 'ADMIN_CABANG'
   | 'ADMIN_LAYANAN'
   | 'ADMIN_LOGISTIK'
+  | 'FINANCE_LOGISTICS_CONTROLLER'
   | 'DOCTOR'
   | 'NURSE'
   | 'MEMBER';
@@ -46,12 +47,24 @@ export const STAFF_ROLES: Role[] = [
   'ADMIN_CABANG',
   'ADMIN_LAYANAN',
   'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
   'DOCTOR',
   'NURSE',
 ];
 
-export const ADMIN_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'];
-export const MANAGER_ABOVE_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'];
+export const ADMIN_ABOVE_ROLES: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+  'ADMIN_CABANG',
+];
+export const MANAGER_ABOVE_ROLES: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+];
 export const SUPER_ADMIN_ONLY: Role[] = ['SUPER_ADMIN'];
 export const PACKAGE_MANAGEMENT_ROLES: Role[] = [
   'SUPER_ADMIN',
@@ -92,8 +105,8 @@ export function getDefaultRoute(role: Role, adminManagerAccessScope?: AdminManag
     return '/members';
   }
 
-  if (role === 'ADMIN_LOGISTIK') {
-    return '/inventory/master-data';
+  if (role === 'ADMIN_LOGISTIK' || role === 'FINANCE_LOGISTICS_CONTROLLER') {
+    return '/inventory/dashboard';
   }
   
   // All staff roles get main dashboard

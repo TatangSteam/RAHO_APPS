@@ -77,8 +77,19 @@ const ALLSTAFF: Role[] = [
   Role.NURSE,
 ];
 
-const ADMIN_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK, Role.ADMIN_CABANG];
-const MANAGER_ROLES: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
+const ADMIN_ROLES: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
+  Role.ADMIN_CABANG,
+];
+const MANAGER_ROLES: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
+];
 
 // Sprint 9 inventory control: approval-based adjustment and locked stock opname.
 router.get('/controls/adjustment-reasons', authenticate, requirePermission(PERMISSIONS.INVENTORY_ADJUSTMENT_READ), inventoryControlController.reasons.bind(inventoryControlController));

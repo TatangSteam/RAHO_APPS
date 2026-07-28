@@ -4,12 +4,14 @@ export const canViewCentralStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
 export const canManageCentralStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
 export const superAdminOnly: Role[] = [
@@ -20,6 +22,7 @@ export const canShipStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
 export const canRequestBranchStock: Role[] = [
@@ -30,6 +33,7 @@ export const canRequestBagStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
   Role.ADMIN_LAYANAN,
 ];
 
@@ -38,6 +42,7 @@ export const canReceiveBranchStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
 export const canReceiveBagStock: Role[] = [
@@ -45,12 +50,14 @@ export const canReceiveBagStock: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
 export const logisticStaffRoles: Role[] = [
   Role.SUPER_ADMIN,
   Role.ADMIN_MANAGER,
   Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
   Role.DOCTOR,

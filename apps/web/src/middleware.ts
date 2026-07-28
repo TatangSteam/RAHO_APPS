@@ -37,7 +37,9 @@ const STAFF_ROUTES = [
 function getRoleHomePath(role: string | null, adminManagerAccessScope: string | null): string {
   if (role === 'MEMBER') return '/me/dashboard';
   if (role === 'ADMIN_MANAGER' && adminManagerAccessScope === 'MEMBER_VIEW_ONLY') return '/members';
-  if (role === 'ADMIN_LOGISTIK') return '/inventory/master-data';
+  if (role === 'ADMIN_LOGISTIK' || role === 'FINANCE_LOGISTICS_CONTROLLER') {
+    return '/inventory/dashboard';
+  }
   return '/dashboard';
 }
 

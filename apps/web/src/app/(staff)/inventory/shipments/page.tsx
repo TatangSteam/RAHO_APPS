@@ -232,7 +232,12 @@ export default function ShipmentsPage() {
   };
 
   const canShip = (shipment: Shipment) => 
-    ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '') &&
+    [
+      'SUPER_ADMIN',
+      'ADMIN_MANAGER',
+      'ADMIN_LOGISTIK',
+      'FINANCE_LOGISTICS_CONTROLLER',
+    ].includes(user?.role || '') &&
     shipment.status === 'PREPARING';
 
   const canEditShipment = (shipment: Shipment) =>

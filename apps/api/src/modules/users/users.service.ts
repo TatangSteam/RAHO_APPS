@@ -29,6 +29,7 @@ const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
 const STAFF_CREATION_ROLES: Record<string, readonly Role[]> = {
   [Role.SUPER_ADMIN]: [
     Role.ADMIN_LOGISTIK,
+    Role.FINANCE_LOGISTICS_CONTROLLER,
     Role.ADMIN_CABANG,
     Role.ADMIN_LAYANAN,
     Role.DOCTOR,

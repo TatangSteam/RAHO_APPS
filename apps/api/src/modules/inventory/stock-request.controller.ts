@@ -6,6 +6,7 @@ import { prisma } from '../../lib/prisma';
 import { uploadFile } from '../../config/minio';
 import { env } from '../../config/env';
 import { v4 as uuidv4 } from 'uuid';
+import { getAccessibleBranchIds } from '../iam/authorization.service';
 
 const stockRequestService = new StockRequestService();
 
@@ -300,6 +301,30 @@ export class StockRequestController {
           page: page ? parseInt(page as string) : 1,
           limit: limit ? parseInt(limit as string) : 50,
         });
+      } else if (userRole === Role.FINANCE_LOGISTICS_CONTROLLER && userId) {
+        const accessibleBranchIds = await getAccessibleBranchIds(userId);
+        const scopedBranchIds = accessibleBranchIds ?? [];
+        if (branchId && !scopedBranchIds.includes(branchId as string)) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+        }
+        if (scopedBranchIds.length === 0) {
+          return sendSuccess(res, {
+            data: [],
+            pagination: {
+              page: page ? parseInt(page as string) : 1,
+              limit: limit ? parseInt(limit as string) : 50,
+              total: 0,
+              totalPages: 0,
+            },
+          });
+        }
+        result = await stockRequestService.getRequests({
+          branchIds: branchId ? [branchId as string] : scopedBranchIds,
+          status: status as StockRequestStatus,
+          statuses: statuses ? (statuses as string).split(',') as StockRequestStatus[] : undefined,
+          page: page ? parseInt(page as string) : 1,
+          limit: limit ? parseInt(limit as string) : 50,
+        });
       } else if (userRole === Role.ADMIN_MANAGER) {
         // Admin Manager sees requests from managed branches
         result = await stockRequestService.getRequestsForManager(userId!, {
@@ -381,6 +406,12 @@ export class StockRequestController {
         });
 
         if (!managerBranch) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke request ini');
+        }
+      }
+      if (userRole === Role.FINANCE_LOGISTICS_CONTROLLER && userId) {
+        const accessibleBranchIds = await getAccessibleBranchIds(userId);
+        if (accessibleBranchIds !== null && !accessibleBranchIds.includes(result.branchId)) {
           return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke request ini');
         }
       }

@@ -3,6 +3,7 @@ import { ShipmentService } from './shipment.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { ShipmentStatus, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
+import { getAccessibleBranchIds } from '../iam/authorization.service';
 
 const shipmentService = new ShipmentService();
 
@@ -161,7 +162,12 @@ export class ShipmentController {
       }
 
       // ADMIN_MANAGER, ADMIN_LOGISTIK, and SUPER_ADMIN can have null branchId
-      if (!branchId && !['ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'SUPER_ADMIN'].includes(userRole || '')) {
+      if (!branchId && ![
+        'ADMIN_MANAGER',
+        'ADMIN_LOGISTIK',
+        'FINANCE_LOGISTICS_CONTROLLER',
+        'SUPER_ADMIN',
+      ].includes(userRole || '')) {
         return sendError(res, 401, 'UNAUTHORIZED', 'User tidak memiliki cabang');
       }
 
@@ -189,6 +195,17 @@ export class ShipmentController {
       if (userRole === Role.SUPER_ADMIN || userRole === Role.ADMIN_LOGISTIK) {
         // SUPER_ADMIN and ADMIN_LOGISTIK can see all shipments
         targetBranchIds = branchId ? [branchId as string] : undefined;
+      } else if (userRole === Role.FINANCE_LOGISTICS_CONTROLLER && userId) {
+        const accessibleBranchIds = await getAccessibleBranchIds(userId);
+        targetBranchIds = accessibleBranchIds ?? [];
+        if (branchId) {
+          if (!targetBranchIds.includes(branchId as string)) {
+            return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke cabang ini');
+          }
+          targetBranchIds = [branchId as string];
+        } else if (targetBranchIds.length === 0) {
+          return sendSuccess(res, []);
+        }
       } else if (userRole === Role.ADMIN_MANAGER && userId) {
         // ADMIN_MANAGER can only see shipments for active branches they manage
         const managedBranches = await prisma.managerBranch.findMany({
@@ -263,6 +280,12 @@ export class ShipmentController {
         });
 
         if (!managerBranch) {
+          return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke shipment ini');
+        }
+      }
+      if (userRole === Role.FINANCE_LOGISTICS_CONTROLLER && userId) {
+        const accessibleBranchIds = await getAccessibleBranchIds(userId);
+        if (accessibleBranchIds !== null && !accessibleBranchIds.includes(result.toBranchId)) {
           return sendError(res, 403, 'ACCESS_DENIED', 'Anda tidak memiliki akses ke shipment ini');
         }
       }

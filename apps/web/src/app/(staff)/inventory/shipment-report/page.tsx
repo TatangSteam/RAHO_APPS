@@ -49,7 +49,12 @@ interface PartnerSummary {
   invoiceAmount: number;
 }
 
-const REPORT_ROLES: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'];
+const REPORT_ROLES: Role[] = [
+  'SUPER_ADMIN',
+  'ADMIN_MANAGER',
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+];
 
 const MONTHS = [
   'Januari',

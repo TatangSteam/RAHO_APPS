@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { ShipmentStatus, DiscrepancyType, Role, AuditAction } from '@prisma/client';
+import { ShipmentStatus, DiscrepancyType, Role, AuditAction, BranchType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { errors } from '../../middleware/errorHandler';
 import { logAudit } from '../../utils/auditLog';
@@ -89,6 +89,17 @@ export class ShipmentService {
       });
       return dispatchReservedShipment(userId, shipmentId, input);
     }
+    const shipmentScope = await prisma.shipment.findUnique({
+      where: { id: shipmentId },
+      select: { toBranch: { select: { type: true } } },
+    });
+    if (!shipmentScope) throw errors.notFound('Shipment tidak ditemukan.');
+    if (shipmentScope.toBranch.type === BranchType.PARTNERSHIP) {
+      throw errors.unprocessable(
+        'PARTNERSHIP_LEDGER_DISPATCH_REQUIRED',
+        'Shipment Partnership harus melalui approval dan reservation FIFO sebelum dikirim.',
+      );
+    }
     return await this.processingService.shipShipment(shipmentId, userId, data);
   }
 
@@ -144,7 +155,12 @@ export class ShipmentService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    if (!user || ![
+      Role.SUPER_ADMIN,
+      Role.ADMIN_MANAGER,
+      Role.ADMIN_LOGISTIK,
+      Role.FINANCE_LOGISTICS_CONTROLLER,
+    ].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',

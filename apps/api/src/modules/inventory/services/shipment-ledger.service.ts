@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto';
 import {
   AccountType,
   AuditAction,
+  BranchType,
   DiscrepancyType,
   InternalTransferStatus,
   InventoryPostingStatus,
@@ -22,6 +23,10 @@ import { postInventoryDerivedJournal } from '@modules/accounting/accounting.serv
 import { assertBranchAccess, assertPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { logAudit } from '@utils/auditLog';
+import {
+  buildPartnershipGoodsShippedPayload,
+  PARTNERSHIP_GOODS_SHIPPED_EVENT,
+} from '@modules/zoho/zoho-routing.policy';
 import type {
   DispatchShipmentInput,
   ReceiveShipmentLedgerInput,
@@ -491,7 +496,11 @@ export async function dispatchReservedShipment(
 ) {
   const scope = await prisma.shipment.findUnique({
     where: { id: shipmentId },
-    select: { fromBranchId: true, toBranchId: true },
+    select: {
+      fromBranchId: true,
+      toBranchId: true,
+      toBranch: { select: { type: true } },
+    },
   });
   if (!scope) throw errors.notFound('Shipment tidak ditemukan.');
   await assertBranchAccess(actorUserId, scope.toBranchId);
@@ -518,6 +527,7 @@ export async function dispatchReservedShipment(
         items: { include: { masterProduct: true } },
         stockRequest: {
           include: {
+            invoice: { include: { items: true } },
             reservations: {
               where: { status: StockReservationStatus.ACTIVE },
               include: { inventoryBalance: true, stockRequestItem: true },
@@ -525,6 +535,7 @@ export async function dispatchReservedShipment(
             },
           },
         },
+        toBranch: { select: { type: true } },
       },
     });
     if (!shipment) throw errors.notFound('Shipment tidak ditemukan.');
@@ -533,6 +544,13 @@ export async function dispatchReservedShipment(
     }
     if (shipment.stockRequest.reservations.length === 0) {
       throw errors.unprocessable('ACTIVE_RESERVATION_REQUIRED', 'Dispatch ledger memerlukan reservation aktif.');
+    }
+    const isPartnershipShipment = shipment.toBranch.type === BranchType.PARTNERSHIP;
+    if (isPartnershipShipment && !shipment.stockRequest.invoice) {
+      throw errors.unprocessable(
+        'PARTNERSHIP_INVOICE_REQUIRED',
+        'Shipment Partnership wajib memiliki invoice sebelum dikirim.',
+      );
     }
 
     const providedItems = new Map<string, Prisma.Decimal>();
@@ -614,6 +632,7 @@ export async function dispatchReservedShipment(
     });
 
     let postingTotalCost = new Prisma.Decimal(0);
+    const costByProduct = new Map<string, Prisma.Decimal>();
     const shippedAt = input.occurredAt;
     for (const shipmentItem of [...shipment.items].sort((a, b) => a.id.localeCompare(b.id))) {
       const reservations = reservationsByProduct.get(shipmentItem.masterProductId) ?? [];
@@ -641,7 +660,7 @@ export async function dispatchReservedShipment(
           data: {
             onHandQty: { decrement: quantity },
             reservedQty: { decrement: quantity },
-            inTransitQty: { increment: quantity },
+            ...(!isPartnershipShipment ? { inTransitQty: { increment: quantity } } : {}),
             version: { increment: 1 },
           },
         });
@@ -704,20 +723,58 @@ export async function dispatchReservedShipment(
         });
         sourceItem.stock = sourceItem.stock.sub(quantity);
         postingTotalCost = postingTotalCost.add(allocationCost);
+        costByProduct.set(
+          shipmentItem.masterProductId,
+          (costByProduct.get(shipmentItem.masterProductId) ?? new Prisma.Decimal(0)).add(allocationCost),
+        );
       }
     }
 
     await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingTotalCost } });
-    await postDispatchTransferAccounting(tx, {
-      shipmentId: shipment.id,
-      shipmentCode: shipment.shipmentCode,
-      fromBranchId: shipment.fromBranchId,
-      toBranchId: shipment.toBranchId,
-      postingId: posting.id,
-      totalCost: postingTotalCost,
-      occurredAt: shippedAt,
-      actorUserId,
-    });
+    if (isPartnershipShipment) {
+      const invoice = shipment.stockRequest.invoice!;
+      const payload = buildPartnershipGoodsShippedPayload({
+        partnershipBranchId: shipment.toBranchId,
+        stockRequestId: shipment.stockRequestId,
+        stockRequestInvoiceId: invoice.id,
+        shipmentCode: shipment.shipmentCode,
+        invoiceNumber: invoice.invoiceNumber,
+        revenueAmount: invoice.totalAmount,
+        invoiceItems: invoice.items.map((item) => ({
+          masterProductId: item.masterProductId,
+          sku: item.sku,
+          quantity: item.quantity,
+          pricePerUnit: item.pricePerUnit,
+        })),
+        shipmentCosts: shipment.items.map((item) => ({
+          masterProductId: item.masterProductId,
+          quantity: item.sentQty,
+          totalCost: costByProduct.get(item.masterProductId) ?? new Prisma.Decimal(0),
+        })),
+      });
+      await tx.integrationEvent.create({
+        data: {
+          eventType: PARTNERSHIP_GOODS_SHIPPED_EVENT,
+          eventVersion: 1,
+          aggregateType: 'Shipment',
+          aggregateId: shipment.id,
+          branchId: shipment.toBranchId,
+          payload,
+          occurredAt: shippedAt,
+        },
+      });
+    } else {
+      await postDispatchTransferAccounting(tx, {
+        shipmentId: shipment.id,
+        shipmentCode: shipment.shipmentCode,
+        fromBranchId: shipment.fromBranchId,
+        toBranchId: shipment.toBranchId,
+        postingId: posting.id,
+        totalCost: postingTotalCost,
+        occurredAt: shippedAt,
+        actorUserId,
+      });
+    }
     await tx.shipment.update({
       where: { id: shipment.id },
       data: {
@@ -769,9 +826,19 @@ export async function receiveReservedShipment(
 ) {
   const scope = await prisma.shipment.findUnique({
     where: { id: shipmentId },
-    select: { fromBranchId: true, toBranchId: true },
+    select: {
+      fromBranchId: true,
+      toBranchId: true,
+      toBranch: { select: { type: true } },
+    },
   });
   if (!scope) throw errors.notFound('Shipment tidak ditemukan.');
+  if (scope.toBranch.type === BranchType.PARTNERSHIP) {
+    throw errors.unprocessable(
+      'PARTNERSHIP_RECEIPT_IS_DELIVERY_CONFIRMATION',
+      'Penerimaan Partnership tidak boleh menambah inventory milik perusahaan. Gunakan konfirmasi delivery.',
+    );
+  }
   await assertBranchAccess(actorUserId, scope.toBranchId);
   await assertPermission(actorUserId, PERMISSIONS.INVENTORY_SHIPMENT_RECEIVE, scope.toBranchId);
 
