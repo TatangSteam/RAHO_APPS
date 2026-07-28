@@ -237,6 +237,7 @@ export class AdminService {
    */
   async createMasterProduct(
     data: {
+      sku: string;
       name: string;
       category: ProductCategory;
       baseUnit: string;
@@ -255,6 +256,7 @@ export class AdminService {
   async updateMasterProduct(
     productId: string,
     data: {
+      sku?: string;
       name?: string;
       category?: ProductCategory;
       baseUnit?: string;

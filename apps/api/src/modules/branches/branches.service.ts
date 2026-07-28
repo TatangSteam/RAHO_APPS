@@ -10,6 +10,10 @@ import {
 } from './branches.schema';
 import { getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import {
+  enqueueBranchMasterChildrenSafely,
+  enqueueMasterSafely,
+} from '@modules/zoho/zoho.master.service';
 
 async function getReadableBranchIds(userId: string): Promise<string[]> {
   const accessible = await getAccessibleBranchIds(userId);
@@ -550,6 +554,9 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
     // Don't throw - branch creation should still succeed even if inventory creation fails
   }
 
+  await enqueueMasterSafely('BRANCH_LOCATION', branch.id);
+  await enqueueBranchMasterChildrenSafely(branch.id);
+
   return branch;
 }
 
@@ -612,6 +619,9 @@ export async function updateBranchService(
     },
     select: branchSelect,
   });
+
+  await enqueueMasterSafely('BRANCH_LOCATION', branch.id);
+  await enqueueBranchMasterChildrenSafely(branch.id);
 
   return branch;
 }

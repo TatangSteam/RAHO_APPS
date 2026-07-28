@@ -51,6 +51,15 @@ export const rejectPaymentSchema = z.object({
   reason: z.string().trim().min(3).max(500),
 });
 
+export const refundPaymentSchema = z.object({
+  amount: z.string().regex(/^\d+(\.\d{1,2})?$/, 'Nominal harus berupa decimal string maksimal dua desimal'),
+  cashBankAccountId: z.string().cuid('Cash/bank account tidak valid'),
+  reason: z.string().trim().min(8).max(500),
+  referenceNumber: z.string().trim().max(100).optional(),
+  refundDate: z.string().datetime().optional(),
+  postingKey: z.string().trim().min(8).max(150),
+});
+
 export const cancelInvoiceSchema = z.object({
   reason: z.string().min(1, 'Cancellation reason is required'),
 });
@@ -62,4 +71,5 @@ export type FinalizeInvoiceInput = z.infer<typeof finalizeInvoiceSchema>;
 export type RecordPaymentInput = z.infer<typeof recordPaymentSchema>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
 export type RejectPaymentInput = z.infer<typeof rejectPaymentSchema>;
+export type RefundPaymentInput = z.infer<typeof refundPaymentSchema>;
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;

@@ -6,6 +6,9 @@ import * as service from './zoho.service';
 import * as queueService from './zoho.queue.service';
 import * as discoveryService from './zoho.discovery.service';
 import * as contactService from './zoho.contact.service';
+import * as masterService from './zoho.master.service';
+import * as invoiceService from './zoho.invoice.service';
+import * as paymentService from './zoho.payment.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -32,6 +35,55 @@ const contactListSchema = z.object({
 
 const approveReviewSchema = z.object({
   zohoContactId: z.string().trim().min(1).max(100),
+});
+
+const masterListSchema = z.object({
+  entityType: z.enum(['MASTER_PRODUCT', 'PACKAGE_PRICING', 'BRANCH_LOCATION', 'STOCK_LOCATION'])
+    .default('MASTER_PRODUCT'),
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const approveMasterReviewSchema = z.object({
+  zohoEntityId: z.string().trim().min(1).max(100),
+});
+
+const accountRoleMappingSchema = z.object({
+  role: z.enum(['ITEM_SALES', 'ITEM_PURCHASE', 'ITEM_INVENTORY']),
+  zohoAccountId: z.string().trim().min(1).max(100),
+});
+
+const uomMappingSchema = z.object({
+  uomId: z.string().trim().min(1).max(100),
+  zohoUnit: z.string().trim().min(1).max(50),
+});
+
+const invoiceListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const taxMappingSchema = z.object({
+  percent: z.coerce.number().min(0).max(100),
+  zohoTaxId: z.string().trim().min(1).max(100),
+});
+
+const paymentListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const paymentAccountMappingSchema = z.object({
+  cashBankAccountId: z.string().cuid(),
+  zohoAccountId: z.string().trim().min(1).max(100),
+});
+
+const paymentMethodMappingSchema = z.object({
+  paymentMethod: z.enum(['CASH', 'TRANSFER', 'DEBIT', 'CREDIT', 'QRIS', 'OTHER']),
+  zohoMode: z.enum(['cash', 'check', 'creditcard', 'banktransfer', 'bankremittance', 'autotransaction', 'others']),
 });
 
 export async function connect(req: Request, res: Response, next: NextFunction) {
@@ -143,4 +195,136 @@ export async function rejectContactReview(req: Request, res: Response, next: Nex
   try {
     sendSuccess(res, await contactService.rejectContactReview(req.user.userId, req.params.id));
   } catch (error) { next(error); }
+}
+
+export async function masters(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = masterListSchema.parse(req.query);
+    sendSuccess(res, await masterService.listMasterMappings({
+      ...query,
+      entityType: query.entityType ?? 'MASTER_PRODUCT',
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function masterConfig(_req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await masterService.getMasterConfig()); } catch (error) { next(error); }
+}
+
+export async function previewMaster(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await masterService.previewMaster(req.params.entityType, req.params.id)); } catch (error) { next(error); }
+}
+
+export async function matchMaster(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await masterService.findMasterMatch(req.params.entityType, req.params.id)); } catch (error) { next(error); }
+}
+
+export async function enqueueMaster(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await masterService.enqueueMaster(req.params.entityType, req.params.id)); } catch (error) { next(error); }
+}
+
+export async function mapItemAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = accountRoleMappingSchema.parse(req.body);
+    sendSuccess(res, await masterService.saveAccountRoleMapping(body.role, body.zohoAccountId));
+  } catch (error) { next(error); }
+}
+
+export async function mapUom(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = uomMappingSchema.parse(req.body);
+    sendSuccess(res, await masterService.saveUomMapping(body.uomId, body.zohoUnit));
+  } catch (error) { next(error); }
+}
+
+export async function approveMasterReview(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = approveMasterReviewSchema.parse(req.body);
+    sendSuccess(res, await masterService.approveMasterReview(req.user.userId, req.params.id, body.zohoEntityId));
+  } catch (error) { next(error); }
+}
+
+export async function rejectMasterReview(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await masterService.rejectMasterReview(req.user.userId, req.params.id)); } catch (error) { next(error); }
+}
+
+export async function invoices(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = invoiceListSchema.parse(req.query);
+    sendSuccess(res, await invoiceService.listInvoiceMappings({
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function invoiceConfig(_req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await invoiceService.getInvoiceConfig()); } catch (error) { next(error); }
+}
+
+export async function previewInvoice(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await invoiceService.previewInvoice(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function enqueueInvoice(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await invoiceService.enqueueInvoice(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function mapInvoiceTax(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = taxMappingSchema.parse(req.body);
+    sendSuccess(res, await invoiceService.saveTaxMapping(body.percent, body.zohoTaxId));
+  } catch (error) { next(error); }
+}
+
+export async function payments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = paymentListSchema.parse(req.query);
+    sendSuccess(res, await paymentService.listPaymentMappings(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function paymentConfig(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await paymentService.getPaymentConfig(req.user.userId)); } catch (error) { next(error); }
+}
+
+export async function mapPaymentAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = paymentAccountMappingSchema.parse(req.body);
+    sendSuccess(res, await paymentService.saveCashBankMapping(
+      req.user.userId,
+      body.cashBankAccountId,
+      body.zohoAccountId,
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function mapPaymentMethod(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = paymentMethodMappingSchema.parse(req.body);
+    sendSuccess(res, await paymentService.savePaymentMethodMapping(
+      req.user.userId,
+      body.paymentMethod,
+      body.zohoMode,
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function previewPayment(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await paymentService.previewPayment(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function enqueuePayment(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await paymentService.enqueuePayment(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function reconcilePayments(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await paymentService.reconcilePayments(req.user.userId)); } catch (error) { next(error); }
 }

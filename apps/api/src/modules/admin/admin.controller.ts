@@ -512,11 +512,12 @@ export async function getMasterProduct(req: Request, res: Response, next: NextFu
  */
 export async function createMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { name, category, baseUnit, usageUnit, conversionFactor, description } = req.body;
+    const { sku, name, category, baseUnit, usageUnit, conversionFactor, description } = req.body;
     const userId = (req as any).user.userId;
 
     const result = await adminService.createMasterProduct(
       {
+        sku,
         name,
         category,
         baseUnit,
@@ -540,12 +541,13 @@ export async function createMasterProduct(req: Request, res: Response, next: Nex
 export async function updateMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const { name, category, baseUnit, usageUnit, conversionFactor, description, isActive } = req.body;
+    const { sku, name, category, baseUnit, usageUnit, conversionFactor, description, isActive } = req.body;
     const userId = (req as any).user.userId;
 
     const result = await adminService.updateMasterProduct(
       id,
       {
+        sku,
         name,
         category,
         baseUnit,

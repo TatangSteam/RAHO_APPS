@@ -13,6 +13,15 @@ import {
   paymentPayloadHash,
 } from './payment-posting.helpers';
 import { createNotification } from '@modules/notifications/notification.service';
+import {
+  buildFinalizedInvoiceSnapshot,
+  enqueueFinalizedInvoiceTx,
+  finalizedTermsSnapshot,
+} from '@modules/zoho/zoho.invoice.service';
+import {
+  buildVerifiedPaymentSnapshot,
+  enqueueVerifiedPaymentTx,
+} from '@modules/zoho/zoho.payment.service';
 
 interface PaymentEvidence {
   proofFileUrl?: string;
@@ -68,11 +77,18 @@ export class InvoicePaymentService {
       }
 
       const finalizedAt = new Date();
+      const finalizedDueDate = dueDate ? new Date(dueDate) : invoice.dueDate;
+      const zohoSnapshot = await buildFinalizedInvoiceSnapshot(
+        tx,
+        invoice,
+        finalizedAt,
+        finalizedDueDate,
+      );
       const updated = await tx.invoice.update({
         where: { id: invoiceId },
         data: {
           status: 'PENDING_PAYMENT',
-          dueDate: dueDate ? new Date(dueDate) : invoice.dueDate,
+          dueDate: finalizedDueDate,
           finalizedAt,
           customerSnapshot: json({
             memberId: invoice.member.id,
@@ -89,23 +105,12 @@ export class InvoicePaymentService {
             phone: invoice.branch.phone,
           }),
           termsSnapshot: json({
-            currency: invoice.currency,
-            paymentPlanType: invoice.paymentPlanType,
-            dueDate: (dueDate ? new Date(dueDate) : invoice.dueDate)?.toISOString() || null,
-            settlementAccountCode: invoice.settlementAccountCode,
+            ...finalizedTermsSnapshot(
+              zohoSnapshot,
+              invoice.paymentPlanType,
+              invoice.settlementAccountCode,
+            ),
             finalizedAt: finalizedAt.toISOString(),
-            items: invoice.items.map((item) => ({
-              id: item.id,
-              itemType: item.itemType,
-              itemId: item.itemId,
-              code: item.code,
-              description: item.description,
-              quantity: item.quantity,
-              pricePerUnit: item.pricePerUnit.toFixed(2),
-              subtotal: item.subtotal.toFixed(2),
-              discountAmount: item.discountAmount?.toFixed(2) || '0.00',
-              totalAmount: item.totalAmount.toFixed(2),
-            })),
           }),
         },
         include: invoiceResultInclude,
@@ -126,6 +131,7 @@ export class InvoicePaymentService {
           description: `Invoice ${invoice.invoiceNumber} difinalisasi dan snapshot dikunci.`,
         },
       });
+      await enqueueFinalizedInvoiceTx(tx, zohoSnapshot);
       return updated;
     });
   }
@@ -190,11 +196,18 @@ export class InvoicePaymentService {
           throw errors.badRequest('PAYMENT_EVIDENCE_REQUIRED', 'Bukti pembayaran wajib untuk pembayaran non-cash.');
         }
 
-        const committed = await tx.invoicePayment.aggregate({
-          where: { invoiceId, verificationStatus: { in: ['PENDING', 'VERIFIED'] } },
-          _sum: { amount: true },
-        });
-        const committedTotal = committed._sum.amount || new Prisma.Decimal(0);
+        const [committed, refunded] = await Promise.all([
+          tx.invoicePayment.aggregate({
+            where: { invoiceId, verificationStatus: { in: ['PENDING', 'VERIFIED'] } },
+            _sum: { amount: true },
+          }),
+          tx.invoicePaymentRefund.aggregate({
+            where: { invoicePayment: { invoiceId }, status: 'POSTED' },
+            _sum: { amount: true },
+          }),
+        ]);
+        const committedTotal = (committed._sum.amount || new Prisma.Decimal(0))
+          .minus(refunded._sum.amount || new Prisma.Decimal(0));
         if (committedTotal.plus(amount).greaterThan(invoice.totalAmount)) {
           throw errors.conflict('PAYMENT_EXCEEDS_BALANCE', 'Pembayaran melebihi sisa tagihan invoice.');
         }
@@ -261,7 +274,7 @@ export class InvoicePaymentService {
       const payment = await tx.invoicePayment.findUnique({
         where: { id: paymentId },
         include: {
-          invoice: true,
+          invoice: { include: { branch: true, items: true } },
           cashBankAccount: { include: { coaAccount: true } },
           cashBankTransaction: true,
         },
@@ -281,13 +294,21 @@ export class InvoicePaymentService {
         throw errors.unprocessable('CASH_BANK_ACCOUNT_NOT_POSTABLE', 'Akun kas/bank pembayaran tidak dapat diposting.');
       }
 
-      const verified = await tx.invoicePayment.aggregate({
-        where: { invoiceId: payment.invoiceId, verificationStatus: 'VERIFIED', id: { not: payment.id } },
-        _sum: { amount: true },
-      });
+      const [verified, refunded] = await Promise.all([
+        tx.invoicePayment.aggregate({
+          where: { invoiceId: payment.invoiceId, verificationStatus: 'VERIFIED', id: { not: payment.id } },
+          _sum: { amount: true },
+        }),
+        tx.invoicePaymentRefund.aggregate({
+          where: { invoicePayment: { invoiceId: payment.invoiceId }, status: 'POSTED' },
+          _sum: { amount: true },
+        }),
+      ]);
+      const previousVerifiedTotal = (verified._sum.amount || new Prisma.Decimal(0))
+        .minus(refunded._sum.amount || new Prisma.Decimal(0));
       const state = calculatePaymentState(
         payment.invoice.totalAmount,
-        verified._sum.amount || new Prisma.Decimal(0),
+        previousVerifiedTotal,
         payment.amount,
       );
       const postingKey = `INVOICE_PAYMENT:${payment.id}`;
@@ -309,6 +330,11 @@ export class InvoicePaymentService {
       }, tx);
 
       const verifiedAt = new Date();
+      const zohoSnapshot = buildVerifiedPaymentSnapshot(
+        payment,
+        previousVerifiedTotal,
+        verifiedAt,
+      );
       const updatedPayment = await tx.invoicePayment.update({
         where: { id: payment.id },
         data: {
@@ -374,6 +400,7 @@ export class InvoicePaymentService {
           description: `Pembayaran invoice ${payment.invoice.invoiceNumber} diverifikasi dan diposting.`,
         },
       });
+      await enqueueVerifiedPaymentTx(tx, zohoSnapshot);
       return { payment: updatedPayment, cashBankTransaction: cashTransaction, journal: posted.journal, deferredRevenueMovements, idempotentReplay: false };
     });
   }

@@ -875,7 +875,7 @@ function ProductModal({ formData, setFormData, editingProduct, submitting, onClo
             <div className={styles.formRow}>
               <div className={styles.formGroup}>
                 <label>SKU (Opsional)</label>
-                <input type="text" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value })} placeholder="Contoh: MED-001" style={{ fontFamily: 'monospace' }} />
+                <input type="text" value={formData.sku} onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })} required placeholder="Contoh: MED-001" style={{ fontFamily: 'monospace' }} />
               </div>
             </div>
             <div className={styles.formGroup}>

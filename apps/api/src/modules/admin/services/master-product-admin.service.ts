@@ -2,6 +2,7 @@
 import { prisma } from '../../../lib/prisma';
 import { ProductCategory } from '@prisma/client';
 import { AppError } from '@middleware/errorHandler';
+import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
 /**
  * Service for Master Product management (SUPER_ADMIN only)
@@ -38,6 +39,7 @@ export class MasterProductAdminService {
 
     if (search) {
       where.OR = [
+        { sku: { contains: search, mode: 'insensitive' } },
         { name: { contains: search, mode: 'insensitive' } },
         { description: { contains: search, mode: 'insensitive' } },
       ];
@@ -104,6 +106,7 @@ export class MasterProductAdminService {
 
         return {
           id: product.id,
+          sku: product.sku,
           name: product.name,
           category: product.category,
           baseUnit: product.baseUnit,
@@ -159,6 +162,7 @@ export class MasterProductAdminService {
 
     return {
       id: product.id,
+      sku: product.sku,
       name: product.name,
       category: product.category,
       baseUnit: product.baseUnit,
@@ -183,6 +187,7 @@ export class MasterProductAdminService {
    * Create master product
    */
   async createMasterProduct(data: {
+    sku: string;
     name: string;
     category: ProductCategory;
     baseUnit: string;
@@ -190,6 +195,10 @@ export class MasterProductAdminService {
     conversionFactor: number;
     description?: string;
   }, userId: string) {
+    const sku = data.sku?.trim().toUpperCase();
+    if (!sku) {
+      throw new AppError(400, 'SKU_REQUIRED', 'SKU wajib diisi untuk sinkronisasi inventory.');
+    }
     // Check if product with same name already exists
     const existing = await prisma.masterProduct.findUnique({
       where: { name: data.name },
@@ -198,9 +207,17 @@ export class MasterProductAdminService {
     if (existing) {
       throw new AppError(409, 'PRODUCT_EXISTS', 'Produk dengan nama ini sudah ada');
     }
+    const existingSku = await prisma.masterProduct.findFirst({
+      where: { sku: { equals: sku, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (existingSku) {
+      throw new AppError(409, 'SKU_EXISTS', 'SKU sudah digunakan produk lain.');
+    }
 
     const product = await prisma.masterProduct.create({
       data: {
+        sku,
         name: data.name,
         category: data.category,
         unit: data.baseUnit, // Legacy field
@@ -227,8 +244,11 @@ export class MasterProductAdminService {
       },
     });
 
+    await enqueueMasterSafely('MASTER_PRODUCT', product.id);
+
     return {
       id: product.id,
+      sku: product.sku,
       name: product.name,
       category: product.category,
       baseUnit: product.baseUnit,
@@ -247,6 +267,7 @@ export class MasterProductAdminService {
   async updateMasterProduct(
     productId: string,
     data: {
+      sku?: string;
       name?: string;
       category?: ProductCategory;
       baseUnit?: string;
@@ -275,10 +296,22 @@ export class MasterProductAdminService {
         throw new AppError(409, 'PRODUCT_EXISTS', 'Produk dengan nama ini sudah ada');
       }
     }
+    const sku = data.sku?.trim().toUpperCase();
+    if (data.sku !== undefined && !sku) {
+      throw new AppError(400, 'SKU_REQUIRED', 'SKU tidak boleh dikosongkan.');
+    }
+    if (sku && sku !== product.sku) {
+      const existingSku = await prisma.masterProduct.findFirst({
+        where: { sku: { equals: sku, mode: 'insensitive' }, id: { not: productId } },
+        select: { id: true },
+      });
+      if (existingSku) throw new AppError(409, 'SKU_EXISTS', 'SKU sudah digunakan produk lain.');
+    }
 
     const updated = await prisma.masterProduct.update({
       where: { id: productId },
       data: {
+        ...(sku && { sku }),
         ...(data.name && { name: data.name }),
         ...(data.category && { category: data.category }),
         ...(data.baseUnit && { baseUnit: data.baseUnit, unit: data.baseUnit }),
@@ -304,8 +337,11 @@ export class MasterProductAdminService {
       },
     });
 
+    await enqueueMasterSafely('MASTER_PRODUCT', updated.id);
+
     return {
       id: updated.id,
+      sku: updated.sku,
       name: updated.name,
       category: updated.category,
       baseUnit: updated.baseUnit,
@@ -365,6 +401,8 @@ export class MasterProductAdminService {
         },
       },
     });
+
+    await enqueueMasterSafely('MASTER_PRODUCT', deleted.id);
 
     return {
       message: 'Produk berhasil dinonaktifkan',

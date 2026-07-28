@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { PackageStatus, PackageType, PaymentMethod, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { InvoicePaymentService } from '../invoice-payment.service';
+import { InvoiceRefundService } from '../invoice-refund.service';
 
 const describeDatabase = process.env.RUN_FINANCE_DB_TESTS === 'true' ? describe : describe.skip;
 
@@ -21,7 +22,10 @@ describeDatabase('AC-001 package payment posting integration', () => {
   const paymentId = `pay_payment_${runId}`;
   const rejectedPaymentId = `pay_rejected_${runId}`;
   const resubmittedPaymentId = `pay_resubmit_${runId}`;
+  const normalInvoiceId = `pay_normal_invoice_${runId}`;
+  const normalPaymentId = `pay_normal_payment_${runId}`;
   const service = new InvoicePaymentService();
+  const refundService = new InvoiceRefundService();
 
   beforeAll(async () => {
     const financeTemplate = await prisma.roleTemplate.findUniqueOrThrow({
@@ -145,18 +149,60 @@ describeDatabase('AC-001 package payment posting integration', () => {
         receivedBy: submitterId,
       },
     });
+    await prisma.invoice.create({
+      data: {
+        id: normalInvoiceId,
+        invoiceNumber: `INV-NORMAL-${runId}`,
+        memberId,
+        branchId,
+        subtotal: '1000.00',
+        totalAmount: '1000.00',
+        status: 'PENDING_PAYMENT',
+        finalizedAt: new Date('2026-07-20T00:00:00.000Z'),
+        createdBy: verifierId,
+        items: {
+          create: {
+            itemType: 'ADDON',
+            itemId: `addon-${runId}`,
+            code: `ADD-${runId}`,
+            description: 'Normal sale',
+            pricePerUnit: '1000.00',
+            subtotal: '1000.00',
+            totalAmount: '1000.00',
+          },
+        },
+        payments: {
+          create: {
+            id: normalPaymentId,
+            idempotencyKey: `PAYMENT-NORMAL-${runId}`,
+            payloadHash: `hash-normal-${runId}`,
+            amount: '600.00',
+            paymentMethod: PaymentMethod.CASH,
+            cashBankAccountId: cashAccountId,
+            receivedBy: submitterId,
+          },
+        },
+      },
+    });
   }, 30_000);
 
   afterAll(async () => {
+    await prisma.integrationEvent.deleteMany({
+      where: { branchId },
+    });
     await prisma.notification.deleteMany({ where: { userId: { in: [memberUserId, submitterId, verifierId] } } });
     await prisma.auditLog.deleteMany({ where: { OR: [{ branchId }, { userId: { in: [verifierId, submitterId] } }] } });
     await prisma.deferredRevenueMovement.deleteMany({ where: { memberPackageId } });
-    await prisma.cashBankTransaction.deleteMany({ where: { invoicePaymentId: paymentId } });
-    await prisma.invoicePayment.deleteMany({ where: { invoiceId } });
+    await prisma.invoicePaymentRefund.deleteMany({
+      where: { invoicePaymentId: normalPaymentId },
+    });
+    await prisma.cashBankTransaction.deleteMany({ where: { branchId } });
+    await prisma.invoicePayment.deleteMany({ where: { invoiceId: { in: [invoiceId, normalInvoiceId] } } });
     await prisma.packageRevenueContract.deleteMany({ where: { memberPackageId } });
     await prisma.packageBenefitValuation.deleteMany({ where: { memberPackageId } });
     await prisma.invoiceItem.deleteMany({ where: { id: invoiceItemId } });
-    await prisma.invoice.deleteMany({ where: { id: invoiceId } });
+    await prisma.invoiceItem.deleteMany({ where: { invoiceId: normalInvoiceId } });
+    await prisma.invoice.deleteMany({ where: { id: { in: [invoiceId, normalInvoiceId] } } });
     await prisma.memberPackage.deleteMany({ where: { id: memberPackageId } });
     await prisma.packagePricing.deleteMany({ where: { id: pricingId } });
     const journalIds = (await prisma.journalEntry.findMany({ where: { branchId }, select: { id: true } })).map((row) => row.id);
@@ -183,6 +229,21 @@ describeDatabase('AC-001 package payment posting integration', () => {
       where: { invoicePaymentId: paymentId, memberPackageId, type: 'FUNDING' },
     })).toBe(1);
     expect(await prisma.revenueRecognition.count({ where: { memberPackageId } })).toBe(0);
+    const zohoEvent = await prisma.integrationEvent.findUniqueOrThrow({
+      where: {
+        eventType_aggregateId: {
+          eventType: 'PAYMENT_VERIFIED',
+          aggregateId: paymentId,
+        },
+      },
+    });
+    expect(zohoEvent.status).toBe('PENDING');
+    expect(zohoEvent.payload).toMatchObject({
+      classification: 'THERAPY_ADVANCE',
+      eligible: false,
+      amount: '600.00',
+      outstandingAfter: '400.00',
+    });
 
     const contract = await prisma.packageRevenueContract.findUniqueOrThrow({ where: { memberPackageId } });
     expect(contract.status).toBe('ACTIVE');
@@ -241,6 +302,9 @@ describeDatabase('AC-001 package payment posting integration', () => {
     expect(rejected.verificationReason).toBe('Bukti pembayaran tidak valid');
     expect(await prisma.cashBankTransaction.count({ where: { invoicePaymentId: rejectedPaymentId } })).toBe(0);
     expect(await prisma.journalEntry.count({ where: { postingKey: `INVOICE_PAYMENT:${rejectedPaymentId}` } })).toBe(0);
+    expect(await prisma.integrationEvent.count({
+      where: { eventType: 'PAYMENT_VERIFIED', aggregateId: rejectedPaymentId },
+    })).toBe(0);
     expect(await prisma.auditLog.count({
       where: { resource: 'InvoicePayment', resourceId: rejectedPaymentId, action: 'UPDATE' },
     })).toBe(1);
@@ -270,5 +334,48 @@ describeDatabase('AC-001 package payment posting integration', () => {
     expect(history).toHaveLength(2);
     expect(history.find((payment) => payment.id === rejectedPaymentId)?.verificationStatus).toBe('REJECTED');
     expect(history.find((payment) => payment.id === resubmittedPaymentId)?.verificationStatus).toBe('PENDING');
+  }, 45_000);
+
+  it('posts an immutable partial refund, reduces net paid, and enqueues the Zoho reversal once', async () => {
+    await service.verifyPayment(
+      normalPaymentId,
+      { reason: 'Normal payment verified' },
+      submitterId,
+    );
+    const input = {
+      amount: '100.00',
+      cashBankAccountId: cashAccountId,
+      reason: 'Kelebihan pembayaran member',
+      referenceNumber: `REF-${runId}`,
+      refundDate: '2026-07-28T09:00:00.000Z',
+      postingKey: `REFUND-NORMAL-${runId}`,
+    };
+    const first = await refundService.refundPayment(normalPaymentId, input, submitterId);
+    const replay = await refundService.refundPayment(normalPaymentId, input, submitterId);
+    expect(first.idempotentReplay).toBe(false);
+    expect(replay.idempotentReplay).toBe(true);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({ where: { id: normalInvoiceId } });
+    expect(invoice.actualPaidAmount?.toFixed(2)).toBe('500.00');
+    expect(invoice.status).toBe('PENDING_PAYMENT');
+    expect(await prisma.invoicePaymentRefund.count({ where: { invoicePaymentId: normalPaymentId } })).toBe(1);
+    expect(await prisma.cashBankTransaction.count({
+      where: { sourceType: 'INVOICE_PAYMENT_REFUND', sourceId: first.refund.id },
+    })).toBe(1);
+
+    const event = await prisma.integrationEvent.findUniqueOrThrow({
+      where: {
+        eventType_aggregateId: {
+          eventType: 'PAYMENT_REFUNDED',
+          aggregateId: first.refund.id,
+        },
+      },
+    });
+    expect(event.payload).toMatchObject({
+      originalPaymentId: normalPaymentId,
+      amount: '100.00',
+      remainingAppliedAmountAfterRefund: '500.00',
+      eligible: true,
+    });
   }, 45_000);
 });

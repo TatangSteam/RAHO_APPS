@@ -3,6 +3,7 @@ import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { CreatePackagePricingInput, UpdatePackagePricingInput } from '../packages.schema';
 import { AuditAction } from '@prisma/client';
+import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
 function normalizeNullableString(value: string | null | undefined) {
   if (value === undefined) return undefined;
@@ -156,6 +157,8 @@ export class PackagePricingService {
       meta: { packageType: data.packageType, totalSessions: data.totalSessions },
     });
 
+    await enqueueMasterSafely('PACKAGE_PRICING', pricing.id);
+
     return {
       ...pricing,
       price: Number(pricing.price)
@@ -232,6 +235,8 @@ export class PackagePricingService {
       resourceId: pricingId,
       meta: data,
     });
+
+    await enqueueMasterSafely('PACKAGE_PRICING', pricing.id);
 
     return {
       ...pricing,

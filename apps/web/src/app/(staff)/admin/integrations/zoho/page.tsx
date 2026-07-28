@@ -4,14 +4,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Ban,
+  Boxes,
   Building2,
   CheckCircle2,
   CircleAlert,
+  CreditCard,
   Database,
   ExternalLink,
   Eye,
+  FileText,
   List,
   Loader2,
+  MapPinned,
   PlugZap,
   RefreshCw,
   RotateCcw,
@@ -23,7 +27,7 @@ import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type Tab = 'connection' | 'queue' | 'discovery' | 'contacts';
+type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 
 type Connection = {
@@ -39,6 +43,12 @@ type Connection = {
   organizationCurrencyCode: string | null;
   discoveryLastRunAt: string | null;
   contactSyncReady: boolean;
+  itemSyncReady: boolean;
+  locationSyncReady: boolean;
+  invoiceSyncReady: boolean;
+  paymentSyncReady: boolean;
+  locationsSupported: boolean | null;
+  locationsCapabilityError: string | null;
 };
 type Status = {
   configured: boolean;
@@ -94,6 +104,10 @@ type DiscoveryData = {
     isUnique: boolean | null;
     ready: boolean;
   };
+  locationCapability: {
+    supported: boolean | null;
+    error: string | null;
+  };
 };
 type ContactCandidate = {
   contact_id: string;
@@ -121,6 +135,164 @@ type ContactMappingRow = {
 type ContactData = {
   items: ContactMappingRow[];
   pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type MasterEntityType = 'MASTER_PRODUCT' | 'PACKAGE_PRICING' | 'BRANCH_LOCATION' | 'STOCK_LOCATION';
+type MasterCandidate = {
+  item_id?: string;
+  name?: string;
+  sku?: string;
+  product_type?: string;
+  location_id?: string;
+  location_name?: string;
+};
+type MasterReview = {
+  id: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  reason: string;
+  candidates: MasterCandidate[];
+};
+type MasterMappingRow = {
+  entityType: MasterEntityType;
+  id: string;
+  code: string;
+  name: string;
+  subtype?: string;
+  isActive: boolean;
+  eligible?: boolean;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  review: MasterReview | null;
+};
+type MasterData = {
+  items: MasterMappingRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type MasterConfig = {
+  accountRoles: Array<{
+    role: 'ITEM_SALES' | 'ITEM_PURCHASE' | 'ITEM_INVENTORY';
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  accounts: DiscoveryItem[];
+  uoms: Array<{
+    id: string;
+    code: string;
+    name: string;
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  locationCapability: { supported: boolean | null; error: string | null };
+};
+type MasterPreview = {
+  snapshot: { name: string; externalKey: string; sku?: string | null; code?: string; eligible?: boolean };
+  payload: unknown;
+  issues: string[];
+  excludedFields: string[];
+  liveReady: boolean;
+  locationCapability: { supported: boolean | null; error: string | null };
+};
+type InvoiceMappingRow = {
+  id: string;
+  invoiceNumber: string;
+  memberNo: string;
+  memberName: string;
+  branchCode: string;
+  branchType: string;
+  classification: 'NORMAL_SALE' | 'THERAPY_ADVANCE';
+  eligible: boolean;
+  status: string;
+  totalAmount: string;
+  finalizedAt: string | null;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  events: Array<{ id: string; eventType: string; status: EventStatus; lastError: string | null }>;
+};
+type InvoiceData = {
+  items: InvoiceMappingRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type InvoiceConfig = {
+  taxes: DiscoveryItem[];
+  mappings: Array<{ localEntityId: string; zohoEntityId: string; status: string }>;
+};
+type InvoicePreview = {
+  snapshot: {
+    invoiceNumber: string;
+    externalKey: string;
+    classification: string;
+    eligible: boolean;
+    excludedReason: string | null;
+    totalAmount: string;
+  };
+  issues: string[];
+  payload: unknown;
+  liveReady: boolean;
+  excludedFields: string[];
+};
+type PaymentMappingRow = {
+  id: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  branchCode: string;
+  branchType: string;
+  classification: 'NORMAL_SALE' | 'THERAPY_ADVANCE';
+  eligible: boolean;
+  amount: string;
+  paymentMethod: string;
+  accountName: string | null;
+  verifiedAt: string | null;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  event: { id: string; status: EventStatus; lastError: string | null } | null;
+  refunds: Array<{
+    id: string;
+    refundNumber: string;
+    amount: string;
+    status: string;
+    refundDate: string;
+    mapping: { zohoEntityId: string; status: string } | null;
+    event: { id: string; status: EventStatus; lastError: string | null } | null;
+  }>;
+};
+type PaymentData = {
+  items: PaymentMappingRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type PaymentConfig = {
+  cashBankAccounts: Array<{
+    id: string;
+    code: string;
+    name: string;
+    branch: { branchCode: string; name: string };
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  paymentMethods: Array<{
+    method: string;
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  zohoAccounts: DiscoveryItem[];
+  modes: DiscoveryItem[];
+};
+type PaymentPreview = {
+  snapshot: {
+    invoiceNumber: string;
+    externalKey: string;
+    classification: string;
+    eligible: boolean;
+    excludedReason: string | null;
+    amount: string;
+  };
+  issues: string[];
+  payload: unknown;
+  liveReady: boolean;
+};
+type ReconciliationData = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    invoiceId: string;
+    invoiceNumber: string;
+    localBalance?: string;
+    zohoBalance?: number | null;
+    result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; reasons: string[] };
+  }>;
 };
 
 const eventStatuses: Array<EventStatus | ''> = [
@@ -172,6 +344,22 @@ export default function ZohoIntegrationPage() {
     excludedFields: string[];
     liveCreateReady: boolean;
   } | null>(null);
+  const [masters, setMasters] = useState<MasterData | null>(null);
+  const [masterConfig, setMasterConfig] = useState<MasterConfig | null>(null);
+  const [masterEntityType, setMasterEntityType] = useState<MasterEntityType>('MASTER_PRODUCT');
+  const [masterSearch, setMasterSearch] = useState('');
+  const [masterPreview, setMasterPreview] = useState<MasterPreview | null>(null);
+  const [invoices, setInvoices] = useState<InvoiceData | null>(null);
+  const [invoiceConfig, setInvoiceConfig] = useState<InvoiceConfig | null>(null);
+  const [invoiceSearch, setInvoiceSearch] = useState('');
+  const [invoiceTaxPercent, setInvoiceTaxPercent] = useState('11');
+  const [invoiceTaxId, setInvoiceTaxId] = useState('');
+  const [invoicePreview, setInvoicePreview] = useState<InvoicePreview | null>(null);
+  const [payments, setPayments] = useState<PaymentData | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [paymentPreview, setPaymentPreview] = useState<PaymentPreview | null>(null);
+  const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -205,6 +393,43 @@ export default function ZohoIntegrationPage() {
     setContacts(response.data.data);
   }, [contactEntityType, contactSearch]);
 
+  const loadMasters = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: MasterData }>('/integrations/zoho/masters', {
+        params: {
+          entityType: masterEntityType,
+          limit: 50,
+          ...(masterSearch.trim() ? { search: masterSearch.trim() } : {}),
+        },
+      }),
+      api.get<{ data: MasterConfig }>('/integrations/zoho/masters/config'),
+    ]);
+    setMasters(rows.data.data);
+    setMasterConfig(config.data.data);
+  }, [masterEntityType, masterSearch]);
+
+  const loadInvoices = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: InvoiceData }>('/integrations/zoho/invoices', {
+        params: { limit: 50, ...(invoiceSearch.trim() ? { search: invoiceSearch.trim() } : {}) },
+      }),
+      api.get<{ data: InvoiceConfig }>('/integrations/zoho/invoices/config'),
+    ]);
+    setInvoices(rows.data.data);
+    setInvoiceConfig(config.data.data);
+  }, [invoiceSearch]);
+
+  const loadPayments = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: PaymentData }>('/integrations/zoho/payments', {
+        params: { limit: 50, ...(paymentSearch.trim() ? { search: paymentSearch.trim() } : {}) },
+      }),
+      api.get<{ data: PaymentConfig }>('/integrations/zoho/payments/config'),
+    ]);
+    setPayments(rows.data.data);
+    setPaymentConfig(config.data.data);
+  }, [paymentSearch]);
+
   useEffect(() => {
     if (user && !['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'].includes(user.role)) router.replace('/dashboard');
   }, [router, user]);
@@ -219,7 +444,10 @@ export default function ZohoIntegrationPage() {
     if (tab === 'queue') void loadQueue().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat antrean Zoho.')));
     if (tab === 'discovery') void loadDiscovery().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat master Zoho.')));
     if (tab === 'contacts') void loadContacts().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat mapping contact.')));
-  }, [loadContacts, loadDiscovery, loadQueue, tab]);
+    if (tab === 'masters') void loadMasters().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat mapping Item/Location.')));
+    if (tab === 'invoices') void loadInvoices().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat invoice Zoho.')));
+    if (tab === 'payments') void loadPayments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat pembayaran Zoho.')));
+  }, [loadContacts, loadDiscovery, loadInvoices, loadMasters, loadPayments, loadQueue, tab]);
 
   useEffect(() => {
     const result = searchParams.get('zoho');
@@ -377,6 +605,190 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
+  async function previewMasterRow(row: MasterMappingRow) {
+    setAction(`master-preview:${row.id}`);
+    try {
+      const response = await api.get<{ data: MasterPreview }>(
+        `/integrations/zoho/masters/${row.entityType}/${row.id}/preview`,
+      );
+      setMasterPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview master gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function findMasterMatch(row: MasterMappingRow) {
+    setAction(`master-match:${row.id}`);
+    try {
+      const response = await api.post<{ data: { decision: { kind: string } } }>(
+        `/integrations/zoho/masters/${row.entityType}/${row.id}/match`,
+      );
+      toast.success(response.data.data.decision.kind === 'REVIEW'
+        ? 'Kandidat ditemukan dan menunggu review.'
+        : response.data.data.decision.kind === 'AUTO_MATCH'
+          ? 'Kode master cocok tepat.'
+          : 'Tidak ada kandidat; master baru dapat dibuat.');
+      await loadMasters();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Pencarian master Zoho gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueMasterRow(row: MasterMappingRow) {
+    setAction(`master-sync:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/masters/${row.entityType}/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Master masuk antrean dry-run.' : 'Master masuk antrean sinkronisasi.');
+      await loadMasters();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Master gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function approveMasterMapping(row: MasterMappingRow, candidate: MasterCandidate) {
+    if (!row.review) return;
+    const zohoEntityId = String(candidate.item_id || candidate.location_id || '');
+    if (!zohoEntityId) return;
+    setAction(`master-review:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/masters/reviews/${row.review.id}/approve`, { zohoEntityId });
+      toast.success('Mapping master disetujui dan dimasukkan ke antrean update.');
+      await loadMasters();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping master tidak dapat disetujui.'));
+    } finally { setAction(null); }
+  }
+
+  async function rejectMasterMapping(row: MasterMappingRow) {
+    if (!row.review) return;
+    setAction(`master-review:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/masters/reviews/${row.review.id}/reject`);
+      toast.success('Semua kandidat ditolak.');
+      await loadMasters();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Review master tidak dapat ditolak.'));
+    } finally { setAction(null); }
+  }
+
+  async function saveAccountMapping(role: string, zohoAccountId: string) {
+    if (!zohoAccountId) return;
+    setAction(`account:${role}`);
+    try {
+      await api.put('/integrations/zoho/masters/config/account', { role, zohoAccountId });
+      toast.success('Mapping account Item disimpan.');
+      await Promise.all([loadMasters(), loadStatus()]);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping account tidak dapat disimpan.'));
+    } finally { setAction(null); }
+  }
+
+  async function saveUomMapping(uom: MasterConfig['uoms'][number]) {
+    const zohoUnit = window.prompt(`Unit Zoho untuk ${uom.code} - ${uom.name}:`, uom.mapping?.zohoEntityId || uom.code);
+    if (!zohoUnit?.trim()) return;
+    setAction(`uom:${uom.id}`);
+    try {
+      await api.put('/integrations/zoho/masters/config/uom', { uomId: uom.id, zohoUnit: zohoUnit.trim() });
+      toast.success('Mapping UOM disimpan.');
+      await loadMasters();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping UOM tidak dapat disimpan.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewInvoiceRow(row: InvoiceMappingRow) {
+    setAction(`invoice-preview:${row.id}`);
+    try {
+      const response = await api.get<{ data: InvoicePreview }>(`/integrations/zoho/invoices/${row.id}/preview`);
+      setInvoicePreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview invoice gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueInvoiceRow(row: InvoiceMappingRow) {
+    setAction(`invoice-sync:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/invoices/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Invoice masuk antrean dry-run.' : 'Invoice masuk antrean sinkronisasi.');
+      await loadInvoices();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Invoice gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function saveInvoiceTaxMapping() {
+    const percent = Number(invoiceTaxPercent);
+    if (!Number.isFinite(percent) || percent < 0 || percent > 100 || !invoiceTaxId) {
+      toast.error('Isi persentase dan pilih pajak Zoho.');
+      return;
+    }
+    setAction('invoice-tax');
+    try {
+      await api.put('/integrations/zoho/invoices/config/tax', { percent, zohoTaxId: invoiceTaxId });
+      toast.success(`Pajak ERP ${percent}% berhasil dipetakan.`);
+      await loadInvoices();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping pajak gagal disimpan.'));
+    } finally { setAction(null); }
+  }
+
+  async function savePaymentAccountMapping(cashBankAccountId: string, zohoAccountId: string) {
+    if (!zohoAccountId) return;
+    setAction(`payment-account:${cashBankAccountId}`);
+    try {
+      await api.put('/integrations/zoho/payments/config/account', { cashBankAccountId, zohoAccountId });
+      toast.success('Mapping rekening pembayaran disimpan.');
+      await loadPayments();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping rekening pembayaran gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function savePaymentMethodMapping(paymentMethod: string, zohoMode: string) {
+    if (!zohoMode) return;
+    setAction(`payment-method:${paymentMethod}`);
+    try {
+      await api.put('/integrations/zoho/payments/config/method', { paymentMethod, zohoMode });
+      toast.success('Mapping metode pembayaran disimpan.');
+      await loadPayments();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping metode pembayaran gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewPaymentRow(row: PaymentMappingRow) {
+    setAction(`payment-preview:${row.id}`);
+    try {
+      const response = await api.get<{ data: PaymentPreview }>(`/integrations/zoho/payments/${row.id}/preview`);
+      setPaymentPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview pembayaran gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueuePaymentRow(row: PaymentMappingRow) {
+    setAction(`payment-sync:${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/payments/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Pembayaran masuk antrean dry-run.' : 'Pembayaran masuk antrean sinkronisasi.');
+      await loadPayments();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Pembayaran gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runPaymentReconciliation() {
+    setAction('payment-reconcile');
+    try {
+      const response = await api.post<{ data: ReconciliationData }>('/integrations/zoho/payments/reconcile/run');
+      setReconciliation(response.data.data);
+      toast.success('Rekonsiliasi piutang selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi piutang gagal.'));
+    } finally { setAction(null); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -398,6 +810,9 @@ export default function ZohoIntegrationPage() {
           ['queue', 'Antrean Sinkronisasi', List],
           ['discovery', 'Master Zoho', Database],
           ['contacts', 'Customer & Vendor', Users],
+          ['masters', 'Item & Location', Boxes],
+          ['invoices', 'Sales Invoice', FileText],
+          ['payments', 'Pembayaran & Piutang', CreditCard],
         ] as const).map(([value, label, Icon]) => (
           <button
             key={value}
@@ -484,6 +899,26 @@ export default function ZohoIntegrationPage() {
                             Contact live belum siap: buat custom field contact unik “RAHO External ID”, lalu jalankan discovery.
                           </p>
                         )}
+                        {!connection.itemSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Item live belum siap: petakan sales, purchase, dan inventory account.
+                          </p>
+                        )}
+                        {!connection.locationSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Location belum siap: jalankan discovery untuk memeriksa dukungan edition Zoho.
+                          </p>
+                        )}
+                        {!connection.invoiceSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Invoice live belum siap: hubungkan ulang untuk scope CREATE dan UPDATE.
+                          </p>
+                        )}
+                        {!connection.paymentSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Customer Payment/refund belum siap: hubungkan ulang untuk scope pembayaran Sprint 6.
+                          </p>
+                        )}
                         {connection.lastError && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
                       </div>
                     </div>
@@ -561,6 +996,11 @@ export default function ZohoIntegrationPage() {
           {discovery && !discovery.contactExternalIdField.ready && (
             <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
               Custom field contact unik “RAHO External ID” belum ditemukan. Field ini wajib agar retry tidak membuat customer/vendor ganda.
+            </div>
+          )}
+          {discovery?.locationCapability.supported === false && (
+            <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
+              Zoho Location diblokir oleh capability check: {discovery.locationCapability.error || 'edition tidak mendukung Location'}.
             </div>
           )}
           {!!discovery?.items.length && (
@@ -661,6 +1101,502 @@ export default function ZohoIntegrationPage() {
         </section>
       )}
 
+      {tab === 'masters' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex items-center gap-2">
+              <Database className="text-blue-600" size={20} />
+              <div>
+                <h2 className="font-semibold">Prasyarat Item Zoho</h2>
+                <p className="text-sm text-neutral-500">Pilih account dari hasil discovery dan petakan unit ERP.</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {masterConfig?.accountRoles.map((entry) => (
+                <label key={entry.role} className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+                  {entry.role.replace('ITEM_', '')} ACCOUNT
+                  <select
+                    value={entry.mapping?.zohoEntityId || ''}
+                    onChange={(event) => void saveAccountMapping(entry.role, event.target.value)}
+                    disabled={!!action}
+                    className="mt-1 w-full rounded-lg border bg-transparent px-3 py-2 text-sm font-normal dark:border-neutral-700"
+                  >
+                    <option value="">Belum dipetakan</option>
+                    {masterConfig.accounts.map((account) => (
+                      <option key={account.zohoId} value={account.zohoId}>
+                        {account.code ? `${account.code} · ` : ''}{account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <div className="mt-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Mapping UOM</p>
+              <div className="mt-2 flex max-h-44 flex-wrap gap-2 overflow-auto">
+                {masterConfig?.uoms.map((uom) => (
+                  <button
+                    key={uom.id}
+                    onClick={() => void saveUomMapping(uom)}
+                    disabled={!!action}
+                    className={`rounded-lg border px-3 py-2 text-left text-xs disabled:opacity-50 dark:border-neutral-700 ${
+                      uom.mapping ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : ''
+                    }`}
+                  >
+                    <span className="block font-semibold">{uom.code} · {uom.name}</span>
+                    <span>{uom.mapping?.zohoEntityId || 'Klik untuk petakan'}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={`mt-4 flex gap-2 rounded-lg p-3 text-sm ${
+              masterConfig?.locationCapability.supported === true
+                ? 'bg-emerald-50 text-emerald-800'
+                : 'bg-amber-50 text-amber-800'
+            }`}>
+              <MapPinned size={18} className="shrink-0" />
+              <span>
+                Location: {masterConfig?.locationCapability.supported === true
+                  ? 'didukung dan siap dipetakan.'
+                  : masterConfig?.locationCapability.error || 'belum diverifikasi; jalankan discovery.'}
+              </span>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Mapping Item dan Location</h2>
+                <p className="text-sm text-neutral-500">
+                  Partnership tidak dibuat sebagai Location. BOM, batch, expiry, dan opening stock tetap di ERP.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={masterEntityType}
+                  onChange={(event) => setMasterEntityType(event.target.value as MasterEntityType)}
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                >
+                  <option value="MASTER_PRODUCT">Barang / Inventory Item</option>
+                  <option value="PACKAGE_PRICING">Paket / Service Item</option>
+                  <option value="BRANCH_LOCATION">Cabang / Location</option>
+                  <option value="STOCK_LOCATION">Stock Location</option>
+                </select>
+                <input
+                  value={masterSearch}
+                  onChange={(event) => setMasterSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadMasters(); }}
+                  placeholder="Cari nama atau kode"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadMasters()} className="rounded-lg border p-2 dark:border-neutral-700"><RefreshCw size={18} /></button>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr><th className="p-3">Master ERP</th><th className="p-3">Mapping Zoho</th><th className="p-3">Review</th><th className="p-3">Aksi</th></tr>
+                </thead>
+                <tbody>
+                  {masters?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.name}</span>
+                        <span className="block text-xs text-neutral-500">{row.code || 'KODE KOSONG'}{row.subtype ? ` · ${row.subtype}` : ''}</span>
+                        {row.eligible === false && <span className="mt-1 block text-xs font-semibold text-amber-700">Tidak dikirim sesuai kebijakan Partnership</span>}
+                      </td>
+                      <td className="p-3">
+                        {row.mapping ? (
+                          <>
+                            <span className="block font-mono text-xs">{row.mapping.zohoEntityId}</span>
+                            <span className="text-xs text-emerald-600">{row.mapping.status}</span>
+                          </>
+                        ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
+                      </td>
+                      <td className="min-w-64 p-3">
+                        {row.review?.status === 'PENDING' ? (
+                          <div className="space-y-2">
+                            <p className="text-xs text-amber-700">{row.review.reason}</p>
+                            {row.review.candidates.map((candidate) => {
+                              const id = String(candidate.item_id || candidate.location_id || '');
+                              return (
+                                <div key={id} className="flex items-center justify-between gap-2 rounded border p-2 dark:border-neutral-700">
+                                  <span className="text-xs">
+                                    {candidate.name || candidate.location_name || id}
+                                    <br />{candidate.sku || candidate.product_type || id}
+                                  </span>
+                                  <button onClick={() => void approveMasterMapping(row, candidate)} disabled={!!action} className="rounded bg-emerald-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">Pilih</button>
+                                </div>
+                              );
+                            })}
+                            <button onClick={() => void rejectMasterMapping(row)} disabled={!!action} className="text-xs font-semibold text-red-600">Tolak semua kandidat</button>
+                          </div>
+                        ) : <span className="text-xs text-neutral-500">{row.review?.status || '-'}</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex min-w-52 flex-wrap gap-2">
+                          <button onClick={() => void previewMasterRow(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Preview</button>
+                          {row.eligible !== false && !row.mapping && row.review?.status !== 'PENDING' && (
+                            <button onClick={() => void findMasterMatch(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Cari Zoho</button>
+                          )}
+                          {row.eligible !== false && row.review?.status !== 'PENDING' && (
+                            <button onClick={() => void enqueueMasterRow(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                              {status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!masters?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Tidak ada master pada filter ini.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'invoices' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex items-center gap-2">
+              <Database className="text-blue-600" size={20} />
+              <div>
+                <h2 className="font-semibold">Mapping Pajak Invoice</h2>
+                <p className="text-sm text-neutral-500">
+                  Persentase pajak ERP harus menunjuk ke tax rate hasil discovery Zoho.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 flex flex-wrap items-end gap-3">
+              <label className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+                Pajak ERP (%)
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={invoiceTaxPercent}
+                  onChange={(event) => setInvoiceTaxPercent(event.target.value)}
+                  className="mt-1 block w-32 rounded-lg border bg-transparent px-3 py-2 text-sm font-normal dark:border-neutral-700"
+                />
+              </label>
+              <label className="min-w-64 flex-1 text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+                Tax rate Zoho
+                <select
+                  value={invoiceTaxId}
+                  onChange={(event) => setInvoiceTaxId(event.target.value)}
+                  className="mt-1 block w-full rounded-lg border bg-transparent px-3 py-2 text-sm font-normal dark:border-neutral-700"
+                >
+                  <option value="">Pilih pajak Zoho</option>
+                  {invoiceConfig?.taxes.map((tax) => (
+                    <option key={tax.zohoId} value={tax.zohoId}>{tax.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={() => void saveInvoiceTaxMapping()}
+                disabled={!!action}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                Simpan mapping
+              </button>
+            </div>
+            {!!invoiceConfig?.mappings.length && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {invoiceConfig.mappings.map((mapping) => {
+                  const tax = invoiceConfig.taxes.find((entry) => entry.zohoId === mapping.zohoEntityId);
+                  return (
+                    <span key={mapping.localEntityId} className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                      ERP {mapping.localEntityId}% → {tax?.name || mapping.zohoEntityId}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Sales Invoice RAHO → Zoho Books</h2>
+                <p className="text-sm text-neutral-500">
+                  Paket terapi tetap uang muka. Invoice member Partnership tidak menjadi omzet per infus.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  value={invoiceSearch}
+                  onChange={(event) => setInvoiceSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadInvoices(); }}
+                  placeholder="Cari nomor atau member"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadInvoices()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Invoice ERP</th>
+                    <th className="p-3">Kebijakan</th>
+                    <th className="p-3">Mapping Zoho</th>
+                    <th className="p-3">Event</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.invoiceNumber}</span>
+                        <span className="block text-xs text-neutral-500">{row.memberNo} · {row.memberName}</span>
+                        <span className="block text-xs text-neutral-500">{row.branchCode} · IDR {Number(row.totalAmount).toLocaleString('id-ID')}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          row.eligible ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {row.classification === 'THERAPY_ADVANCE' ? 'Uang muka terapi' : 'Penjualan biasa'}
+                        </span>
+                        {row.branchType === 'PARTNERSHIP' && (
+                          <span className="mt-2 block text-xs font-semibold text-amber-700">Revenue menunggu shipment barang</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        {row.mapping ? (
+                          <>
+                            <span className="block font-mono text-xs">{row.mapping.zohoEntityId}</span>
+                            <span className={row.mapping.status === 'ACTIVE' ? 'text-xs text-emerald-600' : 'text-xs text-neutral-500'}>
+                              {row.mapping.status}
+                            </span>
+                          </>
+                        ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
+                      </td>
+                      <td className="p-3">
+                        {row.events.map((event) => (
+                          <span key={event.id} className="mb-1 block text-xs">
+                            {event.eventType.replace('INVOICE_', '')} · {event.status}
+                          </span>
+                        ))}
+                        {!row.events.length && <span className="text-xs text-neutral-500">Event lama belum dibuat</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex min-w-44 flex-wrap gap-2">
+                          <button onClick={() => void previewInvoiceRow(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">
+                            Preview
+                          </button>
+                          {row.eligible && (
+                            <button onClick={() => void enqueueInvoiceRow(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                              {row.status === 'CANCELLED' ? 'Antrekan void' : status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!invoices?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Tidak ada invoice finalized.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'payments' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex items-center gap-2">
+              <Database className="text-blue-600" size={20} />
+              <div>
+                <h2 className="font-semibold">Mapping Pembayaran</h2>
+                <p className="text-sm text-neutral-500">
+                  Setiap rekening dan metode ERP harus menunjuk ke rekening serta payment mode Zoho.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">Rekening kas/bank</p>
+                <div className="space-y-2">
+                  {paymentConfig?.cashBankAccounts.map((account) => (
+                    <label key={account.id} className="grid gap-2 rounded-lg border p-3 text-sm dark:border-neutral-700 sm:grid-cols-[1fr_1.2fr] sm:items-center">
+                      <span>
+                        <span className="block font-semibold">{account.code} · {account.name}</span>
+                        <span className="text-xs text-neutral-500">{account.branch.branchCode}</span>
+                      </span>
+                      <select
+                        value={account.mapping?.zohoEntityId || ''}
+                        disabled={!!action}
+                        onChange={(event) => void savePaymentAccountMapping(account.id, event.target.value)}
+                        className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                      >
+                        <option value="">Pilih rekening Zoho</option>
+                        {paymentConfig.zohoAccounts.map((entry) => (
+                          <option key={entry.zohoId} value={entry.zohoId}>{entry.code ? `${entry.code} · ` : ''}{entry.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">Metode pembayaran</p>
+                <div className="space-y-2">
+                  {paymentConfig?.paymentMethods.map((method) => (
+                    <label key={method.method} className="grid gap-2 rounded-lg border p-3 text-sm dark:border-neutral-700 sm:grid-cols-[1fr_1.2fr] sm:items-center">
+                      <span className="font-semibold">{method.method}</span>
+                      <select
+                        value={method.mapping?.zohoEntityId || ''}
+                        disabled={!!action}
+                        onChange={(event) => void savePaymentMethodMapping(method.method, event.target.value)}
+                        className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                      >
+                        <option value="">Pilih payment mode Zoho</option>
+                        {paymentConfig.modes.map((entry) => (
+                          <option key={entry.zohoId} value={entry.zohoId}>{entry.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Customer Payment RAHO → Zoho Books</h2>
+                <p className="text-sm text-neutral-500">
+                  Hanya pembayaran verified untuk penjualan biasa. Uang muka paket menunggu Retainer Sprint 7.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={paymentSearch}
+                  onChange={(event) => setPaymentSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadPayments(); }}
+                  placeholder="Cari invoice atau referensi"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadPayments()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runPaymentReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={status?.dryRun ? 'Matikan dry-run untuk membandingkan data live Zoho.' : undefined}
+                >
+                  Rekonsiliasi AR
+                </button>
+              </div>
+            </div>
+
+            {reconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {reconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {reconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {reconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {reconciliation.missing}</span>
+                </div>
+                {!!reconciliation.rows.filter((row) => row.result.status !== 'MATCHED').length && (
+                  <div className="mt-3 space-y-1 text-xs">
+                    {reconciliation.rows.filter((row) => row.result.status !== 'MATCHED').map((row) => (
+                      <p key={row.invoiceId}>
+                        <strong>{row.invoiceNumber}</strong>: {row.result.reasons.join(' ')}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Pembayaran ERP</th>
+                    <th className="p-3">Kebijakan</th>
+                    <th className="p-3">Zoho</th>
+                    <th className="p-3">Refund</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.invoiceNumber}</span>
+                        <span className="block text-xs text-neutral-500">
+                          {row.branchCode} · {row.paymentMethod} · {row.accountName || '-'}
+                        </span>
+                        <span className="block text-xs font-semibold">IDR {Number(row.amount).toLocaleString('id-ID')}</span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                          row.eligible ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {row.classification === 'THERAPY_ADVANCE' ? 'Uang muka/retainer' : row.branchType === 'PARTNERSHIP' ? 'Partnership' : 'Customer payment'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.mapping ? (
+                          <>
+                            <span className="block font-mono">{row.mapping.zohoEntityId}</span>
+                            <span className="text-emerald-600">{row.mapping.status}</span>
+                          </>
+                        ) : (
+                          <span className={row.event?.lastError ? 'text-red-600' : 'text-neutral-500'}>
+                            {row.event ? row.event.status : 'Belum diantrikan'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.refunds.map((refund) => (
+                          <span key={refund.id} className="mb-1 block">
+                            {refund.refundNumber} · IDR {Number(refund.amount).toLocaleString('id-ID')} · {refund.mapping ? 'Zoho OK' : refund.event?.status || refund.status}
+                          </span>
+                        ))}
+                        {!row.refunds.length && <span className="text-neutral-500">Tidak ada</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex min-w-40 flex-wrap gap-2">
+                          <button
+                            onClick={() => void previewPaymentRow(row)}
+                            disabled={!!action}
+                            className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700"
+                          >
+                            Preview
+                          </button>
+                          {row.eligible && (
+                            <button
+                              onClick={() => void enqueuePaymentRow(row)}
+                              disabled={!!action}
+                              className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              {status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!payments?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada pembayaran verified.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
       {selectedEvent && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setSelectedEvent(null)}>
           <div className="max-h-[85vh] w-full max-w-3xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
@@ -714,6 +1650,101 @@ export default function ZohoIntegrationPage() {
             <p className="mt-1 text-xs text-red-600">{contactPreview.excludedFields.join(', ')}</p>
             <div className="mt-5 flex justify-end">
               <button onClick={() => setContactPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {masterPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setMasterPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview master: {masterPreview.snapshot.name}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{masterPreview.snapshot.externalKey}</p>
+            {!!masterPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {masterPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            {!masterPreview.liveReady && !masterPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                Capability Location belum diverifikasi melalui discovery.
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload yang boleh dikirim</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">{JSON.stringify(masterPreview.payload, null, 2)}</pre>
+            {!!masterPreview.excludedFields.length && (
+              <>
+                <p className="mt-4 text-sm font-semibold">Field yang sengaja tidak dikirim</p>
+                <p className="mt-1 text-xs text-red-600">{masterPreview.excludedFields.join(', ')}</p>
+              </>
+            )}
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setMasterPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {invoicePreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setInvoicePreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview invoice: {invoicePreview.snapshot.invoiceNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{invoicePreview.snapshot.externalKey}</p>
+            {!invoicePreview.snapshot.eligible && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Tidak dibuat sebagai Sales Invoice biasa</p>
+                <p className="mt-1">{invoicePreview.snapshot.excludedReason}</p>
+              </div>
+            )}
+            {!!invoicePreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {invoicePreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload yang boleh dikirim</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {invoicePreview.payload ? JSON.stringify(invoicePreview.payload, null, 2) : 'Tidak ada payload Sales Invoice.'}
+            </pre>
+            <p className="mt-4 text-sm font-semibold">Field yang sengaja tidak dikirim</p>
+            <p className="mt-1 text-xs text-red-600">{invoicePreview.excludedFields.join(', ')}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setInvoicePreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {paymentPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPaymentPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview pembayaran: {paymentPreview.snapshot.invoiceNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{paymentPreview.snapshot.externalKey}</p>
+            {!paymentPreview.snapshot.eligible && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Tidak dibuat sebagai Customer Payment biasa</p>
+                <p className="mt-1">{paymentPreview.snapshot.excludedReason}</p>
+              </div>
+            )}
+            {!!paymentPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {paymentPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Customer Payment</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {paymentPreview.payload ? JSON.stringify(paymentPreview.payload, null, 2) : 'Tidak ada payload Customer Payment.'}
+            </pre>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setPaymentPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
             </div>
           </div>
         </div>

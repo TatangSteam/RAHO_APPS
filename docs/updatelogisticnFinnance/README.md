@@ -34,17 +34,16 @@ reconciliation di dalam paket ini.
 
 ## Status implementasi
 
-Vertical slice awal sudah dimulai:
+Sprint 1–6 sudah memiliki implementasi backend dan UI operasional:
 
-- enum dan template permission `FINANCE_LOGISTICS_CONTROLLER`;
-- branch scope untuk tampilan request dan shipment;
-- shipment Partnership wajib memakai reservation/FIFO;
-- dispatch Partnership membuat event idempoten
-  `PARTNERSHIP_GOODS_SHIPPED`;
-- dispatch Partnership tidak lagi dianggap internal transfer dan receipt-nya
-  tidak boleh menambah inventory milik RAHO;
-- kebijakan terapi Partnership tidak disinkron sebagai omzet per infus ke
-  Zoho sudah tersedia untuk consumer berikutnya.
+- role `FINANCE_LOGISTICS_CONTROLLER` dan branch scope;
+- koneksi OAuth, discovery, mapping, outbox worker, retry/dead-letter;
+- Customer/Vendor, Item/Location, Sales Invoice;
+- `PAYMENT_VERIFIED`, partial/full Customer Payment, mapping rekening/metode;
+- refund immutable yang mengacu pembayaran asli;
+- rekonsiliasi AR antara saldo ERP dan Zoho;
+- kebijakan paket terapi dan Partnership tetap dipisahkan dari omzet terapi
+  biasa.
 
-Yang belum selesai adalah mapping entity Zoho, worker outbox, write API Zoho,
-retry/dead-letter, dan rekonsiliasi.
+Live UAT tetap membutuhkan OAuth scope versi terbaru, worker aktif,
+`ZOHO_SYNC_DRY_RUN=false`, mapping lengkap, serta data uji Zoho yang disetujui.

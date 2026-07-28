@@ -7,6 +7,10 @@ import {
   getAccessibleBranchIds,
 } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
+import {
+  enqueueMasterSafely,
+  enqueueWarehouseLocationsSafely,
+} from '@modules/zoho/zoho.master.service';
 import { buildChangedFields, logAudit } from '@utils/auditLog';
 import type {
   CreateBatchInput,
@@ -90,6 +94,7 @@ export async function createWarehouse(userId: string, input: CreateWarehouseInpu
     return warehouse;
   });
   await logAudit({ userId, branchId: input.branchId, action: 'CREATE', resource: 'Warehouse', resourceId: created.id, afterData: created });
+  await enqueueWarehouseLocationsSafely(created.id);
   return created;
 }
 
@@ -107,6 +112,7 @@ export async function updateWarehouse(userId: string, id: string, input: UpdateW
     userId, branchId: before.branchId, action: 'UPDATE', resource: 'Warehouse', resourceId: id,
     beforeData: before, afterData: updated, changedFields: buildChangedFields(before, updated),
   });
+  await enqueueWarehouseLocationsSafely(updated.id);
   return updated;
 }
 
@@ -116,6 +122,7 @@ export async function deactivateWarehouse(userId: string, id: string) {
   if (warehouse.isDefault) throw errors.conflict('DEFAULT_WAREHOUSE_REQUIRED', 'Warehouse default tidak dapat dinonaktifkan.');
   const updated = await prisma.warehouse.update({ where: { id }, data: { isActive: false } });
   await logAudit({ userId, branchId: warehouse.branchId, action: 'DELETE', resource: 'Warehouse', resourceId: id, beforeData: warehouse, afterData: updated });
+  await enqueueWarehouseLocationsSafely(updated.id);
   return updated;
 }
 
@@ -147,6 +154,7 @@ export async function createStockLocation(userId: string, input: CreateStockLoca
     });
   });
   await logAudit({ userId, branchId: warehouse.branchId, action: 'CREATE', resource: 'StockLocation', resourceId: created.id, afterData: created });
+  await enqueueMasterSafely('STOCK_LOCATION', created.id);
   return created;
 }
 
@@ -164,6 +172,7 @@ export async function updateStockLocation(userId: string, id: string, input: Upd
     userId, branchId: before.warehouse.branchId, action: 'UPDATE', resource: 'StockLocation', resourceId: id,
     beforeData: before, afterData: updated, changedFields: buildChangedFields(before, updated),
   });
+  await enqueueMasterSafely('STOCK_LOCATION', updated.id);
   return updated;
 }
 
@@ -173,6 +182,7 @@ export async function deactivateStockLocation(userId: string, id: string) {
   if (before.isDefault) throw errors.conflict('DEFAULT_LOCATION_REQUIRED', 'Stock location default tidak dapat dinonaktifkan.');
   const updated = await prisma.stockLocation.update({ where: { id }, data: { isActive: false } });
   await logAudit({ userId, branchId: before.warehouse.branchId, action: 'DELETE', resource: 'StockLocation', resourceId: id, beforeData: before, afterData: updated });
+  await enqueueMasterSafely('STOCK_LOCATION', updated.id);
   return updated;
 }
 
@@ -229,6 +239,7 @@ export async function createMasterProduct(userId: string, input: CreateMasterPro
     return created;
   });
   await logAudit({ userId, action: 'CREATE', resource: 'MasterProduct', resourceId: product.id, entityCode: product.sku, afterData: product });
+  await enqueueMasterSafely('MASTER_PRODUCT', product.id);
   return product;
 }
 
@@ -267,6 +278,7 @@ export async function updateMasterProduct(userId: string, id: string, input: Upd
     return product;
   });
   await logAudit({ userId, action: 'UPDATE', resource: 'MasterProduct', resourceId: id, entityCode: updated.sku, beforeData: before, afterData: updated, changedFields: buildChangedFields(before, updated) });
+  await enqueueMasterSafely('MASTER_PRODUCT', updated.id);
   return updated;
 }
 

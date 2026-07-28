@@ -32,6 +32,7 @@ router.get(
 
 router.post('/payments/:paymentId/verify', invoiceController.verifyPayment);
 router.post('/payments/:paymentId/reject', invoiceController.rejectPayment);
+router.post('/payments/:paymentId/refund', invoiceController.refundPayment);
 
 // Get invoice by package ID (ADMIN, STAFF, MEMBER) - MUST BE BEFORE /:invoiceId
 router.get(

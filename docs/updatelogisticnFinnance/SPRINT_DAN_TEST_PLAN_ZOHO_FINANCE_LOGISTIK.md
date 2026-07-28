@@ -458,7 +458,13 @@ Verifikasi:
 ZohoBooks.customerpayments.READ
 ZohoBooks.customerpayments.CREATE
 ZohoBooks.customerpayments.UPDATE
+ZohoBooks.invoices.DELETE
 ```
+
+Scope `ZohoBooks.invoices.DELETE` hanya dipakai untuk melepas aplikasi
+pembayaran dari invoice sebelum refund parsial. Invoice dan Customer Payment
+asal tidak dihapus; sisa pembayaran kemudian diaplikasikan kembali agar saldo
+invoice tetap benar dan jejak audit tetap utuh.
 
 ### Test
 
@@ -494,6 +500,14 @@ Pastikan classification dan total per status benar.
 - outstanding mismatch = 0 untuk data UAT normal;
 - rejected payment tidak pernah muncul di Zoho;
 - retry tidak membuat duplicate.
+
+### Status implementasi 28 Juli 2026
+
+- backend, migration, event outbox, mapping, refund, UI, dan rekonsiliasi:
+  selesai;
+- unit test dan integration test database: lulus;
+- live UAT Zoho: menunggu reconnect OAuth scope versi 6, mapping rekening dan
+  metode pembayaran, worker live, serta dry-run dimatikan.
 
 ## 10. Sprint 7 — Uang Muka, Retainer, dan Treatment Revenue
 

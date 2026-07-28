@@ -2,6 +2,7 @@ import { Prisma, ZohoDiscoveryResourceType } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient, ZohoOrganization } from './zoho.client';
+import { normalizeZohoError } from './zoho.error';
 import { sanitizeForAudit } from './zoho.sanitizer';
 
 type ZohoRecord = Record<string, unknown>;
@@ -71,24 +72,41 @@ async function fetchOrganizations(client: ZohoClient): Promise<DiscoveryItem[]> 
 }
 
 async function fetchAll(client: ZohoClient) {
-  const [accounts, taxes, locations, bankAccounts] = await Promise.all([
+  const [accounts, taxes, bankAccounts, zohoItems] = await Promise.all([
     client.listAll<ZohoRecord>('/books/v3/chartofaccounts', 'chartofaccounts'),
     client.listAll<ZohoRecord>('/books/v3/settings/taxes', 'taxes'),
-    client.listAll<ZohoRecord>('/books/v3/locations', 'locations'),
     client.listAll<ZohoRecord>('/books/v3/bankaccounts', 'bankaccounts', { filter_by: 'Status.All' }),
+    client.listAll<ZohoRecord>('/books/v3/items', 'items', { filter_by: 'Status.All' }),
   ]);
+  let locations: ZohoRecord[] = [];
+  let locationCapability: { supported: boolean; error: string | null };
+  try {
+    locations = await client.listAll<ZohoRecord>('/books/v3/locations', 'locations');
+    locationCapability = { supported: true, error: null };
+  } catch (error) {
+    const normalized = normalizeZohoError(error);
+    if (normalized.httpStatus !== 400 && normalized.httpStatus !== 404) throw error;
+    locationCapability = {
+      supported: false,
+      error: `${normalized.code}: ${normalized.message}`.slice(0, 500),
+    };
+  }
   return {
-    [ZohoDiscoveryResourceType.ACCOUNT]: accounts.map((value) => item(value, 'account_id', 'account_name', 'account_code')),
-    [ZohoDiscoveryResourceType.TAX]: taxes.map((value) => item(value, 'tax_id', 'tax_name')),
-    [ZohoDiscoveryResourceType.LOCATION]: locations.map((value) => item(value, 'location_id', 'location_name')),
-    [ZohoDiscoveryResourceType.BANK_ACCOUNT]: bankAccounts.map((value) => item(value, 'account_id', 'account_name', 'account_code')),
-    [ZohoDiscoveryResourceType.PAYMENT_MODE]: PAYMENT_MODES.map((mode) => ({
-      zohoId: mode,
-      name: mode,
-      code: mode,
-      isActive: true,
-      payload: { mode, source: 'ZOHO_BOOKS_SUPPORTED_PAYMENT_MODE' },
-    })),
+    resources: {
+      [ZohoDiscoveryResourceType.ACCOUNT]: accounts.map((value) => item(value, 'account_id', 'account_name', 'account_code')),
+      [ZohoDiscoveryResourceType.TAX]: taxes.map((value) => item(value, 'tax_id', 'tax_name')),
+      [ZohoDiscoveryResourceType.LOCATION]: locations.map((value) => item(value, 'location_id', 'location_name')),
+      [ZohoDiscoveryResourceType.ITEM]: zohoItems.map((value) => item(value, 'item_id', 'name', 'sku')),
+      [ZohoDiscoveryResourceType.BANK_ACCOUNT]: bankAccounts.map((value) => item(value, 'account_id', 'account_name', 'account_code')),
+      [ZohoDiscoveryResourceType.PAYMENT_MODE]: PAYMENT_MODES.map((mode) => ({
+        zohoId: mode,
+        name: mode,
+        code: mode,
+        isActive: true,
+        payload: { mode, source: 'ZOHO_BOOKS_SUPPORTED_PAYMENT_MODE' },
+      })),
+    },
+    locationCapability,
   };
 }
 
@@ -185,14 +203,14 @@ async function replaceResource(
 
 export async function runDiscovery() {
   const client = await getActiveZohoClient(true);
-  const [organizations, resources, contactExternalIdField] = await Promise.all([
+  const [organizations, discovered, contactExternalIdField] = await Promise.all([
     fetchOrganizations(client),
     fetchAll(client),
     fetchContactExternalIdField(client),
   ]);
 
   await replaceResource(client.connection.id, ZohoDiscoveryResourceType.ORGANIZATION, organizations);
-  for (const [resourceType, items] of Object.entries(resources)) {
+  for (const [resourceType, items] of Object.entries(discovered.resources)) {
     await replaceResource(client.connection.id, resourceType as ZohoDiscoveryResourceType, items);
   }
 
@@ -207,6 +225,8 @@ export async function runDiscovery() {
       contactExternalIdFieldId: contactExternalIdField?.fieldId ?? null,
       contactExternalIdApiName: contactExternalIdField?.apiName ?? null,
       contactExternalIdIsUnique: contactExternalIdField?.isUnique ?? null,
+      locationsSupported: discovered.locationCapability.supported,
+      locationsCapabilityError: discovered.locationCapability.error,
       discoveryLastRunAt: new Date(),
       lastCheckedAt: new Date(),
       lastError: null,
@@ -240,6 +260,10 @@ export async function getDiscovery(resourceType?: ZohoDiscoveryResourceType) {
         && connection.contactExternalIdApiName
         && connection.contactExternalIdIsUnique,
       ),
+    },
+    locationCapability: {
+      supported: connection.locationsSupported,
+      error: connection.locationsCapabilityError,
     },
     counts: Object.fromEntries(counts.map((entry) => [entry.resourceType, entry._count._all])),
     items,

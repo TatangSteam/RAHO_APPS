@@ -5,12 +5,14 @@ import type {
   RecordPaymentInput,
   VerifyPaymentInput,
   RejectPaymentInput,
+  RefundPaymentInput,
   CancelInvoiceInput,
 } from './invoices.schema';
 import { InvoiceCreationService } from './services/invoice-creation.service';
 import { InvoiceRetrievalService } from './services/invoice-retrieval.service';
 import { InvoicePaymentService } from './services/invoice-payment.service';
 import { InvoiceCancellationService } from './services/invoice-cancellation.service';
+import { InvoiceRefundService } from './services/invoice-refund.service';
 
 // ============================================================
 // INVOICE SERVICE - MAIN ORCHESTRATOR
@@ -31,6 +33,7 @@ export const invoiceService = {
   retrievalService: new InvoiceRetrievalService(),
   paymentService: new InvoicePaymentService(),
   cancellationService: new InvoiceCancellationService(),
+  refundService: new InvoiceRefundService(),
 
   /**
    * Create a new invoice (DRAFT status)
@@ -111,6 +114,10 @@ export const invoiceService = {
 
   async rejectPayment(paymentId: string, data: RejectPaymentInput, userId: string) {
     return this.paymentService.rejectPayment(paymentId, data, userId);
+  },
+
+  async refundPayment(paymentId: string, data: RefundPaymentInput, userId: string) {
+    return this.refundService.refundPayment(paymentId, data, userId);
   },
 
   /**

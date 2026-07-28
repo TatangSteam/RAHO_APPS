@@ -7,6 +7,7 @@ import {
   recordPaymentSchema,
   verifyPaymentSchema,
   rejectPaymentSchema,
+  refundPaymentSchema,
   cancelInvoiceSchema,
 } from './invoices.schema';
 import { sendSuccess, sendCreated, sendError } from '../../utils/response';
@@ -245,6 +246,28 @@ export const invoiceController = {
     } catch (error: any) {
       logger.error('Reject payment error:', error);
       return sendError(res, error.status || 400, error.code || 'REJECT_PAYMENT_ERROR', error.message);
+    }
+  },
+
+  async refundPayment(req: Request, res: Response) {
+    try {
+      const validated = refundPaymentSchema.parse(req.body);
+      const idempotencyKey = req.get('Idempotency-Key');
+      if (!idempotencyKey) {
+        throw { status: 400, code: 'IDEMPOTENCY_KEY_REQUIRED', message: 'Header Idempotency-Key wajib diisi.' };
+      }
+      if (idempotencyKey !== validated.postingKey) {
+        throw { status: 400, code: 'IDEMPOTENCY_KEY_MISMATCH', message: 'Header Idempotency-Key harus sama dengan postingKey.' };
+      }
+      const result = await invoiceService.refundPayment(
+        req.params.paymentId,
+        validated,
+        req.user.userId,
+      );
+      return sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
+    } catch (error: any) {
+      logger.error('Refund payment error:', error);
+      return sendError(res, error.status || 400, error.code || 'REFUND_PAYMENT_ERROR', error.message);
     }
   },
 

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { PackageType } from '@prisma/client';
+import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
 function normalizeNullableString(value: string | null | undefined) {
   if (value === undefined) return undefined;
@@ -276,6 +277,8 @@ export class PackagePricingAdminService {
       },
     });
 
+    await enqueueMasterSafely('PACKAGE_PRICING', pricing.id);
+
     return {
       id: pricing.id,
       packageType: pricing.packageType,
@@ -404,6 +407,8 @@ export class PackagePricingAdminService {
         },
       },
     });
+
+    await enqueueMasterSafely('PACKAGE_PRICING', updated.id);
 
     return {
       id: updated.id,

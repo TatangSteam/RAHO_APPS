@@ -135,8 +135,18 @@ export async function getStatus() {
       scopes: true, scopeVersion: true, isActive: true, lastCheckedAt: true, lastError: true,
       organizationCurrencyCode: true, organizationTimeZone: true, discoveryLastRunAt: true,
       contactExternalIdFieldId: true, contactExternalIdApiName: true, contactExternalIdIsUnique: true,
+      locationsSupported: true, locationsCapabilityError: true,
       createdAt: true, updatedAt: true,
     },
+  });
+  const itemAccountMappings = await prisma.zohoEntityMapping.findMany({
+    where: {
+      zohoConnectionId: { in: connections.map((connection) => connection.id) },
+      entityType: 'ACCOUNT_ROLE',
+      localEntityId: { in: ['ITEM_SALES', 'ITEM_PURCHASE', 'ITEM_INVENTORY'] },
+      status: 'ACTIVE',
+    },
+    select: { zohoConnectionId: true, localEntityId: true },
   });
   return {
     configured: Boolean(env.ZOHO_CLIENT_ID && env.ZOHO_CLIENT_SECRET && env.ZOHO_REDIRECT_URI && env.ZOHO_TOKEN_ENCRYPTION_KEY),
@@ -151,13 +161,21 @@ export async function getStatus() {
         ...connection,
         missingScopes,
         contactSyncReady: Boolean(
-          (env.ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID && env.ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_API_NAME)
-          || (
-            connection.contactExternalIdFieldId
-            && connection.contactExternalIdApiName
-            && connection.contactExternalIdIsUnique
-          )
+          connection.contactExternalIdFieldId
+          && connection.contactExternalIdApiName
+          && connection.contactExternalIdIsUnique
         ),
+        itemSyncReady: new Set(
+          itemAccountMappings
+            .filter((mapping) => mapping.zohoConnectionId === connection.id)
+            .map((mapping) => mapping.localEntityId),
+        ).size === 3,
+        locationSyncReady: connection.locationsSupported === true,
+        invoiceSyncReady: !missingScopes.includes('ZohoBooks.invoices.CREATE')
+          && !missingScopes.includes('ZohoBooks.invoices.UPDATE'),
+        paymentSyncReady: !missingScopes.includes('ZohoBooks.customerpayments.CREATE')
+          && !missingScopes.includes('ZohoBooks.customerpayments.UPDATE')
+          && !missingScopes.includes('ZohoBooks.invoices.DELETE'),
         reconnectRequired:
           connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION || missingScopes.length > 0,
       };
