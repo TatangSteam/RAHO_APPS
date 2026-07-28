@@ -269,6 +269,32 @@ enum IntegrationEventStatus {
   PROCESSING
   PROCESSED
   FAILED
+  DRY_RUN
+  DEAD_LETTER
+  IGNORED
+}
+
+enum ZohoMappingStatus {
+  ACTIVE
+  NEEDS_REVIEW
+  INACTIVE
+}
+
+enum ZohoSyncAttemptStatus {
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  RETRY_SCHEDULED
+  DRY_RUN
+}
+
+enum ZohoDiscoveryResourceType {
+  ORGANIZATION
+  ACCOUNT
+  TAX
+  LOCATION
+  BANK_ACCOUNT
+  PAYMENT_MODE
 }
 
 enum InternalTransferStatus {
@@ -739,25 +765,32 @@ model User {
 }
 
 model ZohoConnection {
-  id                    String    @id @default(cuid())
-  organizationId        String    @unique
-  organizationName      String
-  dataCenter            String
-  apiDomain             String
-  encryptedAccessToken  String
-  encryptedRefreshToken String
-  accessTokenExpiresAt  DateTime
-  scopes                String
-  isActive              Boolean   @default(true)
-  lastCheckedAt         DateTime?
-  lastError             String?
-  createdById           String
-  updatedById           String
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  id                       String    @id @default(cuid())
+  organizationId           String    @unique
+  organizationName         String
+  dataCenter               String
+  apiDomain                String
+  encryptedAccessToken     String
+  encryptedRefreshToken    String
+  accessTokenExpiresAt     DateTime
+  scopes                   String
+  scopeVersion             Int       @default(1)
+  isActive                 Boolean   @default(true)
+  organizationCurrencyId   String?
+  organizationCurrencyCode String?
+  organizationTimeZone     String?
+  discoveryLastRunAt       DateTime?
+  lastCheckedAt            DateTime?
+  lastError                String?
+  createdById              String
+  updatedById              String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
-  createdBy User @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
-  updatedBy User @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
+  createdBy      User                 @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
+  updatedBy      User                 @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
+  entityMappings ZohoEntityMapping[]
+  discoveryCache ZohoDiscoveryCache[]
 
   @@index([isActive])
   @@map("zoho_connections")
@@ -2781,26 +2814,102 @@ model TreatmentBomItem {
 }
 
 model IntegrationEvent {
-  id            String                 @id @default(cuid())
-  eventType     String
-  eventVersion  Int                    @default(1)
-  aggregateType String
-  aggregateId   String
-  branchId      String?
-  payload       Json
-  status        IntegrationEventStatus @default(PENDING)
-  attempts      Int                    @default(0)
-  availableAt   DateTime               @default(now())
-  processedAt   DateTime?
-  lastError     String?                @db.Text
-  occurredAt    DateTime
-  createdAt     DateTime               @default(now())
-  updatedAt     DateTime               @updatedAt
+  id             String                 @id @default(cuid())
+  eventType      String
+  eventVersion   Int                    @default(1)
+  aggregateType  String
+  aggregateId    String
+  branchId       String?
+  payload        Json
+  status         IntegrationEventStatus @default(PENDING)
+  attempts       Int                    @default(0)
+  maxAttempts    Int                    @default(8)
+  availableAt    DateTime               @default(now())
+  lockedBy       String?
+  leaseUntil     DateTime?
+  processedAt    DateTime?
+  deadLetteredAt DateTime?
+  ignoredAt      DateTime?
+  ignoredById    String?
+  ignoreReason   String?                @db.Text
+  payloadHash    String?
+  lastError      String?                @db.Text
+  occurredAt     DateTime
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  syncAttempts   ZohoSyncAttempt[]
 
   @@unique([eventType, aggregateId])
   @@index([status, availableAt, createdAt])
   @@index([branchId, occurredAt])
   @@map("integration_events")
+}
+
+model ZohoEntityMapping {
+  id               String            @id @default(cuid())
+  zohoConnectionId String
+  entityType       String
+  localEntityId    String
+  zohoEntityType   String
+  zohoEntityId     String
+  externalKey      String?
+  status           ZohoMappingStatus @default(ACTIVE)
+  metadata         Json?
+  lastSyncedAt     DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  connection ZohoConnection @relation(fields: [zohoConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([zohoConnectionId, entityType, localEntityId])
+  @@unique([zohoConnectionId, zohoEntityType, zohoEntityId])
+  @@index([status, entityType])
+  @@map("zoho_entity_mappings")
+}
+
+model ZohoSyncAttempt {
+  id                 String                @id @default(cuid())
+  integrationEventId String
+  attemptNo          Int
+  workerId           String
+  status             ZohoSyncAttemptStatus @default(PROCESSING)
+  httpStatus         Int?
+  errorCode          String?
+  errorMessage       String?               @db.Text
+  retryable          Boolean?
+  requestSummary     Json?
+  responseSummary    Json?
+  nextRetryAt        DateTime?
+  startedAt          DateTime              @default(now())
+  completedAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  integrationEvent IntegrationEvent @relation(fields: [integrationEventId], references: [id], onDelete: Cascade)
+
+  @@unique([integrationEventId, attemptNo])
+  @@index([status, startedAt])
+  @@map("zoho_sync_attempts")
+}
+
+model ZohoDiscoveryCache {
+  id               String                    @id @default(cuid())
+  zohoConnectionId String
+  resourceType     ZohoDiscoveryResourceType
+  zohoId           String
+  name             String
+  code             String?
+  isActive         Boolean                   @default(true)
+  payload          Json
+  fetchedAt        DateTime                  @default(now())
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+
+  connection ZohoConnection @relation(fields: [zohoConnectionId], references: [id], onDelete: Cascade)
+
+  @@unique([zohoConnectionId, resourceType, zohoId])
+  @@index([resourceType, isActive, name])
+  @@map("zoho_discovery_cache")
 }
 
 model SessionPhoto {

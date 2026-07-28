@@ -326,7 +326,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Integrasi Zoho',
         href: '/admin/integrations/zoho',
         icon: <PlugZap size={20} />,
-        roles: ['SUPER_ADMIN'],
+        roles: ['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'],
       },
     ],
   },

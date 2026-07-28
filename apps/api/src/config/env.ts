@@ -38,6 +38,13 @@ const envSchema = z.object({
   ZOHO_ACCOUNTS_BASE_URL: z.string().url().default('https://accounts.zoho.com'),
   ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
   ZOHO_WEB_REDIRECT_URL: z.string().url().optional(),
+  ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(2),
+  ZOHO_SYNC_DRY_RUN: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
+  ZOHO_SYNC_WORKER_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  ZOHO_SYNC_WORKER_INTERVAL_MS: z.coerce.number().int().min(1_000).default(5_000),
+  ZOHO_SYNC_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
+  ZOHO_SYNC_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(25).default(8),
+  ZOHO_SYNC_LEASE_MS: z.coerce.number().int().min(5_000).default(60_000),
 });
 
 const parsed = envSchema.safeParse(process.env);

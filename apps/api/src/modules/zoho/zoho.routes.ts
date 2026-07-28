@@ -1,14 +1,21 @@
 import { Router } from 'express';
 import { authenticate } from '@middleware/authenticate';
-import { authorize, SUPER_ADMIN_ONLY } from '@middleware/authorize';
+import { requirePermission } from '@middleware/requirePermission';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import * as controller from './zoho.controller';
 
 const router = Router();
 router.get('/callback', controller.callback);
-router.use(authenticate, authorize(SUPER_ADMIN_ONLY));
-router.get('/connect', controller.connect);
-router.get('/status', controller.status);
-router.post('/test', controller.test);
-router.post('/organizations/:id/activate', controller.activate);
-router.delete('/connection', controller.disconnect);
+router.use(authenticate);
+router.get('/status', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.status);
+router.get('/events', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.events);
+router.get('/events/:id', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.event);
+router.post('/events/:id/retry', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.retryEvent);
+router.post('/events/:id/ignore', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.ignoreEvent);
+router.get('/discovery', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.discovery);
+router.post('/discovery/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.runDiscovery);
+router.get('/connect', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.connect);
+router.post('/test', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.test);
+router.post('/organizations/:id/activate', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.activate);
+router.delete('/connection', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.disconnect);
 export default router;

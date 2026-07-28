@@ -35,7 +35,8 @@
         "type-check": "tsc --noEmit",
         "minio:init": "tsx scripts/initMinio.ts",
         "minio:public": "node scripts/setMinioPublicPolicy.js",
-        "fix:document-urls": "tsx scripts/fixDocumentUrls.ts"
+        "fix:document-urls": "tsx scripts/fixDocumentUrls.ts",
+        "zoho:check": "tsx scripts/check-zoho-readiness.ts"
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.600.0",

@@ -1,0 +1,33 @@
+import { createHash } from 'crypto';
+
+const SENSITIVE_KEY = /(authorization|token|secret|password|client[_-]?id|api[_-]?key|cookie)/i;
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, child]) => [key, canonicalize(child)]),
+    );
+  }
+  return value instanceof Date ? value.toISOString() : value;
+}
+
+export function sanitizeForAudit(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sanitizeForAudit);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, child]) => [
+      key,
+      SENSITIVE_KEY.test(key) ? '[REDACTED]' : sanitizeForAudit(child),
+    ]),
+  );
+}
+
+export function stablePayloadHash(value: unknown): string {
+  return createHash('sha256')
+    .update(JSON.stringify(canonicalize(value)))
+    .digest('hex');
+}
