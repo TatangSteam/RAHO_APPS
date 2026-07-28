@@ -110,11 +110,15 @@ services:
       MINIO_PUBLIC_URL: http://minio:9000
       MINIO_USE_SSL: "false"
       CORS_ORIGIN: ${CORS_ORIGIN:-https://erp.rahopremier.id}
-      JWT_ACCESS_EXPIRES: 15m
-      JWT_REFRESH_EXPIRES: 7d
-      RATE_LIMIT_WINDOW_MS: 900000
-      RATE_LIMIT_MAX: 1000
-      AUTH_RATE_LIMIT_MAX: 5
+      JWT_ACCESS_EXPIRES: 1d
+      JWT_REFRESH_EXPIRES: 1d
+      RATE_LIMIT_WINDOW_MS: 60000
+      RATE_LIMIT_MAX: 100
+      AUTH_RATE_LIMIT_MAX: 10
+      ZOHO_REDIRECT_URI: http://localhost:3000/api/zoho/callback
+      ZOHO_ACCOUNTS_BASE_URL: https://accounts.zoho.com
+      ZOHO_API_BASE_URL: https://www.zohoapis.com
+      ZOHO_WEB_REDIRECT_URL: http://localhost:3000/admin/integrations/zoho
     depends_on:
       - postgres
       - minio
@@ -126,6 +130,9 @@ services:
       - JWT_REFRESH_SECRET
       - ICD_API_CLIENT_ID
       - ICD_API_CLIENT_SECRET
+      - ZOHO_CLIENT_ID
+      - ZOHO_CLIENT_SECRET
+      - ZOHO_TOKEN_ENCRYPTION_KEY
     deploy:
       resources:
         limits:
@@ -243,3 +250,9 @@ secrets:
     file: ./secrets/MINIO_SECRET_KEY
   POSTGRES_PASSWORD:
     file: ./secrets/POSTGRES_PASSWORD
+  ZOHO_CLIENT_ID:
+    file: ./secrets/ZOHO_CLIENT_ID
+  ZOHO_CLIENT_SECRET:
+    file: ./secrets/ZOHO_CLIENT_SECRET
+  ZOHO_TOKEN_ENCRYPTION_KEY:
+    file: ./secrets/ZOHO_TOKEN_ENCRYPTION_KEY
