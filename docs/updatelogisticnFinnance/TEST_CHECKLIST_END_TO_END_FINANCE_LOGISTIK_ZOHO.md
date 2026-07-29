@@ -255,8 +255,10 @@ flow invoice otomatis.
 - [x] Paket yang sudah ada sebelum migration `20260729180000` memiliki `revenueFlowVersion = 1` (140 paket lokal terverifikasi).
 - [x] Paket yang dibuat setelah migration otomatis memiliki `revenueFlowVersion = 2`.
 - [x] Posting finance sesi dari paket legacy berbayar tanpa kontrak deferred revenue tetap berhasil.
-- [x] Penyelesaian finance legacy tanpa kontrak tidak membuat omzet/deferred revenue fiktif; hanya HPP material yang diposting bila ada.
-- [x] Paket legacy yang sudah memiliki kontrak tetap menjalankan revenue recognition normal.
+- [x] Penyelesaian sesi legacy tidak membuat omzet, deferred revenue, atau jurnal HPP baru.
+- [x] Sesi legacy tetap selesai walaupun tidak tersedia accounting period untuk tanggal transaksi.
+- [x] Biaya material legacy tetap tercatat sebagai informasi inventory tanpa memaksakan jurnal finance baru.
+- [x] Paket legacy yang mempunyai kontrak hasil backfill tetap dilewati oleh revenue recognition baru.
 - [x] Paket baru berbayar tanpa kontrak tetap ditolak dengan `TREATMENT_REVENUE_CONTRACT_MISSING`.
 - [x] Paket baru gratis tidak diwajibkan mempunyai kontrak deferred revenue.
 - [x] Edit/penggantian paket mempertahankan `revenueFlowVersion` paket sumber.

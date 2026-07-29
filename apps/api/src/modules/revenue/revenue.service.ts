@@ -176,12 +176,18 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       'Paket berbayar belum memiliki kontrak deferred revenue. Verifikasi pembayaran sebelum menyelesaikan treatment.',
     );
   }
-  const revenueCompatibilityMode = packages.some((pkg) =>
-    pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION
-      && !contractByPackage.has(pkg.id)
-  ) ? 'LEGACY' as const : 'CURRENT' as const;
+  const legacyPackageIds = new Set(
+    packages
+      .filter((pkg) => pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION)
+      .map((pkg) => pkg.id),
+  );
+  const revenueCompatibilityMode = legacyPackageIds.size > 0
+    ? 'LEGACY' as const
+    : 'CURRENT' as const;
   const reservations = [];
-  for (const candidate of contracts) {
+  for (const candidate of contracts.filter((contract) =>
+    !legacyPackageIds.has(contract.memberPackageId)
+  )) {
     if (candidate.totalConsideration.isZero()) continue;
     if (candidate.status !== PackageRevenueContractStatus.ACTIVE) {
       throw errors.unprocessable(
@@ -351,15 +357,20 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
     new Prisma.Decimal(0),
   ).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   const materialCost = input.materialCost.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-  const lines = buildTreatmentCompletionJournalLines(pendingRecognitions, materialCost).map((line) => ({
-    ...line,
-    description: {
-      DEFERRED_RELEASE: `Pelepasan deferred revenue ${event.treatmentSession!.sessionCode}`,
-      REVENUE: `Revenue treatment ${event.treatmentSession!.sessionCode}`,
-      HPP: `HPP treatment ${event.treatmentSession!.sessionCode}`,
-      INVENTORY: `Persediaan terpakai ${event.treatmentSession!.sessionCode}`,
-    }[line.metadata.treatmentRole],
-  }));
+  const grossProfit = reservation.revenueCompatibilityMode === 'LEGACY'
+    ? new Prisma.Decimal(0)
+    : recognizedRevenue.sub(materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  const lines = reservation.revenueCompatibilityMode === 'LEGACY'
+    ? []
+    : buildTreatmentCompletionJournalLines(pendingRecognitions, materialCost).map((line) => ({
+        ...line,
+        description: {
+          DEFERRED_RELEASE: `Pelepasan deferred revenue ${event.treatmentSession!.sessionCode}`,
+          REVENUE: `Revenue treatment ${event.treatmentSession!.sessionCode}`,
+          HPP: `HPP treatment ${event.treatmentSession!.sessionCode}`,
+          INVENTORY: `Persediaan terpakai ${event.treatmentSession!.sessionCode}`,
+        }[line.metadata.treatmentRole],
+      }));
 
   let journalEntryId: string | null = null;
   if (lines.length > 0) {
@@ -388,7 +399,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
         eventId: event.id,
         recognizedRevenue: recognizedRevenue.toFixed(2),
         materialCost: materialCost.toFixed(2),
-        grossProfit: recognizedRevenue.sub(materialCost).toFixed(2),
+        grossProfit: grossProfit.toFixed(2),
       },
     }, tx);
     journalEntryId = posted.journal.id;
@@ -448,13 +459,13 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
       entityId: event.treatmentSession.id,
       entityCode: event.treatmentSession.sessionCode,
       description: reservation.revenueCompatibilityMode === 'LEGACY'
-        ? `HPP treatment legacy ${event.treatmentSession.sessionCode} diposting tanpa memaksakan kontrak deferred revenue.`
+        ? `Completion treatment legacy ${event.treatmentSession.sessionCode} tidak membuat posting finance baru.`
         : `Revenue dan HPP treatment ${event.treatmentSession.sessionCode} diposting.`,
       afterData: json({
         journalEntryId,
         recognizedRevenue: recognizedRevenue.toFixed(2),
         materialCost: materialCost.toFixed(2),
-        grossProfit: recognizedRevenue.sub(materialCost).toFixed(2),
+        grossProfit: grossProfit.toFixed(2),
         revenueCompatibilityMode: reservation.revenueCompatibilityMode,
       }),
     },
@@ -463,7 +474,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
     journalEntryId,
     recognizedRevenue,
     materialCost,
-    grossProfit: recognizedRevenue.sub(materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
+    grossProfit,
     recognitionCount: pendingRecognitions.length,
     recognitions: recognitionPayload,
     revenueCompatibilityMode: reservation.revenueCompatibilityMode,

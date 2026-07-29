@@ -560,13 +560,17 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
           actorUserId: actorId,
           eventId: legacyEventId,
           inventoryPostingId: null,
-          materialCost: new Prisma.Decimal(0),
-          occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+          materialCost: new Prisma.Decimal(100),
+          // No accounting period exists for this date. Legacy completion must
+          // not consult accounting periods because the old flow had no journal.
+          occurredAt: new Date('2030-01-16T00:00:00.000Z'),
         }, tx)
       );
       expect(legacyResult).toMatchObject({
         journalEntryId: null,
         recognizedRevenue: new Prisma.Decimal(0),
+        materialCost: new Prisma.Decimal(100),
+        grossProfit: new Prisma.Decimal(0),
         recognitionCount: 0,
         revenueCompatibilityMode: 'LEGACY',
       });
