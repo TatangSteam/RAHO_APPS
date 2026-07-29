@@ -1,7 +1,13 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { CreateInfusionInput } from '../sessions.schema';
-import { AuditAction, Role, StockMutationType } from '@prisma/client';
+import {
+  AuditAction,
+  MaterialUsageStatus,
+  Prisma,
+  Role,
+  StockMutationType,
+} from '@prisma/client';
 
 const DEFAULT_NO_IN_IFA250_ML = 2.5;
 
@@ -341,7 +347,17 @@ export class InfusionService {
           
           // Convert usage unit to base unit for stock calculation
           // Example: 450 ml → 0.9 botol (if conversionFactor = 500)
-          const baseQuantityUsed = usageQuantity / conversionFactor;
+          const baseQuantity = new Prisma.Decimal(usageQuantity)
+            .div(conversionFactor)
+            .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
+          if (baseQuantity.lessThanOrEqualTo(0)) {
+            throw {
+              status: 400,
+              code: 'MATERIAL_QUANTITY_INVALID',
+              message: `Quantity ${inventoryItem.masterProduct.name} terlalu kecil. Tambahkan quantity agar hasil konversi stok minimal 0.0001 ${inventoryItem.masterProduct.baseUnit}.`,
+            };
+          }
+          const baseQuantityUsed = baseQuantity.toNumber();
           
           const stockBefore = Number(inventoryItem.stock);
           const stockAfter = stockBefore - baseQuantityUsed;
@@ -383,6 +399,10 @@ export class InfusionService {
               inventoryItemId: inventoryItem.id,
               quantity: usageQuantity, // Store in usage unit (ml)
               unit: inventoryItem.masterProduct.usageUnit,
+              baseQuantity,
+              status: MaterialUsageStatus.CONSUMED,
+              consumedAt: new Date(),
+              isLegacyConsumption: true,
               recordedBy: userId,
             },
           });

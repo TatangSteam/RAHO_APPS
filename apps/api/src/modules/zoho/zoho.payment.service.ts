@@ -14,6 +14,7 @@ import {
   ZohoPaymentRefundSnapshot,
   ZohoPaymentSnapshot,
 } from './zoho.payment.policy';
+import { handleRetainerFundingPayment } from './zoho.retainer.service';
 
 export const PAYMENT_VERIFIED_EVENT = 'PAYMENT_VERIFIED';
 export const PAYMENT_REFUNDED_EVENT = 'PAYMENT_REFUNDED';
@@ -255,6 +256,9 @@ async function savePaymentMapping(
 
 async function handleVerifiedPayment(event: IntegrationEvent) {
   const snapshot = event.payload as unknown as ZohoPaymentSnapshot;
+  if (snapshot.classification === 'THERAPY_ADVANCE' && snapshot.branchType !== 'PARTNERSHIP') {
+    return handleRetainerFundingPayment(snapshot.localEntityId);
+  }
   if (!snapshot.eligible) {
     return { operation: 'SKIP_POLICY', classification: snapshot.classification, reason: snapshot.excludedReason };
   }

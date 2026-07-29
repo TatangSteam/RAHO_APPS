@@ -9,6 +9,7 @@ import * as contactService from './zoho.contact.service';
 import * as masterService from './zoho.master.service';
 import * as invoiceService from './zoho.invoice.service';
 import * as paymentService from './zoho.payment.service';
+import * as retainerService from './zoho.retainer.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -84,6 +85,17 @@ const paymentAccountMappingSchema = z.object({
 const paymentMethodMappingSchema = z.object({
   paymentMethod: z.enum(['CASH', 'TRANSFER', 'DEBIT', 'CREDIT', 'QRIS', 'OTHER']),
   zohoMode: z.enum(['cash', 'check', 'creditcard', 'banktransfer', 'bankremittance', 'autotransaction', 'others']),
+});
+
+const retainerListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const glAccountMappingSchema = z.object({
+  accountCode: z.string().trim().min(1).max(50),
+  zohoAccountId: z.string().trim().min(1).max(100),
 });
 
 export async function connect(req: Request, res: Response, next: NextFunction) {
@@ -327,4 +339,30 @@ export async function enqueuePayment(req: Request, res: Response, next: NextFunc
 
 export async function reconcilePayments(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await paymentService.reconcilePayments(req.user.userId)); } catch (error) { next(error); }
+}
+
+export async function retainers(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = retainerListSchema.parse(req.query);
+    sendSuccess(res, await retainerService.listRetainerRevenue(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function retainerConfig(_req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await retainerService.getRetainerConfig()); } catch (error) { next(error); }
+}
+
+export async function mapRetainerAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = glAccountMappingSchema.parse(req.body);
+    sendSuccess(res, await retainerService.saveGlAccountMapping(body.accountCode, body.zohoAccountId));
+  } catch (error) { next(error); }
+}
+
+export async function reconcileRetainers(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await retainerService.reconcileRetainerRevenue(req.user.userId)); } catch (error) { next(error); }
 }

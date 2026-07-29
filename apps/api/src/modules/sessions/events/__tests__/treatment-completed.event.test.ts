@@ -17,6 +17,8 @@ describe('TREATMENT_COMPLETED event contract', () => {
         memberId: 'member-1',
         memberPackageId: 'package-1',
         boosterPackageId: null,
+        revenueSourceType: 'BASIC',
+        revenuePackageId: 'package-1',
       },
       inventory: {
         postingId: 'posting-1',
@@ -31,6 +33,17 @@ describe('TREATMENT_COMPLETED event contract', () => {
         hppAmount: '200.00',
         grossProfit: '999800.00',
         journalEntryId: 'journal-1',
+        recognitions: [{
+          recognitionId: 'recognition-1',
+          memberPackageId: 'package-1',
+          sourceType: 'BASIC',
+          productCode: 'BASIC-7',
+          packagePricingId: 'pricing-1',
+          amount: '1000000.00',
+          sessionOrdinal: 1,
+          deferredRevenueAccountCode: '2200',
+          revenueAccountCode: '4100',
+        }],
       },
     });
 
@@ -43,6 +56,17 @@ describe('TREATMENT_COMPLETED event contract', () => {
       hppAmount: '200.00',
       grossProfit: '999800.00',
       journalEntryId: 'journal-1',
+      recognitions: [{
+        recognitionId: 'recognition-1',
+        memberPackageId: 'package-1',
+        sourceType: 'BASIC',
+        productCode: 'BASIC-7',
+        packagePricingId: 'pricing-1',
+        amount: '1000000.00',
+        sessionOrdinal: 1,
+        deferredRevenueAccountCode: '2200',
+        revenueAccountCode: '4100',
+      }],
     });
   });
 });

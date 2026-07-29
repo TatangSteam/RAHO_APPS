@@ -14,6 +14,7 @@ import {
   Eye,
   FileText,
   List,
+  Landmark,
   Loader2,
   MapPinned,
   PlugZap,
@@ -27,7 +28,7 @@ import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments';
+type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 
 type Connection = {
@@ -294,6 +295,50 @@ type ReconciliationData = {
     result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; reasons: string[] };
   }>;
 };
+type RetainerData = {
+  mode: 'DOCUMENT' | 'JOURNAL';
+  items: Array<{
+    id: string;
+    packageCode: string;
+    productCode: string | null;
+    packageType: 'BASIC' | 'BOOSTER';
+    memberNo: string;
+    memberName: string;
+    branchCode: string;
+    totalConsideration: string;
+    fundedDeferredAmount: string;
+    recognizedAmount: string;
+    remainingDeferredAmount: string;
+    status: string;
+    retainerMapping: { zohoEntityId: string; status: string } | null;
+    recognitions: Array<{
+      id: string;
+      sessionCode: string;
+      amount: string;
+      status: string;
+      recognizedAt: string | null;
+      zohoMapping: { zohoEntityId: string; status: string } | null;
+    }>;
+  }>;
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type RetainerConfig = {
+  mode: 'DOCUMENT' | 'JOURNAL';
+  accounts: Array<{ code: string; mapping: { zohoEntityId: string } | null }>;
+  zohoAccounts: DiscoveryItem[];
+};
+type RetainerReconciliation = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    contractId: string;
+    packageCode: string;
+    status: 'MATCHED' | 'MISMATCH' | 'MISSING';
+    reasons: string[];
+  }>;
+};
 
 const eventStatuses: Array<EventStatus | ''> = [
   '',
@@ -360,6 +405,10 @@ export default function ZohoIntegrationPage() {
   const [paymentSearch, setPaymentSearch] = useState('');
   const [paymentPreview, setPaymentPreview] = useState<PaymentPreview | null>(null);
   const [reconciliation, setReconciliation] = useState<ReconciliationData | null>(null);
+  const [retainers, setRetainers] = useState<RetainerData | null>(null);
+  const [retainerConfig, setRetainerConfig] = useState<RetainerConfig | null>(null);
+  const [retainerSearch, setRetainerSearch] = useState('');
+  const [retainerReconciliation, setRetainerReconciliation] = useState<RetainerReconciliation | null>(null);
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -430,6 +479,17 @@ export default function ZohoIntegrationPage() {
     setPaymentConfig(config.data.data);
   }, [paymentSearch]);
 
+  const loadRetainers = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: RetainerData }>('/integrations/zoho/retainers', {
+        params: { limit: 50, ...(retainerSearch.trim() ? { search: retainerSearch.trim() } : {}) },
+      }),
+      api.get<{ data: RetainerConfig }>('/integrations/zoho/retainers/config'),
+    ]);
+    setRetainers(rows.data.data);
+    setRetainerConfig(config.data.data);
+  }, [retainerSearch]);
+
   useEffect(() => {
     if (user && !['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'].includes(user.role)) router.replace('/dashboard');
   }, [router, user]);
@@ -447,7 +507,8 @@ export default function ZohoIntegrationPage() {
     if (tab === 'masters') void loadMasters().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat mapping Item/Location.')));
     if (tab === 'invoices') void loadInvoices().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat invoice Zoho.')));
     if (tab === 'payments') void loadPayments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat pembayaran Zoho.')));
-  }, [loadContacts, loadDiscovery, loadInvoices, loadMasters, loadPayments, loadQueue, tab]);
+    if (tab === 'retainers') void loadRetainers().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Retainer & omzet terapi.')));
+  }, [loadContacts, loadDiscovery, loadInvoices, loadMasters, loadPayments, loadQueue, loadRetainers, tab]);
 
   useEffect(() => {
     const result = searchParams.get('zoho');
@@ -789,6 +850,29 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
+  async function saveRetainerAccountMapping(accountCode: string, zohoAccountId: string) {
+    if (!zohoAccountId) return;
+    setAction(`retainer-account-${accountCode}`);
+    try {
+      await api.put('/integrations/zoho/retainers/config/account', { accountCode, zohoAccountId });
+      toast.success(`Akun ${accountCode} berhasil dipetakan.`);
+      await loadRetainers();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping akun Retainer gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function runRetainerReconciliation() {
+    setAction('retainer-reconcile');
+    try {
+      const response = await api.post<{ data: RetainerReconciliation }>('/integrations/zoho/retainers/reconcile/run');
+      setRetainerReconciliation(response.data.data);
+      toast.success('Rekonsiliasi Retainer selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi Retainer gagal.'));
+    } finally { setAction(null); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -813,6 +897,7 @@ export default function ZohoIntegrationPage() {
           ['masters', 'Item & Location', Boxes],
           ['invoices', 'Sales Invoice', FileText],
           ['payments', 'Pembayaran & Piutang', CreditCard],
+          ['retainers', 'Retainer & Omzet Terapi', Landmark],
         ] as const).map(([value, label, Icon]) => (
           <button
             key={value}
@@ -1592,6 +1677,145 @@ export default function ZohoIntegrationPage() {
                 </tbody>
               </table>
               {!payments?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada pembayaran verified.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'retainers' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Retainer dan pengakuan omzet terapi</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Mode {retainerConfig?.mode || retainers?.mode || 'DOCUMENT'}: uang paket tetap menjadi kewajiban sampai satu sesi Basic atau Booster selesai.
+                </p>
+              </div>
+              <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                Satu sesi = satu sumber omzet
+              </span>
+            </div>
+
+            {retainerConfig?.mode === 'JOURNAL' && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-semibold text-amber-900">Mapping akun untuk mode Journal</p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {retainerConfig.accounts.map((account) => (
+                    <label key={account.code} className="grid gap-2 text-sm">
+                      <span className="font-semibold">Akun ERP {account.code}</span>
+                      <select
+                        value={account.mapping?.zohoEntityId || ''}
+                        disabled={!!action}
+                        onChange={(event) => void saveRetainerAccountMapping(account.code, event.target.value)}
+                        className="rounded-lg border bg-white px-3 py-2 dark:border-neutral-700 dark:bg-neutral-900"
+                      >
+                        <option value="">Pilih akun Zoho</option>
+                        {retainerConfig.zohoAccounts.map((entry) => (
+                          <option key={entry.zohoId} value={entry.zohoId}>
+                            {entry.code ? `${entry.code} · ` : ''}{entry.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Kontrak deferred revenue</h2>
+                <p className="text-sm text-neutral-500">{retainers?.pagination.total || 0} paket berkontrak.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={retainerSearch}
+                  onChange={(event) => setRetainerSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadRetainers(); }}
+                  placeholder="Cari paket atau member"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadRetainers()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runRetainerReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={status?.dryRun ? 'Matikan dry-run untuk rekonsiliasi live.' : undefined}
+                >
+                  Rekonsiliasi Retainer
+                </button>
+              </div>
+            </div>
+
+            {retainerReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {retainerReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {retainerReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {retainerReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {retainerReconciliation.missing}</span>
+                </div>
+                <div className="mt-2 space-y-1 text-xs">
+                  {retainerReconciliation.rows.filter((row) => row.status !== 'MATCHED').map((row) => (
+                    <p key={row.contractId}><strong>{row.packageCode}</strong>: {row.reasons.join(' ')}</p>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Paket</th>
+                    <th className="p-3">Deferred ERP</th>
+                    <th className="p-3">Retainer Zoho</th>
+                    <th className="p-3">Recognition terakhir</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {retainers?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.packageCode}</span>
+                        <span className="block text-xs text-neutral-500">
+                          {row.packageType} · {row.productCode || '-'} · {row.branchCode}
+                        </span>
+                        <span className="block text-xs">{row.memberNo} · {row.memberName}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="block">Nilai: IDR {Number(row.totalConsideration).toLocaleString('id-ID')}</span>
+                        <span className="block">Terbayar: IDR {Number(row.fundedDeferredAmount).toLocaleString('id-ID')}</span>
+                        <span className="block text-emerald-700">Jadi omzet: IDR {Number(row.recognizedAmount).toLocaleString('id-ID')}</span>
+                        <span className="block font-semibold">Sisa: IDR {Number(row.remainingDeferredAmount).toLocaleString('id-ID')}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.retainerMapping ? (
+                          <>
+                            <span className="block font-mono">{row.retainerMapping.zohoEntityId}</span>
+                            <span className="text-emerald-600">{row.retainerMapping.status}</span>
+                          </>
+                        ) : <span className="text-amber-700">Belum tersinkron</span>}
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.recognitions.map((recognition) => (
+                          <span key={recognition.id} className="mb-1 block">
+                            {recognition.sessionCode} · IDR {Number(recognition.amount).toLocaleString('id-ID')}
+                            {' · '}{recognition.zohoMapping ? 'Zoho OK' : recognition.status}
+                          </span>
+                        ))}
+                        {!row.recognitions.length && <span className="text-neutral-500">Belum ada terapi selesai</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!retainers?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada kontrak deferred revenue.</p>}
             </div>
           </section>
         </div>

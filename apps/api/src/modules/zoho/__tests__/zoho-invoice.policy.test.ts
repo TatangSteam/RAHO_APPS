@@ -135,7 +135,7 @@ describe('Zoho Sprint 5 invoice policy', () => {
 
   it('uses normalized tax keys and the Sprint 5 OAuth scopes', () => {
     expect(invoiceTaxMappingKey('11.0000')).toBe('11');
-    expect(ZOHO_SCOPE_VERSION).toBe(6);
+    expect(ZOHO_SCOPE_VERSION).toBe(7);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.invoices.READ',
       'ZohoBooks.invoices.CREATE',

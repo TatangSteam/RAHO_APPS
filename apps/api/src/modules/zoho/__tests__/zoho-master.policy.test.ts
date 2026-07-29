@@ -98,7 +98,7 @@ describe('Zoho Sprint 4 item policy', () => {
   });
 
   it('requests official settings write scopes for Item and Location', () => {
-    expect(ZOHO_SCOPE_VERSION).toBe(6);
+    expect(ZOHO_SCOPE_VERSION).toBe(7);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.settings.READ',
       'ZohoBooks.settings.CREATE',

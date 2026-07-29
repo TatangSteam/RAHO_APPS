@@ -3,8 +3,10 @@ import {
   IntegrationEventStatus,
   MaterialUsageStatus,
   PackageStatus,
+  PackageType,
   Prisma,
   TreatmentCompletionStatus,
+  TreatmentRevenueSourceType,
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
@@ -26,6 +28,7 @@ import {
   TREATMENT_COMPLETED_EVENT_TYPE,
   TREATMENT_COMPLETED_EVENT_VERSION,
 } from '../events/treatment-completed.event';
+import { selectTreatmentRevenueSource } from './treatment-revenue-source';
 import { requiresMaterialDeviationReason } from './material-usage.helpers';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 
@@ -172,8 +175,26 @@ export class SessionCompletionService {
 
       const completedAt = new Date();
       const draftMaterials = session.materials.filter((material) => material.status === MaterialUsageStatus.DRAFT);
+      const legacyConsumedMaterials = draftMaterials.filter(
+        (material) => material.baseQuantity.lessThanOrEqualTo(0),
+      );
+      const postableDraftMaterials = draftMaterials.filter(
+        (material) => material.baseQuantity.greaterThan(0),
+      );
       let materialPostingId: string | null = null;
-      if (draftMaterials.length > 0) {
+      if (legacyConsumedMaterials.length > 0) {
+        await tx.materialUsage.updateMany({
+          where: { id: { in: legacyConsumedMaterials.map((material) => material.id) } },
+          data: {
+            status: MaterialUsageStatus.CONSUMED,
+            consumedAt: completedAt,
+            isLegacyConsumption: true,
+            actualUnitCost: new Prisma.Decimal(0),
+            totalActualCost: new Prisma.Decimal(0),
+          },
+        });
+      }
+      if (postableDraftMaterials.length > 0) {
         materialPostingId = await issueInventoryInTransaction(userId, {
           idempotencyKey: `TREATMENT-MATERIAL-${session.id}`,
           branchId: session.branchId,
@@ -183,7 +204,7 @@ export class SessionCompletionService {
           reasonCode: 'TREATMENT_MATERIAL_USAGE',
           occurredAt: completedAt,
           costCenterCode: session.branchId,
-          lines: draftMaterials.map((material) => ({
+          lines: postableDraftMaterials.map((material) => ({
             inventoryItemId: material.inventoryItemId,
             stockLocationId: material.inventoryItem.stockLocationId ?? undefined,
             quantity: material.baseQuantity.toFixed(4),
@@ -195,7 +216,7 @@ export class SessionCompletionService {
           select: { inventoryItemId: true, actualCost: true, quantity: true },
         });
         const mutationByItem = new Map(mutations.map((mutation) => [mutation.inventoryItemId, mutation]));
-        for (const material of draftMaterials) {
+        for (const material of postableDraftMaterials) {
           const mutation = mutationByItem.get(material.inventoryItemId);
           if (!mutation?.actualCost) throw errors.conflict('MATERIAL_COST_MISSING', 'Actual cost FIFO material tidak ditemukan.');
           await tx.materialUsage.update({
@@ -224,6 +245,38 @@ export class SessionCompletionService {
         new Prisma.Decimal(0),
       );
 
+      const selectedRevenueSource = selectTreatmentRevenueSource(
+        session.encounter.memberPackageId,
+        session.boosterPackageId,
+      );
+      const revenuePackageId = selectedRevenueSource.revenuePackageId;
+      const revenueSourceType = selectedRevenueSource.revenueSourceType === 'BOOSTER'
+        ? TreatmentRevenueSourceType.BOOSTER
+        : TreatmentRevenueSourceType.BASIC;
+      const revenuePackage = await tx.memberPackage.findUnique({
+        where: { id: revenuePackageId },
+        select: { id: true, memberId: true, packageType: true },
+      });
+      if (!revenuePackage || revenuePackage.memberId !== session.encounter.memberId) {
+        throw errors.unprocessable(
+          'TREATMENT_REVENUE_PACKAGE_INVALID',
+          'Paket sumber omzet tidak ditemukan atau bukan milik member sesi.',
+        );
+      }
+      const expectedPackageType = revenueSourceType === TreatmentRevenueSourceType.BOOSTER
+        ? PackageType.BOOSTER
+        : PackageType.BASIC;
+      if (revenuePackage.packageType !== expectedPackageType) {
+        throw errors.unprocessable(
+          'TREATMENT_REVENUE_SOURCE_MISMATCH',
+          `Sumber omzet ${revenueSourceType} tidak cocok dengan jenis paket yang dipilih.`,
+        );
+      }
+      await tx.treatmentSession.update({
+        where: { id: session.id },
+        data: { revenueSourceType, revenuePackageId },
+      });
+
       const revenueEvent = await createTreatmentCompletedEventInTransaction({
         sessionId: session.id,
         sessionCode: session.sessionCode,
@@ -231,8 +284,7 @@ export class SessionCompletionService {
         memberId: session.encounter.memberId,
         treatmentDate: session.treatmentDate,
         completedAt,
-        packageIds: [session.encounter.memberPackageId, session.boosterPackageId]
-          .filter((value): value is string => Boolean(value)),
+        packageIds: [revenuePackageId],
       }, tx);
 
       const finance = await postTreatmentCompletionFinancialsInTransaction({
@@ -269,6 +321,8 @@ export class SessionCompletionService {
           memberId: session.encounter.memberId,
           memberPackageId: session.encounter.memberPackageId,
           boosterPackageId: session.boosterPackageId,
+          revenueSourceType,
+          revenuePackageId,
         },
         inventory: {
           postingId: materialPosting?.id ?? null,
@@ -297,6 +351,7 @@ export class SessionCompletionService {
           hppAmount: finance.materialCost.toFixed(2),
           grossProfit: finance.grossProfit.toFixed(2),
           journalEntryId: finance.journalEntryId,
+          recognitions: finance.recognitions,
         },
       });
       const event = await tx.integrationEvent.create({
@@ -422,9 +477,11 @@ export class SessionCompletionService {
           }, tx)
         : null;
 
-      const packageIds = [session.encounter.memberPackageId, session.boosterPackageId]
-        .filter((value): value is string => Boolean(value))
-        .sort();
+      const packageIds = [
+        session.revenuePackageId
+        || session.boosterPackageId
+        || session.encounter.memberPackageId,
+      ];
       if (packageIds.length > 0) {
         await tx.$queryRaw(Prisma.sql`
           SELECT "id" FROM "member_packages"

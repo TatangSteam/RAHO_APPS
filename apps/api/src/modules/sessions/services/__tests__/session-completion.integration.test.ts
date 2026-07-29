@@ -493,6 +493,11 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
       where: { eventType_aggregateId: { eventType: 'TREATMENT_COMPLETED', aggregateId: sessionId } },
     });
     expect(event.status).toBe('PENDING');
+    expect((event.payload as any).eventVersion).toBe(3);
+    expect((event.payload as any).session).toMatchObject({
+      revenueSourceType: 'BASIC',
+      revenuePackageId: memberPackageId,
+    });
     expect((event.payload as any).finance).toEqual({
       revenueRecognitionStatus: 'POSTED',
       recognizedRevenue: '1000000.00',
@@ -500,6 +505,14 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
       hppAmount: '200.00',
       grossProfit: '999800.00',
       journalEntryId: results[0].journalEntryId,
+      recognitions: [expect.objectContaining({
+        memberPackageId,
+        sourceType: 'BASIC',
+        amount: '1000000.00',
+        sessionOrdinal: 1,
+        deferredRevenueAccountCode: '2200',
+        revenueAccountCode: '4100',
+      })],
     });
     expect(await prisma.journalEntry.count({ where: { branchId } })).toBe(journalCountBefore + 1);
     const completionJournal = await prisma.journalEntry.findUniqueOrThrow({

@@ -6,13 +6,15 @@ import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { normalizeZohoError, ZohoApiError } from './zoho.error';
 
-export const ZOHO_SCOPE_VERSION = 6;
+export const ZOHO_SCOPE_VERSION = 7;
 export const ZOHO_REQUIRED_SCOPES = [
   'ZohoBooks.settings.READ',
   'ZohoBooks.settings.CREATE',
   'ZohoBooks.settings.UPDATE',
   'ZohoBooks.banking.READ',
   'ZohoBooks.accountants.READ',
+  'ZohoBooks.accountants.CREATE',
+  'ZohoBooks.accountants.UPDATE',
   'ZohoBooks.contacts.READ',
   'ZohoBooks.contacts.CREATE',
   'ZohoBooks.contacts.UPDATE',

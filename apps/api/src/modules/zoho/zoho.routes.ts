@@ -41,6 +41,10 @@ router.put('/payments/config/method', requirePermission(PERMISSIONS.ZOHO_MAPPING
 router.get('/payments/:id/preview', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.previewPayment);
 router.post('/payments/:id/enqueue', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.enqueuePayment);
 router.post('/payments/reconcile/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.reconcilePayments);
+router.get('/retainers', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.retainers);
+router.get('/retainers/config', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.retainerConfig);
+router.put('/retainers/config/account', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.mapRetainerAccount);
+router.post('/retainers/reconcile/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.reconcileRetainers);
 router.get('/connect', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.connect);
 router.post('/test', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.test);
 router.post('/organizations/:id/activate', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.activate);

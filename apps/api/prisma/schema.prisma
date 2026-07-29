@@ -95,6 +95,11 @@ enum PackageType {
   BOOSTER
 }
 
+enum TreatmentRevenueSourceType {
+  BASIC
+  BOOSTER
+}
+
 enum PackageStatus {
   PENDING_PAYMENT
   WAITING_VERIFICATION
@@ -1379,6 +1384,7 @@ model MemberPackage {
   upgrades                 MemberPackage[]           @relation("PackageUpgrade")
   encounters               Encounter[]               @relation("EncounterBasicPackage")
   boosterSessions          TreatmentSession[]        @relation("SessionBoosterPackage")
+  revenueSourceSessions    TreatmentSession[]        @relation("SessionRevenuePackage")
   addOns                   MemberAddOn[]
   incentiveRecords         ReferralIncentiveRecord[]
   benefitValuation         PackageBenefitValuation?
@@ -2531,6 +2537,8 @@ model TreatmentSession {
   nurseId                    String // Primary nurse (backward compatibility)
   boosterPackageId           String?
   boosterType                String?
+  revenueSourceType          TreatmentRevenueSourceType?
+  revenuePackageId           String?
   completedAt                DateTime?
   completedBy                String?
   materialPostingId          String?                   @unique
@@ -2553,6 +2561,7 @@ model TreatmentSession {
   doctor                  User              @relation("SessionDoctor", fields: [doctorId], references: [id])
   nurse                   User              @relation("SessionNurse", fields: [nurseId], references: [id])
   boosterPackage          MemberPackage?    @relation("SessionBoosterPackage", fields: [boosterPackageId], references: [id])
+  revenuePackage          MemberPackage?    @relation("SessionRevenuePackage", fields: [revenuePackageId], references: [id], onDelete: Restrict)
   materialPosting         InventoryPosting? @relation("TreatmentMaterialPosting", fields: [materialPostingId], references: [id], onDelete: Restrict)
   materialReversalPosting InventoryPosting? @relation("TreatmentMaterialReversalPosting", fields: [materialReversalPostingId], references: [id], onDelete: Restrict)
   completionJournal       JournalEntry?     @relation("TreatmentCompletionJournal", fields: [completionJournalEntryId], references: [id], onDelete: Restrict)
@@ -2580,6 +2589,7 @@ model TreatmentSession {
   @@index([doctorId, treatmentDate])
   @@index([isCompleted])
   @@index([completionStatus, completedAt])
+  @@index([revenuePackageId])
   @@map("treatment_sessions")
 }
 

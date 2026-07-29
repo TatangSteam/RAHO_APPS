@@ -1,5 +1,17 @@
 export const TREATMENT_COMPLETED_EVENT_TYPE = 'TREATMENT_COMPLETED' as const;
-export const TREATMENT_COMPLETED_EVENT_VERSION = 2 as const;
+export const TREATMENT_COMPLETED_EVENT_VERSION = 3 as const;
+
+export interface TreatmentRevenueRecognitionPayload {
+  recognitionId: string;
+  memberPackageId: string;
+  sourceType: 'BASIC' | 'BOOSTER';
+  productCode: string | null;
+  packagePricingId: string | null;
+  amount: string;
+  sessionOrdinal: number;
+  deferredRevenueAccountCode: string;
+  revenueAccountCode: string;
+}
 
 export interface TreatmentCompletedMaterialPayload {
   materialUsageId: string;
@@ -30,6 +42,8 @@ export interface TreatmentCompletedEventPayload {
     memberId: string;
     memberPackageId: string;
     boosterPackageId: string | null;
+    revenueSourceType: 'BASIC' | 'BOOSTER';
+    revenuePackageId: string;
   };
   inventory: {
     postingId: string | null;
@@ -44,6 +58,7 @@ export interface TreatmentCompletedEventPayload {
     hppAmount: string;
     grossProfit: string;
     journalEntryId: string | null;
+    recognitions: TreatmentRevenueRecognitionPayload[];
   };
 }
 

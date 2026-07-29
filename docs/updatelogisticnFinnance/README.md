@@ -34,7 +34,7 @@ reconciliation di dalam paket ini.
 
 ## Status implementasi
 
-Sprint 1–6 sudah memiliki implementasi backend dan UI operasional:
+Sprint 1–7 sudah memiliki implementasi backend dan UI operasional:
 
 - role `FINANCE_LOGISTICS_CONTROLLER` dan branch scope;
 - koneksi OAuth, discovery, mapping, outbox worker, retry/dead-letter;
@@ -42,8 +42,13 @@ Sprint 1–6 sudah memiliki implementasi backend dan UI operasional:
 - `PAYMENT_VERIFIED`, partial/full Customer Payment, mapping rekening/metode;
 - refund immutable yang mengacu pembayaran asli;
 - rekonsiliasi AR antara saldo ERP dan Zoho;
-- kebijakan paket terapi dan Partnership tetap dipisahkan dari omzet terapi
-  biasa.
+- sumber omzet sesi eksklusif `BASIC` atau `BOOSTER`, bukan keduanya;
+- pembayaran paket mendanai Zoho Retainer Invoice dan Retainer Payment;
+- completion membuat invoice omzet terapi dan memakai saldo retainer;
+- pembatalan melepas aplikasi retainer dan mem-void invoice terapi;
+- rekonsiliasi deferred/recognized ERP dengan Retainer Zoho;
+- mode dokumen sebagai default dan journal sebagai fallback terkontrol;
+- kebijakan Partnership tetap dipisahkan dari omzet terapi biasa.
 
 Live UAT tetap membutuhkan OAuth scope versi terbaru, worker aktif,
 `ZOHO_SYNC_DRY_RUN=false`, mapping lengkap, serta data uji Zoho yang disetujui.

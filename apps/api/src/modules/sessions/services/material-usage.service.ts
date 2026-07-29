@@ -43,7 +43,12 @@ export class MaterialUsageService {
     }
     const quantity = new Prisma.Decimal(data.quantity);
     const baseQuantity = quantity.div(conversionFactor).toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP);
-    if (baseQuantity.lessThanOrEqualTo(0)) throw errors.badRequest('MATERIAL_QUANTITY_INVALID', 'Quantity material harus lebih besar dari nol.');
+    if (baseQuantity.lessThanOrEqualTo(0)) {
+      throw errors.badRequest(
+        'MATERIAL_QUANTITY_INVALID',
+        `Quantity ${inventoryItem.masterProduct.name} terlalu kecil untuk konversi ${conversionFactor.toFixed(4)} ${inventoryItem.masterProduct.usageUnit} per ${inventoryItem.masterProduct.baseUnit}. Tambahkan quantity agar hasil konversi stok minimal 0.0001 ${inventoryItem.masterProduct.baseUnit}.`,
+      );
+    }
 
     const availableBaseQuantity = inventoryItem.balances.reduce(
       (sum, balance) => sum.add(balance.onHandQty).sub(balance.reservedQty).sub(balance.quarantineQty),

@@ -133,12 +133,17 @@ export async function createTreatmentCompletedEventInTransaction(input: {
 
 /** Sprint 8 consumer contract. Reservation is idempotent and does not post revenue yet. */
 export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) {
-  const event = await tx.domainEvent.findUnique({ where: { id: eventId }, include: { treatmentSession: { include: { encounter: true } } } });
+  const event = await tx.domainEvent.findUnique({ where: { id: eventId }, include: { treatmentSession: true } });
   if (!event || event.eventType !== 'TREATMENT_COMPLETED' || !event.treatmentSession) throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
-  const packageIds = [...new Set(
-    [event.treatmentSession.encounter.memberPackageId, event.treatmentSession.boosterPackageId]
-      .filter((value): value is string => Boolean(value)),
-  )];
+  const packageIds = event.treatmentSession.revenuePackageId
+    ? [event.treatmentSession.revenuePackageId]
+    : [];
+  if (packageIds.length !== 1 || !event.treatmentSession.revenueSourceType) {
+    throw errors.unprocessable(
+      'TREATMENT_REVENUE_SOURCE_MISSING',
+      'Sumber omzet sesi belum dipilih. Sesi harus memakai tepat satu paket Basic atau Booster.',
+    );
+  }
   const [packages, contracts] = await Promise.all([
     tx.memberPackage.findMany({
       where: { id: { in: packageIds } },
@@ -277,10 +282,30 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
   await reserveTreatmentCompletedRevenue(event.id, tx);
   const recognitions = await tx.revenueRecognition.findMany({
     where: { domainEventId: event.id },
-    include: { contract: { include: { valuation: true } } },
+    include: {
+      contract: { include: { valuation: true } },
+      memberPackage: {
+        select: {
+          packageType: true,
+          productCode: true,
+          packagePricingId: true,
+        },
+      },
+    },
     orderBy: { id: 'asc' },
   });
   const postedRecognitions = recognitions.filter((row) => row.status === 'POSTED');
+  const recognitionPayload = recognitions.map((row) => ({
+    recognitionId: row.id,
+    memberPackageId: row.memberPackageId,
+    sourceType: row.memberPackage.packageType,
+    productCode: row.memberPackage.productCode,
+    packagePricingId: row.memberPackage.packagePricingId,
+    amount: row.amount.toFixed(2),
+    sessionOrdinal: row.sessionOrdinal,
+    deferredRevenueAccountCode: row.contract.valuation.deferredRevenueAccountCode,
+    revenueAccountCode: row.contract.valuation.revenueAccountCode,
+  }));
   if (postedRecognitions.length > 0) {
     if (postedRecognitions.length !== recognitions.length) {
       throw errors.conflict('TREATMENT_FINANCE_PARTIAL_POSTING', 'Recognition treatment hanya terposting sebagian. Rekonsiliasi diperlukan.');
@@ -299,6 +324,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
       materialCost: input.materialCost.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
       grossProfit: totalRevenue.sub(input.materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
       recognitionCount: postedRecognitions.length,
+      recognitions: recognitionPayload,
       idempotentReplay: true,
     };
   }
@@ -420,6 +446,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
     materialCost,
     grossProfit: recognizedRevenue.sub(materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
     recognitionCount: pendingRecognitions.length,
+    recognitions: recognitionPayload,
     idempotentReplay: false,
   };
 }
