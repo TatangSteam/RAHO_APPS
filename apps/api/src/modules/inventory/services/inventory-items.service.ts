@@ -462,16 +462,37 @@ export class InventoryItemsService {
     usageUnit?: string;
     conversionFactor?: number;
     stock?: number;
+    stockAdjustmentNotes?: string;
     minThreshold?: number;
     storageLocation?: string;
-  }, userId: string) {
-    if (data.stock !== undefined) {
+  }, userId: string, allowDirectStockUpdate = false) {
+    if (data.stock !== undefined && !allowDirectStockUpdate) {
       throw {
-        status: 410,
-        code: 'DIRECT_STOCK_UPDATE_DISABLED',
-        message: 'Perubahan stock langsung dinonaktifkan. Gunakan Inventory Adjustment atau Stock Opname.',
+        status: 403,
+        code: 'DIRECT_STOCK_UPDATE_FORBIDDEN',
+        message: 'Perubahan stok langsung hanya dapat dilakukan oleh Super Admin.',
       };
     }
+
+    if (data.stock !== undefined && (!Number.isFinite(data.stock) || data.stock < 0)) {
+      throw {
+        status: 400,
+        code: 'INVALID_STOCK',
+        message: 'Stok harus berupa angka nol atau lebih.',
+      };
+    }
+
+    if (
+      data.stock !== undefined
+      && (!data.stockAdjustmentNotes || data.stockAdjustmentNotes.trim().length < 3)
+    ) {
+      throw {
+        status: 400,
+        code: 'STOCK_ADJUSTMENT_NOTES_REQUIRED',
+        message: 'Alasan perubahan stok wajib diisi minimal 3 karakter.',
+      };
+    }
+
     // Get current item
     const currentItem = await prisma.inventoryItem.findUnique({
       where: { id: itemId },
@@ -511,27 +532,30 @@ export class InventoryItemsService {
       if (data.storageLocation !== undefined) inventoryUpdates.storageLocation = data.storageLocation;
 
       // Handle stock update with mutation
-      if (data.stock !== undefined && data.stock !== currentItem.stock) {
+      if (data.stock !== undefined) {
         const stockBefore = Number(currentItem.stock);
         const stockAfter = data.stock;
         const adjustment = stockAfter - stockBefore;
 
-        inventoryUpdates.stock = stockAfter;
+        if (stockAfter !== stockBefore) {
+          inventoryUpdates.stock = stockAfter;
 
-        // Create stock mutation
-        await tx.stockMutation.create({
-          data: {
-            inventoryItemId: itemId,
-            type: 'ADJUSTMENT',
-            quantity: Math.abs(adjustment),
-            stockBefore,
-            stockAfter,
-            referenceType: 'ManualAdjustment',
-            referenceId: userId,
-            notes: `Stock updated via edit: ${adjustment > 0 ? '+' : ''}${adjustment} ${currentItem.masterProduct.baseUnit}`,
-            createdBy: userId,
-          },
-        });
+          // This temporary Super Admin flow updates operational stock only.
+          // The authoritative inventory ledger is intentionally not synchronized here.
+          await tx.stockMutation.create({
+            data: {
+              inventoryItemId: itemId,
+              type: 'ADJUSTMENT',
+              quantity: Math.abs(adjustment),
+              stockBefore,
+              stockAfter,
+              referenceType: 'SuperAdminDirectEdit',
+              referenceId: userId,
+              notes: data.stockAdjustmentNotes!.trim(),
+              createdBy: userId,
+            },
+          });
+        }
       }
 
       if (Object.keys(inventoryUpdates).length > 0) {

@@ -603,8 +603,14 @@ export class InventoryController {
     try {
       const { itemId } = req.params;
       const userId = req.user!.userId;
+      const allowDirectStockUpdate = req.user!.role === Role.SUPER_ADMIN;
 
-      const result = await inventoryService.updateInventoryItem(itemId, req.body, userId);
+      const result = await inventoryService.updateInventoryItem(
+        itemId,
+        req.body,
+        userId,
+        allowDirectStockUpdate,
+      );
       return sendSuccess(res, result);
     } catch (err: any) {
       next(err);

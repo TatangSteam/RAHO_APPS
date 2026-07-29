@@ -70,10 +70,16 @@ export class InventoryService {
     usageUnit?: string;
     conversionFactor?: number;
     stock?: number;
+    stockAdjustmentNotes?: string;
     minThreshold?: number;
     storageLocation?: string;
-  }, userId: string) {
-    return await this.itemsService.updateInventoryItem(itemId, data, userId);
+  }, userId: string, allowDirectStockUpdate = false) {
+    return await this.itemsService.updateInventoryItem(
+      itemId,
+      data,
+      userId,
+      allowDirectStockUpdate,
+    );
   }
 
   /**

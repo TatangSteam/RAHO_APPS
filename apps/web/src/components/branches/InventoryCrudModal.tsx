@@ -5,7 +5,6 @@ import { Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDow
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
-import { inventoryApi } from '@/lib/api/inventoryApi';
 import { devLog, devError } from '@/lib/logger';
 import { useAuthStore } from '@/stores/authStore';
 import { CrudModal } from './CrudModal';
@@ -319,20 +318,16 @@ export default function InventoryCrudModal({
         }
 
         const updateData = {
+          ...(stockChanged ? {
+            stock: editFormData.stock,
+            stockAdjustmentNotes: stockAdjustmentNotes.trim(),
+          } : {}),
           minThreshold: editFormData.minThreshold,
           minThresholdUsage: editFormData.minThresholdUsage,
           storageLocation: editFormData.storageLocation || null
         };
         
         await api.patch(`/inventory/items/${inventoryData.id}`, updateData);
-
-        if (stockChanged) {
-          await inventoryApi.adjustStock(inventoryData.id, {
-            idempotencyKey: crypto.randomUUID(),
-            adjustment: editFormData.stock - originalStock,
-            notes: stockAdjustmentNotes.trim(),
-          });
-        }
 
         showToast.success(stockChanged
           ? 'Item inventori dan stok berhasil diperbarui'
