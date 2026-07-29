@@ -323,15 +323,28 @@ export default function MasterProductsPage() {
     }
   };
 
-  const handleAdjustStock = async (branchInfo: BranchStockInfo, inventoryItemId: string, newStock: number, notes: string): Promise<boolean> => {
+  const handleAdjustStock = async (
+    branchInfo: BranchStockInfo,
+    inventoryItemId: string,
+    newStock: number,
+    notes: string,
+    unitCost: number,
+  ): Promise<boolean> => {
     if (newStock < 0) { showToast.error('Stok tidak boleh negatif'); return false; }
     const adjustment = newStock - branchInfo.stock;
     if (adjustment === 0) { showToast.error('Tidak ada perubahan stok'); return false; }
+    if (!notes.trim()) { showToast.error('Catatan perubahan stok wajib diisi'); return false; }
+    if (!Number.isFinite(unitCost) || unitCost <= 0) { showToast.error('Harga pokok harus lebih dari 0'); return false; }
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/items/${inventoryItemId}/adjust-stock`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ adjustment, notes: notes || undefined }),
+        body: JSON.stringify({
+          idempotencyKey: crypto.randomUUID(),
+          adjustment,
+          unitCost,
+          notes: notes.trim(),
+        }),
       });
       if (!response.ok) {
         const err = await response.json();
@@ -965,7 +978,13 @@ function ProductModal({ formData, setFormData, editingProduct, submitting, onClo
 function StockEditModal({ product, onClose, onAdjust }: {
   product: MasterProduct;
   onClose: () => void;
-  onAdjust: (branchInfo: BranchStockInfo, inventoryItemId: string, newStock: number, notes: string) => Promise<boolean>;
+  onAdjust: (
+    branchInfo: BranchStockInfo,
+    inventoryItemId: string,
+    newStock: number,
+    notes: string,
+    unitCost: number,
+  ) => Promise<boolean>;
 }) {
   const [unitMode, setUnitMode] = useState<'base' | 'usage'>('base');
   const [drafts, setDrafts] = useState<Record<string, string>>(() => {
@@ -974,6 +993,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
     return initial;
   });
   const [notes, setNotes] = useState('');
+  const [unitCost, setUnitCost] = useState('');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const currentUnit = unitMode === 'base' ? product.baseUnit : product.usageUnit;
 
@@ -992,8 +1012,17 @@ function StockEditModal({ product, onClose, onAdjust }: {
     const draftStr = drafts[b.inventoryItemId];
     const newStock = Number(draftStr);
     if (Number.isNaN(newStock)) return;
+    const unitCostNumber = Number(unitCost);
+    if (!notes.trim()) {
+      showToast.error('Catatan perubahan stok wajib diisi');
+      return;
+    }
+    if (!Number.isFinite(unitCostNumber) || unitCostNumber <= 0) {
+      showToast.error('Harga pokok harus lebih dari 0');
+      return;
+    }
     setSubmitting(b.inventoryItemId);
-    const ok = await onAdjust(b, b.inventoryItemId, newStock, notes);
+    const ok = await onAdjust(b, b.inventoryItemId, newStock, notes, unitCostNumber);
     setSubmitting(null);
     if (ok) setDrafts(prev => ({ ...prev, [b.inventoryItemId]: String(newStock) }));
   };
@@ -1018,9 +1047,22 @@ function StockEditModal({ product, onClose, onAdjust }: {
           </div>
 
           <div className={styles.formGroup}>
-            <label>Catatan (opsional)</label>
+            <label>Catatan <span className={styles.required}>*</span></label>
             <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Mis: Stok masuk dari supplier, koreksi inventory bulanan, dll" />
             <p className={styles.hint}>Catatan ini akan menempel ke setiap perubahan stok yang Anda simpan.</p>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label>Harga Pokok per {product.baseUnit} (Rp) <span className={styles.required}>*</span></label>
+            <input
+              type="number"
+              min="0.0001"
+              step="0.0001"
+              value={unitCost}
+              onChange={(e) => setUnitCost(e.target.value)}
+              placeholder="Mis: 25000"
+            />
+            <p className={styles.hint}>Digunakan untuk valuasi persediaan dan jurnal koreksi stok.</p>
           </div>
 
           <div className={styles.stockEditHeader}>
@@ -1090,7 +1132,11 @@ function StockEditModal({ product, onClose, onAdjust }: {
                   <div className={styles.stockEditUsage}>
                     {b.sessionUsageCount > 0 ? <span className={styles.stockGreen}><Zap size={14} /> {b.sessionUsageCount}x</span> : <span>—</span>}
                   </div>
-                  <button onClick={() => handleSave(b)} disabled={!isDirty || isLoadingThis} className={styles.stockEditSaveBtn}>
+                  <button
+                    onClick={() => handleSave(b)}
+                    disabled={!isDirty || isLoadingThis || !notes.trim() || !unitCost || Number(unitCost) <= 0}
+                    className={styles.stockEditSaveBtn}
+                  >
                     {isLoadingThis ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan
                   </button>
                 </div>

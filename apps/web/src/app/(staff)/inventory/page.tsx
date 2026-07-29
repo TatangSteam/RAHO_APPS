@@ -68,6 +68,7 @@ export default function InventoryPage() {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [adjustment, setAdjustment] = useState('');
+  const [unitCost, setUnitCost] = useState('');
   const [reason, setReason] = useState('');
   const [adjusting, setAdjusting] = useState(false);
   const [conversionFactor, setConversionFactor] = useState('');
@@ -75,7 +76,7 @@ export default function InventoryPage() {
   // Check if user can access stock requests and shipments
   const canAccessStockRequests = user?.role && ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user.role);
   
-  const canEditStock = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canEditStock = user?.role === 'SUPER_ADMIN';
   
   // Check if user can select branches (Super Admin or Admin Manager)
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
@@ -203,12 +204,13 @@ export default function InventoryPage() {
 
   const handleOpenEditModal = (item: InventoryItem) => {
     if (!canEditStock) {
-      showToast.error('Hanya Admin Manager atau Super Admin yang dapat mengedit stok');
+      showToast.error('Hanya Super Admin yang dapat mengedit stok secara langsung');
       return;
     }
 
     setSelectedItem(item);
     setAdjustment('');
+    setUnitCost('');
     setReason('');
     setConversionFactor(item.masterProduct.conversionFactor.toString());
     setEditModalOpen(true);
@@ -218,6 +220,7 @@ export default function InventoryPage() {
     setEditModalOpen(false);
     setSelectedItem(null);
     setAdjustment('');
+    setUnitCost('');
     setReason('');
     setConversionFactor('');
   };
@@ -233,6 +236,12 @@ export default function InventoryPage() {
 
     if (!reason.trim()) {
       showToast.error('Alasan penyesuaian harus diisi');
+      return;
+    }
+
+    const unitCostNum = parseFloat(unitCost);
+    if (isNaN(unitCostNum) || unitCostNum <= 0) {
+      showToast.error('Harga pokok per satuan harus lebih dari 0');
       return;
     }
 
@@ -262,7 +271,9 @@ export default function InventoryPage() {
       }
       
       await inventoryApi.adjustStock(selectedItem.id, {
+        idempotencyKey: crypto.randomUUID(),
         adjustment: adjustmentNum,
+        unitCost: unitCostNum,
         notes: reason.trim(),
       });
 
@@ -322,6 +333,8 @@ export default function InventoryPage() {
     const hasSeparateUsageUnit = selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit;
     const conversionFactorNum = parseFloat(conversionFactor);
     const conversionInvalid = hasSeparateUsageUnit && (isNaN(conversionFactorNum) || conversionFactorNum <= 0);
+    const unitCostNum = parseFloat(unitCost);
+    const unitCostInvalid = isNaN(unitCostNum) || unitCostNum <= 0;
 
     const modalContent = (
       <div className="fixed inset-0 z-[9999] overflow-hidden">
@@ -408,6 +421,28 @@ export default function InventoryPage() {
                 />
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                  Harga Pokok per {selectedItem.stockInfo.baseUnit} (Rp) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="0.0001"
+                  step="0.0001"
+                  value={unitCost}
+                  onChange={(e) => setUnitCost(e.target.value)}
+                  placeholder="Contoh: 25000"
+                  className={`w-full px-4 py-3 text-sm rounded-xl border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 transition-all ${
+                    unitCost && unitCostInvalid
+                      ? 'border-red-500 focus:ring-red-500'
+                      : 'border-neutral-300 dark:border-neutral-600 focus:ring-blue-500'
+                  }`}
+                />
+                <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                  Digunakan untuk valuasi persediaan dan jurnal penyesuaian.
+                </p>
+              </div>
+
               {/* Reason */}
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
@@ -460,7 +495,7 @@ export default function InventoryPage() {
               </button>
               <button
                 onClick={handleAdjustStock}
-                disabled={adjusting || !hasValidAdjustment || !reason.trim() || wouldBeNegative || conversionInvalid}
+                disabled={adjusting || !hasValidAdjustment || !reason.trim() || unitCostInvalid || wouldBeNegative || conversionInvalid}
                 className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:from-blue-600 hover:to-blue-700 shadow-lg shadow-blue-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 {adjusting ? (

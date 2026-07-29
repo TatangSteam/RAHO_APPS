@@ -5,6 +5,7 @@ import {
   countStockOpnameSchema,
   completeMultiBagUsageSchema,
   createAdjustmentSchema,
+  directStockAdjustmentSchema,
   listInventoryControlSchema,
   startStockOpnameSchema,
   resolveDiscrepancySchema,
@@ -15,6 +16,7 @@ import {
   countStockOpname,
   createAdjustment,
   decideAdjustment,
+  directAdjustStock,
   decideStockOpname,
   listAdjustmentReasons,
   listAdjustments,
@@ -41,6 +43,18 @@ export class InventoryControlController {
 
   createAdjustment(req: Request, res: Response, next: NextFunction) {
     return this.run(() => createAdjustment(req.user!.userId, createAdjustmentSchema.parse(req.body)), res, next, 201);
+  }
+
+  directAdjustStock(req: Request, res: Response, next: NextFunction) {
+    return this.run(
+      () => directAdjustStock(
+        req.user!.userId,
+        req.params.itemId,
+        directStockAdjustmentSchema.parse(req.body),
+      ),
+      res,
+      next,
+    );
   }
 
   submitAdjustment(req: Request, res: Response, next: NextFunction) {

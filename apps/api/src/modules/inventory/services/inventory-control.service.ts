@@ -3,7 +3,9 @@ import {
   ApprovalInstanceStatus,
   InventoryAdjustmentDirection,
   InventoryAdjustmentStatus,
+  InventoryValuationStatus,
   Prisma,
+  Role,
   StockOpnameResolution,
   StockOpnameStatus,
 } from '@prisma/client';
@@ -21,6 +23,7 @@ import type {
   AdjustmentDecisionInput,
   CountStockOpnameInput,
   CreateAdjustmentInput,
+  DirectStockAdjustmentInput,
   InventoryControlListQuery,
   StartStockOpnameInput,
 } from '../inventory-control.schema';
@@ -380,6 +383,244 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
     afterData: { status: 'POSTED', journalEntryId: journal.journal.id, totalPostedValue: posted.totalPostedValue },
   } });
   return posted;
+}
+
+/**
+ * Super Admin emergency/direct stock correction.
+ *
+ * The document deliberately bypasses maker-checker approval, but still uses the
+ * authoritative adjustment posting flow so balances, FIFO layers, mutations,
+ * audit logs, and accounting journals remain synchronized.
+ */
+export async function directAdjustStock(
+  userId: string,
+  inventoryItemId: string,
+  input: DirectStockAdjustmentInput,
+) {
+  const [actor, candidate] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { role: true, isActive: true } }),
+    prisma.inventoryItem.findUnique({
+      where: { id: inventoryItemId },
+      select: { branchId: true, branch: { select: { isActive: true } } },
+    }),
+  ]);
+  if (!actor?.isActive || actor.role !== Role.SUPER_ADMIN) {
+    throw errors.forbidden('Perubahan stok langsung hanya dapat dilakukan oleh Super Admin.');
+  }
+  if (!candidate) throw errors.notFound('Item inventori tidak ditemukan.');
+  if (!candidate.branch.isActive) {
+    throw errors.unprocessable('BRANCH_INACTIVE', 'Stok tidak dapat diedit karena cabang sudah tidak aktif.');
+  }
+
+  await assertBranchAccess(userId, candidate.branchId);
+  await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_CREATE, candidate.branchId);
+  await assertPermission(userId, PERMISSIONS.INVENTORY_ADJUSTMENT_POST, candidate.branchId);
+  await assertPermission(userId, PERMISSIONS.INVENTORY_POST, candidate.branchId);
+
+  const payloadHash = hash({ inventoryItemId, ...input });
+  return prisma.$transaction(async (tx) => {
+    const replay = await tx.inventoryAdjustment.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+      include: adjustmentInclude,
+    });
+    if (replay) {
+      if (replay.payloadHash !== payloadHash) {
+        throw errors.conflict('ADJUSTMENT_KEY_REUSED', 'Idempotency key digunakan untuk payload berbeda.');
+      }
+      return { adjustment: replay, idempotentReplay: true, direct: true };
+    }
+
+    const item = await tx.inventoryItem.findUnique({
+      where: { id: inventoryItemId },
+      include: { masterProduct: true, branch: true },
+    });
+    if (!item) throw errors.notFound('Item inventori tidak ditemukan.');
+    if (!item.branch.isActive) {
+      throw errors.unprocessable('BRANCH_INACTIVE', 'Stok tidak dapat diedit karena cabang sudah tidak aktif.');
+    }
+
+    if (item.masterProduct.tracksBatch && !input.batchId) {
+      throw errors.badRequest(
+        'DIRECT_ADJUSTMENT_BATCH_REQUIRED',
+        `Batch wajib dipilih untuk ${item.masterProduct.name}. Gunakan halaman Adjustment & Opname untuk memilih batch.`,
+      );
+    }
+
+    const balances = await tx.inventoryBalance.findMany({
+      where: { inventoryItemId },
+      include: {
+        stockLocation: { include: { warehouse: true } },
+      },
+      orderBy: [{ stockLocationId: 'asc' }, { batchKey: 'asc' }],
+    });
+    const activeBalance = balances.find((balance) => (
+      balance.stockLocation.isActive
+      && balance.stockLocation.warehouse.isActive
+      && balance.stockLocation.warehouse.branchId === item.branchId
+      && (!input.batchId || balance.batchId === input.batchId)
+    ));
+    const preferredLocationId = input.stockLocationId || item.stockLocationId || activeBalance?.stockLocationId;
+    let location = preferredLocationId
+      ? await tx.stockLocation.findUnique({ where: { id: preferredLocationId }, include: { warehouse: true } })
+      : null;
+    if (
+      !location?.isActive
+      || !location.warehouse.isActive
+      || location.warehouse.branchId !== item.branchId
+    ) {
+      location = await tx.stockLocation.findFirst({
+        where: {
+          isActive: true,
+          warehouse: { branchId: item.branchId, isActive: true },
+        },
+        include: { warehouse: true },
+        orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      });
+    }
+    if (!location) {
+      throw errors.badRequest(
+        'WAREHOUSE_REQUIRED',
+        'Cabang belum memiliki warehouse dan lokasi stok aktif. Siapkan warehouse terlebih dahulu.',
+      );
+    }
+
+    const mirrorQty = new Prisma.Decimal(item.stock);
+    const balanceQty = balances.reduce(
+      (sum, balance) => sum.add(balance.onHandQty),
+      new Prisma.Decimal(0),
+    );
+    if (balances.length > 0 && !balanceQty.equals(mirrorQty)) {
+      throw errors.conflict(
+        'INVENTORY_RECONCILIATION_REQUIRED',
+        `Saldo ledger (${balanceQty.toFixed(4)}) berbeda dari stok item (${mirrorQty.toFixed(4)}). Jalankan rekonsiliasi sebelum mengubah stok.`,
+      );
+    }
+
+    const directUnitCost = new Prisma.Decimal(input.unitCost);
+    let bootstrappedLegacyStock = false;
+    if (balances.length === 0 && mirrorQty.greaterThan(0)) {
+      const batchKey = input.batchId || 'NO_BATCH';
+      const balance = await tx.inventoryBalance.create({
+        data: {
+          inventoryItemId: item.id,
+          stockLocationId: location.id,
+          masterProductId: item.masterProductId,
+          branchId: item.branchId,
+          batchId: input.batchId,
+          batchKey,
+          onHandQty: mirrorQty,
+        },
+      });
+      await tx.inventoryCostLayer.create({
+        data: {
+          inventoryBalanceId: balance.id,
+          batchId: input.batchId,
+          sourceType: 'DIRECT_STOCK_BOOTSTRAP',
+          sourceId: item.id,
+          originalQty: mirrorQty,
+          remainingQty: mirrorQty,
+          unitCost: directUnitCost,
+          currency: 'IDR',
+          valuationStatus: InventoryValuationStatus.VALUED,
+          receivedAt: new Date(),
+        },
+      });
+      bootstrappedLegacyStock = true;
+    }
+
+    const locationBalanceIds = await tx.inventoryBalance.findMany({
+      where: {
+        inventoryItemId: item.id,
+        stockLocationId: location.id,
+        ...(input.batchId ? { batchId: input.batchId } : {}),
+      },
+      select: { id: true },
+    });
+    const valuedLegacyLayers = locationBalanceIds.length === 0
+      ? { count: 0 }
+      : await tx.inventoryCostLayer.updateMany({
+        where: {
+          inventoryBalanceId: { in: locationBalanceIds.map((balance) => balance.id) },
+          valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+          unitCost: null,
+          isVoided: false,
+        },
+        data: {
+          unitCost: directUnitCost,
+          valuationStatus: InventoryValuationStatus.VALUED,
+        },
+      });
+
+    if (item.stockLocationId !== location.id || item.warehouseId !== location.warehouseId) {
+      await tx.inventoryItem.update({
+        where: { id: item.id },
+        data: { warehouseId: location.warehouseId, stockLocationId: location.id },
+      });
+    }
+
+    const adjustment = new Prisma.Decimal(input.adjustment);
+    const normalized: CreateAdjustmentInput = {
+      idempotencyKey: input.idempotencyKey,
+      branchId: item.branchId,
+      stockLocationId: location.id,
+      reasonCode: input.reasonCode,
+      description: input.notes,
+      submit: true,
+      lines: [{
+        inventoryItemId: item.id,
+        batchId: input.batchId,
+        direction: adjustment.greaterThan(0) ? 'IN' : 'OUT',
+        quantity: adjustment.abs().toFixed(4),
+        unitCost: adjustment.greaterThan(0) ? directUnitCost.toFixed(4) : undefined,
+        notes: input.notes,
+      }],
+    };
+    const validated = await validateAdjustmentLines(tx, normalized);
+    const now = new Date();
+    const document = await tx.inventoryAdjustment.create({
+      data: {
+        adjustmentNumber: documentNumber('ADJ-DIRECT'),
+        idempotencyKey: input.idempotencyKey,
+        payloadHash,
+        branchId: item.branchId,
+        stockLocationId: location.id,
+        reasonCode: validated.reason.code,
+        status: InventoryAdjustmentStatus.APPROVED,
+        description: input.notes,
+        totalEstimatedValue: validated.total,
+        sourceType: 'SUPER_ADMIN_DIRECT',
+        submittedAt: now,
+        approvedAt: now,
+        approvedBy: userId,
+        createdBy: userId,
+        lines: { create: validated.lines },
+      },
+      include: adjustmentInclude,
+    });
+    await tx.auditLog.create({ data: {
+      userId,
+      branchId: item.branchId,
+      action: 'CREATE',
+      module: 'INVENTORY',
+      resource: 'InventoryAdjustment',
+      resourceId: document.id,
+      entityType: 'InventoryAdjustment',
+      entityId: document.id,
+      entityCode: document.adjustmentNumber,
+      description: `Adjustment langsung ${document.adjustmentNumber} dibuat dan disetujui oleh Super Admin.`,
+      afterData: {
+        status: document.status,
+        direct: true,
+        adjustment: input.adjustment,
+        unitCost: input.unitCost,
+        stockLocationId: location.id,
+        bootstrappedLegacyStock,
+        valuedLegacyLayers: valuedLegacyLayers.count,
+      },
+    } });
+    const posted = await postAdjustmentInTransaction(tx, document.id, userId);
+    return { adjustment: posted, idempotentReplay: false, direct: true };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 
 export async function postAdjustment(userId: string, adjustmentId: string) {

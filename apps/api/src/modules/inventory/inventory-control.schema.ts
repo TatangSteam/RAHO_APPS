@@ -6,6 +6,13 @@ const nonNegativeQuantity = z.union([z.string(), z.number()]).transform(String)
   .refine((value) => /^\d+(?:\.\d{1,4})?$/.test(value), 'Quantity harus non-negatif dengan maksimal 4 desimal.');
 const unitCost = z.union([z.string(), z.number()]).transform(String)
   .refine((value) => /^\d+(?:\.\d{1,4})?$/.test(value) && Number(value) >= 0, 'Unit cost tidak valid.');
+const positiveUnitCost = z.union([z.string(), z.number()]).transform(String)
+  .refine((value) => /^\d+(?:\.\d{1,4})?$/.test(value) && Number(value) > 0, 'Harga pokok harus lebih dari 0 dengan maksimal 4 desimal.');
+const signedAdjustment = z.union([z.string(), z.number()]).transform(String)
+  .refine(
+    (value) => /^-?\d+(?:\.\d{1,4})?$/.test(value) && Number(value) !== 0,
+    'Penyesuaian stok harus bukan 0 dengan maksimal 4 desimal.',
+  );
 
 export const createAdjustmentSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
@@ -27,6 +34,16 @@ export const createAdjustmentSchema = z.object({
 export const adjustmentDecisionSchema = z.object({
   decision: z.enum(['APPROVE', 'REJECT']),
   note: z.string().trim().min(3).max(500),
+});
+
+export const directStockAdjustmentSchema = z.object({
+  idempotencyKey: z.string().trim().min(8).max(160),
+  adjustment: signedAdjustment,
+  unitCost: positiveUnitCost,
+  notes: z.string().trim().min(3).max(500),
+  stockLocationId: z.string().trim().min(1).optional(),
+  batchId: z.string().trim().min(1).optional(),
+  reasonCode: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()).default('OTHER'),
 });
 
 export const listInventoryControlSchema = z.object({
@@ -79,6 +96,7 @@ export const completeMultiBagUsageSchema = z.object({
 
 export type CreateAdjustmentInput = z.infer<typeof createAdjustmentSchema>;
 export type AdjustmentDecisionInput = z.infer<typeof adjustmentDecisionSchema>;
+export type DirectStockAdjustmentInput = z.infer<typeof directStockAdjustmentSchema>;
 export type InventoryControlListQuery = z.infer<typeof listInventoryControlSchema>;
 export type StartStockOpnameInput = z.infer<typeof startStockOpnameSchema>;
 export type CountStockOpnameInput = z.infer<typeof countStockOpnameSchema>;

@@ -114,7 +114,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Stok',
         href: '/inventory',
         icon: <Boxes size={20} />,
-        roles: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
+        roles: ['SUPER_ADMIN', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],
       },
       {
         label: 'Mutasi Stok',

@@ -727,9 +727,17 @@ export const inventoryApi = {
   },
 
   /**
-   * Adjust stock (Admin Cabang / Admin Manager / Super Admin)
+   * Direct, audited stock adjustment (Super Admin only).
    */
-  adjustStock: (itemId: string, data: { adjustment: number; notes: string }) => {
+  adjustStock: (itemId: string, data: {
+    idempotencyKey: string;
+    adjustment: number;
+    unitCost: number;
+    notes: string;
+    stockLocationId?: string;
+    batchId?: string;
+    reasonCode?: string;
+  }) => {
     return api.patch(`/inventory/items/${itemId}/adjust-stock`, data);
   },
 

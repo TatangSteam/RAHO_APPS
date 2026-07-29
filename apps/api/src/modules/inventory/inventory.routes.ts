@@ -282,12 +282,12 @@ router.get(
   inventoryController.getLowStockItems.bind(inventoryController)
 );
 
-// Adjust stock (SUPER_ADMIN or ADMIN_MANAGER)
+// Direct stock adjustment is an audited, immediately posted Super Admin action.
 router.patch(
   '/items/:itemId/adjust-stock',
   authenticate,
-  authorize(MANAGER_ROLES),
-  inventoryController.adjustStock.bind(inventoryController)
+  authorize(superAdminOnly),
+  inventoryControlController.directAdjustStock.bind(inventoryControlController)
 );
 
 // ============================================================
