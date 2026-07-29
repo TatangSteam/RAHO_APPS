@@ -45,6 +45,13 @@ router.get('/retainers', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controll
 router.get('/retainers/config', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.retainerConfig);
 router.put('/retainers/config/account', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.mapRetainerAccount);
 router.post('/retainers/reconcile/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.reconcileRetainers);
+router.get('/expenses', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.expenses);
+router.get('/expenses/config', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.expenseConfig);
+router.put('/expenses/config/account', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.mapExpenseAccount);
+router.put('/expenses/config/paid-through', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.mapExpensePaidThrough);
+router.get('/expenses/:id/preview', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.previewExpense);
+router.post('/expenses/:id/enqueue', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.enqueueExpense);
+router.post('/expenses/reconcile/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.reconcileExpenses);
 router.get('/connect', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.connect);
 router.post('/test', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.test);
 router.post('/organizations/:id/activate', requirePermission(PERMISSIONS.ZOHO_CONNECTION_MANAGE), controller.activate);

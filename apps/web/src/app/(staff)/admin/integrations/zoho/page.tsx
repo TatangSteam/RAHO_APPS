@@ -18,6 +18,7 @@ import {
   Loader2,
   MapPinned,
   PlugZap,
+  ReceiptText,
   RefreshCw,
   RotateCcw,
   Unplug,
@@ -28,7 +29,7 @@ import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers';
+type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 
 type Connection = {
@@ -48,6 +49,7 @@ type Connection = {
   locationSyncReady: boolean;
   invoiceSyncReady: boolean;
   paymentSyncReady: boolean;
+  expenseSyncReady: boolean;
   locationsSupported: boolean | null;
   locationsCapabilityError: string | null;
 };
@@ -340,6 +342,63 @@ type RetainerReconciliation = {
   }>;
 };
 
+type ExpenseMappingRow = {
+  id: string;
+  expenseNumber: string;
+  branch: { branchCode: string; name: string };
+  expenseDate: string;
+  paidAt: string | null;
+  status: string;
+  category: string;
+  description: string;
+  amount: string;
+  expenseAccount: { code: string; name: string };
+  cashBankAccount: { id: string; code: string; name: string };
+  hasEvidence: boolean;
+  mapping: { zohoEntityId: string; status: string; metadata?: Record<string, unknown> } | null;
+  event: { id: string; status: EventStatus; lastError: string | null } | null;
+};
+type ExpenseData = {
+  items: ExpenseMappingRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type ExpenseConfig = {
+  expenseAccounts: Array<{
+    id: string;
+    code: string;
+    name: string;
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  cashBankAccounts: Array<{
+    id: string;
+    code: string;
+    name: string;
+    branch: { branchCode: string; name: string };
+    mapping: { zohoEntityId: string } | null;
+  }>;
+  zohoAccounts: DiscoveryItem[];
+  zohoBankAccounts: DiscoveryItem[];
+};
+type ExpensePreview = {
+  snapshot: { expenseNumber: string; externalKey: string; amount: string };
+  payload: unknown;
+  issues: string[];
+  liveReady: boolean;
+  excludedFields: string[];
+  reversalPolicy: string;
+};
+type ExpenseReconciliation = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    expenseId: string;
+    expenseNumber: string;
+    result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; reasons: string[] };
+  }>;
+};
+
 const eventStatuses: Array<EventStatus | ''> = [
   '',
   'PENDING',
@@ -409,6 +468,11 @@ export default function ZohoIntegrationPage() {
   const [retainerConfig, setRetainerConfig] = useState<RetainerConfig | null>(null);
   const [retainerSearch, setRetainerSearch] = useState('');
   const [retainerReconciliation, setRetainerReconciliation] = useState<RetainerReconciliation | null>(null);
+  const [expenses, setExpenses] = useState<ExpenseData | null>(null);
+  const [expenseConfig, setExpenseConfig] = useState<ExpenseConfig | null>(null);
+  const [expenseSearch, setExpenseSearch] = useState('');
+  const [expensePreview, setExpensePreview] = useState<ExpensePreview | null>(null);
+  const [expenseReconciliation, setExpenseReconciliation] = useState<ExpenseReconciliation | null>(null);
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -490,6 +554,17 @@ export default function ZohoIntegrationPage() {
     setRetainerConfig(config.data.data);
   }, [retainerSearch]);
 
+  const loadExpenses = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: ExpenseData }>('/integrations/zoho/expenses', {
+        params: { limit: 50, ...(expenseSearch.trim() ? { search: expenseSearch.trim() } : {}) },
+      }),
+      api.get<{ data: ExpenseConfig }>('/integrations/zoho/expenses/config'),
+    ]);
+    setExpenses(rows.data.data);
+    setExpenseConfig(config.data.data);
+  }, [expenseSearch]);
+
   useEffect(() => {
     if (user && !['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'].includes(user.role)) router.replace('/dashboard');
   }, [router, user]);
@@ -508,7 +583,8 @@ export default function ZohoIntegrationPage() {
     if (tab === 'invoices') void loadInvoices().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat invoice Zoho.')));
     if (tab === 'payments') void loadPayments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat pembayaran Zoho.')));
     if (tab === 'retainers') void loadRetainers().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Retainer & omzet terapi.')));
-  }, [loadContacts, loadDiscovery, loadInvoices, loadMasters, loadPayments, loadQueue, loadRetainers, tab]);
+    if (tab === 'expenses') void loadExpenses().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Expense Zoho.')));
+  }, [loadContacts, loadDiscovery, loadExpenses, loadInvoices, loadMasters, loadPayments, loadQueue, loadRetainers, tab]);
 
   useEffect(() => {
     const result = searchParams.get('zoho');
@@ -873,6 +949,62 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
+  async function saveExpenseAccountMapping(accountCode: string, zohoAccountId: string) {
+    if (!zohoAccountId) return;
+    setAction(`expense-account-${accountCode}`);
+    try {
+      await api.put('/integrations/zoho/expenses/config/account', { accountCode, zohoAccountId });
+      toast.success(`Akun beban ${accountCode} berhasil dipetakan.`);
+      await loadExpenses();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping akun beban gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function saveExpensePaidThroughMapping(cashBankAccountId: string, zohoAccountId: string) {
+    if (!zohoAccountId) return;
+    setAction(`expense-paid-through-${cashBankAccountId}`);
+    try {
+      await api.put('/integrations/zoho/expenses/config/paid-through', { cashBankAccountId, zohoAccountId });
+      toast.success('Akun paid-through berhasil dipetakan.');
+      await loadExpenses();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Mapping paid-through gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewExpenseRow(row: ExpenseMappingRow) {
+    setAction(`expense-preview-${row.id}`);
+    try {
+      const response = await api.get<{ data: ExpensePreview }>(`/integrations/zoho/expenses/${row.id}/preview`);
+      setExpensePreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview expense gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueExpenseRow(row: ExpenseMappingRow) {
+    setAction(`expense-sync-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/expenses/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Expense masuk antrean dry-run.' : 'Expense masuk antrean sinkronisasi.');
+      await loadExpenses();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Expense gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runExpenseReconciliation() {
+    setAction('expense-reconcile');
+    try {
+      const response = await api.post<{ data: ExpenseReconciliation }>('/integrations/zoho/expenses/reconcile/run');
+      setExpenseReconciliation(response.data.data);
+      toast.success('Rekonsiliasi expense selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi expense gagal.'));
+    } finally { setAction(null); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -898,6 +1030,7 @@ export default function ZohoIntegrationPage() {
           ['invoices', 'Sales Invoice', FileText],
           ['payments', 'Pembayaran & Piutang', CreditCard],
           ['retainers', 'Retainer & Omzet Terapi', Landmark],
+          ['expenses', 'Expense', ReceiptText],
         ] as const).map(([value, label, Icon]) => (
           <button
             key={value}
@@ -1002,6 +1135,11 @@ export default function ZohoIntegrationPage() {
                         {!connection.paymentSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Customer Payment/refund belum siap: hubungkan ulang untuk scope pembayaran Sprint 6.
+                          </p>
+                        )}
+                        {!connection.expenseSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Expense belum siap: hubungkan ulang untuk scope expense Sprint 8.
                           </p>
                         )}
                         {connection.lastError && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
@@ -1682,6 +1820,164 @@ export default function ZohoIntegrationPage() {
         </div>
       )}
 
+      {tab === 'expenses' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div>
+              <h2 className="font-semibold">Mapping Expense</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Expense hanya dikirim setelah PAID. Akun beban dan rekening paid-through wajib dipetakan sebelum worker menulis ke Zoho.
+              </p>
+            </div>
+            <div className="mt-4 grid gap-5 lg:grid-cols-2">
+              <div>
+                <p className="mb-2 text-sm font-semibold">Akun beban ERP → Zoho</p>
+                <div className="max-h-72 space-y-2 overflow-auto">
+                  {expenseConfig?.expenseAccounts.map((account) => (
+                    <label key={account.id} className="grid gap-1 rounded-lg border p-3 text-xs dark:border-neutral-700">
+                      <span className="font-semibold">{account.code} · {account.name}</span>
+                      <select
+                        value={account.mapping?.zohoEntityId || ''}
+                        disabled={!!action}
+                        onChange={(event) => void saveExpenseAccountMapping(account.code, event.target.value)}
+                        className="rounded border bg-transparent px-2 py-2 dark:border-neutral-700"
+                      >
+                        <option value="">Belum dipetakan</option>
+                        {expenseConfig.zohoAccounts.map((entry) => (
+                          <option key={entry.zohoId} value={entry.zohoId}>
+                            {entry.code ? `${entry.code} · ` : ''}{entry.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm font-semibold">Kas/bank ERP → Paid-through Zoho</p>
+                <div className="max-h-72 space-y-2 overflow-auto">
+                  {expenseConfig?.cashBankAccounts.map((account) => (
+                    <label key={account.id} className="grid gap-1 rounded-lg border p-3 text-xs dark:border-neutral-700">
+                      <span className="font-semibold">{account.branch.branchCode} · {account.code} · {account.name}</span>
+                      <select
+                        value={account.mapping?.zohoEntityId || ''}
+                        disabled={!!action}
+                        onChange={(event) => void saveExpensePaidThroughMapping(account.id, event.target.value)}
+                        className="rounded border bg-transparent px-2 py-2 dark:border-neutral-700"
+                      >
+                        <option value="">Belum dipetakan</option>
+                        {expenseConfig.zohoBankAccounts.map((entry) => (
+                          <option key={entry.zohoId} value={entry.zohoId}>
+                            {entry.code ? `${entry.code} · ` : ''}{entry.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Kontrol Expense RAHO → Zoho</h2>
+                <p className="text-sm text-neutral-500">{expenses?.pagination.total || 0} expense · receipt diunggah terpisah agar retry tidak menggandakan expense.</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={expenseSearch}
+                  onChange={(event) => setExpenseSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadExpenses(); }}
+                  placeholder="Cari nomor/kategori"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadExpenses()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runExpenseReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={status?.dryRun ? 'Matikan dry-run untuk rekonsiliasi live.' : undefined}
+                >
+                  Rekonsiliasi
+                </button>
+              </div>
+            </div>
+
+            {expenseReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {expenseReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {expenseReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {expenseReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {expenseReconciliation.missing}</span>
+                </div>
+                {expenseReconciliation.rows.filter((row) => row.result.status !== 'MATCHED').map((row) => (
+                  <p key={row.expenseId} className="mt-1 text-xs"><strong>{row.expenseNumber}</strong>: {row.result.reasons.join(' ')}</p>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Expense</th>
+                    <th className="p-3">Akun</th>
+                    <th className="p-3">Nominal</th>
+                    <th className="p-3">Zoho / Receipt</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenses?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.expenseNumber}</span>
+                        <span className="block text-xs text-neutral-500">{row.branch.branchCode} · {new Date(row.expenseDate).toLocaleDateString('id-ID')}</span>
+                        <span className="block text-xs">{row.category} · {row.status}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="block">{row.expenseAccount.code} · {row.expenseAccount.name}</span>
+                        <span className="block text-neutral-500">{row.cashBankAccount.code} · {row.cashBankAccount.name}</span>
+                      </td>
+                      <td className="p-3 font-mono">IDR {Number(row.amount).toLocaleString('id-ID')}</td>
+                      <td className="p-3 text-xs">
+                        {row.mapping ? (
+                          <>
+                            <span className="block font-mono">{row.mapping.zohoEntityId}</span>
+                            <span className="text-emerald-600">{row.mapping.status}</span>
+                            <span className="block">Receipt: {String(row.mapping.metadata?.receiptStatus || (row.hasEvidence ? 'PENDING' : 'NOT_PROVIDED'))}</span>
+                          </>
+                        ) : <span className="text-amber-700">Belum tersinkron</span>}
+                        {row.event && <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>{row.event.status}</span>}
+                        {row.event?.lastError && <span className="mt-1 block text-red-600">{row.event.lastError}</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-wrap gap-2">
+                          {row.status === 'PAID' && (
+                            <>
+                              <button onClick={() => void previewExpenseRow(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Preview</button>
+                              <button onClick={() => void enqueueExpenseRow(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                                {status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!expenses?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada expense.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
       {tab === 'retainers' && (
         <div className="space-y-5">
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
@@ -1969,6 +2265,34 @@ export default function ZohoIntegrationPage() {
             </pre>
             <div className="mt-5 flex justify-end">
               <button onClick={() => setPaymentPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {expensePreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setExpensePreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview expense: {expensePreview.snapshot.expenseNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{expensePreview.snapshot.externalKey}</p>
+            {!!expensePreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {expensePreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Expense Zoho</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {expensePreview.payload ? JSON.stringify(expensePreview.payload, null, 2) : 'Payload diblok sampai mapping lengkap.'}
+            </pre>
+            <p className="mt-4 text-sm font-semibold">Receipt</p>
+            <p className="mt-1 text-xs text-neutral-600">File dikirim sebagai multipart terpisah; URL internal tidak pernah masuk description/payload.</p>
+            <p className="mt-4 text-sm font-semibold">Kebijakan reversal</p>
+            <p className="mt-1 text-xs text-neutral-600">{expensePreview.reversalPolicy}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setExpensePreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
             </div>
           </div>
         </div>

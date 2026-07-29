@@ -25,6 +25,7 @@ import {
   handleTreatmentCancellation,
   handleTreatmentCompleted,
 } from './zoho.retainer.service';
+import { EXPENSE_PAID_EVENT, handleExpensePaid } from './zoho.expense.service';
 
 let registered = false;
 
@@ -42,5 +43,6 @@ export function registerZohoHandlers(): void {
   registerZohoEventHandler(PAYMENT_REFUNDED_EVENT, handlePaymentEvent);
   registerZohoEventHandler('TREATMENT_COMPLETED', handleTreatmentCompleted);
   registerZohoEventHandler('TREATMENT_COMPLETION_CANCELLED', handleTreatmentCancellation);
+  registerZohoEventHandler(EXPENSE_PAID_EVENT, handleExpensePaid);
   registered = true;
 }

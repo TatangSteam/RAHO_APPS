@@ -102,7 +102,7 @@ describe('Zoho Sprint 3 contact matching', () => {
   });
 
   it('requests the official contact write scopes in scope version 4', () => {
-    expect(ZOHO_SCOPE_VERSION).toBe(7);
+    expect(ZOHO_SCOPE_VERSION).toBe(8);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.contacts.READ',
       'ZohoBooks.contacts.CREATE',

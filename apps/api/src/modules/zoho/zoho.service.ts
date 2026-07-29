@@ -176,6 +176,9 @@ export async function getStatus() {
         paymentSyncReady: !missingScopes.includes('ZohoBooks.customerpayments.CREATE')
           && !missingScopes.includes('ZohoBooks.customerpayments.UPDATE')
           && !missingScopes.includes('ZohoBooks.invoices.DELETE'),
+        expenseSyncReady: !missingScopes.includes('ZohoBooks.expenses.READ')
+          && !missingScopes.includes('ZohoBooks.expenses.CREATE')
+          && !missingScopes.includes('ZohoBooks.expenses.UPDATE'),
         reconnectRequired:
           connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION || missingScopes.length > 0,
       };

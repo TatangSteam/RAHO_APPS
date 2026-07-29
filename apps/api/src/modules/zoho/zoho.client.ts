@@ -1,3 +1,4 @@
+import { Blob } from 'buffer';
 import axios, { AxiosRequestConfig, Method } from 'axios';
 import { ZohoConnection } from '@prisma/client';
 import { env } from '@config/env';
@@ -6,7 +7,7 @@ import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { normalizeZohoError, ZohoApiError } from './zoho.error';
 
-export const ZOHO_SCOPE_VERSION = 7;
+export const ZOHO_SCOPE_VERSION = 8;
 export const ZOHO_REQUIRED_SCOPES = [
   'ZohoBooks.settings.READ',
   'ZohoBooks.settings.CREATE',
@@ -25,6 +26,9 @@ export const ZOHO_REQUIRED_SCOPES = [
   'ZohoBooks.customerpayments.READ',
   'ZohoBooks.customerpayments.CREATE',
   'ZohoBooks.customerpayments.UPDATE',
+  'ZohoBooks.expenses.READ',
+  'ZohoBooks.expenses.CREATE',
+  'ZohoBooks.expenses.UPDATE',
 ] as const;
 
 export type ZohoTokenResponse = {
@@ -228,6 +232,20 @@ export class ZohoClient {
       page += 1;
     }
     return results;
+  }
+
+  async uploadFile<T>(
+    path: string,
+    fieldName: string,
+    file: { buffer: Buffer; fileName: string; mimeType: string },
+  ): Promise<T> {
+    const body = new FormData();
+    body.append(
+      fieldName,
+      new Blob([new Uint8Array(file.buffer)], { type: file.mimeType }),
+      file.fileName,
+    );
+    return this.request<T>(path, { method: 'POST', data: body });
   }
 }
 

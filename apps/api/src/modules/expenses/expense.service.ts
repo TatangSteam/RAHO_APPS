@@ -10,6 +10,10 @@ import { logAudit } from '@utils/auditLog';
 import type { CreateExpenseInput, ListExpensesQuery } from './expense.schema';
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
+import {
+  buildExpensePaidSnapshot,
+  enqueueExpensePaidTx,
+} from '@modules/zoho/zoho.expense.service';
 
 interface ExpenseEvidence {
   fileUrl?: string;
@@ -254,6 +258,7 @@ export async function payExpense(userId: string, id: string) {
         description: `Expense ${expense.expenseNumber} dibayar dan diposting.`,
       },
     });
+    await enqueueExpensePaidTx(tx, buildExpensePaidSnapshot(expense, paidAt));
     return { expense: formatExpense(await tx.expense.findUniqueOrThrow({ where: { id }, include: includeExpense })), journal: posted.journal, idempotentReplay: false };
   });
 }

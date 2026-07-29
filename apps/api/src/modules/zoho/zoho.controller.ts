@@ -10,6 +10,7 @@ import * as masterService from './zoho.master.service';
 import * as invoiceService from './zoho.invoice.service';
 import * as paymentService from './zoho.payment.service';
 import * as retainerService from './zoho.retainer.service';
+import * as expenseService from './zoho.expense.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -95,6 +96,17 @@ const retainerListSchema = z.object({
 
 const glAccountMappingSchema = z.object({
   accountCode: z.string().trim().min(1).max(50),
+  zohoAccountId: z.string().trim().min(1).max(100),
+});
+
+const expenseListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const expensePaidThroughMappingSchema = z.object({
+  cashBankAccountId: z.string().cuid(),
   zohoAccountId: z.string().trim().min(1).max(100),
 });
 
@@ -365,4 +377,49 @@ export async function mapRetainerAccount(req: Request, res: Response, next: Next
 
 export async function reconcileRetainers(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await retainerService.reconcileRetainerRevenue(req.user.userId)); } catch (error) { next(error); }
+}
+
+export async function expenses(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = expenseListSchema.parse(req.query);
+    sendSuccess(res, await expenseService.listExpenseMappings(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function expenseConfig(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await expenseService.getExpenseConfig(req.user.userId)); } catch (error) { next(error); }
+}
+
+export async function mapExpenseAccount(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = glAccountMappingSchema.parse(req.body);
+    sendSuccess(res, await expenseService.saveExpenseAccountMapping(body.accountCode, body.zohoAccountId));
+  } catch (error) { next(error); }
+}
+
+export async function mapExpensePaidThrough(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = expensePaidThroughMappingSchema.parse(req.body);
+    sendSuccess(res, await expenseService.saveExpensePaidThroughMapping(
+      req.user.userId,
+      body.cashBankAccountId,
+      body.zohoAccountId,
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function previewExpense(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await expenseService.previewExpense(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function enqueueExpense(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await expenseService.enqueueExpense(req.params.id)); } catch (error) { next(error); }
+}
+
+export async function reconcileExpenses(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await expenseService.reconcileExpenses(req.user.userId)); } catch (error) { next(error); }
 }

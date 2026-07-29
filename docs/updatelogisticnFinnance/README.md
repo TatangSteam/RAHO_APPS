@@ -34,7 +34,7 @@ reconciliation di dalam paket ini.
 
 ## Status implementasi
 
-Sprint 1–7 sudah memiliki implementasi backend dan UI operasional:
+Sprint 1–8 sudah memiliki implementasi backend dan UI operasional:
 
 - role `FINANCE_LOGISTICS_CONTROLLER` dan branch scope;
 - koneksi OAuth, discovery, mapping, outbox worker, retry/dead-letter;
@@ -49,6 +49,13 @@ Sprint 1–7 sudah memiliki implementasi backend dan UI operasional:
 - rekonsiliasi deferred/recognized ERP dengan Retainer Zoho;
 - mode dokumen sebagai default dan journal sebagai fallback terkontrol;
 - kebijakan Partnership tetap dipisahkan dari omzet terapi biasa.
+- expense baru masuk outbox `EXPENSE_PAID` setelah jurnal dan kas/bank berhasil;
+- mapping akun beban serta rekening paid-through wajib sebelum create;
+- receipt dikirim terpisah tanpa membocorkan URL internal, sehingga retry tidak
+  menggandakan expense;
+- preview, status mapping/receipt, retry, dan rekonsiliasi amount/date/reference
+  tersedia pada tab Expense;
+- reversal expense tidak melakukan delete otomatis ke Zoho.
 
 Live UAT tetap membutuhkan OAuth scope versi terbaru, worker aktif,
 `ZOHO_SYNC_DRY_RUN=false`, mapping lengkap, serta data uji Zoho yang disetujui.

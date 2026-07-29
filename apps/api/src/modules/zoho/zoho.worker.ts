@@ -23,6 +23,7 @@ export const ZOHO_SYNC_EVENT_TYPES = [
   'INVOICE_VOIDED',
   'PAYMENT_VERIFIED',
   'PAYMENT_REFUNDED',
+  'EXPENSE_PAID',
 ] as const;
 const workerId = `${os.hostname()}:${process.pid}`;
 let timer: NodeJS.Timeout | null = null;

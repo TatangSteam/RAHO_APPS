@@ -139,7 +139,7 @@ describe('Zoho customer payment policy', () => {
       localStatus: 'PENDING_PAYMENT',
     }).status).toBe('MISSING');
     expect(paymentMethodMappingKey('QRIS')).toBe('PAYMENT_METHOD:QRIS');
-    expect(ZOHO_SCOPE_VERSION).toBe(7);
+    expect(ZOHO_SCOPE_VERSION).toBe(8);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.customerpayments.READ',
       'ZohoBooks.customerpayments.CREATE',

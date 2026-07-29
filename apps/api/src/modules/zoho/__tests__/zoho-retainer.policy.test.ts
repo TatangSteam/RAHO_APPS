@@ -74,7 +74,7 @@ describe('Zoho retainer and treatment revenue policy', () => {
       expect.objectContaining({ account_id: 'deferred-1', debit_or_credit: 'debit', amount: 250000 }),
       expect.objectContaining({ account_id: 'revenue-1', debit_or_credit: 'credit', amount: 250000 }),
     ]);
-    expect(ZOHO_SCOPE_VERSION).toBe(7);
+    expect(ZOHO_SCOPE_VERSION).toBe(8);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.invoices.CREATE',
       'ZohoBooks.invoices.DELETE',

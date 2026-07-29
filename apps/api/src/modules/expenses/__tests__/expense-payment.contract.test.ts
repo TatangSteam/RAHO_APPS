@@ -9,5 +9,6 @@ describe('expense payment posting contract', () => {
     expect(service).toContain('postingKey: `EXPENSE:${expense.id}`');
     expect(service).toContain('await tx.cashBankTransaction.create');
     expect(service).toContain("status: 'PAID'");
+    expect(service).toContain('await enqueueExpensePaidTx(tx, buildExpensePaidSnapshot(expense, paidAt))');
   });
 });

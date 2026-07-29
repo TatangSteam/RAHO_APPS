@@ -117,6 +117,25 @@ export async function getPresignedUrl(key: string, expiresIn = 3600): Promise<st
 }
 
 /**
+ * Read a private object without exposing an internal/presigned URL.
+ * `maxBytes` protects integrations from unexpectedly large attachments.
+ */
+export async function downloadFile(key: string, maxBytes?: number): Promise<Buffer> {
+  const response = await s3Client.send(
+    new GetObjectCommand({ Bucket: env.MINIO_BUCKET, Key: key }),
+  );
+  if (maxBytes && response.ContentLength && response.ContentLength > maxBytes) {
+    throw new Error(`Stored object exceeds the ${maxBytes} byte download limit.`);
+  }
+  if (!response.Body) throw new Error('Stored object has no body.');
+  const bytes = await response.Body.transformToByteArray();
+  if (maxBytes && bytes.byteLength > maxBytes) {
+    throw new Error(`Stored object exceeds the ${maxBytes} byte download limit.`);
+  }
+  return Buffer.from(bytes);
+}
+
+/**
  * Delete a file from MinIO
  * @param key - Object key in the bucket
  */
