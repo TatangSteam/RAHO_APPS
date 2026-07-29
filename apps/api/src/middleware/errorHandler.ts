@@ -34,6 +34,20 @@ export function errorHandler(
 
   // ── Prisma Known Request Errors ──────────────────────────
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    // Database schema does not match the generated Prisma Client.
+    // Return an actionable service error instead of masking it as an unknown 500.
+    if (err.code === 'P2021' || err.code === 'P2022') {
+      logger.error(
+        `[Database Schema Mismatch] ${req.method} ${req.url}: ${err.code} ${err.message}`,
+      );
+      sendError(
+        res,
+        503,
+        'DATABASE_SCHEMA_OUT_OF_DATE',
+        'Schema database belum tersinkron. Jalankan migration terbaru lalu restart server.',
+      );
+      return;
+    }
     // Unique constraint violation
     if (err.code === 'P2002') {
       const fields = (err.meta?.target as string[]) ?? [];

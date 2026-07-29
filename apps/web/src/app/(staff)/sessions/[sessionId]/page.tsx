@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
@@ -94,6 +94,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [completing, setCompleting] = useState(false);
+  const completionInFlightRef = useRef(false);
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
   const [cancellationKey, setCancellationKey] = useState('');
@@ -367,7 +368,7 @@ export default function SessionDetailPage() {
   };
 
   const handleCompleteSession = async () => {
-    if (!session) return;
+    if (!session || completionInFlightRef.current) return;
 
     const { steps } = session;
     
@@ -401,6 +402,7 @@ export default function SessionDetailPage() {
       return;
     }
 
+    completionInFlightRef.current = true;
     try {
       setCompleting(true);
       const result = await sessionApi.completeSession(sessionId);
@@ -411,6 +413,7 @@ export default function SessionDetailPage() {
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyelesaikan sesi';
       showToast.error(errorMessage);
     } finally {
+      completionInFlightRef.current = false;
       setCompleting(false);
     }
   };

@@ -4,6 +4,7 @@
     "description": "RAHO ERP — REST API Server (Express.js)",
     "main": "dist/server.js",
     "scripts": {
+        "predev": "prisma generate && prisma migrate deploy",
         "dev": "tsx watch src/server.ts",
         "build": "tsc --project tsconfig.build.json && tsc-alias -p tsconfig.build.json",
         "build:nocheck": "tsc --build --noCheck",
