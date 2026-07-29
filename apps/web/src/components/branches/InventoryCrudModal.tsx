@@ -5,7 +5,9 @@ import { Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDow
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
+import { inventoryApi } from '@/lib/api/inventoryApi';
 import { devLog, devError } from '@/lib/logger';
+import { useAuthStore } from '@/stores/authStore';
 import { CrudModal } from './CrudModal';
 import styles from '@/styles/crud-modal.module.css';
 
@@ -84,6 +86,7 @@ export default function InventoryCrudModal({
   inventoryData,
   existingProductIds = []
 }: InventoryCrudModalProps) {
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [masterProducts, setMasterProducts] = useState<MasterProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -95,6 +98,8 @@ export default function InventoryCrudModal({
   // Unit mode for edit: 'base' (e.g., botol) or 'usage' (e.g., ml)
   const [stockUnitMode, setStockUnitMode] = useState<'base' | 'usage'>('base');
   const [thresholdUnitMode, setThresholdUnitMode] = useState<'base' | 'usage'>('base');
+  const [stockUnitCost, setStockUnitCost] = useState('');
+  const [stockAdjustmentNotes, setStockAdjustmentNotes] = useState('');
   
   const [formData, setFormData] = useState<InventoryFormData>({
     masterProductId: '',
@@ -138,8 +143,15 @@ export default function InventoryCrudModal({
         storageLocation: inventoryData.storageLocation || '',
         conversionFactor: inventoryData.conversionFactor || 1
       });
+      setStockUnitCost('');
+      setStockAdjustmentNotes('');
     }
   }, [action, inventoryData]);
+
+  const originalStock = Number(inventoryData?.stock || 0);
+  const stockChanged = action === 'edit'
+    && Math.abs(editFormData.stock - originalStock) > 0.00001;
+  const canDirectAdjustStock = user?.role === 'SUPER_ADMIN';
 
   const loadMasterProducts = async () => {
     try {
@@ -296,16 +308,44 @@ export default function InventoryCrudModal({
         await api.post('/inventory/items', createData);
         showToast.success('Item inventori berhasil ditambahkan');
       } else if (action === 'edit') {
+        if (stockChanged && !canDirectAdjustStock) {
+          showToast.error('Perubahan stok langsung hanya dapat dilakukan oleh Super Admin');
+          setLoading(false);
+          return;
+        }
+
+        const unitCost = Number(stockUnitCost);
+        if (stockChanged && (!Number.isFinite(unitCost) || unitCost <= 0)) {
+          showToast.error('Harga pokok per satuan harus lebih dari 0');
+          setLoading(false);
+          return;
+        }
+        if (stockChanged && stockAdjustmentNotes.trim().length < 3) {
+          showToast.error('Alasan perubahan stok wajib diisi minimal 3 karakter');
+          setLoading(false);
+          return;
+        }
+
         const updateData = {
-          stock: editFormData.stock,
-          usageStock: editFormData.usageStock,
           minThreshold: editFormData.minThreshold,
           minThresholdUsage: editFormData.minThresholdUsage,
           storageLocation: editFormData.storageLocation || null
         };
         
         await api.patch(`/inventory/items/${inventoryData.id}`, updateData);
-        showToast.success('Item inventori berhasil diperbarui');
+
+        if (stockChanged) {
+          await inventoryApi.adjustStock(inventoryData.id, {
+            idempotencyKey: crypto.randomUUID(),
+            adjustment: editFormData.stock - originalStock,
+            unitCost,
+            notes: stockAdjustmentNotes.trim(),
+          });
+        }
+
+        showToast.success(stockChanged
+          ? 'Item inventori dan stok berhasil diperbarui'
+          : 'Item inventori berhasil diperbarui');
       }
       
       onSuccess();
@@ -764,16 +804,54 @@ export default function InventoryCrudModal({
                     min="0"
                     step={stockUnitMode === 'base' ? '0.01' : '1'}
                     placeholder="0"
+                    disabled={!canDirectAdjustStock}
                     style={{ flex: 1 }}
                   />
                 </div>
                 <small style={{ color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                  {stockUnitMode === 'base' 
+                  {!canDirectAdjustStock
+                    ? 'Perubahan stok langsung hanya tersedia untuk Super Admin'
+                    : stockUnitMode === 'base' 
                     ? `= ${editFormData.usageStock.toFixed(0)} ${editFormData.usageUnit}`
                     : `= ${editFormData.stock.toFixed(2)} ${editFormData.baseUnit}`
                   }
                 </small>
               </div>
+
+              {stockChanged && canDirectAdjustStock && (
+                <>
+                  <div className={styles.formGroup}>
+                    <label htmlFor="stockUnitCost">
+                      Harga Pokok per {editFormData.baseUnit} (Rp) *
+                    </label>
+                    <input
+                      type="number"
+                      id="stockUnitCost"
+                      min="0.0001"
+                      step="0.0001"
+                      value={stockUnitCost}
+                      onChange={(event) => setStockUnitCost(event.target.value)}
+                      placeholder="Contoh: 25000"
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>
+                      Digunakan untuk valuasi dan jurnal penyesuaian.
+                    </small>
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label htmlFor="stockAdjustmentNotes">
+                      Alasan Perubahan Stok *
+                    </label>
+                    <input
+                      type="text"
+                      id="stockAdjustmentNotes"
+                      value={stockAdjustmentNotes}
+                      onChange={(event) => setStockAdjustmentNotes(event.target.value)}
+                      placeholder="Contoh: Koreksi hasil stok fisik"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Min Threshold Input with Unit Toggle */}
               <div className={styles.formGroupFull}>
@@ -901,7 +979,16 @@ export default function InventoryCrudModal({
               unstyled
               type="submit"
               className={styles.saveButton}
-              disabled={loading || (action === 'create' && !selectedProduct)}
+              disabled={
+                loading
+                || (action === 'create' && !selectedProduct)
+                || (stockChanged && (
+                  !canDirectAdjustStock
+                  || !stockUnitCost
+                  || Number(stockUnitCost) <= 0
+                  || stockAdjustmentNotes.trim().length < 3
+                ))
+              }
             >
               {loading ? (
                 <>
