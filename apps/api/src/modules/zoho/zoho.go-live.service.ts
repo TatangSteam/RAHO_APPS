@@ -9,11 +9,57 @@ export type ZohoRuntimeGate = {
   connectionId: string | null;
   canaryBranchIds: string[];
   masterFrozen: boolean;
-  source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED';
+  source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED' | 'CONFIGURATION_INVALID';
 };
 
 function stringArray(value: Prisma.JsonValue | null | undefined): string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+function hasZohoSyncCredentials(): boolean {
+  return Boolean(
+    env.ZOHO_CLIENT_ID
+    && env.ZOHO_CLIENT_SECRET
+    && env.ZOHO_TOKEN_ENCRYPTION_KEY,
+  );
+}
+
+function assertRuntimeReadyForMode(mode: ZohoRuntimeMode): void {
+  if (mode === 'OFF') return;
+  if (!env.ZOHO_SYNC_WORKER_ENABLED) {
+    throw new AppError(
+      409,
+      'ZOHO_WORKER_DISABLED',
+      'Worker Zoho belum aktif. Aktifkan ZOHO_SYNC_WORKER_ENABLED lalu restart API sebelum rehearsal atau go-live.',
+    );
+  }
+  if ((mode === 'CANARY' || mode === 'LIVE') && !hasZohoSyncCredentials()) {
+    throw new AppError(
+      409,
+      'ZOHO_RUNTIME_CONFIG_INCOMPLETE',
+      'Client ID, Client Secret, dan token encryption key wajib tersedia sebelum CANARY/LIVE.',
+    );
+  }
+}
+
+export function jakartaBusinessDayWindow(now: Date): {
+  start: Date;
+  end: Date;
+  isBusinessDay: boolean;
+} {
+  const jakartaOffsetMs = 7 * 60 * 60 * 1_000;
+  const jakarta = new Date(now.getTime() + jakartaOffsetMs);
+  const day = jakarta.getUTCDay();
+  const start = new Date(Date.UTC(
+    jakarta.getUTCFullYear(),
+    jakarta.getUTCMonth(),
+    jakarta.getUTCDate(),
+  ) - jakartaOffsetMs);
+  return {
+    start,
+    end: new Date(start.getTime() + 24 * 60 * 60 * 1_000),
+    isBusinessDay: day >= 1 && day <= 5,
+  };
 }
 
 export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
@@ -25,8 +71,26 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
     where: { zohoConnectionId: connection.id },
   });
   if (!control) {
+    if (!env.ZOHO_SYNC_WORKER_ENABLED) {
+      return {
+        mode: 'OFF',
+        connectionId: connection.id,
+        canaryBranchIds: [],
+        masterFrozen: false,
+        source: 'LEGACY_ENV',
+      };
+    }
+    if (!env.ZOHO_SYNC_DRY_RUN && !hasZohoSyncCredentials()) {
+      return {
+        mode: 'OFF',
+        connectionId: connection.id,
+        canaryBranchIds: [],
+        masterFrozen: false,
+        source: 'CONFIGURATION_INVALID',
+      };
+    }
     return {
-      mode: env.ZOHO_SYNC_DRY_RUN ? 'DRY_RUN' : env.ZOHO_SYNC_WORKER_ENABLED ? 'LIVE' : 'OFF',
+      mode: env.ZOHO_SYNC_DRY_RUN ? 'DRY_RUN' : 'LIVE',
       connectionId: connection.id,
       canaryBranchIds: [],
       masterFrozen: false,
@@ -36,6 +100,24 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
   const mode = ['OFF', 'DRY_RUN', 'CANARY', 'LIVE'].includes(control.mode)
     ? control.mode as ZohoRuntimeMode
     : 'OFF';
+  if (mode !== 'OFF' && !env.ZOHO_SYNC_WORKER_ENABLED) {
+    return {
+      mode: 'OFF',
+      connectionId: connection.id,
+      canaryBranchIds: stringArray(control.canaryBranchIds),
+      masterFrozen: control.masterFrozen,
+      source: 'CONFIGURATION_INVALID',
+    };
+  }
+  if ((mode === 'CANARY' || mode === 'LIVE') && !hasZohoSyncCredentials()) {
+    return {
+      mode: 'OFF',
+      connectionId: connection.id,
+      canaryBranchIds: stringArray(control.canaryBranchIds),
+      masterFrozen: control.masterFrozen,
+      source: 'CONFIGURATION_INVALID',
+    };
+  }
   return {
     mode,
     connectionId: connection.id,
@@ -110,6 +192,12 @@ export async function configureGoLiveControl(input: {
       ...(input.canaryCustomerId === undefined ? {} : { canaryCustomerId: input.canaryCustomerId }),
       ...(input.canaryVendorId === undefined ? {} : { canaryVendorId: input.canaryVendorId }),
       ...(input.notes === undefined ? {} : { notes: input.notes }),
+      financeApprovedAt: null,
+      financeApprovedById: null,
+      logisticsApprovedAt: null,
+      logisticsApprovedById: null,
+      mismatchFreeBusinessDays: 0,
+      lastMismatchFreeBusinessDayAt: null,
       updatedById: input.actorUserId,
     },
   });
@@ -137,7 +225,7 @@ async function assertPromotionReady(mode: 'CANARY' | 'LIVE', control: {
   logisticsApprovedAt: Date | null;
   canaryBranchIds: Prisma.JsonValue | null;
   mismatchFreeBusinessDays: number;
-}) {
+}, connectionId: string) {
   if (!control.financeApprovedAt || !control.logisticsApprovedAt) {
     throw new AppError(409, 'ZOHO_GO_LIVE_APPROVAL_REQUIRED', 'Approval Finance dan Logistik wajib lengkap.');
   }
@@ -145,7 +233,7 @@ async function assertPromotionReady(mode: 'CANARY' | 'LIVE', control: {
     throw new AppError(409, 'ZOHO_CANARY_SCOPE_REQUIRED', 'Minimal satu cabang canary wajib dipilih.');
   }
   const latest = await prisma.zohoReconciliationRun.findFirst({
-    where: { runType: 'FULL', status: 'COMPLETED' },
+    where: { zohoConnectionId: connectionId, runType: 'FULL', status: 'COMPLETED' },
     orderBy: { finishedAt: 'desc' },
   });
   if (!latest) throw new AppError(409, 'ZOHO_RECONCILIATION_REQUIRED', 'Reconciliation lengkap wajib dijalankan sebelum promosi.');
@@ -175,14 +263,39 @@ export async function setGoLiveMode(actorUserId: string, mode: ZohoRuntimeMode) 
     where: { zohoConnectionId: connection.id },
   });
   if (!control) throw new AppError(409, 'ZOHO_GO_LIVE_NOT_CONFIGURED', 'Konfigurasi cutover belum dibuat.');
-  if (mode === 'CANARY' || mode === 'LIVE') await assertPromotionReady(mode, control);
-  return prisma.zohoGoLiveControl.update({
-    where: { id: control.id },
-    data: {
-      mode,
-      lastRehearsalAt: mode === 'DRY_RUN' ? new Date() : control.lastRehearsalAt,
-      updatedById: actorUserId,
-    },
+  assertRuntimeReadyForMode(mode);
+  if (mode === 'CANARY' || mode === 'LIVE') {
+    await assertPromotionReady(mode, control, connection.id);
+  }
+  return prisma.$transaction(async (tx) => {
+    if (mode === 'CANARY' || mode === 'LIVE') {
+      // DRY_RUN hanya rehearsal. Event harus kembali antre agar tetap dikirim saat
+      // CANARY/LIVE, dan rehearsal tidak boleh menghabiskan jatah retry nyata.
+      await tx.integrationEvent.updateMany({
+        where: { status: 'DRY_RUN' },
+        data: {
+          status: 'PENDING',
+          attempts: 0,
+          availableAt: new Date(),
+          processedAt: null,
+          deadLetteredAt: null,
+          lastError: null,
+          lockedBy: null,
+          leaseUntil: null,
+        },
+      });
+    }
+    return tx.zohoGoLiveControl.update({
+      where: { id: control.id },
+      data: {
+        mode,
+        lastRehearsalAt: mode === 'DRY_RUN' ? new Date() : control.lastRehearsalAt,
+        ...(mode === 'CANARY'
+          ? { mismatchFreeBusinessDays: 0, lastMismatchFreeBusinessDayAt: null }
+          : {}),
+        updatedById: actorUserId,
+      },
+    });
   });
 }
 
@@ -215,14 +328,34 @@ export async function recordMismatchFreeBusinessDay(actorUserId: string) {
     throw new AppError(409, 'ZOHO_CANARY_NOT_ACTIVE', 'Pencatatan hanya tersedia saat CANARY aktif.');
   }
   const latest = await prisma.zohoReconciliationRun.findFirst({
-    where: { runType: 'FULL', status: 'COMPLETED' },
+    where: { zohoConnectionId: connection.id, runType: 'FULL', status: 'COMPLETED' },
     orderBy: { finishedAt: 'desc' },
   });
   if (!latest || latest.exceptionCount > 0) {
     throw new AppError(409, 'ZOHO_CANARY_MISMATCH_FOUND', 'Hari bebas mismatch tidak dapat dicatat.');
   }
-  return prisma.zohoGoLiveControl.update({
-    where: { id: control.id },
-    data: { mismatchFreeBusinessDays: { increment: 1 }, updatedById: actorUserId },
+  const now = new Date();
+  const day = jakartaBusinessDayWindow(now);
+  if (!day.isBusinessDay) {
+    throw new AppError(409, 'ZOHO_CANARY_BUSINESS_DAY_REQUIRED', 'Observasi canary hanya dapat dicatat pada hari kerja Jakarta.');
+  }
+  const updated = await prisma.zohoGoLiveControl.updateMany({
+    where: {
+      id: control.id,
+      OR: [
+        { lastMismatchFreeBusinessDayAt: null },
+        { lastMismatchFreeBusinessDayAt: { lt: day.start } },
+        { lastMismatchFreeBusinessDayAt: { gte: day.end } },
+      ],
+    },
+    data: {
+      mismatchFreeBusinessDays: { increment: 1 },
+      lastMismatchFreeBusinessDayAt: now,
+      updatedById: actorUserId,
+    },
   });
+  if (!updated.count) {
+    throw new AppError(409, 'ZOHO_CANARY_DAY_ALREADY_RECORDED', 'Hari kerja ini sudah dicatat untuk observasi canary.');
+  }
+  return prisma.zohoGoLiveControl.findUniqueOrThrow({ where: { id: control.id } });
 }

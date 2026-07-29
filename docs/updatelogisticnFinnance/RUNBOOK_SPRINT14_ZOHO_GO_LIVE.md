@@ -24,6 +24,10 @@ ZOHO_RECONCILIATION_INTERVAL_MS=3600000
 ZOHO_WEBHOOK_SECRET=
 ```
 
+Nilai konfigurasi Zoho opsional yang kosong diperlakukan sebagai "belum
+dikonfigurasi", sehingga API tetap dapat start. Runtime dipaksa ke `OFF` bila
+worker tidak aktif atau kredensial yang dibutuhkan CANARY/LIVE tidak lengkap.
+
 `ZOHO_WEBHOOK_SECRET` harus berupa nilai acak 12-100 karakter dan tidak boleh
 masuk source control atau screenshot.
 
@@ -76,6 +80,11 @@ yang dikonfigurasi pengguna. Receiver juga menerima HMAC SHA-256 hex/base64 pada
 13. Pilih satu cabang lalu aktifkan `CANARY`.
 14. Rekonsiliasi setiap hari dan catat lima hari kerja bebas mismatch.
 15. Aktifkan `LIVE`.
+
+Event yang telah diperiksa saat `DRY_RUN` dikembalikan ke status `PENDING`
+ketika promosi ke `CANARY/LIVE`; rehearsal tidak menghilangkan transaksi yang
+masih wajib dikirim. Satu hari observasi hanya dapat dicatat sekali pada hari
+kerja zona waktu Asia/Jakarta.
 
 ## Rollback
 

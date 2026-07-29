@@ -3,6 +3,16 @@ import path from 'path';
 
 const root = path.resolve(__dirname, '../../../..');
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), 'utf8');
+const walkTypeScript = (relative: string): string[] => {
+  const absolute = path.join(root, relative);
+  return fs.readdirSync(absolute, { withFileTypes: true }).flatMap((entry) => {
+    const child = path.join(relative, entry.name);
+    if (entry.isDirectory()) {
+      return entry.name === '__tests__' ? [] : walkTypeScript(child);
+    }
+    return entry.isFile() && entry.name.endsWith('.ts') ? [child] : [];
+  });
+};
 
 describe('Sprint 14 additive and local-independence contract', () => {
   it('memasang webhook sebelum authenticate dan melindungi dashboard sesudah authenticate', () => {
@@ -33,16 +43,23 @@ describe('Sprint 14 additive and local-independence contract', () => {
   });
 
   it('tidak membuat flow lokal mengimpor client Zoho', () => {
-    for (const file of [
-      'src/modules/packages/packages.service.ts',
-      'src/modules/sessions/services/session-completion.service.ts',
-      'src/modules/invoices/invoices.service.ts',
-      'src/modules/inventory/services/inventory-ledger.service.ts',
-      'src/modules/purchasing/purchasing.service.ts',
-    ]) {
+    const coreModules = [
+      'src/modules/auth',
+      'src/modules/packages',
+      'src/modules/invoices',
+      'src/modules/sessions',
+      'src/modules/inventory',
+      'src/modules/purchasing',
+      'src/modules/accounting',
+      'src/modules/expenses',
+      'src/modules/revenue',
+    ];
+    for (const file of coreModules.flatMap(walkTypeScript)) {
       const source = read(file);
       expect(source).not.toContain('getActiveZohoClient');
       expect(source).not.toContain('ZohoClient');
+      expect(source).not.toMatch(/from\s+['"][^'"]*zoho\.client['"]/);
+      expect(source).not.toContain('zohoapis.');
     }
   });
 
@@ -51,6 +68,29 @@ describe('Sprint 14 additive and local-independence contract', () => {
     expect(worker).toContain("if (gate.mode === 'OFF') return 0");
     expect(worker).toContain("gate?.mode === 'CANARY'");
     expect(worker).toContain('gate.canaryBranchIds');
+  });
+
+  it('fail-closed saat runtime tidak siap dan tidak kehilangan event hasil dry-run', () => {
+    const goLive = read('src/modules/zoho/zoho.go-live.service.ts');
+    const env = read('src/config/env.ts');
+    expect(goLive).toContain("'ZOHO_WORKER_DISABLED'");
+    expect(goLive).toContain("'ZOHO_RUNTIME_CONFIG_INCOMPLETE'");
+    expect(goLive).toContain("source: 'CONFIGURATION_INVALID'");
+    expect(goLive).toContain("where: { status: 'DRY_RUN' }");
+    expect(goLive).toContain("status: 'PENDING'");
+    expect(goLive).toContain('attempts: 0');
+    expect(env).toContain('ZOHO_TOKEN_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined');
+    expect(env).toContain('ZOHO_CLIENT_ID: z.preprocess(emptyStringToUndefined');
+  });
+
+  it('mengikat reconciliation ke koneksi aktif dan menghitung canary sekali per hari kerja', () => {
+    const goLive = read('src/modules/zoho/zoho.go-live.service.ts');
+    const schema = read('prisma/schema.prisma');
+    expect(goLive).toContain('zohoConnectionId: connectionId');
+    expect(goLive).toContain('zohoConnectionId: connection.id');
+    expect(goLive).toContain("'ZOHO_CANARY_BUSINESS_DAY_REQUIRED'");
+    expect(goLive).toContain("'ZOHO_CANARY_DAY_ALREADY_RECORDED'");
+    expect(schema).toContain('lastMismatchFreeBusinessDayAt DateTime?');
   });
 
   it('tidak mengubah role atau permission SUPER_ADMIN yang sudah ada', () => {

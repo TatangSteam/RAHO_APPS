@@ -4,7 +4,11 @@ import path from 'path';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-const envSchema = z.object({
+const emptyStringToUndefined = (value: unknown): unknown => (
+  typeof value === 'string' && !value.trim() ? undefined : value
+);
+
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(4000),
   API_PREFIX: z.string().default('/api/v1'),
@@ -31,13 +35,13 @@ const envSchema = z.object({
   AUTH_RATE_LIMIT_MAX: z.coerce.number().default(10),
   E2E_DISABLE_RATE_LIMIT: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
-  ZOHO_CLIENT_ID: z.string().optional(),
-  ZOHO_CLIENT_SECRET: z.string().optional(),
-  ZOHO_REDIRECT_URI: z.string().url().optional(),
-  ZOHO_TOKEN_ENCRYPTION_KEY: z.string().min(32).optional(),
+  ZOHO_CLIENT_ID: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
+  ZOHO_CLIENT_SECRET: z.preprocess(emptyStringToUndefined, z.string().trim().min(1).optional()),
+  ZOHO_REDIRECT_URI: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
+  ZOHO_TOKEN_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined, z.string().min(32).optional()),
   ZOHO_ACCOUNTS_BASE_URL: z.string().url().default('https://accounts.zoho.com'),
   ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
-  ZOHO_WEB_REDIRECT_URL: z.string().url().optional(),
+  ZOHO_WEB_REDIRECT_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
   ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(12),
   ZOHO_INVENTORY_SYNC_ENABLED: z.preprocess(
     (value) => value === 'true' || value === true,
@@ -46,11 +50,11 @@ const envSchema = z.object({
   ZOHO_GRNI_SLA_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   ZOHO_TREATMENT_REVENUE_MODE: z.enum(['DOCUMENT', 'JOURNAL']).default('DOCUMENT'),
   ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID: z.preprocess(
-    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    emptyStringToUndefined,
     z.string().trim().min(1).optional(),
   ),
   ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_API_NAME: z.preprocess(
-    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    emptyStringToUndefined,
     z.string().trim().regex(/^cf_[a-z0-9_]+$/i).optional(),
   ),
   ZOHO_SYNC_DRY_RUN: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
@@ -60,7 +64,7 @@ const envSchema = z.object({
   ZOHO_SYNC_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(25).default(8),
   ZOHO_SYNC_LEASE_MS: z.coerce.number().int().min(5_000).default(60_000),
   ZOHO_WEBHOOK_SECRET: z.preprocess(
-    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    emptyStringToUndefined,
     z.string().min(12).max(100).optional(),
   ),
   ZOHO_RECONCILIATION_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),

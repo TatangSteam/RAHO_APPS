@@ -699,7 +699,7 @@ type GoLiveData = {
   localErpIndependent: boolean;
   runtime: {
     mode: 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE';
-    source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED';
+    source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED' | 'CONFIGURATION_INVALID';
     canaryBranchIds: string[];
     masterFrozen: boolean;
   };
@@ -3249,6 +3249,12 @@ export default function ZohoIntegrationPage() {
             {!goLive?.connected && (
               <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
                 Zoho belum terhubung. Seluruh ERP lokal tetap dapat digunakan; worker dan reconciliation Zoho tidak melakukan write.
+              </div>
+            )}
+
+            {goLive?.runtime.source === 'CONFIGURATION_INVALID' && (
+              <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+                Runtime Zoho dipaksa OFF karena worker atau kredensial server belum lengkap. ERP lokal tetap berjalan normal.
               </div>
             )}
 

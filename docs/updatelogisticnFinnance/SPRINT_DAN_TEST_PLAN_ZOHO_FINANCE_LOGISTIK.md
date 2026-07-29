@@ -1238,6 +1238,10 @@ Sprint 14 telah diimplementasikan dengan boundary berikut:
   dead-letter kosong;
 - LIVE membutuhkan lima hari kerja canary bebas mismatch;
 - rollback hanya mematikan adapter Zoho dan tidak membatalkan transaksi lokal.
+- runtime fail-closed ke `OFF` bila worker/kredensial tidak siap;
+- event hasil rehearsal `DRY_RUN` kembali ke antrean sebelum CANARY/LIVE;
+- reconciliation gate selalu terikat ke koneksi organisasi aktif;
+- hari observasi canary hanya dapat dicatat satu kali per hari kerja Jakarta.
 
 Kontrak wajib: tidak adanya koneksi, token kedaluwarsa, rate-limit, atau outage
 Zoho tidak boleh menggagalkan pembelian paket, pembayaran, treatment completion,
