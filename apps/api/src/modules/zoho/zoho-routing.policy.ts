@@ -13,6 +13,7 @@ export function shouldSyncTreatmentRevenueToZoho(branchType: BranchType): boolea
 type PartnershipInvoiceItem = {
   masterProductId: string;
   sku: string | null;
+  productName: string;
   quantity: Prisma.Decimal;
   pricePerUnit: Prisma.Decimal;
 };
@@ -24,6 +25,7 @@ type PartnershipShipmentCost = {
 };
 
 export type PartnershipGoodsShippedPayloadInput = {
+  sourceBranchId: string;
   partnershipBranchId: string;
   stockRequestId: string;
   stockRequestInvoiceId: string;
@@ -60,6 +62,7 @@ export function buildPartnershipGoodsShippedPayload(
     return {
       masterProductId: cost.masterProductId,
       sku: invoiceItem.sku,
+      productName: invoiceItem.productName,
       quantity: cost.quantity.toFixed(4),
       unitPrice: invoiceItem.pricePerUnit.toFixed(2),
       unitCost: cost.totalCost.div(cost.quantity).toFixed(4),
@@ -68,6 +71,7 @@ export function buildPartnershipGoodsShippedPayload(
   });
 
   return {
+    sourceBranchId: input.sourceBranchId,
     partnershipBranchId: input.partnershipBranchId,
     stockRequestId: input.stockRequestId,
     stockRequestInvoiceId: input.stockRequestInvoiceId,

@@ -4,6 +4,10 @@ import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { startZohoWorker, stopZohoWorker } from '@modules/zoho/zoho.worker';
 import { registerZohoHandlers } from '@modules/zoho/zoho.handlers';
+import {
+  startZohoReconciliationScheduler,
+  stopZohoReconciliationScheduler,
+} from '@modules/zoho/zoho.reconciliation.service';
 
 async function bootstrap(): Promise<void> {
   // ── Verify Database Connection ─────────────────────────────
@@ -26,10 +30,12 @@ async function bootstrap(): Promise<void> {
   });
   registerZohoHandlers();
   startZohoWorker();
+  startZohoReconciliationScheduler();
 
   // ── Graceful Shutdown ─────────────────────────────────────
   const shutdown = async (signal: string): Promise<void> => {
     stopZohoWorker();
+    stopZohoReconciliationScheduler();
     logger.info(`\n${signal} received — shutting down gracefully`);
 
     server.close(async () => {

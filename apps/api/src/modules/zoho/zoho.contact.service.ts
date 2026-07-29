@@ -16,10 +16,15 @@ import { ZohoApiError } from './zoho.error';
 
 export const MEMBER_CONTACT_EVENT = 'MEMBER_CONTACT_UPSERTED';
 export const SUPPLIER_CONTACT_EVENT = 'SUPPLIER_CONTACT_UPSERTED';
+export const PARTNERSHIP_CONTACT_EVENT = 'PARTNERSHIP_CONTACT_UPSERTED';
 
 function assertEntityType(value: string): asserts value is ContactEntityType {
-  if (value !== 'MEMBER' && value !== 'SUPPLIER') {
-    throw new AppError(400, 'ZOHO_CONTACT_ENTITY_INVALID', 'Entity contact harus MEMBER atau SUPPLIER.');
+  if (!['MEMBER', 'SUPPLIER', 'PARTNERSHIP_BRANCH'].includes(value)) {
+    throw new AppError(
+      400,
+      'ZOHO_CONTACT_ENTITY_INVALID',
+      'Entity contact harus MEMBER, SUPPLIER, atau PARTNERSHIP_BRANCH.',
+    );
   }
 }
 
@@ -43,6 +48,28 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
       isActive: member.isActive && member.user.isActive,
     };
   }
+  if (entityType === 'PARTNERSHIP_BRANCH') {
+    const branch = await prisma.branch.findUnique({ where: { id } });
+    if (!branch || branch.type !== 'PARTNERSHIP') {
+      throw new AppError(
+        404,
+        'PARTNERSHIP_BRANCH_NOT_FOUND',
+        'Cabang Partnership tidak ditemukan.',
+      );
+    }
+    return {
+      entityType,
+      localEntityId: branch.id,
+      externalKey: `RAHO:PARTNERSHIP:${branch.id}`,
+      displayName: `[${branch.branchCode}] ${branch.name}`,
+      email: null,
+      phone: branch.phone || null,
+      address: [branch.address, branch.city].filter(Boolean).join(', ') || null,
+      taxId: null,
+      paymentTermsDays: 0,
+      isActive: branch.isActive,
+    };
+  }
   const supplier = await prisma.supplier.findUnique({ where: { id } });
   if (!supplier) throw new AppError(404, 'SUPPLIER_NOT_FOUND', 'Supplier tidak ditemukan.');
   return {
@@ -60,11 +87,15 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
 }
 
 function eventTypeFor(entityType: ContactEntityType): string {
-  return entityType === 'MEMBER' ? MEMBER_CONTACT_EVENT : SUPPLIER_CONTACT_EVENT;
+  if (entityType === 'MEMBER') return MEMBER_CONTACT_EVENT;
+  if (entityType === 'SUPPLIER') return SUPPLIER_CONTACT_EVENT;
+  return PARTNERSHIP_CONTACT_EVENT;
 }
 
 function zohoEntityTypeFor(entityType: ContactEntityType): string {
-  return entityType === 'MEMBER' ? 'CONTACT_CUSTOMER' : 'CONTACT_VENDOR';
+  if (entityType === 'MEMBER') return 'CONTACT_CUSTOMER';
+  if (entityType === 'SUPPLIER') return 'CONTACT_VENDOR';
+  return 'PARTNERSHIP_BRANCH_CUSTOMER';
 }
 
 function externalIdField(connection?: {
@@ -206,7 +237,11 @@ export async function enqueueContact(entityTypeValue: string, id: string) {
     create: {
       eventType,
       eventVersion: 1,
-      aggregateType: snapshot.entityType === 'MEMBER' ? 'Member' : 'Supplier',
+      aggregateType: snapshot.entityType === 'MEMBER'
+        ? 'Member'
+        : snapshot.entityType === 'SUPPLIER'
+          ? 'Supplier'
+          : 'Branch',
       aggregateId: snapshot.localEntityId,
       payload: payload as Prisma.InputJsonValue,
       status: 'PENDING',
@@ -279,7 +314,11 @@ async function saveMapping(
 }
 
 export async function handleContactEvent(event: { aggregateId: string; aggregateType: string }) {
-  const entityType: ContactEntityType = event.aggregateType === 'Member' ? 'MEMBER' : 'SUPPLIER';
+  const entityType: ContactEntityType = event.aggregateType === 'Member'
+    ? 'MEMBER'
+    : event.aggregateType === 'Supplier'
+      ? 'SUPPLIER'
+      : 'PARTNERSHIP_BRANCH';
   const [client, snapshot] = await Promise.all([
     getActiveZohoClient(true),
     localSnapshot(entityType, event.aggregateId),
@@ -390,6 +429,57 @@ export async function listContactMappings(input: {
   const connection = await prisma.zohoConnection.findFirst({ where: { isActive: true } });
   if (!connection) throw new AppError(404, 'ZOHO_NOT_CONNECTED', 'Zoho Books belum terhubung.');
   const skip = (input.page - 1) * input.limit;
+  if (input.entityType === 'PARTNERSHIP_BRANCH') {
+    const where: Prisma.BranchWhereInput = {
+      type: 'PARTNERSHIP',
+      ...(input.search ? {
+        OR: [
+          { branchCode: { contains: input.search, mode: 'insensitive' } },
+          { name: { contains: input.search, mode: 'insensitive' } },
+          { city: { contains: input.search, mode: 'insensitive' } },
+        ],
+      } : {}),
+    };
+    const [rows, total] = await prisma.$transaction([
+      prisma.branch.findMany({ where, orderBy: { branchCode: 'asc' }, skip, take: input.limit }),
+      prisma.branch.count({ where }),
+    ]);
+    const ids = rows.map((row) => row.id);
+    const [mappings, reviews] = await Promise.all([
+      prisma.zohoEntityMapping.findMany({
+        where: {
+          zohoConnectionId: connection.id,
+          entityType: 'PARTNERSHIP_BRANCH',
+          localEntityId: { in: ids },
+        },
+      }),
+      prisma.zohoMappingReview.findMany({
+        where: {
+          zohoConnectionId: connection.id,
+          entityType: 'PARTNERSHIP_BRANCH',
+          localEntityId: { in: ids },
+        },
+      }),
+    ]);
+    return {
+      items: rows.map((row) => ({
+        entityType: 'PARTNERSHIP_BRANCH',
+        id: row.id,
+        code: row.branchCode,
+        name: row.name,
+        email: null,
+        isActive: row.isActive,
+        mapping: mappings.find((mapping) => mapping.localEntityId === row.id) || null,
+        review: reviews.find((review) => review.localEntityId === row.id) || null,
+      })),
+      pagination: {
+        page: input.page,
+        limit: input.limit,
+        total,
+        totalPages: Math.ceil(total / input.limit),
+      },
+    };
+  }
   if (input.entityType === 'MEMBER') {
     const where: Prisma.MemberWhereInput = input.search ? {
       OR: [

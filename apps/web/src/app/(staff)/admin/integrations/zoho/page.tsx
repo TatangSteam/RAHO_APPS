@@ -12,6 +12,7 @@ import {
   Database,
   ExternalLink,
   Eye,
+  FileInput,
   FileText,
   List,
   Landmark,
@@ -21,6 +22,7 @@ import {
   ReceiptText,
   RefreshCw,
   RotateCcw,
+  ShoppingCart,
   Unplug,
   Users,
 } from 'lucide-react';
@@ -29,7 +31,7 @@ import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 
-type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'expenses';
+type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
 
 type Connection = {
@@ -50,8 +52,14 @@ type Connection = {
   invoiceSyncReady: boolean;
   paymentSyncReady: boolean;
   expenseSyncReady: boolean;
+  purchaseOrderSyncReady: boolean;
+  billSyncReady: boolean;
+  vendorPaymentSyncReady: boolean;
   locationsSupported: boolean | null;
   locationsCapabilityError: string | null;
+  inventoryAdjustmentsSupported: boolean | null;
+  inventoryAdjustmentsCapabilityError: string | null;
+  inventoryAdjustmentsLastCheckedAt: string | null;
 };
 type Status = {
   configured: boolean;
@@ -126,7 +134,7 @@ type ContactReview = {
   candidates: ContactCandidate[];
 };
 type ContactMappingRow = {
-  entityType: 'MEMBER' | 'SUPPLIER';
+  entityType: 'MEMBER' | 'SUPPLIER' | 'PARTNERSHIP_BRANCH';
   id: string;
   code: string;
   name: string;
@@ -399,6 +407,315 @@ type ExpenseReconciliation = {
   }>;
 };
 
+type PartnershipSaleRow = {
+  id: string;
+  shipmentCode: string;
+  status: string;
+  shippedAt: string | null;
+  fromBranch: { id: string; branchCode: string; name: string };
+  partnershipBranch: { id: string; branchCode: string; name: string; type: string };
+  stockRequest: { id: string; requestCode: string };
+  invoice: { id: string; invoiceNumber: string; status: string } | null;
+  amounts: { revenue?: string; fifoCost?: string; grossProfit?: string } | null;
+  customerMapping: { zohoEntityId: string; status: string } | null;
+  invoiceMapping: { zohoEntityId: string; status: string } | null;
+  paymentMapping: { zohoEntityId: string; status: string } | null;
+  event: { id: string; status: EventStatus; lastError: string | null } | null;
+};
+type PartnershipSaleData = {
+  items: PartnershipSaleRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type PartnershipSalePreview = {
+  snapshot: {
+    shipmentCode: string;
+    invoiceNumber: string;
+    revenueAmount: string;
+    costAmount: string;
+    grossProfit: string;
+  };
+  payload: unknown;
+  issues: string[];
+  liveReady: boolean;
+  accounting: { revenue: string; fifoCost: string; grossProfit: string; policy: string };
+  excludedFields: string[];
+};
+type PartnershipReconciliation = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    shipmentId: string;
+    shipmentCode: string;
+    result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; differences: string[] };
+  }>;
+};
+
+type PurchaseOrderRow = {
+  id: string;
+  poNumber: string;
+  orderDate: string;
+  expectedDate: string | null;
+  status: string;
+  currency: string;
+  totalAmount: string;
+  supplier: { id: string; code: string; name: string };
+  branch: { id: string; code: string; name: string; type: string };
+  lineCount: number;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  events: Array<{ id: string; eventType: string; status: EventStatus; lastError: string | null }>;
+};
+type PurchaseOrderData = {
+  items: PurchaseOrderRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type PurchaseOrderPreview = {
+  snapshot: {
+    poNumber: string;
+    externalKey: string;
+    eligible: boolean;
+    excludedReason: string | null;
+    totalAmount: string;
+    lines: unknown[];
+  };
+  payload: unknown;
+  issues: string[];
+  liveReady: boolean;
+  stockPolicy: string;
+  excludedFields: string[];
+};
+type PurchaseOrderReconciliation = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    purchaseOrderId: string;
+    poNumber: string;
+    result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; differences: string[] };
+  }>;
+};
+
+type BillRow = {
+  id: string;
+  invoiceNumber: string;
+  supplierInvoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  amount: string;
+  paidAmount: string;
+  balanceAmount: string;
+  status: string;
+  lineCount: number;
+  supplier: { id: string; code: string; name: string };
+  branch: { id: string; code: string; name: string; type: string };
+  purchaseOrder: { id: string; poNumber: string };
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  event: { id: string; status: EventStatus; lastError: string | null } | null;
+};
+type BillData = {
+  items: BillRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type BillPreview = {
+  snapshot: {
+    invoiceNumber: string;
+    supplierInvoiceNumber: string;
+    externalKey: string;
+    poNumber: string;
+    eligible: boolean;
+    excludedReason: string | null;
+    amount: string;
+    lines: unknown[];
+  };
+  payload: unknown;
+  issues: string[];
+  liveReady: boolean;
+  inventoryPolicy: string;
+  excludedFields: string[];
+};
+type BillReconciliation = {
+  checked: number;
+  matched: number;
+  mismatched: number;
+  missing: number;
+  rows: Array<{
+    supplierInvoiceId: string;
+    invoiceNumber: string;
+    result: { status: 'MATCHED' | 'MISMATCH' | 'MISSING'; differences: string[] };
+  }>;
+};
+type GrniData = {
+  summary: {
+    waiting: number;
+    overdue: number;
+    clear: number;
+    unbilledValue: string;
+    slaDays: number;
+  };
+  items: Array<{
+    purchaseOrderId: string;
+    poNumber: string;
+    supplier: { code: string; name: string };
+    branch: { code: string; name: string };
+    oldestReceiptAt: string;
+    ageDays: number;
+    status: 'WAITING' | 'OVERDUE' | 'CLEAR';
+    receivedValue: string;
+    billedValue: string;
+    unbilledValue: string;
+    receiptCount: number;
+    billCount: number;
+    hasLegacyAmountOnlyBill: boolean;
+    lines: Array<{
+      purchaseOrderItemId: string;
+      sku: string | null;
+      name: string;
+      receivedQty: string;
+      billedQty: string;
+      unbilledQty: string;
+    }>;
+  }>;
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type VendorPaymentRow = {
+  id: string;
+  paymentNumber: string;
+  paymentReference: string;
+  paymentDate: string;
+  amount: string;
+  paymentMethod: 'CASH' | 'TRANSFER';
+  cashBankAccount: { id: string; code: string; name: string };
+  supplierInvoice: {
+    id: string;
+    invoiceNumber: string;
+    supplierInvoiceNumber: string;
+    balanceAmount: string;
+  };
+  supplier: { id: string; code: string; name: string };
+  branch: { id: string; code: string; name: string; type: string };
+  eligible: boolean;
+  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  event: { id: string; status: EventStatus; lastError: string | null } | null;
+};
+type VendorPaymentData = {
+  items: VendorPaymentRow[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type VendorPaymentPreview = {
+  snapshot: {
+    paymentNumber: string;
+    invoiceNumber: string;
+    externalKey: string;
+    eligible: boolean;
+    excludedReason: string | null;
+    amount: string;
+  };
+  dependencies: Record<string, string | undefined>;
+  payload: unknown;
+  issues: string[];
+  liveReady: boolean;
+  invariant: string;
+};
+type VendorPaymentReconciliation = {
+  checked: number;
+  matched: number;
+  missing: number;
+  mismatched: number;
+  rows: Array<{
+    supplierPaymentId: string;
+    paymentNumber: string;
+    result: {
+      status: 'MATCHED' | 'MISSING_IN_ZOHO' | 'AMOUNT_MISMATCH';
+      differences: string[];
+    };
+  }>;
+};
+type InventoryAdjustmentData = {
+  items: SyncEvent[];
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type InventoryAdjustmentCapability = {
+  supported: boolean | null;
+  error: string | null;
+  checkedAt: string | null;
+  fallback: 'CONTROLLED_EXPORT_OR_ENABLE_ZOHO_INVENTORY' | null;
+};
+type InventoryAdjustmentReconciliation = {
+  checked: number;
+  results: Array<{
+    localEntityId: string;
+    referenceMatched: boolean;
+    quantityMatched: boolean;
+    valueMatched: boolean;
+  }>;
+};
+type WebhookInboxData = {
+  items: Array<{
+    id: string;
+    eventType: string;
+    zohoEntityType: string | null;
+    zohoEntityId: string | null;
+    externalReference: string | null;
+    status: string;
+    correlationStatus: string;
+    receivedAt: string;
+    errorMessage: string | null;
+  }>;
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type ReconciliationResultRow = {
+  id: string;
+  entityType: string;
+  externalReference: string | null;
+  status: string;
+  severity: string;
+  differences: string[];
+  actionRequired: string | null;
+  resolvedAt: string | null;
+};
+type ReconciliationRunsData = {
+  items: Array<{
+    id: string;
+    runType: string;
+    status: string;
+    triggerSource: string;
+    totalChecked: number;
+    matchedCount: number;
+    exceptionCount: number;
+    errorCount: number;
+    lastError: string | null;
+    createdAt: string;
+    finishedAt: string | null;
+    results: ReconciliationResultRow[];
+  }>;
+  pagination: { page: number; limit: number; total: number; totalPages: number };
+};
+type GoLiveData = {
+  connected: boolean;
+  organizationId?: string;
+  organizationName?: string;
+  localErpIndependent: boolean;
+  runtime: {
+    mode: 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE';
+    source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED';
+    canaryBranchIds: string[];
+    masterFrozen: boolean;
+  };
+  control: null | {
+    id: string;
+    mode: 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE';
+    masterFrozen: boolean;
+    canaryBranchIds: string[];
+    mismatchFreeBusinessDays: number;
+    financeApprovedAt: string | null;
+    logisticsApprovedAt: string | null;
+    lastRollbackAt: string | null;
+    rollbackReason: string | null;
+  };
+};
+
 const eventStatuses: Array<EventStatus | ''> = [
   '',
   'PENDING',
@@ -440,7 +757,7 @@ export default function ZohoIntegrationPage() {
   const [queue, setQueue] = useState<QueueData | null>(null);
   const [discovery, setDiscovery] = useState<DiscoveryData | null>(null);
   const [contacts, setContacts] = useState<ContactData | null>(null);
-  const [contactEntityType, setContactEntityType] = useState<'MEMBER' | 'SUPPLIER'>('MEMBER');
+  const [contactEntityType, setContactEntityType] = useState<'MEMBER' | 'SUPPLIER' | 'PARTNERSHIP_BRANCH'>('MEMBER');
   const [contactSearch, setContactSearch] = useState('');
   const [contactPreview, setContactPreview] = useState<{
     snapshot: { displayName: string; externalKey: string };
@@ -473,6 +790,31 @@ export default function ZohoIntegrationPage() {
   const [expenseSearch, setExpenseSearch] = useState('');
   const [expensePreview, setExpensePreview] = useState<ExpensePreview | null>(null);
   const [expenseReconciliation, setExpenseReconciliation] = useState<ExpenseReconciliation | null>(null);
+  const [partnershipSales, setPartnershipSales] = useState<PartnershipSaleData | null>(null);
+  const [partnershipSearch, setPartnershipSearch] = useState('');
+  const [partnershipPreview, setPartnershipPreview] = useState<PartnershipSalePreview | null>(null);
+  const [partnershipReconciliation, setPartnershipReconciliation] = useState<PartnershipReconciliation | null>(null);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderData | null>(null);
+  const [purchaseOrderSearch, setPurchaseOrderSearch] = useState('');
+  const [purchaseOrderPreview, setPurchaseOrderPreview] = useState<PurchaseOrderPreview | null>(null);
+  const [purchaseOrderReconciliation, setPurchaseOrderReconciliation] = useState<PurchaseOrderReconciliation | null>(null);
+  const [bills, setBills] = useState<BillData | null>(null);
+  const [grni, setGrni] = useState<GrniData | null>(null);
+  const [billSearch, setBillSearch] = useState('');
+  const [billPreview, setBillPreview] = useState<BillPreview | null>(null);
+  const [billReconciliation, setBillReconciliation] = useState<BillReconciliation | null>(null);
+  const [vendorPayments, setVendorPayments] = useState<VendorPaymentData | null>(null);
+  const [vendorPaymentConfig, setVendorPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [vendorPaymentSearch, setVendorPaymentSearch] = useState('');
+  const [vendorPaymentPreview, setVendorPaymentPreview] = useState<VendorPaymentPreview | null>(null);
+  const [vendorPaymentReconciliation, setVendorPaymentReconciliation] = useState<VendorPaymentReconciliation | null>(null);
+  const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustmentData | null>(null);
+  const [inventoryAdjustmentCapability, setInventoryAdjustmentCapability] = useState<InventoryAdjustmentCapability | null>(null);
+  const [inventoryAdjustmentReconciliation, setInventoryAdjustmentReconciliation] = useState<InventoryAdjustmentReconciliation | null>(null);
+  const [webhookInbox, setWebhookInbox] = useState<WebhookInboxData | null>(null);
+  const [reconciliationRuns, setReconciliationRuns] = useState<ReconciliationRunsData | null>(null);
+  const [goLive, setGoLive] = useState<GoLiveData | null>(null);
+  const [canaryBranchIds, setCanaryBranchIds] = useState('');
   const [statusFilter, setStatusFilter] = useState<EventStatus | ''>('');
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
@@ -565,6 +907,83 @@ export default function ZohoIntegrationPage() {
     setExpenseConfig(config.data.data);
   }, [expenseSearch]);
 
+  const loadPartnershipSales = useCallback(async () => {
+    const response = await api.get<{ data: PartnershipSaleData }>('/integrations/zoho/partnership-sales', {
+      params: {
+        limit: 50,
+        ...(partnershipSearch.trim() ? { search: partnershipSearch.trim() } : {}),
+      },
+    });
+    setPartnershipSales(response.data.data);
+  }, [partnershipSearch]);
+
+  const loadPurchaseOrders = useCallback(async () => {
+    const response = await api.get<{ data: PurchaseOrderData }>('/integrations/zoho/purchase-orders', {
+      params: {
+        limit: 50,
+        ...(purchaseOrderSearch.trim() ? { search: purchaseOrderSearch.trim() } : {}),
+      },
+    });
+    setPurchaseOrders(response.data.data);
+  }, [purchaseOrderSearch]);
+
+  const loadBills = useCallback(async () => {
+    const [billResponse, grniResponse] = await Promise.all([
+      api.get<{ data: BillData }>('/integrations/zoho/bills', {
+        params: {
+          limit: 50,
+          ...(billSearch.trim() ? { search: billSearch.trim() } : {}),
+        },
+      }),
+      api.get<{ data: GrniData }>('/integrations/zoho/grni', {
+        params: {
+          limit: 50,
+          ...(billSearch.trim() ? { search: billSearch.trim() } : {}),
+        },
+      }),
+    ]);
+    setBills(billResponse.data.data);
+    setGrni(grniResponse.data.data);
+  }, [billSearch]);
+
+  const loadVendorPayments = useCallback(async () => {
+    const [rows, config] = await Promise.all([
+      api.get<{ data: VendorPaymentData }>('/integrations/zoho/vendor-payments', {
+        params: {
+          limit: 50,
+          ...(vendorPaymentSearch.trim() ? { search: vendorPaymentSearch.trim() } : {}),
+        },
+      }),
+      api.get<{ data: PaymentConfig }>('/integrations/zoho/vendor-payments/config'),
+    ]);
+    setVendorPayments(rows.data.data);
+    setVendorPaymentConfig(config.data.data);
+  }, [vendorPaymentSearch]);
+
+  const loadInventoryAdjustments = useCallback(async () => {
+    const [events, capability] = await Promise.all([
+      api.get<{ data: InventoryAdjustmentData }>('/integrations/zoho/inventory-adjustments', {
+        params: { limit: 50 },
+      }),
+      api.get<{ data: InventoryAdjustmentCapability }>('/integrations/zoho/inventory-adjustments/capability'),
+    ]);
+    setInventoryAdjustments(events.data.data);
+    setInventoryAdjustmentCapability(capability.data.data);
+  }, []);
+
+  const loadOperations = useCallback(async () => {
+    const [webhooks, runs, control] = await Promise.all([
+      api.get<{ data: WebhookInboxData }>('/integrations/zoho/webhooks', { params: { limit: 30 } }),
+      api.get<{ data: ReconciliationRunsData }>('/integrations/zoho/reconciliation/runs', { params: { limit: 10 } }),
+      api.get<{ data: GoLiveData }>('/integrations/zoho/go-live'),
+    ]);
+    setWebhookInbox(webhooks.data.data);
+    setReconciliationRuns(runs.data.data);
+    setGoLive(control.data.data);
+    const ids = control.data.data.control?.canaryBranchIds;
+    setCanaryBranchIds(Array.isArray(ids) ? ids.join(', ') : '');
+  }, []);
+
   useEffect(() => {
     if (user && !['SUPER_ADMIN', 'FINANCE_LOGISTICS_CONTROLLER'].includes(user.role)) router.replace('/dashboard');
   }, [router, user]);
@@ -584,7 +1003,13 @@ export default function ZohoIntegrationPage() {
     if (tab === 'payments') void loadPayments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat pembayaran Zoho.')));
     if (tab === 'retainers') void loadRetainers().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Retainer & omzet terapi.')));
     if (tab === 'expenses') void loadExpenses().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Expense Zoho.')));
-  }, [loadContacts, loadDiscovery, loadExpenses, loadInvoices, loadMasters, loadPayments, loadQueue, loadRetainers, tab]);
+    if (tab === 'partnership') void loadPartnershipSales().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat penjualan Partnership.')));
+    if (tab === 'purchaseOrders') void loadPurchaseOrders().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Purchase Order.')));
+    if (tab === 'bills') void loadBills().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Bill dan GRNI.')));
+    if (tab === 'vendorPayments') void loadVendorPayments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat Vendor Payment.')));
+    if (tab === 'inventoryAdjustments') void loadInventoryAdjustments().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat adjustment inventory.')));
+    if (tab === 'operations') void loadOperations().catch((error) => toast.error(apiErrorMessage(error, 'Gagal memuat kontrol go-live.')));
+  }, [loadBills, loadContacts, loadDiscovery, loadExpenses, loadInventoryAdjustments, loadInvoices, loadMasters, loadOperations, loadPartnershipSales, loadPayments, loadPurchaseOrders, loadQueue, loadRetainers, loadVendorPayments, tab]);
 
   useEffect(() => {
     const result = searchParams.get('zoho');
@@ -1005,6 +1430,320 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
+  async function previewPartnershipSale(row: PartnershipSaleRow) {
+    setAction(`partnership-preview-${row.id}`);
+    try {
+      const response = await api.get<{ data: PartnershipSalePreview }>(
+        `/integrations/zoho/partnership-sales/${row.id}/preview`,
+      );
+      setPartnershipPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview shipment Partnership gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueuePartnershipSale(row: PartnershipSaleRow) {
+    setAction(`partnership-sync-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/partnership-sales/${row.id}/enqueue`);
+      toast.success(status?.dryRun
+        ? 'Shipment Partnership masuk antrean dry-run.'
+        : 'Shipment Partnership masuk antrean Zoho.');
+      await loadPartnershipSales();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Shipment Partnership gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueuePartnershipCustomer(row: PartnershipSaleRow) {
+    setAction(`partnership-customer-${row.partnershipBranch.id}`);
+    try {
+      await api.post(
+        `/integrations/zoho/partnership-sales/customers/${row.partnershipBranch.id}/enqueue`,
+      );
+      toast.success('Customer Partnership masuk antrean mapping Zoho.');
+      await loadPartnershipSales();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Customer Partnership gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runPartnershipReconciliation() {
+    setAction('partnership-reconcile');
+    try {
+      const response = await api.post<{ data: PartnershipReconciliation }>(
+        '/integrations/zoho/partnership-sales/reconcile/run',
+      );
+      setPartnershipReconciliation(response.data.data);
+      toast.success('Rekonsiliasi penjualan Partnership selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi Partnership gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewPurchaseOrder(row: PurchaseOrderRow) {
+    setAction(`po-preview-${row.id}`);
+    try {
+      const response = await api.get<{ data: PurchaseOrderPreview }>(
+        `/integrations/zoho/purchase-orders/${row.id}/preview`,
+      );
+      setPurchaseOrderPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview Purchase Order gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueuePurchaseOrder(row: PurchaseOrderRow) {
+    setAction(`po-sync-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/purchase-orders/${row.id}/enqueue`);
+      toast.success(row.status === 'CANCELLED'
+        ? 'Pembatalan Purchase Order masuk antrean Zoho.'
+        : status?.dryRun
+          ? 'Purchase Order masuk antrean dry-run.'
+          : 'Purchase Order masuk antrean Zoho.');
+      await loadPurchaseOrders();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Purchase Order gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueuePurchaseOrderDependencies(row: PurchaseOrderRow) {
+    setAction(`po-dependencies-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/purchase-orders/${row.id}/dependencies/enqueue`);
+      toast.success('Vendor, Item, dan Location masuk antrean mapping.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Dependency Purchase Order gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runPurchaseOrderReconciliation() {
+    setAction('po-reconcile');
+    try {
+      const response = await api.post<{ data: PurchaseOrderReconciliation }>(
+        '/integrations/zoho/purchase-orders/reconcile/run',
+      );
+      setPurchaseOrderReconciliation(response.data.data);
+      toast.success('Rekonsiliasi Purchase Order selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi Purchase Order gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewBill(row: BillRow) {
+    setAction(`bill-preview-${row.id}`);
+    try {
+      const response = await api.get<{ data: BillPreview }>(
+        `/integrations/zoho/bills/${row.id}/preview`,
+      );
+      setBillPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview Zoho Bill gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueBill(row: BillRow) {
+    setAction(`bill-sync-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/bills/${row.id}/enqueue`);
+      toast.success(status?.dryRun ? 'Bill masuk antrean dry-run.' : 'Bill masuk antrean Zoho.');
+      await loadBills();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Bill gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueBillDependencies(row: BillRow) {
+    setAction(`bill-dependencies-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/bills/${row.id}/dependencies/enqueue`);
+      toast.success('Vendor, PO, Item, dan Location masuk antrean mapping.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Dependency Bill gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runBillReconciliation() {
+    setAction('bill-reconcile');
+    try {
+      const response = await api.post<{ data: BillReconciliation }>(
+        '/integrations/zoho/bills/reconcile/run',
+      );
+      setBillReconciliation(response.data.data);
+      toast.success('Rekonsiliasi Bill dan AP selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi Bill gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function previewVendorPayment(row: VendorPaymentRow) {
+    setAction(`vendor-payment-preview-${row.id}`);
+    try {
+      const response = await api.get<{ data: VendorPaymentPreview }>(
+        `/integrations/zoho/vendor-payments/${row.id}/preview`,
+      );
+      setVendorPaymentPreview(response.data.data);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Preview Vendor Payment gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function enqueueVendorPayment(row: VendorPaymentRow) {
+    setAction(`vendor-payment-sync-${row.id}`);
+    try {
+      await api.post(`/integrations/zoho/vendor-payments/${row.id}/enqueue`);
+      toast.success(status?.dryRun
+        ? 'Vendor Payment masuk antrean dry-run.'
+        : 'Vendor Payment masuk antrean Zoho.');
+      await loadVendorPayments();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Vendor Payment gagal dimasukkan ke antrean.'));
+    } finally { setAction(null); }
+  }
+
+  async function runVendorPaymentReconciliation() {
+    setAction('vendor-payment-reconcile');
+    try {
+      const response = await api.post<{ data: VendorPaymentReconciliation }>(
+        '/integrations/zoho/vendor-payments/reconcile/run',
+      );
+      setVendorPaymentReconciliation(response.data.data);
+      toast.success('Rekonsiliasi Vendor Payment dan AP selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi Vendor Payment gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function probeInventoryCapability() {
+    setAction('inventory-capability');
+    try {
+      const response = await api.post<{ data: InventoryAdjustmentCapability }>(
+        '/integrations/zoho/inventory-adjustments/capability/probe',
+      );
+      setInventoryAdjustmentCapability(response.data.data);
+      toast.success(response.data.data.supported
+        ? 'API adjustment Zoho Inventory tersedia.'
+        : 'API adjustment belum tersedia; gunakan ekspor terkontrol.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Capability probe gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function runInventoryAdjustmentReconciliation() {
+    setAction('inventory-reconcile');
+    try {
+      const response = await api.post<{ data: InventoryAdjustmentReconciliation }>(
+        '/integrations/zoho/inventory-adjustments/reconcile/run',
+      );
+      setInventoryAdjustmentReconciliation(response.data.data);
+      toast.success('Rekonsiliasi quantity dan value selesai.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rekonsiliasi adjustment gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function downloadInventoryAdjustmentExport() {
+    setAction('inventory-export');
+    try {
+      const response = await api.get('/integrations/zoho/inventory-adjustments/export', {
+        responseType: 'blob',
+      });
+      const url = URL.createObjectURL(response.data as Blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'zoho-inventory-adjustments.csv';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Ekspor adjustment gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function runFullReconciliation() {
+    setAction('full-reconciliation');
+    try {
+      await api.post('/integrations/zoho/reconciliation/run');
+      toast.success('Reconciliation penuh selesai atau dijadwalkan untuk dilanjutkan.');
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Reconciliation penuh gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function retryWebhookCorrelation(id: string) {
+    setAction(`webhook-${id}`);
+    try {
+      await api.post(`/integrations/zoho/webhooks/${id}/correlate`);
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Korelasi webhook gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function resolveReconciliationResult(id: string) {
+    const note = window.prompt('Catatan penyelesaian exception:');
+    if (!note?.trim()) return;
+    setAction(`resolve-${id}`);
+    try {
+      await api.post(`/integrations/zoho/reconciliation/results/${id}/resolve`, { note });
+      toast.success('Exception ditandai selesai.');
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Exception gagal diselesaikan.'));
+    } finally { setAction(null); }
+  }
+
+  async function saveGoLiveConfig() {
+    setAction('go-live-config');
+    try {
+      const ids = canaryBranchIds.split(',').map((entry) => entry.trim()).filter(Boolean);
+      await api.put('/integrations/zoho/go-live', {
+        masterFrozen: goLive?.runtime.masterFrozen || false,
+        canaryBranchIds: ids,
+      });
+      toast.success('Konfigurasi cutover disimpan dalam mode aman.');
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Konfigurasi cutover gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function changeGoLiveMode(mode: 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE') {
+    setAction(`go-live-${mode}`);
+    try {
+      await api.post('/integrations/zoho/go-live/mode', { mode });
+      toast.success(`Mode Zoho berubah menjadi ${mode}.`);
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, `Mode ${mode} belum dapat diaktifkan.`));
+    } finally { setAction(null); }
+  }
+
+  async function approveGoLive(area: 'FINANCE' | 'LOGISTICS') {
+    setAction(`approve-${area}`);
+    try {
+      await api.post('/integrations/zoho/go-live/approve', { area });
+      toast.success(`Approval ${area} tersimpan.`);
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Approval gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function rollbackGoLive() {
+    const reason = window.prompt('Alasan rollback Zoho:');
+    if (!reason?.trim()) return;
+    setAction('go-live-rollback');
+    try {
+      await api.post('/integrations/zoho/go-live/rollback', { reason });
+      toast.success('Sinkronisasi Zoho dihentikan. ERP lokal tetap berjalan.');
+      await loadOperations();
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Rollback gagal.'));
+    } finally { setAction(null); }
+  }
+
   if (loading) {
     return <div className="grid min-h-[60vh] place-items-center"><Loader2 className="animate-spin text-blue-600" size={32} /></div>;
   }
@@ -1030,6 +1769,12 @@ export default function ZohoIntegrationPage() {
           ['invoices', 'Sales Invoice', FileText],
           ['payments', 'Pembayaran & Piutang', CreditCard],
           ['retainers', 'Retainer & Omzet Terapi', Landmark],
+          ['partnership', 'Penjualan Partnership', Building2],
+          ['purchaseOrders', 'Purchase Order', ShoppingCart],
+          ['bills', 'Bill & GRNI', FileInput],
+          ['vendorPayments', 'Vendor Payment & AP', CreditCard],
+          ['inventoryAdjustments', 'Inventory Usage', Boxes],
+          ['operations', 'Go-live & Exception', CircleAlert],
           ['expenses', 'Expense', ReceiptText],
         ] as const).map(([value, label, Icon]) => (
           <button
@@ -1142,6 +1887,16 @@ export default function ZohoIntegrationPage() {
                             Expense belum siap: hubungkan ulang untuk scope expense Sprint 8.
                           </p>
                         )}
+                        {!connection.purchaseOrderSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Purchase Order belum siap: hubungkan ulang untuk scope purchase order.
+                          </p>
+                        )}
+                        {!connection.billSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Bill belum siap: hubungkan ulang untuk scope Bill Sprint 11.
+                          </p>
+                        )}
                         {connection.lastError && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
                       </div>
                     </div>
@@ -1245,17 +2000,18 @@ export default function ZohoIntegrationPage() {
             <div>
               <h2 className="font-semibold">Mapping Customer dan Vendor</h2>
               <p className="text-sm text-neutral-500">
-                Member menjadi customer; supplier menjadi vendor. Data klinis tidak dikirim.
+                Member dan cabang Partnership menjadi customer; supplier menjadi vendor. Data klinis tidak dikirim.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <select
                 value={contactEntityType}
-                onChange={(event) => setContactEntityType(event.target.value as 'MEMBER' | 'SUPPLIER')}
+                onChange={(event) => setContactEntityType(event.target.value as 'MEMBER' | 'SUPPLIER' | 'PARTNERSHIP_BRANCH')}
                 className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
               >
                 <option value="MEMBER">Member / Customer</option>
                 <option value="SUPPLIER">Supplier / Vendor</option>
+                <option value="PARTNERSHIP_BRANCH">Cabang Partnership / Customer</option>
               </select>
               <input
                 value={contactSearch}
@@ -1820,6 +2576,803 @@ export default function ZohoIntegrationPage() {
         </div>
       )}
 
+      {tab === 'partnership' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Kontrol Penjualan Barang Partnership</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Omzet muncul saat shipment SHIPPED. Terapi di cabang Partnership tetap tidak membuat omzet per infus di Zoho.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={partnershipSearch}
+                  onChange={(event) => setPartnershipSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadPartnershipSales(); }}
+                  placeholder="Cari shipment/order/invoice"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadPartnershipSales()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runPartnershipReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={status?.dryRun ? 'Matikan dry-run untuk rekonsiliasi live.' : undefined}
+                >
+                  Rekonsiliasi
+                </button>
+              </div>
+            </div>
+
+            {partnershipReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {partnershipReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {partnershipReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {partnershipReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {partnershipReconciliation.missing}</span>
+                </div>
+                {partnershipReconciliation.rows.filter((row) => row.result.status !== 'MATCHED').map((row) => (
+                  <p key={row.shipmentId} className="mt-1 text-xs">
+                    <strong>{row.shipmentCode}</strong>: {row.result.differences.join(' ')}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Shipment / Order</th>
+                    <th className="p-3">Omzet / HPP</th>
+                    <th className="p-3">Customer / Payment</th>
+                    <th className="p-3">Invoice Zoho</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {partnershipSales?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.shipmentCode}</span>
+                        <span className="block text-xs text-neutral-500">
+                          {row.stockRequest.requestCode} · {row.invoice?.invoiceNumber || 'Belum ada invoice'}
+                        </span>
+                        <span className="block text-xs">
+                          {row.fromBranch.branchCode} → {row.partnershipBranch.branchCode} · {row.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.amounts ? (
+                          <>
+                            <span className="block">Omzet IDR {Number(row.amounts.revenue || 0).toLocaleString('id-ID')}</span>
+                            <span className="block">HPP IDR {Number(row.amounts.fifoCost || 0).toLocaleString('id-ID')}</span>
+                            <span className="block font-semibold text-emerald-700">
+                              Laba kotor IDR {Number(row.amounts.grossProfit || 0).toLocaleString('id-ID')}
+                            </span>
+                          </>
+                        ) : <span className="text-amber-700">Menunggu shipment final</span>}
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className={row.customerMapping ? 'text-emerald-700' : 'text-amber-700'}>
+                          Customer: {row.customerMapping?.zohoEntityId || 'belum dipetakan'}
+                        </span>
+                        <span className="block">
+                          Advance/payment: {row.paymentMapping?.zohoEntityId || 'belum tersinkron'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.invoiceMapping ? (
+                          <span className="font-mono text-emerald-700">{row.invoiceMapping.zohoEntityId}</span>
+                        ) : <span className="text-amber-700">Belum tersinkron</span>}
+                        {row.event && (
+                          <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>
+                            {row.event.status}
+                          </span>
+                        )}
+                        {row.event?.lastError && <span className="mt-1 block text-red-600">{row.event.lastError}</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex min-w-48 flex-wrap gap-2">
+                          {!row.customerMapping && (
+                            <button
+                              onClick={() => void enqueuePartnershipCustomer(row)}
+                              disabled={!!action}
+                              className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700"
+                            >
+                              Petakan customer
+                            </button>
+                          )}
+                          {row.event && (
+                            <>
+                              <button onClick={() => void previewPartnershipSale(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">
+                                Preview
+                              </button>
+                              <button onClick={() => void enqueuePartnershipSale(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">
+                                {status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!partnershipSales?.items.length && (
+                <p className="p-8 text-center text-sm text-neutral-500">Belum ada shipment Partnership.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'purchaseOrders' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Kontrol Purchase Order</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Hanya PO berstatus issued yang dikirim. Membuat PO tidak mengurangi atau menambah stok ERP.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={purchaseOrderSearch}
+                  onChange={(event) => setPurchaseOrderSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadPurchaseOrders(); }}
+                  placeholder="Cari PO, vendor, cabang"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadPurchaseOrders()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runPurchaseOrderReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={status?.dryRun ? 'Matikan dry-run untuk rekonsiliasi live.' : undefined}
+                >
+                  Rekonsiliasi
+                </button>
+              </div>
+            </div>
+
+            {purchaseOrderReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {purchaseOrderReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {purchaseOrderReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {purchaseOrderReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {purchaseOrderReconciliation.missing}</span>
+                </div>
+                {purchaseOrderReconciliation.rows
+                  .filter((row) => row.result.status !== 'MATCHED')
+                  .map((row) => (
+                    <p key={row.purchaseOrderId} className="mt-1 text-xs">
+                      <strong>{row.poNumber}</strong>: {row.result.differences.join(' ')}
+                    </p>
+                  ))}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">PO / Tanggal</th>
+                    <th className="p-3">Vendor / Cabang</th>
+                    <th className="p-3">Nilai / Baris</th>
+                    <th className="p-3">Zoho</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {purchaseOrders?.items.map((row) => {
+                    const latestEvent = row.events.at(-1);
+                    const partnership = row.branch.type === 'PARTNERSHIP';
+                    return (
+                      <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                        <td className="p-3">
+                          <span className="block font-semibold">{row.poNumber}</span>
+                          <span className="block text-xs text-neutral-500">
+                            {new Date(row.orderDate).toLocaleDateString('id-ID')} · {row.status}
+                          </span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block font-semibold">{row.supplier.code} · {row.supplier.name}</span>
+                          <span className="block text-neutral-500">{row.branch.code} · {row.branch.name}</span>
+                          {partnership && <span className="block text-amber-700">Tidak memakai Location internal Zoho</span>}
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block font-semibold">
+                            {row.currency} {Number(row.totalAmount).toLocaleString('id-ID')}
+                          </span>
+                          <span>{row.lineCount} baris item</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          {row.mapping ? (
+                            <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span>
+                          ) : <span className="text-amber-700">{partnership ? 'Dikecualikan' : 'Belum tersinkron'}</span>}
+                          {latestEvent && (
+                            <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[latestEvent.status]}`}>
+                              {latestEvent.eventType} · {latestEvent.status}
+                            </span>
+                          )}
+                          {latestEvent?.lastError && <span className="mt-1 block max-w-xs text-red-600">{latestEvent.lastError}</span>}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex min-w-52 flex-wrap gap-2">
+                            <button
+                              onClick={() => void previewPurchaseOrder(row)}
+                              disabled={!!action}
+                              className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700"
+                            >
+                              Preview
+                            </button>
+                            {!partnership && !row.mapping && (
+                              <button
+                                onClick={() => void enqueuePurchaseOrderDependencies(row)}
+                                disabled={!!action}
+                                className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700"
+                              >
+                                Siapkan mapping
+                              </button>
+                            )}
+                            {!partnership && (
+                              <button
+                                onClick={() => void enqueuePurchaseOrder(row)}
+                                disabled={!!action}
+                                className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50"
+                              >
+                                {row.status === 'CANCELLED' ? 'Sync pembatalan' : status?.dryRun ? 'Dry-run' : 'Sinkronkan'}
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!purchaseOrders?.items.length && (
+                <p className="p-8 text-center text-sm text-neutral-500">Belum ada Purchase Order.</p>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'bills' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Received not billed (GRNI)</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Goods Receipt menaikkan stok ERP. Quantity Zoho baru naik satu kali ketika Bill dibuat.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={billSearch}
+                  onChange={(event) => setBillSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadBills(); }}
+                  placeholder="Cari Bill, PO, vendor"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadBills()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runBillReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Rekonsiliasi
+                </button>
+              </div>
+            </div>
+
+            {grni && (
+              <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                <div className="rounded-lg bg-amber-50 p-3 text-amber-900"><span className="block text-xs">Menunggu</span><strong>{grni.summary.waiting}</strong></div>
+                <div className="rounded-lg bg-red-50 p-3 text-red-900"><span className="block text-xs">Lewat SLA {grni.summary.slaDays} hari</span><strong>{grni.summary.overdue}</strong></div>
+                <div className="rounded-lg bg-emerald-50 p-3 text-emerald-900"><span className="block text-xs">Clear</span><strong>{grni.summary.clear}</strong></div>
+                <div className="rounded-lg bg-blue-50 p-3 text-blue-900"><span className="block text-xs">Nilai belum ditagih</span><strong>IDR {Number(grni.summary.unbilledValue).toLocaleString('id-ID')}</strong></div>
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">PO / Vendor</th>
+                    <th className="p-3">Umur / Status</th>
+                    <th className="p-3">Received</th>
+                    <th className="p-3">Billed</th>
+                    <th className="p-3">Belum ditagih</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grni?.items.map((row) => (
+                    <tr key={row.purchaseOrderId} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.poNumber}</span>
+                        <span className="block text-xs">{row.supplier.code} · {row.supplier.name}</span>
+                        <span className="block text-xs text-neutral-500">{row.branch.code} · {row.receiptCount} GR / {row.billCount} Bill</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className={`rounded px-2 py-1 font-semibold ${
+                          row.status === 'OVERDUE'
+                            ? 'bg-red-100 text-red-800'
+                            : row.status === 'CLEAR'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                        }`}>{row.status}</span>
+                        <span className="mt-2 block">{row.ageDays} hari</span>
+                        {row.hasLegacyAmountOnlyBill && <span className="block text-red-600">Ada Bill lama tanpa quantity</span>}
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="font-semibold">IDR {Number(row.receivedValue).toLocaleString('id-ID')}</span>
+                        {row.lines.map((line) => <span key={line.purchaseOrderItemId} className="block">{line.sku || '-'}: {line.receivedQty}</span>)}
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="font-semibold">IDR {Number(row.billedValue).toLocaleString('id-ID')}</span>
+                        {row.lines.map((line) => <span key={line.purchaseOrderItemId} className="block">{line.sku || '-'}: {line.billedQty}</span>)}
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="font-semibold">IDR {Number(row.unbilledValue).toLocaleString('id-ID')}</span>
+                        {row.lines.map((line) => <span key={line.purchaseOrderItemId} className="block">{line.sku || '-'}: {line.unbilledQty}</span>)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!grni?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada Goods Receipt.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <h2 className="font-semibold">Supplier Invoice → Zoho Bill</h2>
+            <p className="mt-1 text-sm text-neutral-500">Bill harus terkait PO dan hanya memuat quantity received yang benar-benar ditagihkan.</p>
+
+            {billReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {billReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {billReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {billReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {billReconciliation.missing}</span>
+                </div>
+                {billReconciliation.rows.filter((row) => row.result.status !== 'MATCHED').map((row) => (
+                  <p key={row.supplierInvoiceId} className="mt-1 text-xs">
+                    <strong>{row.invoiceNumber}</strong>: {row.result.differences.join(' ')}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Invoice / PO</th>
+                    <th className="p-3">Vendor / Cabang</th>
+                    <th className="p-3">Amount / AP</th>
+                    <th className="p-3">Zoho</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bills?.items.map((row) => {
+                    const partnership = row.branch.type === 'PARTNERSHIP';
+                    return (
+                      <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                        <td className="p-3">
+                          <span className="block font-semibold">{row.invoiceNumber}</span>
+                          <span className="block text-xs">{row.supplierInvoiceNumber} · {row.purchaseOrder.poNumber}</span>
+                          <span className="block text-xs text-neutral-500">{new Date(row.invoiceDate).toLocaleDateString('id-ID')} · {row.lineCount} baris</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block font-semibold">{row.supplier.code} · {row.supplier.name}</span>
+                          <span>{row.branch.code} · {row.branch.name}</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block font-semibold">IDR {Number(row.amount).toLocaleString('id-ID')}</span>
+                          <span className="block">Saldo IDR {Number(row.balanceAmount).toLocaleString('id-ID')}</span>
+                          <span>{row.status}</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          {row.mapping ? <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span> : <span className="text-amber-700">{partnership ? 'Dikecualikan' : 'Belum tersinkron'}</span>}
+                          {row.event && <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>{row.event.status}</span>}
+                          {row.event?.lastError && <span className="mt-1 block max-w-xs text-red-600">{row.event.lastError}</span>}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex min-w-52 flex-wrap gap-2">
+                            <button onClick={() => void previewBill(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Preview</button>
+                            {!partnership && !row.mapping && <button onClick={() => void enqueueBillDependencies(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Siapkan mapping</button>}
+                            {!partnership && <button onClick={() => void enqueueBill(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">{status?.dryRun ? 'Dry-run' : 'Sinkronkan'}</button>}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!bills?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada supplier invoice.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'vendorPayments' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Supplier Payment → Zoho Vendor Payment</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Setiap pembayaran diterapkan ke satu Bill yang tepat. Partial payment mengurangi saldo AP tanpa membuat payment ganda.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  value={vendorPaymentSearch}
+                  onChange={(event) => setVendorPaymentSearch(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === 'Enter') void loadVendorPayments(); }}
+                  placeholder="Cari payment, Bill, vendor"
+                  className="rounded-lg border bg-transparent px-3 py-2 text-sm dark:border-neutral-700"
+                />
+                <button onClick={() => void loadVendorPayments()} className="rounded-lg border p-2 dark:border-neutral-700">
+                  <RefreshCw size={18} />
+                </button>
+                <button
+                  onClick={() => void runVendorPaymentReconciliation()}
+                  disabled={!!action || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Rekonsiliasi AP
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-neutral-50 p-3 text-xs dark:bg-neutral-800">
+              <span>
+                Rekening terpetakan: <strong>{vendorPaymentConfig?.cashBankAccounts.filter((row) => row.mapping).length || 0}/{vendorPaymentConfig?.cashBankAccounts.length || 0}</strong>
+              </span>
+              <span>
+                Metode terpetakan: <strong>{vendorPaymentConfig?.paymentMethods.filter((row) => row.mapping).length || 0}/{vendorPaymentConfig?.paymentMethods.length || 0}</strong>
+              </span>
+              <button onClick={() => setTab('payments')} className="font-semibold text-blue-600">
+                Atur mapping rekening & metode
+              </button>
+            </div>
+
+            {vendorPaymentReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <div className="flex flex-wrap gap-4 font-semibold">
+                  <span>Diperiksa: {vendorPaymentReconciliation.checked}</span>
+                  <span className="text-emerald-700">Cocok: {vendorPaymentReconciliation.matched}</span>
+                  <span className="text-red-700">Beda: {vendorPaymentReconciliation.mismatched}</span>
+                  <span className="text-amber-700">Hilang: {vendorPaymentReconciliation.missing}</span>
+                </div>
+                {vendorPaymentReconciliation.rows.filter((row) => row.result.status !== 'MATCHED').map((row) => (
+                  <p key={row.supplierPaymentId} className="mt-1 text-xs">
+                    <strong>{row.paymentNumber}</strong>: {row.result.differences.join(' ')}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Payment / Tanggal</th>
+                    <th className="p-3">Vendor / Bill</th>
+                    <th className="p-3">Nominal / Rekening</th>
+                    <th className="p-3">Zoho</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendorPayments?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                      <td className="p-3">
+                        <span className="block font-semibold">{row.paymentNumber}</span>
+                        <span className="block text-xs">{new Date(row.paymentDate).toLocaleDateString('id-ID')}</span>
+                        <span className="block text-xs text-neutral-500">{row.paymentReference}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="block font-semibold">{row.supplier.code} · {row.supplier.name}</span>
+                        <span className="block">{row.supplierInvoice.invoiceNumber}</span>
+                        <span className="text-neutral-500">{row.branch.code} · {row.branch.type}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        <span className="block font-semibold">IDR {Number(row.amount).toLocaleString('id-ID')}</span>
+                        <span>{row.cashBankAccount.code} · {row.cashBankAccount.name}</span>
+                        <span className="block">{row.paymentMethod}</span>
+                      </td>
+                      <td className="p-3 text-xs">
+                        {row.mapping
+                          ? <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span>
+                          : <span className="text-amber-700">{row.eligible ? 'Belum tersinkron' : 'Dikecualikan'}</span>}
+                        {row.event && <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>{row.event.status}</span>}
+                        {row.event?.lastError && <span className="mt-1 block max-w-xs text-red-600">{row.event.lastError}</span>}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex min-w-40 flex-wrap gap-2">
+                          <button onClick={() => void previewVendorPayment(row)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Preview</button>
+                          {row.eligible && <button onClick={() => void enqueueVendorPayment(row)} disabled={!!action} className="rounded bg-blue-600 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50">{status?.dryRun ? 'Dry-run' : 'Sinkronkan'}</button>}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!vendorPayments?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada pembayaran supplier.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'inventoryAdjustments' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Treatment & Inventory Adjustment</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Consumer inventory berdiri sendiri dari finance. Error atau retry stok tidak memposting ulang omzet/HPP.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => void probeInventoryCapability()} disabled={!!action} className="rounded-lg border px-3 py-2 text-sm font-semibold dark:border-neutral-700">
+                  Tes capability
+                </button>
+                <button onClick={() => void downloadInventoryAdjustmentExport()} disabled={!!action} className="rounded-lg border px-3 py-2 text-sm font-semibold dark:border-neutral-700">
+                  Ekspor CSV
+                </button>
+                <button
+                  onClick={() => void runInventoryAdjustmentReconciliation()}
+                  disabled={!!action || inventoryAdjustmentCapability?.supported !== true || status?.dryRun}
+                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  Rekonsiliasi
+                </button>
+              </div>
+            </div>
+
+            <div className={`mt-4 rounded-xl border p-4 text-sm ${
+              inventoryAdjustmentCapability?.supported === true
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                : 'border-amber-200 bg-amber-50 text-amber-900'
+            }`}>
+              <p className="font-semibold">
+                Capability: {inventoryAdjustmentCapability?.supported === true
+                  ? 'Tersedia'
+                  : inventoryAdjustmentCapability?.supported === false
+                    ? 'Tidak tersedia'
+                    : 'Belum dites'}
+              </p>
+              <p className="mt-1 text-xs">
+                {inventoryAdjustmentCapability?.error
+                  || 'Bila endpoint tidak tersedia, transaksi lokal tetap jalan dan data dapat diekspor tanpa jurnal palsu.'}
+              </p>
+              <p className="mt-1 text-xs">Terakhir dicek: {when(inventoryAdjustmentCapability?.checkedAt || null)}</p>
+            </div>
+
+            {inventoryAdjustmentReconciliation && (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
+                <p className="font-semibold">Diperiksa: {inventoryAdjustmentReconciliation.checked}</p>
+                <p className="mt-1 text-xs">
+                  Selisih: {inventoryAdjustmentReconciliation.results.filter((row) => (
+                    !row.referenceMatched || !row.quantityMatched || !row.valueMatched
+                  )).length}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Event</th>
+                    <th className="p-3">Referensi</th>
+                    <th className="p-3">Cabang / Waktu</th>
+                    <th className="p-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inventoryAdjustments?.items.map((row) => {
+                    const payload = row.payload as {
+                      externalKey?: string;
+                      postingReference?: string | null;
+                      lines?: unknown[];
+                    };
+                    return (
+                      <tr key={row.id} className="border-b border-neutral-100 align-top dark:border-neutral-800">
+                        <td className="p-3">
+                          <span className="block font-semibold">{row.eventType}</span>
+                          <span className="text-xs text-neutral-500">{payload.lines?.length || 0} baris</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block font-mono">{payload.externalKey || row.aggregateId}</span>
+                          <span className="text-neutral-500">{payload.postingReference || '-'}</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className="block">{row.branchId || '-'}</span>
+                          <span>{when(row.occurredAt)}</span>
+                        </td>
+                        <td className="p-3 text-xs">
+                          <span className={`block w-fit rounded px-2 py-0.5 ${badge[row.status]}`}>{row.status}</span>
+                          {row.lastError && <span className="mt-1 block max-w-sm text-red-600">{row.lastError}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!inventoryAdjustments?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada event inventory.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
+      {tab === 'operations' && (
+        <div className="space-y-5">
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Cutover, Canary, dan Rollback</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Mode ini hanya mengontrol adapter Zoho. Pembelian paket, pembayaran, treatment, stok, dan purchasing lokal tetap berjalan saat mode OFF atau Zoho terputus.
+                </p>
+              </div>
+              <span className={`rounded-full px-3 py-1 text-sm font-bold ${
+                goLive?.runtime.mode === 'LIVE' ? 'bg-emerald-100 text-emerald-800'
+                  : goLive?.runtime.mode === 'CANARY' ? 'bg-blue-100 text-blue-800'
+                    : goLive?.runtime.mode === 'DRY_RUN' ? 'bg-violet-100 text-violet-800'
+                      : 'bg-neutral-200 text-neutral-700'
+              }`}>
+                {goLive?.runtime.mode || 'OFF'}
+              </span>
+            </div>
+
+            {!goLive?.connected && (
+              <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+                Zoho belum terhubung. Seluruh ERP lokal tetap dapat digunakan; worker dan reconciliation Zoho tidak melakukan write.
+              </div>
+            )}
+
+            {goLive?.connected && (
+              <>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl bg-neutral-50 p-3 text-sm dark:bg-neutral-800">
+                    <p className="text-xs text-neutral-500">Approval Finance</p>
+                    <p className="font-semibold">{goLive.control?.financeApprovedAt ? when(goLive.control.financeApprovedAt) : 'Belum'}</p>
+                  </div>
+                  <div className="rounded-xl bg-neutral-50 p-3 text-sm dark:bg-neutral-800">
+                    <p className="text-xs text-neutral-500">Approval Logistik</p>
+                    <p className="font-semibold">{goLive.control?.logisticsApprovedAt ? when(goLive.control.logisticsApprovedAt) : 'Belum'}</p>
+                  </div>
+                  <div className="rounded-xl bg-neutral-50 p-3 text-sm dark:bg-neutral-800">
+                    <p className="text-xs text-neutral-500">Canary bebas mismatch</p>
+                    <p className="font-semibold">{goLive.control?.mismatchFreeBusinessDays || 0}/5 hari kerja</p>
+                  </div>
+                </div>
+
+                {canManageConnection && (
+                  <div className="mt-4 space-y-3 rounded-xl border p-4 dark:border-neutral-700">
+                    <label className="block text-sm">
+                      <span className="font-semibold">ID cabang canary</span>
+                      <span className="ml-2 text-xs text-neutral-500">pisahkan dengan koma</span>
+                      <input
+                        value={canaryBranchIds}
+                        onChange={(event) => setCanaryBranchIds(event.target.value)}
+                        className="mt-2 w-full rounded-lg border bg-transparent px-3 py-2 font-mono text-xs dark:border-neutral-700"
+                        placeholder="cuid-cabang-1, cuid-cabang-2"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={() => void saveGoLiveConfig()} disabled={!!action} className="rounded-lg border px-3 py-2 text-xs font-semibold dark:border-neutral-700">Simpan kontrol</button>
+                      <button onClick={() => void approveGoLive('FINANCE')} disabled={!!action || !goLive.control} className="rounded-lg border px-3 py-2 text-xs font-semibold dark:border-neutral-700">Approval Finance</button>
+                      <button onClick={() => void approveGoLive('LOGISTICS')} disabled={!!action || !goLive.control} className="rounded-lg border px-3 py-2 text-xs font-semibold dark:border-neutral-700">Approval Logistik</button>
+                      <button onClick={() => void changeGoLiveMode('DRY_RUN')} disabled={!!action || !goLive.control} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Dry-run</button>
+                      <button onClick={() => void changeGoLiveMode('CANARY')} disabled={!!action || !goLive.control} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Canary</button>
+                      <button onClick={() => void changeGoLiveMode('LIVE')} disabled={!!action || !goLive.control} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Live</button>
+                      <button onClick={() => void rollbackGoLive()} disabled={!!action || !goLive.control} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Rollback OFF</button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Reconciliation & Exception</h2>
+                <p className="mt-1 text-sm text-neutral-500">Run dapat dilanjutkan setelah restart atau rate-limit.</p>
+              </div>
+              <button onClick={() => void runFullReconciliation()} disabled={!!action || !goLive?.connected} className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                Jalankan reconciliation
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              {reconciliationRuns?.items.map((run) => (
+                <div key={run.id} className="rounded-xl border p-4 text-sm dark:border-neutral-700">
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <span className="font-semibold">{run.runType} · {run.triggerSource}</span>
+                    <span>{run.status} · {when(run.finishedAt || run.createdAt)}</span>
+                  </div>
+                  <p className="mt-1 text-xs text-neutral-500">
+                    Diperiksa {run.totalChecked} · cocok {run.matchedCount} · exception {run.exceptionCount} · error {run.errorCount}
+                  </p>
+                  {run.lastError && <p className="mt-2 text-xs text-red-600">{run.lastError}</p>}
+                  {run.results.map((result) => (
+                    <div key={result.id} className="mt-2 flex flex-wrap items-start justify-between gap-2 rounded-lg bg-amber-50 p-3 text-xs text-amber-950">
+                      <div>
+                        <p className="font-semibold">{result.severity} · {result.entityType} · {result.status}</p>
+                        <p>{result.externalReference || '-'} · {(result.differences || []).join(', ')}</p>
+                        {result.actionRequired && <p className="mt-1">{result.actionRequired}</p>}
+                      </div>
+                      {!result.resolvedAt && (
+                        <button onClick={() => void resolveReconciliationResult(result.id)} disabled={!!action} className="rounded border border-amber-400 px-2 py-1 font-semibold">
+                          Selesaikan
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+              {!reconciliationRuns?.items.length && <p className="py-6 text-center text-sm text-neutral-500">Belum ada reconciliation run.</p>}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
+            <h2 className="font-semibold">Webhook Inbox</h2>
+            <p className="mt-1 text-sm text-neutral-500">Webhook duplikat disimpan satu kali; event yang belum punya mapping menunggu korelasi.</p>
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b text-xs uppercase text-neutral-500">
+                  <tr>
+                    <th className="p-3">Event</th>
+                    <th className="p-3">Entity</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Waktu</th>
+                    <th className="p-3">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {webhookInbox?.items.map((row) => (
+                    <tr key={row.id} className="border-b border-neutral-100 dark:border-neutral-800">
+                      <td className="p-3 font-semibold">{row.eventType}</td>
+                      <td className="p-3 text-xs">{row.zohoEntityType || '-'} · {row.externalReference || row.zohoEntityId || '-'}</td>
+                      <td className="p-3 text-xs">{row.status} · {row.correlationStatus}</td>
+                      <td className="p-3 text-xs">{when(row.receivedAt)}</td>
+                      <td className="p-3">
+                        {row.status === 'PENDING_CORRELATION' && (
+                          <button onClick={() => void retryWebhookCorrelation(row.id)} disabled={!!action} className="rounded border px-2 py-1 text-xs font-semibold dark:border-neutral-700">Coba korelasi</button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!webhookInbox?.items.length && <p className="p-8 text-center text-sm text-neutral-500">Belum ada webhook.</p>}
+            </div>
+          </section>
+        </div>
+      )}
+
       {tab === 'expenses' && (
         <div className="space-y-5">
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
@@ -2265,6 +3818,148 @@ export default function ZohoIntegrationPage() {
             </pre>
             <div className="mt-5 flex justify-end">
               <button onClick={() => setPaymentPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {partnershipPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPartnershipPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview shipment: {partnershipPreview.snapshot.shipmentCode}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{partnershipPreview.snapshot.invoiceNumber}</p>
+            <div className="mt-4 grid gap-2 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 sm:grid-cols-3">
+              <span>Omzet: IDR {Number(partnershipPreview.accounting.revenue).toLocaleString('id-ID')}</span>
+              <span>HPP FIFO: IDR {Number(partnershipPreview.accounting.fifoCost).toLocaleString('id-ID')}</span>
+              <span>Laba kotor: IDR {Number(partnershipPreview.accounting.grossProfit).toLocaleString('id-ID')}</span>
+            </div>
+            {!!partnershipPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {partnershipPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Sales Invoice barang</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {partnershipPreview.payload
+                ? JSON.stringify(partnershipPreview.payload, null, 2)
+                : 'Payload diblok sampai mapping customer, item, dan Location HQ lengkap.'}
+            </pre>
+            <p className="mt-4 text-sm font-semibold">Kebijakan accounting</p>
+            <p className="mt-1 text-xs text-neutral-600">{partnershipPreview.accounting.policy}</p>
+            <p className="mt-4 text-sm font-semibold">Field yang tidak pernah dikirim</p>
+            <p className="mt-1 text-xs text-red-600">{partnershipPreview.excludedFields.join(', ')}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setPartnershipPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {billPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setBillPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview Bill: {billPreview.snapshot.invoiceNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{billPreview.snapshot.externalKey}</p>
+            <p className="mt-1 text-sm">{billPreview.snapshot.supplierInvoiceNumber} · {billPreview.snapshot.poNumber}</p>
+            {!billPreview.snapshot.eligible && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Bill tidak dikirim ke Zoho</p>
+                <p className="mt-1">{billPreview.snapshot.excludedReason}</p>
+              </div>
+            )}
+            {!!billPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {billPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Zoho Bill</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {billPreview.payload
+                ? JSON.stringify(billPreview.payload, null, 2)
+                : 'Payload diblok sampai Vendor, PO, Item, UOM, Location, dan alokasi quantity lengkap.'}
+            </pre>
+            <p className="mt-4 text-sm font-semibold">Kebijakan anti-double-stock</p>
+            <p className="mt-1 text-xs text-neutral-600">{billPreview.inventoryPolicy}</p>
+            <p className="mt-4 text-sm font-semibold">Data yang tidak dikirim</p>
+            <p className="mt-1 text-xs text-red-600">{billPreview.excludedFields.join(', ')}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setBillPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {vendorPaymentPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setVendorPaymentPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview Vendor Payment: {vendorPaymentPreview.snapshot.paymentNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{vendorPaymentPreview.snapshot.externalKey}</p>
+            <p className="mt-1 text-sm">{vendorPaymentPreview.snapshot.invoiceNumber} · IDR {Number(vendorPaymentPreview.snapshot.amount).toLocaleString('id-ID')}</p>
+            {!vendorPaymentPreview.snapshot.eligible && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Vendor Payment tidak dikirim ke Zoho</p>
+                <p className="mt-1">{vendorPaymentPreview.snapshot.excludedReason}</p>
+              </div>
+            )}
+            {!!vendorPaymentPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {vendorPaymentPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Zoho Vendor Payment</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {vendorPaymentPreview.payload
+                ? JSON.stringify(vendorPaymentPreview.payload, null, 2)
+                : 'Payload diblok sampai Vendor, Bill, rekening, dan metode terpetakan.'}
+            </pre>
+            <p className="mt-4 text-xs text-neutral-600">{vendorPaymentPreview.invariant}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setVendorPaymentPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {purchaseOrderPreview && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4" onClick={() => setPurchaseOrderPreview(null)}>
+          <div className="max-h-[85vh] w-full max-w-2xl overflow-auto rounded-2xl bg-white p-6 shadow-xl dark:bg-neutral-900" onClick={(event) => event.stopPropagation()}>
+            <h3 className="text-lg font-bold">Preview PO: {purchaseOrderPreview.snapshot.poNumber}</h3>
+            <p className="mt-1 font-mono text-xs text-neutral-500">{purchaseOrderPreview.snapshot.externalKey}</p>
+            {!purchaseOrderPreview.snapshot.eligible && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">PO tidak dikirim ke Zoho</p>
+                <p className="mt-1">{purchaseOrderPreview.snapshot.excludedReason}</p>
+              </div>
+            )}
+            {!!purchaseOrderPreview.issues.length && (
+              <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
+                <p className="font-semibold">Belum siap live:</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {purchaseOrderPreview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                </ul>
+              </div>
+            )}
+            <p className="mt-4 text-sm font-semibold">Payload Purchase Order Zoho</p>
+            <pre className="mt-2 overflow-auto rounded-lg bg-neutral-100 p-3 text-xs dark:bg-neutral-800">
+              {purchaseOrderPreview.payload
+                ? JSON.stringify(purchaseOrderPreview.payload, null, 2)
+                : 'Payload diblok sampai mapping vendor, item, UOM, dan Location lengkap.'}
+            </pre>
+            <p className="mt-4 text-sm font-semibold">Kebijakan stok</p>
+            <p className="mt-1 text-xs text-neutral-600">{purchaseOrderPreview.stockPolicy}</p>
+            <p className="mt-4 text-sm font-semibold">Data yang tidak dikirim</p>
+            <p className="mt-1 text-xs text-red-600">{purchaseOrderPreview.excludedFields.join(', ')}</p>
+            <div className="mt-5 flex justify-end">
+              <button onClick={() => setPurchaseOrderPreview(null)} className="rounded-lg border px-4 py-2 text-sm font-semibold dark:border-neutral-700">Tutup</button>
             </div>
           </div>
         </div>

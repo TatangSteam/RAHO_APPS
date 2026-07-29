@@ -61,6 +61,52 @@ export default function PurchasingPage() {
     catch (error: any) { showToast.error(apiMessage(error, 'Aksi gagal.')); }
   };
 
+  const postInvoiceForOrder = async (order: PurchaseOrder) => {
+    const supplierInvoiceNumber = prompt('Nomor invoice supplier');
+    if (!supplierInvoiceNumber) return;
+    if (order.invoices.some((invoice) => !invoice.lines?.length)) {
+      showToast.error('PO mempunyai invoice lama tanpa detail quantity. Rekonsiliasi data lama sebelum membuat partial Bill berikutnya.');
+      return;
+    }
+    const lines: Array<{ purchaseOrderItemId: string; billedQty: string }> = [];
+    let amount = 0;
+    for (const item of order.items) {
+      const alreadyBilled = order.invoices
+        .flatMap((invoice) => invoice.lines || [])
+        .filter((line) => line.purchaseOrderItemId === item.id)
+        .reduce((sum, line) => sum + Number(line.billedQty), 0);
+      const available = Math.max(0, Number(item.receivedQty) - alreadyBilled);
+      if (available <= 0) continue;
+      const value = prompt(
+        `Quantity ${item.nameSnapshot} yang ditagihkan (maks ${available})`,
+        String(available),
+      );
+      if (value === null) return;
+      const billedQty = Number(value);
+      if (!Number.isFinite(billedQty) || billedQty < 0 || billedQty > available) {
+        showToast.error(`Quantity ${item.nameSnapshot} tidak valid.`);
+        return;
+      }
+      if (billedQty === 0) continue;
+      lines.push({ purchaseOrderItemId: item.id, billedQty: billedQty.toFixed(4) });
+      amount += billedQty * Number(item.unitPrice);
+    }
+    if (!lines.length || amount <= 0) {
+      showToast.error('Tidak ada quantity received yang dipilih untuk ditagihkan.');
+      return;
+    }
+    await act(
+      () => purchasingApi.postInvoice(
+        order.id,
+        supplierInvoiceNumber,
+        amount.toFixed(2),
+        order.supplier.paymentTermsDays,
+        lines,
+      ),
+      'Supplier invoice diposting dan masuk antrean Zoho Bill.',
+    );
+  };
+
   return <div className="mx-auto max-w-7xl space-y-5">
     <header>
       <h1 className="flex items-center gap-2 text-2xl font-semibold text-neutral-950 dark:text-neutral-50"><ShoppingCart className="text-blue-600 dark:text-blue-400" /> Purchasing & Accounts Payable</h1>
@@ -91,7 +137,7 @@ export default function PurchasingPage() {
           </tr>)}
         </Table>
       </section>}
-      {tab === 'PO' && <Table headers={['PO','Supplier','Status receipt','Nilai','Invoice']}>{orders.map((row) => <tr key={row.id} className="border-t"><Cell><b>{row.poNumber}</b><small className="block">{date(row.orderDate)}</small></Cell><Cell>{row.supplier.code} — {row.supplier.name}</Cell><Cell>{row.status}<small className="block text-neutral-500">{row.goodsReceipts.length} receipt</small></Cell><Cell>Rp {money(row.totalAmount)}</Cell><Cell>{['PARTIALLY_RECEIVED','RECEIVED'].includes(row.status) && <Small onClick={() => { const number = prompt('Nomor invoice supplier'); const amount = prompt('Nominal invoice', row.totalAmount); if (number && amount) void act(() => purchasingApi.postInvoice(row.id, number, amount, row.supplier.paymentTermsDays), 'Supplier invoice diposting.'); }}>Post invoice</Small>}</Cell></tr>)}</Table>}
+      {tab === 'PO' && <Table headers={['PO','Supplier','Status receipt','Nilai','Invoice / Aksi']}>{orders.map((row) => <tr key={row.id} className="border-t"><Cell><b>{row.poNumber}</b><small className="block">{date(row.orderDate)}</small></Cell><Cell>{row.supplier.code} — {row.supplier.name}</Cell><Cell>{row.status}<small className="block text-neutral-500">{row.goodsReceipts.length} receipt</small></Cell><Cell>Rp {money(row.totalAmount)}</Cell><Cell><div className="flex flex-wrap gap-2">{['PARTIALLY_RECEIVED','RECEIVED'].includes(row.status) && <Small onClick={() => void postInvoiceForOrder(row)}>Post invoice</Small>}{row.status === 'ISSUED' && row.goodsReceipts.length === 0 && <Small onClick={() => { const reason = prompt('Alasan pembatalan PO (minimal 3 karakter)'); if (reason) void act(() => purchasingApi.cancelOrder(row.id, reason), 'PO dibatalkan dan pembatalan masuk antrean Zoho.'); }}>Batalkan PO</Small>}</div></Cell></tr>)}</Table>}
       {tab === 'AP' && <Table headers={['Invoice','Supplier / PO','Jatuh tempo','Saldo','Status / Aksi']}>{invoices.map((row) => <tr key={row.id} className="border-t"><Cell><b>{row.supplierInvoiceNumber}</b><small className="block">{row.journalEntry.journalNumber}</small></Cell><Cell>{row.supplier.name}<small className="block">{row.purchaseOrder.poNumber}</small></Cell><Cell>{date(row.dueDate)}</Cell><Cell>Rp {money(row.balanceAmount)}<small className="block">dibayar Rp {money(row.paidAmount)}</small></Cell><Cell>{row.status !== 'PAID' ? <Small onClick={() => { const accountId = promptCash(cashAccounts.filter((account) => account.branchId === row.branchId)); const amount = prompt('Nominal pembayaran', row.balanceAmount); const reference = prompt('Referensi pembayaran'); if (accountId && amount && reference) void act(() => purchasingApi.payInvoice(row.id, accountId, amount, reference), 'Pembayaran supplier diposting.'); }}>Bayar</Small> : 'PAID'}</Cell></tr>)}</Table>}
       {tab === 'SUPPLIER' && <><SupplierForm onSaved={reload}/><Table headers={['Kode','Nama','Termin','Status']}>{suppliers.map((row) => <tr key={row.id} className="border-t"><Cell>{row.code}</Cell><Cell>{row.name}</Cell><Cell>{row.paymentTermsDays} hari</Cell><Cell><Status value={row.status}/></Cell></tr>)}</Table></>}
     </>}

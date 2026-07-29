@@ -15,6 +15,7 @@ describe('Zoho branch routing policy', () => {
 
   it('builds Partnership revenue and FIFO cost snapshot', () => {
     const payload = buildPartnershipGoodsShippedPayload({
+      sourceBranchId: 'hq-1',
       partnershipBranchId: 'partner-1',
       stockRequestId: 'request-1',
       stockRequestInvoiceId: 'invoice-1',
@@ -24,6 +25,7 @@ describe('Zoho branch routing policy', () => {
       invoiceItems: [{
         masterProductId: 'product-1',
         sku: 'VIT-C',
+        productName: 'Vitamin C',
         quantity: new Prisma.Decimal('10'),
         pricePerUnit: new Prisma.Decimal('500000'),
       }],
@@ -35,11 +37,13 @@ describe('Zoho branch routing policy', () => {
     });
 
     expect(payload).toMatchObject({
+      sourceBranchId: 'hq-1',
       revenueAmount: '5000000.00',
       costAmount: '3000000.0000',
       grossProfit: '2000000.0000',
       items: [{
         masterProductId: 'product-1',
+        productName: 'Vitamin C',
         quantity: '10.0000',
         unitPrice: '500000.00',
         unitCost: '300000.0000',

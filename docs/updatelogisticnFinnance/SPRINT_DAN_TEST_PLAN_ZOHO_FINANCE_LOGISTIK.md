@@ -822,6 +822,9 @@ RAHO session/material operational record = tetap ada
 
 ## 13. Sprint 10 — Purchase Order
 
+**Status implementasi: selesai (backend, worker, kontrol UI, dan unit/contract
+test). Live sandbox UAT tetap wajib sebelum production.**
+
 ### Fitur
 
 - vendor/item/location dependency;
@@ -865,7 +868,23 @@ ZohoBooks.purchaseorders.UPDATE
 - PO total dan status cocok;
 - stok Zoho tidak berubah ketika PO dibuat.
 
+### Bukti implementasi
+
+- create PO dan event `PO_ISSUED` berada dalam satu transaksi database;
+- `postingKey` dan unique event aggregate mencegah PO/event ganda;
+- payload memakai snapshot baris, quantity, UOM, harga, dan total saat issued;
+- mapping Vendor, Item, UOM, dan Location divalidasi sebelum create;
+- PO Zoho dipulihkan dari `reference_number` bila respons create terputus;
+- pembatalan hanya untuk PO issued yang belum received dan belum billed;
+- cancel mengirim status `cancelled`, tidak pernah delete;
+- Goods Receipt tetap lokal dan tidak dipicu oleh sinkronisasi PO;
+- dashboard Controller menyediakan preview, dependency enqueue, retry, dan
+  rekonsiliasi nomor/total/jumlah baris/status.
+
 ## 14. Sprint 11 — Goods Receipt, Bill, dan GRNI
+
+**Status implementasi: selesai (model quantity invoice, outbox, worker, kontrol
+UI, GRNI, rekonsiliasi, dan unit/contract test). Live sandbox UAT tetap wajib.**
 
 ### Fitur
 
@@ -922,6 +941,21 @@ Zoho quantity       -> naik satu kali
 - received-not-billed dapat dijelaskan;
 - AP dan inventory quantity sesuai transaksi billed.
 
+### Bukti implementasi
+
+- `SupplierInvoiceLine` menyimpan billed quantity per `PurchaseOrderItem`;
+- backend mengunci PO dan menghitung received quantity dikurangi seluruh billed
+  quantity sebelumnya;
+- billed quantity di atas received quantity ditolak;
+- total baris wajib sama dengan amount supplier invoice;
+- supplier invoice, jurnal AP, baris invoice, dan
+  `SUPPLIER_INVOICE_POSTED` dibuat dalam satu transaksi;
+- Zoho Bill membawa `purchaseorder_ids` dan `purchaseorder_item_id`;
+- retry mencari Bill berdasarkan reference invoice ERP sebelum create;
+- tidak ada event Goods Receipt atau inventory adjustment positif ke Zoho;
+- dashboard GRNI memakai SLA `ZOHO_GRNI_SLA_DAYS` dan branch scope;
+- rekonsiliasi membandingkan total, baris, PO link, reference, dan saldo AP.
+
 ## 15. Sprint 12 — Vendor Payment dan AP Reconciliation
 
 ### Fitur
@@ -960,6 +994,24 @@ ZohoBooks.vendorpayments.UPDATE
 - AP balance sama;
 - partial payment dan retry aman;
 - bank/cash mapping tervalidasi.
+
+### Implementasi aktual
+
+- `SupplierPayment`, jurnal AP, cash/bank transaction, dan
+  `AP_PAYMENT_POSTED` dibuat atomik;
+- worker menunggu mapping Zoho Bill, Vendor, paid-through account, dan payment
+  mode sebelum membuat Vendor Payment;
+- payload selalu mengaplikasikan nominal pembayaran ke satu `bill_id`;
+- retry mencari `paymentNumber` ERP pada `reference_number` Zoho sebelum create;
+- `SupplierPaymentRefund` immutable membuat jurnal debit kas/bank dan kredit AP,
+  lalu menerbitkan `AP_PAYMENT_REFUNDED`;
+- refund Zoho mengurangi aplikasi payment pada Bill dan membuat refund yang
+  tetap mengacu Vendor Payment asli;
+- rekonsiliasi menghasilkan `MATCHED`, `MISSING_IN_ZOHO`, atau
+  `AMOUNT_MISMATCH`, serta menjalankan pemeriksaan saldo AP Bill;
+- dashboard `Vendor Payment & AP` menyediakan preview, retry, kesiapan mapping,
+  dan hasil rekonsiliasi;
+- OAuth contract dinaikkan ke scope version `12`.
 
 ## 16. Sprint 13 — Treatment Completion dan Inventory Usage
 
@@ -1061,6 +1113,38 @@ Jika API adjustment tidak tersedia:
 - duplicate/retry nol;
 - privacy test lulus.
 
+### Status implementasi 29 Juli 2026
+
+Sprint 13 telah diimplementasikan secara aditif:
+
+- completion tetap menerbitkan `TREATMENT_COMPLETED` v3 untuk finance dan
+  outbox terpisah `TREATMENT_INVENTORY_CONSUMED` untuk inventory;
+- cancellation menerbitkan reversal inventory terpisah sehingga retry inventory
+  tidak memposting ulang revenue/HPP;
+- adjustment manual dan stock opname menerbitkan snapshot immutable setelah
+  posting lokal berhasil;
+- payload inventory hanya berisi referensi event, tanggal, SKU/item, location,
+  quantity, unit rate/value, reason, dan material posting reference;
+- cabang Partnership di-skip oleh adapter Zoho dan tetap diproses lokal;
+- capability probe, reconciliation quantity/value, serta controlled CSV export
+  tersedia pada dashboard dan API;
+- endpoint quantity adjustment menggunakan API resmi Zoho Inventory
+  `/inventory/v1/inventoryadjustments`.
+
+Feature flag default adalah `ZOHO_INVENTORY_SYNC_ENABLED=false` agar koneksi
+Zoho Books Sprint 1-12 tidak berubah. Untuk capability PoC organisasi sandbox:
+
+1. ubah `ZOHO_INVENTORY_SYNC_ENABLED=true`;
+2. ubah `ZOHO_REQUIRED_SCOPE_VERSION=13`;
+3. restart API dan hubungkan ulang Zoho agar scope
+   `ZohoInventory.inventoryadjustments.READ/CREATE` diberikan;
+4. klik **Tes capability**;
+5. hanya aktifkan worker live setelah capability berstatus tersedia.
+
+Jika organisasi tidak memiliki Zoho Inventory atau scope ditolak, kembalikan
+flag ke `false`; completion dan ledger lokal tetap berjalan, sementara operator
+menggunakan ekspor terkontrol.
+
 ## 17. Sprint 14 — Webhook, Reconciliation, Cutover, dan Go-live
 
 ### Fitur
@@ -1133,6 +1217,31 @@ Lakukan minimal dua kali di organisasi test:
 - rollback feature flag teruji;
 - Finance dan Logistik menandatangani UAT;
 - runbook insiden tersedia.
+
+### Status implementasi 29 Juli 2026
+
+Sprint 14 telah diimplementasikan dengan boundary berikut:
+
+- `ZohoWebhookInbox` menyimpan webhook valid secara deduplicated;
+- source divalidasi terhadap organization aktif dan secret custom header/HMAC;
+- event unknown disimpan aman sebagai `IGNORED`;
+- event yang datang sebelum mapping berstatus `PENDING_CORRELATION`;
+- webhook drift membuat `ZohoReconciliationRun/Result`;
+- full reconciliation memeriksa missing, duplicate reference, amount/status drift,
+  closed period, pelanggaran treatment Partnership, dan salah routing shipment
+  Partnership;
+- cursor reconciliation disimpan per resource sehingga run `PAUSED` dapat
+  dilanjutkan setelah rate-limit atau restart;
+- scheduler default `OFF`;
+- `ZohoGoLiveControl` menyediakan mode `OFF`, `DRY_RUN`, `CANARY`, dan `LIVE`;
+- promosi CANARY/LIVE membutuhkan approval, reconciliation bersih, dan
+  dead-letter kosong;
+- LIVE membutuhkan lima hari kerja canary bebas mismatch;
+- rollback hanya mematikan adapter Zoho dan tidak membatalkan transaksi lokal.
+
+Kontrak wajib: tidak adanya koneksi, token kedaluwarsa, rate-limit, atau outage
+Zoho tidak boleh menggagalkan pembelian paket, pembayaran, treatment completion,
+FIFO, stock request, shipment, purchasing, AP, maupun ledger lokal.
 
 ## 18. Regression matrix
 

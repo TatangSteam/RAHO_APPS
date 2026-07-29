@@ -558,6 +558,17 @@ erDiagram
         string status
     }
 
+    SUPPLIER_INVOICE_LINE {
+        string id PK
+        string supplierInvoiceId FK
+        string purchaseOrderItemId FK
+        int lineNo
+        string descriptionSnapshot
+        decimal billedQty
+        decimal unitPrice
+        decimal lineTotal
+    }
+
     SUPPLIER_PAYMENT {
         string id PK
         string paymentNumber UK
@@ -569,6 +580,21 @@ erDiagram
         string cashBankTransactionId FK
         decimal amount
         datetime paymentDate
+    }
+
+    SUPPLIER_PAYMENT_REFUND {
+        string id PK
+        string refundNumber UK
+        string postingKey UK
+        string supplierPaymentId FK
+        string supplierInvoiceId FK
+        string cashBankAccountId FK
+        string branchId FK
+        string journalEntryId FK
+        string cashBankTransactionId FK
+        decimal amount
+        string reason
+        datetime refundDate
     }
 
     MASTER_PRODUCT {
@@ -678,12 +704,20 @@ erDiagram
     ACCOUNT ||--o{ SUPPLIER_INVOICE : grni_account
     ACCOUNT ||--o{ SUPPLIER_INVOICE : ap_account
     JOURNAL_ENTRY ||--o| SUPPLIER_INVOICE : journals
+    SUPPLIER_INVOICE ||--o{ SUPPLIER_INVOICE_LINE : contains
+    PURCHASE_ORDER_ITEM ||--o{ SUPPLIER_INVOICE_LINE : bills_received_quantity
 
     SUPPLIER_INVOICE ||--o{ SUPPLIER_PAYMENT : paid_by
     CASH_BANK_ACCOUNT ||--o{ SUPPLIER_PAYMENT : paid_through
     BRANCH ||--o{ SUPPLIER_PAYMENT : pays
     JOURNAL_ENTRY ||--o| SUPPLIER_PAYMENT : journals
     CASH_BANK_TRANSACTION ||--o| SUPPLIER_PAYMENT : settles
+    SUPPLIER_PAYMENT ||--o{ SUPPLIER_PAYMENT_REFUND : refunded_by
+    SUPPLIER_INVOICE ||--o{ SUPPLIER_PAYMENT_REFUND : restores_ap
+    CASH_BANK_ACCOUNT ||--o{ SUPPLIER_PAYMENT_REFUND : received_to
+    BRANCH ||--o{ SUPPLIER_PAYMENT_REFUND : receives
+    JOURNAL_ENTRY ||--o| SUPPLIER_PAYMENT_REFUND : journals
+    CASH_BANK_TRANSACTION ||--o| SUPPLIER_PAYMENT_REFUND : settles
 ```
 
 ## 3. Partnership Order, Invoice, dan Shipment
@@ -1253,9 +1287,8 @@ foreign-key relation agar sesuai schema aktual.
 
 ## 5. Integrasi Zoho Finance–Logistik dan Access Control
 
-`ZOHO_CONNECTION` dan `INTEGRATION_EVENT` sudah ada. Entitas bertanda
-`PLANNED_*` adalah tabel yang direkomendasikan dalam development flow dan belum
-ada pada Prisma schema saat dokumen ini dibuat.
+Seluruh entitas pada bagian ini sudah tersedia pada Prisma schema setelah
+Sprint 14.
 
 ```mermaid
 erDiagram
@@ -1298,7 +1331,7 @@ erDiagram
         datetime occurredAt
     }
 
-    PLANNED_ZOHO_ENTITY_MAPPING {
+    ZOHO_ENTITY_MAPPING {
         string id PK
         string zohoConnectionId FK
         string entityType
@@ -1306,62 +1339,104 @@ erDiagram
         string zohoEntityId
         string externalKey
         string status
-        string localPayloadHash
-        string zohoPayloadHash
+        json metadata
         datetime lastSyncedAt
     }
 
-    PLANNED_ZOHO_SYNC_ATTEMPT {
+    ZOHO_SYNC_ATTEMPT {
         string id PK
         string integrationEventId FK
         int attemptNo
-        string requestMethod
-        string requestPath
-        string requestHash
-        int responseStatus
-        string zohoCode
-        string errorCategory
-        string errorMessageSanitized
-        int durationMs
+        string workerId
+        string status
+        int httpStatus
+        string errorCode
+        string errorMessage
+        boolean retryable
+        json requestSummary
+        json responseSummary
         datetime startedAt
-        datetime finishedAt
+        datetime completedAt
     }
 
-    PLANNED_ZOHO_RECONCILIATION_RUN {
+    ZOHO_RECONCILIATION_RUN {
         string id PK
         string zohoConnectionId FK
-        string reconciliationType
+        string runType
         string status
-        datetime periodStart
-        datetime periodEnd
+        string triggerSource
+        string scheduledKey UK
+        json cursor
+        int totalChecked
         int matchedCount
-        int mismatchCount
+        int exceptionCount
+        int errorCount
         datetime startedAt
         datetime finishedAt
     }
 
-    PLANNED_ZOHO_RECONCILIATION_RESULT {
+    ZOHO_RECONCILIATION_RESULT {
         string id PK
         string reconciliationRunId FK
         string entityType
         string localEntityId
         string zohoEntityId
+        string externalReference
         string status
-        decimal localAmount
-        decimal zohoAmount
-        json details
+        string severity
+        json differences
+        json evidence
+        string actionRequired
+        datetime resolvedAt
+    }
+
+    ZOHO_WEBHOOK_INBOX {
+        string id PK
+        string zohoConnectionId FK
+        string organizationId
+        string dedupKey UK
+        string eventType
+        string zohoEntityType
+        string zohoEntityId
+        string payloadHash
+        json payload
+        boolean signatureValid
+        boolean sourceValid
+        string status
+        string correlationStatus
+        string reconciliationRunId FK
+        datetime receivedAt
+        datetime processedAt
+    }
+
+    ZOHO_GO_LIVE_CONTROL {
+        string id PK
+        string zohoConnectionId FK,UK
+        string mode
+        boolean masterFrozen
+        json canaryBranchIds
+        int mismatchFreeBusinessDays
+        datetime financeApprovedAt
+        datetime logisticsApprovedAt
+        datetime lastRehearsalAt
+        datetime lastRollbackAt
+        string rollbackReason
+        string updatedById
     }
 
     USER ||--o{ ZOHO_CONNECTION : creates
     USER ||--o{ ZOHO_CONNECTION : updates
-    ZOHO_CONNECTION ||--o{ PLANNED_ZOHO_ENTITY_MAPPING : owns
-    INTEGRATION_EVENT ||--o{ PLANNED_ZOHO_SYNC_ATTEMPT : attempts
-    ZOHO_CONNECTION ||--o{ PLANNED_ZOHO_RECONCILIATION_RUN : reconciles
-    PLANNED_ZOHO_RECONCILIATION_RUN ||--|{ PLANNED_ZOHO_RECONCILIATION_RESULT : produces
+    ZOHO_CONNECTION ||--o{ ZOHO_ENTITY_MAPPING : owns
+    INTEGRATION_EVENT ||--o{ ZOHO_SYNC_ATTEMPT : attempts
+    ZOHO_CONNECTION ||--o{ ZOHO_RECONCILIATION_RUN : reconciles
+    ZOHO_RECONCILIATION_RUN ||--o{ ZOHO_RECONCILIATION_RESULT : produces
+    ZOHO_CONNECTION ||--o{ ZOHO_WEBHOOK_INBOX : receives
+    ZOHO_RECONCILIATION_RUN ||--o{ ZOHO_WEBHOOK_INBOX : correlates
+    ZOHO_CONNECTION ||--o| ZOHO_GO_LIVE_CONTROL : controls
 ```
 
 Relasi `IntegrationEvent.aggregateId` dan
-`PlannedZohoEntityMapping.localEntityId` bersifat polymorphic. Nilainya dapat
+`ZohoEntityMapping.localEntityId` bersifat polymorphic. Nilainya dapat
 menunjuk ke:
 
 ```text
@@ -1375,6 +1450,7 @@ Supplier
 PurchaseOrder
 SupplierInvoice
 SupplierPayment
+SupplierPaymentRefund
 MasterProduct
 InventoryAdjustment
 StockOpname

@@ -11,6 +11,14 @@ import * as invoiceService from './zoho.invoice.service';
 import * as paymentService from './zoho.payment.service';
 import * as retainerService from './zoho.retainer.service';
 import * as expenseService from './zoho.expense.service';
+import * as partnershipService from './zoho.partnership.service';
+import * as purchaseOrderService from './zoho.purchase-order.service';
+import * as billService from './zoho.bill.service';
+import * as vendorPaymentService from './zoho.vendor-payment.service';
+import * as inventoryAdjustmentService from './zoho.inventory-adjustment.service';
+import * as webhookService from './zoho.webhook.service';
+import * as reconciliationService from './zoho.reconciliation.service';
+import * as goLiveService from './zoho.go-live.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -29,7 +37,7 @@ const discoveryQuerySchema = z.object({
 });
 
 const contactListSchema = z.object({
-  entityType: z.enum(['MEMBER', 'SUPPLIER']).default('MEMBER'),
+  entityType: z.enum(['MEMBER', 'SUPPLIER', 'PARTNERSHIP_BRANCH']).default('MEMBER'),
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
   search: z.string().trim().min(1).max(100).optional(),
@@ -108,6 +116,56 @@ const expenseListSchema = z.object({
 const expensePaidThroughMappingSchema = z.object({
   cashBankAccountId: z.string().cuid(),
   zohoAccountId: z.string().trim().min(1).max(100),
+});
+
+const partnershipSaleListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const purchaseOrderListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const billListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().trim().min(1).max(100).optional(),
+});
+
+const grniListSchema = billListSchema.extend({
+  overdueOnly: z.enum(['true', 'false']).optional()
+    .transform((value) => value === 'true'),
+});
+
+const vendorPaymentListSchema = billListSchema;
+const inventoryAdjustmentListSchema = billListSchema;
+const sprint14ListSchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.string().trim().min(1).max(50).optional(),
+});
+const resolveExceptionSchema = z.object({
+  note: z.string().trim().min(5).max(1000),
+});
+const goLiveConfigSchema = z.object({
+  masterFrozen: z.boolean().optional(),
+  canaryBranchIds: z.array(z.string().cuid()).max(20).optional(),
+  canaryCustomerId: z.string().cuid().nullable().optional(),
+  canaryVendorId: z.string().cuid().nullable().optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+});
+const goLiveModeSchema = z.object({
+  mode: z.enum(['OFF', 'DRY_RUN', 'CANARY', 'LIVE']),
+});
+const goLiveApprovalSchema = z.object({
+  area: z.enum(['FINANCE', 'LOGISTICS']),
+});
+const rollbackSchema = z.object({
+  reason: z.string().trim().min(5).max(1000),
 });
 
 export async function connect(req: Request, res: Response, next: NextFunction) {
@@ -422,4 +480,382 @@ export async function enqueueExpense(req: Request, res: Response, next: NextFunc
 
 export async function reconcileExpenses(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await expenseService.reconcileExpenses(req.user.userId)); } catch (error) { next(error); }
+}
+
+export async function partnershipSales(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = partnershipSaleListSchema.parse(req.query);
+    sendSuccess(res, await partnershipService.listPartnershipSales(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function previewPartnershipSale(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(
+      res,
+      await partnershipService.previewPartnershipSale(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function enqueuePartnershipSale(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(
+      res,
+      await partnershipService.enqueuePartnershipSale(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function enqueuePartnershipCustomer(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await partnershipService.enqueuePartnershipCustomer(req.user.userId, req.params.branchId),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function reconcilePartnershipSales(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await partnershipService.reconcilePartnershipSales(req.user.userId));
+  } catch (error) { next(error); }
+}
+
+export async function purchaseOrders(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = purchaseOrderListSchema.parse(req.query);
+    sendSuccess(res, await purchaseOrderService.listPurchaseOrderMappings(
+      req.user.userId,
+      { ...query, page: query.page ?? 1, limit: query.limit ?? 20 },
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function previewPurchaseOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(
+      res,
+      await purchaseOrderService.previewPurchaseOrder(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function enqueuePurchaseOrder(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(
+      res,
+      await purchaseOrderService.enqueuePurchaseOrder(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function enqueuePurchaseOrderDependencies(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await purchaseOrderService.enqueuePurchaseOrderDependencies(
+        req.user.userId,
+        req.params.id,
+      ),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function reconcilePurchaseOrders(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await purchaseOrderService.reconcilePurchaseOrders(req.user.userId));
+  } catch (error) { next(error); }
+}
+
+export async function bills(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = billListSchema.parse(req.query);
+    sendSuccess(res, await billService.listBills(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function previewBill(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await billService.previewBill(req.user.userId, req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function enqueueBill(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await billService.enqueueBill(req.user.userId, req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function enqueueBillDependencies(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await billService.enqueueBillDependencies(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function grni(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = grniListSchema.parse(req.query);
+    sendSuccess(res, await billService.listGrniExceptions(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function reconcileBills(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await billService.reconcileBills(req.user.userId));
+  } catch (error) { next(error); }
+}
+
+export async function vendorPayments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = vendorPaymentListSchema.parse(req.query);
+    sendSuccess(res, await vendorPaymentService.listVendorPayments(req.user.userId, {
+      ...query,
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function vendorPaymentConfig(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await vendorPaymentService.getVendorPaymentConfig(req.user.userId));
+  } catch (error) { next(error); }
+}
+
+export async function previewVendorPayment(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await vendorPaymentService.previewVendorPayment(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function enqueueVendorPayment(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await vendorPaymentService.enqueueVendorPayment(req.user.userId, req.params.id),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function reconcileVendorPayments(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(
+      res,
+      await vendorPaymentService.reconcileVendorPayments(req.user.userId),
+    );
+  } catch (error) { next(error); }
+}
+
+export async function inventoryAdjustments(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = inventoryAdjustmentListSchema.parse(req.query);
+    sendSuccess(res, await inventoryAdjustmentService.listInventoryAdjustmentEvents(
+      req.user.userId,
+      { page: query.page ?? 1, limit: query.limit ?? 20 },
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function inventoryAdjustmentCapability(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await inventoryAdjustmentService.getInventoryAdjustmentCapability());
+  } catch (error) { next(error); }
+}
+
+export async function probeInventoryAdjustmentCapability(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await inventoryAdjustmentService.probeInventoryAdjustmentCapability());
+  } catch (error) { next(error); }
+}
+
+export async function exportInventoryAdjustments(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const csv = await inventoryAdjustmentService.controlledInventoryExport(req.user.userId);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="zoho-inventory-adjustments.csv"');
+    res.status(200).send(csv);
+  } catch (error) { next(error); }
+}
+
+export async function reconcileInventoryAdjustments(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    sendSuccess(res, await inventoryAdjustmentService.reconcileInventoryAdjustments());
+  } catch (error) { next(error); }
+}
+
+export async function receiveWebhook(req: Request, res: Response, next: NextFunction) {
+  try {
+    const rawBody = (req as Request & { rawBody?: Buffer }).rawBody
+      || Buffer.from(JSON.stringify(req.body));
+    const result = await webhookService.receiveZohoWebhook({
+      organizationId: req.params.organizationId,
+      payload: req.body,
+      rawBody,
+      headers: req.headers,
+    });
+    res.status(202).json({ success: true, data: result });
+  } catch (error) { next(error); }
+}
+
+export async function webhookInbox(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = sprint14ListSchema.parse(req.query);
+    sendSuccess(res, await webhookService.listWebhookInbox({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      status: query.status,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function retryWebhookCorrelation(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await webhookService.retryPendingWebhookCorrelation(req.params.id));
+  } catch (error) { next(error); }
+}
+
+export async function reconciliationRuns(req: Request, res: Response, next: NextFunction) {
+  try {
+    const query = sprint14ListSchema.parse(req.query);
+    sendSuccess(res, await reconciliationService.listReconciliationRuns({
+      page: query.page ?? 1,
+      limit: query.limit ?? 20,
+      status: query.status,
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function runFullReconciliation(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await reconciliationService.startReconciliationRun({
+      actorUserId: req.user.userId,
+      triggerSource: 'MANUAL',
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function resolveReconciliationException(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+) {
+  try {
+    const input = resolveExceptionSchema.parse(req.body);
+    sendSuccess(res, await reconciliationService.resolveReconciliationResult(
+      req.params.id,
+      req.user.userId,
+      input.note,
+    ));
+  } catch (error) { next(error); }
+}
+
+export async function goLiveControl(_req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await goLiveService.getGoLiveControl()); } catch (error) { next(error); }
+}
+
+export async function configureGoLive(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await goLiveService.configureGoLiveControl({
+      actorUserId: req.user.userId,
+      ...goLiveConfigSchema.parse(req.body),
+    }));
+  } catch (error) { next(error); }
+}
+
+export async function setGoLiveMode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = goLiveModeSchema.parse(req.body);
+    sendSuccess(res, await goLiveService.setGoLiveMode(req.user.userId, input.mode));
+  } catch (error) { next(error); }
+}
+
+export async function approveGoLive(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = goLiveApprovalSchema.parse(req.body);
+    sendSuccess(res, await goLiveService.approveGoLive(req.user.userId, input.area));
+  } catch (error) { next(error); }
+}
+
+export async function rollbackGoLive(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = rollbackSchema.parse(req.body);
+    sendSuccess(res, await goLiveService.rollbackGoLive(req.user.userId, input.reason));
+  } catch (error) { next(error); }
+}
+
+export async function recordCanaryDay(req: Request, res: Response, next: NextFunction) {
+  try {
+    sendSuccess(res, await goLiveService.recordMismatchFreeBusinessDay(req.user.userId));
+  } catch (error) { next(error); }
 }

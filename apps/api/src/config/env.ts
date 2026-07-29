@@ -38,7 +38,12 @@ const envSchema = z.object({
   ZOHO_ACCOUNTS_BASE_URL: z.string().url().default('https://accounts.zoho.com'),
   ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
   ZOHO_WEB_REDIRECT_URL: z.string().url().optional(),
-  ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(8),
+  ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(12),
+  ZOHO_INVENTORY_SYNC_ENABLED: z.preprocess(
+    (value) => value === 'true' || value === true,
+    z.boolean().default(false),
+  ),
+  ZOHO_GRNI_SLA_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   ZOHO_TREATMENT_REVENUE_MODE: z.enum(['DOCUMENT', 'JOURNAL']).default('DOCUMENT'),
   ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID: z.preprocess(
     (value) => typeof value === 'string' && !value.trim() ? undefined : value,
@@ -54,6 +59,12 @@ const envSchema = z.object({
   ZOHO_SYNC_BATCH_SIZE: z.coerce.number().int().min(1).max(100).default(10),
   ZOHO_SYNC_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(25).default(8),
   ZOHO_SYNC_LEASE_MS: z.coerce.number().int().min(5_000).default(60_000),
+  ZOHO_WEBHOOK_SECRET: z.preprocess(
+    (value) => typeof value === 'string' && !value.trim() ? undefined : value,
+    z.string().min(12).max(100).optional(),
+  ),
+  ZOHO_RECONCILIATION_ENABLED: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
+  ZOHO_RECONCILIATION_INTERVAL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
 });
 
 const parsed = envSchema.safeParse(process.env);

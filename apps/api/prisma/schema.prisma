@@ -679,6 +679,7 @@ model Branch {
   goodsReceipts           GoodsReceipt[]
   supplierInvoices        SupplierInvoice[]
   supplierPayments        SupplierPayment[]
+  supplierPaymentRefunds  SupplierPaymentRefund[]
   packageRevenueContracts PackageRevenueContract[]
   domainEvents            DomainEvent[]
   revenueRecognitions     RevenueRecognition[]
@@ -708,45 +709,46 @@ model User {
   updatedAt               DateTime                @updatedAt
 
   // Relations
-  branch                       Branch?                  @relation(fields: [branchId], references: [id])
-  roleTemplate                 RoleTemplate?            @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
-  profile                      UserProfile?
-  member                       Member?
-  auditLogs                    AuditLog[]
-  notifications                Notification[]
-  chatMessages                 ChatMessage[]
-  chatRooms                    ChatRoom[]               @relation("ChatRoomStaff")
-  managedBranches              ManagerBranch[]
-  staffBranches                StaffBranch[]            @relation("StaffBranches")
-  permissionOverrides          UserPermissionOverride[] @relation("PermissionOverrideUser")
-  permissionOverridesCreated   UserPermissionOverride[] @relation("PermissionOverrideCreatedBy")
-  journalEntriesCreated        JournalEntry[]           @relation("JournalEntryCreatedBy")
-  journalEntriesPosted         JournalEntry[]           @relation("JournalEntryPostedBy")
-  accountingPeriodsCreated     AccountingPeriod[]       @relation("AccountingPeriodCreatedBy")
-  accountingPeriodsClosed      AccountingPeriod[]       @relation("AccountingPeriodClosedBy")
-  paymentsVerified             InvoicePayment[]         @relation("PaymentVerifiedBy")
-  invoicePaymentRefundsCreated InvoicePaymentRefund[]   @relation("InvoicePaymentRefundCreatedBy")
-  cashBankAccountsCreated      CashBankAccount[]        @relation("CashBankAccountCreatedBy")
-  cashBankTransactionsCreated  CashBankTransaction[]    @relation("CashBankTransactionCreatedBy")
-  openingBalancesCreated       OpeningBalance[]         @relation("OpeningBalanceCreatedBy")
-  openingBalancesReviewed      OpeningBalance[]         @relation("OpeningBalanceReviewedBy")
-  expensesCreated              Expense[]                @relation("ExpenseCreatedBy")
-  expensesReviewed             Expense[]                @relation("ExpenseReviewedBy")
-  expensesPaid                 Expense[]                @relation("ExpensePaidBy")
-  suppliersCreated             Supplier[]               @relation("SupplierCreatedBy")
-  purchaseRequestsCreated      PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
-  purchaseRequestsReviewed     PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
-  purchaseOrdersCreated        PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
-  goodsReceiptsCreated         GoodsReceipt[]           @relation("GoodsReceiptCreatedBy")
-  supplierInvoicesCreated      SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
-  supplierPaymentsCreated      SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
-  revenuePoliciesCreated       PackageRevenuePolicy[]   @relation("RevenuePolicyCreatedBy")
-  approvalInstancesMade        ApprovalInstance[]       @relation("ApprovalInstanceMaker")
-  approvalDecisions            ApprovalDecision[]       @relation("ApprovalDecisionApprover")
-  approvalAuditLogs            ApprovalAuditLog[]       @relation("ApprovalAuditActor")
-  stockOpnamesCreated          StockOpname[]            @relation("StockOpnameCreatedBy")
-  zohoConnectionsCreated       ZohoConnection[]         @relation("ZohoConnectionCreatedBy")
-  zohoConnectionsUpdated       ZohoConnection[]         @relation("ZohoConnectionUpdatedBy")
+  branch                        Branch?                  @relation(fields: [branchId], references: [id])
+  roleTemplate                  RoleTemplate?            @relation(fields: [roleTemplateId], references: [id], onDelete: SetNull)
+  profile                       UserProfile?
+  member                        Member?
+  auditLogs                     AuditLog[]
+  notifications                 Notification[]
+  chatMessages                  ChatMessage[]
+  chatRooms                     ChatRoom[]               @relation("ChatRoomStaff")
+  managedBranches               ManagerBranch[]
+  staffBranches                 StaffBranch[]            @relation("StaffBranches")
+  permissionOverrides           UserPermissionOverride[] @relation("PermissionOverrideUser")
+  permissionOverridesCreated    UserPermissionOverride[] @relation("PermissionOverrideCreatedBy")
+  journalEntriesCreated         JournalEntry[]           @relation("JournalEntryCreatedBy")
+  journalEntriesPosted          JournalEntry[]           @relation("JournalEntryPostedBy")
+  accountingPeriodsCreated      AccountingPeriod[]       @relation("AccountingPeriodCreatedBy")
+  accountingPeriodsClosed       AccountingPeriod[]       @relation("AccountingPeriodClosedBy")
+  paymentsVerified              InvoicePayment[]         @relation("PaymentVerifiedBy")
+  invoicePaymentRefundsCreated  InvoicePaymentRefund[]   @relation("InvoicePaymentRefundCreatedBy")
+  cashBankAccountsCreated       CashBankAccount[]        @relation("CashBankAccountCreatedBy")
+  cashBankTransactionsCreated   CashBankTransaction[]    @relation("CashBankTransactionCreatedBy")
+  openingBalancesCreated        OpeningBalance[]         @relation("OpeningBalanceCreatedBy")
+  openingBalancesReviewed       OpeningBalance[]         @relation("OpeningBalanceReviewedBy")
+  expensesCreated               Expense[]                @relation("ExpenseCreatedBy")
+  expensesReviewed              Expense[]                @relation("ExpenseReviewedBy")
+  expensesPaid                  Expense[]                @relation("ExpensePaidBy")
+  suppliersCreated              Supplier[]               @relation("SupplierCreatedBy")
+  purchaseRequestsCreated       PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
+  purchaseRequestsReviewed      PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
+  purchaseOrdersCreated         PurchaseOrder[]          @relation("PurchaseOrderCreatedBy")
+  goodsReceiptsCreated          GoodsReceipt[]           @relation("GoodsReceiptCreatedBy")
+  supplierInvoicesCreated       SupplierInvoice[]        @relation("SupplierInvoiceCreatedBy")
+  supplierPaymentsCreated       SupplierPayment[]        @relation("SupplierPaymentCreatedBy")
+  supplierPaymentRefundsCreated SupplierPaymentRefund[]  @relation("SupplierPaymentRefundCreatedBy")
+  revenuePoliciesCreated        PackageRevenuePolicy[]   @relation("RevenuePolicyCreatedBy")
+  approvalInstancesMade         ApprovalInstance[]       @relation("ApprovalInstanceMaker")
+  approvalDecisions             ApprovalDecision[]       @relation("ApprovalDecisionApprover")
+  approvalAuditLogs             ApprovalAuditLog[]       @relation("ApprovalAuditActor")
+  stockOpnamesCreated           StockOpname[]            @relation("StockOpnameCreatedBy")
+  zohoConnectionsCreated        ZohoConnection[]         @relation("ZohoConnectionCreatedBy")
+  zohoConnectionsUpdated        ZohoConnection[]         @relation("ZohoConnectionUpdatedBy")
 
   sessionsAsAdmin  TreatmentSession[] @relation("SessionAdmin")
   sessionsAsDoctor TreatmentSession[] @relation("SessionDoctor")
@@ -779,38 +781,44 @@ model User {
 }
 
 model ZohoConnection {
-  id                        String    @id @default(cuid())
-  organizationId            String    @unique
-  organizationName          String
-  dataCenter                String
-  apiDomain                 String
-  encryptedAccessToken      String
-  encryptedRefreshToken     String
-  accessTokenExpiresAt      DateTime
-  scopes                    String
-  scopeVersion              Int       @default(1)
-  isActive                  Boolean   @default(true)
-  organizationCurrencyId    String?
-  organizationCurrencyCode  String?
-  organizationTimeZone      String?
-  discoveryLastRunAt        DateTime?
-  contactExternalIdFieldId  String?
-  contactExternalIdApiName  String?
-  contactExternalIdIsUnique Boolean?
-  locationsSupported        Boolean?
-  locationsCapabilityError  String?
-  lastCheckedAt             DateTime?
-  lastError                 String?
-  createdById               String
-  updatedById               String
-  createdAt                 DateTime  @default(now())
-  updatedAt                 DateTime  @updatedAt
+  id                                  String    @id @default(cuid())
+  organizationId                      String    @unique
+  organizationName                    String
+  dataCenter                          String
+  apiDomain                           String
+  encryptedAccessToken                String
+  encryptedRefreshToken               String
+  accessTokenExpiresAt                DateTime
+  scopes                              String
+  scopeVersion                        Int       @default(1)
+  isActive                            Boolean   @default(true)
+  organizationCurrencyId              String?
+  organizationCurrencyCode            String?
+  organizationTimeZone                String?
+  discoveryLastRunAt                  DateTime?
+  contactExternalIdFieldId            String?
+  contactExternalIdApiName            String?
+  contactExternalIdIsUnique           Boolean?
+  locationsSupported                  Boolean?
+  locationsCapabilityError            String?
+  inventoryAdjustmentsSupported       Boolean?
+  inventoryAdjustmentsCapabilityError String?
+  inventoryAdjustmentsLastCheckedAt   DateTime?
+  lastCheckedAt                       DateTime?
+  lastError                           String?
+  createdById                         String
+  updatedById                         String
+  createdAt                           DateTime  @default(now())
+  updatedAt                           DateTime  @updatedAt
 
-  createdBy      User                 @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
-  updatedBy      User                 @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
-  entityMappings ZohoEntityMapping[]
-  discoveryCache ZohoDiscoveryCache[]
-  mappingReviews ZohoMappingReview[]
+  createdBy          User                    @relation("ZohoConnectionCreatedBy", fields: [createdById], references: [id])
+  updatedBy          User                    @relation("ZohoConnectionUpdatedBy", fields: [updatedById], references: [id])
+  entityMappings     ZohoEntityMapping[]
+  discoveryCache     ZohoDiscoveryCache[]
+  mappingReviews     ZohoMappingReview[]
+  webhookInbox       ZohoWebhookInbox[]
+  reconciliationRuns ZohoReconciliationRun[]
+  goLiveControl      ZohoGoLiveControl?
 
   @@index([isActive])
   @@map("zoho_connections")
@@ -1038,6 +1046,7 @@ model JournalEntry {
   goodsReceipt              GoodsReceipt?
   supplierInvoice           SupplierInvoice?
   supplierPayment           SupplierPayment?
+  supplierPaymentRefund     SupplierPaymentRefund?
   deferredRevenueMovements  DeferredRevenueMovement[]
   revenueRecognitions       RevenueRecognition[]
   completedTreatmentSession TreatmentSession?         @relation("TreatmentCompletionJournal")
@@ -1834,15 +1843,16 @@ model CashBankAccount {
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
 
-  branch                Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  coaAccount            Account                @relation(fields: [coaAccountId], references: [id], onDelete: Restrict)
-  creator               User                   @relation("CashBankAccountCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  payments              InvoicePayment[]
-  transactions          CashBankTransaction[]
-  openingBalanceLines   OpeningBalanceLine[]
-  expenses              Expense[]
-  supplierPayments      SupplierPayment[]
-  invoicePaymentRefunds InvoicePaymentRefund[]
+  branch                 Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  coaAccount             Account                 @relation(fields: [coaAccountId], references: [id], onDelete: Restrict)
+  creator                User                    @relation("CashBankAccountCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payments               InvoicePayment[]
+  transactions           CashBankTransaction[]
+  openingBalanceLines    OpeningBalanceLine[]
+  expenses               Expense[]
+  supplierPayments       SupplierPayment[]
+  supplierPaymentRefunds SupplierPaymentRefund[]
+  invoicePaymentRefunds  InvoicePaymentRefund[]
 
   @@unique([branchId, name])
   @@index([branchId, type, isActive])
@@ -1898,14 +1908,15 @@ model CashBankTransaction {
   createdBy         String
   createdAt         DateTime                  @default(now())
 
-  cashBankAccount    CashBankAccount     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
-  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  invoicePayment     InvoicePayment?     @relation(fields: [invoicePaymentId], references: [id], onDelete: Restrict)
-  journalEntry       JournalEntry        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
-  creator            User                @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  openingBalanceLine OpeningBalanceLine?
-  expense            Expense?
-  supplierPayment    SupplierPayment?
+  cashBankAccount       CashBankAccount        @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  branch                Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  invoicePayment        InvoicePayment?        @relation(fields: [invoicePaymentId], references: [id], onDelete: Restrict)
+  journalEntry          JournalEntry           @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  creator               User                   @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  openingBalanceLine    OpeningBalanceLine?
+  expense               Expense?
+  supplierPayment       SupplierPayment?
+  supplierPaymentRefund SupplierPaymentRefund?
 
   @@index([cashBankAccountId, transactionDate])
   @@index([branchId, transactionDate])
@@ -2268,12 +2279,13 @@ model PurchaseOrderItem {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
-  purchaseOrder            PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  masterProduct            MasterProduct      @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
-  uom                      UnitOfMeasure?     @relation(fields: [uomId], references: [id], onDelete: Restrict)
-  destinationStockLocation StockLocation?     @relation(fields: [destinationStockLocationId], references: [id], onDelete: Restrict)
+  purchaseOrder            PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  masterProduct            MasterProduct         @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+  uom                      UnitOfMeasure?        @relation(fields: [uomId], references: [id], onDelete: Restrict)
+  destinationStockLocation StockLocation?        @relation(fields: [destinationStockLocationId], references: [id], onDelete: Restrict)
   receiptLines             GoodsReceiptLine[]
   receiptItems             GoodsReceiptItem[]
+  supplierInvoiceLines     SupplierInvoiceLine[]
 
   @@unique([purchaseOrderId, lineNo])
   @@index([masterProductId])
@@ -2400,19 +2412,41 @@ model SupplierInvoice {
   createdAt             DateTime              @default(now())
   updatedAt             DateTime              @updatedAt
 
-  purchaseOrder PurchaseOrder     @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
-  supplier      Supplier          @relation(fields: [supplierId], references: [id], onDelete: Restrict)
-  branch        Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  grniAccount   Account           @relation("SupplierInvoiceGrniAccount", fields: [grniAccountId], references: [id], onDelete: Restrict)
-  apAccount     Account           @relation("SupplierInvoiceApAccount", fields: [apAccountId], references: [id], onDelete: Restrict)
-  journalEntry  JournalEntry      @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
-  creator       User              @relation("SupplierInvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
-  payments      SupplierPayment[]
+  purchaseOrder  PurchaseOrder           @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+  supplier       Supplier                @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  branch         Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  grniAccount    Account                 @relation("SupplierInvoiceGrniAccount", fields: [grniAccountId], references: [id], onDelete: Restrict)
+  apAccount      Account                 @relation("SupplierInvoiceApAccount", fields: [apAccountId], references: [id], onDelete: Restrict)
+  journalEntry   JournalEntry            @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  creator        User                    @relation("SupplierInvoiceCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  payments       SupplierPayment[]
+  paymentRefunds SupplierPaymentRefund[]
+  lines          SupplierInvoiceLine[]
 
   @@unique([supplierId, supplierInvoiceNumber])
   @@index([branchId, dueDate, status])
   @@index([purchaseOrderId, invoiceDate])
   @@map("supplier_invoices")
+}
+
+model SupplierInvoiceLine {
+  id                  String   @id @default(cuid())
+  supplierInvoiceId   String
+  purchaseOrderItemId String
+  lineNo              Int
+  descriptionSnapshot String
+  billedQty           Decimal  @db.Decimal(18, 4)
+  unitPrice           Decimal  @db.Decimal(18, 4)
+  lineTotal           Decimal  @db.Decimal(18, 2)
+  createdAt           DateTime @default(now())
+
+  supplierInvoice   SupplierInvoice   @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+  purchaseOrderItem PurchaseOrderItem @relation(fields: [purchaseOrderItemId], references: [id], onDelete: Restrict)
+
+  @@unique([supplierInvoiceId, purchaseOrderItemId])
+  @@unique([supplierInvoiceId, lineNo])
+  @@index([purchaseOrderItemId])
+  @@map("supplier_invoice_lines")
 }
 
 model SupplierPayment {
@@ -2432,16 +2466,50 @@ model SupplierPayment {
   postedAt              DateTime @default(now())
   createdAt             DateTime @default(now())
 
+  supplierInvoice     SupplierInvoice         @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount         @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  branch              Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  journalEntry        JournalEntry            @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction     @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+  creator             User                    @relation("SupplierPaymentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  refunds             SupplierPaymentRefund[]
+
+  @@index([supplierInvoiceId, paymentDate])
+  @@index([branchId, paymentDate])
+  @@map("supplier_payments")
+}
+
+model SupplierPaymentRefund {
+  id                    String   @id @default(cuid())
+  refundNumber          String   @unique
+  postingKey            String   @unique
+  payloadHash           String
+  supplierPaymentId     String
+  supplierInvoiceId     String
+  cashBankAccountId     String
+  branchId              String
+  refundDate            DateTime
+  amount                Decimal  @db.Decimal(18, 2)
+  reason                String
+  referenceNumber       String?
+  journalEntryId        String   @unique
+  cashBankTransactionId String   @unique
+  createdBy             String
+  postedAt              DateTime @default(now())
+  createdAt             DateTime @default(now())
+
+  supplierPayment     SupplierPayment     @relation(fields: [supplierPaymentId], references: [id], onDelete: Restrict)
   supplierInvoice     SupplierInvoice     @relation(fields: [supplierInvoiceId], references: [id], onDelete: Restrict)
   cashBankAccount     CashBankAccount     @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
   branch              Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
   journalEntry        JournalEntry        @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
   cashBankTransaction CashBankTransaction @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
-  creator             User                @relation("SupplierPaymentCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  creator             User                @relation("SupplierPaymentRefundCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
 
-  @@index([supplierInvoiceId, paymentDate])
-  @@index([branchId, paymentDate])
-  @@map("supplier_payments")
+  @@index([supplierPaymentId, refundDate])
+  @@index([supplierInvoiceId, refundDate])
+  @@index([branchId, refundDate])
+  @@map("supplier_payment_refunds")
 }
 
 enum AddOnType {
@@ -2522,16 +2590,16 @@ model Encounter {
 }
 
 model TreatmentSession {
-  id                         String                    @id @default(cuid())
-  sessionCode                String                    @unique
+  id                         String                      @id @default(cuid())
+  sessionCode                String                      @unique
   encounterId                String
   branchId                   String
   infusKe                    Int
   branchInfusKe              Int
   pelaksanaan                SessionType
   treatmentDate              DateTime
-  isCompleted                Boolean                   @default(false)
-  completionStatus           TreatmentCompletionStatus @default(IN_PROGRESS)
+  isCompleted                Boolean                     @default(false)
+  completionStatus           TreatmentCompletionStatus   @default(IN_PROGRESS)
   adminLayananId             String
   doctorId                   String // Primary doctor (backward compatibility)
   nurseId                    String // Primary nurse (backward compatibility)
@@ -2541,19 +2609,19 @@ model TreatmentSession {
   revenuePackageId           String?
   completedAt                DateTime?
   completedBy                String?
-  materialPostingId          String?                   @unique
-  completionJournalEntryId   String?                   @unique
-  recognizedRevenue          Decimal                   @default(0) @db.Decimal(18, 2)
-  materialCost               Decimal                   @default(0) @db.Decimal(18, 2)
-  grossProfit                Decimal                   @default(0) @db.Decimal(18, 2)
+  materialPostingId          String?                     @unique
+  completionJournalEntryId   String?                     @unique
+  recognizedRevenue          Decimal                     @default(0) @db.Decimal(18, 2)
+  materialCost               Decimal                     @default(0) @db.Decimal(18, 2)
+  grossProfit                Decimal                     @default(0) @db.Decimal(18, 2)
   cancelledAt                DateTime?
   cancelledBy                String?
-  cancellationIdempotencyKey String?                   @unique
-  cancellationReason         String?                   @db.Text
-  materialReversalPostingId  String?                   @unique
-  cancellationJournalEntryId String?                   @unique
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
+  cancellationIdempotencyKey String?                     @unique
+  cancellationReason         String?                     @db.Text
+  materialReversalPostingId  String?                     @unique
+  cancellationJournalEntryId String?                     @unique
+  createdAt                  DateTime                    @default(now())
+  updatedAt                  DateTime                    @updatedAt
 
   encounter               Encounter         @relation(fields: [encounterId], references: [id])
   branch                  Branch            @relation(fields: [branchId], references: [id])
@@ -2946,6 +3014,124 @@ model ZohoSyncAttempt {
   @@unique([integrationEventId, attemptNo])
   @@index([status, startedAt])
   @@map("zoho_sync_attempts")
+}
+
+model ZohoWebhookInbox {
+  id                  String    @id @default(cuid())
+  zohoConnectionId    String?
+  organizationId      String
+  dedupKey            String    @unique
+  eventType           String
+  zohoEntityType      String?
+  zohoEntityId        String?
+  externalReference   String?
+  payloadHash         String
+  payload             Json
+  headers             Json?
+  signatureValid      Boolean
+  sourceValid         Boolean
+  status              String    @default("RECEIVED")
+  correlationStatus   String    @default("PENDING")
+  correlatedMappingId String?
+  reconciliationRunId String?
+  errorCode           String?
+  errorMessage        String?   @db.Text
+  receivedAt          DateTime  @default(now())
+  processedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  connection        ZohoConnection?        @relation(fields: [zohoConnectionId], references: [id], onDelete: SetNull)
+  reconciliationRun ZohoReconciliationRun? @relation(fields: [reconciliationRunId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+  @@index([organizationId, eventType, receivedAt])
+  @@index([zohoEntityType, zohoEntityId])
+  @@map("zoho_webhook_inbox")
+}
+
+model ZohoReconciliationRun {
+  id               String    @id @default(cuid())
+  zohoConnectionId String?
+  runType          String
+  status           String    @default("PENDING")
+  triggerSource    String
+  scheduledKey     String?   @unique
+  cursor           Json?
+  filters          Json?
+  totalChecked     Int       @default(0)
+  matchedCount     Int       @default(0)
+  exceptionCount   Int       @default(0)
+  errorCount       Int       @default(0)
+  requestedById    String?
+  startedAt        DateTime?
+  finishedAt       DateTime?
+  lastError        String?   @db.Text
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  connection     ZohoConnection?            @relation(fields: [zohoConnectionId], references: [id], onDelete: SetNull)
+  results        ZohoReconciliationResult[]
+  webhookEntries ZohoWebhookInbox[]
+
+  @@index([status, createdAt])
+  @@index([zohoConnectionId, runType, createdAt])
+  @@map("zoho_reconciliation_runs")
+}
+
+model ZohoReconciliationResult {
+  id                String    @id @default(cuid())
+  runId             String
+  entityType        String
+  localEntityId     String?
+  zohoEntityId      String?
+  externalReference String?
+  status            String
+  severity          String    @default("INFO")
+  differences       Json?
+  evidence          Json?
+  ownerUserId       String?
+  actionRequired    String?
+  resolvedAt        DateTime?
+  resolvedById      String?
+  resolutionNote    String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  run ZohoReconciliationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, entityType, localEntityId, zohoEntityId])
+  @@index([status, severity, createdAt])
+  @@index([localEntityId])
+  @@index([zohoEntityId])
+  @@map("zoho_reconciliation_results")
+}
+
+model ZohoGoLiveControl {
+  id                       String    @id @default(cuid())
+  zohoConnectionId         String    @unique
+  mode                     String    @default("OFF")
+  masterFrozen             Boolean   @default(false)
+  canaryBranchIds          Json?
+  canaryCustomerId         String?
+  canaryVendorId           String?
+  mismatchFreeBusinessDays Int       @default(0)
+  financeApprovedAt        DateTime?
+  financeApprovedById      String?
+  logisticsApprovedAt      DateTime?
+  logisticsApprovedById    String?
+  lastRehearsalAt          DateTime?
+  lastRollbackAt           DateTime?
+  rollbackReason           String?   @db.Text
+  notes                    String?   @db.Text
+  updatedById              String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  connection ZohoConnection @relation(fields: [zohoConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([mode])
+  @@map("zoho_go_live_controls")
 }
 
 model ZohoDiscoveryCache {

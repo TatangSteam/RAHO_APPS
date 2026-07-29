@@ -734,6 +734,7 @@ export async function dispatchReservedShipment(
     if (isPartnershipShipment) {
       const invoice = shipment.stockRequest.invoice!;
       const payload = buildPartnershipGoodsShippedPayload({
+        sourceBranchId: shipment.fromBranchId,
         partnershipBranchId: shipment.toBranchId,
         stockRequestId: shipment.stockRequestId,
         stockRequestInvoiceId: invoice.id,
@@ -743,6 +744,7 @@ export async function dispatchReservedShipment(
         invoiceItems: invoice.items.map((item) => ({
           masterProductId: item.masterProductId,
           sku: item.sku,
+          productName: item.productName,
           quantity: item.quantity,
           pricePerUnit: item.pricePerUnit,
         })),

@@ -99,7 +99,7 @@ describe('Zoho expense policy', () => {
   });
 
   it('adds Sprint 8 scopes without automatic destructive reversal', () => {
-    expect(ZOHO_SCOPE_VERSION).toBe(8);
+    expect(ZOHO_SCOPE_VERSION).toBe(12);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.expenses.READ',
       'ZohoBooks.expenses.CREATE',

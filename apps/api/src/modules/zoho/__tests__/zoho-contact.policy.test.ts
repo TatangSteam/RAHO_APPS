@@ -49,6 +49,24 @@ describe('Zoho Sprint 3 contact payload', () => {
     });
   });
 
+  it('maps a Partnership branch as a business customer, never an internal location', () => {
+    const payload = buildZohoContactPayload({
+      ...member,
+      entityType: 'PARTNERSHIP_BRANCH',
+      externalKey: 'RAHO:PARTNERSHIP:branch-1',
+      displayName: '[PTN] Partner Bandung',
+      email: null,
+      paymentTermsDays: 0,
+    }, 'custom-raho-id');
+    expect(payload).toMatchObject({
+      contact_name: '[PTN] Partner Bandung',
+      company_name: '[PTN] Partner Bandung',
+      contact_type: 'customer',
+    });
+    expect(payload).not.toHaveProperty('customer_sub_type', 'individual');
+    expect(payload).not.toHaveProperty('location_id');
+  });
+
   it('splits primary contact name deterministically', () => {
     expect(splitContactName('Budi Santoso Wijaya')).toEqual({
       first_name: 'Budi',
@@ -102,7 +120,7 @@ describe('Zoho Sprint 3 contact matching', () => {
   });
 
   it('requests the official contact write scopes in scope version 4', () => {
-    expect(ZOHO_SCOPE_VERSION).toBe(8);
+    expect(ZOHO_SCOPE_VERSION).toBe(12);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([
       'ZohoBooks.contacts.READ',
       'ZohoBooks.contacts.CREATE',

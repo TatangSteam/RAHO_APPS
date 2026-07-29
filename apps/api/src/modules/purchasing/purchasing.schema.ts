@@ -35,10 +35,22 @@ export const createGoodsReceiptSchema = z.object({
 export const createSupplierInvoiceSchema = z.object({
   postingKey: z.string().trim().min(8).max(150), purchaseOrderId: z.string().cuid(), supplierInvoiceNumber: z.string().trim().min(2).max(100),
   invoiceDate: z.coerce.date(), dueDate: z.coerce.date(), amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/), evidenceReference: z.string().trim().max(500).optional(),
+  lines: z.array(z.object({
+    purchaseOrderItemId: z.string().cuid(),
+    billedQty: quantity,
+  })).min(1).max(100).optional(),
 });
 export const createSupplierPaymentSchema = z.object({
   postingKey: z.string().trim().min(8).max(150), cashBankAccountId: z.string().cuid(), paymentDate: z.coerce.date(),
   amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/), paymentReference: z.string().trim().min(2).max(150),
+});
+export const createSupplierPaymentRefundSchema = z.object({
+  postingKey: z.string().trim().min(8).max(150),
+  cashBankAccountId: z.string().cuid(),
+  refundDate: z.coerce.date(),
+  amount: z.string().regex(/^\d+(?:\.\d{1,2})?$/),
+  reason: z.string().trim().min(3).max(500),
+  referenceNumber: z.string().trim().max(150).optional(),
 });
 
 export type CreateSupplierInput = z.infer<typeof createSupplierSchema>;
@@ -49,3 +61,4 @@ export type CreatePurchaseOrderInput = z.infer<typeof createPurchaseOrderSchema>
 export type CreateGoodsReceiptInput = z.infer<typeof createGoodsReceiptSchema>;
 export type CreateSupplierInvoiceInput = z.infer<typeof createSupplierInvoiceSchema>;
 export type CreateSupplierPaymentInput = z.infer<typeof createSupplierPaymentSchema>;
+export type CreateSupplierPaymentRefundInput = z.infer<typeof createSupplierPaymentRefundSchema>;

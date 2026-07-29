@@ -28,6 +28,11 @@ import {
   TREATMENT_COMPLETED_EVENT_TYPE,
   TREATMENT_COMPLETED_EVENT_VERSION,
 } from '../events/treatment-completed.event';
+import { createInventorySyncEventInTransaction } from '@modules/zoho/zoho.inventory-outbox';
+import {
+  TREATMENT_INVENTORY_CONSUMED_EVENT,
+  TREATMENT_INVENTORY_REVERSED_EVENT,
+} from '@modules/zoho/zoho.inventory-adjustment.policy';
 import { selectTreatmentRevenueSource } from './treatment-revenue-source';
 import { requiresMaterialDeviationReason } from './material-usage.helpers';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
@@ -366,6 +371,31 @@ export class SessionCompletionService {
           occurredAt: completedAt,
         },
       });
+      await createInventorySyncEventInTransaction(tx, {
+        eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
+        aggregateType: 'TreatmentSessionInventory',
+        aggregateId: session.id,
+        occurredAt: completedAt,
+        snapshot: {
+          sourceType: 'TREATMENT_COMPLETION',
+          localEntityId: session.id,
+          externalKey: `RAHO-TREATMENT-${session.sessionCode}`,
+          branchId: session.branchId,
+          occurredAt: completedAt.toISOString(),
+          postingReference: materialPosting?.postingNumber ?? null,
+          reason: 'Treatment material consumption',
+          lines: materialRows
+            .filter((material) => material.baseQuantity.greaterThan(0))
+            .map((material) => ({
+              inventoryItemId: material.inventoryItemId,
+              sku: material.inventoryItem.masterProduct.sku,
+              stockLocationId: material.inventoryItem.stockLocationId,
+              quantityAdjusted: material.baseQuantity.negated().toFixed(4),
+              unitRate: material.actualUnitCost?.toFixed(4) ?? null,
+              value: material.totalActualCost?.negated().toFixed(4) ?? null,
+            })),
+        },
+      });
       return {
         sessionId: session.id,
         sessionCode: session.sessionCode,
@@ -527,6 +557,49 @@ export class SessionCompletionService {
           },
         },
       });
+      const consumedInventoryEvent = await tx.integrationEvent.findUnique({
+        where: {
+          eventType_aggregateId: {
+            eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
+            aggregateId: session.id,
+          },
+        },
+      });
+      if (consumedInventoryEvent) {
+        const consumed = consumedInventoryEvent.payload as unknown as {
+          lines?: Array<{
+            inventoryItemId: string;
+            sku: string | null;
+            stockLocationId: string | null;
+            quantityAdjusted: string;
+            unitRate: string | null;
+            value: string | null;
+          }>;
+          postingReference?: string | null;
+        };
+        await createInventorySyncEventInTransaction(tx, {
+          eventType: TREATMENT_INVENTORY_REVERSED_EVENT,
+          aggregateType: 'TreatmentSessionInventoryReversal',
+          aggregateId: `${session.id}:REVERSAL`,
+          occurredAt: cancelledAt,
+          snapshot: {
+            sourceType: 'TREATMENT_CANCELLATION',
+            localEntityId: `${session.id}:REVERSAL`,
+            externalKey: `RAHO-TREATMENT-REV-${session.sessionCode}`,
+            branchId: session.branchId,
+            occurredAt: cancelledAt.toISOString(),
+            postingReference: inventoryReversalPostingId || consumed.postingReference || null,
+            reason: 'Treatment completion cancellation',
+            lines: (consumed.lines || []).map((line) => ({
+              ...line,
+              quantityAdjusted: new Prisma.Decimal(line.quantityAdjusted).negated().toFixed(4),
+              value: line.value == null
+                ? null
+                : new Prisma.Decimal(line.value).negated().toFixed(4),
+            })),
+          },
+        });
+      }
       await tx.treatmentSession.update({
         where: { id: session.id },
         data: {

@@ -9,6 +9,8 @@ import { decideApprovalInTransaction, startApprovalInTransaction } from '@module
 import type { CreateStockOpnameInput, StockOpnameListInput } from '../stock-opname.schema';
 import { issueAdjustmentInventoryInTransaction, receiveAdjustmentInventoryInTransaction } from './inventory-ledger.service';
 import { logAudit } from '@utils/auditLog';
+import { createInventorySyncEventInTransaction } from '@modules/zoho/zoho.inventory-outbox';
+import { STOCK_OPNAME_POSTED_EVENT } from '@modules/zoho/zoho.inventory-adjustment.policy';
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const includeOpname = { lines: { orderBy: { lineNo: 'asc' as const } }, journalEntry: { select: { id: true, journalNumber: true } } };
@@ -157,7 +159,38 @@ export async function decideStockOpname(actorUserId: string, id: string, decisio
       sourceLinks: [{ sourceType: 'STOCK_OPNAME', sourceId: opname.id, sourceNumber: opname.opnameNumber }],
       metadata: { approvalInstanceId: opname.approvalInstanceId, reasonCode: opname.reasonCode, increaseValue: increaseValue.toFixed(4), decreaseValue: decreaseValue.toFixed(4) },
     }, tx);
-    return tx.stockOpname.update({ where: { id }, data: { status: StockOpnameStatus.POSTED, reviewedBy: actorUserId, reviewedAt: new Date(), postedAt: new Date(), journalEntryId: journal.journal.id, totalAdjustmentValue: increaseValue.add(decreaseValue).toDecimalPlaces(2) }, include: includeOpname });
+    const postedAt = new Date();
+    const posted = await tx.stockOpname.update({ where: { id }, data: { status: StockOpnameStatus.POSTED, reviewedBy: actorUserId, reviewedAt: postedAt, postedAt, journalEntryId: journal.journal.id, totalAdjustmentValue: increaseValue.add(decreaseValue).toDecimalPlaces(2) }, include: includeOpname });
+    await createInventorySyncEventInTransaction(tx, {
+      eventType: STOCK_OPNAME_POSTED_EVENT,
+      aggregateType: 'StockOpnameInventory',
+      aggregateId: opname.id,
+      occurredAt: postedAt,
+      snapshot: {
+        sourceType: 'STOCK_OPNAME',
+        localEntityId: opname.id,
+        externalKey: `RAHO-OPNAME-${opname.opnameNumber}`,
+        branchId: opname.branchId,
+        occurredAt: postedAt.toISOString(),
+        postingReference: opname.opnameNumber,
+        reason: opname.reasonCode,
+        lines: posted.lines
+          .filter((line) => !line.differenceQty.isZero())
+          .map((line) => ({
+            inventoryItemId: line.inventoryItemId,
+            sku: null,
+            stockLocationId: line.stockLocationId,
+            quantityAdjusted: line.differenceQty.toFixed(4),
+            unitRate: line.actualCost && !line.differenceQty.isZero()
+              ? line.actualCost.div(line.differenceQty.abs()).toFixed(4)
+              : null,
+            value: line.actualCost
+              ? line.actualCost.mul(line.differenceQty.isNegative() ? -1 : 1).toFixed(4)
+              : null,
+          })),
+      },
+    });
+    return posted;
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
 }
 

@@ -22,8 +22,9 @@ export type PurchaseRequest = {
     masterProduct?: { sku: string; name: string; baseUnit?: string; unit?: string };
   }>;
 };
-export type PurchaseOrder = { id: string; poNumber: string; branchId: string; orderDate: string; status: string; totalAmount: string; supplier: Supplier; items: Array<{ id: string; nameSnapshot: string; orderedQty: string; receivedQty: string; unitPrice: string }>; goodsReceipts: Array<{ id: string; receiptNumber: string; totalValue: string }>; invoices: Array<{ id: string; invoiceNumber: string }> };
-export type SupplierInvoice = { id: string; invoiceNumber: string; supplierInvoiceNumber: string; branchId: string; dueDate: string; amount: string; paidAmount: string; balanceAmount: string; status: string; supplier: Supplier; purchaseOrder: { poNumber: string }; journalEntry: { journalNumber: string }; payments: Array<{ id: string; paymentNumber: string; amount: string }> };
+export type SupplierInvoiceLine = { id: string; purchaseOrderItemId: string; billedQty: string; unitPrice: string; lineTotal: string };
+export type PurchaseOrder = { id: string; poNumber: string; branchId: string; orderDate: string; status: string; totalAmount: string; supplier: Supplier; items: Array<{ id: string; nameSnapshot: string; orderedQty: string; receivedQty: string; unitPrice: string }>; goodsReceipts: Array<{ id: string; receiptNumber: string; totalValue: string }>; invoices: Array<{ id: string; invoiceNumber: string; lines: SupplierInvoiceLine[] }> };
+export type SupplierInvoice = { id: string; invoiceNumber: string; supplierInvoiceNumber: string; branchId: string; dueDate: string; amount: string; paidAmount: string; balanceAmount: string; status: string; supplier: Supplier; purchaseOrder: { poNumber: string }; journalEntry: { journalNumber: string }; lines: SupplierInvoiceLine[]; payments: Array<{ id: string; paymentNumber: string; amount: string }> };
 const unwrap = <T>(response: { data: { data: T } }) => response.data.data;
 
 export const purchasingApi = {
@@ -40,10 +41,28 @@ export const purchasingApi = {
   rejectRequest: async (id: string, reason: string) => unwrap<PurchaseRequest>(await api.post(`/purchasing/purchase-requests/${id}/reject`, { reason })),
   orders: async () => unwrap<PurchaseOrder[]>(await api.get('/purchasing/purchase-orders')),
   createOrder: async (purchaseRequestId: string, supplierId: string) => unwrap<{ purchaseOrder: PurchaseOrder }>(await api.post('/purchasing/purchase-orders', { postingKey: crypto.randomUUID(), purchaseRequestId, supplierId, orderDate: new Date().toISOString() })),
+  cancelOrder: async (id: string, reason: string) =>
+    unwrap<{ purchaseOrder: PurchaseOrder; idempotentReplay: boolean }>(
+      await api.post(`/purchasing/purchase-orders/${id}/cancel`, { reason }),
+    ),
   accountsPayable: async () => unwrap<SupplierInvoice[]>(await api.get('/purchasing/accounts-payable')),
-  postInvoice: async (purchaseOrderId: string, supplierInvoiceNumber: string, amount: string, termsDays: number) => {
+  postInvoice: async (
+    purchaseOrderId: string,
+    supplierInvoiceNumber: string,
+    amount: string,
+    termsDays: number,
+    lines?: Array<{ purchaseOrderItemId: string; billedQty: string }>,
+  ) => {
     const due = new Date(); due.setDate(due.getDate() + termsDays);
-    return unwrap(await api.post('/purchasing/supplier-invoices', { postingKey: crypto.randomUUID(), purchaseOrderId, supplierInvoiceNumber, invoiceDate: new Date().toISOString(), dueDate: due.toISOString(), amount }));
+    return unwrap(await api.post('/purchasing/supplier-invoices', {
+      postingKey: crypto.randomUUID(),
+      purchaseOrderId,
+      supplierInvoiceNumber,
+      invoiceDate: new Date().toISOString(),
+      dueDate: due.toISOString(),
+      amount,
+      ...(lines?.length ? { lines } : {}),
+    }));
   },
   payInvoice: async (id: string, cashBankAccountId: string, amount: string, paymentReference: string) => unwrap(await api.post(`/purchasing/supplier-invoices/${id}/payments`, { postingKey: crypto.randomUUID(), cashBankAccountId, paymentDate: new Date().toISOString(), amount, paymentReference })),
 };

@@ -18,6 +18,25 @@ export function supplierInvoiceStatus(balance: Prisma.Decimal, paid: Prisma.Deci
   return SupplierInvoiceStatus.POSTED;
 }
 
+export function assertBilledQuantityWithinReceived(
+  receivedInput: Prisma.Decimal.Value,
+  previouslyBilledInput: Prisma.Decimal.Value,
+  requestedInput: Prisma.Decimal.Value,
+  itemName: string,
+) {
+  const received = new Prisma.Decimal(receivedInput);
+  const previouslyBilled = new Prisma.Decimal(previouslyBilledInput);
+  const requested = new Prisma.Decimal(requestedInput);
+  const available = received.sub(previouslyBilled);
+  if (!requested.greaterThan(0) || requested.greaterThan(available)) {
+    throw errors.unprocessable(
+      'SUPPLIER_INVOICE_EXCEEDS_RECEIVED_QUANTITY',
+      `Billed quantity ${itemName} melebihi quantity received yang belum ditagihkan (${available.toFixed(4)}).`,
+    );
+  }
+  return { requested, available };
+}
+
 export const PURCHASING_ACCOUNTS = { inventory: '1300', ap: '2100', grni: '2110' } as const;
 
 export function buildPurchasingJournal(source: 'GOODS_RECEIPT' | 'SUPPLIER_INVOICE' | 'SUPPLIER_PAYMENT', amountInput: Prisma.Decimal.Value, cashAccountCode?: string) {

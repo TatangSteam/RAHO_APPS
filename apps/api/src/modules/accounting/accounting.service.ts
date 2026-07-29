@@ -439,6 +439,18 @@ export async function postPurchasingDerivedJournal(input: PostJournalInput, tx: 
     if (!cashAccount?.isActive || !cashAccount.allowPosting || cashAccount.type !== AccountType.ASSET) {
       throw errors.badRequest('AP_PAYMENT_CASH_ACCOUNT_INVALID', 'Akun kredit pembayaran supplier harus akun aset kas/bank aktif.');
     }
+  } else if (sourceType === 'SUPPLIER_PAYMENT_REFUND') {
+    await assertPermission(posting.actorUserId, PERMISSIONS.AP_PAY, posting.branchId);
+    const ap = posting.lines.find((line) => line.accountCode === '2100');
+    const cashLine = posting.lines.find((line) => line.accountCode !== '2100');
+    if (!ap || !cashLine || !cashLine.debit.greaterThan(0) || !ap.credit.equals(cashLine.debit)
+      || !cashLine.credit.isZero() || !ap.debit.isZero()) {
+      throw errors.badRequest('AP_PAYMENT_REFUND_JOURNAL_POLICY_INVALID', 'Refund supplier harus debit akun kas/bank dan kredit AP 2100.');
+    }
+    const cashAccount = await tx.account.findUnique({ where: { code: cashLine.accountCode } });
+    if (!cashAccount?.isActive || !cashAccount.allowPosting || cashAccount.type !== AccountType.ASSET) {
+      throw errors.badRequest('AP_PAYMENT_REFUND_CASH_ACCOUNT_INVALID', 'Akun debit refund supplier harus akun aset kas/bank aktif.');
+    }
   } else {
     throw errors.badRequest('DERIVED_JOURNAL_SOURCE_INVALID', 'Source jurnal purchasing tidak didukung.');
   }

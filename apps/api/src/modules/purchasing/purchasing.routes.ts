@@ -16,8 +16,10 @@ router.post('/purchase-requests/:id/approve', requirePermission(PERMISSIONS.PURC
 router.post('/purchase-requests/:id/reject', requirePermission(PERMISSIONS.PURCHASE_REQUEST_APPROVE), controller.rejectPurchaseRequest);
 router.get('/purchase-orders', requirePermission(PERMISSIONS.PURCHASE_ORDER_READ), controller.purchaseOrders);
 router.post('/purchase-orders', requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), controller.createPurchaseOrder);
+router.post('/purchase-orders/:id/cancel', requirePermission(PERMISSIONS.PURCHASE_ORDER_CREATE), controller.cancelPurchaseOrder);
 router.post('/purchase-orders/:id/goods-receipts', requirePermission(PERMISSIONS.GOODS_RECEIPT_POST), controller.postGoodsReceipt);
 router.get('/accounts-payable', requirePermission(PERMISSIONS.AP_READ), controller.accountsPayable);
 router.post('/supplier-invoices', requirePermission(PERMISSIONS.AP_INVOICE_POST), controller.postSupplierInvoice);
 router.post('/supplier-invoices/:id/payments', requirePermission(PERMISSIONS.AP_PAY), controller.paySupplierInvoice);
+router.post('/supplier-payments/:id/refunds', requirePermission(PERMISSIONS.AP_PAY), controller.refundSupplierPayment);
 export default router;

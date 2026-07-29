@@ -1,5 +1,11 @@
 import { Prisma } from '@prisma/client';
-import { buildPurchasingJournal, exactCurrency, purchaseOrderStatus, supplierInvoiceStatus } from '../purchasing.helpers';
+import {
+  assertBilledQuantityWithinReceived,
+  buildPurchasingJournal,
+  exactCurrency,
+  purchaseOrderStatus,
+  supplierInvoiceStatus,
+} from '../purchasing.helpers';
 
 describe('AC-003 purchasing and AP accounting policy', () => {
   it.each([
@@ -25,5 +31,17 @@ describe('AC-003 purchasing and AP accounting policy', () => {
   it('menolak nilai PO/receipt yang tidak representable dalam dua desimal', () => {
     expect(() => exactCurrency(new Prisma.Decimal('1.001'), 'Nilai')).toThrow();
     expect(exactCurrency(new Prisma.Decimal('1.00'), 'Nilai').toFixed(2)).toBe('1.00');
+  });
+
+  it('mengizinkan partial Bill 4 + 6 dan menolak billed quantity di atas received', () => {
+    expect(
+      assertBilledQuantityWithinReceived('10', '0', '4', 'Booster').available.toFixed(4),
+    ).toBe('10.0000');
+    expect(
+      assertBilledQuantityWithinReceived('10', '4', '6', 'Booster').requested.toFixed(4),
+    ).toBe('6.0000');
+    expect(() =>
+      assertBilledQuantityWithinReceived('10', '4', '7', 'Booster'))
+      .toThrow('quantity received yang belum ditagihkan');
   });
 });

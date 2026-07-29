@@ -85,7 +85,12 @@ export function createApp(): Application {
   );
 
   // ── Body Parsers ───────────────────────────────────────────
-  app.use(express.json({ limit: '10mb' }));
+  app.use(express.json({
+    limit: '10mb',
+    verify: (req, _res, buffer) => {
+      (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+    },
+  }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
   // ── Compression ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-export type ContactEntityType = 'MEMBER' | 'SUPPLIER';
+export type ContactEntityType = 'MEMBER' | 'SUPPLIER' | 'PARTNERSHIP_BRANCH';
 export type ZohoContactType = 'customer' | 'vendor';
 
 export type LocalContactSnapshot = {
@@ -48,7 +48,7 @@ function customExternalId(candidate: ZohoContactCandidate): string | null {
 }
 
 export function expectedZohoContactType(entityType: ContactEntityType): ZohoContactType {
-  return entityType === 'MEMBER' ? 'customer' : 'vendor';
+  return entityType === 'SUPPLIER' ? 'vendor' : 'customer';
 }
 
 export function splitContactName(displayName: string): { first_name: string; last_name?: string } {
@@ -71,7 +71,9 @@ export function buildZohoContactPayload(
   return {
     contact_name: snapshot.displayName,
     contact_type: contactType,
-    ...(contactType === 'customer' ? { customer_sub_type: 'individual' } : { company_name: snapshot.displayName }),
+    ...(snapshot.entityType === 'MEMBER'
+      ? { customer_sub_type: 'individual' }
+      : { company_name: snapshot.displayName }),
     payment_terms: snapshot.paymentTermsDays,
     ...(snapshot.address ? { billing_address: { address: snapshot.address } } : {}),
     contact_persons: [person],

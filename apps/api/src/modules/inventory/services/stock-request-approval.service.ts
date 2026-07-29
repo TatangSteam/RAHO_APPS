@@ -13,6 +13,10 @@ import {
   parseStockRequestQuantity,
 } from './stock-request-units';
 import { decideApprovalInTransaction, submitApprovalInTransaction } from '../../approvals/approval.service';
+import {
+  buildPartnershipPaymentVerifiedEventData,
+} from '../../zoho/zoho.partnership.service';
+import { assertBranchAccess } from '../../iam/authorization.service';
 
 interface InvoiceItemInput {
   masterProductId: string;
@@ -81,11 +85,16 @@ export class StockRequestApprovalService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    if (!user || ![
+      Role.SUPER_ADMIN,
+      Role.ADMIN_MANAGER,
+      Role.ADMIN_LOGISTIK,
+      Role.FINANCE_LOGISTICS_CONTROLLER,
+    ].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
-        message: 'Hanya Super Admin, Admin Manager, atau Admin Logistik yang dapat memproses permintaan stok',
+        message: 'Role Anda tidak dapat memproses permintaan stok',
       };
     }
 
@@ -105,6 +114,9 @@ export class StockRequestApprovalService {
           message: 'Anda hanya dapat memproses permintaan dari cabang yang Anda kelola',
         };
       }
+    }
+    if (user.role === Role.FINANCE_LOGISTICS_CONTROLLER) {
+      await assertBranchAccess(userId, branchId);
     }
 
     return user;
@@ -696,7 +708,12 @@ export class StockRequestApprovalService {
       select: { role: true, branchId: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    if (!user || ![
+      Role.SUPER_ADMIN,
+      Role.ADMIN_MANAGER,
+      Role.ADMIN_LOGISTIK,
+      Role.FINANCE_LOGISTICS_CONTROLLER,
+    ].includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -721,6 +738,9 @@ export class StockRequestApprovalService {
         };
       }
     }
+    if (user.role === Role.FINANCE_LOGISTICS_CONTROLLER) {
+      await assertBranchAccess(userId, request.branchId);
+    }
 
     // Update request and invoice with payment proof
     const result = await prisma.$transaction(async (tx) => {
@@ -728,6 +748,8 @@ export class StockRequestApprovalService {
       const nextPaidAmount = isDebtRequest ? paidAmount + paymentAmount : paidAmount;
       const nextRemainingAmount = isDebtRequest ? Math.max(0, totalAmount - nextPaidAmount) : remainingAmount;
       const isFullyPaid = isDebtRequest && nextRemainingAmount <= 0;
+      const autoVerifyDebt = isDebtRequest
+        && user.role !== Role.FINANCE_LOGISTICS_CONTROLLER;
 
       // Update request
       const updatedRequest = await tx.stockRequest.update({
@@ -740,8 +762,8 @@ export class StockRequestApprovalService {
           paymentProofMimeType: fileData.mimeType,
           paymentUploadedAt: now,
           paymentUploadedBy: userId,
-          paymentVerifiedBy: isDebtRequest && isFullyPaid ? userId : request.paymentVerifiedBy,
-          paymentVerifiedAt: isDebtRequest && isFullyPaid ? now : request.paymentVerifiedAt,
+          paymentVerifiedBy: autoVerifyDebt && isFullyPaid ? userId : request.paymentVerifiedBy,
+          paymentVerifiedAt: autoVerifyDebt && isFullyPaid ? now : request.paymentVerifiedAt,
           paymentVerificationNotes: isDebtRequest
             ? isFullyPaid
               ? 'Pembayaran utang sudah lunas'
@@ -781,9 +803,9 @@ export class StockRequestApprovalService {
           notes: paymentData?.notes?.trim() || null,
           uploadedBy: userId,
           uploadedAt: now,
-          verifiedBy: isDebtRequest ? userId : null,
-          verifiedAt: isDebtRequest ? now : null,
-          verificationNotes: isDebtRequest
+          verifiedBy: autoVerifyDebt ? userId : null,
+          verifiedAt: autoVerifyDebt ? now : null,
+          verificationNotes: autoVerifyDebt
             ? isFullyPaid
               ? 'Pembayaran utang sudah lunas'
               : `Pembayaran parsial diterima. Sisa utang Rp ${nextRemainingAmount.toLocaleString('id-ID')}`
@@ -796,24 +818,24 @@ export class StockRequestApprovalService {
         data: {
           paidAmount: nextPaidAmount,
           remainingAmount: nextRemainingAmount,
-          status: isFullyPaid ? 'PAID' : isDebtRequest ? 'DEBT' : request.invoice.status,
+          status: autoVerifyDebt && isFullyPaid ? 'PAID' : isDebtRequest ? 'DEBT' : request.invoice.status,
           paymentProofUrl: fileData.url,
           paymentProofFileName: fileData.fileName,
           paymentProofFileSize: fileData.fileSize,
           paymentProofMimeType: fileData.mimeType,
           paymentUploadedAt: now,
           paymentUploadedBy: userId,
-          paymentVerificationStatus: isDebtRequest
+          paymentVerificationStatus: autoVerifyDebt
             ? isFullyPaid ? 'VERIFIED' : 'PENDING'
             : 'PENDING',
-          verifiedBy: isDebtRequest && isFullyPaid ? userId : request.invoice.verifiedBy,
-          verifiedAt: isDebtRequest && isFullyPaid ? now : request.invoice.verifiedAt,
-          verificationNotes: isDebtRequest
+          verifiedBy: autoVerifyDebt && isFullyPaid ? userId : request.invoice.verifiedBy,
+          verifiedAt: autoVerifyDebt && isFullyPaid ? now : request.invoice.verifiedAt,
+          verificationNotes: autoVerifyDebt
             ? isFullyPaid
               ? 'Pembayaran utang sudah lunas'
               : `Pembayaran parsial diterima. Sisa utang Rp ${nextRemainingAmount.toLocaleString('id-ID')}`
             : request.invoice.verificationNotes,
-          paidAt: isFullyPaid ? now : request.invoice.paidAt,
+          paidAt: autoVerifyDebt && isFullyPaid ? now : request.invoice.paidAt,
           rejectionReason: null,
         },
       });
@@ -856,6 +878,17 @@ export class StockRequestApprovalService {
     const user = await this.validateManagerPermission(userId, request.branchId);
     const isFreeRequest = Number(request.invoice?.totalAmount || 0) <= 0;
     const isDebtRequest = request.invoice?.status === 'DEBT';
+    if (
+      user.role === Role.FINANCE_LOGISTICS_CONTROLLER
+      && !isFreeRequest
+      && request.paymentUploadedBy === userId
+    ) {
+      throw {
+        status: 403,
+        code: 'PAYMENT_MAKER_CHECKER_REQUIRED',
+        message: 'Pengunggah bukti pembayaran tidak boleh memverifikasi pembayaran yang sama',
+      };
+    }
 
     if (!isDebtRequest && !['WAITING_PAYMENT', 'PAYMENT_UPLOADED'].includes(request.status)) {
       throw {
@@ -891,12 +924,13 @@ export class StockRequestApprovalService {
         };
       }
 
+      const verifiedAt = new Date();
       const result = await prisma.$transaction(async (tx) => {
         const updatedRequest = await tx.stockRequest.update({
           where: { id: requestId },
           data: {
             paymentVerifiedBy: userId,
-            paymentVerifiedAt: new Date(),
+            paymentVerifiedAt: verifiedAt,
             paymentVerificationNotes: verificationNotes,
           },
           include: {
@@ -927,9 +961,9 @@ export class StockRequestApprovalService {
                 remainingAmount: 0,
                 paymentVerificationStatus: 'VERIFIED',
                 verifiedBy: userId,
-                verifiedAt: new Date(),
+                verifiedAt,
                 verificationNotes,
-                paidAt: new Date(),
+                paidAt: verifiedAt,
               },
               include: {
                 items: {
@@ -941,6 +975,55 @@ export class StockRequestApprovalService {
             })
           : null;
 
+        if (invoice) {
+          await tx.stockRequestInvoicePayment.updateMany({
+            where: { invoiceId: invoice.id, verifiedAt: null },
+            data: {
+              verifiedBy: userId,
+              verifiedAt,
+              verificationNotes,
+              rejectionReason: null,
+            },
+          });
+        }
+
+        if (
+          invoice
+          && request.branch.type === BranchType.PARTNERSHIP
+          && invoice.totalAmount.greaterThan(0)
+        ) {
+          const eventData = buildPartnershipPaymentVerifiedEventData({
+            invoiceId: invoice.id,
+            branchId: request.branchId,
+            stockRequestId: request.id,
+            invoiceNumber: invoice.invoiceNumber,
+            amount: invoice.totalAmount,
+            verifiedAt,
+            paymentAccountNumber: invoice.paymentAccountNumber,
+          });
+          await tx.integrationEvent.upsert({
+            where: {
+              eventType_aggregateId: {
+                eventType: eventData.eventType,
+                aggregateId: eventData.aggregateId,
+              },
+            },
+            create: eventData,
+            update: {
+              payload: eventData.payload,
+              branchId: eventData.branchId,
+              occurredAt: verifiedAt,
+              status: 'PENDING',
+              attempts: 0,
+              availableAt: new Date(),
+              processedAt: null,
+              deadLetteredAt: null,
+              lockedBy: null,
+              leaseUntil: null,
+              lastError: null,
+            },
+          });
+        }
         return { updatedRequest, invoice };
       });
 
@@ -967,6 +1050,7 @@ export class StockRequestApprovalService {
     const shipmentCode = await this.generateShipmentCode(senderBranch.id, request.branchId);
 
     // Update request, invoice, and create shipment
+    const verifiedAt = new Date();
     const result = await prisma.$transaction(async (tx) => {
       // Update request to APPROVED (shipment will be created)
       const updatedRequest = await tx.stockRequest.update({
@@ -974,7 +1058,7 @@ export class StockRequestApprovalService {
         data: {
           status: 'APPROVED',
           paymentVerifiedBy: userId,
-          paymentVerifiedAt: new Date(),
+          paymentVerifiedAt: verifiedAt,
           paymentVerificationNotes: verificationNotes,
         },
         include: {
@@ -998,7 +1082,7 @@ export class StockRequestApprovalService {
 
       // Update invoice
       if (request.invoice) {
-        await tx.stockRequestInvoice.update({
+        const paidInvoice = await tx.stockRequestInvoice.update({
           where: { id: request.invoice.id },
           data: {
             status: 'PAID',
@@ -1006,9 +1090,54 @@ export class StockRequestApprovalService {
             remainingAmount: 0,
             paymentVerificationStatus: 'VERIFIED',
             verifiedBy: userId,
-            verifiedAt: new Date(),
+            verifiedAt,
             verificationNotes,
-            paidAt: new Date(),
+            paidAt: verifiedAt,
+          },
+        });
+        if (
+          request.branch.type === BranchType.PARTNERSHIP
+          && paidInvoice.totalAmount.greaterThan(0)
+        ) {
+          const eventData = buildPartnershipPaymentVerifiedEventData({
+            invoiceId: paidInvoice.id,
+            branchId: request.branchId,
+            stockRequestId: request.id,
+            invoiceNumber: paidInvoice.invoiceNumber,
+            amount: paidInvoice.totalAmount,
+            verifiedAt,
+            paymentAccountNumber: paidInvoice.paymentAccountNumber,
+          });
+          await tx.integrationEvent.upsert({
+            where: {
+              eventType_aggregateId: {
+                eventType: eventData.eventType,
+                aggregateId: eventData.aggregateId,
+              },
+            },
+            create: eventData,
+            update: {
+              payload: eventData.payload,
+              branchId: eventData.branchId,
+              occurredAt: verifiedAt,
+              status: 'PENDING',
+              attempts: 0,
+              availableAt: new Date(),
+              processedAt: null,
+              deadLetteredAt: null,
+              lockedBy: null,
+              leaseUntil: null,
+              lastError: null,
+            },
+          });
+        }
+        await tx.stockRequestInvoicePayment.updateMany({
+          where: { invoiceId: paidInvoice.id, verifiedAt: null },
+          data: {
+            verifiedBy: userId,
+            verifiedAt,
+            verificationNotes,
+            rejectionReason: null,
           },
         });
       }

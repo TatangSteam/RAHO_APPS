@@ -697,6 +697,7 @@ Event:
 PO_ISSUED
 SUPPLIER_INVOICE_POSTED
 AP_PAYMENT_POSTED
+AP_PAYMENT_REFUNDED
 PO_CANCELLED
 SUPPLIER_INVOICE_REVERSED
 ```
@@ -713,6 +714,7 @@ flowchart LR
     WAIT --> BILL[Supplier Invoice RAHO]
     BILL --> ZBILL[Zoho Bill linked to PO]
     ZBILL --> PAY[Zoho Vendor Payment]
+    PAY --> REFUND[Zoho Vendor Payment Refund]
 ```
 
 Aturan anti-double-posting:
@@ -723,6 +725,8 @@ Aturan anti-double-posting:
   jika Bill inventory akan menyusul;
 - Zoho Bill menjadi satu-satunya jalur normal yang menambah inventory Zoho;
 - jangan mengirim Bill dan adjustment positif untuk penerimaan yang sama;
+- refund pembayaran supplier adalah reversal immutable yang mengacu payment
+  asli; transaksi payment tidak dihapus;
 - partial receipt/partial bill harus memakai quantity yang benar-benar ditagih;
 - penerimaan tanpa invoice dalam batas SLA tampil sebagai exception GRNI.
 

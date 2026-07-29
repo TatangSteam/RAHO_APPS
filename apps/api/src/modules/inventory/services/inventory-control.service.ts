@@ -15,6 +15,11 @@ import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@m
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { decideApprovalInTransaction, submitApprovalInTransaction } from '@modules/approvals/approval.service';
 import { postInventoryAdjustmentDerivedJournal } from '@modules/accounting/accounting.service';
+import { createInventorySyncEventInTransaction } from '@modules/zoho/zoho.inventory-outbox';
+import {
+  INVENTORY_ADJUSTMENT_POSTED_EVENT,
+  STOCK_OPNAME_POSTED_EVENT,
+} from '@modules/zoho/zoho.inventory-adjustment.policy';
 import {
   issueAdjustmentInventoryInTransaction,
   receiveAdjustmentInventoryInTransaction,
@@ -382,6 +387,34 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
     entityCode: adjustment.adjustmentNumber, description: `Adjustment ${adjustment.adjustmentNumber} diposting.`,
     afterData: { status: 'POSTED', journalEntryId: journal.journal.id, totalPostedValue: posted.totalPostedValue },
   } });
+  await createInventorySyncEventInTransaction(tx, {
+    eventType: adjustment.stockOpnameId
+      ? STOCK_OPNAME_POSTED_EVENT
+      : INVENTORY_ADJUSTMENT_POSTED_EVENT,
+    aggregateType: adjustment.stockOpnameId ? 'StockOpnameInventory' : 'InventoryAdjustment',
+    aggregateId: adjustment.stockOpnameId || adjustment.id,
+    occurredAt: now,
+    snapshot: {
+      sourceType: adjustment.stockOpnameId ? 'STOCK_OPNAME' : 'MANUAL_ADJUSTMENT',
+      localEntityId: adjustment.stockOpnameId || adjustment.id,
+      externalKey: `RAHO-ADJUSTMENT-${adjustment.adjustmentNumber}`,
+      branchId: adjustment.branchId,
+      occurredAt: now.toISOString(),
+      postingReference: outboundPostingId || firstInboundPostingId || null,
+      reason: adjustment.reasonCode,
+      lines: posted.lines.map((line) => {
+        const direction = line.direction === InventoryAdjustmentDirection.OUT ? -1 : 1;
+        return {
+          inventoryItemId: line.inventoryItemId,
+          sku: null,
+          stockLocationId: adjustment.stockLocationId,
+          quantityAdjusted: line.quantity.mul(direction).toFixed(4),
+          unitRate: line.unitCost?.toFixed(4) ?? null,
+          value: line.postedValue?.mul(direction).toFixed(4) ?? null,
+        };
+      }),
+    },
+  });
   return posted;
 }
 

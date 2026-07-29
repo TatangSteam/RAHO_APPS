@@ -136,6 +136,8 @@ export async function getStatus() {
       organizationCurrencyCode: true, organizationTimeZone: true, discoveryLastRunAt: true,
       contactExternalIdFieldId: true, contactExternalIdApiName: true, contactExternalIdIsUnique: true,
       locationsSupported: true, locationsCapabilityError: true,
+      inventoryAdjustmentsSupported: true, inventoryAdjustmentsCapabilityError: true,
+      inventoryAdjustmentsLastCheckedAt: true,
       createdAt: true, updatedAt: true,
     },
   });
@@ -179,6 +181,15 @@ export async function getStatus() {
         expenseSyncReady: !missingScopes.includes('ZohoBooks.expenses.READ')
           && !missingScopes.includes('ZohoBooks.expenses.CREATE')
           && !missingScopes.includes('ZohoBooks.expenses.UPDATE'),
+        purchaseOrderSyncReady: !missingScopes.includes('ZohoBooks.purchaseorders.READ')
+          && !missingScopes.includes('ZohoBooks.purchaseorders.CREATE')
+          && !missingScopes.includes('ZohoBooks.purchaseorders.UPDATE'),
+        billSyncReady: !missingScopes.includes('ZohoBooks.bills.READ')
+          && !missingScopes.includes('ZohoBooks.bills.CREATE')
+          && !missingScopes.includes('ZohoBooks.bills.UPDATE'),
+        vendorPaymentSyncReady: !missingScopes.includes('ZohoBooks.vendorpayments.READ')
+          && !missingScopes.includes('ZohoBooks.vendorpayments.CREATE')
+          && !missingScopes.includes('ZohoBooks.vendorpayments.UPDATE'),
         reconnectRequired:
           connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION || missingScopes.length > 0,
       };

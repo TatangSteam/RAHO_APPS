@@ -7,8 +7,12 @@ import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { normalizeZohoError, ZohoApiError } from './zoho.error';
 
-export const ZOHO_SCOPE_VERSION = 8;
-export const ZOHO_REQUIRED_SCOPES = [
+export const ZOHO_INVENTORY_SCOPES = [
+  'ZohoInventory.inventoryadjustments.READ',
+  'ZohoInventory.inventoryadjustments.CREATE',
+] as const;
+
+const ZOHO_BOOKS_SCOPES = [
   'ZohoBooks.settings.READ',
   'ZohoBooks.settings.CREATE',
   'ZohoBooks.settings.UPDATE',
@@ -29,6 +33,21 @@ export const ZOHO_REQUIRED_SCOPES = [
   'ZohoBooks.expenses.READ',
   'ZohoBooks.expenses.CREATE',
   'ZohoBooks.expenses.UPDATE',
+  'ZohoBooks.purchaseorders.READ',
+  'ZohoBooks.purchaseorders.CREATE',
+  'ZohoBooks.purchaseorders.UPDATE',
+  'ZohoBooks.bills.READ',
+  'ZohoBooks.bills.CREATE',
+  'ZohoBooks.bills.UPDATE',
+  'ZohoBooks.vendorpayments.READ',
+  'ZohoBooks.vendorpayments.CREATE',
+  'ZohoBooks.vendorpayments.UPDATE',
+] as const;
+
+export const ZOHO_SCOPE_VERSION = env.ZOHO_INVENTORY_SYNC_ENABLED ? 13 : 12;
+export const ZOHO_REQUIRED_SCOPES = [
+  ...ZOHO_BOOKS_SCOPES,
+  ...(env.ZOHO_INVENTORY_SYNC_ENABLED ? ZOHO_INVENTORY_SCOPES : []),
 ] as const;
 
 export type ZohoTokenResponse = {

@@ -5,6 +5,7 @@ import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 import { ZohoApiError, normalizeZohoError } from './zoho.error';
 import { sanitizeForAudit, stablePayloadHash } from './zoho.sanitizer';
+import { getZohoRuntimeGate, ZohoRuntimeGate } from './zoho.go-live.service';
 
 export type ZohoEventHandler = (event: IntegrationEvent) => Promise<unknown>;
 
@@ -13,6 +14,8 @@ export const ZOHO_SYNC_EVENT_TYPES = [
   'TREATMENT_COMPLETED',
   'TREATMENT_COMPLETION_CANCELLED',
   'PARTNERSHIP_GOODS_SHIPPED',
+  'PARTNERSHIP_PAYMENT_VERIFIED',
+  'PARTNERSHIP_CONTACT_UPSERTED',
   'MEMBER_CONTACT_UPSERTED',
   'SUPPLIER_CONTACT_UPSERTED',
   'MASTER_PRODUCT_ITEM_UPSERTED',
@@ -24,6 +27,15 @@ export const ZOHO_SYNC_EVENT_TYPES = [
   'PAYMENT_VERIFIED',
   'PAYMENT_REFUNDED',
   'EXPENSE_PAID',
+  'PO_ISSUED',
+  'PO_CANCELLED',
+  'SUPPLIER_INVOICE_POSTED',
+  'AP_PAYMENT_POSTED',
+  'AP_PAYMENT_REFUNDED',
+  'TREATMENT_INVENTORY_CONSUMED',
+  'TREATMENT_INVENTORY_REVERSED',
+  'INVENTORY_ADJUSTMENT_POSTED',
+  'STOCK_OPNAME_POSTED',
 ] as const;
 const workerId = `${os.hostname()}:${process.pid}`;
 let timer: NodeJS.Timeout | null = null;
@@ -38,14 +50,37 @@ export function calculateRetryAt(attemptNo: number, retryAfterMs?: number): Date
   return new Date(Date.now() + (retryAfterMs ?? exponential));
 }
 
-export async function claimZohoEvents(limit = env.ZOHO_SYNC_BATCH_SIZE): Promise<IntegrationEvent[]> {
+const MASTER_SYNC_EVENT_TYPES = [
+  'PARTNERSHIP_CONTACT_UPSERTED',
+  'MEMBER_CONTACT_UPSERTED',
+  'SUPPLIER_CONTACT_UPSERTED',
+  'MASTER_PRODUCT_ITEM_UPSERTED',
+  'PACKAGE_PRICING_ITEM_UPSERTED',
+  'BRANCH_LOCATION_UPSERTED',
+  'STOCK_LOCATION_UPSERTED',
+] as const;
+
+export async function claimZohoEvents(
+  limit = env.ZOHO_SYNC_BATCH_SIZE,
+  gate?: ZohoRuntimeGate,
+): Promise<IntegrationEvent[]> {
   const leaseUntil = new Date(Date.now() + env.ZOHO_SYNC_LEASE_MS);
+  const canaryFilter = gate?.mode === 'CANARY'
+    ? gate.canaryBranchIds.length
+      ? Prisma.sql`AND "branchId" IN (${Prisma.join(gate.canaryBranchIds)})`
+      : Prisma.sql`AND FALSE`
+    : Prisma.empty;
+  const masterFreezeFilter = gate?.masterFrozen
+    ? Prisma.sql`AND "eventType" NOT IN (${Prisma.join(MASTER_SYNC_EVENT_TYPES)})`
+    : Prisma.empty;
   return prisma.$transaction(async (tx) => {
     const claimed = await tx.$queryRaw<Array<{ id: string }>>(Prisma.sql`
       WITH candidates AS (
         SELECT "id"
         FROM "integration_events"
         WHERE "eventType" IN (${Prisma.join(ZOHO_SYNC_EVENT_TYPES)})
+        ${canaryFilter}
+        ${masterFreezeFilter}
         AND (
           ("status" = 'PENDING' AND "availableAt" <= NOW())
           OR ("status" = 'PROCESSING' AND "leaseUntil" < NOW())
@@ -115,8 +150,11 @@ async function finishDryRun(event: IntegrationEvent): Promise<void> {
   ]);
 }
 
-export async function processClaimedZohoEvent(event: IntegrationEvent): Promise<void> {
-  if (env.ZOHO_SYNC_DRY_RUN) {
+export async function processClaimedZohoEvent(
+  event: IntegrationEvent,
+  runtimeDryRun?: boolean,
+): Promise<void> {
+  if (runtimeDryRun ?? env.ZOHO_SYNC_DRY_RUN) {
     await finishDryRun(event);
     return;
   }
@@ -209,8 +247,13 @@ export async function runZohoWorkerOnce(): Promise<number> {
   if (running) return 0;
   running = true;
   try {
-    const events = await claimZohoEvents();
-    await Promise.all(events.map(processClaimedZohoEvent));
+    const gate = await getZohoRuntimeGate();
+    if (gate.mode === 'OFF') return 0;
+    const events = await claimZohoEvents(env.ZOHO_SYNC_BATCH_SIZE, gate);
+    await Promise.all(events.map((event) => processClaimedZohoEvent(
+      event,
+      gate.mode === 'DRY_RUN',
+    )));
     return events.length;
   } finally {
     running = false;

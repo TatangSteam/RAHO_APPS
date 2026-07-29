@@ -20,7 +20,17 @@ export const approvePurchaseRequest = run((req) => service.approvePurchaseReques
 export const rejectPurchaseRequest = run((req) => service.rejectPurchaseRequest(req.user.userId, req.params.id, schema.rejectSchema.parse(req.body).reason));
 export const purchaseOrders = run((req) => service.listPurchaseOrders(req.user.userId, schema.listPurchasingSchema.parse(req.query).branchId));
 export const createPurchaseOrder = run((req) => service.createPurchaseOrder(req.user.userId, schema.createPurchaseOrderSchema.parse(req.body)), true);
+export const cancelPurchaseOrder = run((req) => service.cancelPurchaseOrder(
+  req.user.userId,
+  req.params.id,
+  schema.rejectSchema.parse(req.body).reason,
+));
 export const postGoodsReceipt = run((req) => service.postGoodsReceipt(req.user.userId, req.params.id, schema.createGoodsReceiptSchema.parse(req.body)), true);
 export const accountsPayable = run((req) => service.listAccountsPayable(req.user.userId, schema.listPurchasingSchema.parse(req.query).branchId));
 export const postSupplierInvoice = run((req) => service.postSupplierInvoice(req.user.userId, schema.createSupplierInvoiceSchema.parse(req.body)), true);
 export const paySupplierInvoice = run((req) => service.paySupplierInvoice(req.user.userId, req.params.id, schema.createSupplierPaymentSchema.parse(req.body)), true);
+export const refundSupplierPayment = run((req) => service.refundSupplierPayment(
+  req.user.userId,
+  req.params.id,
+  schema.createSupplierPaymentRefundSchema.parse(req.body),
+), true);
