@@ -1353,6 +1353,8 @@ model MemberPackage {
   serviceType         String? // HC, PS, PHC, PTY, PDA
   purchaseGroupId     String? // Group BASIC + BOOSTER purchased together
   upgradedFromId      String? // Track if this is an upgrade from another package
+  // 1 = paket legacy sebelum cutover finance; 2 = paket baru yang wajib deferred revenue
+  revenueFlowVersion  Int             @default(2)
 
   // Payment proof (bukti pembayaran)
   paymentProofUrl      String?

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import {
   CheckCircle2,
   CreditCard,
@@ -563,7 +563,7 @@ export default function PaymentsPage() {
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-amber-500 px-5 text-sm font-bold text-black hover:bg-amber-400"
           >
             <FileText size={16} />
-            Buat Invoice
+            Info Invoice Otomatis
           </button>
         </header>
 
@@ -1215,11 +1215,12 @@ function Modal({
   children: React.ReactNode;
   onClose: () => void;
 }) {
+  const titleId = useId();
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+    <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl dark:bg-neutral-900">
         <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-xl font-bold">{title}</h2>
+          <h2 id={titleId} className="text-xl font-bold">{title}</h2>
           <button type="button" aria-label="Tutup" onClick={onClose} className="rounded-lg p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800">
             <X size={20} />
           </button>

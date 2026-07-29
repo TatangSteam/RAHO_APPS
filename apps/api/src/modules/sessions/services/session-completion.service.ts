@@ -19,6 +19,7 @@ import {
 import { resolveSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 import {
   createTreatmentCompletedEventInTransaction,
+  LEGACY_REVENUE_FLOW_VERSION,
   postTreatmentCompletionFinancialsInTransaction,
   reverseTreatmentCompletionFinancialsInTransaction,
 } from '@modules/revenue/revenue.service';
@@ -108,13 +109,21 @@ export class SessionCompletionService {
         throw errors.conflict('SESSION_COMPLETION_CANCELLED', 'Completion sesi ini sudah dibatalkan dan tidak dapat diposting ulang.');
       }
       if (session.isCompleted) {
-        const [existingEvent, existingRevenueEvent] = await Promise.all([
+        const replayPackageId = session.revenuePackageId
+          || session.boosterPackageId
+          || session.encounter.memberPackageId;
+        const [existingEvent, existingRevenueEvent, replayPackage] = await Promise.all([
           tx.integrationEvent.findUnique({
             where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: session.id } },
           }),
           tx.domainEvent.findUnique({ where: { eventKey: `TREATMENT_COMPLETED:${session.id}` } }),
+          tx.memberPackage.findUnique({
+            where: { id: replayPackageId },
+            select: { revenueFlowVersion: true },
+          }),
         ]);
-        if (!existingEvent || !existingRevenueEvent) {
+        const isLegacyCompletion = replayPackage?.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
+        if ((!existingEvent || !existingRevenueEvent) && !isLegacyCompletion) {
           throw errors.conflict(
             'SESSION_COMPLETION_EVENT_MISSING',
             'Sesi sudah selesai tetapi kontrak event inventory atau deferred revenue tidak lengkap.',
@@ -130,11 +139,14 @@ export class SessionCompletionService {
           recognizedRevenue: session.recognizedRevenue,
           materialCost: session.materialCost,
           grossProfit: session.grossProfit,
-          eventId: existingEvent.id,
-          eventStatus: existingEvent.status,
-          domainEventId: existingRevenueEvent.id,
+          eventId: existingEvent?.id ?? null,
+          eventStatus: existingEvent?.status ?? null,
+          domainEventId: existingRevenueEvent?.id ?? null,
+          revenueCompatibilityMode: isLegacyCompletion ? 'LEGACY' : 'CURRENT',
           idempotentReplay: true,
-          message: 'Sesi terapi sudah diselesaikan.',
+          message: isLegacyCompletion
+            ? 'Sesi terapi lama sudah diselesaikan dan tetap menggunakan alur legacy.'
+            : 'Sesi terapi sudah diselesaikan.',
         };
       }
 
@@ -410,6 +422,7 @@ export class SessionCompletionService {
         recognizedRevenue: finance.recognizedRevenue,
         materialCost: finance.materialCost,
         grossProfit: finance.grossProfit,
+        revenueCompatibilityMode: finance.revenueCompatibilityMode,
         idempotentReplay: false,
         message: 'Sesi terapi berhasil diselesaikan',
       };
@@ -431,6 +444,7 @@ export class SessionCompletionService {
         recognizedRevenue: result.recognizedRevenue,
         materialCost: result.materialCost,
         grossProfit: result.grossProfit,
+        revenueCompatibilityMode: result.revenueCompatibilityMode,
         revenueRecognitionStatus: 'POSTED',
       },
     });

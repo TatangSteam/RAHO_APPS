@@ -30,6 +30,7 @@
         "db:seed:essential": "tsx prisma/seed-essential.ts",
         "db:seed:testing": "tsx prisma/seed-testing.ts",
         "db:seed:minimal": "tsx prisma/seed-minimal.ts",
+        "db:seed:local-cash-bank": "tsx prisma/seed-local-cash-bank.ts",
         "db:studio": "prisma studio",
         "db:reset": "prisma migrate reset --force",
         "lint": "eslint src --ext .ts",

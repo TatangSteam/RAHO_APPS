@@ -13,6 +13,17 @@ import type { ProfitabilityQuery, RevenueListQuery, UpsertRevenuePolicyInput } f
 type Tx = Prisma.TransactionClient;
 const json = (value: unknown) => value as Prisma.InputJsonValue;
 
+export const LEGACY_REVENUE_FLOW_VERSION = 1;
+export const CURRENT_REVENUE_FLOW_VERSION = 2;
+
+export function requiresDeferredRevenueContract(pkg: {
+  finalPrice: Prisma.Decimal;
+  revenueFlowVersion: number;
+}) {
+  return pkg.revenueFlowVersion >= CURRENT_REVENUE_FLOW_VERSION
+    && pkg.finalPrice.greaterThan(0);
+}
+
 export async function upsertRevenuePolicy(actorUserId: string, input: UpsertRevenuePolicyInput) {
   await assertPermission(actorUserId, PERMISSIONS.REVENUE_POLICY_MANAGE);
   const [pricing, deferredAccount, revenueAccount, existing] = await Promise.all([
@@ -147,7 +158,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
   const [packages, contracts] = await Promise.all([
     tx.memberPackage.findMany({
       where: { id: { in: packageIds } },
-      select: { id: true, finalPrice: true },
+      select: { id: true, finalPrice: true, revenueFlowVersion: true },
     }),
     tx.packageRevenueContract.findMany({
       where: { memberPackageId: { in: packageIds } },
@@ -157,7 +168,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
   ]);
   const contractByPackage = new Map(contracts.map((contract) => [contract.memberPackageId, contract]));
   const missingFundedContract = packages.find((pkg) =>
-    pkg.finalPrice.greaterThan(0) && !contractByPackage.has(pkg.id)
+    requiresDeferredRevenueContract(pkg) && !contractByPackage.has(pkg.id)
   );
   if (missingFundedContract) {
     throw errors.unprocessable(
@@ -165,6 +176,10 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       'Paket berbayar belum memiliki kontrak deferred revenue. Verifikasi pembayaran sebelum menyelesaikan treatment.',
     );
   }
+  const revenueCompatibilityMode = packages.some((pkg) =>
+    pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION
+      && !contractByPackage.has(pkg.id)
+  ) ? 'LEGACY' as const : 'CURRENT' as const;
   const reservations = [];
   for (const candidate of contracts) {
     if (candidate.totalConsideration.isZero()) continue;
@@ -201,7 +216,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
     if (!amount.greaterThan(0)) continue;
     reservations.push(await tx.revenueRecognition.create({ data: { recognitionKey, domainEventId: event.id, treatmentSessionId: event.treatmentSession.id, memberPackageId: contract.memberPackageId, contractId: contract.id, branchId: event.branchId, sessionOrdinal: ordinal, amount } }));
   }
-  return reservations;
+  return { reservations, revenueCompatibilityMode };
 }
 
 function addAmount(target: Map<string, Prisma.Decimal>, accountCode: string, amount: Prisma.Decimal) {
@@ -279,7 +294,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
     throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
   }
 
-  await reserveTreatmentCompletedRevenue(event.id, tx);
+  const reservation = await reserveTreatmentCompletedRevenue(event.id, tx);
   const recognitions = await tx.revenueRecognition.findMany({
     where: { domainEventId: event.id },
     include: {
@@ -325,6 +340,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
       grossProfit: totalRevenue.sub(input.materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
       recognitionCount: postedRecognitions.length,
       recognitions: recognitionPayload,
+      revenueCompatibilityMode: reservation.revenueCompatibilityMode,
       idempotentReplay: true,
     };
   }
@@ -431,12 +447,15 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
       entityType: 'TreatmentSession',
       entityId: event.treatmentSession.id,
       entityCode: event.treatmentSession.sessionCode,
-      description: `Revenue dan HPP treatment ${event.treatmentSession.sessionCode} diposting.`,
+      description: reservation.revenueCompatibilityMode === 'LEGACY'
+        ? `HPP treatment legacy ${event.treatmentSession.sessionCode} diposting tanpa memaksakan kontrak deferred revenue.`
+        : `Revenue dan HPP treatment ${event.treatmentSession.sessionCode} diposting.`,
       afterData: json({
         journalEntryId,
         recognizedRevenue: recognizedRevenue.toFixed(2),
         materialCost: materialCost.toFixed(2),
         grossProfit: recognizedRevenue.sub(materialCost).toFixed(2),
+        revenueCompatibilityMode: reservation.revenueCompatibilityMode,
       }),
     },
   });
@@ -447,6 +466,7 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
     grossProfit: recognizedRevenue.sub(materialCost).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP),
     recognitionCount: pendingRecognitions.length,
     recognitions: recognitionPayload,
+    revenueCompatibilityMode: reservation.revenueCompatibilityMode,
     idempotentReplay: false,
   };
 }

@@ -444,6 +444,7 @@ export class MemberHistoricalImportService {
             totalVerifiedPaid: packageRow.finalPrice || 0,
             boosterType: packageRow.boosterType,
             serviceType: packageRow.serviceType,
+            revenueFlowVersion: 1,
             assignedBy: actorId,
             verifiedBy: actorId,
             verifiedAt: new Date(),
