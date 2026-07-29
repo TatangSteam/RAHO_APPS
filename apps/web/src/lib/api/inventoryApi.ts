@@ -732,7 +732,7 @@ export const inventoryApi = {
   adjustStock: (itemId: string, data: {
     idempotencyKey: string;
     adjustment: number;
-    unitCost: number;
+    unitCost?: number;
     notes: string;
     stockLocationId?: string;
     batchId?: string;

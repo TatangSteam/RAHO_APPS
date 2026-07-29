@@ -13,11 +13,17 @@ describe('directStockAdjustmentSchema', () => {
   it('menerima penambahan dan pengurangan stok serta memakai reason OTHER', () => {
     const incoming = directStockAdjustmentSchema.parse(validInput);
     const outgoing = directStockAdjustmentSchema.parse({ ...validInput, adjustment: '-2.5' });
+    const withoutUnitCost = directStockAdjustmentSchema.parse({
+      idempotencyKey: 'DIRECT-STOCK-002',
+      adjustment: 3,
+      notes: 'Koreksi stok tanpa input harga',
+    });
 
     expect(incoming.adjustment).toBe('5');
     expect(incoming.unitCost).toBe('25000');
     expect(incoming.reasonCode).toBe('OTHER');
     expect(outgoing.adjustment).toBe('-2.5');
+    expect(withoutUnitCost.unitCost).toBeUndefined();
   });
 
   it('menolak adjustment nol dan harga pokok nol', () => {

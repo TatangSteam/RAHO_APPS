@@ -39,7 +39,7 @@ export const adjustmentDecisionSchema = z.object({
 export const directStockAdjustmentSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   adjustment: signedAdjustment,
-  unitCost: positiveUnitCost,
+  unitCost: positiveUnitCost.optional(),
   notes: z.string().trim().min(3).max(500),
   stockLocationId: z.string().trim().min(1).optional(),
   batchId: z.string().trim().min(1).optional(),

@@ -385,6 +385,65 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
   return posted;
 }
 
+async function resolveDirectAdjustmentUnitCost(
+  tx: Tx,
+  item: { id: string; masterProductId: string },
+  requestedUnitCost?: string,
+) {
+  if (requestedUnitCost) {
+    return { unitCost: new Prisma.Decimal(requestedUnitCost), source: 'REQUEST' };
+  }
+
+  const latestLayer = await tx.inventoryCostLayer.findFirst({
+    where: {
+      inventoryBalance: { inventoryItemId: item.id },
+      valuationStatus: InventoryValuationStatus.VALUED,
+      unitCost: { gt: 0 },
+      isVoided: false,
+    },
+    select: { unitCost: true },
+    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+  });
+  if (latestLayer?.unitCost?.greaterThan(0)) {
+    return { unitCost: latestLayer.unitCost, source: 'LATEST_COST_LAYER' };
+  }
+
+  const latestReceipt = await tx.goodsReceiptItem.findFirst({
+    where: { inventoryItemId: item.id, unitCost: { gt: 0 } },
+    select: { unitCost: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (latestReceipt?.unitCost.greaterThan(0)) {
+    return { unitCost: latestReceipt.unitCost, source: 'LATEST_GOODS_RECEIPT' };
+  }
+
+  const latestOrder = await tx.purchaseOrderItem.findFirst({
+    where: { masterProductId: item.masterProductId, unitPrice: { gt: 0 } },
+    select: { unitPrice: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (latestOrder?.unitPrice.greaterThan(0)) {
+    return { unitCost: latestOrder.unitPrice, source: 'LATEST_PURCHASE_ORDER' };
+  }
+
+  const latestRequest = await tx.purchaseRequestItem.findFirst({
+    where: { masterProductId: item.masterProductId, estimatedUnitCost: { gt: 0 } },
+    select: { estimatedUnitCost: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (latestRequest?.estimatedUnitCost.greaterThan(0)) {
+    return { unitCost: latestRequest.estimatedUnitCost, source: 'LATEST_PURCHASE_REQUEST' };
+  }
+
+  const configuredFallback = new Prisma.Decimal(
+    process.env.INVENTORY_DIRECT_ADJUSTMENT_FALLBACK_UNIT_COST || '1',
+  );
+  return {
+    unitCost: configuredFallback.greaterThan(0) ? configuredFallback : new Prisma.Decimal(1),
+    source: 'SYSTEM_FALLBACK',
+  };
+}
+
 /**
  * Super Admin emergency/direct stock correction.
  *
@@ -496,7 +555,8 @@ export async function directAdjustStock(
       );
     }
 
-    const directUnitCost = new Prisma.Decimal(input.unitCost);
+    const valuation = await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
+    const directUnitCost = valuation.unitCost;
     let bootstrappedLegacyStock = false;
     if (balances.length === 0 && mirrorQty.greaterThan(0)) {
       const batchKey = input.batchId || 'NO_BATCH';
@@ -612,7 +672,8 @@ export async function directAdjustStock(
         status: document.status,
         direct: true,
         adjustment: input.adjustment,
-        unitCost: input.unitCost,
+        unitCost: directUnitCost.toFixed(4),
+        valuationSource: valuation.source,
         stockLocationId: location.id,
         bootstrappedLegacyStock,
         valuedLegacyLayers: valuedLegacyLayers.count,

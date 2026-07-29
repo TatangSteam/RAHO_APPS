@@ -98,7 +98,6 @@ export default function InventoryCrudModal({
   // Unit mode for edit: 'base' (e.g., botol) or 'usage' (e.g., ml)
   const [stockUnitMode, setStockUnitMode] = useState<'base' | 'usage'>('base');
   const [thresholdUnitMode, setThresholdUnitMode] = useState<'base' | 'usage'>('base');
-  const [stockUnitCost, setStockUnitCost] = useState('');
   const [stockAdjustmentNotes, setStockAdjustmentNotes] = useState('');
   
   const [formData, setFormData] = useState<InventoryFormData>({
@@ -143,7 +142,6 @@ export default function InventoryCrudModal({
         storageLocation: inventoryData.storageLocation || '',
         conversionFactor: inventoryData.conversionFactor || 1
       });
-      setStockUnitCost('');
       setStockAdjustmentNotes('');
     }
   }, [action, inventoryData]);
@@ -314,12 +312,6 @@ export default function InventoryCrudModal({
           return;
         }
 
-        const unitCost = Number(stockUnitCost);
-        if (stockChanged && (!Number.isFinite(unitCost) || unitCost <= 0)) {
-          showToast.error('Harga pokok per satuan harus lebih dari 0');
-          setLoading(false);
-          return;
-        }
         if (stockChanged && stockAdjustmentNotes.trim().length < 3) {
           showToast.error('Alasan perubahan stok wajib diisi minimal 3 karakter');
           setLoading(false);
@@ -338,7 +330,6 @@ export default function InventoryCrudModal({
           await inventoryApi.adjustStock(inventoryData.id, {
             idempotencyKey: crypto.randomUUID(),
             adjustment: editFormData.stock - originalStock,
-            unitCost,
             notes: stockAdjustmentNotes.trim(),
           });
         }
@@ -819,38 +810,18 @@ export default function InventoryCrudModal({
               </div>
 
               {stockChanged && canDirectAdjustStock && (
-                <>
-                  <div className={styles.formGroup}>
-                    <label htmlFor="stockUnitCost">
-                      Harga Pokok per {editFormData.baseUnit} (Rp) *
-                    </label>
-                    <input
-                      type="number"
-                      id="stockUnitCost"
-                      min="0.0001"
-                      step="0.0001"
-                      value={stockUnitCost}
-                      onChange={(event) => setStockUnitCost(event.target.value)}
-                      placeholder="Contoh: 25000"
-                    />
-                    <small style={{ color: 'var(--text-muted)' }}>
-                      Digunakan untuk valuasi dan jurnal penyesuaian.
-                    </small>
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label htmlFor="stockAdjustmentNotes">
-                      Alasan Perubahan Stok *
-                    </label>
-                    <input
-                      type="text"
-                      id="stockAdjustmentNotes"
-                      value={stockAdjustmentNotes}
-                      onChange={(event) => setStockAdjustmentNotes(event.target.value)}
-                      placeholder="Contoh: Koreksi hasil stok fisik"
-                    />
-                  </div>
-                </>
+                <div className={styles.formGroupFull}>
+                  <label htmlFor="stockAdjustmentNotes">
+                    Alasan Perubahan Stok *
+                  </label>
+                  <input
+                    type="text"
+                    id="stockAdjustmentNotes"
+                    value={stockAdjustmentNotes}
+                    onChange={(event) => setStockAdjustmentNotes(event.target.value)}
+                    placeholder="Contoh: Koreksi hasil stok fisik"
+                  />
+                </div>
               )}
 
               {/* Min Threshold Input with Unit Toggle */}
@@ -984,8 +955,6 @@ export default function InventoryCrudModal({
                 || (action === 'create' && !selectedProduct)
                 || (stockChanged && (
                   !canDirectAdjustStock
-                  || !stockUnitCost
-                  || Number(stockUnitCost) <= 0
                   || stockAdjustmentNotes.trim().length < 3
                 ))
               }

@@ -491,9 +491,9 @@ jurnal sesuai konfigurasi.
 ### 9.3 Kontrol Stok
 
 - **Super Admin** dapat mengubah stok langsung dari menu **Stok** atau
-  **Master Produk**. Isi stok/penyesuaian, harga pokok per satuan, dan alasan;
-  sistem langsung membuat, menyetujui, serta mem-posting dokumen adjustment
-  beserta mutasi ledger, valuasi, jurnal, dan audit trail.
+  **Master Produk**. Isi stok/penyesuaian dan alasan; sistem menentukan valuasi
+  internal lalu langsung membuat, menyetujui, serta mem-posting dokumen
+  adjustment beserta mutasi ledger, jurnal, dan audit trail.
 - Gunakan **Adjustment & Opname** untuk koreksi dengan alasan dan evidence.
 - Gunakan **Stock Opname** untuk snapshot, hitung fisik, resolusi selisih,
   approval, dan posting.
