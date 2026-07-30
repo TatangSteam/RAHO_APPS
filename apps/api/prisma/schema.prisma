@@ -2602,6 +2602,8 @@ model TreatmentSession {
   treatmentDate              DateTime
   isCompleted                Boolean                     @default(false)
   completionStatus           TreatmentCompletionStatus   @default(IN_PROGRESS)
+  // 1 = sesi yang sudah ada sebelum cutover; 2 = completion inventory/finance/event terbaru
+  completionFlowVersion      Int                         @default(2)
   adminLayananId             String
   doctorId                   String // Primary doctor (backward compatibility)
   nurseId                    String // Primary nurse (backward compatibility)
@@ -2659,6 +2661,7 @@ model TreatmentSession {
   @@index([doctorId, treatmentDate])
   @@index([isCompleted])
   @@index([completionStatus, completedAt])
+  @@index([completionFlowVersion])
   @@index([revenuePackageId])
   @@map("treatment_sessions")
 }

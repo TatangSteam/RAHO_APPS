@@ -4,11 +4,11 @@ import {
   MaterialUsageStatus,
   PackageStatus,
   PackageType,
-  Prisma,
   ProductCategory,
   Role,
   SessionType,
   TreatmentBomStatus,
+  TreatmentCompletionStatus,
   TreatmentRevenueSourceType,
   VitalTiming,
   VitalType,
@@ -16,10 +16,7 @@ import {
 import { prisma } from '@lib/prisma';
 import { LogisticsService } from '@modules/inventory/logistics.service';
 import { receiveInventory } from '@modules/inventory/services/inventory-ledger.service';
-import {
-  postTreatmentCompletionFinancialsInTransaction,
-  reserveTreatmentCompletedRevenue,
-} from '@modules/revenue/revenue.service';
+import { reserveTreatmentCompletedRevenue } from '@modules/revenue/revenue.service';
 import { SessionCompletionService } from '../session-completion.service';
 
 const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describe : describe.skip;
@@ -429,15 +426,17 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
     await prisma.$disconnect();
   }, 45_000);
 
-  it('allows legacy packages without a contract but still blocks current packages without one', async () => {
+  it('completes and replays an old session without BOM, finance, accounting period, events, or Zoho', async () => {
     const legacyPackageId = `legacy_package_${runId}`;
     const currentPackageId = `current_package_${runId}`;
     const legacyEncounterId = `legacy_encounter_${runId}`;
     const currentEncounterId = `current_encounter_${runId}`;
     const legacySessionId = `legacy_session_${runId}`;
     const currentSessionId = `current_session_${runId}`;
-    const legacyEventId = `legacy_event_${runId}`;
     const currentEventId = `current_event_${runId}`;
+    const legacyPlanId = `legacy_plan_${runId}`;
+    const legacyEvaluationId = `legacy_evaluation_${runId}`;
+    const legacyMaterialId = `legacy_material_${runId}`;
 
     try {
       await prisma.memberPackage.createMany({
@@ -447,7 +446,9 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
             packageCode: `LEGACY-${runId}`,
             memberId,
             branchId,
+            packagePricingId: pricingId,
             packageType: PackageType.BASIC,
+            productCode: `PKG-${runId}`,
             totalSessions: 1,
             finalPrice: '500000',
             status: PackageStatus.ACTIVE,
@@ -506,6 +507,7 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
             adminLayananId: actorId,
             doctorId: actorId,
             nurseId: actorId,
+            completionFlowVersion: 1,
             revenueSourceType: TreatmentRevenueSourceType.BASIC,
             revenuePackageId: legacyPackageId,
           },
@@ -521,62 +523,134 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
             adminLayananId: actorId,
             doctorId: actorId,
             nurseId: actorId,
+            completionFlowVersion: 2,
             revenueSourceType: TreatmentRevenueSourceType.BASIC,
             revenuePackageId: currentPackageId,
           },
         ],
       });
-      await prisma.domainEvent.createMany({
+      await prisma.therapyPlan.create({
+        data: {
+          id: legacyPlanId,
+          planCode: `LEGACY-PLAN-${runId}`,
+          memberId,
+          treatmentSessionId: legacySessionId,
+          ifa250: '1',
+        },
+      });
+      await prisma.vitalSign.createMany({
         data: [
           {
-            id: legacyEventId,
-            eventKey: `TREATMENT_COMPLETED:${legacySessionId}`,
-            eventType: 'TREATMENT_COMPLETED',
-            aggregateType: 'TreatmentSession',
-            aggregateId: legacySessionId,
-            branchId,
             treatmentSessionId: legacySessionId,
-            payloadHash: `legacy-${runId}`,
-            payload: { packageIds: [legacyPackageId] },
-            occurredAt: new Date('2026-07-16T00:00:00.000Z'),
+            pencatatan: VitalType.SISTOL,
+            waktuCatat: VitalTiming.SEBELUM,
+            value: '120',
+            unit: 'mmHg',
+            recordedBy: actorId,
           },
           {
-            id: currentEventId,
-            eventKey: `TREATMENT_COMPLETED:${currentSessionId}`,
-            eventType: 'TREATMENT_COMPLETED',
-            aggregateType: 'TreatmentSession',
-            aggregateId: currentSessionId,
-            branchId,
-            treatmentSessionId: currentSessionId,
-            payloadHash: `current-${runId}`,
-            payload: { packageIds: [currentPackageId] },
-            occurredAt: new Date('2026-07-29T00:00:00.000Z'),
+            treatmentSessionId: legacySessionId,
+            pencatatan: VitalType.SISTOL,
+            waktuCatat: VitalTiming.SESUDAH,
+            value: '118',
+            unit: 'mmHg',
+            recordedBy: actorId,
           },
         ],
       });
+      await prisma.infusionExecution.create({
+        data: {
+          treatmentSessionId: legacySessionId,
+          therapyPlanId: legacyPlanId,
+          ifa250: '1',
+        },
+      });
+      await prisma.doctorEvaluation.create({
+        data: {
+          id: legacyEvaluationId,
+          evaluationCode: `LEGACY-EVAL-${runId}`,
+          treatmentSessionId: legacySessionId,
+          assessment: 'Legacy session is stable',
+          writtenBy: actorId,
+        },
+      });
+      await prisma.materialUsage.create({
+        data: {
+          id: legacyMaterialId,
+          usageKey: `${legacySessionId}:${inventoryItemId}`,
+          treatmentSessionId: legacySessionId,
+          inventoryItemId,
+          quantity: '1',
+          unit: 'unit',
+          baseQuantity: '1',
+          status: MaterialUsageStatus.CONSUMED,
+          isLegacyConsumption: true,
+          consumedAt: new Date('2026-07-16T00:00:00.000Z'),
+          recordedBy: actorId,
+        },
+      });
 
-      const legacyResult = await prisma.$transaction((tx) =>
-        postTreatmentCompletionFinancialsInTransaction({
-          actorUserId: actorId,
-          eventId: legacyEventId,
-          inventoryPostingId: null,
-          materialCost: new Prisma.Decimal(100),
-          // No accounting period exists for this date. Legacy completion must
-          // not consult accounting periods because the old flow had no journal.
-          occurredAt: new Date('2030-01-16T00:00:00.000Z'),
-        }, tx)
-      );
+      const journalCountBefore = await prisma.journalEntry.count({ where: { branchId } });
+      await prisma.accountingPeriod.update({
+        where: { id: accountingPeriodId },
+        data: { status: 'CLOSED' },
+      });
+      const legacyResult = await service.completeSession(legacySessionId, actorId);
       expect(legacyResult).toMatchObject({
         journalEntryId: null,
-        recognizedRevenue: new Prisma.Decimal(0),
-        materialCost: new Prisma.Decimal(100),
-        grossProfit: new Prisma.Decimal(0),
-        recognitionCount: 0,
+        eventId: null,
+        domainEventId: null,
         revenueCompatibilityMode: 'LEGACY',
+        idempotentReplay: false,
       });
-      expect((await prisma.domainEvent.findUniqueOrThrow({
-        where: { id: legacyEventId },
-      })).status).toBe('PROCESSED');
+      const legacyReplay = await service.completeSession(legacySessionId, actorId);
+      expect(legacyReplay).toMatchObject({
+        eventId: null,
+        domainEventId: null,
+        revenueCompatibilityMode: 'LEGACY',
+        idempotentReplay: true,
+      });
+      expect(await prisma.journalEntry.count({ where: { branchId } })).toBe(journalCountBefore);
+      expect(await prisma.domainEvent.count({ where: { treatmentSessionId: legacySessionId } })).toBe(0);
+      expect(await prisma.integrationEvent.count({ where: { aggregateId: legacySessionId } })).toBe(0);
+      expect((await prisma.treatmentSession.findUniqueOrThrow({
+        where: { id: legacySessionId },
+      })).completionStatus).toBe(TreatmentCompletionStatus.COMPLETED);
+
+      const legacyCancellation = await service.cancelCompletion(legacySessionId, actorId, {
+        idempotencyKey: `legacy-cancel-${runId}`,
+        reason: 'Legacy compatibility cancellation test',
+      });
+      expect(legacyCancellation).toMatchObject({
+        cancellationJournalEntryId: null,
+        inventoryReversalPostingId: null,
+        completionStatus: TreatmentCompletionStatus.CANCELLED,
+        idempotentReplay: false,
+      });
+      const legacyCancellationReplay = await service.cancelCompletion(legacySessionId, actorId, {
+        idempotencyKey: `legacy-cancel-${runId}`,
+        reason: 'Legacy compatibility cancellation test',
+      });
+      expect(legacyCancellationReplay.idempotentReplay).toBe(true);
+
+      await prisma.accountingPeriod.update({
+        where: { id: accountingPeriodId },
+        data: { status: 'OPEN' },
+      });
+      await prisma.domainEvent.create({
+        data: {
+          id: currentEventId,
+          eventKey: `TREATMENT_COMPLETED:${currentSessionId}`,
+          eventType: 'TREATMENT_COMPLETED',
+          aggregateType: 'TreatmentSession',
+          aggregateId: currentSessionId,
+          branchId,
+          treatmentSessionId: currentSessionId,
+          payloadHash: `current-${runId}`,
+          payload: { packageIds: [currentPackageId] },
+          occurredAt: new Date('2026-07-29T00:00:00.000Z'),
+        },
+      });
 
       await expect(prisma.$transaction((tx) =>
         reserveTreatmentCompletedRevenue(currentEventId, tx)
@@ -584,7 +658,17 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
         code: 'TREATMENT_REVENUE_CONTRACT_MISSING',
       });
     } finally {
-      await prisma.domainEvent.deleteMany({ where: { id: { in: [legacyEventId, currentEventId] } } });
+      await prisma.accountingPeriod.update({
+        where: { id: accountingPeriodId },
+        data: { status: 'OPEN' },
+      });
+      await prisma.integrationEvent.deleteMany({ where: { aggregateId: legacySessionId } });
+      await prisma.domainEvent.deleteMany({ where: { id: currentEventId } });
+      await prisma.materialUsage.deleteMany({ where: { id: legacyMaterialId } });
+      await prisma.doctorEvaluation.deleteMany({ where: { id: legacyEvaluationId } });
+      await prisma.vitalSign.deleteMany({ where: { treatmentSessionId: legacySessionId } });
+      await prisma.infusionExecution.deleteMany({ where: { treatmentSessionId: legacySessionId } });
+      await prisma.therapyPlan.deleteMany({ where: { id: legacyPlanId } });
       await prisma.treatmentSession.deleteMany({ where: { id: { in: [legacySessionId, currentSessionId] } } });
       await prisma.encounter.deleteMany({ where: { id: { in: [legacyEncounterId, currentEncounterId] } } });
       await prisma.memberPackage.deleteMany({ where: { id: { in: [legacyPackageId, currentPackageId] } } });

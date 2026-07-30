@@ -39,6 +39,7 @@ import { requiresMaterialDeviationReason } from './material-usage.helpers';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
+const LEGACY_COMPLETION_FLOW_VERSION = 1;
 
 function isRetryableTransactionError(error: unknown): boolean {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
@@ -105,6 +106,7 @@ export class SessionCompletionService {
         },
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
+      const isLegacySession = session.completionFlowVersion === LEGACY_COMPLETION_FLOW_VERSION;
       if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
         throw errors.conflict('SESSION_COMPLETION_CANCELLED', 'Completion sesi ini sudah dibatalkan dan tidak dapat diposting ulang.');
       }
@@ -122,7 +124,8 @@ export class SessionCompletionService {
             select: { revenueFlowVersion: true },
           }),
         ]);
-        const isLegacyCompletion = replayPackage?.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
+        const isLegacyCompletion = isLegacySession
+          || replayPackage?.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
         if ((!existingEvent || !existingRevenueEvent) && !isLegacyCompletion) {
           throw errors.conflict(
             'SESSION_COMPLETION_EVENT_MISSING',
@@ -161,7 +164,7 @@ export class SessionCompletionService {
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
 
       const recommendations = await resolveSessionMaterialRecommendations(session.id, tx);
-      if (recommendations.hasActiveBom) {
+      if (!isLegacySession && recommendations.hasActiveBom) {
         for (const recommendation of recommendations.items.filter((item) => item.isRequired)) {
           const usage = session.materials.find(
             (material) => material.inventoryItem.masterProductId === recommendation.masterProductId,
@@ -261,6 +264,42 @@ export class SessionCompletionService {
         (sum, material) => sum.add(material.totalActualCost ?? 0),
         new Prisma.Decimal(0),
       );
+
+      if (isLegacySession) {
+        const zero = new Prisma.Decimal(0);
+        await tx.treatmentSession.update({
+          where: { id: session.id },
+          data: {
+            isCompleted: true,
+            completionStatus: TreatmentCompletionStatus.COMPLETED,
+            completedAt,
+            completedBy: userId,
+            materialPostingId,
+            completionJournalEntryId: null,
+            recognizedRevenue: zero,
+            materialCost: totalActualMaterialCost,
+            grossProfit: zero,
+          },
+        });
+        return {
+          sessionId: session.id,
+          sessionCode: session.sessionCode,
+          isCompleted: true,
+          completedAt,
+          materialPostingId,
+          totalActualMaterialCost,
+          eventId: null,
+          eventStatus: null,
+          domainEventId: null,
+          journalEntryId: null,
+          recognizedRevenue: zero,
+          materialCost: totalActualMaterialCost,
+          grossProfit: zero,
+          revenueCompatibilityMode: 'LEGACY' as const,
+          idempotentReplay: false,
+          message: 'Sesi terapi lama berhasil diselesaikan dengan flow legacy.',
+        };
+      }
 
       const selectedRevenueSource = selectTreatmentRevenueSource(
         session.encounter.memberPackageId,
@@ -445,7 +484,9 @@ export class SessionCompletionService {
         materialCost: result.materialCost,
         grossProfit: result.grossProfit,
         revenueCompatibilityMode: result.revenueCompatibilityMode,
-        revenueRecognitionStatus: 'POSTED',
+        revenueRecognitionStatus: result.revenueCompatibilityMode === 'LEGACY'
+          ? 'LEGACY_NOT_APPLICABLE'
+          : 'POSTED',
       },
     });
     return result;
@@ -490,7 +531,8 @@ export class SessionCompletionService {
       if (session.completionStatus !== TreatmentCompletionStatus.COMPLETED || !session.isCompleted) {
         throw errors.conflict('SESSION_NOT_COMPLETED', 'Hanya sesi yang sudah selesai yang dapat dibatalkan melalui reversal.');
       }
-      if (!session.completionJournalEntryId
+      if (session.completionFlowVersion !== LEGACY_COMPLETION_FLOW_VERSION
+        && !session.completionJournalEntryId
         && (session.recognizedRevenue.greaterThan(0) || session.materialCost.greaterThan(0))) {
         throw errors.conflict('TREATMENT_COMPLETION_JOURNAL_MISSING', 'Jurnal completion tidak ditemukan. Pembatalan dihentikan untuk menjaga integritas ledger.');
       }

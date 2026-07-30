@@ -254,11 +254,18 @@ flow invoice otomatis.
 
 - [x] Paket yang sudah ada sebelum migration `20260729180000` memiliki `revenueFlowVersion = 1` (140 paket lokal terverifikasi).
 - [x] Paket yang dibuat setelah migration otomatis memiliki `revenueFlowVersion = 2`.
+- [x] Sesi yang sudah ada sebelum migration `20260729181000` memiliki `completionFlowVersion = 1` (8 sesi lokal terverifikasi).
+- [x] Sesi yang dibuat setelah migration otomatis memiliki `completionFlowVersion = 2`.
+- [x] Sesi legacy hanya memakai validasi inti flow lama: therapy plan, vital sebelum/sesudah, infus, material, dan evaluasi.
+- [x] Treatment BOM yang ditambahkan belakangan tidak memblokir completion sesi legacy.
 - [x] Posting finance sesi dari paket legacy berbayar tanpa kontrak deferred revenue tetap berhasil.
 - [x] Penyelesaian sesi legacy tidak membuat omzet, deferred revenue, atau jurnal HPP baru.
 - [x] Sesi legacy tetap selesai walaupun tidak tersedia accounting period untuk tanggal transaksi.
 - [x] Biaya material legacy tetap tercatat sebagai informasi inventory tanpa memaksakan jurnal finance baru.
 - [x] Paket legacy yang mempunyai kontrak hasil backfill tetap dilewati oleh revenue recognition baru.
+- [x] Completion sesi legacy tidak membuat DomainEvent, IntegrationEvent, atau antrean sinkronisasi Zoho baru.
+- [x] Pemanggilan completion kedua pada sesi legacy bersifat idempotent walaupun tidak memiliki event baru.
+- [x] Cancellation dan pemanggilan ulang cancellation sesi legacy berhasil tanpa jurnal atau accounting period.
 - [x] Paket baru berbayar tanpa kontrak tetap ditolak dengan `TREATMENT_REVENUE_CONTRACT_MISSING`.
 - [x] Paket baru gratis tidak diwajibkan mempunyai kontrak deferred revenue.
 - [x] Edit/penggantian paket mempertahankan `revenueFlowVersion` paket sumber.

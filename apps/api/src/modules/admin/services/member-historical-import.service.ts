@@ -611,6 +611,7 @@ export class MemberHistoricalImportService {
             pelaksanaan: this.mapSessionType(session.pelaksanaanText),
             treatmentDate: session.treatmentDate,
             isCompleted: options.markSessionsCompleted && this.isCompletedStatus(session.statusText),
+            completionFlowVersion: 1,
             adminLayananId: adminId,
             doctorId,
             nurseId,
