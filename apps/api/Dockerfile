@@ -1,6 +1,11 @@
 FROM node:20 AS builder
 WORKDIR /usr/src/app
 
+# TypeScript compiles a large API module graph. Keep this setting scoped to
+# the builder stage so CI has enough V8 heap without increasing runtime memory.
+ARG NODE_BUILD_MEMORY_MB=3072
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_MEMORY_MB}
+
 # Install deps and build
 COPY package*.json tsconfig*.json tsconfig.build.json ./
 RUN npm ci

@@ -22,6 +22,7 @@ import Step8ComplaintsRecommendations from '@/components/sessions/Step8Complaint
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
 import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
 import { RotateCcw, X } from 'lucide-react';
+import styles from './page.module.css';
 
 type BoosterPackageOption = {
   packageId: string;
@@ -63,7 +64,10 @@ const toDateTimeLocalValue = (value: string) => {
   return localDate.toISOString().slice(0, 16);
 };
 
-const mergeStaffOptions = (options: StaffMember[], current?: { userId: string; fullName: string; staffCode?: string | null }) => {
+const mergeStaffOptions = (
+  options: StaffMember[],
+  current?: { userId: string; fullName: string; staffCode?: string | null } | null,
+) => {
   if (!current?.userId || options.some((option) => option.userId === current.userId)) {
     return options;
   }
@@ -144,7 +148,7 @@ export default function SessionDetailPage() {
         else if (!data.steps.step3_vitalBefore) setActiveStep(3);
         else if (!data.steps.step4_infusion) setActiveStep(4);
         else if (!data.steps.step5_materials) setActiveStep(5);
-        else if (!data.steps.step6_photo) setActiveStep(6);
+        // Foto bersifat opsional, jadi jangan menghalangi pengguna menuju vital sesudah.
         else if (!data.steps.step7_vitalAfter) setActiveStep(7);
         else if (!data.steps.step8_evaluation) setActiveStep(9); // Step 8 is optional, Step 9 is required
       }
@@ -214,20 +218,20 @@ export default function SessionDetailPage() {
     setSessionEditMemberPackageId(session.session.memberPackage?.packageId || '');
     setSessionEditTreatmentDate(toDateTimeLocalValue(session.session.treatmentDate));
     setSessionEditPelaksanaan(session.session.pelaksanaan);
-    setSessionEditAdminLayananId(session.session.adminLayanan.userId);
-    setSessionEditDoctorId(session.session.doctor.userId);
-    setSessionEditNurseId(session.session.nurse.userId);
+    setSessionEditAdminLayananId(session.session.adminLayanan?.userId || '');
+    setSessionEditDoctorId(session.session.doctor?.userId || '');
+    setSessionEditNurseId(session.session.nurse?.userId || '');
     setSessionEditInfusKe(session.session.infusKe || '');
     setSessionEditBranchInfusKe(session.session.branchInfusKe || session.session.infusKe || '');
     setSessionEditShiftFollowing(false);
     setSessionEditAdditionalDoctorIds(
       (session.session.sessionDoctors || [])
-        .filter((assignment) => !assignment.isPrimary)
+        .filter((assignment) => !assignment.isPrimary && assignment.doctor?.userId)
         .map((assignment) => assignment.doctor.userId)
     );
     setSessionEditAdditionalNurseIds(
       (session.session.sessionNurses || [])
-        .filter((assignment) => !assignment.isPrimary)
+        .filter((assignment) => !assignment.isPrimary && assignment.nurse?.userId)
         .map((assignment) => assignment.nurse.userId)
     );
     setBoosterEditUseBooster(!!session.session.boosterPackage);
@@ -489,9 +493,15 @@ export default function SessionDetailPage() {
     steps.step5_materials &&
     steps.step7_vitalAfter &&
     steps.step8_evaluation;
+  const sessionPhases = [
+    { label: 'Persiapan', range: 'Langkah 1–3', active: activeStep <= 3 },
+    { label: 'Pelaksanaan', range: 'Langkah 4–6', active: activeStep >= 4 && activeStep <= 6 },
+    { label: 'Setelah Terapi', range: 'Langkah 7–8', active: activeStep >= 7 && activeStep <= 8 },
+    { label: 'Evaluasi', range: 'Langkah 9', active: activeStep === 9 },
+  ];
 
   return (
-    <div>
+    <div className={styles.page}>
       {/* Header */}
       <div style={{ marginBottom: '24px' }}>
         <button
@@ -593,7 +603,7 @@ export default function SessionDetailPage() {
 
       {/* Progress Steps */}
       <div className="card" style={{ marginBottom: '24px', padding: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div className={styles.progressHeader} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h3 style={{ 
             fontSize: '18px', 
             fontWeight: '700',
@@ -636,7 +646,7 @@ export default function SessionDetailPage() {
               <span>👥</span> Tim Medis & Admin
             </h4>
             
-            <div style={{
+            <div className={styles.staffGrid} style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
               gap: '16px'
@@ -667,7 +677,7 @@ export default function SessionDetailPage() {
                   gap: '8px'
                 }}>
                   <span style={{ fontSize: '18px' }}>👤</span>
-                  <span>{sessionInfo.adminLayanan.fullName}</span>
+                  <span>{sessionInfo.adminLayanan?.fullName || 'Data admin lama tidak tersedia'}</span>
                 </div>
               </div>
 
@@ -697,7 +707,7 @@ export default function SessionDetailPage() {
                   gap: '8px'
                 }}>
                   <span style={{ fontSize: '18px' }}>👨‍⚕️</span>
-                  <span>{sessionInfo.doctor.fullName}</span>
+                  <span>{sessionInfo.doctor?.fullName || 'Data dokter lama tidak tersedia'}</span>
                 </div>
                 {!steps.step8_evaluation && (
                   <div style={{
@@ -716,7 +726,7 @@ export default function SessionDetailPage() {
                   </div>
                 )}
                 {/* Additional Doctors - will be added when backend returns them */}
-                {(sessionInfo as any).sessionDoctors && (sessionInfo as any).sessionDoctors.length > 1 && (
+                {(sessionInfo.sessionDoctors?.length || 0) > 1 && (
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
                     <div style={{
                       fontSize: '11px',
@@ -726,16 +736,16 @@ export default function SessionDetailPage() {
                     }}>
                       Dokter Tambahan:
                     </div>
-                    {(sessionInfo as any).sessionDoctors
-                      .filter((sd: any) => !sd.isPrimary)
-                      .map((sd: any) => (
-                        <div key={sd.id} style={{
+                    {sessionInfo.sessionDoctors
+                      ?.filter((assignment) => !assignment.isPrimary && assignment.doctor)
+                      .map((assignment) => (
+                        <div key={assignment.id} style={{
                           fontSize: '13px',
                           color: 'var(--text-secondary)',
                           marginBottom: '4px',
                           paddingLeft: '26px'
                         }}>
-                          • {sd.doctor.profile?.fullName || sd.doctor.fullName}
+                          • {assignment.doctor.fullName || 'Data dokter lama tidak tersedia'}
                         </div>
                       ))}
                   </div>
@@ -768,10 +778,10 @@ export default function SessionDetailPage() {
                   gap: '8px'
                 }}>
                   <span style={{ fontSize: '18px' }}>👩‍⚕️</span>
-                  <span>{sessionInfo.nurse.fullName}</span>
+                  <span>{sessionInfo.nurse?.fullName || 'Data nakes lama tidak tersedia'}</span>
                 </div>
                 {/* Additional Nurses - will be added when backend returns them */}
-                {(sessionInfo as any).sessionNurses && (sessionInfo as any).sessionNurses.length > 1 && (
+                {(sessionInfo.sessionNurses?.length || 0) > 1 && (
                   <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--surface-border)' }}>
                     <div style={{
                       fontSize: '11px',
@@ -781,16 +791,16 @@ export default function SessionDetailPage() {
                     }}>
                       Nakes Tambahan:
                     </div>
-                    {(sessionInfo as any).sessionNurses
-                      .filter((sn: any) => !sn.isPrimary)
-                      .map((sn: any) => (
-                        <div key={sn.id} style={{
+                    {sessionInfo.sessionNurses
+                      ?.filter((assignment) => !assignment.isPrimary && assignment.nurse)
+                      .map((assignment) => (
+                        <div key={assignment.id} style={{
                           fontSize: '13px',
                           color: 'var(--text-secondary)',
                           marginBottom: '4px',
                           paddingLeft: '26px'
                         }}>
-                          • {sn.nurse.profile?.fullName || sn.nurse.fullName}
+                          • {assignment.nurse.fullName || 'Data nakes lama tidak tersedia'}
                         </div>
                       ))}
                   </div>
@@ -800,7 +810,23 @@ export default function SessionDetailPage() {
           </div>
         )}
 
-        <div style={{ 
+        <div className={styles.phaseGrid} aria-label="Tahapan utama sesi terapi">
+          {sessionPhases.map((phase) => (
+            <div
+              key={phase.label}
+              className={`${styles.phaseItem} ${phase.active ? styles.phaseActive : ''}`}
+            >
+              <span>{phase.label}</span>
+              <small>{phase.range}</small>
+            </div>
+          ))}
+        </div>
+
+        <p className={styles.stepHint}>
+          Pilih langkah di bawah. Sistem mengunci langkah yang belum siap agar urutan pengisian tetap aman.
+        </p>
+
+        <div className={styles.stepGrid} style={{
           display: 'grid', 
           gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', 
           gap: '12px' 
@@ -1063,7 +1089,7 @@ export default function SessionDetailPage() {
       )}
 
       {showCancellationModal && typeof document !== 'undefined' && createPortal(
-        <div style={{
+        <div className={styles.modalOverlay} style={{
           position: 'fixed',
           inset: 0,
           zIndex: 1200,
@@ -1073,7 +1099,7 @@ export default function SessionDetailPage() {
           justifyContent: 'center',
           padding: '20px',
         }}>
-          <div className="card" style={{ width: '100%', maxWidth: '520px', padding: '24px', borderRadius: '8px' }}>
+          <div className={`card ${styles.modalCard}`} style={{ width: '100%', maxWidth: '520px', padding: '24px', borderRadius: '8px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Batalkan Completion</h3>
@@ -1126,7 +1152,7 @@ export default function SessionDetailPage() {
       )}
 
       {showBoosterEditModal && (
-        <div style={{
+        <div className={styles.modalOverlay} style={{
           position: 'fixed',
           inset: 0,
           zIndex: 1100,
@@ -1137,7 +1163,7 @@ export default function SessionDetailPage() {
           padding: '24px',
         }}>
           <div
-            className="card"
+            className={`card ${styles.modalCard}`}
             style={{
               width: '100%',
               maxWidth: '760px',
@@ -1180,7 +1206,7 @@ export default function SessionDetailPage() {
               </div>
             )}
 
-            <div style={{
+            <div className={styles.formGrid} style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
               gap: '16px',
@@ -1419,7 +1445,7 @@ export default function SessionDetailPage() {
               </span>
             </label>
 
-            <div style={{
+            <div className={styles.formGrid} style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
               gap: '16px',
@@ -1600,7 +1626,7 @@ export default function SessionDetailPage() {
 
       {/* Floating Sticky Button - Always visible when scrolling */}
       {!sessionInfo.isCompleted && allRequiredStepsComplete && (
-        <div style={{
+        <div className={styles.completionAction} style={{
           position: 'fixed',
           bottom: '24px',
           right: '24px',

@@ -11,6 +11,7 @@ import {
   Database, LockKeyhole, Warehouse, PackageCheck, ShoppingCart, BadgeDollarSign,
   ListTree,
   PlugZap,
+  UsersRound,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { Role } from '@/types/auth';
@@ -42,6 +43,34 @@ interface MenuGroup {
 // ── Menu Config ───────────────────────────────────────────────
 
 const ALL_STAFF: Role[] = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'ADMIN_LOGISTIK', 'DOCTOR', 'NURSE'];
+const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
+  ADMIN_LAYANAN: new Set([
+    '/dashboard',
+    '/members',
+    '/sessions',
+    '/payments',
+    '/inventory/team',
+    '/notifications',
+    '/chat',
+  ]),
+  NURSE: new Set([
+    '/dashboard',
+    '/members',
+    '/sessions',
+    '/inventory/team',
+    '/inventory/material-usage-history',
+    '/inventory/homecare-bags',
+    '/notifications',
+    '/chat',
+  ]),
+  DOCTOR: new Set([
+    '/dashboard',
+    '/members',
+    '/sessions',
+    '/notifications',
+    '/chat',
+  ]),
+};
 
 const MENU_GROUPS: MenuGroup[] = [
   {
@@ -104,6 +133,13 @@ const MENU_GROUPS: MenuGroup[] = [
   {
     title: 'Inventori',
     items: [
+      {
+        label: 'Inventori Tim',
+        href: '/inventory/team',
+        icon: <UsersRound size={20} />,
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE'],
+        badge: 'Segera',
+      },
       {
         label: 'Dashboard Logistik',
         href: '/inventory/dashboard',
@@ -652,8 +688,10 @@ export function Sidebar({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-3 flex flex-col gap-1">
         {MENU_GROUPS.map((group, gi) => {
+          const focusedMenu = FOCUSED_ROLE_MENU[role];
           const visibleItems = group.items.filter((item) => (
             item.roles.includes(role) &&
+            (!focusedMenu || focusedMenu.has(item.href)) &&
             (!isMemberViewOnlyAdminManager || item.href === '/members')
           ));
           if (visibleItems.length === 0) return null;

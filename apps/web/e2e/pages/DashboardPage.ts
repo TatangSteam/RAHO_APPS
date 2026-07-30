@@ -30,17 +30,17 @@ export const DASHBOARD_SMOKE_CASES: DashboardSmokeCase[] = [
   {
     role: 'ADMIN_LAYANAN',
     path: '/dashboard/admin-layanan',
-    heading: /dashboard layanan/i,
+    heading: /siapkan pelayanan hari ini/i,
   },
   {
     role: 'DOCTOR',
     path: '/dashboard/doctor',
-    heading: /dashboard dokter/i,
+    heading: /sesi yang perlu perhatian/i,
   },
   {
     role: 'NURSE',
     path: '/dashboard/nurse',
-    heading: /dashboard perawat/i,
+    heading: /tindakan yang perlu dilanjutkan/i,
   },
 ];
 

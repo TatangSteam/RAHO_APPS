@@ -69,6 +69,26 @@ describe('paymentPresentation', () => {
     ).toEqual([invoices[1]]);
   });
 
+  it('does not crash on incomplete legacy invoice fields', () => {
+    const legacyInvoice = {
+      ...invoices[0],
+      memberName: null,
+      status: null,
+      paymentMethods: null,
+      createdAt: null,
+      pendingPayments: [{ id: 'legacy', amount: null, method: null }],
+    } as unknown as Invoice;
+
+    expect(() => filterInvoices([legacyInvoice], {
+      search: 'unknown',
+      statusFilter: 'Semua Status',
+      methodFilter: 'Semua Metode',
+      startDate: '',
+      endDate: '',
+    })).not.toThrow();
+    expect(remainingAmount(legacyInvoice)).toBe(300000);
+  });
+
   it('matches product suggestions case-insensitively', () => {
     expect(matchingProducts('vit')).toEqual([{ name: 'Vitamin C', price: 5000 }]);
     expect(matchingProducts('')).toHaveLength(4);
@@ -82,6 +102,9 @@ describe('paymentPresentation', () => {
     expect(parsed).toEqual([{ productName: 'IFA 250', quantity: 30, unitPrice: 10000, discount: 0 }]);
     expect(hasInvalidInvoiceItem(parsed)).toBe(false);
     expect(hasInvalidInvoiceItem([{ ...parsed[0], quantity: 0 }])).toBe(true);
+    expect(hasInvalidInvoiceItem([{ ...parsed[0], quantity: Number.NaN }])).toBe(true);
+    expect(hasInvalidInvoiceItem([{ ...parsed[0], unitPrice: Number.POSITIVE_INFINITY }])).toBe(true);
+    expect(hasInvalidInvoiceItem([{ ...parsed[0], discount: 300001 }])).toBe(true);
   });
 
   it('returns partial or paid payment status', () => {

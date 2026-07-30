@@ -31,10 +31,31 @@ import MemberCredentialsModal from '@/components/members/MemberCredentialsModal'
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 import MemberEditModal from '@/components/members/MemberEditModal';
+import {
+  ClipboardList,
+  FlaskConical,
+  Package,
+  Pill,
+  Plus,
+  Stethoscope,
+  UserRound,
+} from 'lucide-react';
 
 type MemberDetailTab = 'profil' | 'paket' | 'sesi' | 'diagnosa' | 'therapy-plan' | 'lab-results';
 
 const MEMBER_DETAIL_TABS: MemberDetailTab[] = ['profil', 'paket', 'therapy-plan', 'diagnosa', 'sesi', 'lab-results'];
+
+const MEMBER_DETAIL_TAB_META: Record<MemberDetailTab, {
+  label: string;
+  icon: typeof UserRound;
+}> = {
+  profil: { label: 'Profil', icon: UserRound },
+  paket: { label: 'Paket', icon: Package },
+  sesi: { label: 'Sesi Terapi', icon: Stethoscope },
+  diagnosa: { label: 'Diagnosis', icon: ClipboardList },
+  'therapy-plan': { label: 'Therapy Plan', icon: Pill },
+  'lab-results': { label: 'Hasil Lab', icon: FlaskConical },
+};
 
 function isMemberDetailTab(value: string | null): value is MemberDetailTab {
   return Boolean(value && MEMBER_DETAIL_TABS.includes(value as MemberDetailTab));
@@ -715,33 +736,31 @@ export default function MemberDetailPage() {
       <MemberStatusCards member={member} packages={packages} />
 
       {/* Tabs */}
-      <div className="card member-detail-tabs-card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div className="member-detail-tab-list">
-          {MEMBER_DETAIL_TABS.map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              style={{
-                padding: '16px 24px',
-                background: 'none',
-                border: 'none',
-                borderBottom: activeTab === tab ? '2px solid var(--color-primary-500)' : '2px solid transparent',
-                color: activeTab === tab ? 'var(--color-primary-400)' : 'var(--text-secondary)',
-                fontWeight: activeTab === tab ? '600' : '500',
-                fontSize: '14px',
-                cursor: 'pointer',
-                transition: 'all var(--transition-fast)',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {tab === 'profil' && '👤 Profil'}
-              {tab === 'paket' && '📦 Paket'}
-              {tab === 'sesi' && '🩺 Sesi Terapi'}
-              {tab === 'diagnosa' && '📋 Diagnosa'}
-              {tab === 'therapy-plan' && '💊 Therapy Plan'}
-              {tab === 'lab-results' && '🔬 Hasil Lab'}
-            </button>
-          ))}
+      <div className="member-detail-tabs-card overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="member-detail-tab-list gap-1 bg-neutral-50 p-2 dark:bg-neutral-950/40" role="tablist" aria-label="Menu detail member">
+          {MEMBER_DETAIL_TABS.map((tab) => {
+            const tabMeta = MEMBER_DETAIL_TAB_META[tab];
+            const TabIcon = tabMeta.icon;
+            const isSelected = activeTab === tab;
+
+            return (
+              <button
+                key={tab}
+                type="button"
+                role="tab"
+                aria-selected={isSelected}
+                onClick={() => setActiveTab(tab)}
+                className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition ${
+                  isSelected
+                    ? 'bg-white text-sky-700 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-sky-300 dark:ring-neutral-700'
+                    : 'text-neutral-500 hover:bg-white/70 hover:text-neutral-900 dark:text-neutral-400 dark:hover:bg-neutral-800/70 dark:hover:text-white'
+                }`}
+              >
+                <TabIcon size={16} />
+                {tabMeta.label}
+              </button>
+            );
+          })}
         </div>
 
         <div className="member-detail-tab-content">
@@ -760,10 +779,18 @@ export default function MemberDetailPage() {
           {activeTab === 'paket' && (
             <div>
               <div className="member-packages-header">
-                <h3 style={{ fontSize: '18px', fontWeight: '600' }}>📦 Paket Member</h3>
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">Keanggotaan</p>
+                  <h3 className="mt-1 text-lg font-bold text-neutral-950 dark:text-white">Paket Member</h3>
+                </div>
                 {canAssignPackage && (
-                  <button onClick={() => setShowAssignModal(true)} className="btn btn-primary">
-                    ➕ Assign Paket
+                  <button
+                    type="button"
+                    onClick={() => setShowAssignModal(true)}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-black transition hover:bg-amber-400"
+                  >
+                    <Plus size={16} />
+                    Assign Paket
                   </button>
                 )}
               </div>

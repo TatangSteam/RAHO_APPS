@@ -140,10 +140,10 @@ export interface Session {
   cancellationJournalEntryId?: string | null;
   member: SessionMember;
   memberPackage: SessionMemberPackage;
-  adminLayanan: SessionStaff;
-  doctor: SessionStaff;
+  adminLayanan?: SessionStaff | null;
+  doctor?: SessionStaff | null;
   doctorEvaluationCompleted?: boolean;
-  nurse: SessionStaff;
+  nurse?: SessionStaff | null;
   sessionDoctors?: SessionDoctorAssignment[];
   sessionNurses?: SessionNurseAssignment[];
   boosterPackage: SessionBoosterPackage | null;

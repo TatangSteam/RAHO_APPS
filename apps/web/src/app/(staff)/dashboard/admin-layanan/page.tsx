@@ -13,6 +13,7 @@ import { getDashboardLoadErrorMessage } from '@/lib/dashboardPresentation';
 import { DashboardErrorState } from '@/components/dashboard/DashboardErrorState';
 import { DashboardLoadingState } from '@/components/dashboard/DashboardLoadingState';
 import { DashboardStatCard as StatCard } from '@/components/dashboard/DashboardStatCard';
+import { RoleWorkspaceHeader } from '@/components/dashboard/RoleWorkspace';
 
 export default function AdminLayananDashboardPage() {
   const { user } = useAuthStore();
@@ -60,25 +61,24 @@ export default function AdminLayananDashboardPage() {
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg shadow-emerald-500/30">
-              <UserCheck className="h-6 w-6 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">
-                Dashboard Layanan
-              </h1>
-              <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                Fokus pelayanan member dan sesi terapi
-              </p>
-            </div>
-          </div>
-        </div>
+        <RoleWorkspaceHeader
+          accent="amber"
+          icon={<UserCheck className="h-6 w-6" />}
+          eyebrow="Ruang kerja admin layanan"
+          title="Siapkan pelayanan hari ini"
+          description="Kelola jadwal, pembayaran yang perlu perhatian, dan kesiapan tim dari satu halaman."
+          userName={user?.fullName}
+          primaryAction={{ href: '/sessions', label: 'Buka Sesi Hari Ini' }}
+          secondaryAction={{ href: '/members', label: 'Cari Member' }}
+          guide={[
+            'Pastikan member dan paket yang dipakai sudah benar.',
+            'Pilih dokter dan tenaga kesehatan untuk sesi.',
+            'Pantau sesi sampai siap dievaluasi dan diselesaikan.',
+          ]}
+        />
 
         {/* Today Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="my-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard 
             icon={<Calendar className="h-5 w-5" />}
             label="Sesi Hari Ini"
@@ -140,7 +140,7 @@ export default function AdminLayananDashboardPage() {
                         {new Date(session.time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="py-3 px-4">
-                        <Link href={`/members/${session.id}`} className="hover:text-amber-500">
+                        <Link href={`/sessions/${session.id}`} className="hover:text-amber-500">
                           <div className="font-medium text-neutral-900 dark:text-white">{session.memberName}</div>
                           <div className="text-xs text-neutral-500">{session.memberNo}</div>
                         </Link>
@@ -156,15 +156,20 @@ export default function AdminLayananDashboardPage() {
                         {session.doctorName}
                       </td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          session.status === 'completed' 
-                            ? 'bg-emerald-500/15 text-emerald-500' 
-                            : session.status === 'ongoing'
-                            ? 'bg-amber-500/15 text-amber-500'
-                            : 'bg-neutral-500/15 text-neutral-500'
-                        }`}>
-                          {session.status === 'completed' ? 'Selesai' : session.status === 'ongoing' ? 'Berlangsung' : 'Terjadwal'}
-                        </span>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            session.status === 'completed'
+                              ? 'bg-emerald-500/15 text-emerald-500'
+                              : session.status === 'ongoing'
+                              ? 'bg-amber-500/15 text-amber-500'
+                              : 'bg-neutral-500/15 text-neutral-500'
+                          }`}>
+                            {session.status === 'completed' ? 'Selesai' : session.status === 'ongoing' ? 'Berlangsung' : 'Terjadwal'}
+                          </span>
+                          <Link href={`/sessions/${session.id}`} className="text-xs font-bold text-amber-600 dark:text-amber-400">
+                            Buka
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}

@@ -10,6 +10,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'apps/api/Dockerfile'
+      - 'apps/api/.dockerignore'
       - 'apps/api/entrypoint.sh'
       - 'apps/api/package.json'
       - 'apps/api/package-lock.json'
@@ -19,6 +20,7 @@ on:
       - 'apps/api/tsconfig*.json'
       - 'apps/api/jest*.js'
       - 'apps/web/Dockerfile'
+      - 'apps/web/.dockerignore'
       - 'apps/web/entrypoint.sh'
       - 'apps/web/package.json'
       - 'apps/web/package-lock.json'
@@ -129,9 +131,21 @@ jobs:
           trap 'flock -u 9 || true' EXIT
 
           docker system prune -a -f
-          if ! docker compose -f docker-compose.prod.yml build --pull api web; then
-            echo "Primary Docker Compose build failed, retrying with --no-cache..."
-            docker compose -f docker-compose.prod.yml build --pull --no-cache api web
-          fi
+
+          build_service() {
+            service="$1"
+            echo "Building ${service} image..."
+
+            if ! docker compose -f docker-compose.prod.yml build --pull "$service"; then
+              echo "${service} build failed, retrying with --no-cache..."
+              docker compose -f docker-compose.prod.yml build --pull --no-cache "$service"
+            fi
+          }
+
+          # Build sequentially to avoid API TypeScript and Next.js competing
+          # for memory on the self-hosted deployment runner.
+          build_service api
+          build_service web
+
           docker compose -f docker-compose.prod.yml run --rm migrate
           docker compose -f docker-compose.prod.yml up -d api web

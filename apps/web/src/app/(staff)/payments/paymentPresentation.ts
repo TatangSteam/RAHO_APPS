@@ -82,15 +82,25 @@ export function formatCurrency(amount: number) {
 }
 
 export function calculateTotal(items: InvoiceItem[]) {
-  return items.reduce((sum, item) => sum + item.quantity * item.unitPrice - item.discount, 0);
+  return items.reduce((sum, item) => {
+    const quantity = Number(item?.quantity);
+    const unitPrice = Number(item?.unitPrice);
+    const discount = Number(item?.discount);
+
+    if (![quantity, unitPrice, discount].every(Number.isFinite)) return sum;
+    return sum + quantity * unitPrice - discount;
+  }, 0);
 }
 
 export function remainingAmount(invoice: Invoice) {
-  const pendingAmount = (invoice.pendingPayments || []).reduce(
-    (sum, payment) => sum + payment.amount,
+  const pendingAmount = (Array.isArray(invoice.pendingPayments) ? invoice.pendingPayments : []).reduce(
+    (sum, payment) => sum + (Number.isFinite(Number(payment?.amount)) ? Number(payment.amount) : 0),
     0,
   );
-  return Math.max(invoice.total - invoice.paidAmount - pendingAmount - invoice.refundAmount, 0);
+  const total = Number.isFinite(Number(invoice.total)) ? Number(invoice.total) : 0;
+  const paidAmount = Number.isFinite(Number(invoice.paidAmount)) ? Number(invoice.paidAmount) : 0;
+  const refundAmount = Number.isFinite(Number(invoice.refundAmount)) ? Number(invoice.refundAmount) : 0;
+  return Math.max(total - paidAmount - pendingAmount - refundAmount, 0);
 }
 
 export function matchingProducts(query: string) {
@@ -111,19 +121,28 @@ export function filterInvoices(
 ) {
   return invoices.filter((invoice) => {
     const query = filters.search.trim().toLowerCase();
+    const memberName = typeof invoice?.memberName === 'string' ? invoice.memberName : '';
+    const invoiceId = typeof invoice?.id === 'string' ? invoice.id : '';
+    const invoiceNumber = typeof invoice?.invoiceNumber === 'string' ? invoice.invoiceNumber : '';
+    const status = typeof invoice?.status === 'string' ? invoice.status : '';
+    const paymentMethods = Array.isArray(invoice?.paymentMethods) ? invoice.paymentMethods : [];
+    const createdAt = typeof invoice?.createdAt === 'string' ? invoice.createdAt : '';
     const matchesSearch =
       !query ||
-      invoice.memberName.toLowerCase().includes(query) ||
-      invoice.id.toLowerCase().includes(query) ||
-      (invoice.invoiceNumber || '').toLowerCase().includes(query);
+      memberName.toLowerCase().includes(query) ||
+      invoiceId.toLowerCase().includes(query) ||
+      invoiceNumber.toLowerCase().includes(query);
     const matchesStatus =
       filters.statusFilter === 'Semua Status' ||
-      invoice.status.toLowerCase().includes(filters.statusFilter.toLowerCase());
+      status.toLowerCase().includes(filters.statusFilter.toLowerCase());
     const matchesMethod =
       filters.methodFilter === 'Semua Metode' ||
-      invoice.paymentMethods.some((method) => method.toLowerCase() === filters.methodFilter.toLowerCase());
-    const matchesStart = !filters.startDate || invoice.createdAt >= filters.startDate;
-    const matchesEnd = !filters.endDate || invoice.createdAt <= filters.endDate;
+      paymentMethods.some(
+        (method) => typeof method === 'string'
+          && method.toLowerCase() === filters.methodFilter.toLowerCase(),
+      );
+    const matchesStart = !filters.startDate || (createdAt !== '' && createdAt >= filters.startDate);
+    const matchesEnd = !filters.endDate || (createdAt !== '' && createdAt <= filters.endDate);
 
     return matchesSearch && matchesStatus && matchesMethod && matchesStart && matchesEnd;
   });
@@ -139,7 +158,17 @@ export function parseInvoiceItemForms(items: InvoiceItemForm[]) {
 }
 
 export function hasInvalidInvoiceItem(items: InvoiceItem[]) {
-  return items.some((item) => !item.productName || item.quantity <= 0 || item.unitPrice < 0 || item.discount < 0);
+  return items.some((item) => {
+    const lineSubtotal = item.quantity * item.unitPrice;
+    return (
+      !item.productName ||
+      ![item.quantity, item.unitPrice, item.discount, lineSubtotal].every(Number.isFinite) ||
+      item.quantity <= 0 ||
+      item.unitPrice < 0 ||
+      item.discount < 0 ||
+      item.discount > lineSubtotal
+    );
+  });
 }
 
 export function getPaymentStatus(total: number, paidAmount: number) {

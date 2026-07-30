@@ -1,0 +1,226 @@
+.page {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  min-width: 0;
+}
+
+.draftNotice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(14, 165, 233, 0.22);
+  border-radius: 15px;
+  padding: 13px 16px;
+  background: rgba(14, 165, 233, 0.07);
+}
+
+.draftCopy {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-width: 0;
+}
+
+.draftCopy svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #0284c7;
+}
+
+.draftCopy strong {
+  display: block;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.draftCopy p {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.clearDraft {
+  flex: 0 0 auto;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 10px;
+  padding: 0 11px;
+  color: #dc2626;
+  background: rgba(239, 68, 68, 0.06);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.clearDraft:hover {
+  background: rgba(239, 68, 68, 0.11);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.form :global(.card) {
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.035);
+}
+
+.branchCard {
+  border: 1px solid var(--surface-border);
+  border-radius: 18px;
+  padding: 20px;
+  background: var(--surface-card);
+}
+
+.branchHeading {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin-bottom: 16px;
+}
+
+.branchHeading > div:first-child {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 12px;
+  color: #0284c7;
+  background: rgba(14, 165, 233, 0.1);
+}
+
+.branchHeading h2 {
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 750;
+}
+
+.branchHeading p {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.branchField {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.branchField label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.branchField select {
+  width: 100%;
+}
+
+.branchField p {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.required {
+  color: #ef4444;
+}
+
+.formActions {
+  position: sticky;
+  z-index: 10;
+  bottom: 12px;
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(220px, 1fr);
+  gap: 10px;
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--surface-card) 92%, transparent);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.15);
+  backdrop-filter: blur(12px);
+}
+
+.cancelButton,
+.submitButton {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 800;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.cancelButton {
+  border: 1px solid var(--surface-border);
+  color: var(--text-secondary);
+  background: var(--surface-card);
+}
+
+.cancelButton:hover {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.submitButton {
+  border: 0;
+  color: #0c0a09;
+  background: #f59e0b;
+}
+
+.submitButton:hover:not(:disabled) {
+  background: #fbbf24;
+}
+
+.submitButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+@media (max-width: 640px) {
+  .draftNotice {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .clearDraft {
+    width: 100%;
+  }
+
+  .form :global(.card),
+  .branchCard {
+    border-radius: 15px;
+  }
+
+  .formActions {
+    bottom: 8px;
+    grid-template-columns: 1fr;
+  }
+
+  .cancelButton {
+    order: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cancelButton,
+  .submitButton {
+    transition: none;
+  }
+}

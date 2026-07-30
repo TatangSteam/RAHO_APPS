@@ -13,6 +13,22 @@ import { MemberTableCell } from '@/components/members/MemberTableCell';
 import { useMemberColumns } from '@/hooks/useMemberColumns';
 import { devLog, devError } from '@/lib/logger';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
+import {
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Inbox,
+  Link2,
+  Plus,
+  Search,
+  Settings2,
+  ShieldCheck,
+  Ticket,
+  UserCheck,
+  UsersRound,
+} from 'lucide-react';
+import styles from './page.module.css';
 
 export default function MembersPage() {
   const router = useRouter();
@@ -174,127 +190,141 @@ export default function MembersPage() {
     setPage(1);
   };
 
+  const activeMembersOnPage = members.filter((member) => member.isActive && !member.isDeceased).length;
+  const crossBranchMembersOnPage = members.filter((member) => member.isLintas).length;
+  const basicVouchersOnPage = members.reduce(
+    (sum, member) => sum + (Number.isFinite(member.basicPackageCount) ? member.basicPackageCount : 0),
+    0,
+  );
+  const hasActiveFilter = Boolean(search || status || branchFilter);
+
+  const resetFilters = () => {
+    setSearch('');
+    setDebouncedSearch('');
+    setStatus('');
+    setBranchFilter('');
+    setPage(1);
+  };
+
   return (
-    <>
-      {/* Header */}
-      <div style={{ marginBottom: '32px' }}>
-        <div className="members-page-header" style={{ marginBottom: '24px' }}>
-          <div className="members-page-title">
-            <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px', background: 'linear-gradient(135deg, #60a5fa, #3b82f6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Manajemen Member
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Kelola data member dan akses lintas cabang</p>
+    <main className={styles.page}>
+      <section className={styles.hero}>
+        <div className={styles.heroCopy}>
+          <div className={styles.heroIcon}>
+            <UsersRound size={25} />
           </div>
-          <div className="members-page-actions">
-            {/* Column Configuration Button */}
+          <div>
+            <p className={styles.eyebrow}>Data layanan</p>
+            <h1>Member</h1>
+            <p>Cari data, periksa kelengkapan, lalu lanjutkan ke profil atau sesi terapi.</p>
+          </div>
+        </div>
+
+        <div className={styles.actions}>
+          <button
+            type="button"
+            onClick={() => setShowColumnConfigModal(true)}
+            className={styles.secondaryAction}
+            title="Atur kolom tabel"
+          >
+            <Settings2 size={17} />
+            Atur kolom
+          </button>
+          {!['DOCTOR', 'NURSE'].includes(user?.role || '') && !isMemberViewOnlyAdminManager && (
             <button
-              onClick={() => setShowColumnConfigModal(true)}
-              className="btn btn-secondary"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              title="Konfigurasi kolom tabel"
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className={styles.secondaryAction}
             >
-              ⚙️ Kolom
+              <Download size={17} />
+              Export
             </button>
-            {/* Hide "Export Data" for DOCTOR, NURSE, and member-view-only Admin Manager */}
-            {!['DOCTOR', 'NURSE'].includes(user?.role || '') && !isMemberViewOnlyAdminManager && (
-              <button
-                onClick={() => setShowExportModal(true)}
-                className="btn btn-secondary"
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                📥 Export Data
-              </button>
-            )}
-            {/* Hide cross-branch lookup for read-only Admin Manager and medical staff */}
-            {canLookupCrossBranch && (
-              <button
-                onClick={() => setShowLookupModal(true)}
-                className="btn btn-secondary"
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                🔍 Cari Lintas Cabang
-              </button>
-            )}
-            {canCreateMember && (
-              <div className="members-register-action">
-                <button
-                  onClick={() => router.push('/members/new')}
-                  className="btn btn-primary"
-                  style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                >
-                  ➕ Daftarkan Member Baru
-                </button>
-              </div>
-            )}
-          </div>
+          )}
+          {canLookupCrossBranch && (
+            <button
+              type="button"
+              onClick={() => setShowLookupModal(true)}
+              className={styles.secondaryAction}
+            >
+              <Link2 size={17} />
+              Lintas cabang
+            </button>
+          )}
+          {canCreateMember && (
+            <button
+              type="button"
+              onClick={() => router.push('/members/new')}
+              className={styles.primaryAction}
+            >
+              <Plus size={18} />
+              Daftarkan Member
+            </button>
+          )}
         </div>
+      </section>
 
-        {/* Stats Cards */}
-        <div className="dashboard-grid" style={{ marginBottom: '24px' }}>
-          <div className="card" style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', border: 'none', color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', opacity: 0.9 }}>Total Member</span>
-              <span style={{ fontSize: '32px' }}>👥</span>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{total}</p>
-            <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>Member terdaftar</p>
-          </div>
+      <section className={styles.guide} aria-label="Petunjuk singkat">
+        <ShieldCheck size={18} />
+        <p>
+          <strong>Alur cepat:</strong> cari member, buka profil untuk memeriksa data, lalu pilih tab Sesi Terapi
+          saat akan melanjutkan pelayanan.
+        </p>
+      </section>
 
-          <div className="card" style={{ background: 'linear-gradient(135deg, #22c55e, #16a34a)', border: 'none', color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', opacity: 0.9 }}>Member Aktif</span>
-              <span style={{ fontSize: '32px' }}>✅</span>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{members.filter(m => m.isActive && !m.isDeceased).length}</p>
-            <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>Dari halaman ini</p>
-          </div>
+      <section className={styles.statsGrid} aria-label="Ringkasan member">
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.blue}`}><UsersRound size={20} /></div>
+          <div><p>Total member</p><strong>{total}</strong><span>sesuai filter saat ini</span></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.green}`}><UserCheck size={20} /></div>
+          <div><p>Member aktif</p><strong>{activeMembersOnPage}</strong><span>pada halaman ini</span></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.purple}`}><Link2 size={20} /></div>
+          <div><p>Lintas cabang</p><strong>{crossBranchMembersOnPage}</strong><span>pada halaman ini</span></div>
+        </article>
+        <article className={styles.statCard}>
+          <div className={`${styles.statIcon} ${styles.amber}`}><Ticket size={20} /></div>
+          <div><p>Voucher BASIC</p><strong>{basicVouchersOnPage}</strong><span>sisa pada halaman ini</span></div>
+        </article>
+      </section>
 
-          <div className="card" style={{ background: 'linear-gradient(135deg, #a855f7, #9333ea)', border: 'none', color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', opacity: 0.9 }}>Lintas Cabang</span>
-              <span style={{ fontSize: '32px' }}>🔗</span>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{members.filter(m => m.isLintas).length}</p>
-            <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>Dari halaman ini</p>
+      <section className={styles.filterCard}>
+        <div className={styles.sectionHeading}>
+          <div>
+            <h2>Cari member</h2>
+            <p>Gunakan nama, nomor member, atau telepon.</p>
           </div>
-
-          <div className="card" style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', border: 'none', color: 'white' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-              <span style={{ fontSize: '13px', opacity: 0.9 }}>Total Voucher BASIC</span>
-              <span style={{ fontSize: '32px' }}>🎫</span>
-            </div>
-            <p style={{ fontSize: '32px', fontWeight: '700', margin: 0 }}>{members.reduce((sum, m) => sum + (m.basicPackageCount || 0), 0)}</p>
-            <p style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>Sisa voucher BASIC aktif</p>
-          </div>
+          {hasActiveFilter && (
+            <button type="button" onClick={resetFilters} className={styles.resetButton}>
+              Reset filter
+            </button>
+          )}
         </div>
-      </div>
-
-      {/* Search & Filter */}
-      <div className="card" style={{ marginBottom: '24px' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: '300px', position: 'relative' }}>
-            <span style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', fontSize: '18px' }}>🔍</span>
+        <form onSubmit={handleSearch} className={styles.filterForm}>
+          <label className={styles.searchField}>
+            <span className={styles.srOnly}>Cari member</span>
+            <Search size={18} />
             <input
               type="text"
               placeholder="Cari nama, no. member, atau telepon..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(event) => setSearch(event.target.value)}
               className="form-input"
-              style={{ paddingLeft: '44px' }}
             />
-          </div>
-          {(isSuperAdmin || isAdminManager) && (
-            <>
-              {devLog('🎨 Rendering dropdown - branches:', branches.length, 'isSuperAdmin:', isSuperAdmin, 'isAdminManager:', isAdminManager)}
+          </label>
+          {(isSuperAdmin || isAdminManager) ? (
+            <label className={styles.selectField}>
+              <span>Cabang</span>
               <select
+                aria-label="Filter cabang"
                 value={branchFilter}
-                onChange={(e) => {
-                  devLog('🔄 Branch filter changed to:', e.target.value);
-                  setBranchFilter(e.target.value);
+                onChange={(event) => {
+                  setBranchFilter(event.target.value);
                   setPage(1);
                 }}
                 className="form-input"
-                style={{ width: 'auto', minWidth: '180px' }}
               >
                 <option value="">Semua Cabang</option>
                 {branches.map((branch) => (
@@ -303,167 +333,168 @@ export default function MembersPage() {
                   </option>
                 ))}
               </select>
-            </>
-          )}
-          {!isSuperAdmin && !isAdminManager && user?.branchCode && (
-            <div className="form-input" style={{ width: 'auto', minWidth: '180px', background: 'var(--surface-hover)', cursor: 'not-allowed', display: 'flex', alignItems: 'center' }}>
-              🏢 {user.branchCode}
+            </label>
+          ) : user?.branchCode ? (
+            <div className={styles.branchReadOnly}>
+              <Building2 size={17} />
+              <span>{user.branchCode}</span>
             </div>
-          )}
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-            className="form-input"
-            style={{ width: 'auto', minWidth: '150px' }}
-          >
-            <option value="">Semua Status</option>
-            <option value="active">Aktif</option>
-            <option value="inactive">Nonaktif</option>
-          </select>
-          <button type="submit" className="btn btn-primary">
+          ) : null}
+          <label className={styles.selectField}>
+            <span>Status</span>
+            <select
+              aria-label="Filter status member"
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value);
+                setPage(1);
+              }}
+              className="form-input"
+            >
+              <option value="">Semua Status</option>
+              <option value="active">Aktif</option>
+              <option value="inactive">Nonaktif</option>
+            </select>
+          </label>
+          <button type="submit" className={styles.searchButton}>
+            <Search size={17} />
             Cari
           </button>
         </form>
-      </div>
+      </section>
 
-    {/* Table */}
-    <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-      {loading ? (
-        <PageLoading text="Memuat data member" />
-    ) : members.length === 0 ? (
-      <div style={{ padding: '48px', textAlign: 'center' }}>
-        <div style={{ fontSize: '64px', marginBottom: '16px' }}>👥</div>
-        <p style={{ fontSize: '18px', fontWeight: '500', marginBottom: '8px' }}>
-          Tidak ada member ditemukan
-        </p>
-        <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
-          Coba ubah filter pencarian Anda
-        </p>
-      </div>
-    ) : (
-      <>
-        {branchFilter && (isSuperAdmin || isAdminManager) && (
-          <div style={{ 
-            padding: '12px 24px', 
-            background: 'rgba(59,130,246,0.1)', 
-            borderBottom: '1px solid rgba(59,130,246,0.2)',
-            fontSize: '14px',
-            color: 'var(--text-secondary)'
-          }}>
-            Menampilkan <strong>{total}</strong> member dari cabang <strong>{branches.find(b => b.branchCode === branchFilter)?.name || branchFilter}</strong>
+      <section className={styles.resultsCard}>
+        <div className={styles.resultsHeader}>
+          <div>
+            <p className={styles.eyebrow}>Hasil pencarian</p>
+            <h2>{loading ? 'Memuat member...' : `${total} member ditemukan`}</h2>
           </div>
-        )}
-        {isAdminManager && !branchFilter && branches.length > 0 && (
-          <div style={{ 
-            padding: '12px 24px', 
-            background: 'rgba(168,85,247,0.1)', 
-            borderBottom: '1px solid rgba(168,85,247,0.2)',
-            fontSize: '14px',
-            color: 'var(--text-secondary)'
-          }}>
-            📌 Menampilkan member dari <strong>{branches.length}</strong> cabang yang Anda kelola
+          <p>Klik baris untuk membuka profil lengkap.</p>
+        </div>
+
+        {loading ? (
+          <PageLoading text="Memuat data member" />
+        ) : members.length === 0 ? (
+          <div className={styles.emptyState}>
+            <div><Inbox size={28} /></div>
+            <h3>Tidak ada member ditemukan</h3>
+            <p>Coba periksa kata pencarian atau ubah filter yang dipilih.</p>
+            {hasActiveFilter && (
+              <button type="button" onClick={resetFilters} className={styles.secondaryAction}>
+                Reset filter
+              </button>
+            )}
           </div>
-        )}
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                {visibleColumns.map((column) => (
-                  <th
-                    key={column.id}
-                    style={{
-                      textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
-                        ? 'center'
-                        : 'left'
-                    }}
-                  >
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {members.map((member) => (
-                <tr 
-                  key={member.memberId}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => router.push(`/members/${member.memberId}`)}
-                >
-                  {visibleColumns.map((column) => (
-                    <td
-                      key={column.id}
-                      style={{
-                        textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
-                          ? 'center'
-                          : 'left'
-                      }}
+        ) : (
+          <>
+            {branchFilter && (isSuperAdmin || isAdminManager) && (
+              <div className={styles.contextBanner}>
+                <Building2 size={16} />
+                Menampilkan <strong>{total}</strong> member dari cabang{' '}
+                <strong>{branches.find((branch) => branch.branchCode === branchFilter)?.name || branchFilter}</strong>
+              </div>
+            )}
+            {isAdminManager && !branchFilter && branches.length > 0 && (
+              <div className={styles.contextBanner}>
+                <Building2 size={16} />
+                Menampilkan member dari <strong>{branches.length}</strong> cabang yang Anda kelola
+              </div>
+            )}
+            <div className={`table-wrapper ${styles.tableWrapper}`}>
+              <table>
+                <thead>
+                  <tr>
+                    {visibleColumns.map((column) => (
+                      <th
+                        key={column.id}
+                        style={{
+                          textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                            ? 'center'
+                            : 'left',
+                        }}
+                      >
+                        {column.label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {members.map((member) => (
+                    <tr
+                      key={member.memberId}
+                      className={styles.memberRow}
+                      onClick={() => router.push(`/members/${member.memberId}`)}
                     >
-                      <MemberTableCell
-                        columnId={column.id}
-                        member={member}
-                        photoUrl={photoUrls[member.memberId]}
-                        onNavigate={() => router.push(`/members/${member.memberId}`)}
-                      />
-                    </td>
+                      {visibleColumns.map((column) => (
+                        <td
+                          key={column.id}
+                          style={{
+                            textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                              ? 'center'
+                              : 'left',
+                          }}
+                        >
+                          <MemberTableCell
+                            columnId={column.id}
+                            member={member}
+                            photoUrl={photoUrls[member.memberId]}
+                            onNavigate={() => router.push(`/members/${member.memberId}`)}
+                          />
+                        </td>
+                      ))}
+                    </tr>
                   ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                </tbody>
+              </table>
+            </div>
 
-              {/* Pagination */}
-              {totalPages > 1 && (
-                <div style={{ padding: '16px 24px', borderTop: '1px solid var(--surface-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    ← Sebelumnya
-                  </button>
-                  <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                    Halaman <strong style={{ color: 'var(--color-primary-400)' }}>{page}</strong> dari <strong>{totalPages}</strong>
-                  </span>
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="btn btn-sm btn-secondary"
-                  >
-                    Selanjutnya →
-                  </button>
-                </div>
-              )}
-            </>
-          )}
-        </div>
+            {totalPages > 1 && (
+              <div className={styles.pagination}>
+                <button
+                  type="button"
+                  onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+                  disabled={page === 1}
+                  className={styles.pageButton}
+                  aria-label="Halaman sebelumnya"
+                >
+                  <ChevronLeft size={17} />
+                  <span>Sebelumnya</span>
+                </button>
+                <span>Halaman <strong>{page}</strong> dari <strong>{totalPages}</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setPage((currentPage) => Math.min(totalPages, currentPage + 1))}
+                  disabled={page === totalPages}
+                  className={styles.pageButton}
+                  aria-label="Halaman selanjutnya"
+                >
+                  <span>Selanjutnya</span>
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
-        {/* Modal Lookup */}
-        <LookupMemberModal
-          isOpen={showLookupModal}
-          onClose={() => setShowLookupModal(false)}
-          onSuccess={() => loadMembers()}
-        />
-
-        {/* Modal Export */}
-        <ExportMembersModal
-          isOpen={showExportModal}
-          onClose={() => setShowExportModal(false)}
-          currentSearch={debouncedSearch}
-          currentStatus={status}
-        />
-
-        {/* Modal Column Config */}
-        <ColumnConfigModal
-          isOpen={showColumnConfigModal}
-          onClose={() => setShowColumnConfigModal(false)}
-          columns={columns}
-          onToggleColumn={toggleColumn}
-          onReset={resetColumns}
-        />
-    </>
+      <LookupMemberModal
+        isOpen={showLookupModal}
+        onClose={() => setShowLookupModal(false)}
+        onSuccess={() => loadMembers()}
+      />
+      <ExportMembersModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        currentSearch={debouncedSearch}
+        currentStatus={status}
+      />
+      <ColumnConfigModal
+        isOpen={showColumnConfigModal}
+        onClose={() => setShowColumnConfigModal(false)}
+        columns={columns}
+        onToggleColumn={toggleColumn}
+        onReset={resetColumns}
+      />
+    </main>
   );
 }

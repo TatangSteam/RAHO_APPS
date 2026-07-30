@@ -14,6 +14,8 @@ import AccountSection from '@/components/members/new/AccountSection';
 import IncentiveSection from '@/components/members/new/IncentiveSection';
 import DocumentUploadSection from '@/components/members/new/DocumentUploadSection';
 import { ErrorAlert } from '@/components/ui/Alert';
+import { Building2, Loader2, Save, Trash2, X } from 'lucide-react';
+import styles from './page.module.css';
 
 interface Branch {
   id: string;
@@ -446,62 +448,30 @@ export default function NewMemberPage() {
   }
 
   return (
-    <>
+    <main className={styles.page}>
       <NewMemberHeader onBack={() => returnTo ? router.push(returnTo) : router.back()} />
 
       {hasSavedData && (
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(37, 99, 235, 0.1))',
-          border: '1px solid rgba(59, 130, 246, 0.3)',
-          borderRadius: '12px',
-          padding: '16px 20px',
-          marginBottom: '20px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '16px',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <span style={{ fontSize: '24px' }}>💾</span>
+        <div className={styles.draftNotice}>
+          <div className={styles.draftCopy}>
+            <Save size={19} />
             <div>
-              <p style={{ fontWeight: '600', marginBottom: '4px', color: 'var(--text-primary)' }}>
-                Data tersimpan otomatis
-              </p>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                Form Anda disimpan otomatis. Anda bisa keluar dan melanjutkan nanti.
-              </p>
+              <strong>Draft tersimpan otomatis</strong>
+              <p>Anda dapat meninggalkan halaman ini dan melanjutkan pengisian nanti.</p>
             </div>
           </div>
           <button
             type="button"
             onClick={handleClearDraft}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              background: 'rgba(239, 68, 68, 0.1)',
-              color: '#ef4444',
-              fontSize: '13px',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
-              e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-            }}
+            className={styles.clearDraft}
           >
-            🗑️ Hapus Draft
+            <Trash2 size={14} />
+            Hapus Draft
           </button>
         </div>
       )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <form onSubmit={handleSubmit} className={styles.form}>
         {formError && (
           <ErrorAlert title="Error">
             {formError}
@@ -510,13 +480,17 @@ export default function NewMemberPage() {
 
         {/* Branch Selection for SUPER_ADMIN */}
         {requiresBranchSelection && (
-          <div className="card" style={{ padding: '20px' }}>
-            <h3 style={{ marginBottom: '16px', fontSize: '16px', fontWeight: '600' }}>
-              🏢 Cabang Pendaftaran
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="branchId" style={{ fontSize: '14px', fontWeight: '500' }}>
-                Cabang Pendaftaran <span style={{ color: '#ef4444' }}>*</span>
+          <section className={styles.branchCard}>
+            <div className={styles.branchHeading}>
+              <div><Building2 size={19} /></div>
+              <div>
+                <h2>Cabang Pendaftaran</h2>
+                <p>Tentukan cabang yang bertanggung jawab atas data dan pelayanan awal member.</p>
+              </div>
+            </div>
+            <div className={styles.branchField}>
+              <label htmlFor="branchId">
+                Pilih cabang <span className={styles.required}>*</span>
               </label>
               <select
                 id="branchId"
@@ -524,42 +498,25 @@ export default function NewMemberPage() {
                 value={formData.branchId || ''}
                 onChange={handleInputChange}
                 disabled={loadingBranches || isBranchLocked}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: '8px',
-                  border: '1px solid #334155',
-                  fontSize: '14px',
-                  backgroundColor: '#1e293b',
-                  color: '#f1f5f9',
-                  cursor: loadingBranches || isBranchLocked ? 'not-allowed' : 'pointer',
-                  appearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 12px center',
-                  paddingRight: '36px',
-                }}
+                className="form-input"
                 required
               >
-                <option value="" style={{ backgroundColor: '#1e293b', color: '#94a3b8' }}>
+                <option value="">
                   {loadingBranches ? 'Memuat cabang...' : '-- Pilih Cabang --'}
                 </option>
                 {branches.map((branch) => (
-                  <option 
-                    key={branch.id} 
-                    value={branch.id}
-                    style={{ backgroundColor: '#1e293b', color: '#f1f5f9' }}
-                  >
+                  <option key={branch.id} value={branch.id}>
                     {branch.name} ({branch.branchCode})
                   </option>
                 ))}
               </select>
-              <p style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>
+              <p>
                 {isBranchLocked
                   ? 'Cabang dipilih otomatis dari halaman detail cabang'
                   : 'Member akan didaftarkan di cabang yang dipilih'}
               </p>
             </div>
-          </div>
+          </section>
         )}
 
         <PersonalDataSection formData={formData} onChange={handleInputChange} errors={fieldErrors} />
@@ -588,32 +545,34 @@ export default function NewMemberPage() {
         />
 
         {/* Submit Buttons */}
-        <div style={{ display: 'flex', gap: '12px', paddingTop: '8px' }}>
+        <div className={styles.formActions}>
           <button
             type="button"
             onClick={() => returnTo ? router.push(returnTo) : router.back()}
-            className="btn btn-secondary"
-            style={{ minWidth: '120px' }}
+            className={styles.cancelButton}
           >
-            ❌ Batal
+            <X size={17} />
+            Batal
           </button>
           <button
             type="submit"
             disabled={loading}
-            className="btn btn-primary"
-            style={{ flex: 1, minHeight: '48px', fontSize: '16px', fontWeight: '600' }}
+            className={styles.submitButton}
           >
             {loading ? (
-              <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
-                <div className="spinner" style={{ width: '20px', height: '20px' }}></div>
+              <>
+                <Loader2 size={18} className="animate-spin" />
                 Mendaftarkan Member...
-              </span>
+              </>
             ) : (
-              '✅ Daftarkan Member'
+              <>
+                <Save size={18} />
+                Daftarkan Member
+              </>
             )}
           </button>
         </div>
       </form>
-    </>
+    </main>
   );
 }

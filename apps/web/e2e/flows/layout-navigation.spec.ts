@@ -26,7 +26,31 @@ test.describe('Staff layout navigation', () => {
     const layout = new StaffLayoutPage(page);
     await layout.expectRoleLabel('Nakes');
     await layout.expectSidebarLinkVisible(/^Sesi Terapi$/);
+    await layout.expectSidebarLinkVisible(/Inventori Tim/);
     await layout.expectSidebarLinkHidden(/^Audit Log$/);
     await layout.expectSidebarLinkHidden(/^Pembayaran$/);
+    await layout.expectSidebarLinkHidden(/^Stok$/);
+  });
+
+  test('should keep doctor navigation focused on clinical work', async ({ loginAs, page }) => {
+    await loginAs('DOCTOR');
+
+    const layout = new StaffLayoutPage(page);
+    await layout.expectSidebarLinkVisible(/^Member$/);
+    await layout.expectSidebarLinkVisible(/^Sesi Terapi$/);
+    await layout.expectSidebarLinkHidden(/^Stok$/);
+    await layout.expectSidebarLinkHidden(/Inventori Tim/);
+    await layout.expectSidebarLinkHidden(/^Mutasi Stok$/);
+  });
+
+  test('should keep service admin navigation focused on service tasks', async ({ loginAs, page }) => {
+    await loginAs('ADMIN_LAYANAN');
+
+    const layout = new StaffLayoutPage(page);
+    await layout.expectSidebarLinkVisible(/^Member$/);
+    await layout.expectSidebarLinkVisible(/^Sesi Terapi$/);
+    await layout.expectSidebarLinkVisible(/^Pembayaran$/);
+    await layout.expectSidebarLinkVisible(/Inventori Tim/);
+    await layout.expectSidebarLinkHidden(/^Mutasi Stok$/);
   });
 });

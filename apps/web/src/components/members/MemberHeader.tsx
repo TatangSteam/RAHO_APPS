@@ -1,9 +1,19 @@
-"use client";
+'use client';
 
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import {
+  ArrowLeft,
+  Bell,
+  Building2,
+  CircleAlert,
+  FileUp,
+  KeyRound,
+  Loader2,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
-import { Key, Loader2, Trash2, Upload } from 'lucide-react';
 import { devError } from '@/lib/logger';
 
 interface MemberHeaderProps {
@@ -19,60 +29,43 @@ interface MemberHeaderProps {
   canDelete?: boolean;
   isDeleting?: boolean;
   canUploadDocuments?: boolean;
-  hasDocuments?: boolean; // Indicates if member has any documents (PSP or Photo)
+  hasDocuments?: boolean;
 }
 
-type HeaderActionTone = 'success' | 'warning' | 'danger';
+type ActionTone = 'neutral' | 'primary' | 'success' | 'warning' | 'danger';
 
-interface HeaderIconActionProps {
+const actionToneClasses: Record<ActionTone, string> = {
+  neutral:
+    'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800',
+  primary:
+    'border-neutral-950 bg-neutral-950 text-white hover:border-amber-500 hover:bg-amber-500 hover:text-black dark:border-white dark:bg-white dark:text-neutral-950 dark:hover:border-amber-400 dark:hover:bg-amber-400',
+  success:
+    'border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300',
+  warning:
+    'border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 hover:bg-amber-100 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300',
+  danger:
+    'border-red-200 bg-red-50 text-red-700 hover:border-red-300 hover:bg-red-100 dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-300',
+};
+
+function HeaderAction({
+  children,
+  icon,
+  onClick,
+  tone = 'neutral',
+  disabled = false,
+}: {
   children: ReactNode;
   icon: ReactNode;
   onClick: () => void;
-  tone: HeaderActionTone;
+  tone?: ActionTone;
   disabled?: boolean;
-}
-
-const headerActionBaseStyle: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-};
-
-const headerActionToneStyles: Record<HeaderActionTone, CSSProperties> = {
-  success: {
-    background: 'linear-gradient(135deg, #10b98120, #06b6d420)',
-    borderColor: '#10b98150',
-    color: '#10b981',
-  },
-  warning: {
-    background: 'linear-gradient(135deg, #f59e0b20, #d9770620)',
-    borderColor: '#f59e0b50',
-    color: '#f59e0b',
-  },
-  danger: {
-    background: 'linear-gradient(135deg, #ef444420, #dc262620)',
-    borderColor: '#ef444450',
-    color: '#ef4444',
-  },
-};
-
-const disabledActionStyle: CSSProperties = {
-  opacity: 0.7,
-  cursor: 'not-allowed',
-};
-
-function HeaderIconAction({ children, icon, onClick, tone, disabled = false }: HeaderIconActionProps) {
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="btn btn-secondary member-detail-action-button"
-      style={{
-        ...headerActionBaseStyle,
-        ...headerActionToneStyles[tone],
-        ...(disabled ? disabledActionStyle : undefined),
-      }}
+      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3.5 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${actionToneClasses[tone]}`}
     >
       {icon}
       {children}
@@ -80,29 +73,28 @@ function HeaderIconAction({ children, icon, onClick, tone, disabled = false }: H
   );
 }
 
-export default function MemberHeader({ 
-  member, 
-  onBack, 
-  onSendNotification, 
-  onEdit, 
+export default function MemberHeader({
+  member,
+  onBack,
+  onSendNotification,
+  onEdit,
   onDelete,
-  onManageCredentials, 
+  onManageCredentials,
   onUploadDocuments,
   isSuperAdmin,
   canSendNotification = true,
   canDelete = false,
   isDeleting = false,
   canUploadDocuments = false,
-  hasDocuments = false
+  hasDocuments = false,
 }: MemberHeaderProps) {
-  // Get profile photo from documents
-  const profilePhoto = member.documents?.find(doc => doc.documentType === 'FOTO_PROFIL');
+  const profilePhoto = member.documents?.find((document) => document.documentType === 'FOTO_PROFIL');
   const hasInformedConsent = member.documents?.some(
-    doc => doc.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN'
+    (document) => document.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN',
   );
   const missingWarnings = [
     !member.profile?.phone?.trim() ? 'No HP belum terisi' : null,
-    !hasInformedConsent ? 'Inform consent belum terisi' : null,
+    !hasInformedConsent ? 'Informed consent belum terisi' : null,
   ].filter(Boolean) as string[];
   const [profilePhotoUrl, setProfilePhotoUrl] = useState<string | null>(null);
 
@@ -117,19 +109,14 @@ export default function MemberHeader({
 
       try {
         const url = await createAuthenticatedObjectUrl(profilePhoto.fileUrl);
-        if (!cancelled) {
-          setProfilePhotoUrl(url);
-        }
+        if (!cancelled) setProfilePhotoUrl(url);
       } catch (error) {
         devError('Failed to load member profile photo:', error);
-        if (!cancelled) {
-          setProfilePhotoUrl(null);
-        }
+        if (!cancelled) setProfilePhotoUrl(null);
       }
     };
 
     loadProfilePhoto();
-
     return () => {
       cancelled = true;
     };
@@ -137,102 +124,78 @@ export default function MemberHeader({
 
   useEffect(() => {
     return () => {
-      if (profilePhotoUrl?.startsWith('blob:')) {
-        URL.revokeObjectURL(profilePhotoUrl);
-      }
+      if (profilePhotoUrl?.startsWith('blob:')) URL.revokeObjectURL(profilePhotoUrl);
     };
   }, [profilePhotoUrl]);
-  
+
+  const isActive = member.user?.isActive && !member.isDeceased;
+  const memberName = member.profile?.fullName || 'Nama tidak tersedia';
+
   return (
-    <div style={{ marginBottom: '24px' }}>
-      <button onClick={onBack} className="btn btn-secondary btn-sm" style={{ marginBottom: '16px' }}>
-        ← Kembali
+    <header className="mb-5">
+      <button
+        type="button"
+        onClick={onBack}
+        className="mb-3 inline-flex items-center gap-1.5 rounded-lg px-1 py-1 text-sm font-bold text-neutral-500 transition hover:text-neutral-950 dark:text-neutral-400 dark:hover:text-white"
+      >
+        <ArrowLeft size={17} />
+        Kembali ke daftar member
       </button>
-      <div className="member-detail-header">
-        <div className="member-detail-profile-wrap">
-          <div className="member-detail-profile">
-            <div className="member-detail-avatar" style={{
-              width: '80px',
-              height: '80px',
-              borderRadius: '50%',
-              background: profilePhoto ? 'transparent' : 'linear-gradient(135deg, #3b82f6, #2563eb)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'white',
-              fontWeight: '700',
-              fontSize: '32px',
-              position: 'relative',
-              overflow: 'visible',
-              border: '3px solid var(--surface-border)',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-            }}>
-              {profilePhoto && profilePhotoUrl ? (
-                <img
-                  src={profilePhotoUrl}
-                  alt={member.profile?.fullName || 'Member'}
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderRadius: '50%'
-                  }}
-                />
+
+      <div className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
+        <div className="flex flex-col gap-5 p-5 md:p-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-start gap-4">
+            <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-2xl font-black text-white ring-4 ring-blue-50 dark:ring-blue-500/10 md:h-20 md:w-20 md:text-3xl">
+              {profilePhotoUrl ? (
+                <img src={profilePhotoUrl} alt={memberName} className="h-full w-full object-cover" />
               ) : (
-                (member.profile?.fullName || 'M').charAt(0).toUpperCase()
+                memberName.charAt(0).toUpperCase()
               )}
-              {member.user?.isActive && !member.isDeceased && (
-                <span style={{
-                  position: 'absolute',
-                  bottom: '2px',
-                  right: '2px',
-                  width: '20px',
-                  height: '20px',
-                  background: '#22c55e',
-                  border: '3px solid var(--surface-card)',
-                  borderRadius: '50%',
-                  boxShadow: '0 0 0 2px var(--surface-card)'
-                }}></span>
-              )}
+              <span
+                className={`absolute bottom-1.5 right-1.5 h-3.5 w-3.5 rounded-full border-2 border-white dark:border-neutral-900 ${
+                  isActive ? 'bg-emerald-500' : 'bg-neutral-400'
+                }`}
+                aria-label={isActive ? 'Member aktif' : 'Member tidak aktif'}
+              />
             </div>
-            <div className="member-detail-identity">
-              <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '4px' }}>{member.profile?.fullName || 'Nama tidak tersedia'}</h1>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
-                <span style={{ fontFamily: 'monospace', fontWeight: '600' }}>{member.memberNo}</span> • 🏢 {member.registrationBranch?.name || 'N/A'}
-              </p>
-              {member.isDeceased && (
-                <span style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  marginTop: '8px',
-                  padding: '4px 10px',
-                  borderRadius: '999px',
-                  background: 'rgba(239,68,68,0.12)',
-                  color: '#ef4444',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                }}>
-                  Status: Meninggal
+
+            <div className="min-w-0 pt-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[11px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                  Profil member
+                </p>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    member.isDeceased
+                      ? 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-300'
+                      : isActive
+                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300'
+                        : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300'
+                  }`}
+                >
+                  {member.isDeceased ? 'Meninggal' : isActive ? 'Aktif' : 'Nonaktif'}
                 </span>
-              )}
+              </div>
+              <h1 className="mt-1 break-words text-2xl font-extrabold leading-tight text-neutral-950 dark:text-white md:text-3xl">
+                {memberName}
+              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500 dark:text-neutral-400">
+                <span className="font-mono font-bold text-neutral-700 dark:text-neutral-200">
+                  {member.memberNo || 'Nomor belum tersedia'}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <Building2 size={13} />
+                  {member.registrationBranch?.name || 'Cabang tidak tersedia'}
+                </span>
+              </div>
               {missingWarnings.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                <div className="mt-3 flex flex-wrap gap-1.5">
                   {missingWarnings.map((warning) => (
                     <span
                       key={warning}
-                      title={warning}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        padding: '5px 10px',
-                        borderRadius: '999px',
-                        border: '1px solid rgba(245, 158, 11, 0.45)',
-                        background: 'rgba(245, 158, 11, 0.14)',
-                        color: '#f59e0b',
-                        fontSize: '12px',
-                        fontWeight: 700,
-                      }}
+                      className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700 dark:border-amber-500/25 dark:bg-amber-500/10 dark:text-amber-300"
                     >
+                      <CircleAlert size={12} />
                       {warning}
                     </span>
                   ))}
@@ -240,48 +203,45 @@ export default function MemberHeader({
               )}
             </div>
           </div>
+
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:justify-end">
+            {canSendNotification && (
+              <HeaderAction onClick={onSendNotification} icon={<Bell size={15} />}>
+                Notifikasi
+              </HeaderAction>
+            )}
+            {canUploadDocuments && onUploadDocuments && (
+              <HeaderAction onClick={onUploadDocuments} tone="success" icon={<FileUp size={15} />}>
+                {hasDocuments ? 'Kelola Dokumen' : 'Upload Dokumen'}
+              </HeaderAction>
+            )}
+            {isSuperAdmin && onManageCredentials && (
+              <HeaderAction onClick={onManageCredentials} tone="warning" icon={<KeyRound size={15} />}>
+                Kredensial
+              </HeaderAction>
+            )}
+            {isSuperAdmin && (
+              <HeaderAction onClick={onEdit} tone="primary" icon={<Pencil size={15} />}>
+                Edit
+              </HeaderAction>
+            )}
+            {canDelete && onDelete && (
+              <HeaderAction
+                onClick={onDelete}
+                disabled={isDeleting}
+                tone="danger"
+                icon={isDeleting ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              >
+                {isDeleting ? 'Menghapus...' : 'Hapus Member'}
+              </HeaderAction>
+            )}
+          </div>
         </div>
-        <div className="member-detail-actions">
-          {canSendNotification && (
-            <button onClick={onSendNotification} className="btn btn-secondary member-detail-action-button">
-              📧 Kirim Notifikasi
-            </button>
-          )}
-          {canUploadDocuments && onUploadDocuments && (
-            <HeaderIconAction
-              onClick={onUploadDocuments} 
-              tone="success"
-              icon={<Upload size={16} />}
-            >
-              {hasDocuments ? 'Ganti Dokumen' : 'Upload Dokumen'}
-            </HeaderIconAction>
-          )}
-          {isSuperAdmin && onManageCredentials && (
-            <HeaderIconAction
-              onClick={onManageCredentials} 
-              tone="warning"
-              icon={<Key size={16} />}
-            >
-              Kredensial
-            </HeaderIconAction>
-          )}
-          {isSuperAdmin && (
-            <button onClick={onEdit} className="btn btn-primary member-detail-action-button">
-              ✏️ Edit
-            </button>
-          )}
-          {canDelete && onDelete && (
-            <HeaderIconAction
-              onClick={onDelete} 
-              disabled={isDeleting}
-              tone="danger"
-              icon={isDeleting ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-            >
-              {isDeleting ? 'Menghapus...' : 'Hapus Member'}
-            </HeaderIconAction>
-          )}
+
+        <div className="border-t border-sky-100 bg-sky-50/70 px-5 py-3 text-xs leading-5 text-sky-900 dark:border-sky-500/10 dark:bg-sky-500/5 dark:text-sky-100 md:px-6">
+          Periksa identitas dan kelengkapan profil sebelum membuka paket, sesi terapi, diagnosis, atau therapy plan.
         </div>
       </div>
-    </div>
+    </header>
   );
 }

@@ -1,6 +1,11 @@
 FROM node:20 AS builder
 WORKDIR /usr/src/web
 
+# Keep Next.js build memory predictable on constrained CI hosts. This
+# environment variable is not inherited by the production runner stage.
+ARG NODE_BUILD_MEMORY_MB=2048
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_BUILD_MEMORY_MB}
+
 # Build-time public envs for Next.js. These are injected by compose build.args.
 ARG NEXT_PUBLIC_API_URL=/api/v1
 ARG NEXT_PUBLIC_APP_NAME="Raho ERP"
