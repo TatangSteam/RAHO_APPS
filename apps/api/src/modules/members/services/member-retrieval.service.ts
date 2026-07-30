@@ -1,6 +1,11 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { Role } from '@prisma/client';
+import {
+  buildMemberRankMap,
+  EMPTY_MEMBER_RANK,
+  type MemberRankResult,
+} from './member-rank';
 
 function calculateAge(dateOfBirth?: Date | null): number | null {
   if (!dateOfBirth) return null;
@@ -290,8 +295,13 @@ export class MemberRetrievalService {
       take: limit,
     });
 
+    const memberRanks = await this.getMemberRanks(members.map(member => member.id));
+
     return {
-      members: members.map(m => this.formatMemberData(m)),
+      members: members.map(member => ({
+        ...this.formatMemberData(member),
+        ...(memberRanks.get(member.id) || EMPTY_MEMBER_RANK),
+      })),
       pagination: {
         page,
         limit,
@@ -408,8 +418,13 @@ export class MemberRetrievalService {
       take: limit,
     });
 
+    const memberRanks = await this.getMemberRanks(members.map(member => member.id));
+
     return {
-      members: members.map(m => this.formatMemberData(m)),
+      members: members.map(member => ({
+        ...this.formatMemberData(member),
+        ...(memberRanks.get(member.id) || EMPTY_MEMBER_RANK),
+      })),
       pagination: {
         page,
         limit,
@@ -476,34 +491,37 @@ export class MemberRetrievalService {
     console.log('🔍 [Member Retrieval] getMemberById called for:', memberId);
     console.time('getMemberById');
     
-    const member = await prisma.member.findUnique({
-      where: { id: memberId },
-      include: {
-        user: {
-          include: {
-            profile: true,
+    const [member, memberRanks] = await Promise.all([
+      prisma.member.findUnique({
+        where: { id: memberId },
+        include: {
+          user: {
+            include: {
+              profile: true,
+            },
+          },
+          registrationBranch: true,
+          branchAccesses: {
+            include: {
+              branch: true,
+            },
+          },
+          referralCode: true,
+          documents: true,
+          memberPackages: {
+            where: {
+              packageType: 'BASIC',
+              status: 'ACTIVE',
+            },
+            select: {
+              totalSessions: true,
+              usedSessions: true,
+            },
           },
         },
-        registrationBranch: true,
-        branchAccesses: {
-          include: {
-            branch: true,
-          },
-        },
-        referralCode: true,
-        documents: true,
-        memberPackages: {
-          where: {
-            packageType: 'BASIC',
-            status: 'ACTIVE',
-          },
-          select: {
-            totalSessions: true,
-            usedSessions: true,
-          },
-        },
-      },
-    });
+      }),
+      this.getMemberRanks([memberId]),
+    ]);
 
     console.timeEnd('getMemberById');
 
@@ -513,7 +531,10 @@ export class MemberRetrievalService {
     }
 
     console.log('✅ [Member Retrieval] Member found:', member.memberNo, member.user.profile?.fullName);
-    const result = this.formatMemberDetailData(member);
+    const result = {
+      ...this.formatMemberDetailData(member),
+      ...(memberRanks.get(member.id) || EMPTY_MEMBER_RANK),
+    };
     console.log('✅ [Member Retrieval] Formatted data ready');
     return result;
   }
@@ -643,6 +664,38 @@ export class MemberRetrievalService {
         createdAt: record.createdAt.toISOString(),
       })),
     };
+  }
+
+  /**
+   * Load package history in one indexed query so list pages do not create an
+   * N+1 query per member. Rank stays derived and requires no data migration.
+   */
+  private async getMemberRanks(memberIds: string[]): Promise<Map<string, MemberRankResult>> {
+    if (memberIds.length === 0) return new Map();
+
+    const packages = await prisma.memberPackage.findMany({
+      where: {
+        memberId: { in: memberIds },
+        status: { not: 'CANCELLED' },
+      },
+      select: {
+        id: true,
+        memberId: true,
+        purchaseGroupId: true,
+        finalPrice: true,
+        discountAmount: true,
+        discountPercent: true,
+        status: true,
+        createdAt: true,
+      },
+      orderBy: [
+        { memberId: 'asc' },
+        { createdAt: 'desc' },
+        { id: 'desc' },
+      ],
+    });
+
+    return buildMemberRankMap(packages);
   }
 
   /**

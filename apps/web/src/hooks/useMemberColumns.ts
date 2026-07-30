@@ -12,6 +12,7 @@ export interface ColumnConfig {
 export const DEFAULT_COLUMNS: ColumnConfig[] = [
   { id: 'memberNo', label: 'No. Member', visible: true, required: true },
   { id: 'nameAndBranch', label: 'Nama & Cabang', visible: true, required: true },
+  { id: 'rank', label: 'Rank Member', visible: true, required: true },
   { id: 'phone', label: 'Telepon', visible: true },
   { id: 'registrationDate', label: 'Tanggal Daftar', visible: false },
   { id: 'email', label: 'Email', visible: false },
@@ -27,6 +28,21 @@ export const DEFAULT_COLUMNS: ColumnConfig[] = [
 
 const STORAGE_KEY = 'raho-member-columns-config';
 
+export function normalizeMemberColumns(savedColumns: ColumnConfig[]): ColumnConfig[] {
+  return DEFAULT_COLUMNS.map(defaultColumn => {
+    const savedColumn = savedColumns.find(column => column.id === defaultColumn.id);
+    const savedVisibility =
+      typeof savedColumn?.visible === 'boolean'
+        ? savedColumn.visible
+        : defaultColumn.visible;
+
+    return {
+      ...defaultColumn,
+      visible: defaultColumn.required ? true : savedVisibility,
+    };
+  });
+}
+
 export function useMemberColumns() {
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
 
@@ -35,13 +51,10 @@ export function useMemberColumns() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const savedColumns: ColumnConfig[] = JSON.parse(saved);
-        // Merge with defaults to handle new columns added in updates
-        const merged = DEFAULT_COLUMNS.map(defaultCol => {
-          const saved = savedColumns.find(s => s.id === defaultCol.id);
-          return saved ? { ...defaultCol, visible: saved.visible } : defaultCol;
-        });
-        setColumns(merged);
+        const savedColumns: unknown = JSON.parse(saved);
+        if (Array.isArray(savedColumns)) {
+          setColumns(normalizeMemberColumns(savedColumns as ColumnConfig[]));
+        }
       }
     } catch (error) {
       console.error('Failed to load column config:', error);
@@ -50,9 +63,10 @@ export function useMemberColumns() {
 
   // Save to localStorage when columns change
   const updateColumns = (newColumns: ColumnConfig[]) => {
-    setColumns(newColumns);
+    const normalizedColumns = normalizeMemberColumns(newColumns);
+    setColumns(normalizedColumns);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newColumns));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedColumns));
     } catch (error) {
       console.error('Failed to save column config:', error);
     }

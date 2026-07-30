@@ -312,9 +312,9 @@ export default function MemberDetailPage() {
     }
   }, [activeTab, canAssignPackage, member]);
 
-  const loadMemberDetail = async () => {
+  const loadMemberDetail = async (showPageLoading = true) => {
     try {
-      setLoading(true);
+      if (showPageLoading) setLoading(true);
       devLog('📥 [Member Detail] Loading member detail for:', memberId);
       const startTime = performance.now();
       
@@ -331,7 +331,7 @@ export default function MemberDetailPage() {
       alert('Gagal memuat detail member: ' + (error.response?.data?.error?.message || error.message));
       router.back();
     } finally {
-      setLoading(false);
+      if (showPageLoading) setLoading(false);
       devLog('🏁 [Member Detail] Loading finished');
     }
   };
@@ -449,7 +449,7 @@ export default function MemberDetailPage() {
           installmentCount: 2,
         },
       });
-      await loadPackages();
+      await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error: any) {
       devError('Assign package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal assign paket');
@@ -616,7 +616,7 @@ export default function MemberDetailPage() {
       setRefundAmount(0);
       setRefundProof({ file: null, preview: null });
       setSelectedPackageId('');
-      await loadPackages();
+      await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error: any) {
       devError('Refund package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal refund paket');
@@ -640,7 +640,7 @@ export default function MemberDetailPage() {
       setShowCancelModal(false);
       setCancelReason('');
       setSelectedPackageId('');
-      await loadPackages();
+      await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error: any) {
       devError('Cancel package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal batalkan pembelian');
@@ -700,7 +700,7 @@ export default function MemberDetailPage() {
         notes: ''
       });
       setEditingPackageId('');
-      await loadPackages();
+      await Promise.all([loadPackages(), loadMemberDetail(false)]);
     } catch (error: any) {
       devError('Edit package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal edit paket');

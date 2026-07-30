@@ -10,6 +10,7 @@ import {
   Phone,
 } from 'lucide-react';
 import type { Member } from '@/types/member';
+import MemberRankBadge from './MemberRankBadge';
 
 interface MemberTableCellProps {
   columnId: string;
@@ -103,6 +104,17 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
           <Phone size={14} className="text-neutral-400" />
           {member.phone || '-'}
         </span>
+      );
+
+    case 'rank':
+      return (
+        <div className="flex min-w-32 flex-col items-center gap-1">
+          <MemberRankBadge
+            rank={member.memberRank}
+            discountPercent={member.lastPurchaseDiscountPercent}
+          />
+          <span className="text-[10px] text-neutral-500">Diskon pembelian terakhir</span>
+        </div>
       );
 
     case 'registrationDate':

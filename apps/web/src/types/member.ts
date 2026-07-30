@@ -1,3 +1,5 @@
+export type MemberRank = 'A' | 'B' | 'C';
+
 export interface Member {
   memberId: string;
   memberNo: string;
@@ -12,6 +14,9 @@ export interface Member {
   lastInfusionDate?: string | null;
   primaryDiagnosis?: string | null;
   primaryDiagnosisIcd?: string | null;
+  memberRank?: MemberRank | null;
+  lastPurchaseDiscountPercent?: number | null;
+  lastPackagePurchaseAt?: string | null;
   isActive: boolean;
   isDeceased?: boolean;
   isLintas: boolean;
@@ -78,6 +83,9 @@ export interface MemberDetail {
   sumberInfoRaho?: string;
   postalCode?: string;
   voucherCount: number;
+  memberRank?: MemberRank | null;
+  lastPurchaseDiscountPercent?: number | null;
+  lastPackagePurchaseAt?: string | null;
   isConsentToPhoto: boolean;
   isActive: boolean;
   isDeceased: boolean;

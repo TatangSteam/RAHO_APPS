@@ -29,6 +29,9 @@ const legacyMember = {
   jenisKelamin: 'P',
   address: 'Jakarta',
   voucherCount: 1,
+  memberRank: 'C',
+  lastPurchaseDiscountPercent: 60,
+  lastPackagePurchaseAt: '2025-01-01T00:00:00.000Z',
   isConsentToPhoto: true,
   isActive: true,
   isDeceased: false,
@@ -105,6 +108,38 @@ test('admin layanan can edit legacy package once without duplicate submission', 
   let submittedPayload: any;
 
   await page.route(
+    /\/api\/v1\/members(?:\?.*)?$/,
+    route =>
+      route.fulfill({
+        json: {
+          success: true,
+          data: {
+            members: [
+              {
+                memberId,
+                memberNo: legacyMember.memberNo,
+                fullName: legacyMember.profile.fullName,
+                phone: legacyMember.profile.phone,
+                email: legacyMember.user.email,
+                voucherCount: 1,
+                basicPackageCount: 7,
+                memberRank: legacyMember.memberRank,
+                lastPurchaseDiscountPercent: legacyMember.lastPurchaseDiscountPercent,
+                lastPackagePurchaseAt: legacyMember.lastPackagePurchaseAt,
+                isActive: true,
+                isDeceased: false,
+                isLintas: false,
+                registrationBranch: legacyMember.registrationBranch.name,
+                hasInformedConsent: true,
+                createdAt: legacyMember.createdAt,
+              },
+            ],
+            pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
+          },
+        },
+      }),
+  );
+  await page.route(
     new RegExp(`/api/v1/members/${memberId}/packages(?:\\?.*)?$`),
     route => route.fulfill({ json: { success: true, data: legacyPackages } }),
   );
@@ -134,7 +169,21 @@ test('admin layanan can edit legacy package once without duplicate submission', 
     },
   );
 
-  await page.goto(`/members/${memberId}`);
+  // Simulate an existing browser preference from before Rank became mandatory.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'raho-member-columns-config',
+      JSON.stringify([{ id: 'rank', label: 'Rank Member', visible: false }]),
+    );
+  });
+
+  await page.goto('/members');
+  await expect(page.getByRole('columnheader', { name: 'Rank Member' })).toBeVisible();
+  await expect(page.getByText('Rank C · 60%')).toBeVisible();
+  await page.getByText('Member Data Lama', { exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/members/${memberId}$`));
+  await expect(page.getByText('Rank C', { exact: true })).toBeVisible();
+
   await page.getByRole('tab', { name: 'Paket', exact: true }).click();
   await expect(page.getByText('Paket Bundling').first()).toBeVisible();
   await page.getByText('Paket Bundling').first().click();

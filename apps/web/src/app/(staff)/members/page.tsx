@@ -267,7 +267,8 @@ export default function MembersPage() {
         <ShieldCheck size={18} />
         <p>
           <strong>Alur cepat:</strong> cari member, buka profil untuk memeriksa data, lalu pilih tab Sesi Terapi
-          saat akan melanjutkan pelayanan.
+          saat akan melanjutkan pelayanan. Rank dihitung otomatis dari diskon pembelian paket terakhir:
+          A 0–20%, B 21–50%, dan C 51–100%.
         </p>
       </section>
 
@@ -408,7 +409,7 @@ export default function MembersPage() {
                       <th
                         key={column.id}
                         style={{
-                          textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                          textAlign: ['rank', 'status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
                             ? 'center'
                             : 'left',
                         }}
@@ -429,7 +430,7 @@ export default function MembersPage() {
                         <td
                           key={column.id}
                           style={{
-                            textAlign: ['status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
+                            textAlign: ['rank', 'status', 'basicPackage', 'voucherCount', 'actions', 'sessionCount', 'lastInfusion'].includes(column.id)
                               ? 'center'
                               : 'left',
                           }}
