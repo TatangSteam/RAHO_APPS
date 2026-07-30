@@ -23,16 +23,8 @@ export class PackagesController {
   async assignPackage(req: Request, res: Response, next: NextFunction) {
     try {
       const { memberId } = req.params;
-      console.log('\n=== assignPackage controller called ===');
-      console.log('Request body:', JSON.stringify(req.body, null, 2));
-      
       const data = assignPackageSchema.parse(req.body);
-      console.log('Parsed data:', JSON.stringify(data, null, 2));
-      console.log('Number of package selections:', data.packages.length);
-      data.packages.forEach((pkg, idx) => {
-        console.log(`  Package ${idx}: pricingId=${pkg.pricingId}, quantity=${pkg.quantity}`);
-      });
-      
+
       const branchId = req.user?.branchId;
       const userId = req.user?.userId;
 
@@ -341,16 +333,9 @@ export class PackagesController {
   // Refund package
   async refundPackage(req: Request, res: Response, next: NextFunction) {
     try {
-      console.log('=== refundPackage controller called ===');
-      console.log('packageId:', req.params.packageId);
-      console.log('Request body:', JSON.stringify(req.body, null, 2));
-      console.log('File:', req.file);
-      
       const { packageId } = req.params;
       const data = refundPackageSchema.parse(req.body);
-      
-      console.log('Parsed data:', JSON.stringify(data, null, 2));
-      
+
       const userId = req.user?.userId;
       const branchId = req.user?.branchId || null;
 
@@ -411,13 +396,8 @@ export class PackagesController {
   async editPackage(req: Request, res: Response, next: NextFunction) {
     try {
       const { packageId } = req.params;
-      console.log('\n=== editPackage controller called ===');
-      console.log('packageId:', packageId);
-      console.log('Request body:', JSON.stringify(req.body, null, 2));
-      
       const data = editPackageSchema.parse(req.body);
-      console.log('Parsed data:', JSON.stringify(data, null, 2));
-      
+
       const userId = req.user?.userId;
       const branchId = req.user?.branchId || null;
       const userRole = req.user?.role;
@@ -429,7 +409,6 @@ export class PackagesController {
       const result = await packagesService.editPackage(packageId, data, userId, branchId, userRole);
       return sendSuccess(res, result);
     } catch (error) {
-      console.error('editPackage controller error:', error);
       next(error);
     }
   }

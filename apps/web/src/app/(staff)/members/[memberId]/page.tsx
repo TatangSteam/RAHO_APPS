@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
 import { packagesApi } from '@/lib/packagesApi';
@@ -654,13 +654,20 @@ export default function MemberDetailPage() {
     setEditData(data);
   };
 
+  const editSubmissionInFlightRef = useRef(false);
+
   const handleEditPackage = async () => {
+    if (editSubmissionInFlightRef.current) {
+      return;
+    }
+
     if (editData.selectedPackages.length === 0 && editData.selectedAddOns.length === 0) {
       showToast.error('Pilih minimal 1 paket atau add-on');
       return;
     }
 
     try {
+      editSubmissionInFlightRef.current = true;
       setSubmitting(true);
       
       // Prepare payload similar to assign package
@@ -698,6 +705,7 @@ export default function MemberDetailPage() {
       devError('Edit package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal edit paket');
     } finally {
+      editSubmissionInFlightRef.current = false;
       setSubmitting(false);
     }
   };
