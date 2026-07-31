@@ -196,6 +196,7 @@ export default function AssignPackageModal({
             <button
               type="button"
               onClick={onClose}
+              aria-label="Tutup pemilihan paket"
               className="assign-package-modal-close rounded-xl p-2.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
             >
               <X className="h-5 w-5" />
@@ -323,7 +324,7 @@ export default function AssignPackageModal({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Assign Paket
+                  {preview.items.length > 0 ? `Assign ${preview.items.length} Paket` : 'Pilih Paket'}
                 </>
               )}
             </button>

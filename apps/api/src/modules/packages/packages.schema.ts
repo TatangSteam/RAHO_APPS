@@ -108,17 +108,28 @@ export const assignPackageSchema = z.object({
 export const verifyPaymentSchema = z.object({
   notes: z.string().optional(),
   paidAmount: z.number().min(0).optional(),
-  // Payment proof file (required)
+  // Proof is optional at the transport boundary for complimentary invoices.
+  // The service still requires it for every invoice with a positive value.
   proofFileUrl: z.string().min(1, 'URL file bukti pembayaran harus valid').refine(
     isValidProofFileUrl,
     { message: 'URL file bukti pembayaran harus valid' }
-  ),
-  proofFileName: z.string().min(1, 'Nama file bukti pembayaran diperlukan'),
-  proofFileSize: z.number().int().min(1, 'Ukuran file harus lebih dari 0'),
+  ).optional(),
+  proofFileName: z.string().min(1, 'Nama file bukti pembayaran diperlukan').optional(),
+  proofFileSize: z.number().int().min(1, 'Ukuran file harus lebih dari 0').optional(),
   proofMimeType: z.string().refine(
     (type) => ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'].includes(type),
     { message: 'Format file harus JPG, PNG, atau PDF' }
-  ),
+  ).optional(),
+}).superRefine((data, ctx) => {
+  const proofParts = [data.proofFileUrl, data.proofFileName, data.proofFileSize, data.proofMimeType];
+  const suppliedParts = proofParts.filter((value) => value !== undefined).length;
+  if (suppliedParts > 0 && suppliedParts < proofParts.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['proofFileUrl'],
+      message: 'Data bukti pembayaran harus lengkap',
+    });
+  }
 });
 
 export const createPackagePricingSchema = z.object({

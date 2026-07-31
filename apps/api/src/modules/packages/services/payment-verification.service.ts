@@ -51,8 +51,29 @@ export class PaymentVerificationService {
     await assertBranchAccess(userId, pkg.branchId);
     await assertPermission(userId, PERMISSIONS.INVOICE_PAYMENT, pkg.branchId);
 
+    const pendingInvoice = await prisma.invoice.findFirst({
+      where: {
+        status: 'PENDING_PAYMENT',
+        items: { some: { itemId: packageId } },
+      },
+      select: { totalAmount: true, paymentPlanType: true },
+    });
+    const isComplimentary = Boolean(
+      pendingInvoice &&
+      pendingInvoice.paymentPlanType !== 'INSTALLMENT' &&
+      Number(pendingInvoice.totalAmount) === 0
+    );
+
+    if (!isComplimentary && !data.proofFileUrl) {
+      throw {
+        status: 400,
+        code: 'PAYMENT_PROOF_REQUIRED',
+        message: 'Bukti pembayaran wajib diupload',
+      };
+    }
+
     // Allow verification from PENDING_PAYMENT if staff provides payment proof
-    if (pkg.status === PackageStatus.PENDING_PAYMENT && data.proofFileUrl) {
+    if (pkg.status === PackageStatus.PENDING_PAYMENT && (data.proofFileUrl || isComplimentary)) {
       // Staff is uploading proof and verifying in one step
       // This is valid - proceed with verification
     } else if (

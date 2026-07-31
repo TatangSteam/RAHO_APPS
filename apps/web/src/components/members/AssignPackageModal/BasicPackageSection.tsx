@@ -65,10 +65,15 @@ export default function BasicPackageSection({
 
   return (
     <div className="assign-package-section space-y-3">
-      <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
-        <Package className="h-4 w-4" />
-        PAKET BASIC
-      </h4>
+      <div className="assign-package-section-heading flex items-center justify-between gap-3">
+        <h4 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+          <Package className="h-4 w-4" />
+          PAKET BASIC
+        </h4>
+        <span className="assign-package-section-count text-xs text-neutral-500 dark:text-neutral-400">
+          {basicPricings.length} pilihan
+        </span>
+      </div>
       <div className="assign-package-section-box p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
         <div className="space-y-3">
           {basicPricings.map((pricing) => {
@@ -89,13 +94,18 @@ export default function BasicPackageSection({
                     type="checkbox"
                     checked={isSelected}
                     onChange={() => toggleBasic(pricing.id)}
-                    className="w-4 h-4 mr-3 rounded border-blue-400 dark:border-blue-500/50 text-blue-600 focus:ring-blue-500 bg-white dark:bg-neutral-800"
+                    className="assign-package-option-checkbox w-4 h-4 rounded border-blue-400 dark:border-blue-500/50 text-blue-600 focus:ring-blue-500 bg-white dark:bg-neutral-800"
                   />
-                  <span className="assign-package-option-name flex-1 font-medium text-sm text-neutral-800 dark:text-neutral-200">
-                    {pricing.name}
+                  <span className="assign-package-option-copy">
+                    <span className="assign-package-option-name font-medium text-sm text-neutral-800 dark:text-neutral-200">
+                      {pricing.name}
+                    </span>
+                    <span className="assign-package-option-meta text-xs text-neutral-500 dark:text-neutral-400">
+                      {pricing.totalSessions} sesi terapi
+                    </span>
                   </span>
                   <span className="assign-package-option-price font-bold text-sm text-blue-600 dark:text-blue-400">
-                    {formatCurrency(pricing.price)}
+                    {pricing.price === 0 ? 'Gratis' : formatCurrency(pricing.price)}
                   </span>
                 </label>
                 

@@ -4,6 +4,7 @@ import { generateInvoiceNumber } from '../../../utils/invoiceGenerator';
 import {
   allocateInvoiceItems,
   cloneInvoiceItemsForAllocation,
+  shouldRecordInvoicePayment,
 } from './invoice-generation.helpers';
 import { createHash } from 'crypto';
 
@@ -187,25 +188,27 @@ export class InvoiceGenerationService {
       });
     }
 
-    const paymentKey = `PACKAGE_INSTALLMENT_PAYMENT:${invoice.id}`;
-    await prisma.invoicePayment.create({
-      data: {
-        invoiceId: invoice.id,
-        idempotencyKey: paymentKey,
-        payloadHash: createHash('sha256').update(paymentKey).digest('hex'),
-        amount: paidAmount,
-        paymentMethod: paymentData.proofFileUrl ? 'TRANSFER' : 'CASH',
-        notes: paymentData.notes || null,
-        proofFileUrl: paymentData.proofFileUrl || null,
-        proofFileName: paymentData.proofFileName || null,
-        proofFileSize: paymentData.proofFileSize || null,
-        proofMimeType: paymentData.proofMimeType || null,
-        receivedBy: userId,
-        receivedAt: now,
-        verificationStatus: 'VERIFIED',
-        verifiedAt: now,
-      },
-    });
+    if (shouldRecordInvoicePayment(paidAmount)) {
+      const paymentKey = `PACKAGE_INSTALLMENT_PAYMENT:${invoice.id}`;
+      await prisma.invoicePayment.create({
+        data: {
+          invoiceId: invoice.id,
+          idempotencyKey: paymentKey,
+          payloadHash: createHash('sha256').update(paymentKey).digest('hex'),
+          amount: paidAmount,
+          paymentMethod: paymentData.proofFileUrl ? 'TRANSFER' : 'CASH',
+          notes: paymentData.notes || null,
+          proofFileUrl: paymentData.proofFileUrl || null,
+          proofFileName: paymentData.proofFileName || null,
+          proofFileSize: paymentData.proofFileSize || null,
+          proofMimeType: paymentData.proofMimeType || null,
+          receivedBy: userId,
+          receivedAt: now,
+          verificationStatus: 'VERIFIED',
+          verifiedAt: now,
+        },
+      });
+    }
 
     const paidInvoice = await prisma.invoice.update({
       where: { id: invoice.id },
@@ -586,6 +589,10 @@ export class InvoiceGenerationService {
     userId: string,
     receivedAt: Date
   ) {
+    if (!shouldRecordInvoicePayment(totalAmount)) {
+      return;
+    }
+
     const existingPayment = await prisma.invoicePayment.findFirst({
       where: { invoiceId },
     });

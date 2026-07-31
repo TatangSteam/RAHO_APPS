@@ -10,6 +10,15 @@ export interface InvoiceItemForAllocation {
   totalAmount: number;
 }
 
+/**
+ * Finance payments must represent real money received. Zero-value invoices
+ * (for example complimentary packages) can be finalized without inserting an
+ * invoice_payments row because the database enforces amount > 0.
+ */
+export function shouldRecordInvoicePayment(amount: number): boolean {
+  return Number.isFinite(amount) && amount > 0;
+}
+
 export function allocateInvoiceItems<T extends InvoiceItemForAllocation>(
   items: T[],
   invoiceAmount: number,

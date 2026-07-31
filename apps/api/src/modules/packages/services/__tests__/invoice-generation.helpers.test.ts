@@ -1,6 +1,7 @@
 import {
   allocateInvoiceItems,
   cloneInvoiceItemsForAllocation,
+  shouldRecordInvoicePayment,
   type InvoiceItemForAllocation,
 } from '../invoice-generation.helpers';
 
@@ -30,6 +31,18 @@ const items: InvoiceItemForAllocation[] = [
 ];
 
 describe('invoice generation helpers', () => {
+  describe('shouldRecordInvoicePayment', () => {
+    it('does not create a finance payment for a complimentary invoice', () => {
+      expect(shouldRecordInvoicePayment(0)).toBe(false);
+    });
+
+    it('records only finite positive payment amounts', () => {
+      expect(shouldRecordInvoicePayment(850000)).toBe(true);
+      expect(shouldRecordInvoicePayment(-1)).toBe(false);
+      expect(shouldRecordInvoicePayment(Number.NaN)).toBe(false);
+    });
+  });
+
   describe('allocateInvoiceItems', () => {
     it('allocates installment amount proportionally across items', () => {
       const allocated = allocateInvoiceItems(items, 75000, 150000);

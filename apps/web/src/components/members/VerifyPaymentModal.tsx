@@ -61,6 +61,11 @@ export default function VerifyPaymentModal({
 
   const hasExistingProof = packageStatus === 'WAITING_VERIFICATION' && existingProofUrl;
   const isInstallment = invoice?.paymentPlanType === 'INSTALLMENT' && invoice.installmentNumber && invoice.installmentTotal;
+  const isComplimentary = Boolean(
+    invoice &&
+    invoice.paymentPlanType !== 'INSTALLMENT' &&
+    Number(invoice.totalAmount || invoice.totalPurchaseAmount || 0) === 0
+  );
   const remainingInstallments = isInstallment
     ? Math.max(0, Number(invoice.installmentTotal) - Number(invoice.installmentNumber) + 1)
     : 0;
@@ -191,7 +196,7 @@ export default function VerifyPaymentModal({
     !submitting &&
     !rejecting &&
     !compressing &&
-    (hasExistingProof || Boolean(paymentProof.file)) &&
+    (isComplimentary || hasExistingProof || Boolean(paymentProof.file)) &&
     !finalInstallmentAmountInvalid;
 
   const handleBackdropClick = (e: React.MouseEvent) => {
@@ -223,7 +228,9 @@ export default function VerifyPaymentModal({
           <div className={styles.warningBox}>
             <span className={styles.warningIcon}>⚠️</span>
             <div className={styles.warningText}>
-              {hasExistingProof 
+              {isComplimentary
+                ? 'Paket gratis tidak memerlukan bukti pembayaran. Verifikasi akan langsung mengaktifkan paket tanpa mencatat transaksi pembayaran.'
+                : hasExistingProof
                 ? 'Member telah mengupload bukti pembayaran. Verifikasi atau tolak pembayaran.'
                 : 'Pastikan pembayaran telah diterima sebelum melakukan verifikasi. Paket akan langsung aktif setelah diverifikasi dan invoice akan menjadi kwitansi lunas.'}
             </div>
@@ -284,7 +291,7 @@ export default function VerifyPaymentModal({
           )}
 
           {/* Payment Proof Upload (for PENDING_PAYMENT) */}
-          {!hasExistingProof && (
+          {!hasExistingProof && !isComplimentary && (
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>
                 📸 Bukti Pembayaran (Wajib) *
@@ -424,7 +431,7 @@ export default function VerifyPaymentModal({
             disabled={!canSubmit}
             className={`${styles.button} ${styles.buttonPrimary}`}
             title={
-              !hasExistingProof && !paymentProof.file
+              !isComplimentary && !hasExistingProof && !paymentProof.file
                 ? 'Bukti pembayaran wajib diupload'
                 : finalInstallmentAmountInvalid
                   ? 'Termin terakhir wajib dibayar penuh'

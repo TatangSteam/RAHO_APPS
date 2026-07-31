@@ -462,8 +462,13 @@ export default function MemberDetailPage() {
     // For WAITING_VERIFICATION, we already have proof, don't need to upload
     // For PENDING_PAYMENT, we need proof to be uploaded
     const hasExistingProof = selectedPackageProof.status === 'WAITING_VERIFICATION' && selectedPackageProof.url;
+    const isComplimentary = Boolean(
+      verifyInvoice &&
+      verifyInvoice.paymentPlanType !== 'INSTALLMENT' &&
+      Number(verifyInvoice.totalAmount || verifyInvoice.totalPurchaseAmount || 0) === 0
+    );
     
-    if (!hasExistingProof && !paymentProof.file) {
+    if (!isComplimentary && !hasExistingProof && !paymentProof.file) {
       showToast.error('Bukti pembayaran wajib diupload');
       return;
     }
@@ -486,7 +491,11 @@ export default function MemberDetailPage() {
       setSubmitting(true);
       
       let proofData;
-      if (hasExistingProof) {
+      if (isComplimentary) {
+        proofData = {
+          notes: verifyNotes || undefined,
+        };
+      } else if (hasExistingProof) {
         // Use existing proof from member upload
         proofData = {
           notes: verifyNotes || undefined,

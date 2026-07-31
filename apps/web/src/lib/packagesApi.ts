@@ -29,10 +29,10 @@ export interface AssignPackageData {
 export interface VerifyPaymentData {
   notes?: string;
   paidAmount?: number;
-  proofFileUrl: string;
-  proofFileName: string;
-  proofFileSize: number;
-  proofMimeType: string;
+  proofFileUrl?: string;
+  proofFileName?: string;
+  proofFileSize?: number;
+  proofMimeType?: string;
 }
 
 export interface PackagePricingData {
