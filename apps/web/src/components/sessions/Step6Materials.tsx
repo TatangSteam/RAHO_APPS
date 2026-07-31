@@ -294,6 +294,7 @@ export default function Step6Materials({
   if (isLocked) {
     return (
       <div
+        className="material-add-card"
         style={{
           padding: '24px',
           background: 'rgba(148,163,184,0.05)',
@@ -595,9 +596,12 @@ export default function Step6Materials({
           <span>➕</span> Tambah Material
         </h4>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: '12px', alignItems: 'end' }}>
+        <div
+          className="material-add-grid"
+          style={{ display: 'grid', gridTemplateColumns: '1fr 180px auto', gap: '12px', alignItems: 'end' }}
+        >
           {/* Custom Dropdown with Search */}
-          <div ref={dropdownRef} style={{ position: 'relative' }}>
+          <div ref={dropdownRef} className="material-picker-field" style={{ position: 'relative' }}>
             <label
               style={{
                 display: 'block',
@@ -663,6 +667,7 @@ export default function Step6Materials({
             {/* Dropdown Panel */}
             {isDropdownOpen && (
               <div
+                className="material-picker-dropdown"
                 style={{
                   position: 'absolute',
                   top: 'calc(100% + 4px)',
@@ -919,6 +924,7 @@ export default function Step6Materials({
 
           {/* Add Button */}
           <button
+            className="material-add-button"
             onClick={handleAddMaterial}
             disabled={loading || !selectedItem || !quantity}
             style={{
@@ -943,6 +949,7 @@ export default function Step6Materials({
 
         {isDeviation && (
           <div
+            className="material-deviation-grid"
             style={{
               marginTop: '14px',
               paddingTop: '14px',
