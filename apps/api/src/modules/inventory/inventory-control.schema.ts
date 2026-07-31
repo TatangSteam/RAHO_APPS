@@ -17,7 +17,9 @@ const signedAdjustment = z.union([z.string(), z.number()]).transform(String)
 export const createAdjustmentSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   branchId: z.string().trim().min(1),
-  stockLocationId: z.string().trim().min(1),
+  // Legacy clients may still send this field. The API resolves the canonical
+  // stock scope from branchId and does not require manual location selection.
+  stockLocationId: z.string().trim().min(1).optional(),
   reasonCode: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()),
   description: z.string().trim().min(5).max(500),
   submit: z.boolean().default(true),
@@ -55,7 +57,7 @@ export const listInventoryControlSchema = z.object({
 
 export const startStockOpnameSchema = z.object({
   branchId: z.string().trim().min(1),
-  stockLocationId: z.string().trim().min(1),
+  stockLocationId: z.string().trim().min(1).optional(),
   notes: z.string().trim().max(500).optional(),
 });
 

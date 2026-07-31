@@ -26,7 +26,7 @@ export const postGoodsReceiptSchema = z.object({
   lines: z.array(z.object({
     purchaseOrderItemId: z.string().trim().min(1),
     quantity: positiveDecimal,
-    stockLocationId: z.string().trim().min(1),
+    stockLocationId: z.string().trim().min(1).optional(),
     condition: z.nativeEnum(GoodsReceiptCondition).default(GoodsReceiptCondition.GOOD),
     batch: batchSchema.optional(),
     notes: z.string().trim().max(500).optional(),
@@ -34,7 +34,6 @@ export const postGoodsReceiptSchema = z.object({
 }).superRefine((value, context) => {
   const keys = value.lines.map((line) => [
     line.purchaseOrderItemId,
-    line.stockLocationId,
     line.batch?.batchNumber ?? 'NO_BATCH',
     line.condition,
   ].join(':'));
@@ -42,7 +41,7 @@ export const postGoodsReceiptSchema = z.object({
     context.addIssue({
       code: z.ZodIssueCode.custom,
       path: ['lines'],
-      message: 'PO item, lokasi, batch, dan kondisi tidak boleh duplikat dalam satu receipt',
+      message: 'PO item, batch, dan kondisi tidak boleh duplikat dalam satu receipt',
     });
   }
   value.lines.forEach((line, index) => {

@@ -10,27 +10,17 @@ import styles from '../operations.module.css';
 import { extractCollectionRows } from './stockReservationPresentation';
 
 type Row = Record<string, any>;
-type DraftLine = { approvedQty: string; stockLocationId: string };
+type DraftLine = { approvedQty: string };
 
 function idempotencyKey(prefix: string) {
   return `${prefix}:${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`}`;
 }
 
-function availableByLocation(balances: Row[], masterProductId: string) {
-  const grouped = new Map<string, { id: string; label: string; available: number }>();
-  balances
-    .filter((balance) => balance.masterProductId === masterProductId)
-    .forEach((balance) => {
-      const current = grouped.get(balance.stockLocationId);
-      const available = Number(balance.availableQty || 0);
-      const label = `${balance.stockLocation?.warehouse?.code || '-'} / ${balance.stockLocation?.code || '-'}`;
-      grouped.set(balance.stockLocationId, {
-        id: balance.stockLocationId,
-        label,
-        available: (current?.available || 0) + available,
-      });
-    });
-  return Array.from(grouped.values()).filter((location) => location.available > 0);
+function availableForProduct(balances: Row[], masterProductId: string) {
+  const productBalances = balances.filter((balance) => balance.masterProductId === masterProductId);
+  const canonicalBalances = productBalances.filter((balance) => balance.stockLocation?.isDefault);
+  return (canonicalBalances.length > 0 ? canonicalBalances : productBalances)
+    .reduce((total, balance) => total + Number(balance.availableQty || 0), 0);
 }
 
 export default function StockReservationsPage() {
@@ -72,12 +62,10 @@ export default function StockReservationsPage() {
       requestRows.forEach((request: Row) => {
         nextDrafts[request.id] = {};
         extractCollectionRows<Row>(request.items).forEach((item: Row) => {
-          const locations = availableByLocation(balanceRows, item.masterProductId);
-          const location = locations[0];
+          const available = availableForProduct(balanceRows, item.masterProductId);
           const requested = Number(item.finalQty ?? item.requestedQty ?? 0);
           nextDrafts[request.id][item.id] = {
-            approvedQty: String(Math.min(requested, location?.available || 0)),
-            stockLocationId: location?.id || '',
+            approvedQty: String(Math.min(requested, available)),
           };
         });
       });
@@ -105,7 +93,6 @@ export default function StockReservationsPage() {
     const lines = extractCollectionRows<Row>(request.items).map((item: Row) => ({
       stockRequestItemId: item.id,
       approvedQty: drafts[request.id]?.[item.id]?.approvedQty || '0',
-      stockLocationId: drafts[request.id]?.[item.id]?.stockLocationId || undefined,
     }));
     if (!lines.some((line: Row) => Number(line.approvedQty) > 0)) {
       showToast.error('Minimal satu item harus memiliki approved quantity.');
@@ -153,7 +140,7 @@ export default function StockReservationsPage() {
 
   return <main className={styles.page}>
     <header className={styles.header}>
-      <div><h1>Stock Request & Reservation</h1><p>Approval penuh atau parsial berdasarkan available quantity per lokasi.</p></div>
+      <div><h1>Stock Request & Reservation</h1><p>Approval penuh atau parsial memakai stok tersedia pada scope Logistik Pusat.</p></div>
       <button className={styles.secondaryButton} onClick={() => void load()} title="Muat ulang"><RefreshCw size={16} /></button>
     </header>
     <div className={styles.toolbar}>
@@ -166,14 +153,13 @@ export default function StockReservationsPage() {
         <div className={styles.requestList}>{requests.length === 0 ? <div className={styles.empty}>Tidak ada request pending.</div> : requests.map((request) => <article className={styles.requestCard} key={request.id}>
           <div className={styles.requestHeader}><div><strong>{request.requestCode}</strong><span>{request.branchName}</span></div><span className={styles.warningBadge}>PENDING</span></div>
           <div className={styles.lineGrid}>{extractCollectionRows<Row>(request.items).map((item: Row) => {
-            const locations = availableByLocation(balances, item.masterProductId);
-            const draft = drafts[request.id]?.[item.id] || { approvedQty: '0', stockLocationId: '' };
-            const selectedLocation = locations.find((location) => location.id === draft.stockLocationId);
+            const available = availableForProduct(balances, item.masterProductId);
+            const draft = drafts[request.id]?.[item.id] || { approvedQty: '0' };
             return <div className={styles.lineRow} key={item.id}>
               <div><strong>{item.productName}</strong><span>Diminta {item.finalQty ?? item.requestedQty} {item.unit}</span></div>
-              <label className={styles.field}><span>Stock location</span><select className={styles.select} value={draft.stockLocationId} onChange={(event) => updateDraft(request.id, item.id, { stockLocationId: event.target.value })}><option value="">Tidak tersedia</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.label} - tersedia {location.available}</option>)}</select></label>
+              <div className={styles.field}><span>Scope stok</span><strong>Logistik Pusat</strong></div>
               <label className={styles.field}><span>Approved quantity</span><input className={styles.input} type="number" min="0" max={Number(item.finalQty ?? item.requestedQty)} step="0.01" value={draft.approvedQty} onChange={(event) => updateDraft(request.id, item.id, { approvedQty: event.target.value })} /></label>
-              <span className={styles.available}>Available {selectedLocation?.available || 0}</span>
+              <span className={styles.available}>Available {available}</span>
             </div>;
           })}</div>
           <div className={styles.actions}><button className={styles.button} disabled={saving} onClick={() => void approve(request)}><CheckCircle2 size={16} /> Approve & reserve</button></div>
@@ -182,7 +168,7 @@ export default function StockReservationsPage() {
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}><h2>Reservation aktif</h2><span>{reservations.length} allocation</span></div>
-        {reservationGroups.length === 0 ? <div className={styles.empty}>Tidak ada reservation aktif.</div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Request / Tujuan</th><th>Produk</th><th>Lokasi / Batch</th><th className={styles.number}>Reserved</th><th>Aksi</th></tr></thead><tbody>{reservationGroups.flatMap(([requestId, rows]) => rows.map((reservation, index) => <tr key={reservation.id}><td>{reservation.stockRequest?.requestCode}<br />{reservation.stockRequest?.branch?.name}</td><td>{reservation.stockRequestItem?.masterProduct?.sku}<br />{reservation.stockRequestItem?.masterProduct?.name}</td><td>{reservation.inventoryBalance?.stockLocation?.warehouse?.code} / {reservation.inventoryBalance?.stockLocation?.code}<br />{reservation.inventoryBalance?.batch?.batchNumber || 'Tanpa batch'}</td><td className={styles.number}>{String(reservation.quantity)}</td><td>{index === 0 ? <button className={styles.dangerButton} disabled={saving} onClick={() => void release(requestId)}><Unlock size={15} /> Release</button> : null}</td></tr>))}</tbody></table></div>}
+        {reservationGroups.length === 0 ? <div className={styles.empty}>Tidak ada reservation aktif.</div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Request / Tujuan</th><th>Produk</th><th>Batch</th><th className={styles.number}>Reserved</th><th>Aksi</th></tr></thead><tbody>{reservationGroups.flatMap(([requestId, rows]) => rows.map((reservation, index) => <tr key={reservation.id}><td>{reservation.stockRequest?.requestCode}<br />{reservation.stockRequest?.branch?.name}</td><td>{reservation.stockRequestItem?.masterProduct?.sku}<br />{reservation.stockRequestItem?.masterProduct?.name}</td><td>{reservation.inventoryBalance?.batch?.batchNumber || 'Tanpa batch'}</td><td className={styles.number}>{String(reservation.quantity)}</td><td>{index === 0 ? <button className={styles.dangerButton} disabled={saving} onClick={() => void release(requestId)}><Unlock size={15} /> Release</button> : null}</td></tr>))}</tbody></table></div>}
       </section>
     </>}
   </main>;

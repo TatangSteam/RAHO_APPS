@@ -30,6 +30,7 @@ import toast from 'react-hot-toast';
 import axios from 'axios';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
+import { ZohoExistingDataGuide } from '@/components/zoho/ZohoExistingDataGuide';
 
 type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
@@ -1749,7 +1750,7 @@ export default function ZohoIntegrationPage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6 p-4 md:p-8">
+    <div className="mx-auto w-full min-w-0 max-w-6xl space-y-6 overflow-x-hidden p-4 md:p-8">
       <div>
         <h1 className="flex items-center gap-3 text-2xl font-bold text-neutral-900 dark:text-white">
           <PlugZap className="text-blue-600" /> Integrasi Zoho Books
@@ -1759,13 +1760,13 @@ export default function ZohoIntegrationPage() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-2 border-b border-neutral-200 dark:border-neutral-700">
+      <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto border-b border-neutral-200 dark:border-neutral-700">
         {([
           ['connection', 'Koneksi', PlugZap],
           ['queue', 'Antrean Sinkronisasi', List],
           ['discovery', 'Master Zoho', Database],
           ['contacts', 'Customer & Vendor', Users],
-          ['masters', 'Item & Location', Boxes],
+          ['masters', 'Item & Scope Cabang', Boxes],
           ['invoices', 'Sales Invoice', FileText],
           ['payments', 'Pembayaran & Piutang', CreditCard],
           ['retainers', 'Retainer & Omzet Terapi', Landmark],
@@ -1780,7 +1781,7 @@ export default function ZohoIntegrationPage() {
           <button
             key={value}
             onClick={() => setTab(value)}
-            className={`inline-flex items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${
+            className={`inline-flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold ${
               tab === value ? 'border-blue-600 text-blue-600' : 'border-transparent text-neutral-500'
             }`}
           >
@@ -1814,13 +1815,13 @@ export default function ZohoIntegrationPage() {
                 </div>
               </div>
               {canManageConnection && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex max-w-full flex-wrap gap-2">
                   {status?.connected && (
                     <button onClick={testConnection} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50 dark:border-neutral-700">
                       <RefreshCw size={16} className={action === 'test' ? 'animate-spin' : ''} /> Tes
                     </button>
                   )}
-                  <button onClick={connect} disabled={!status?.configured || !!action} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  <button onClick={connect} disabled={!status?.configured || !!action} className="inline-flex max-w-full items-center gap-2 whitespace-normal rounded-lg bg-blue-600 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">
                     {action === 'connect' ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
                     {status?.connected ? 'Hubungkan ulang' : 'Hubungkan Zoho'}
                   </button>
@@ -1839,6 +1840,8 @@ export default function ZohoIntegrationPage() {
               </div>
             )}
           </section>
+
+          <ZohoExistingDataGuide />
 
           {!!status?.connections.length && (
             <section className="space-y-3">
@@ -1869,7 +1872,7 @@ export default function ZohoIntegrationPage() {
                         )}
                         {!connection.locationSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
-                            Location belum siap: jalankan discovery untuk memeriksa dukungan edition Zoho.
+                            Scope cabang Zoho belum siap: jalankan discovery untuk memeriksa dukungan edition Zoho.
                           </p>
                         )}
                         {!connection.invoiceSyncReady && (
@@ -1978,7 +1981,7 @@ export default function ZohoIntegrationPage() {
           )}
           {discovery?.locationCapability.supported === false && (
             <div className="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-800">
-              Zoho Location diblokir oleh capability check: {discovery.locationCapability.error || 'edition tidak mendukung Location'}.
+              Scope cabang Zoho diblokir oleh capability check: {discovery.locationCapability.error || 'edition tidak mendukung scope cabang'}.
             </div>
           )}
           {!!discovery?.items.length && (
@@ -2145,7 +2148,7 @@ export default function ZohoIntegrationPage() {
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
-                <h2 className="font-semibold">Mapping Item dan Location</h2>
+                <h2 className="font-semibold">Mapping Item dan Scope Cabang</h2>
                 <p className="text-sm text-neutral-500">
                   Partnership tidak dibuat sebagai Location. BOM, batch, expiry, dan opening stock tetap di ERP.
                 </p>
@@ -3749,7 +3752,7 @@ export default function ZohoIntegrationPage() {
             )}
             {!masterPreview.liveReady && !masterPreview.issues.length && (
               <div className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-                Capability Location belum diverifikasi melalui discovery.
+                Capability scope cabang belum diverifikasi melalui discovery.
               </div>
             )}
             <p className="mt-4 text-sm font-semibold">Payload yang boleh dikirim</p>

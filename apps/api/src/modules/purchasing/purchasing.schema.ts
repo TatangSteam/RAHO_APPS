@@ -29,7 +29,7 @@ export const createPurchaseOrderSchema = z.object({
 });
 export const createGoodsReceiptSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(150), receiptDate: z.coerce.date(), evidenceReference: z.string().trim().max(500).optional(),
-  lines: z.array(z.object({ purchaseOrderItemId: z.string().cuid(), inventoryItemId: z.string().cuid(), stockLocationId: z.string().cuid(), quantity,
+  lines: z.array(z.object({ purchaseOrderItemId: z.string().cuid(), inventoryItemId: z.string().cuid(), stockLocationId: z.string().cuid().optional(), quantity,
     batchNumber: z.string().trim().max(80).optional(), manufactureDate: z.coerce.date().optional(), expiryDate: z.coerce.date().optional() })).min(1).max(100),
 });
 export const createSupplierInvoiceSchema = z.object({

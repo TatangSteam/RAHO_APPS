@@ -24,6 +24,7 @@ import type {
   PostGoodsReceiptInput,
   PurchaseOrderListQuery,
 } from '../goods-receipt.schema';
+import { resolveBranchInventoryScope } from './inventory-scope.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -292,17 +293,7 @@ export async function postGoodsReceipt(
       }
     }
 
-    const locationIds = [...new Set(input.lines.map((line) => line.stockLocationId))].sort();
-    const locations = await tx.stockLocation.findMany({
-      where: { id: { in: locationIds } },
-      include: { warehouse: true },
-    });
-    const locationById = new Map(locations.map((location) => [location.id, location]));
-    if (locations.length !== locationIds.length || locations.some(
-      (location) => !location.isActive || !location.warehouse.isActive || location.warehouse.branchId !== purchaseOrder.branchId,
-    )) {
-      throw errors.badRequest('STOCK_LOCATION_INVALID', 'Stock location tidak aktif atau tidak berada pada branch PO.');
-    }
+    const { location } = await resolveBranchInventoryScope(tx, purchaseOrder.branchId, actorUserId);
 
     const batchByLineKey = new Map<string, { id: string; batchNumber: string }>();
     for (const line of input.lines) {
@@ -357,13 +348,11 @@ export async function postGoodsReceipt(
       batchByLineKey.set(`${line.purchaseOrderItemId}:${line.batch.batchNumber}`, batch);
     }
 
-    const firstLocationByProduct = new Map<string, typeof locations[number]>();
-    for (const line of input.lines) {
-      const productId = orderItemById.get(line.purchaseOrderItemId)!.masterProductId;
-      if (!firstLocationByProduct.has(productId)) firstLocationByProduct.set(productId, locationById.get(line.stockLocationId)!);
-    }
+    const productIds = [...new Set(input.lines.map(
+      (line) => orderItemById.get(line.purchaseOrderItemId)!.masterProductId,
+    ))].sort();
     const inventoryItems: Array<{ id: string; masterProductId: string }> = [];
-    for (const [masterProductId, location] of [...firstLocationByProduct.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const masterProductId of productIds) {
       inventoryItems.push(await tx.inventoryItem.upsert({
         where: { masterProductId_branchId: { masterProductId, branchId: purchaseOrder.branchId } },
         create: {
@@ -454,7 +443,6 @@ export async function postGoodsReceipt(
     for (const line of [...input.lines].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))) {
       const orderItem = orderItemById.get(line.purchaseOrderItemId)!;
       const inventoryItem = inventoryItemByProduct.get(orderItem.masterProductId)!;
-      const location = locationById.get(line.stockLocationId)!;
       const batch = line.batch ? batchByLineKey.get(`${line.purchaseOrderItemId}:${line.batch.batchNumber}`)! : null;
       const batchKey = batch?.id ?? 'NO_BATCH';
       const quantity = new Prisma.Decimal(line.quantity);

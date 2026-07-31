@@ -182,7 +182,6 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
   onCancel: () => void;
 }) {
   type InventoryItemOption = { id: string; masterProduct?: { sku?: string; name?: string } };
-  type LocationOption = { id: string; code?: string; name: string };
   const [form, setForm] = useState({
     branchId: existing?.branch.id || '',
     balanceDate: existing?.balanceDate.slice(0, 10) || new Date().toISOString().slice(0, 10),
@@ -192,7 +191,6 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashBankAccount[]>([]);
   const [items, setItems] = useState<InventoryItemOption[]>([]);
-  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
@@ -205,25 +203,17 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
     if (!form.branchId) {
       setCashAccounts([]);
       setItems([]);
-      setLocations([]);
       return;
     }
     void Promise.all([
       cashBankApi.listAccounts({ branchId: form.branchId, isActive: 'true' }),
       inventoryApi.getInventoryItems(form.branchId),
-      api.get('/inventory/warehouses', { params: { branchId: form.branchId } }),
-    ]).then(async ([cash, itemResponse, warehouseResponse]) => {
+    ]).then(([cash, itemResponse]) => {
       setCashAccounts(cash);
       setItems(itemResponse.data.data || []);
-      const warehouses = warehouseResponse.data.data || [];
-      const locationResponses = await Promise.all(
-        warehouses.map((warehouse: { id: string }) => api.get('/inventory/stock-locations', { params: { warehouseId: warehouse.id } })),
-      );
-      setLocations(locationResponses.flatMap((response) => response.data.data || []));
     }).catch(() => {
       setCashAccounts([]);
       setItems([]);
-      setLocations([]);
     });
   }, [form.branchId]);
 
@@ -339,7 +329,7 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
             {line.type === 'INVENTORY' && (
               <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-5">
                 <label className="grid min-w-0 gap-1 text-xs font-medium">Item persediaan<select required value={line.inventoryItemId || ''} onChange={(event) => updateLine(index, { inventoryItemId: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih item</option>{items.map((item) => <option key={item.id} value={item.id}>{item.masterProduct?.sku || '-'} — {item.masterProduct?.name || item.id}</option>)}</select></label>
-                <label className="grid min-w-0 gap-1 text-xs font-medium">Lokasi stok<select required value={line.stockLocationId || ''} onChange={(event) => updateLine(index, { stockLocationId: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-2 text-sm"><option value="">Pilih lokasi</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.code ? `${location.code} — ` : ''}{location.name}</option>)}</select></label>
+                <div className="grid min-w-0 gap-1 text-xs font-medium"><span>Scope stok</span><strong className="flex h-10 items-center rounded-lg border px-3 text-sm">{branches.find((branch) => branch.id === form.branchId)?.name || 'Pilih cabang'}</strong></div>
                 <label className="grid min-w-0 gap-1 text-xs font-medium">Jumlah<input required type="number" min="0" step="0.0001" value={line.quantity || ''} onChange={(event) => updateLine(index, { quantity: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>
                 <label className="grid min-w-0 gap-1 text-xs font-medium">Harga per unit<input required type="number" min="0" step="0.0001" value={line.unitCost || ''} onChange={(event) => updateLine(index, { unitCost: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>
                 <label className="grid min-w-0 gap-1 text-xs font-medium">Batch (opsional)<input value={line.batchNumber || ''} onChange={(event) => updateLine(index, { batchNumber: event.target.value })} className="h-10 w-full min-w-0 rounded-lg border bg-transparent px-3 text-sm" /></label>

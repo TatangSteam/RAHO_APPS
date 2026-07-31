@@ -58,7 +58,7 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
   const role = user.role as Role;
 
   return (
-    <header className="sticky top-0 z-40 h-16 flex items-center justify-between px-4 sm:px-6 gap-4 bg-white dark:bg-[#0a0a0a] border-b border-neutral-200 dark:border-neutral-800 transition-colors duration-300">
+    <header className="sticky top-0 z-40 box-border flex h-16 w-full max-w-[100vw] items-center justify-between gap-4 overflow-x-hidden border-b border-neutral-200 bg-white px-4 transition-colors duration-300 dark:border-neutral-800 dark:bg-[#0a0a0a] sm:px-6">
       {/* Left */}
       <div className="flex items-center gap-3 flex-1 min-w-0">
         {/* Mobile menu button */}

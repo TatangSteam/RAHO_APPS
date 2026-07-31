@@ -11,6 +11,7 @@ import type {
   StockReservationQuery,
 } from '../stock-reservation.schema';
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
+import { resolveBranchInventoryScope } from './inventory-scope.service';
 
 type Tx = Prisma.TransactionClient;
 
@@ -148,6 +149,7 @@ export async function approveAndReserveStockRequest(
     if (requestItems.size !== normalized.lines.length || normalized.lines.some((line) => !requestItems.has(line.stockRequestItemId))) {
       throw errors.badRequest('INCOMPLETE_APPROVAL_LINES', 'Semua item stock request harus memiliki keputusan quantity.');
     }
+    const { location } = await resolveBranchInventoryScope(tx, input.sourceBranchId, actorUserId);
 
     let isFullApproval = true;
     for (const line of normalized.lines) {
@@ -166,14 +168,6 @@ export async function approveAndReserveStockRequest(
         if (!inventoryItem) {
           throw errors.unprocessable('SOURCE_INVENTORY_NOT_FOUND', 'Product belum tersedia pada inventory source branch.');
         }
-        const location = await tx.stockLocation.findUnique({
-          where: { id: line.stockLocationId! },
-          include: { warehouse: true },
-        });
-        if (!location?.isActive || !location.warehouse.isActive || location.warehouse.branchId !== input.sourceBranchId) {
-          throw errors.badRequest('INVALID_SOURCE_LOCATION', 'Stock location tidak aktif atau tidak berada pada source branch.');
-        }
-
         const balances = await lockReservableBalances(tx, inventoryItem.id, location.id, new Date());
         const available = balances.reduce(
           (sum, balance) => sum.add(balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty)),

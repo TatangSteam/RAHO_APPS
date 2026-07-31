@@ -15,10 +15,16 @@ test.describe('Inventory - Adjustment and Stock Opname', () => {
     await expect(page.getByText('Mohon tunggu sebentar...')).toBeHidden();
     await expect(page.getByText('Gagal memuat inventory control.')).toBeHidden();
 
+    await page.getByRole('button', { name: 'Buat Adjustment' }).click();
+    await expect(page.getByText('Scope stok').first()).toBeVisible();
+    await expect(page.getByLabel('Lokasi')).toHaveCount(0);
+
     await page.screenshot({ path: test.info().outputPath('inventory-controls-desktop.png'), fullPage: true });
 
     await page.getByRole('button', { name: 'Stock Opname' }).click();
     await expect(page.getByRole('button', { name: 'Mulai Opname' })).toBeVisible();
+    await expect(page.getByText('Scope stok').first()).toBeVisible();
+    await expect(page.getByLabel('Lokasi')).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.getByRole('heading', { name: 'Inventory Control' })).toBeVisible();
     const horizontalOverflow = await page.evaluate(

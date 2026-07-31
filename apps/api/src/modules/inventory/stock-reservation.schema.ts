@@ -23,11 +23,6 @@ export const approveStockRequestReservationSchema = z.object({
   if (!value.lines.some((line) => Number(line.approvedQty) > 0)) {
     context.addIssue({ code: z.ZodIssueCode.custom, path: ['lines'], message: 'Minimal satu item harus disetujui' });
   }
-  value.lines.forEach((line, index) => {
-    if (Number(line.approvedQty) > 0 && !line.stockLocationId) {
-      context.addIssue({ code: z.ZodIssueCode.custom, path: ['lines', index, 'stockLocationId'], message: 'Stock location wajib untuk quantity yang disetujui' });
-    }
-  });
 });
 
 export const releaseStockReservationSchema = z.object({

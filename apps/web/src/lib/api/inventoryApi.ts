@@ -679,7 +679,7 @@ export interface PostGoodsReceiptInput {
   lines: Array<{
     purchaseOrderItemId: string;
     quantity: string;
-    stockLocationId: string;
+    stockLocationId?: string;
     condition: GoodsReceiptCondition;
     batch?: { batchNumber: string; manufactureDate?: string; expiryDate?: string };
     notes?: string;
@@ -1255,7 +1255,7 @@ export const inventoryApi = {
 
   getStockOpnames: (params?: { branchId?: string; status?: string; page?: number; limit?: number }) =>
     api.get('/inventory/controls/stock-opnames', { params }),
-  startStockOpname: (data: { branchId: string; stockLocationId: string; notes?: string }) =>
+  startStockOpname: (data: { branchId: string; stockLocationId?: string; notes?: string }) =>
     api.post('/inventory/controls/stock-opnames', data),
   countStockOpname: (id: string, lines: Array<Record<string, unknown>>) =>
     api.patch(`/inventory/controls/stock-opnames/${id}/count`, { lines }),

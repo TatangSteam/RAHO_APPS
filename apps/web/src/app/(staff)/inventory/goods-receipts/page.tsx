@@ -17,7 +17,6 @@ type Row = Record<string, any>;
 type ReceiptLineForm = {
   purchaseOrderItemId: string;
   quantity: string;
-  stockLocationId: string;
   condition: GoodsReceiptCondition;
   batchNumber: string;
   manufactureDate: string;
@@ -53,7 +52,6 @@ export default function GoodsReceiptsPage() {
   const [branches, setBranches] = useState<Row[]>([]);
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderInventory[]>([]);
   const [receipts, setReceipts] = useState<Row[]>([]);
-  const [locations, setLocations] = useState<Row[]>([]);
   const [selectedPo, setSelectedPo] = useState<PurchaseOrderInventory | null>(null);
   const [lines, setLines] = useState<ReceiptLineForm[]>([]);
   const [receivedAt, setReceivedAt] = useState(new Date().toISOString().slice(0, 10));
@@ -81,22 +79,16 @@ export default function GoodsReceiptsPage() {
     try {
       setLoading(true);
       setError('');
-      const [branchResponse, poResponse, receiptResponse, warehouseResponse] = await Promise.all([
+      const [branchResponse, poResponse, receiptResponse] = await Promise.all([
         api.get('/branches', { params: { isActive: true, limit: 100 } }),
         inventoryApi.getPurchaseOrdersForReceipt({ branchId, limit: 100 }),
         inventoryApi.getGoodsReceipts({ branchId, limit: 100 }),
-        inventoryApi.getWarehouses({ branchId }),
       ]);
-      const warehouses = warehouseResponse.data?.data || [];
-      const locationResponses = await Promise.all(
-        warehouses.map((warehouse: Row) => inventoryApi.getStockLocations(warehouse.id)),
-      );
       setBranches(branchResponse.data?.data || []);
       setPurchaseOrders((poResponse.data?.data?.data || []).filter(
         (po: PurchaseOrderInventory) => po.status === 'ISSUED' || po.status === 'PARTIALLY_RECEIVED',
       ));
       setReceipts(receiptResponse.data?.data?.data || []);
-      setLocations(locationResponses.flatMap((response) => response.data?.data || []));
     } catch (requestError: any) {
       setError(requestError.response?.data?.error?.message || 'Gagal memuat Goods Receipt.');
     } finally {
@@ -113,7 +105,6 @@ export default function GoodsReceiptsPage() {
       .map((item) => ({
         purchaseOrderItemId: item.id,
         quantity: '',
-        stockLocationId: item.destinationStockLocation?.id || locations[0]?.id || '',
         condition: 'GOOD',
         batchNumber: '',
         manufactureDate: '',
@@ -153,7 +144,6 @@ export default function GoodsReceiptsPage() {
           return {
             purchaseOrderItemId: line.purchaseOrderItemId,
             quantity: line.quantity,
-            stockLocationId: line.stockLocationId,
             condition: line.condition,
             ...(orderItem.masterProduct.tracksBatch ? {
               batch: {
@@ -185,7 +175,7 @@ export default function GoodsReceiptsPage() {
 
   return <main className={styles.page}>
     <header className={styles.header}>
-      <div><h1>Goods Receipt</h1><p>Penerimaan pembelian per PO, lokasi, batch, expiry, dan kondisi.</p></div>
+      <div><h1>Goods Receipt</h1><p>Penerimaan per PO, batch, expiry, dan kondisi. Scope stok mengikuti cabang PO secara otomatis.</p></div>
       <button className={styles.secondaryButton} type="button" onClick={() => void load()} title="Muat ulang"><RefreshCw size={16} /></button>
     </header>
 
@@ -213,13 +203,13 @@ export default function GoodsReceiptsPage() {
           <label className={styles.field}><span>Tanggal terima</span><input className={styles.input} type="date" required value={receivedAt} onChange={(event) => setReceivedAt(event.target.value)} /></label>
           <label className={styles.field}><span>Surat jalan supplier</span><input className={styles.input} value={deliveryNumber} onChange={(event) => setDeliveryNumber(event.target.value)} /></label>
           <label className={styles.field}><span>Catatan receipt</span><input className={styles.input} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+          <div className={styles.field}><span>Scope stok</span><strong>{selectedPo.branch?.name || 'Cabang PO'}</strong></div>
         </div>
         <div className={styles.lineGrid}>{lines.map((line, index) => {
           const item = selectedPo.items.find((candidate) => candidate.id === line.purchaseOrderItemId)!;
           return <div className={styles.goodsReceiptLine} key={line.purchaseOrderItemId}>
             <div><strong>{item.masterProduct.sku || '-'}</strong><span>{item.masterProduct.name}</span><span>Sisa {formatQuantity(item.remainingQty)} / {formatMoney(item.unitCost, selectedPo.currency)}</span></div>
             <label className={styles.field}><span>Quantity</span><input className={styles.input} inputMode="decimal" value={line.quantity} onChange={(event) => updateLine(index, { quantity: event.target.value })} /></label>
-            <label className={styles.field}><span>Lokasi</span><select className={styles.select} required value={line.stockLocationId} onChange={(event) => updateLine(index, { stockLocationId: event.target.value })}><option value="">Pilih</option>{locations.map((location) => <option key={location.id} value={location.id}>{location.warehouse?.code} / {location.code}</option>)}</select></label>
             {item.masterProduct.tracksBatch && <label className={styles.field}><span>Batch</span><input className={styles.input} required={Number(line.quantity) > 0} value={line.batchNumber} onChange={(event) => updateLine(index, { batchNumber: event.target.value })} /></label>}
             {item.masterProduct.tracksBatch && <label className={styles.field}><span>Manufacture</span><input className={styles.input} type="date" value={line.manufactureDate} onChange={(event) => updateLine(index, { manufactureDate: event.target.value })} /></label>}
             {item.masterProduct.tracksExpiry && <label className={styles.field}><span>Expiry</span><input className={styles.input} required={Number(line.quantity) > 0} type="date" value={line.expiryDate} onChange={(event) => updateLine(index, { expiryDate: event.target.value })} /></label>}

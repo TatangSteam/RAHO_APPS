@@ -7,6 +7,7 @@ import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import { postJournal } from '@modules/accounting/accounting.service';
 import { receiveOpeningInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
+import { resolveBranchInventoryScope } from '@modules/inventory/services/inventory-scope.service';
 import { logAudit } from '@utils/auditLog';
 import type { CreateOpeningBalanceInput, ListOpeningBalancesQuery, UpdateOpeningBalanceInput } from './opening-balance.schema';
 import { calculateOpeningTotals, hasExactCurrencyPrecision, openingInventoryValue } from './opening-balance.helpers';
@@ -76,6 +77,9 @@ export async function createOpeningBalance(userId: string, input: CreateOpeningB
   if (missing.length) throw errors.badRequest('OPENING_ACCOUNT_INVALID', `Account tidak aktif/postable: ${missing.join(', ')}.`);
 
   const { debit: totalDebit, credit: totalCredit } = calculateOpeningTotals(input.lines);
+  const inventoryScope = input.lines.some((line) => line.type === 'INVENTORY')
+    ? await prisma.$transaction((tx) => resolveBranchInventoryScope(tx, input.branchId, userId))
+    : null;
   const normalized = [] as Array<any>;
   for (const [index, line] of input.lines.entries()) {
     const debit = new Prisma.Decimal(line.debit);
@@ -90,11 +94,10 @@ export async function createOpeningBalance(userId: string, input: CreateOpeningB
     }
     if (line.type === 'INVENTORY') {
       const item = await prisma.inventoryItem.findUnique({ where: { id: line.inventoryItemId! } });
-      const location = await prisma.stockLocation.findUnique({ where: { id: line.stockLocationId! }, include: { warehouse: true } });
       const quantity = new Prisma.Decimal(line.quantity!);
       const unitCost = new Prisma.Decimal(line.unitCost!);
-      if (!item || item.branchId !== input.branchId || !location?.isActive || location.warehouse.branchId !== input.branchId || !credit.isZero()) {
-        throw errors.badRequest('OPENING_INVENTORY_INVALID', `Line ${index + 1}: item/lokasi/branch atau sisi debit tidak valid.`);
+      if (!item || item.branchId !== input.branchId || !inventoryScope || !credit.isZero()) {
+        throw errors.badRequest('OPENING_INVENTORY_INVALID', `Line ${index + 1}: item, cabang, atau sisi debit tidak valid.`);
       }
       const inventoryValue = openingInventoryValue(quantity, unitCost);
       if (!hasExactCurrencyPrecision(inventoryValue) || !inventoryValue.equals(debit)) {
@@ -111,7 +114,7 @@ export async function createOpeningBalance(userId: string, input: CreateOpeningB
       counterpartyRef: line.counterpartyRef,
       cashBankAccountId: line.cashBankAccountId,
       inventoryItemId: line.inventoryItemId,
-      stockLocationId: line.stockLocationId,
+      stockLocationId: line.type === 'INVENTORY' ? inventoryScope!.location.id : undefined,
       quantity: line.quantity ? new Prisma.Decimal(line.quantity) : null,
       unitCost: line.unitCost ? new Prisma.Decimal(line.unitCost) : null,
       batchNumber: line.batchNumber,
@@ -179,6 +182,9 @@ export async function updateOpeningBalance(userId: string, id: string, input: Up
     throw errors.unprocessable('OPENING_NOT_BALANCED', `Opening balance tidak seimbang: debit ${totalDebit.toFixed(2)}, kredit ${totalCredit.toFixed(2)}.`);
   }
 
+  const inventoryScope = input.lines.some((line) => line.type === 'INVENTORY')
+    ? await prisma.$transaction((tx) => resolveBranchInventoryScope(tx, opening.branchId, userId))
+    : null;
   const normalized = [] as Array<any>;
   for (const [index, line] of input.lines.entries()) {
     const debit = new Prisma.Decimal(line.debit);
@@ -192,11 +198,10 @@ export async function updateOpeningBalance(userId: string, id: string, input: Up
     }
     if (line.type === 'INVENTORY') {
       const item = await prisma.inventoryItem.findUnique({ where: { id: line.inventoryItemId! } });
-      const location = await prisma.stockLocation.findUnique({ where: { id: line.stockLocationId! }, include: { warehouse: true } });
       const quantity = new Prisma.Decimal(line.quantity!);
       const unitCost = new Prisma.Decimal(line.unitCost!);
-      if (!item || item.branchId !== opening.branchId || !location?.isActive || location.warehouse.branchId !== opening.branchId || !credit.isZero()) {
-        throw errors.badRequest('OPENING_INVENTORY_INVALID', `Line ${index + 1}: item/lokasi/branch atau sisi debit tidak valid.`);
+      if (!item || item.branchId !== opening.branchId || !inventoryScope || !credit.isZero()) {
+        throw errors.badRequest('OPENING_INVENTORY_INVALID', `Line ${index + 1}: item, cabang, atau sisi debit tidak valid.`);
       }
       const inventoryValue = openingInventoryValue(quantity, unitCost);
       if (!hasExactCurrencyPrecision(inventoryValue) || !inventoryValue.equals(debit)) {
@@ -213,7 +218,7 @@ export async function updateOpeningBalance(userId: string, id: string, input: Up
       counterpartyRef: line.counterpartyRef,
       cashBankAccountId: line.cashBankAccountId,
       inventoryItemId: line.inventoryItemId,
-      stockLocationId: line.stockLocationId,
+      stockLocationId: line.type === 'INVENTORY' ? inventoryScope!.location.id : undefined,
       quantity: line.quantity ? new Prisma.Decimal(line.quantity) : null,
       unitCost: line.unitCost ? new Prisma.Decimal(line.unitCost) : null,
       batchNumber: line.batchNumber,

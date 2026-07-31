@@ -24,6 +24,7 @@ import {
   issueAdjustmentInventoryInTransaction,
   receiveAdjustmentInventoryInTransaction,
 } from './inventory-ledger.service';
+import { resolveBranchInventoryScope } from './inventory-scope.service';
 import type {
   AdjustmentDecisionInput,
   CountStockOpnameInput,
@@ -34,6 +35,7 @@ import type {
 } from '../inventory-control.schema';
 
 type Tx = Prisma.TransactionClient;
+type ScopedAdjustmentInput = CreateAdjustmentInput & { stockLocationId: string };
 
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const documentNumber = (prefix: string) => `${prefix}/${new Date().getUTCFullYear()}/${randomUUID().slice(0, 10).toUpperCase()}`;
@@ -89,7 +91,7 @@ async function estimateOutbound(
   return money(value);
 }
 
-async function validateAdjustmentLines(tx: Tx, input: CreateAdjustmentInput) {
+async function validateAdjustmentLines(tx: Tx, input: ScopedAdjustmentInput) {
   const reason = await tx.inventoryAdjustmentReasonCode.findUnique({ where: { code: input.reasonCode } });
   if (!reason?.isActive) throw errors.badRequest('ADJUSTMENT_REASON_INVALID', 'Reason code adjustment tidak aktif atau tidak ditemukan.');
   const location = await tx.stockLocation.findUnique({ where: { id: input.stockLocationId }, include: { warehouse: true } });
@@ -209,14 +211,16 @@ export async function createAdjustment(userId: string, input: CreateAdjustmentIn
       if (replay.payloadHash !== payloadHash) throw errors.conflict('ADJUSTMENT_KEY_REUSED', 'Idempotency key digunakan untuk payload berbeda.');
       return { adjustment: replay, idempotentReplay: true };
     }
-    const validated = await validateAdjustmentLines(tx, input);
+    const scope = await resolveBranchInventoryScope(tx, input.branchId, userId);
+    const scopedInput: ScopedAdjustmentInput = { ...input, stockLocationId: scope.location.id };
+    const validated = await validateAdjustmentLines(tx, scopedInput);
     const adjustment = await tx.inventoryAdjustment.create({
       data: {
         adjustmentNumber: documentNumber('ADJ'),
         idempotencyKey: input.idempotencyKey,
         payloadHash,
         branchId: input.branchId,
-        stockLocationId: input.stockLocationId,
+        stockLocationId: scope.location.id,
         reasonCode: validated.reason.code,
         description: input.description,
         totalEstimatedValue: validated.total,
@@ -652,7 +656,7 @@ export async function directAdjustStock(
     }
 
     const adjustment = new Prisma.Decimal(input.adjustment);
-    const normalized: CreateAdjustmentInput = {
+    const normalized: ScopedAdjustmentInput = {
       idempotencyKey: input.idempotencyKey,
       branchId: item.branchId,
       stockLocationId: location.id,
@@ -751,8 +755,7 @@ export async function startStockOpname(userId: string, input: StartStockOpnameIn
   await assertBranchAccess(userId, input.branchId);
   await assertPermission(userId, PERMISSIONS.INVENTORY_OPNAME_COUNT, input.branchId);
   return prisma.$transaction(async (tx) => {
-    const location = await tx.stockLocation.findUnique({ where: { id: input.stockLocationId }, include: { warehouse: true } });
-    if (!location?.isActive || location.warehouse.branchId !== input.branchId) throw errors.badRequest('STOCK_LOCATION_INVALID', 'Stock location tidak sesuai branch.');
+    const { location } = await resolveBranchInventoryScope(tx, input.branchId, userId);
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "stock_locations" WHERE "id" = ${location.id} FOR UPDATE`);
     const active = await tx.stockOpname.findFirst({ where: { stockLocationId: location.id, status: { in: ['COUNTING', 'PENDING_APPROVAL', 'APPROVED'] } } });
     if (active) throw errors.conflict('STOCK_OPNAME_ALREADY_ACTIVE', `Masih ada opname aktif ${active.opnameNumber}.`);

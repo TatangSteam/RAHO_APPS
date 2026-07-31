@@ -30,7 +30,7 @@ Zoho Books dipakai Finance untuk:
 - pembayaran;
 - omzet dan laporan keuangan.
 
-## 2. Mana yang sudah ada dan belum ada?
+## 2. Status implementasi saat ini
 
 ### Sudah ada di RAHO
 
@@ -48,21 +48,18 @@ Zoho Books dipakai Finance untuk:
 - Stock request partnership.
 - Shipment/pengiriman barang.
 - Invoice stock request partnership.
+- OAuth dan tombol Hubungkan Zoho Books.
+- Penyimpanan token terenkripsi dan pemilihan organization.
+- Discovery read-only untuk account, tax, bank, item, dan scope cabang.
+- Mapping customer/vendor, item/UOM, account, tax, bank, dan payment mode.
+- Outbox, worker dry-run/live, retry, dead-letter, dan reconciliation.
+- Flow invoice, payment, retainer/revenue, expense, PO, bill, vendor payment,
+  serta inventory adjustment sesuai capability.
 
-### Belum ada
-
-- Tombol Hubungkan Zoho.
-- OAuth/token Zoho.
-- Penarikan data existing Zoho.
-- Mapping item Zoho dengan produk RAHO.
-- Mapping customer Zoho dengan member RAHO.
-- Worker sinkronisasi.
-- Faktur uang muka Zoho otomatis.
-- Invoice satuan Zoho otomatis.
-- Rekonsiliasi otomatis RAHO dengan Zoho.
-
-Jadi dokumen ini adalah gambar tentang fitur integrasi yang harus dibuat di
-atas fitur RAHO yang sudah ada.
+Integrasi harus dimulai dalam mode `OFF`/`DRY_RUN`. Untuk Zoho yang sudah
+berisi data, ikuti
+[panduan koneksi dan cut-off](./CARA_KONEKSI_ZOHO_BOOKS_DENGAN_DATA_EXISTING.md)
+agar transaksi historis tidak dibuat ulang.
 
 ## 3. Flow besar
 

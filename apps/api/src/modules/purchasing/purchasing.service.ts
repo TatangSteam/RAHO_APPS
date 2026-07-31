@@ -13,6 +13,7 @@ import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermis
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { postPurchasingDerivedJournal } from '@modules/accounting/accounting.service';
 import { receivePurchasedInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
+import { resolveBranchInventoryScope } from '@modules/inventory/services/inventory-scope.service';
 import { logAudit } from '@utils/auditLog';
 import {
   assertBilledQuantityWithinReceived,
@@ -553,13 +554,14 @@ export async function postGoodsReceipt(userId: string, purchaseOrderId: string, 
     });
     const totalValue = values.reduce((sum, line) => sum.add(line.lineValue), new Prisma.Decimal(0));
     const totalQuantity = values.reduce((sum, line) => sum.add(line.qty), new Prisma.Decimal(0));
+    const { location } = await resolveBranchInventoryScope(tx, po.branchId, userId);
     const receiptId = randomUUID(); const receiptNumber = id('GR');
     const posted = await postPurchasingDerivedJournal({ postingKey: `GOODS_RECEIPT:${receiptId}`, transactionDate: input.receiptDate, branchId: po.branchId, actorUserId: userId, description: `Goods Receipt ${receiptNumber}`, lines: buildPurchasingJournal('GOODS_RECEIPT', totalValue), sourceLinks: [{ sourceType: 'GOODS_RECEIPT', sourceId: receiptId, sourceNumber: receiptNumber }], metadata: { purchaseOrderId: po.id } }, tx);
     await tx.goodsReceipt.create({ data: { id: receiptId, receiptNumber, idempotencyKey: input.idempotencyKey, payloadHash, purchaseOrderId: po.id, branchId: po.branchId, receiptDate: input.receiptDate, totalQuantity, totalValue, journalEntryId: posted.journal.id, evidenceReference: input.evidenceReference, createdBy: userId } });
     for (let index = 0; index < values.length; index += 1) {
       const value = values[index];
-      const inventory = await receivePurchasedInventoryInTransaction(userId, { idempotencyKey: `GOODS_RECEIPT:${receiptId}:${index + 1}`, inventoryItemId: value.input.inventoryItemId, branchId: po.branchId, stockLocationId: value.input.stockLocationId, quantity: value.qty.toFixed(4), unitCost: value.poLine.unitPrice.toFixed(4), currency: 'IDR', sourceType: 'GOODS_RECEIPT', sourceId: receiptId, sourceNumber: receiptNumber, reasonCode: 'PURCHASE_RECEIPT', occurredAt: input.receiptDate, batch: value.input.batchNumber ? { batchNumber: value.input.batchNumber, manufactureDate: value.input.manufactureDate, expiryDate: value.input.expiryDate } : undefined }, tx);
-      await tx.goodsReceiptLine.create({ data: { goodsReceiptId: receiptId, purchaseOrderItemId: value.poLine.id, lineNo: index + 1, inventoryItemId: value.input.inventoryItemId, stockLocationId: value.input.stockLocationId, quantity: value.qty, unitCost: value.poLine.unitPrice, lineValue: value.lineValue, batchNumber: value.input.batchNumber, manufactureDate: value.input.manufactureDate, expiryDate: value.input.expiryDate, inventoryPostingId: inventory.id } });
+      const inventory = await receivePurchasedInventoryInTransaction(userId, { idempotencyKey: `GOODS_RECEIPT:${receiptId}:${index + 1}`, inventoryItemId: value.input.inventoryItemId, branchId: po.branchId, stockLocationId: location.id, quantity: value.qty.toFixed(4), unitCost: value.poLine.unitPrice.toFixed(4), currency: 'IDR', sourceType: 'GOODS_RECEIPT', sourceId: receiptId, sourceNumber: receiptNumber, reasonCode: 'PURCHASE_RECEIPT', occurredAt: input.receiptDate, batch: value.input.batchNumber ? { batchNumber: value.input.batchNumber, manufactureDate: value.input.manufactureDate, expiryDate: value.input.expiryDate } : undefined }, tx);
+      await tx.goodsReceiptLine.create({ data: { goodsReceiptId: receiptId, purchaseOrderItemId: value.poLine.id, lineNo: index + 1, inventoryItemId: value.input.inventoryItemId, stockLocationId: location.id, quantity: value.qty, unitCost: value.poLine.unitPrice, lineValue: value.lineValue, batchNumber: value.input.batchNumber, manufactureDate: value.input.manufactureDate, expiryDate: value.input.expiryDate, inventoryPostingId: inventory.id } });
       await tx.purchaseOrderItem.update({ where: { id: value.poLine.id }, data: { receivedQty: { increment: value.qty } } });
     }
     const aggregate = await tx.purchaseOrderItem.aggregate({ where: { purchaseOrderId: po.id }, _sum: { orderedQty: true, receivedQty: true } });

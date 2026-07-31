@@ -23,8 +23,8 @@ export const openingBalanceLineSchema = z.object({
   const credit = Number(line.credit);
   if ((debit > 0) === (credit > 0)) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Line harus memiliki tepat satu sisi debit/kredit' });
   if (line.type === 'CASH_BANK' && !line.cashBankAccountId) context.addIssue({ code: z.ZodIssueCode.custom, message: 'Cash/bank account wajib untuk opening kas/bank' });
-  if (line.type === 'INVENTORY' && (!line.inventoryItemId || !line.stockLocationId || !line.quantity || !line.unitCost)) {
-    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Item, lokasi, quantity, dan unit cost wajib untuk opening stock' });
+  if (line.type === 'INVENTORY' && (!line.inventoryItemId || !line.quantity || !line.unitCost)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Item, quantity, dan unit cost wajib untuk opening stock' });
   }
 });
 
