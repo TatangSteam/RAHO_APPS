@@ -1734,7 +1734,19 @@ function StepIndicator({
 
   return (
     <div
+      className={styles.stepIndicator}
+      role="button"
+      tabIndex={locked ? -1 : 0}
+      aria-current={active ? 'step' : undefined}
+      aria-disabled={locked}
+      aria-label={`Step ${number}: ${title}${completed ? ', selesai' : locked ? ', terkunci' : active ? ', sedang dibuka' : ''}`}
       onClick={locked ? undefined : onClick}
+      onKeyDown={(event) => {
+        if (!locked && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onClick?.();
+        }
+      }}
       style={{
         padding: '16px',
         borderRadius: '12px',

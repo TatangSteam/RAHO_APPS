@@ -14,6 +14,11 @@
   min-width: 0;
 }
 
+.stepIndicator:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.35);
+  outline-offset: 2px;
+}
+
 .phaseGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -85,6 +90,47 @@
   .stepGrid,
   .formGrid {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .stepGrid {
+    gap: 6px !important;
+  }
+
+  .stepIndicator {
+    min-height: 54px;
+    padding: 8px 10px !important;
+    border-width: 1px !important;
+    border-radius: 10px !important;
+  }
+
+  /* Status sudah terwakili oleh marker utama; badge kedua hanya menambah noise. */
+  .stepIndicator > div:first-child:not(:last-child) {
+    display: none !important;
+  }
+
+  .stepIndicator > div:last-child {
+    gap: 10px !important;
+  }
+
+  .stepIndicator > div:last-child > div:first-child {
+    width: 34px !important;
+    height: 34px !important;
+    flex-basis: 34px;
+    font-size: 14px !important;
+  }
+
+  .stepIndicator > div:last-child > div:last-child > div:first-child {
+    margin-bottom: 0 !important;
+    font-size: 9px !important;
+    line-height: 1.2;
+  }
+
+  .stepIndicator > div:last-child > div:last-child > div:last-child {
+    overflow: hidden;
+    font-size: 14px !important;
+    line-height: 1.25 !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .phaseGrid {
