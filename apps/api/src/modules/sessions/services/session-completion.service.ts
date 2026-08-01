@@ -35,7 +35,10 @@ import {
   TREATMENT_INVENTORY_REVERSED_EVENT,
 } from '@modules/zoho/zoho.inventory-adjustment.policy';
 import { selectTreatmentRevenueSource } from './treatment-revenue-source';
-import { requiresMaterialDeviationReason } from './material-usage.helpers';
+import {
+  calculateValuedAvailableBaseQuantity,
+  requiresMaterialDeviationReason,
+} from './material-usage.helpers';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
@@ -101,7 +104,28 @@ export class SessionCompletionService {
           therapyPlan: true,
           vitalSigns: true,
           infusion: true,
-          materials: { include: { inventoryItem: { include: { masterProduct: true } } } },
+          materials: {
+            include: {
+              inventoryItem: {
+                include: {
+                  masterProduct: true,
+                  balances: {
+                    include: {
+                      costLayers: {
+                        where: {
+                          remainingQty: { gt: 0 },
+                          unitCost: { not: null },
+                          valuationStatus: 'VALUED',
+                          isVoided: false,
+                        },
+                        select: { remainingQty: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           evaluation: true,
         },
       });
@@ -162,6 +186,16 @@ export class SessionCompletionService {
       if (session.materials.length === 0) errorsList.push('Pemakaian bahan belum diisi (WAJIB)');
       if (!hasVitalAfter) errorsList.push('Tanda vital SESUDAH belum diisi');
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
+
+      for (const material of session.materials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
+        const valuedAvailable = calculateValuedAvailableBaseQuantity(material.inventoryItem.balances);
+        if (valuedAvailable.lessThan(material.baseQuantity)) {
+          throw errors.unprocessable(
+            'INSUFFICIENT_VALUED_STOCK',
+            `Stok FIFO ${material.inventoryItem.masterProduct.name} kurang ${material.baseQuantity.sub(valuedAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit}. Lakukan penerimaan stok atau rekonsiliasi Stock Opname.`,
+          );
+        }
+      }
 
       const recommendations = await resolveSessionMaterialRecommendations(session.id, tx);
       if (!isLegacySession && recommendations.hasActiveBom) {

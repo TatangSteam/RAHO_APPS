@@ -1,9 +1,31 @@
 import { Prisma } from '@prisma/client';
-import { requiresMaterialDeviationReason } from '../material-usage.helpers';
+import {
+  calculateValuedAvailableBaseQuantity,
+  requiresMaterialDeviationReason,
+} from '../material-usage.helpers';
 
 const decimal = (value: string) => new Prisma.Decimal(value);
 
 describe('material usage deviation', () => {
+  it('caps selectable stock to valued FIFO quantity for each balance', () => {
+    const valued = calculateValuedAvailableBaseQuantity([
+      {
+        onHandQty: decimal('10'),
+        reservedQty: decimal('2'),
+        quarantineQty: decimal('1'),
+        costLayers: [{ remainingQty: decimal('5') }],
+      },
+      {
+        onHandQty: decimal('3'),
+        reservedQty: decimal('0'),
+        quarantineQty: decimal('0'),
+        costLayers: [{ remainingQty: decimal('8') }],
+      },
+    ]);
+
+    expect(valued.toFixed(4)).toBe('8.0000');
+  });
+
   it('does not require a reason when no BOM is active', () => {
     expect(requiresMaterialDeviationReason(decimal('99'), null, decimal('0'), false)).toBe(false);
   });

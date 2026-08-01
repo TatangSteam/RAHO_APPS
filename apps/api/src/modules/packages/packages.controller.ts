@@ -51,7 +51,8 @@ export class PackagesController {
         throw { status: 401, code: 'UNAUTHORIZED', message: 'User information missing' };
       }
 
-      const result = await packagesService.verifyPayment(packageId, data, branchId, userId);
+      const result =
+      await packagesService.verifyPayment(packageId, data, branchId, userId);
       return sendSuccess(res, result);
     } catch (error) {
       next(error);

@@ -51,6 +51,13 @@ class ToastStore {
   }
 
   add(toast: Omit<ToastData, 'id'>) {
+    const duplicate = this.toasts.find((current) =>
+      current.type === toast.type &&
+      current.title === toast.title &&
+      current.message === toast.message
+    );
+    if (duplicate) return duplicate.id;
+
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const newToast: ToastData = {
       id,

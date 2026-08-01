@@ -11,7 +11,17 @@ import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { resolveSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 import { logAudit } from '@utils/auditLog';
 import type { CreateMaterialUsageInput } from '../sessions.schema';
-import { requiresMaterialDeviationReason } from './material-usage.helpers';
+import {
+  calculateValuedAvailableBaseQuantity,
+  requiresMaterialDeviationReason,
+} from './material-usage.helpers';
+
+const valuedCostLayerFilter = {
+  remainingQty: { gt: 0 },
+  unitCost: { not: null },
+  valuationStatus: 'VALUED' as const,
+  isVoided: false,
+};
 
 export class MaterialUsageService {
   async createMaterialUsage(
@@ -32,7 +42,17 @@ export class MaterialUsageService {
 
     const inventoryItem = await prisma.inventoryItem.findUnique({
       where: { id: data.inventoryItemId },
-      include: { masterProduct: true, balances: true },
+      include: {
+        masterProduct: true,
+        balances: {
+          include: {
+            costLayers: {
+              where: valuedCostLayerFilter,
+              select: { remainingQty: true },
+            },
+          },
+        },
+      },
     });
     if (!inventoryItem || inventoryItem.branchId !== session.branchId || !inventoryItem.masterProduct.isActive) {
       throw errors.notFound('Item inventory aktif tidak ditemukan dalam cabang sesi.');
@@ -58,6 +78,14 @@ export class MaterialUsageService {
       throw errors.unprocessable(
         'INSUFFICIENT_AVAILABLE_STOCK',
         `Stok tersedia ${availableBaseQuantity.mul(conversionFactor).toFixed(4)} ${inventoryItem.masterProduct.usageUnit}.`,
+      );
+    }
+
+    const valuedAvailableBaseQuantity = calculateValuedAvailableBaseQuantity(inventoryItem.balances);
+    if (valuedAvailableBaseQuantity.lessThan(baseQuantity)) {
+      throw errors.unprocessable(
+        'INSUFFICIENT_VALUED_STOCK',
+        `Stok FIFO bernilai ${inventoryItem.masterProduct.name} hanya ${valuedAvailableBaseQuantity.mul(conversionFactor).toFixed(4)} ${inventoryItem.masterProduct.usageUnit}. Lakukan penerimaan stok atau rekonsiliasi Stock Opname terlebih dahulu.`,
       );
     }
 
@@ -195,17 +223,28 @@ export class MaterialUsageService {
   async getAvailableInventoryItems(branchId: string) {
     const items = await prisma.inventoryItem.findMany({
       where: { branchId, masterProduct: { isActive: true } },
-      include: { masterProduct: true, balances: true },
+      include: {
+        masterProduct: true,
+        balances: {
+          include: {
+            costLayers: {
+              where: valuedCostLayerFilter,
+              select: { remainingQty: true },
+            },
+          },
+        },
+      },
       orderBy: [
         { masterProduct: { category: 'asc' } },
         { masterProduct: { name: 'asc' } },
       ],
     });
     return items.map((item) => {
-      const availableBase = item.balances.reduce(
+      const physicalAvailableBase = item.balances.reduce(
         (sum, balance) => sum.add(balance.onHandQty).sub(balance.reservedQty).sub(balance.quarantineQty),
         new Prisma.Decimal(0),
       );
+      const availableBase = calculateValuedAvailableBaseQuantity(item.balances);
       const conversionFactor = item.masterProduct.conversionFactor;
       const availableUsage = availableBase.mul(conversionFactor);
       const minThresholdUsage = item.minThreshold.mul(conversionFactor);
@@ -221,6 +260,8 @@ export class MaterialUsageService {
           isLowStock: availableBase.lessThan(item.minThreshold),
           displayText: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(2)} ${item.masterProduct.usageUnit} tersedia)`,
           displayShort: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(0)} ${item.masterProduct.usageUnit})`,
+          physicalBaseStock: physicalAvailableBase,
+          requiresValuationReconciliation: physicalAvailableBase.greaterThan(availableBase),
         },
       };
     });
