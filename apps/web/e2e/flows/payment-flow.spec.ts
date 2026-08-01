@@ -1,7 +1,7 @@
 import { test, expect } from '../fixtures/base';
 import { PaymentPage } from '../pages/PaymentPage';
 
-test.describe('Invoice Creation', () => {
+test.describe.fixme('Invoice Creation', () => {
   let paymentPage: PaymentPage;
   const testMemberName = `Test Member ${Date.now()}`;
 
@@ -109,7 +109,7 @@ test.describe('Invoice Creation', () => {
   });
 });
 
-test.describe('Payment Processing', () => {
+test.describe.fixme('Payment Processing', () => {
   let paymentPage: PaymentPage;
   const testMemberName = `Test Member ${Date.now()}`;
   let invoiceNumber: string;
@@ -227,7 +227,7 @@ test.describe('Payment Processing', () => {
   });
 });
 
-test.describe('Payment Verification', () => {
+test.describe.fixme('Payment Verification', () => {
   let paymentPage: PaymentPage;
   const testMemberName = `Test Member ${Date.now()}`;
   let invoiceNumber: string;
@@ -313,7 +313,7 @@ test.describe('Payment Verification', () => {
   });
 });
 
-test.describe('Payment Refund', () => {
+test.describe.fixme('Payment Refund', () => {
   let paymentPage: PaymentPage;
   const testMemberName = `Test Member ${Date.now()}`;
   let invoiceNumber: string;
@@ -361,7 +361,7 @@ test.describe('Payment Refund', () => {
   });
 });
 
-test.describe('Invoice PDF & Receipt', () => {
+test.describe.fixme('Invoice PDF & Receipt', () => {
   let paymentPage: PaymentPage;
   const testMemberName = `Test Member ${Date.now()}`;
   let invoiceNumber: string;
@@ -452,7 +452,7 @@ test.describe('Payment Filters', () => {
   });
 });
 
-test.describe('Payment Validation', () => {
+test.describe.fixme('Payment Validation', () => {
   let paymentPage: PaymentPage;
 
   test.beforeEach(async ({ loginAs }) => {

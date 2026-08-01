@@ -4,6 +4,8 @@ const webPort = Number(process.env.E2E_WEB_PORT || 3000);
 const baseURL = process.env.E2E_BASE_URL || `http://localhost:${webPort}`;
 const apiURL = process.env.E2E_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:4000/api/v1';
 const shouldStartWebServer = process.env.E2E_START_WEB_SERVER !== 'false';
+const webServerCommand =
+  process.env.E2E_WEB_SERVER_COMMAND || `npm run dev -- --hostname 127.0.0.1 --port ${webPort}`;
 const includeMobileProject = process.env.E2E_INCLUDE_MOBILE === 'true';
 const workers = Number(process.env.E2E_WORKERS || (process.env.CI ? 2 : 1));
 const browserChannel = process.env.E2E_BROWSER_CHANNEL || 'chromium';
@@ -27,9 +29,6 @@ export default defineConfig({
   use: {
     baseURL,
     channel: browserChannel,
-    extraHTTPHeaders: {
-      'X-E2E-Test': 'true',
-    },
     locale: 'id-ID',
     timezoneId: 'Asia/Jakarta',
     trace: 'retain-on-failure',
@@ -40,7 +39,7 @@ export default defineConfig({
   },
   webServer: shouldStartWebServer
     ? {
-        command: `npm run dev -- --hostname 127.0.0.1 --port ${webPort}`,
+        command: webServerCommand,
         url: baseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

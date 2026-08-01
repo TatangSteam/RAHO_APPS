@@ -1,5 +1,5 @@
 import { test as base, expect, type Page } from '@playwright/test';
-import { loginByApi, loginByUi, restoreAuthFromStorageState } from '../helpers/auth';
+import { loginByApi, loginByUi } from '../helpers/auth';
 import type { E2ERole } from './test-users';
 import { requireTestUser } from './test-users';
 
@@ -17,7 +17,7 @@ export const test = base.extend<RahoFixtures>({
 
       if (mode === 'ui') {
         await loginByUi(page, user);
-      } else if (!(await restoreAuthFromStorageState(page, role, user.expectedPath))) {
+      } else {
         await loginByApi(page, request, user);
       }
 

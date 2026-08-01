@@ -244,7 +244,7 @@ export class MemberPage {
   async assignPackage(memberName: string, packageName: string) {
     await this.viewMember(memberName);
 
-    await this.page.getByRole('button', { name: /paket/i }).first().click();
+    await this.page.getByRole('tab', { name: 'Paket', exact: true }).click();
     await waitForLoadingToFinish(this.page);
     
     // Click assign package button
@@ -262,7 +262,9 @@ export class MemberPage {
     }
     
     // Submit
-    const submitButton = this.page.getByRole('button', { name: 'Assign Paket', exact: true });
+    const submitButton = this.page
+      .getByRole('dialog')
+      .getByRole('button', { name: /^Assign \d+ Paket$/ });
     await submitButton.click();
     
     // Wait for success
@@ -274,7 +276,7 @@ export class MemberPage {
    * Verify package is assigned
    */
   async expectPackageAssigned(_packageName: string) {
-    await this.page.getByRole('button', { name: /paket/i }).first().click();
+    await this.page.getByRole('tab', { name: 'Paket', exact: true }).click();
     await waitForLoadingToFinish(this.page);
 
     const packageSection = this.page.locator('.member-detail-tab-content');

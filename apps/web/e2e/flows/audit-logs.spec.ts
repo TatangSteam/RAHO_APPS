@@ -339,6 +339,10 @@ test.describe('Audit Log Security', () => {
     // Try to navigate to audit logs
     await page.goto('/admin/audit-logs');
 
+    await expect
+      .poll(() => page.url(), { timeout: 10000 })
+      .not.toContain('/admin/audit-logs');
+
     // Should either redirect or show permission denied
     const isOnAuditLogs = page.url().includes('audit-log');
     const hasPermissionError = await page

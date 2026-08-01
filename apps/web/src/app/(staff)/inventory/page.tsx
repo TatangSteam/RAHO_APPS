@@ -50,6 +50,30 @@ interface Branch {
   type: string;
 }
 
+function toFiniteNumber(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeInventoryItem(item: InventoryItem): InventoryItem {
+  return {
+    ...item,
+    stock: toFiniteNumber(item.stock),
+    minThreshold: toFiniteNumber(item.minThreshold),
+    masterProduct: {
+      ...item.masterProduct,
+      conversionFactor: toFiniteNumber(item.masterProduct.conversionFactor),
+    },
+    stockInfo: {
+      ...item.stockInfo,
+      baseStock: toFiniteNumber(item.stockInfo.baseStock),
+      usageStock: toFiniteNumber(item.stockInfo.usageStock),
+      minThresholdBase: toFiniteNumber(item.stockInfo.minThresholdBase),
+      minThresholdUsage: toFiniteNumber(item.stockInfo.minThresholdUsage),
+    },
+  };
+}
+
 export default function InventoryPage() {
   const router = useRouter();
   const { user, accessToken } = useAuthStore();
@@ -148,7 +172,8 @@ export default function InventoryPage() {
       }
 
       const response = await inventoryApi.getAvailableItems(branchId);
-      setItems(response.data.data || []);
+      const inventoryItems = (response.data.data || []) as InventoryItem[];
+      setItems(inventoryItems.map(normalizeInventoryItem));
     } catch (error) {
       showToast.error('Gagal memuat data inventori');
       devError('Inventory fetch error:', error);

@@ -13,7 +13,9 @@ export class NotificationsPage {
   }
 
   async expectShell() {
-    await expect(this.page.getByRole('heading', { name: /notifikasi/i })).toBeVisible({ timeout: 10000 });
+    await expect(
+      this.page.getByRole('heading', { name: 'Notifikasi Admin Manager', exact: true }),
+    ).toBeVisible({ timeout: 10000 });
     await expect(this.page.getByText(NOTIFICATION_SHELL_TEXT).first()).toBeVisible({ timeout: 10000 });
   }
 

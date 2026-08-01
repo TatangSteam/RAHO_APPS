@@ -178,7 +178,9 @@ export class ReportPage {
   }
 
   async expectReportEmpty() {
-    await expect(this.page.locator('text=/tidak.*ada.*data|no.*data|empty|kosong/i')).toBeVisible({ timeout: 5000 });
+    await expect(
+      this.page.locator('main').getByText(EMPTY_STATE_TEXT).filter({ visible: true }).first(),
+    ).toBeVisible({ timeout: 5000 });
   }
 
   async expectReportTotal(label: string, value: string) {

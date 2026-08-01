@@ -35,8 +35,8 @@ describeDatabase('Sprint 9 stock opname atomic posting', () => {
     await prisma.managerBranch.create({ data: { userId: approverId, branchId } });
     await prisma.staffBranch.create({ data: { userId: makerId, branchId } });
     await prisma.accountingPeriod.create({ data: {
-      name: `Sprint 9 ${suffix}`, fiscalYear: 2026, periodNo: 7,
-      startDate: new Date('2026-07-01T00:00:00.000Z'), endDate: new Date('2026-07-31T23:59:59.999Z'),
+      name: `Sprint 9 Year 2026 ${suffix}`, fiscalYear: 2026, periodNo: 1,
+      startDate: new Date('2026-01-01T00:00:00.000Z'), endDate: new Date('2026-12-31T23:59:59.999Z'),
       branchId, scopeKey: branchId, status: 'OPEN', createdBy: approverId,
     } });
     await prisma.masterProduct.create({ data: {

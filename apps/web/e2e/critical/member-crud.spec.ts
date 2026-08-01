@@ -59,7 +59,9 @@ test.describe('Member CRUD', () => {
     await page.locator('#btn-login').click();
 
     const loginResponse = await loginResponsePromise;
-    expect(loginResponse.ok(), `Login member gagal: ${loginResponse.status()} ${await loginResponse.text()}`).toBeTruthy();
+    if (!loginResponse.ok()) {
+      throw new Error(`Login member gagal: ${loginResponse.status()} ${await loginResponse.text()}`);
+    }
     expect(loginResponse.request().postDataJSON()).toMatchObject({
       identifier: member.username,
       password: member.password,
@@ -185,28 +187,29 @@ test.describe('Member CRUD', () => {
     const submitButton = page.getByRole('button', { name: /daftarkan.*member|simpan|save/i });
     await submitButton.click();
 
-    const usernamePatternMismatch = await page.locator('[name="memberUsername"]').evaluate((element) => {
-      return (element as HTMLInputElement).validity.patternMismatch;
-    });
-    expect(usernamePatternMismatch).toBe(true);
+    await expect(page.getByText(/username.*4-30|huruf.*angka|username.*valid/i).first()).toBeVisible();
+    await expect(page.locator('[name="memberUsername"]')).toHaveAttribute('aria-invalid', 'true');
   });
 
   test('should handle duplicate username', async ({ page }) => {
-    const duplicateUsername = `duplicate${Date.now()}`;
+    const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const duplicateUsername = `duplicate${suffix}`;
 
     // Create first member
     await memberPage.createMember({
-      name: 'First Member',
+      name: `First Member ${suffix}`,
       username: duplicateUsername,
       phone: '081234567890',
+      birthDate: '1991-01-01',
     });
 
     // Try to create second member with same username
     await memberPage.clickAddMember();
     await memberPage.fillMemberForm({
-      name: 'Second Member',
+      name: `Second Member ${suffix}`,
       username: duplicateUsername,
       phone: '081234567891',
+      birthDate: '1992-02-02',
     });
 
     const submitButton = page.getByRole('button', { name: /daftarkan.*member|simpan|save/i });

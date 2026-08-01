@@ -9,6 +9,7 @@ const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describ
 describeDatabase('opening stock and stock request reservations', () => {
   const runId = randomUUID().replace(/-/g, '').slice(0, 16);
   const actorId = `reserve_user_${runId}`;
+  const approverId = `reserve_approver_${runId}`;
   const sourceBranchId = `reserve_source_${runId}`;
   const destinationBranchId = `reserve_dest_${runId}`;
   const warehouseId = `reserve_wh_${runId}`;
@@ -41,13 +42,18 @@ describeDatabase('opening stock and stock request reservations', () => {
   });
 
   beforeAll(async () => {
-    await prisma.user.create({
-      data: {
+    await prisma.user.createMany({
+      data: [{
         id: actorId,
         email: `reserve-${runId}@example.test`,
         password: 'not-used-in-test',
         role: Role.SUPER_ADMIN,
-      },
+      }, {
+        id: approverId,
+        email: `reserve-approver-${runId}@example.test`,
+        password: 'not-used-in-test',
+        role: Role.SUPER_ADMIN,
+      }],
     });
     await prisma.branch.createMany({
       data: [
@@ -120,7 +126,27 @@ describeDatabase('opening stock and stock request reservations', () => {
   }, 30_000);
 
   afterAll(async () => {
-    await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId: { in: [sourceBranchId, destinationBranchId] } }] } });
+    await prisma.auditLog.deleteMany({ where: { OR: [{ userId: { in: [actorId, approverId] } }, { branchId: { in: [sourceBranchId, destinationBranchId] } }] } });
+    const requestIds = (await prisma.stockRequest.findMany({
+      where: { requestedBy: actorId },
+      select: { id: true },
+    })).map((request) => request.id);
+    const approvalInstanceIds = (await prisma.approvalInstance.findMany({
+      where: { entityType: 'StockRequest', entityId: { in: requestIds } },
+      select: { id: true },
+    })).map((instance) => instance.id);
+    await prisma.approvalAuditLog.deleteMany({
+      where: { approvalInstanceId: { in: approvalInstanceIds } },
+    });
+    await prisma.approvalDecision.deleteMany({
+      where: { approvalInstanceId: { in: approvalInstanceIds } },
+    });
+    await prisma.approvalInstance.deleteMany({
+      where: { id: { in: approvalInstanceIds } },
+    });
+    await prisma.notification.deleteMany({
+      where: { userId: { in: [actorId, approverId] } },
+    });
     await prisma.stockReservation.deleteMany({ where: { stockRequest: { requestedBy: actorId } } });
     await prisma.shipmentItem.deleteMany({ where: { shipment: { stockRequest: { requestedBy: actorId } } } });
     await prisma.shipment.deleteMany({ where: { stockRequest: { requestedBy: actorId } } });
@@ -138,7 +164,7 @@ describeDatabase('opening stock and stock request reservations', () => {
     await prisma.unitOfMeasure.deleteMany({ where: { id: uomId } });
     await prisma.accountingPeriod.deleteMany({ where: { id: periodId } });
     await prisma.branch.deleteMany({ where: { id: { in: [sourceBranchId, destinationBranchId] } } });
-    await prisma.user.deleteMany({ where: { id: actorId } });
+    await prisma.user.deleteMany({ where: { id: { in: [actorId, approverId] } } });
     await prisma.$disconnect();
   }, 30_000);
 
@@ -252,8 +278,8 @@ describeDatabase('opening stock and stock request reservations', () => {
       reviewNotes: 'Partial sesuai stock plan',
       lines: [{ stockRequestItemId: request.items[0].id, approvedQty: '6', stockLocationId: locationId }],
     };
-    const approved = await approveAndReserveStockRequest(actorId, request.id, approvalInput);
-    const duplicate = await approveAndReserveStockRequest(actorId, request.id, approvalInput);
+    const approved = await approveAndReserveStockRequest(approverId, request.id, approvalInput);
+    const duplicate = await approveAndReserveStockRequest(approverId, request.id, approvalInput);
 
     expect(approved.status).toBe('PARTIALLY_APPROVED');
     expect(duplicate.reservations[0].id).toBe(approved.reservations[0].id);
@@ -276,7 +302,7 @@ describeDatabase('opening stock and stock request reservations', () => {
 
   it('supports full approval and prevents concurrent over-reservation', async () => {
     const fullRequest = await createRequest('FULL', '3');
-    const full = await approveAndReserveStockRequest(actorId, fullRequest.id, {
+    const full = await approveAndReserveStockRequest(approverId, fullRequest.id, {
       idempotencyKey: `RESERVE-FULL-${runId}`,
       sourceBranchId,
       lines: [{ stockRequestItemId: fullRequest.items[0].id, approvedQty: '3', stockLocationId: locationId }],
@@ -289,12 +315,12 @@ describeDatabase('opening stock and stock request reservations', () => {
 
     const [requestA, requestB] = await Promise.all([createRequest('RACE-A', '7'), createRequest('RACE-B', '7')]);
     const competing = await Promise.allSettled([
-      approveAndReserveStockRequest(actorId, requestA.id, {
+      approveAndReserveStockRequest(approverId, requestA.id, {
         idempotencyKey: `RESERVE-RACE-A-${runId}`,
         sourceBranchId,
         lines: [{ stockRequestItemId: requestA.items[0].id, approvedQty: '7', stockLocationId: locationId }],
       }),
-      approveAndReserveStockRequest(actorId, requestB.id, {
+      approveAndReserveStockRequest(approverId, requestB.id, {
         idempotencyKey: `RESERVE-RACE-B-${runId}`,
         sourceBranchId,
         lines: [{ stockRequestItemId: requestB.items[0].id, approvedQty: '7', stockLocationId: locationId }],

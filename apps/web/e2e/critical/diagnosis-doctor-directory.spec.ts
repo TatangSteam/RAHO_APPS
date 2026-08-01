@@ -14,7 +14,7 @@ test.describe('Diagnosis doctor directory', () => {
     await memberRow.click();
     await expect(page).toHaveURL(/\/members\/[^/]+$/);
 
-    await page.getByRole('button', { name: /Diagnosa/i }).click();
+    await page.getByRole('tab', { name: 'Diagnosis', exact: true }).click();
     await expect(page.getByText('Diagnosa Member')).toBeVisible();
 
     const directoryResponsePromise = page.waitForResponse(

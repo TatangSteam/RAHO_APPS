@@ -165,13 +165,13 @@ export default function AssignPackageModal({
     <div className="assign-package-modal-root fixed inset-0 z-[9999] overflow-hidden">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 z-0 bg-black/80 backdrop-blur-sm transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Modal Container */}
-      <div className="assign-package-modal-viewport flex min-h-full items-start justify-center p-4 pt-8 pb-8 overflow-y-auto">
+      <div className="assign-package-modal-viewport relative z-10 flex min-h-full items-start justify-center p-4 pt-8 pb-8 overflow-y-auto">
         <div
           className="assign-package-modal-panel relative w-full max-w-2xl bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl transform transition-all flex flex-col my-auto"
           role="dialog"

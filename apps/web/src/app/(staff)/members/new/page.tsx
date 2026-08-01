@@ -327,7 +327,10 @@ export default function NewMemberPage() {
       return;
     }
     if (!/^[a-zA-Z0-9._-]{4,30}$/.test(formData.memberUsername)) {
-      showToast.error('Username harus 4-30 karakter dan hanya boleh berisi huruf, angka, titik, _ atau -');
+      const usernameError = 'Username harus 4-30 karakter dan hanya boleh berisi huruf, angka, titik, _ atau -';
+      setFormError(usernameError);
+      setFieldErrors((current) => ({ ...current, memberUsername: usernameError }));
+      showToast.error(usernameError);
       return;
     }
     if (!formData.memberPassword || formData.memberPassword.length < 8) {

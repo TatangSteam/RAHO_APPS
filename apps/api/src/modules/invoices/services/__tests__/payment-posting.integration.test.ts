@@ -63,11 +63,11 @@ describeDatabase('AC-001 package payment posting integration', () => {
     await prisma.accountingPeriod.create({
       data: {
         id: periodId,
-        name: `July 2026 Payment ${runId}`,
+        name: `Year 2026 Payment ${runId}`,
         fiscalYear: 2026,
-        periodNo: 7,
-        startDate: new Date('2026-07-01T00:00:00.000Z'),
-        endDate: new Date('2026-07-31T23:59:59.999Z'),
+        periodNo: 1,
+        startDate: new Date('2026-01-01T00:00:00.000Z'),
+        endDate: new Date('2026-12-31T23:59:59.999Z'),
         branchId,
         scopeKey: branchId,
         createdBy: verifierId,
