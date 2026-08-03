@@ -1,5 +1,6 @@
 import {
   allocateInvoiceItems,
+  capInvoiceDiscount,
   cloneInvoiceItemsForAllocation,
   shouldRecordInvoicePayment,
   type InvoiceItemForAllocation,
@@ -31,6 +32,27 @@ const items: InvoiceItemForAllocation[] = [
 ];
 
 describe('invoice generation helpers', () => {
+  describe('capInvoiceDiscount', () => {
+    it('preserves valid discount metadata', () => {
+      expect(capInvoiceDiscount(100_000, {
+        discountAmount: 15_000,
+        discountPercent: 10,
+        discountNote: 'Loyalty',
+      })).toEqual({
+        discountAmount: 15_000,
+        discountPercent: 10,
+        discountNote: 'Loyalty',
+      });
+    });
+
+    it('keeps the invoice total non-negative', () => {
+      expect(capInvoiceDiscount(15_000, { discountAmount: 20_000 }).discountAmount)
+        .toBe(15_000);
+      expect(capInvoiceDiscount(15_000, { discountAmount: -1 }).discountAmount)
+        .toBe(0);
+    });
+  });
+
   describe('shouldRecordInvoicePayment', () => {
     it('does not create a finance payment for a complimentary invoice', () => {
       expect(shouldRecordInvoicePayment(0)).toBe(false);

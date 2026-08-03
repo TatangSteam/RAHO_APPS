@@ -47,7 +47,7 @@ export default function PreviewSection({
       <div className="text-sm space-y-2">
         {items.length === 0 ? (
           <p className="text-neutral-500 dark:text-neutral-500 text-center py-4">
-            Pilih minimal 1 paket
+            Pilih minimal 1 paket atau add-on
           </p>
         ) : (
           <>
@@ -71,15 +71,21 @@ export default function PreviewSection({
             ))}
             
             {discount > 0 && (
-              <div className="assign-package-preview-row flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold pt-2">
-                <span>
-                  Diskon
-                  {discountPercent > 0 && ` ${discountPercent}%`}
-                  {discountPercent > 0 && discountAmount > 0 && ' +'}
-                  {discountAmount > 0 && ` ${formatCurrency(discountAmount)}`}
-                </span>
-                <span>- {formatCurrency(Math.round(discount))}</span>
-              </div>
+              <>
+                <div className="assign-package-preview-row flex justify-between pt-2 text-neutral-600 dark:text-neutral-300">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(Math.round(subtotal))}</span>
+                </div>
+                <div className="assign-package-preview-row flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
+                  <span>
+                    Diskon
+                    {discountPercent > 0 && ` ${discountPercent}%`}
+                    {discountPercent > 0 && discountAmount > 0 && ' +'}
+                    {discountAmount > 0 && ` ${formatCurrency(discountAmount)}`}
+                  </span>
+                  <span>- {formatCurrency(Math.round(discount))}</span>
+                </div>
+              </>
             )}
             
             <div className="assign-package-preview-row flex justify-between text-base font-bold text-amber-600 dark:text-amber-400 pt-3 mt-2 border-t-2 border-neutral-300 dark:border-neutral-600/50">

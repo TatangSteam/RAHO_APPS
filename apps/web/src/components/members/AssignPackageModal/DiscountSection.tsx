@@ -22,6 +22,7 @@ function NumericTextInput({
   min = 0,
   max,
   placeholder,
+  id,
   className,
   format,
 }: {
@@ -30,6 +31,7 @@ function NumericTextInput({
   min?: number;
   max?: number;
   placeholder?: string;
+  id: string;
   className?: string;
   format?: boolean;
 }) {
@@ -44,6 +46,7 @@ function NumericTextInput({
   return (
     <input
       type="text"
+      id={id}
       inputMode="numeric"
       value={inputValue}
       onChange={(e) => {
@@ -98,8 +101,14 @@ export default function DiscountSection({
       <div className="assign-package-section-box p-4 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30">
         <div className="assign-package-discount-grid grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Diskon (%)</label>
+            <label
+              htmlFor="assign-discount-percent"
+              className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5"
+            >
+              Diskon (%)
+            </label>
             <NumericTextInput
+              id="assign-discount-percent"
               value={discountPercent}
               onChange={onDiscountPercentChange}
               min={0}
@@ -109,8 +118,14 @@ export default function DiscountSection({
             />
           </div>
           <div>
-            <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Diskon (Rp)</label>
+            <label
+              htmlFor="assign-discount-amount"
+              className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5"
+            >
+              Diskon (Rp)
+            </label>
             <NumericTextInput
+              id="assign-discount-amount"
               value={discountAmount}
               onChange={onDiscountAmountChange}
               min={0}
@@ -121,8 +136,14 @@ export default function DiscountSection({
           </div>
         </div>
         <div className="mb-3">
-          <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Catatan Diskon</label>
+          <label
+            htmlFor="assign-discount-note"
+            className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5"
+          >
+            Catatan Diskon
+          </label>
           <input
+            id="assign-discount-note"
             type="text"
             value={discountNote}
             onChange={(e) => onDiscountNoteChange(e.target.value)}
@@ -131,8 +152,14 @@ export default function DiscountSection({
           />
         </div>
         <div>
-          <label className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5">Notes</label>
+          <label
+            htmlFor="assign-notes"
+            className="text-xs text-neutral-600 dark:text-neutral-400 block mb-1.5"
+          >
+            Notes
+          </label>
           <textarea
+            id="assign-notes"
             value={notes}
             onChange={(e) => onNotesChange(e.target.value)}
             rows={2}

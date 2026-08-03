@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
-import { packagesApi } from '@/lib/packagesApi';
+import { packagesApi, type AssignPackageData } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
 import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
@@ -260,7 +260,7 @@ export default function MemberDetailPage() {
 
   // Handler for AssignPackageModal data changes
   const handleAssignDataChange = (data: typeof assignData) => {
-    setAssignData({ ...data, selectedAddOns: [] });
+    setAssignData(data);
   };
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -403,8 +403,8 @@ export default function MemberDetailPage() {
     devLog('assignData:', assignData);
     devLog('selectedPackages:', assignData.selectedPackages);
     
-    if (assignData.selectedPackages.length === 0) {
-      showToast.error('Pilih minimal 1 paket');
+    if (assignData.selectedPackages.length === 0 && assignData.selectedAddOns.length === 0) {
+      showToast.error('Pilih minimal 1 paket atau add-on');
       return;
     }
 
@@ -418,8 +418,9 @@ export default function MemberDetailPage() {
       setSubmitting(true);
       
       // Prepare payload
-      const payload: any = {
+      const payload: AssignPackageData = {
         packages: assignData.selectedPackages,
+        addOns: assignData.selectedAddOns.length > 0 ? assignData.selectedAddOns : undefined,
         discountPercent: assignData.discountPercent || undefined,
         discountAmount: assignData.discountAmount || undefined,
         discountNote: assignData.discountNote || undefined,
@@ -435,7 +436,7 @@ export default function MemberDetailPage() {
       devLog('Sending payload:', payload);
       
       await packagesApi.assignPackage(memberId, payload);
-      showToast.success('Paket berhasil diassign');
+      showToast.success('Paket / add-on berhasil diassign');
       setShowAssignModal(false);
       setAssignData({
         selectedPackages: [],

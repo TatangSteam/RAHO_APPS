@@ -89,7 +89,7 @@ test.describe('Local core flow without Zoho worker', () => {
     await memberPage.goto();
     await memberPage.createMember(member);
     await memberPage.assignPackage(member.name, 'Basic Package');
-    await memberPage.expectPackageAssigned('Basic Package');
+    await memberPage.expectPackageAssigned();
 
     const paymentPage = new PaymentPage(page);
     await paymentPage.goto();

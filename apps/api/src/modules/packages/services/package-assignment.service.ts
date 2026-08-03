@@ -1,10 +1,25 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 import { logAudit } from '../../../utils/auditLog';
 import type { AssignPackageInput } from '../packages.schema';
-import { PackageType, PackageStatus, AuditAction } from '@prisma/client';
+import {
+  PackageType,
+  PackageStatus,
+  AuditAction,
+  AddOnType,
+  type Branch,
+  type MemberAddOn,
+  type MemberPackage,
+  type PackagePricing,
+} from '@prisma/client';
 import { calculateAndRecordIncentive } from '../../referrals/incentive-calculation.service';
 import { InvoiceGenerationService } from './invoice-generation.service';
+import {
+  allocatePackageDiscount,
+  calculatePurchaseDiscount,
+  normalizeAddOnAssignments,
+  type AddOnAssignmentInput,
+} from './package-assignment.helpers';
 
 type NormalizedPaymentPlan = {
   type: 'FULL_PAYMENT' | 'INSTALLMENT';
@@ -15,6 +30,47 @@ type NormalizedPaymentPlan = {
     dueDate?: string;
   }>;
 };
+
+interface PackageDetail {
+  pricing: PackagePricing;
+  quantity: number;
+  boosterType?: string;
+  serviceType?: string;
+  pricePerSession: number;
+}
+
+type CreatedPackage = MemberPackage & {
+  extendedBoosterType?: string;
+};
+
+type CreatedAddOn = MemberAddOn & {
+  originalCode: string;
+  originalName: string;
+  originalType: AddOnAssignmentInput['type'];
+};
+
+interface PackageAssignmentTransactionResult {
+  createdPackages: CreatedPackage[];
+  createdAddOns: CreatedAddOn[];
+  purchaseGroupId?: string;
+  totalBasicSessions: number;
+}
+
+interface PackageAssignmentTransactionParams {
+  memberId: string;
+  branchId: string;
+  branch: Pick<Branch, 'branchCode'>;
+  packageDetails: PackageDetail[];
+  addOns: AddOnAssignmentInput[];
+  totalSubtotal: number;
+  totalDiscountAmount: number;
+  discountPercent?: number;
+  discountNote?: string;
+  notes?: string;
+  purchaseGroupId?: string;
+  userId: string;
+  paymentPlan: NormalizedPaymentPlan;
+}
 
 /**
  * Service for handling package assignment to members
@@ -75,20 +131,7 @@ export class PackageAssignmentService {
     branchId: string,
     userId: string
   ) {
-    console.log('🔍 assignPackage called with:', {
-      memberId,
-      branchId,
-      userId,
-      packagesCount: data.packages.length,
-      packages: data.packages,
-      addOnsCount: data.addOns?.length || 0,
-      addOns: data.addOns,
-      discount: {
-        percent: data.discountPercent,
-        amount: data.discountAmount,
-        note: data.discountNote
-      }
-    });
+    const normalizedAddOns = normalizeAddOnAssignments(data.addOns || []);
 
     // Validate member access
     const member = await prisma.member.findUnique({
@@ -124,57 +167,42 @@ export class PackageAssignmentService {
 
     // Fetch all pricing data
     const pricingIds = [...new Set(data.packages.map(p => p.pricingId))];
-    console.log('📋 Fetching pricings for IDs:', pricingIds);
-    
     const pricings = pricingIds.length > 0 ? await prisma.packagePricing.findMany({
       where: { id: { in: pricingIds } },
     }) : [];
 
-    console.log('📋 Found pricings:', pricings.length);
-
     if (pricingIds.length > 0 && pricings.length !== pricingIds.length) {
-      console.error('❌ Pricing mismatch:', {
-        requested: pricingIds.length,
-        found: pricings.length,
-        requestedIds: pricingIds,
-        foundIds: pricings.map(p => p.id)
-      });
       throw { status: 404, code: 'PRICING_NOT_FOUND', message: 'Beberapa harga paket tidak ditemukan' };
     }
 
     // Calculate total price
     const { subtotal, packageDetails } = this.calculatePackagePricing(data, pricings);
-    console.log('💰 Calculated pricing:', { subtotal, packageDetailsCount: packageDetails.length });
-
     // Add add-on subtotal
-    const addOnSubtotal = (data.addOns || []).reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
+    const addOnSubtotal = normalizedAddOns.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
     const totalSubtotal = subtotal + addOnSubtotal;
-    console.log('💰 Total subtotal (with addons):', totalSubtotal);
 
     // Calculate discount
-    const percentDiscount = Math.round((totalSubtotal * (data.discountPercent || 0)) / 100);
-    const amountDiscount = Math.round(data.discountAmount || 0);
-    const totalDiscountAmount = percentDiscount + amountDiscount;
-    const finalTotal = Math.round(totalSubtotal - totalDiscountAmount);
-    const paymentPlan = this.normalizePaymentPlan(data, finalTotal);
-    console.log('💰 Final calculation:', { percentDiscount, amountDiscount, totalDiscountAmount, finalTotal });
+    const { totalDiscountAmount } = calculatePurchaseDiscount(
+      totalSubtotal,
+      data.discountPercent,
+      data.discountAmount,
+    );
+    const paymentPlan = this.normalizePaymentPlan(data);
 
     // Determine purchase group
-    const purchaseGroupId = this.determinePurchaseGroup(packageDetails, data.addOns);
+    const purchaseGroupId = this.determinePurchaseGroup(packageDetails, normalizedAddOns);
 
     // Get sequences for package codes
     const { basicSequence, boosterSequence } = await this.getNextSequences(branch.branchCode, branchId);
-    console.log('🔢 Sequences:', { basicSequence, boosterSequence });
 
     // Create packages in transaction
-    console.log('💾 Creating packages in transaction...');
     const result = await this.createPackagesTransaction(
       {
         memberId,
         branchId,
         branch,
         packageDetails,
-        addOns: data.addOns || [],
+        addOns: normalizedAddOns,
         totalSubtotal,
         totalDiscountAmount,
         discountPercent: data.discountPercent,
@@ -188,19 +216,18 @@ export class PackageAssignmentService {
       boosterSequence
     );
 
-    console.log('✅ Packages created:', {
-      packagesCount: result.createdPackages.length,
-      addOnsCount: result.createdAddOns.length,
-      purchaseGroupId: result.purchaseGroupId
-    });
-
     // Create invoice immediately for unpaid assigned packages/add-ons.
     await this.invoiceService.generatePendingInvoiceForPackages(
       result.createdPackages,
       result.createdAddOns,
       member,
       userId,
-      paymentPlan
+      paymentPlan,
+      {
+        discountAmount: totalDiscountAmount,
+        discountPercent: data.discountPercent || 0,
+        discountNote: data.discountNote,
+      },
     );
 
     // Audit logs
@@ -221,16 +248,9 @@ export class PackageAssignmentService {
   /**
    * Calculate package pricing
    */
-  private calculatePackagePricing(data: AssignPackageInput, pricings: any[]) {
+  private calculatePackagePricing(data: AssignPackageInput, pricings: PackagePricing[]) {
     let subtotal = 0;
-    const packageDetails: Array<{
-      pricing: any;
-      quantity: number;
-      boosterType?: string;
-      serviceType?: string;
-      pricePerSession: number;
-      totalPrice: number;
-    }> = [];
+    const packageDetails: PackageDetail[] = [];
 
     data.packages.forEach((pkg) => {
       const pricing = pricings.find(p => p.id === pkg.pricingId)!;
@@ -254,7 +274,6 @@ export class PackageAssignmentService {
         boosterType: pkg.boosterType,
         serviceType: pkg.serviceType,
         pricePerSession,
-        totalPrice,
       });
     });
 
@@ -264,34 +283,23 @@ export class PackageAssignmentService {
   /**
    * Determine if packages should be grouped
    */
-  private determinePurchaseGroup(packageDetails: any[], addOns: any[] = []): string | undefined {
+  private determinePurchaseGroup(
+    packageDetails: PackageDetail[],
+    addOns: readonly AddOnAssignmentInput[] = [],
+  ): string | undefined {
     const hasBasic = packageDetails.some(p => p.pricing.packageType === PackageType.BASIC);
     const hasBooster = packageDetails.some(p => p.pricing.packageType === PackageType.BOOSTER);
     const totalPackagesToCreate = packageDetails.reduce((sum, detail) => sum + detail.quantity, 0);
     const hasAddOns = addOns.length > 0;
     
-    console.log('🔍 Determine Purchase Group:', {
-      hasBasic,
-      hasBooster,
-      totalPackagesToCreate,
-      hasAddOns,
-      packageDetails: packageDetails.map(p => ({
-        type: p.pricing.packageType,
-        quantity: p.quantity
-      }))
-    });
-    
     if ((hasBasic && hasBooster) || totalPackagesToCreate > 1 || (totalPackagesToCreate > 0 && hasAddOns)) {
-      const groupId = `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-      console.log('✅ Creating purchase group:', groupId);
-      return groupId;
+      return `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
     }
-    
-    console.log('✅ No purchase group needed (single package, no addons)');
+
     return undefined;
   }
 
-  private normalizePaymentPlan(data: AssignPackageInput, finalTotal: number): NormalizedPaymentPlan {
+  private normalizePaymentPlan(data: AssignPackageInput): NormalizedPaymentPlan {
     if (!data.paymentPlan || data.paymentPlan.type !== 'INSTALLMENT') {
       return { type: 'FULL_PAYMENT' };
     }
@@ -344,14 +352,14 @@ export class PackageAssignmentService {
     const boosterPattern = `${branchPrefix}-${boosterTypeCode}-${dateStr}-%`;
     
     const [lastBasicResult, lastBoosterResult] = await Promise.all([
-      prisma.$queryRaw<any[]>`
+      prisma.$queryRaw<Array<{ packageCode: string }>>`
         SELECT "packageCode" FROM "member_packages"
         WHERE "branchId" = ${branchId}
           AND "packageCode" LIKE ${basicPattern}
         ORDER BY "packageCode" DESC
         LIMIT 1
       `,
-      prisma.$queryRaw<any[]>`
+      prisma.$queryRaw<Array<{ packageCode: string }>>`
         SELECT "packageCode" FROM "member_packages"
         WHERE "branchId" = ${branchId}
           AND "packageCode" LIKE ${boosterPattern}
@@ -381,27 +389,13 @@ export class PackageAssignmentService {
    * Create packages and add-ons in transaction
    */
   private async createPackagesTransaction(
-    params: {
-      memberId: string;
-      branchId: string;
-      branch: any;
-      packageDetails: any[];
-      addOns: any[];
-      totalSubtotal: number;
-      totalDiscountAmount: number;
-      discountPercent?: number;
-      discountNote?: string;
-      notes?: string;
-      purchaseGroupId?: string;
-      userId: string;
-      paymentPlan: NormalizedPaymentPlan;
-    },
+    params: PackageAssignmentTransactionParams,
     initialBasicSequence: number,
     initialBoosterSequence: number
   ) {
     return await prisma.$transaction(async (tx) => {
-      const createdPackages: any[] = [];
-      const createdAddOns: any[] = [];
+      const createdPackages: CreatedPackage[] = [];
+      const createdAddOns: CreatedAddOn[] = [];
       let totalBasicSessions = 0;
       let basicSequence = initialBasicSequence;
       let boosterSequence = initialBoosterSequence;
@@ -447,13 +441,15 @@ export class PackageAssignmentService {
           }
           
           // Distribute discount proportionally
-          let packageDiscount = 0;
-          if (packageIndex === totalPackages) {
-            packageDiscount = remainingDiscount;
-          } else {
-            packageDiscount = Math.round((packageSubtotal / params.totalSubtotal) * params.totalDiscountAmount);
-            remainingDiscount -= packageDiscount;
-          }
+          const packageDiscount = allocatePackageDiscount({
+            packageSubtotal,
+            purchaseSubtotal: params.totalSubtotal,
+            purchaseDiscount: params.totalDiscountAmount,
+            remainingDiscount,
+            isLastPackage: packageIndex === totalPackages,
+            hasAddOns: params.addOns.length > 0,
+          });
+          remainingDiscount -= packageDiscount;
           
           const packageFinalPrice = Math.round(packageSubtotal - packageDiscount);
 
@@ -515,7 +511,7 @@ export class PackageAssignmentService {
           // The service will detect if it's a bundle and calculate accordingly
           await calculateAndRecordIncentive(createdPackages[0].id, tx);
         } catch (error) {
-          console.error('[PackageAssignment] Error calculating incentive:', error);
+          logger.warn('[PackageAssignment] Incentive calculation failed', { error });
           // Don't fail the whole transaction if incentive calculation fails
         }
       }
@@ -527,7 +523,7 @@ export class PackageAssignmentService {
       for (const addon of params.addOns) {
         const addonDateStr = `${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}`;
         const addonPattern = `ADO-${params.branch.branchCode}-${addonDateStr}-%`;
-        const lastAddon = await tx.$queryRaw<any[]>`
+        const lastAddon = await tx.$queryRaw<Array<{ addOnCode: string }>>`
           SELECT "addOnCode" FROM "member_add_ons"
           WHERE "branchId" = ${params.branchId}
             AND "addOnCode" LIKE ${addonPattern}
@@ -542,15 +538,6 @@ export class PackageAssignmentService {
         }
         const addOnCode = `ADO-${params.branch.branchCode}-${addonDateStr}-${addonSeq.toString().padStart(4, '0')}`;
 
-        const addOnTypeMap: Record<string, string> = {
-          AIR_NANO: 'AIR_NANO',
-          ROKOK_KENKOU: 'LAINNYA',
-          KONSULTASI_GIZI: 'KONSULTASI_GIZI',
-          KONSULTASI_PSIKOLOG: 'KONSULTASI_PSIKOLOG',
-          LAINNYA: 'LAINNYA',
-        };
-        const prismaAddOnType = addOnTypeMap[addon.type] || 'LAINNYA';
-
         const linkedPackageId = createdPackages.length > 0 ? createdPackages[0].id : null;
 
         const memberAddOn = await tx.memberAddOn.create({
@@ -559,7 +546,7 @@ export class PackageAssignmentService {
             memberId: params.memberId,
             branchId: params.branchId,
             packageId: linkedPackageId,
-            addOnType: prismaAddOnType as any,
+            addOnType: addon.type as AddOnType,
             quantity: addon.quantity,
             pricePerUnit: addon.price,
             totalPrice: addon.price * addon.quantity,
@@ -589,7 +576,11 @@ export class PackageAssignmentService {
   /**
    * Log audit for package assignment
    */
-  private async logPackageAssignment(result: any, branchId: string, userId: string) {
+  private async logPackageAssignment(
+    result: PackageAssignmentTransactionResult,
+    branchId: string,
+    userId: string,
+  ) {
     // Audit log for packages
     for (const pkg of result.createdPackages) {
       await logAudit({

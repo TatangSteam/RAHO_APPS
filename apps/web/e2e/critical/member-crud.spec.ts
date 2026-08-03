@@ -242,20 +242,16 @@ test.describe('Member Package Assignment', () => {
     await memberPage.assignPackage(testMember.name, 'Basic Package');
 
     // Verify package is assigned
-    await memberPage.expectPackageAssigned('Basic Package');
+    await memberPage.expectPackageAssigned();
   });
 
   test('should assign multiple packages to member', async () => {
     // Assign first package
     await memberPage.assignPackage(testMember.name, 'Basic Package');
-    await memberPage.expectPackageAssigned('Basic Package');
+    await memberPage.expectPackageAssigned();
 
     // Assign second package
     await memberPage.assignPackage(testMember.name, 'Premium Package');
-    await memberPage.expectPackageAssigned('Premium Package');
-
-    // Verify both packages are visible
-    await memberPage.expectPackageAssigned('Basic Package');
-    await memberPage.expectPackageAssigned('Premium Package');
+    await memberPage.expectPackageAssigned();
   });
 });

@@ -238,36 +238,72 @@ export class MemberPage {
     return rows;
   }
 
+  private async openAssignmentDialog(memberName: string): Promise<Locator> {
+    await this.viewMember(memberName);
+    await this.page.getByRole('tab', { name: 'Paket', exact: true }).click();
+    await waitForLoadingToFinish(this.page);
+    await this.page.getByRole('button', { name: /assign|tambah.*paket/i }).click();
+    await waitForModal(this.page);
+
+    return this.page.getByRole('dialog').last();
+  }
+
   /**
    * Assign package to member
    */
   async assignPackage(memberName: string, packageName: string) {
-    await this.viewMember(memberName);
+    const dialog = await this.openAssignmentDialog(memberName);
+    const packageOption = dialog
+      .locator('label')
+      .filter({ hasText: new RegExp(packageName, 'i') })
+      .first();
 
-    await this.page.getByRole('tab', { name: 'Paket', exact: true }).click();
-    await waitForLoadingToFinish(this.page);
-    
-    // Click assign package button
-    const assignButton = this.page.getByRole('button', { name: /assign|tambah.*paket/i });
-    await assignButton.click();
-    
-    // Wait for modal
-    await waitForModal(this.page);
-    
-    const packageOption = this.page.locator('label').filter({ hasText: new RegExp(packageName, 'i') }).first();
     if (await packageOption.isVisible({ timeout: 2000 }).catch(() => false)) {
       await packageOption.click();
     } else {
-      await this.page.locator('input[type="checkbox"]').first().check();
+      await dialog.locator('input[type="checkbox"]').first().check();
     }
-    
-    // Submit
-    const submitButton = this.page
-      .getByRole('dialog')
-      .getByRole('button', { name: /^Assign \d+ Paket$/ });
-    await submitButton.click();
-    
-    // Wait for success
+
+    await dialog.getByRole('button', { name: /^Assign \d+ Item$/ }).click();
+    await waitForSuccessToast(this.page);
+    await waitForModalClose(this.page);
+  }
+
+  /**
+   * Purchase a standalone add-on without requiring a therapy package.
+   */
+  async assignAddOn(memberName: string, addOnName: string, discountPercent = 0) {
+    const dialog = await this.openAssignmentDialog(memberName);
+    await dialog
+      .locator('label')
+      .filter({ hasText: new RegExp(addOnName, 'i') })
+      .first()
+      .click();
+
+    if (discountPercent > 0) {
+      await dialog.getByRole('textbox', { name: 'Diskon (%)', exact: true })
+        .fill(String(discountPercent));
+    }
+
+    const purchaseResponse = this.page.waitForResponse(
+      (response) => /\/api\/v1\/members\/[^/]+\/packages$/.test(response.url())
+        && response.request().method() === 'POST',
+    );
+    await dialog.getByRole('button', { name: /^Assign 1 Item$/ }).click();
+
+    const response = await purchaseResponse;
+    const requestPayload = response.request().postDataJSON();
+    expect(
+      response.ok(),
+      `Pembelian add-on gagal: ${response.status()} ${await response.text()}`,
+    ).toBeTruthy();
+    expect(requestPayload.addOns).toEqual([
+      expect.objectContaining({ name: addOnName, quantity: 1 }),
+    ]);
+    if (discountPercent > 0) {
+      expect(requestPayload.discountPercent).toBe(discountPercent);
+    }
+
     await waitForSuccessToast(this.page);
     await waitForModalClose(this.page);
   }
@@ -275,7 +311,7 @@ export class MemberPage {
   /**
    * Verify package is assigned
    */
-  async expectPackageAssigned(_packageName: string) {
+  async expectPackageAssigned() {
     await this.page.getByRole('tab', { name: 'Paket', exact: true }).click();
     await waitForLoadingToFinish(this.page);
 

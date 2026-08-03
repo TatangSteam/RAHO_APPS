@@ -10,6 +10,37 @@ export interface InvoiceItemForAllocation {
   totalAmount: number;
 }
 
+interface InvoiceItemAllocationSource {
+  itemType?: string;
+  itemId?: string;
+  code?: string | null;
+  description?: string;
+  quantity?: unknown;
+  pricePerUnit?: unknown;
+  subtotal?: unknown;
+  discountAmount?: unknown;
+  totalAmount?: unknown;
+}
+
+export interface InvoiceDiscount {
+  discountAmount: number;
+  discountPercent?: number;
+  discountNote?: string;
+}
+
+export function capInvoiceDiscount(
+  subtotal: number,
+  discount: InvoiceDiscount,
+): InvoiceDiscount {
+  return {
+    ...discount,
+    discountAmount: Math.min(
+      Math.max(0, subtotal),
+      Math.max(0, Number(discount.discountAmount || 0)),
+    ),
+  };
+}
+
 /**
  * Finance payments must represent real money received. Zero-value invoices
  * (for example complimentary packages) can be finalized without inserting an
@@ -56,7 +87,7 @@ export function allocateInvoiceItems<T extends InvoiceItemForAllocation>(
   });
 }
 
-export function cloneInvoiceItemsForAllocation(items: Array<Partial<InvoiceItemForAllocation>>) {
+export function cloneInvoiceItemsForAllocation(items: InvoiceItemAllocationSource[]) {
   return items.map((item) => ({
     itemType: item.itemType || '',
     itemId: item.itemId || '',

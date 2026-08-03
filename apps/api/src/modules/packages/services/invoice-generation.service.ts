@@ -1,12 +1,22 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { logger } from '../../../lib/logger';
 import { generateInvoiceNumber } from '../../../utils/invoiceGenerator';
 import {
   allocateInvoiceItems,
+  capInvoiceDiscount,
   cloneInvoiceItemsForAllocation,
+  type InvoiceDiscount,
+  type InvoiceItemForAllocation,
   shouldRecordInvoicePayment,
 } from './invoice-generation.helpers';
 import { createHash } from 'crypto';
+import type {
+  Member,
+  MemberAddOn,
+  MemberPackage,
+  Invoice,
+  Prisma,
+} from '@prisma/client';
 
 type InvoiceTargetStatus = 'PENDING_PAYMENT' | 'PAID';
 type PaymentPlanConfig = {
@@ -19,6 +29,13 @@ type PaymentPlanConfig = {
   }>;
 };
 
+type InvoiceMember = Pick<Member, 'id' | 'registrationBranchId'>;
+type InvoicePackage = MemberPackage;
+type InvoiceAddOn = MemberAddOn;
+type InvoiceWithItemsAndPayments = Prisma.InvoiceGetPayload<{
+  include: { items: true; payments: true };
+}>;
+
 /**
  * Service for creating invoice records from assigned packages/add-ons.
  *
@@ -28,11 +45,12 @@ type PaymentPlanConfig = {
  */
 export class InvoiceGenerationService {
   async generatePendingInvoiceForPackages(
-    packages: any[],
-    addOns: any[] = [],
-    member: any,
+    packages: InvoicePackage[],
+    addOns: InvoiceAddOn[] = [],
+    member: InvoiceMember,
     userId: string,
-    paymentPlan?: PaymentPlanConfig
+    paymentPlan?: PaymentPlanConfig,
+    purchaseDiscount?: InvoiceDiscount,
   ) {
     return this.createOrUpdateInvoiceForPurchase({
       packages,
@@ -41,6 +59,7 @@ export class InvoiceGenerationService {
       userId,
       targetStatus: 'PENDING_PAYMENT',
       paymentPlan,
+      purchaseDiscount,
     });
   }
 
@@ -48,14 +67,18 @@ export class InvoiceGenerationService {
    * Backward-compatible method used by older callers. It now marks the related
    * invoice as paid, or creates a paid invoice if the pending invoice is absent.
    */
-  async generateInvoiceForPackages(packages: any[], member: any, userId: string) {
+  async generateInvoiceForPackages(
+    packages: InvoicePackage[],
+    member: InvoiceMember,
+    userId: string,
+  ) {
     return this.markInvoicePaidForPackages(packages, undefined, member, userId);
   }
 
   async markInvoicePaidForPackages(
-    packages: any[],
-    addOns: any[] | undefined,
-    member: any,
+    packages: InvoicePackage[],
+    addOns: InvoiceAddOn[] | undefined,
+    member: InvoiceMember,
     userId: string
   ) {
     return this.createOrUpdateInvoiceForPurchase({
@@ -67,7 +90,11 @@ export class InvoiceGenerationService {
     });
   }
 
-  async markInvoicePaidForAddOns(addOns: any[], member: any, userId: string) {
+  async markInvoicePaidForAddOns(
+    addOns: InvoiceAddOn[],
+    member: InvoiceMember,
+    userId: string,
+  ) {
     return this.createOrUpdateInvoiceForPurchase({
       packages: [],
       addOns,
@@ -78,9 +105,9 @@ export class InvoiceGenerationService {
   }
 
   async verifyActiveInvoiceForPurchase(
-    packages: any[],
-    addOns: any[] | undefined,
-    member: any,
+    packages: InvoicePackage[],
+    addOns: InvoiceAddOn[] | undefined,
+    member: InvoiceMember,
     userId: string,
     paymentData: {
       paidAmount?: number;
@@ -152,8 +179,11 @@ export class InvoiceGenerationService {
           payments: true,
         },
       });
-      const totalPaid = paidInvoices.reduce((sum: number, paidInvoice: any) => (
-        sum + paidInvoice.payments.reduce((paymentSum: number, payment: any) => paymentSum + Number(payment.amount || 0), 0)
+      const totalPaid = paidInvoices.reduce((sum, paidInvoice) => (
+        sum + paidInvoice.payments.reduce(
+          (paymentSum, payment) => paymentSum + Number(payment.amount || 0),
+          0,
+        )
       ), 0);
       finalInstallmentRequiredAmount = Math.max(0, Number(invoice.totalPurchaseAmount || 0) - totalPaid);
     }
@@ -181,7 +211,7 @@ export class InvoiceGenerationService {
       });
 
       await prisma.invoiceItem.createMany({
-        data: paidInvoiceItems.map((item: any) => ({
+        data: paidInvoiceItems.map((item) => ({
           ...item,
           invoiceId: invoice.id,
         })),
@@ -253,19 +283,20 @@ export class InvoiceGenerationService {
   }
 
   private async createOrUpdateInvoiceForPurchase(params: {
-    packages: any[];
-    addOns?: any[];
-    member: any;
+    packages: InvoicePackage[];
+    addOns?: InvoiceAddOn[];
+    member: InvoiceMember;
     userId: string;
     targetStatus: InvoiceTargetStatus;
     paymentPlan?: PaymentPlanConfig;
+    purchaseDiscount?: InvoiceDiscount;
   }) {
     try {
       const packages = params.packages || [];
       const addOns = await this.resolveAddOns(packages, params.addOns);
 
       if (packages.length === 0 && addOns.length === 0) {
-        console.warn('[InvoiceGeneration] No packages or add-ons to invoice');
+        logger.warn('[InvoiceGeneration] No packages or add-ons to invoice');
         return null;
       }
 
@@ -280,13 +311,16 @@ export class InvoiceGenerationService {
       });
 
       if (!branch) {
-        console.error('[InvoiceGeneration] Branch not found');
+        logger.error('[InvoiceGeneration] Branch not found', { branchId });
         return null;
       }
 
       const invoiceItems = this.buildInvoiceItems(packages, addOns);
       const subtotal = invoiceItems.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-      const discountInfo = this.calculateDiscount(packages);
+      const discountInfo = capInvoiceDiscount(
+        subtotal,
+        params.purchaseDiscount || this.calculateDiscount(packages),
+      );
       const totalAmount = Math.max(0, subtotal - discountInfo.discountAmount);
       const paymentPlan = params.paymentPlan || { type: 'FULL_PAYMENT' };
       const isInstallmentInvoice = params.targetStatus === 'PENDING_PAYMENT' && paymentPlan.type === 'INSTALLMENT';
@@ -321,7 +355,7 @@ export class InvoiceGenerationService {
         : null;
 
       const now = new Date();
-      const baseInvoiceData: any = {
+      const baseInvoiceData = {
         memberId: params.member.id,
         branchId,
         subtotal: invoiceItemsForCreate.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
@@ -364,7 +398,7 @@ export class InvoiceGenerationService {
         baseInvoiceData.verifiedAt = null;
       }
 
-      let invoice: any;
+      let invoice: Invoice;
 
       if (existingInvoice) {
         await prisma.invoiceItem.deleteMany({
@@ -399,18 +433,22 @@ export class InvoiceGenerationService {
         await this.recordPaymentIfNeeded(invoice.id, invoiceTotalAmount, packages, addOns, params.userId, now);
       }
 
-      console.log(
-        `[InvoiceGeneration] ${params.targetStatus} invoice ready: ${invoice.invoiceNumber}`
-      );
+      logger.info('[InvoiceGeneration] Invoice ready', {
+        invoiceNumber: invoice.invoiceNumber,
+        status: params.targetStatus,
+      });
 
       return invoice;
     } catch (error) {
-      console.error('[InvoiceGeneration] Error generating invoice:', error);
+      logger.error('[InvoiceGeneration] Error generating invoice', { error });
       return null;
     }
   }
 
-  private async resolveAddOns(packages: any[], providedAddOns?: any[]) {
+  private async resolveAddOns(
+    packages: InvoicePackage[],
+    providedAddOns?: InvoiceAddOn[],
+  ): Promise<InvoiceAddOn[]> {
     if (providedAddOns) {
       return providedAddOns;
     }
@@ -441,8 +479,11 @@ export class InvoiceGenerationService {
     });
   }
 
-  private buildInvoiceItems(packages: any[], addOns: any[]) {
-    const items: any[] = [];
+  private buildInvoiceItems(
+    packages: InvoicePackage[],
+    addOns: InvoiceAddOn[],
+  ): InvoiceItemForAllocation[] {
+    const items: InvoiceItemForAllocation[] = [];
 
     for (const pkg of packages) {
       const itemCode = pkg.productCode || pkg.packageCode;
@@ -483,7 +524,7 @@ export class InvoiceGenerationService {
     return items;
   }
 
-  private getPaymentGroupId(packages: any[], addOns: any[]) {
+  private getPaymentGroupId(packages: InvoicePackage[], addOns: InvoiceAddOn[]) {
     return (
       packages[0]?.purchaseGroupId ||
       packages[0]?.id ||
@@ -493,7 +534,7 @@ export class InvoiceGenerationService {
     );
   }
 
-  private calculateDiscount(packages: any[]) {
+  private calculateDiscount(packages: InvoicePackage[]): InvoiceDiscount {
     let discountAmount = 0;
     let discountPercent = 0;
     let discountNote: string | undefined;
@@ -517,7 +558,7 @@ export class InvoiceGenerationService {
     };
   }
 
-  private getPackageDescription(pkg: any) {
+  private getPackageDescription(pkg: InvoicePackage) {
     const isBooster = pkg.packageType === 'BOOSTER' || pkg.boosterType || pkg.productCode?.startsWith('BST-');
 
     if (isBooster) {
@@ -538,7 +579,7 @@ export class InvoiceGenerationService {
     return `Paket Terapi Dasar - ${pkg.totalSessions}x Sesi`;
   }
 
-  private getAddOnDescription(addon: any) {
+  private getAddOnDescription(addon: InvoiceAddOn) {
     const addOnLabels: Record<string, string> = {
       AIR_NANO: 'Air Nano',
       KONSULTASI_GIZI: 'Konsultasi Gizi',
@@ -561,31 +602,30 @@ export class InvoiceGenerationService {
     return serviceLabels[serviceType || ''] || serviceType || 'Premier';
   }
 
-  private getPaymentMethod(packages: any[], addOns: any[]) {
+  private getPaymentMethod(packages: InvoicePackage[], addOns: InvoiceAddOn[]) {
     const proof = this.getPaymentProof(packages, addOns);
     return proof.proofFileUrl ? 'TRANSFER' : 'CASH';
   }
 
-  private getPaymentProof(packages: any[], addOns: any[]) {
+  private getPaymentProof(packages: InvoicePackage[], addOns: InvoiceAddOn[]) {
     const source = packages.find((pkg) => pkg.paymentProofUrl) ||
       addOns.find((addon) => addon.paymentProofUrl) ||
       packages[0] ||
-      addOns[0] ||
-      {};
+      addOns[0];
 
     return {
-      proofFileUrl: source.paymentProofUrl,
-      proofFileName: source.paymentProofFileName,
-      proofFileSize: source.paymentProofFileSize,
-      proofMimeType: source.paymentProofMimeType,
+      proofFileUrl: source?.paymentProofUrl,
+      proofFileName: source?.paymentProofFileName,
+      proofFileSize: source?.paymentProofFileSize,
+      proofMimeType: source?.paymentProofMimeType,
     };
   }
 
   private async recordPaymentIfNeeded(
     invoiceId: string,
     totalAmount: number,
-    packages: any[],
-    addOns: any[],
+    packages: InvoicePackage[],
+    addOns: InvoiceAddOn[],
     userId: string,
     receivedAt: Date
   ) {
@@ -623,13 +663,22 @@ export class InvoiceGenerationService {
     });
   }
 
-  private async createNextInstallmentInvoice(previousInvoice: any, paidAmount: number, userId: string) {
+  private async createNextInstallmentInvoice(
+    previousInvoice: InvoiceWithItemsAndPayments,
+    paidAmount: number,
+    userId: string,
+  ) {
     const nextInstallmentNumber = Number(previousInvoice.installmentNumber) + 1;
     const installmentTotal = Number(previousInvoice.installmentTotal);
     const schedule = Array.isArray(previousInvoice.installmentSchedule)
       ? previousInvoice.installmentSchedule
       : [];
-    const nextSchedule = schedule.find((item: any) => Number(item.installmentNumber) === nextInstallmentNumber);
+    const nextSchedule = schedule.find(
+      (item) => typeof item === 'object'
+        && item !== null
+        && 'installmentNumber' in item
+        && Number(item.installmentNumber) === nextInstallmentNumber,
+    );
     const plannedAmount = Math.round(Number(nextSchedule?.amount || 0));
     const totalPurchaseAmount = Number(previousInvoice.totalPurchaseAmount || previousInvoice.totalAmount || 0);
     const paidInvoices = await prisma.invoice.findMany({
@@ -641,8 +690,11 @@ export class InvoiceGenerationService {
         payments: true,
       },
     });
-    const totalPaid = paidInvoices.reduce((sum: number, invoice: any) => (
-      sum + invoice.payments.reduce((paymentSum: number, payment: any) => paymentSum + Number(payment.amount || 0), 0)
+    const totalPaid = paidInvoices.reduce((sum, invoice) => (
+      sum + invoice.payments.reduce(
+        (paymentSum, payment) => paymentSum + Number(payment.amount || 0),
+        0,
+      )
     ), 0);
     const remainingAmount = Math.max(0, totalPurchaseAmount - totalPaid);
     const nextAmount = plannedAmount > 0 ? Math.min(plannedAmount, remainingAmount) : remainingAmount;
@@ -667,13 +719,18 @@ export class InvoiceGenerationService {
     });
 
     if (!branch) {
-      console.error('[InvoiceGeneration] Branch not found for next installment');
+      logger.error('[InvoiceGeneration] Branch not found for next installment', {
+        branchId: previousInvoice.branchId,
+      });
       return null;
     }
 
     const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode);
     const sourceItems = previousInvoice.items || [];
-    const sourceTotal = sourceItems.reduce((sum: number, item: any) => sum + Number(item.totalAmount || 0), 0);
+    const sourceTotal = sourceItems.reduce(
+      (sum, item) => sum + Number(item.totalAmount || 0),
+      0,
+    );
     const clonedSourceItems = cloneInvoiceItemsForAllocation(sourceItems);
     const nextItems = nextAmount > 0
       ? allocateInvoiceItems(clonedSourceItems, nextAmount, sourceTotal)

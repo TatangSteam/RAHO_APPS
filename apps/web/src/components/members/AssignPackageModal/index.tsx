@@ -7,6 +7,7 @@ import { PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/t
 import { usePackageSelection } from './usePackageSelection';
 import BasicPackageSection from './BasicPackageSection';
 import BoosterPackageSection from './BoosterPackageSection';
+import AddOnSection from './AddOnSection';
 import DiscountSection from './DiscountSection';
 import PreviewSection from './PreviewSection';
 
@@ -128,6 +129,10 @@ export default function AssignPackageModal({
     toggleBooster,
     updateBoosterQty,
     updateBoosterServiceType,
+    isAddOnSelected,
+    getAddOnQuantity,
+    toggleAddOn,
+    updateAddOnQuantity,
     calculatePreview,
   } = usePackageSelection(assignData, onAssignDataChange, pricingsList);
 
@@ -186,10 +191,10 @@ export default function AssignPackageModal({
               </div>
               <div className="assign-package-modal-title-copy">
                 <h2 className="text-xl font-bold text-neutral-900 dark:text-white">
-                  Assign Paket Terapi
+                  Assign Paket & Add-On
                 </h2>
                 <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Pilih paket untuk member
+                  Pilih paket atau produk tambahan untuk member
                 </p>
               </div>
             </div>
@@ -222,6 +227,14 @@ export default function AssignPackageModal({
               toggleBooster={toggleBooster}
               updateBoosterQty={updateBoosterQty}
               updateBoosterServiceType={updateBoosterServiceType}
+            />
+
+            {/* ADD-ONS */}
+            <AddOnSection
+              isAddOnSelected={isAddOnSelected}
+              getAddOnQuantity={getAddOnQuantity}
+              toggleAddOn={toggleAddOn}
+              updateAddOnQuantity={updateAddOnQuantity}
             />
 
             {/* DISKON */}
@@ -324,7 +337,7 @@ export default function AssignPackageModal({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  {preview.items.length > 0 ? `Assign ${preview.items.length} Paket` : 'Pilih Paket'}
+                  {preview.items.length > 0 ? `Assign ${preview.items.length} Item` : 'Pilih Paket / Add-On'}
                 </>
               )}
             </button>
