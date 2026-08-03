@@ -10,6 +10,7 @@ import {
   type MaterialRecommendationsResponse,
 } from '@/lib/materialsApi';
 import { devError } from '@/lib/logger';
+import { getApiErrorMessage } from '@/lib/api';
 import { AlertTriangle, ClipboardCheck, Trash2 } from 'lucide-react';
 
 interface MaterialUsage {
@@ -229,15 +230,15 @@ export default function Step6Materials({
       setDeviationReason('');
       setDeviationNotes('');
       onComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       devError('Error adding material:', error);
-      showToast.error(error.message || 'Gagal menambah material');
+      showToast.error(getApiErrorMessage(error) || 'Gagal menambah material');
     } finally {
       setLoading(false);
     }
   };
 
-  const useRecommendation = (recommendation: MaterialRecommendation) => {
+  const applyRecommendation = (recommendation: MaterialRecommendation) => {
     const item = inventoryItems.find((inventoryItem) => inventoryItem.id === recommendation.inventoryItemId);
     if (!item) {
       showToast.error('Material rekomendasi belum tersedia pada inventory cabang');
@@ -254,9 +255,9 @@ export default function Step6Materials({
       await materialsApi.deleteMaterial(sessionId, usageId);
       showToast.success('Draft material dihapus');
       onComplete();
-    } catch (error: any) {
+    } catch (error: unknown) {
       devError('Error deleting material usage:', error);
-      showToast.error(error.response?.data?.error?.message || 'Gagal menghapus draft material');
+      showToast.error(getApiErrorMessage(error) || 'Gagal menghapus draft material');
     }
   };
 
@@ -453,7 +454,7 @@ export default function Step6Materials({
                   </span>
                   <button
                     type="button"
-                    onClick={() => useRecommendation(recommendation)}
+                    onClick={() => applyRecommendation(recommendation)}
                     disabled={!recommendation.isAvailable || recorded}
                     style={{
                       minHeight: '32px',

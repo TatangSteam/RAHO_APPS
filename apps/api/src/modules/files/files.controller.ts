@@ -16,7 +16,7 @@ export class FilesController {
   async serveFile(req: Request, res: Response, next: NextFunction) {
     try {
       // Get the full path after /files/
-      let filePath = req.params[0]; // This captures everything after /files/
+      const filePath = req.params[0]; // This captures everything after /files/
 
       if (!filePath) {
         return res.status(400).json({

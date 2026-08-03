@@ -415,7 +415,7 @@ export class PackageEditService {
     });
 
     let packageRecords = [...updatedPackages];
-    let createdAddOns: any[] = [];
+    const createdAddOns: any[] = [];
 
     if (data.addOns && data.addOns.length > 0) {
       for (const addon of data.addOns) {

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { ShieldCheck, UsersRound } from 'lucide-react';
-import { api } from '@/lib/api';
+import { api, getApiErrorMessage } from '@/lib/api';
 import { iamApi, Permission, RoleTemplate, UserAccess } from '@/lib/iamApi';
 import { showToast } from '@/lib/toast';
 
@@ -89,17 +89,20 @@ export default function PermissionManagementPage() {
       await iamApi.replaceTemplatePermissions(selectedTemplate.id, Array.from(templateCodes));
       setTemplates(await iamApi.roleTemplates());
       showToast.success('Permission role template tersimpan dan tercatat di audit log.');
-    } catch (error: any) {
-      showToast.error(error.response?.data?.error?.message || 'Gagal menyimpan role template.');
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error) || 'Gagal menyimpan role template.');
     } finally { setSaving(false); }
   };
 
   const saveUserAccess = async () => {
     if (!selectedUserId || !userAccess) return;
+    if (selectedBranchIds.size === 0) {
+      showToast.error('Pilih minimal satu branch untuk user.');
+      return;
+    }
     setSaving(true);
     try {
       const selected = staff.find((item) => item.id === selectedUserId);
-      if (selectedBranchIds.size === 0) throw new Error('Pilih minimal satu branch untuk user.');
       await iamApi.replaceUserBranches(selectedUserId, Array.from(selectedBranchIds), Array.from(selectedBranchIds)[0]);
       await iamApi.assignRoleTemplate(selectedUserId, userAccess.roleTemplateId);
       const payload = Object.entries(overrides)
@@ -112,8 +115,8 @@ export default function PermissionManagementPage() {
       const next = await iamApi.replaceUserOverrides(selectedUserId, payload);
       setUserAccess(next);
       showToast.success('Akses user tersimpan dan tercatat di audit log.');
-    } catch (error: any) {
-      showToast.error(error.response?.data?.error?.message || error.message || 'Gagal menyimpan akses user.');
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error) || 'Gagal menyimpan akses user.');
     } finally { setSaving(false); }
   };
 
@@ -138,7 +141,11 @@ export default function PermissionManagementPage() {
         <PermissionGrid grouped={grouped} renderControl={(permission) => (
           <input type="checkbox" checked={templateCodes.has(permission.code)} onChange={(event) => setTemplateCodes((current) => {
             const next = new Set(current);
-            event.target.checked ? next.add(permission.code) : next.delete(permission.code);
+            if (event.target.checked) {
+              next.add(permission.code);
+            } else {
+              next.delete(permission.code);
+            }
             return next;
           })} />
         )} />
@@ -185,7 +192,11 @@ export default function PermissionManagementPage() {
             <div className="flex flex-wrap gap-2">{branches.map((branch) => <label key={branch.id} className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm dark:border-neutral-800">
               <input type="checkbox" checked={selectedBranchIds.has(branch.id)} onChange={(event) => setSelectedBranchIds((current) => {
                 const next = new Set(current);
-                event.target.checked ? next.add(branch.id) : next.delete(branch.id);
+                if (event.target.checked) {
+                  next.add(branch.id);
+                } else {
+                  next.delete(branch.id);
+                }
                 return next;
               })} />
               {branch.branchCode} — {branch.name}
@@ -193,7 +204,7 @@ export default function PermissionManagementPage() {
           </div>
           <p className="mb-3 text-xs text-neutral-500">Gunakan ALLOW/DENY hanya untuk pengecualian dari role template.</p>
           <PermissionGrid grouped={grouped} renderControl={(permission) => (
-            <select className="rounded border bg-transparent px-2 py-1 text-xs" value={overrides[permission.code] || 'INHERIT'} onChange={(event) => setOverrides((current) => ({ ...current, [permission.code]: event.target.value as any }))}>
+            <select className="rounded border bg-transparent px-2 py-1 text-xs" value={overrides[permission.code] || 'INHERIT'} onChange={(event) => setOverrides((current) => ({ ...current, [permission.code]: event.target.value as 'INHERIT' | 'ALLOW' | 'DENY' }))}>
               <option value="INHERIT">Ikuti template</option><option value="ALLOW">ALLOW</option><option value="DENY">DENY</option>
             </select>
           )} />

@@ -345,7 +345,7 @@ export async function handlePurchaseOrderEvent(event: IntegrationEvent) {
     );
   }
   let remote = matches[0];
-  let operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
+  const operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
   const local = await prisma.purchaseOrder.findUnique({
     where: { id: snapshot.localEntityId },
     select: { status: true },

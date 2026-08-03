@@ -508,7 +508,7 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
     'vendorpayment_refunds',
   );
   let refund = refunds.find((row) => row.reference_number === snapshot.referenceNumber);
-  let operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
+  const operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
   if (!refund) {
     const updatePayload = buildZohoVendorPaymentPayload(
       original,

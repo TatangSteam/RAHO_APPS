@@ -53,7 +53,7 @@ export function normalizeIfaSubstances(
         amount,
         unit,
         ...(keterangan ? { keterangan } : {}),
-        ...(Boolean(raw.isDefault) ? { isDefault: true } : {}),
+        ...(raw.isDefault ? { isDefault: true } : {}),
       };
     })
     .filter((item): item is TherapyPlanSubstance => Boolean(item));

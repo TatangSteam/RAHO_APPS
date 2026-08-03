@@ -112,7 +112,7 @@ export async function processImage(
   }
 
   // Process the image
-  let sharpInstance = sharp(buffer)
+  const sharpInstance = sharp(buffer)
     .resize(width, height, {
       fit: 'inside',
       withoutEnlargement: true,

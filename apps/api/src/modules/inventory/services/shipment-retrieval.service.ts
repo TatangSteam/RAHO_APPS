@@ -125,7 +125,7 @@ export class ShipmentRetrievalService {
 
     // Query stock mutations separately for all shipments
     const shipmentIds = shipments.map(s => s.id);
-    let stockMutationsMap: Map<string, any> = new Map();
+    const stockMutationsMap: Map<string, any> = new Map();
 
     if (shipmentIds.length > 0) {
       const stockMutations = await prisma.stockMutation.findMany({

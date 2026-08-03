@@ -393,7 +393,7 @@ async function handleJournalRecognition(
     mapping(client.connection.id, 'GL_ACCOUNT', recognition.revenueAccountCode),
   ]);
   const referenceNumber = `RAHO-SESSION:${payload.session.id}`;
-  let journalMap = await mapping(client.connection.id, 'TREATMENT_REVENUE_JOURNAL', payload.session.id);
+  const journalMap = await mapping(client.connection.id, 'TREATMENT_REVENUE_JOURNAL', payload.session.id);
   if (journalMap) return { operation: 'ALREADY_MAPPED', journalId: journalMap.zohoEntityId };
   let candidate = await findOne<ZohoJournal>(client, '/books/v3/journals', 'journals', referenceNumber);
   const operation = candidate ? 'RECOVER_EXISTING' : 'CREATE';

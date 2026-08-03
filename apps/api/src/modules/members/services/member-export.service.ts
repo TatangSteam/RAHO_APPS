@@ -342,7 +342,7 @@ export class MemberExportService {
     });
 
     // Fetch session stats if needed
-    let sessionStats: Map<string, { total: number; completed: number; lastDate: string | null }> = new Map();
+    const sessionStats: Map<string, { total: number; completed: number; lastDate: string | null }> = new Map();
     if (needsSessions) {
       const memberIds = members.map(m => m.id);
       
@@ -441,14 +441,16 @@ export class MemberExportService {
     switch (groupBy) {
       case 'branch':
         return member.registrationBranch?.name || 'Tidak Ada Cabang';
-      case 'packageType':
+      case 'packageType': {
         const packages = member.memberPackages || [];
         if (packages.length === 0) return 'Tidak Ada Paket';
         const types = [...new Set(packages.map((p: any) => p.packageType))];
         return types.join(', ');
-      case 'registrationMonth':
+      }
+      case 'registrationMonth': {
         const date = new Date(member.createdAt);
         return `${date.toLocaleString('id-ID', { month: 'long' })} ${date.getFullYear()}`;
+      }
       case 'gender':
         return member.jenisKelamin === 'L' ? 'Laki-laki' : 
                member.jenisKelamin === 'P' ? 'Perempuan' : 'Tidak Diketahui';

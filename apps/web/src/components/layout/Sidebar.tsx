@@ -24,6 +24,7 @@ import {
   formatNotificationBadge,
   type ManagerNotificationCounts,
 } from '@/lib/api/managerNotificationsApi';
+import { OptimizedImage } from '@/components/ui/OptimizedImage';
 
 // ── Menu Item Type ────────────────────────────────────────────
 
@@ -397,6 +398,54 @@ export function Sidebar({
   const loadingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const overlayShownRef = useRef(false);
 
+  useEffect(() => {
+    if (!pendingHref) return;
+
+    if (pathname === pendingHref) {
+      setPendingHref(null);
+    }
+  }, [pathname, pendingHref]);
+
+  useEffect(() => {
+    if (loadingTimerRef.current) {
+      clearTimeout(loadingTimerRef.current);
+      loadingTimerRef.current = null;
+    }
+
+    if (!pendingHref) {
+      if (overlayShownRef.current) {
+        hideGlobalLoading();
+        overlayShownRef.current = false;
+      }
+
+      return;
+    }
+
+    loadingTimerRef.current = setTimeout(() => {
+      overlayShownRef.current = true;
+      showGlobalLoading('Memuat halaman...');
+    }, 180);
+
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+    };
+  }, [hideGlobalLoading, pendingHref, showGlobalLoading]);
+
+  useEffect(() => {
+    return () => {
+      if (loadingTimerRef.current) {
+        clearTimeout(loadingTimerRef.current);
+      }
+
+      if (overlayShownRef.current) {
+        hideGlobalLoading();
+      }
+    };
+  }, [hideGlobalLoading]);
+
   if (!user) return null;
 
   const role = user.role as Role;
@@ -454,54 +503,6 @@ export function Sidebar({
     return pathname.startsWith(href + '/');
   };
 
-  useEffect(() => {
-    if (!pendingHref) return;
-
-    if (pathname === pendingHref) {
-      setPendingHref(null);
-    }
-  }, [pathname, pendingHref]);
-
-  useEffect(() => {
-    if (loadingTimerRef.current) {
-      clearTimeout(loadingTimerRef.current);
-      loadingTimerRef.current = null;
-    }
-
-    if (!pendingHref) {
-      if (overlayShownRef.current) {
-        hideGlobalLoading();
-        overlayShownRef.current = false;
-      }
-
-      return;
-    }
-
-    loadingTimerRef.current = setTimeout(() => {
-      overlayShownRef.current = true;
-      showGlobalLoading('Memuat halaman...');
-    }, 180);
-
-    return () => {
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current);
-        loadingTimerRef.current = null;
-      }
-    };
-  }, [hideGlobalLoading, pendingHref, showGlobalLoading]);
-
-  useEffect(() => {
-    return () => {
-      if (loadingTimerRef.current) {
-        clearTimeout(loadingTimerRef.current);
-      }
-
-      if (overlayShownRef.current) {
-        hideGlobalLoading();
-      }
-    };
-  }, [hideGlobalLoading]);
-
   const shouldSkipNavigationLoading = (event: MouseEvent<HTMLAnchorElement>, href: string) => {
     return (
       pathname === href ||
@@ -541,10 +542,13 @@ export function Sidebar({
         )}>
           {/* Logo */}
           <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
-            <img 
-              src="/asset/logo_tab_RAHO.png" 
-              alt="RAHO" 
-              className="w-full h-full object-cover"
+            <OptimizedImage
+              src="/asset/logo_tab_RAHO.png"
+              alt="RAHO"
+              width={40}
+              height={40}
+              showPlaceholder={false}
+              className="h-full w-full object-cover"
             />
           </div>
           {!collapsed && (
@@ -625,10 +629,13 @@ export function Sidebar({
         >
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 overflow-hidden">
             {user.avatarUrl ? (
-              <img
+              <OptimizedImage
                 src={user.avatarUrl}
                 alt={user.fullName}
-                className="w-full h-full object-cover"
+                width={40}
+                height={40}
+                showPlaceholder={false}
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-black font-bold">
@@ -663,10 +670,13 @@ export function Sidebar({
         >
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold overflow-hidden transition-transform duration-200 group-hover:scale-105">
             {user.avatarUrl ? (
-              <img
+              <OptimizedImage
                 src={user.avatarUrl}
                 alt={user.fullName}
-                className="w-full h-full object-cover"
+                width={40}
+                height={40}
+                showPlaceholder={false}
+                className="h-full w-full object-cover"
               />
             ) : (
               <div className="w-full h-full bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center text-black font-bold">

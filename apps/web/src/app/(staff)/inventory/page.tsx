@@ -7,10 +7,10 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { inventoryApi } from '@/lib/api/inventoryApi';
-import { api } from '@/lib/api';
+import { api, getApiErrorMessage } from '@/lib/api';
 import { 
   Package, Search, AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, 
-  ClipboardList, Truck, Building2, RefreshCw, X, Edit3, ShoppingCart, MapPin,
+  ClipboardList, Truck, Building2, X, Edit3, ShoppingCart, MapPin,
   ArrowUpDown, Save
 } from 'lucide-react';
 import { PageLoading, ButtonLoading } from '@/components/ui/LoadingSpinner';
@@ -148,15 +148,9 @@ export default function InventoryPage() {
         setSelectedBranchId(user.branchId);
       }
     }
-  }, [mounted, user, accessToken, canSelectBranch, fetchBranches]);
+  }, [mounted, user, accessToken, canSelectBranch, fetchBranches, router]);
 
-  useEffect(() => {
-    if (selectedBranchId && accessToken) {
-      fetchInventoryItems(selectedBranchId);
-    }
-  }, [selectedBranchId, accessToken]);
-
-  const fetchInventoryItems = async (branchId: string) => {
+  const fetchInventoryItems = useCallback(async (branchId: string) => {
     try {
       setLoading(true);
       
@@ -180,7 +174,13 @@ export default function InventoryPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, router]);
+
+  useEffect(() => {
+    if (selectedBranchId && accessToken) {
+      fetchInventoryItems(selectedBranchId);
+    }
+  }, [selectedBranchId, accessToken, fetchInventoryItems]);
 
   const handleExport = async (format: 'csv' | 'excel') => {
     try {
@@ -305,8 +305,8 @@ export default function InventoryPage() {
       showToast.success('Stok berhasil disesuaikan');
       handleCloseEditModal();
       fetchInventoryItems(selectedBranchId);
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.error?.message || 'Gagal menyesuaikan stok';
+    } catch (error: unknown) {
+      const errorMessage = getApiErrorMessage(error) || 'Gagal menyesuaikan stok';
       showToast.error(errorMessage);
       devError('Adjust stock error:', error);
     } finally {

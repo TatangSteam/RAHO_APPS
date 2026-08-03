@@ -396,7 +396,7 @@ async function handlePaymentRefund(event: IntegrationEvent) {
     'refunds',
   );
   let refund = refunds.find((row) => row.reference_number === snapshot.referenceNumber);
-  let operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
+  const operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
   const paymentDetail = await client.request<{ payment?: ZohoCustomerPayment }>(
     `/books/v3/customerpayments/${paymentId}`,
   );

@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow E2E production builds to use an isolated directory while a local
+  // `next dev` process continues using the default `.next` directory.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   typescript: {
     // ⚠️ Dangerously allow production builds to successfully complete even if
     // your project has type errors.
