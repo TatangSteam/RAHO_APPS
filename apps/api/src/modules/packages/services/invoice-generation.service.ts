@@ -35,6 +35,27 @@ type InvoiceAddOn = MemberAddOn;
 type InvoiceWithItemsAndPayments = Prisma.InvoiceGetPayload<{
   include: { items: true; payments: true };
 }>;
+type InstallmentInvoiceSource = Omit<
+  InvoiceWithItemsAndPayments,
+  'totalAmount' | 'installmentAmount'
+> & {
+  totalAmount: InvoiceWithItemsAndPayments['totalAmount'] | number;
+  installmentAmount: InvoiceWithItemsAndPayments['installmentAmount'] | number;
+};
+type InvoiceBaseData = Omit<
+  Prisma.InvoiceUncheckedCreateInput,
+  'invoiceNumber' | 'createdBy' | 'items' | 'payments'
+>;
+
+type InstallmentScheduleEntry = Prisma.JsonObject & {
+  installmentNumber: Prisma.JsonValue;
+  amount?: Prisma.JsonValue;
+  dueDate?: Prisma.JsonValue;
+};
+
+function isInstallmentScheduleEntry(value: unknown): value is InstallmentScheduleEntry {
+  return typeof value === 'object' && value !== null && 'installmentNumber' in value;
+}
 
 /**
  * Service for creating invoice records from assigned packages/add-ons.
@@ -355,7 +376,7 @@ export class InvoiceGenerationService {
         : null;
 
       const now = new Date();
-      const baseInvoiceData = {
+      const baseInvoiceData: InvoiceBaseData = {
         memberId: params.member.id,
         branchId,
         subtotal: invoiceItemsForCreate.reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
@@ -664,7 +685,7 @@ export class InvoiceGenerationService {
   }
 
   private async createNextInstallmentInvoice(
-    previousInvoice: InvoiceWithItemsAndPayments,
+    previousInvoice: InstallmentInvoiceSource,
     paidAmount: number,
     userId: string,
   ) {
@@ -673,12 +694,9 @@ export class InvoiceGenerationService {
     const schedule = Array.isArray(previousInvoice.installmentSchedule)
       ? previousInvoice.installmentSchedule
       : [];
-    const nextSchedule = schedule.find(
-      (item) => typeof item === 'object'
-        && item !== null
-        && 'installmentNumber' in item
-        && Number(item.installmentNumber) === nextInstallmentNumber,
-    );
+    const nextSchedule = schedule
+      .filter(isInstallmentScheduleEntry)
+      .find((item) => Number(item.installmentNumber) === nextInstallmentNumber);
     const plannedAmount = Math.round(Number(nextSchedule?.amount || 0));
     const totalPurchaseAmount = Number(previousInvoice.totalPurchaseAmount || previousInvoice.totalAmount || 0);
     const paidInvoices = await prisma.invoice.findMany({
@@ -762,7 +780,9 @@ export class InvoiceGenerationService {
         paymentVerificationStatus: 'PENDING',
         paymentRejectionReason: null,
         isAdjustment: false,
-        dueDate: nextSchedule?.dueDate ? new Date(nextSchedule.dueDate) : this.getDefaultDueDate(new Date()),
+        dueDate: typeof nextSchedule?.dueDate === 'string'
+          ? new Date(nextSchedule.dueDate)
+          : this.getDefaultDueDate(new Date()),
         paidAt: null,
         paymentMethod: null,
         paymentReference: null,
