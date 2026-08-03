@@ -1,5 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { generateInvoiceNumber as formatInvoiceNumber } from './codeGenerator';
+import { Prisma } from '@prisma/client';
+
+type InvoiceNumberDb = Pick<Prisma.TransactionClient, 'invoice' | '$queryRaw'>;
 
 /**
  * Generate unique invoice number
@@ -8,13 +11,17 @@ import { generateInvoiceNumber as formatInvoiceNumber } from './codeGenerator';
  */
 export async function generateInvoiceNumber(
   branchCode: string,
-  date = new Date()
+  date = new Date(),
+  db: InvoiceNumberDb = prisma,
 ): Promise<string> {
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const suffix = `-${branchCode}-${month}-${year}`;
 
-  const lastInvoice = await prisma.invoice.findFirst({
+  await db.$queryRaw(
+    Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`INVOICE_NUMBER:${branchCode}:${year}:${month}`}))::text AS "lockResult"`,
+  );
+  const lastInvoice = await db.invoice.findFirst({
     where: {
       invoiceNumber: {
         endsWith: suffix,

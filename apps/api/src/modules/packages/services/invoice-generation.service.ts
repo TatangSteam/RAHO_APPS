@@ -72,6 +72,7 @@ export class InvoiceGenerationService {
     userId: string,
     paymentPlan?: PaymentPlanConfig,
     purchaseDiscount?: InvoiceDiscount,
+    tx?: Prisma.TransactionClient,
   ) {
     return this.createOrUpdateInvoiceForPurchase({
       packages,
@@ -81,6 +82,7 @@ export class InvoiceGenerationService {
       targetStatus: 'PENDING_PAYMENT',
       paymentPlan,
       purchaseDiscount,
+      tx,
     });
   }
 
@@ -311,10 +313,12 @@ export class InvoiceGenerationService {
     targetStatus: InvoiceTargetStatus;
     paymentPlan?: PaymentPlanConfig;
     purchaseDiscount?: InvoiceDiscount;
+    tx?: Prisma.TransactionClient;
   }) {
     try {
+      const db = params.tx || prisma;
       const packages = params.packages || [];
-      const addOns = await this.resolveAddOns(packages, params.addOns);
+      const addOns = await this.resolveAddOns(packages, params.addOns, db);
 
       if (packages.length === 0 && addOns.length === 0) {
         logger.warn('[InvoiceGeneration] No packages or add-ons to invoice');
@@ -326,7 +330,7 @@ export class InvoiceGenerationService {
         addOns[0]?.branchId ||
         params.member.registrationBranchId;
 
-      const branch = await prisma.branch.findUnique({
+      const branch = await db.branch.findUnique({
         where: { id: branchId },
         select: { branchCode: true },
       });
@@ -359,7 +363,7 @@ export class InvoiceGenerationService {
       const paymentGroupId = this.getPaymentGroupId(packages, addOns);
 
       const existingInvoice = itemIds.length > 0
-        ? await prisma.invoice.findFirst({
+        ? await db.invoice.findFirst({
             where: {
               status: { not: 'CANCELLED' },
               items: {
@@ -422,11 +426,11 @@ export class InvoiceGenerationService {
       let invoice: Invoice;
 
       if (existingInvoice) {
-        await prisma.invoiceItem.deleteMany({
+        await db.invoiceItem.deleteMany({
           where: { invoiceId: existingInvoice.id },
         });
 
-        invoice = await prisma.invoice.update({
+        invoice = await db.invoice.update({
           where: { id: existingInvoice.id },
           data: {
             ...baseInvoiceData,
@@ -436,9 +440,9 @@ export class InvoiceGenerationService {
           },
         });
       } else {
-        const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode);
+        const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode, db);
 
-        invoice = await prisma.invoice.create({
+        invoice = await db.invoice.create({
           data: {
             invoiceNumber,
             ...baseInvoiceData,
@@ -451,7 +455,7 @@ export class InvoiceGenerationService {
       }
 
       if (params.targetStatus === 'PAID') {
-        await this.recordPaymentIfNeeded(invoice.id, invoiceTotalAmount, packages, addOns, params.userId, now);
+        await this.recordPaymentIfNeeded(invoice.id, invoiceTotalAmount, packages, addOns, params.userId, now, db);
       }
 
       logger.info('[InvoiceGeneration] Invoice ready', {
@@ -462,13 +466,14 @@ export class InvoiceGenerationService {
       return invoice;
     } catch (error) {
       logger.error('[InvoiceGeneration] Error generating invoice', { error });
-      return null;
+      throw error;
     }
   }
 
   private async resolveAddOns(
     packages: InvoicePackage[],
     providedAddOns?: InvoiceAddOn[],
+    db: Prisma.TransactionClient | typeof prisma = prisma,
   ): Promise<InvoiceAddOn[]> {
     if (providedAddOns) {
       return providedAddOns;
@@ -481,7 +486,7 @@ export class InvoiceGenerationService {
     let packageIds = packages.map((pkg) => pkg.id).filter(Boolean);
 
     if (packages[0]?.purchaseGroupId) {
-      const groupPackages = await prisma.memberPackage.findMany({
+      const groupPackages = await db.memberPackage.findMany({
         where: { purchaseGroupId: packages[0].purchaseGroupId },
         select: { id: true },
       });
@@ -492,7 +497,7 @@ export class InvoiceGenerationService {
       return [];
     }
 
-    return prisma.memberAddOn.findMany({
+    return db.memberAddOn.findMany({
       where: {
         packageId: { in: packageIds },
         status: { not: 'CANCELLED' },
@@ -648,13 +653,14 @@ export class InvoiceGenerationService {
     packages: InvoicePackage[],
     addOns: InvoiceAddOn[],
     userId: string,
-    receivedAt: Date
+    receivedAt: Date,
+    db: Prisma.TransactionClient | typeof prisma = prisma,
   ) {
     if (!shouldRecordInvoicePayment(totalAmount)) {
       return;
     }
 
-    const existingPayment = await prisma.invoicePayment.findFirst({
+    const existingPayment = await db.invoicePayment.findFirst({
       where: { invoiceId },
     });
 
@@ -665,7 +671,7 @@ export class InvoiceGenerationService {
     const proof = this.getPaymentProof(packages, addOns);
 
     const paymentKey = `PACKAGE_PAYMENT:${invoiceId}`;
-    await prisma.invoicePayment.create({
+    await db.invoicePayment.create({
       data: {
         invoiceId,
         idempotencyKey: paymentKey,
@@ -804,7 +810,10 @@ export class InvoiceGenerationService {
     return dueDate;
   }
 
-  private async generateInvoiceNumber(branchCode: string): Promise<string> {
-    return generateInvoiceNumber(branchCode);
+  private async generateInvoiceNumber(
+    branchCode: string,
+    db: Prisma.TransactionClient | typeof prisma = prisma,
+  ): Promise<string> {
+    return generateInvoiceNumber(branchCode, new Date(), db);
   }
 }

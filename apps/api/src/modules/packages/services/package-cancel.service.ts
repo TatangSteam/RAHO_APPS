@@ -1,5 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
+import { releaseAddOnStockInTransaction } from './add-on-inventory.service';
 
 interface CancelPackageInput {
   reason: string;
@@ -22,7 +23,7 @@ export class PackageCancelService {
     packageId: string,
     data: CancelPackageInput,
     userId: string,
-    branchId: string | null
+    _branchId: string | null
   ) {
     // 1. Fetch package with relations
     const memberPackage = await prisma.memberPackage.findUnique({
@@ -42,11 +43,7 @@ export class PackageCancelService {
     });
 
     if (!memberPackage) {
-      throw {
-        status: 404,
-        code: 'PACKAGE_NOT_FOUND',
-        message: 'Paket tidak ditemukan'
-      };
+      return this.cancelStandaloneAddOn(packageId, data, userId);
     }
 
     // 2. Validate status
@@ -61,6 +58,7 @@ export class PackageCancelService {
     // 3. Check if this package is part of a bundle
     const purchaseGroupId = memberPackage.purchaseGroupId;
     let packagesToCancel: string[] = [packageId];
+    let addOnsToCancel: string[] = [];
     
     if (purchaseGroupId) {
       // Find all packages in the same bundle
@@ -105,18 +103,7 @@ export class PackageCancelService {
         select: { id: true }
       });
       
-      // Cancel all add-ons in the bundle
-      if (bundleAddOns.length > 0) {
-        await prisma.memberAddOn.updateMany({
-          where: {
-            id: { in: bundleAddOns.map(a => a.id) }
-          },
-          data: {
-            status: 'CANCELLED',
-            updatedAt: new Date()
-          }
-        });
-      }
+      addOnsToCancel = bundleAddOns.map((addOn) => addOn.id);
     }
 
     // 4. Find related invoice
@@ -133,24 +120,40 @@ export class PackageCancelService {
       }
     });
 
-    // 5. Update ALL packages in the bundle to CANCELLED
-    await prisma.memberPackage.updateMany({
-      where: {
-        id: { in: packagesToCancel }
-      },
-      data: {
-        status: 'CANCELLED',
-        updatedAt: new Date()
+    const cancelledAt = new Date();
+    await prisma.$transaction(async (tx) => {
+      for (const addOnId of addOnsToCancel) {
+        await releaseAddOnStockInTransaction(addOnId, userId, data.reason, tx);
       }
-    });
-    
-    // Add cancellation note to the main package
-    await prisma.memberPackage.update({
-      where: { id: packageId },
-      data: {
-        notes: memberPackage.notes 
-          ? `${memberPackage.notes}\n\n[CANCELLED] ${data.reason}`
-          : `[CANCELLED] ${data.reason}`
+      if (addOnsToCancel.length > 0) {
+        await tx.memberAddOn.updateMany({
+          where: { id: { in: addOnsToCancel } },
+          data: { status: 'CANCELLED', updatedAt: cancelledAt },
+        });
+      }
+      await tx.memberPackage.updateMany({
+        where: { id: { in: packagesToCancel } },
+        data: { status: 'CANCELLED', updatedAt: cancelledAt },
+      });
+      await tx.memberPackage.update({
+        where: { id: packageId },
+        data: {
+          notes: memberPackage.notes
+            ? `${memberPackage.notes}\n\n[CANCELLED] ${data.reason}`
+            : `[CANCELLED] ${data.reason}`,
+        },
+      });
+      if (invoice) {
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt,
+            notes: invoice.notes
+              ? `${invoice.notes}\n\n[CANCELLED] ${data.reason}`
+              : `[CANCELLED] ${data.reason}`,
+          },
+        });
       }
     });
 
@@ -171,20 +174,6 @@ export class PackageCancelService {
         packagePricing: true
       }
     });
-
-    // 7. Update invoice status if exists
-    if (invoice) {
-      await prisma.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          status: 'CANCELLED',
-          cancelledAt: new Date(),
-          notes: invoice.notes
-            ? `${invoice.notes}\n\n[CANCELLED] ${data.reason}`
-            : `[CANCELLED] ${data.reason}`
-        }
-      });
-    }
 
     // 8. Create audit log
     await logAudit({
@@ -210,6 +199,79 @@ export class PackageCancelService {
       package: updatedPackage,
       invoice: invoice ? { id: invoice.id, invoiceNumber: invoice.invoiceNumber } : null,
       cancelledPackagesCount: packagesToCancel.length
+    };
+  }
+
+  private async cancelStandaloneAddOn(
+    addOnId: string,
+    data: CancelPackageInput,
+    userId: string,
+  ) {
+    const addOn = await prisma.memberAddOn.findUnique({
+      where: { id: addOnId },
+      include: { member: { include: { user: { include: { profile: true } } } } },
+    });
+    if (!addOn) {
+      throw { status: 404, code: 'PACKAGE_NOT_FOUND', message: 'Paket atau add-on tidak ditemukan' };
+    }
+    if (addOn.status !== 'PENDING_PAYMENT') {
+      throw {
+        status: 400,
+        code: 'INVALID_STATUS',
+        message: 'Hanya add-on dengan status PENDING_PAYMENT yang bisa dibatalkan',
+      };
+    }
+    const invoice = await prisma.invoice.findFirst({
+      where: {
+        status: { in: ['DRAFT', 'PENDING_PAYMENT'] },
+        items: { some: { itemId: addOnId, itemType: 'ADDON' } },
+      },
+    });
+    const cancelledAt = new Date();
+    const cancelledAddOn = await prisma.$transaction(async (tx) => {
+      await releaseAddOnStockInTransaction(addOnId, userId, data.reason, tx);
+      const updated = await tx.memberAddOn.update({
+        where: { id: addOnId },
+        data: {
+          status: 'CANCELLED',
+          notes: addOn.notes
+            ? `${addOn.notes}\n\n[CANCELLED] ${data.reason}`
+            : `[CANCELLED] ${data.reason}`,
+        },
+      });
+      if (invoice) {
+        await tx.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt,
+            notes: invoice.notes
+              ? `${invoice.notes}\n\n[CANCELLED] ${data.reason}`
+              : `[CANCELLED] ${data.reason}`,
+          },
+        });
+      }
+      return updated;
+    });
+    await logAudit({
+      userId,
+      branchId: addOn.branchId,
+      action: 'UPDATE',
+      resource: 'MemberAddOn',
+      resourceId: addOnId,
+      meta: {
+        action: 'CANCEL',
+        reason: data.reason,
+        previousStatus: 'PENDING_PAYMENT',
+        newStatus: 'CANCELLED',
+        invoiceId: invoice?.id,
+      },
+    });
+    return {
+      addOn: cancelledAddOn,
+      invoice: invoice ? { id: invoice.id, invoiceNumber: invoice.invoiceNumber } : null,
+      cancelledPackagesCount: 0,
+      cancelledAddOnsCount: 1,
     };
   }
 }

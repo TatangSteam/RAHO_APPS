@@ -13,11 +13,13 @@ interface PackageRefundModalProps {
   finalPrice: number;
   reason: string;
   refundAmount: number;
+  returnAddOnsToStock: boolean;
   submitting: boolean;
   refundProof?: { file: File | null; preview: string | null };
   onClose: () => void;
   onReasonChange: (value: string) => void;
   onRefundAmountChange: (value: number) => void;
+  onReturnAddOnsToStockChange: (value: boolean) => void;
   onProofChange?: (value: { file: File | null; preview: string | null }) => void;
   onSubmit: () => void;
 }
@@ -28,11 +30,13 @@ export default function PackageRefundModal({
   finalPrice,
   reason,
   refundAmount,
+  returnAddOnsToStock,
   submitting,
   refundProof,
   onClose,
   onReasonChange,
   onRefundAmountChange,
+  onReturnAddOnsToStockChange,
   onProofChange,
   onSubmit,
 }: PackageRefundModalProps) {
@@ -138,6 +142,24 @@ export default function PackageRefundModal({
               max={finalPrice}
             />
             <small className={styles.hint}>Maksimal: Rp {finalPrice.toLocaleString('id-ID')}</small>
+          </div>
+
+          <div className={styles.formGroup}>
+            <label style={{ display: 'flex', gap: '10px', alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={returnAddOnsToStock}
+                onChange={(event) => onReturnAddOnsToStockChange(event.target.checked)}
+                disabled={submitting}
+                style={{ marginTop: '3px' }}
+              />
+              <span>
+                Kembalikan add-on fisik ke stok
+                <small className={styles.hint} style={{ display: 'block', fontWeight: 400 }}>
+                  Centang hanya jika barang add-on benar-benar sudah diterima kembali. Stok dan HPP akan direversal otomatis.
+                </small>
+              </span>
+            </label>
           </div>
 
           {onProofChange && (

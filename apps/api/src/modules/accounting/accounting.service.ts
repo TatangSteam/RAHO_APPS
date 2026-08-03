@@ -48,12 +48,12 @@ function jsonValue(value?: Record<string, unknown>): Prisma.InputJsonValue | und
   return value as Prisma.InputJsonValue | undefined;
 }
 
-function formatJournal(entry: any) {
+function formatJournal(entry: Prisma.JournalEntryGetPayload<{ include: typeof journalInclude }>) {
   return {
     ...entry,
     totalDebit: entry.totalDebit.toFixed(2),
     totalCredit: entry.totalCredit.toFixed(2),
-    lines: entry.lines.map((line: any) => ({
+    lines: entry.lines.map((line) => ({
       ...line,
       debit: line.debit.toFixed(2),
       credit: line.credit.toFixed(2),
@@ -257,6 +257,104 @@ export async function postJournal(input: PostJournalInput, tx?: DbClient) {
     }
     throw error;
   }
+}
+
+/**
+ * Posts FIFO cost for a physical add-on in the same transaction as its stock
+ * issue. Package/payment operators are allowed to trigger this narrow journal;
+ * they are not granted the broader manual-journal permission.
+ */
+export async function postAddOnCostInTransaction(input: {
+  actorUserId: string;
+  branchId: string;
+  memberAddOnId: string;
+  addOnCode: string;
+  inventoryPostingId: string;
+  totalCost: Prisma.Decimal.Value;
+  occurredAt: Date;
+}, tx: DbClient) {
+  const totalCost = new Prisma.Decimal(input.totalCost)
+    .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  if (!totalCost.greaterThan(0)) return null;
+
+  await assertBranchAccess(input.actorUserId, input.branchId);
+  await assertPermission(input.actorUserId, PERMISSIONS.INVOICE_PAYMENT, input.branchId);
+
+  const posting = validateAndNormalizePosting({
+    postingKey: `ADDON_COGS:${input.memberAddOnId}`,
+    transactionDate: input.occurredAt,
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    description: `HPP add-on ${input.addOnCode}`,
+    lines: [
+      { accountCode: '5100', debit: totalCost },
+      { accountCode: '1300', credit: totalCost },
+    ],
+    sourceLinks: [
+      { sourceType: 'MEMBER_ADD_ON', sourceId: input.memberAddOnId, sourceNumber: input.addOnCode },
+      { sourceType: 'INVENTORY_POSTING', sourceId: input.inventoryPostingId, relationType: 'COST_OF' },
+    ],
+    metadata: { inventoryPostingId: input.inventoryPostingId },
+  });
+  return postWithinTransaction(tx, posting);
+}
+
+/** Reverse only the system HPP journal owned by the refunded physical add-on. */
+export async function reverseAddOnCostInTransaction(input: {
+  actorUserId: string;
+  branchId: string;
+  memberAddOnId: string;
+  addOnCode: string;
+  reason: string;
+  occurredAt: Date;
+}, tx: DbClient) {
+  const original = await tx.journalEntry.findUnique({
+    where: { postingKey: `ADDON_COGS:${input.memberAddOnId}` },
+    include: journalInclude,
+  });
+  if (!original) return null;
+
+  await tx.$queryRaw(Prisma.sql`
+    SELECT "id" FROM "journal_entries" WHERE "id" = ${original.id} FOR UPDATE
+  `);
+  const locked = await tx.journalEntry.findUniqueOrThrow({
+    where: { id: original.id },
+    include: journalInclude,
+  });
+  if (locked.status === 'REVERSED') return locked.reversedByEntryId;
+
+  await assertBranchAccess(input.actorUserId, input.branchId);
+  await assertPermission(input.actorUserId, PERMISSIONS.INVOICE_CANCEL, input.branchId);
+  const posting = validateAndNormalizePosting({
+    postingKey: `ADDON_COGS_REVERSAL:${input.memberAddOnId}`,
+    transactionDate: input.occurredAt,
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    description: `Reversal HPP add-on ${input.addOnCode}: ${input.reason}`,
+    lines: locked.lines.map((line) => ({
+      accountCode: line.account.code,
+      debit: line.credit,
+      credit: line.debit,
+      description: `Reversal: ${line.description || locked.description}`,
+    })),
+    sourceLinks: [{
+      sourceType: 'MEMBER_ADD_ON',
+      sourceId: input.memberAddOnId,
+      sourceNumber: input.addOnCode,
+      relationType: 'REVERSAL',
+    }],
+    metadata: { originalJournalEntryId: locked.id, reason: input.reason },
+  });
+  const reversed = await postWithinTransaction(tx, posting);
+  await tx.journalEntry.update({
+    where: { id: locked.id },
+    data: {
+      status: 'REVERSED',
+      reversedAt: input.occurredAt,
+      reversedByEntryId: reversed.journal.id,
+    },
+  });
+  return reversed.journal.id;
 }
 
 export async function reverseManualJournalService(

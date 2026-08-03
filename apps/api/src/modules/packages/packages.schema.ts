@@ -158,6 +158,10 @@ export const updatePackagePricingSchema = z.object({
 
 export const refundPackageSchema = z.object({
   reason: z.string().min(8, 'Alasan refund minimal 8 karakter'),
+  returnAddOnsToStock: z.preprocess(
+    (value) => value === 'true' ? true : value === 'false' ? false : value,
+    z.boolean().default(false),
+  ),
   refundAmount: z.preprocess(
     (val) => val === undefined || val === '' ? undefined : Number(val),
     z.number().min(0).optional()

@@ -2,10 +2,15 @@ import { PackageStatus, InvoiceStatus, PackageType } from '@prisma/client';
 import { prisma } from '../../../../lib/prisma';
 import { logAudit } from '../../../../utils/auditLog';
 import { PackageEditService } from '../package-edit.service';
+import {
+  releaseAddOnStockInTransaction,
+  reserveAddOnStockInTransaction,
+} from '../add-on-inventory.service';
 
 jest.mock('../../../../lib/prisma', () => ({
   prisma: {
     $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
     memberPackage: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -41,7 +46,23 @@ jest.mock('../../../../utils/auditLog', () => ({
   logAudit: jest.fn(),
 }));
 
-const mockPrisma = prisma as any;
+jest.mock('../add-on-inventory.service', () => ({
+  releaseAddOnStockInTransaction: jest.fn(),
+  reserveAddOnStockInTransaction: jest.fn(),
+}));
+
+interface MockPrismaClient {
+  $transaction: jest.Mock;
+  $queryRaw: jest.Mock;
+  memberPackage: Record<'findUnique' | 'findMany' | 'update' | 'updateMany' | 'create' | 'deleteMany', jest.Mock>;
+  memberAddOn: Record<'findMany' | 'deleteMany' | 'updateMany' | 'create', jest.Mock>;
+  packagePricing: Record<'findMany', jest.Mock>;
+  referralIncentiveRecord: Record<'deleteMany', jest.Mock>;
+  invoice: Record<'findFirst' | 'update', jest.Mock>;
+  invoiceItem: Record<'deleteMany' | 'create', jest.Mock>;
+}
+
+const mockPrisma = prisma as unknown as MockPrismaClient;
 
 describe('PackageEditService', () => {
   beforeEach(() => {
@@ -49,6 +70,7 @@ describe('PackageEditService', () => {
     mockPrisma.$transaction.mockImplementation((callback: (transaction: unknown) => unknown) =>
       callback(mockPrisma),
     );
+    mockPrisma.$queryRaw.mockResolvedValue([]);
   });
 
   it('updates an active used package in place for privileged roles', async () => {
@@ -443,5 +465,125 @@ describe('PackageEditService', () => {
     expect(mockPrisma.memberPackage.update).not.toHaveBeenCalled();
     expect(mockPrisma.memberPackage.deleteMany).not.toHaveBeenCalled();
     expect(mockPrisma.memberAddOn.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('does not allow active add-ons to be silently replaced', async () => {
+    const service = new PackageEditService();
+    const activePackage = {
+      id: 'pkg-active-addon',
+      packageCode: 'PKG-ACTIVE-ADDON',
+      memberId: 'member-1',
+      branchId: 'branch-1',
+      purchaseGroupId: null,
+      packagePricingId: 'pricing-1',
+      packageType: PackageType.BASIC,
+      productCode: 'TNB-P7-PS',
+      boosterType: null,
+      serviceType: 'PS',
+      totalSessions: 7,
+      usedSessions: 0,
+      finalPrice: 12500000,
+      status: PackageStatus.ACTIVE,
+      paymentPlanType: 'FULL_PAYMENT',
+      installmentTotal: null,
+      installmentSchedule: null,
+      totalVerifiedPaid: 12500000,
+      paymentPlanStatus: null,
+      paidAt: new Date(),
+      verifiedBy: 'manager-1',
+      verifiedAt: new Date(),
+      activatedAt: new Date(),
+      paymentProofUrl: null,
+      paymentProofFileName: null,
+      paymentProofFileSize: null,
+      paymentProofMimeType: null,
+      revenueFlowVersion: 1,
+      member: { memberNo: 'MBR-001', user: { profile: { fullName: 'Member' } } },
+      branch: { id: 'branch-1', branchCode: 'PST' },
+    };
+    const pricing = {
+      id: 'pricing-1', packageType: PackageType.BASIC, boosterType: null,
+      serviceType: 'PS', productCode: 'TNB-P7-PS', totalSessions: 7, price: 12500000,
+    };
+
+    mockPrisma.memberPackage.findUnique.mockResolvedValue(activePackage);
+    mockPrisma.memberPackage.findMany
+      .mockResolvedValueOnce([{ id: activePackage.id, packageCode: activePackage.packageCode, usedSessions: 0 }])
+      .mockResolvedValueOnce([activePackage]);
+    mockPrisma.packagePricing.findMany.mockResolvedValue([pricing]);
+    mockPrisma.memberPackage.update.mockResolvedValue(activePackage);
+    mockPrisma.memberAddOn.findMany.mockResolvedValue([{ id: 'addon-active' }]);
+
+    await expect(service.editPackage(
+      activePackage.id,
+      { packages: [{ pricingId: pricing.id, quantity: 1 }] },
+      'super-admin-1',
+      null,
+      'SUPER_ADMIN',
+    )).rejects.toMatchObject({ code: 'ACTIVE_ADD_ON_EDIT_FORBIDDEN', status: 409 });
+
+    expect(releaseAddOnStockInTransaction).not.toHaveBeenCalled();
+    expect(reserveAddOnStockInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('uses the server catalog and reserves stock when replacing pending add-ons', async () => {
+    const service = new PackageEditService();
+    const pendingPackage = {
+      id: 'pkg-pending-addon', packageCode: 'PKG-PENDING-ADDON', memberId: 'member-1',
+      branchId: 'branch-1', purchaseGroupId: null, packagePricingId: 'pricing-1',
+      packageType: PackageType.BASIC, productCode: 'TNB-P7-PS', boosterType: null,
+      serviceType: 'PS', totalSessions: 7, usedSessions: 0, finalPrice: 12500000,
+      status: PackageStatus.PENDING_PAYMENT, paymentPlanType: 'FULL_PAYMENT',
+      installmentTotal: null, installmentSchedule: null, totalVerifiedPaid: 0,
+      paymentPlanStatus: null, paidAt: null, verifiedBy: null, verifiedAt: null,
+      activatedAt: null, paymentProofUrl: null, paymentProofFileName: null,
+      paymentProofFileSize: null, paymentProofMimeType: null, revenueFlowVersion: 1,
+      member: { memberNo: 'MBR-001', user: { profile: { fullName: 'Member' } } },
+      branch: { id: 'branch-1', branchCode: 'PST' },
+    };
+    const pricing = {
+      id: 'pricing-1', packageType: PackageType.BASIC, boosterType: null,
+      serviceType: 'PS', productCode: 'TNB-P7-PS', totalSessions: 7, price: 12500000,
+    };
+    const createdAddOn = { id: 'addon-new', addOnCode: 'ADO-PST-2608-0001' };
+
+    mockPrisma.memberPackage.findUnique.mockResolvedValue(pendingPackage);
+    mockPrisma.memberPackage.findMany
+      .mockResolvedValueOnce([{ id: pendingPackage.id, packageCode: pendingPackage.packageCode, usedSessions: 0 }])
+      .mockResolvedValueOnce([pendingPackage]);
+    mockPrisma.packagePricing.findMany.mockResolvedValue([pricing]);
+    mockPrisma.memberPackage.update.mockResolvedValue(pendingPackage);
+    mockPrisma.memberPackage.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.memberAddOn.findMany.mockResolvedValue([]);
+    mockPrisma.memberAddOn.create.mockResolvedValue(createdAddOn);
+    mockPrisma.invoice.findFirst.mockResolvedValue(null);
+
+    await service.editPackage(
+      pendingPackage.id,
+      {
+        packages: [{ pricingId: pricing.id, quantity: 1 }],
+        addOns: [{
+          type: 'AIR_NANO', code: 'PRD-ANN-KNG-001', name: 'Harga palsu', price: 1, quantity: 2,
+        }],
+      },
+      'admin-layanan-1',
+      'branch-1',
+      'ADMIN_LAYANAN',
+    );
+
+    expect(mockPrisma.memberAddOn.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        productCode: 'PRD-ANN-KNG-001',
+        inventorySku: 'PRD-ANN-KNG-001',
+        pricePerUnit: 15000,
+        totalPrice: 30000,
+        stockQuantity: 2,
+      }),
+    });
+    expect(reserveAddOnStockInTransaction).toHaveBeenCalledWith(
+      createdAddOn,
+      'admin-layanan-1',
+      mockPrisma,
+    );
   });
 });

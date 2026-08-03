@@ -1,11 +1,28 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { VerifyPaymentInput } from '../packages.schema';
-import { PackageStatus } from '@prisma/client';
+import { PackageStatus, Prisma } from '@prisma/client';
 import { InvoiceGenerationService } from './invoice-generation.service';
 import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';
 import { PERMISSIONS } from '../../iam/permission-catalog';
+import { consumeAddOnStockInTransaction } from './add-on-inventory.service';
+
+type PackageWithMember = Prisma.MemberPackageGetPayload<{
+  include: {
+    member: {
+      include: {
+        user: true;
+        registrationBranch: true;
+      };
+    };
+  };
+}>;
+
+interface PaymentPlanInvoice {
+  paymentPlanType: string;
+  installmentNumber: number | null;
+  installmentTotal: number | null;
+}
 
 /**
  * Service for handling payment verification
@@ -17,7 +34,7 @@ export class PaymentVerificationService {
     this.invoiceService = new InvoiceGenerationService();
   }
 
-  private getPaymentPlanStatus(invoice: any) {
+  private getPaymentPlanStatus(invoice: PaymentPlanInvoice | null | undefined) {
     if (invoice?.paymentPlanType !== 'INSTALLMENT') {
       return 'PAID';
     }
@@ -192,20 +209,23 @@ export class PaymentVerificationService {
       data
     );
 
-    const updatedAddOn = await prisma.memberAddOn.update({
-      where: { id: addOnId },
-      data: {
-        status: PackageStatus.ACTIVE,
-        paidAt: now,
-        verifiedBy: userId,
-        verifiedAt: now,
-        totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || addon.totalPrice || 0) },
-        paymentPlanStatus: this.getPaymentPlanStatus(paidInvoice),
-        paymentProofUrl: data.proofFileUrl,
-        paymentProofFileName: data.proofFileName,
-        paymentProofFileSize: data.proofFileSize,
-        paymentProofMimeType: data.proofMimeType,
-      },
+    const updatedAddOn = await prisma.$transaction(async (tx) => {
+      await consumeAddOnStockInTransaction(addOnId, userId, now, tx);
+      return tx.memberAddOn.update({
+        where: { id: addOnId },
+        data: {
+          status: PackageStatus.ACTIVE,
+          paidAt: now,
+          verifiedBy: userId,
+          verifiedAt: now,
+          totalVerifiedPaid: { increment: data.paidAmount || Number(paidInvoice?.totalAmount || addon.totalPrice || 0) },
+          paymentPlanStatus: this.getPaymentPlanStatus(paidInvoice),
+          paymentProofUrl: data.proofFileUrl,
+          paymentProofFileName: data.proofFileName,
+          paymentProofFileSize: data.proofFileSize,
+          paymentProofMimeType: data.proofMimeType,
+        },
+      });
     });
 
     // Send notification
@@ -236,7 +256,7 @@ export class PaymentVerificationService {
   /**
    * Verify group payment (multiple packages and add-ons)
    */
-  private async verifyGroupPayment(pkg: any, data: VerifyPaymentInput, userId: string, now: Date) {
+  private async verifyGroupPayment(pkg: PackageWithMember, data: VerifyPaymentInput, userId: string, now: Date) {
     // Get all packages in the group
     const groupPackages = await prisma.memberPackage.findMany({
       where: { purchaseGroupId: pkg.purchaseGroupId },
@@ -261,35 +281,18 @@ export class PaymentVerificationService {
     const verifiedAmount = data.paidAmount || Number(paidInvoice?.totalAmount || 0);
     const paymentPlanStatus = this.getPaymentPlanStatus(paidInvoice);
 
-    // Update all packages in the group
-    await prisma.memberPackage.updateMany({
-      where: { purchaseGroupId: pkg.purchaseGroupId },
-      data: {
-        status: PackageStatus.ACTIVE,
-        paidAt: now,
-        verifiedBy: userId,
-        verifiedAt: now,
-        activatedAt: now,
-        totalVerifiedPaid: { increment: verifiedAmount },
-        paymentPlanStatus,
-        paymentProofUrl: data.proofFileUrl,
-        paymentProofFileName: data.proofFileName,
-        paymentProofFileSize: data.proofFileSize,
-        paymentProofMimeType: data.proofMimeType,
-      },
-    });
-
-    // Update all add-ons in the group
-    if (groupAddOns.length > 0) {
-      await prisma.memberAddOn.updateMany({
-        where: { 
-          packageId: { in: packageIds }
-        },
+    await prisma.$transaction(async (tx) => {
+      for (const groupAddOn of groupAddOns) {
+        await consumeAddOnStockInTransaction(groupAddOn.id, userId, now, tx);
+      }
+      await tx.memberPackage.updateMany({
+        where: { purchaseGroupId: pkg.purchaseGroupId },
         data: {
           status: PackageStatus.ACTIVE,
           paidAt: now,
           verifiedBy: userId,
           verifiedAt: now,
+          activatedAt: now,
           totalVerifiedPaid: { increment: verifiedAmount },
           paymentPlanStatus,
           paymentProofUrl: data.proofFileUrl,
@@ -298,16 +301,23 @@ export class PaymentVerificationService {
           paymentProofMimeType: data.proofMimeType,
         },
       });
-    }
-
-    // Refetch packages/add-ons with updated payment proof data for receipt generation.
-    const updatedPackages = await prisma.memberPackage.findMany({
-      where: { purchaseGroupId: pkg.purchaseGroupId },
-    });
-    const updatedAddOns = await prisma.memberAddOn.findMany({
-      where: {
-        packageId: { in: packageIds },
-      },
+      if (groupAddOns.length > 0) {
+        await tx.memberAddOn.updateMany({
+          where: { packageId: { in: packageIds } },
+          data: {
+            status: PackageStatus.ACTIVE,
+            paidAt: now,
+            verifiedBy: userId,
+            verifiedAt: now,
+            totalVerifiedPaid: { increment: verifiedAmount },
+            paymentPlanStatus,
+            paymentProofUrl: data.proofFileUrl,
+            paymentProofFileName: data.proofFileName,
+            paymentProofFileSize: data.proofFileSize,
+            paymentProofMimeType: data.proofMimeType,
+          },
+        });
+      }
     });
 
     // NOTE: Payment record is already created inside the invoice service.
@@ -374,7 +384,7 @@ export class PaymentVerificationService {
   /**
    * Verify single package payment
    */
-  private async verifySinglePackagePayment(pkg: any, data: VerifyPaymentInput, userId: string, now: Date) {
+  private async verifySinglePackagePayment(pkg: PackageWithMember, data: VerifyPaymentInput, userId: string, now: Date) {
     const paidInvoice = await this.invoiceService.verifyActiveInvoiceForPurchase(
       [pkg],
       undefined,
@@ -480,7 +490,7 @@ export class PaymentVerificationService {
     await prisma.notification.create({
       data: {
         userId: addon.member.userId,
-        type: 'WARNING',
+        type: 'INFO',
         title: 'Pembayaran Add-On Ditolak',
         body: `Pembayaran add-on Anda ditolak. Alasan: ${rejectionReason}`,
         status: 'UNREAD',
@@ -504,7 +514,7 @@ export class PaymentVerificationService {
   /**
    * Reject group payment (multiple packages and add-ons)
    */
-  private async rejectGroupPayment(pkg: any, rejectionReason: string, userId: string, now: Date) {
+  private async rejectGroupPayment(pkg: PackageWithMember, rejectionReason: string, userId: string, now: Date) {
     // Get all packages in the group
     const groupPackages = await prisma.memberPackage.findMany({
       where: { purchaseGroupId: pkg.purchaseGroupId },
@@ -561,7 +571,7 @@ export class PaymentVerificationService {
     await prisma.notification.create({
       data: {
         userId: pkg.member.userId,
-        type: 'WARNING',
+        type: 'INFO',
         title: 'Pembayaran Paket Ditolak',
         body: `Pembayaran ${totalItems} item ditolak. Alasan: ${rejectionReason}`,
         status: 'UNREAD',
@@ -616,7 +626,7 @@ export class PaymentVerificationService {
   /**
    * Reject single package payment
    */
-  private async rejectSinglePackagePayment(pkg: any, rejectionReason: string, userId: string, now: Date) {
+  private async rejectSinglePackagePayment(pkg: PackageWithMember, rejectionReason: string, userId: string, now: Date) {
     const updatedPackage = await prisma.memberPackage.update({
       where: { id: pkg.id },
       data: {
@@ -636,7 +646,7 @@ export class PaymentVerificationService {
     await prisma.notification.create({
       data: {
         userId: pkg.member.userId,
-        type: 'WARNING',
+        type: 'INFO',
         title: 'Pembayaran Paket Ditolak',
         body: `Pembayaran paket ${pkg.packageType} ditolak. Alasan: ${rejectionReason}`,
         status: 'UNREAD',

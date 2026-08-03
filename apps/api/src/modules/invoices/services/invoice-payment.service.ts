@@ -22,6 +22,7 @@ import {
   buildVerifiedPaymentSnapshot,
   enqueueVerifiedPaymentTx,
 } from '@modules/zoho/zoho.payment.service';
+import { consumeAddOnStockInTransaction } from '@modules/packages/services/add-on-inventory.service';
 
 interface PaymentEvidence {
   proofFileUrl?: string;
@@ -311,6 +312,27 @@ export class InvoicePaymentService {
         previousVerifiedTotal,
         payment.amount,
       );
+      const addOnIds = payment.invoice.items
+        .filter((item) => item.itemType === 'ADDON')
+        .map((item) => item.itemId);
+      const verifiedAt = new Date();
+      if (state.isFullyPaid) {
+        for (const addOnId of addOnIds) {
+          await consumeAddOnStockInTransaction(addOnId, userId, verifiedAt, tx);
+        }
+        if (addOnIds.length > 0) {
+          await tx.memberAddOn.updateMany({
+            where: { id: { in: addOnIds }, status: { in: ['PENDING_PAYMENT', 'WAITING_VERIFICATION'] } },
+            data: {
+              status: 'ACTIVE',
+              paidAt: verifiedAt,
+              verifiedAt,
+              verifiedBy: userId,
+              paymentPlanStatus: 'PAID',
+            },
+          });
+        }
+      }
       const postingKey = `INVOICE_PAYMENT:${payment.id}`;
       const posted = await postJournal({
         postingKey,
@@ -329,7 +351,6 @@ export class InvoicePaymentService {
         metadata: { cashBankAccountId: account.id, paymentMethod: payment.paymentMethod },
       }, tx);
 
-      const verifiedAt = new Date();
       const zohoSnapshot = buildVerifiedPaymentSnapshot(
         payment,
         previousVerifiedTotal,

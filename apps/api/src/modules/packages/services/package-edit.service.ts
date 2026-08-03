@@ -1,30 +1,31 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { InvoiceStatus, PackageStatus, Prisma } from '@prisma/client';
+import {
+  AddOnType,
+  Invoice,
+  InvoiceStatus,
+  MemberAddOn,
+  MemberPackage,
+  PackageStatus,
+  Prisma,
+} from '@prisma/client';
+import type { EditPackageInput } from '../packages.schema';
+import {
+  normalizeAddOnAssignments,
+  type NormalizedAddOnAssignment,
+} from './package-assignment.helpers';
+import {
+  releaseAddOnStockInTransaction,
+  reserveAddOnStockInTransaction,
+} from './add-on-inventory.service';
 
-interface PackageSelection {
-  pricingId: string;
-  quantity: number;
-  boosterType?: string;
-  serviceType?: string;
-}
-
-interface AddOnSelection {
-  type: string;
-  code: string;
-  name: string;
-  price: number;
-  quantity: number;
-}
-
-interface EditPackageInput {
-  packages: PackageSelection[];
-  addOns?: AddOnSelection[];
-  discountPercent?: number;
-  discountAmount?: number;
-  discountNote?: string;
-  notes?: string;
-}
+type EditableMemberPackage = Prisma.MemberPackageGetPayload<{
+  include: {
+    member: { include: { user: { include: { profile: true } } } };
+    branch: true;
+  };
+}>;
+type PackageSelection = EditPackageInput['packages'][number];
 
 const PRIVILEGED_PACKAGE_EDIT_ROLES = new Set(['SUPER_ADMIN', 'ADMIN_MANAGER']);
 
@@ -49,6 +50,7 @@ export class PackageEditService {
     branchId: string | null,
     userRole?: string
   ) {
+    const normalizedAddOns = normalizeAddOnAssignments(data.addOns ?? []);
     const hasPrivilegedEditAccess = PRIVILEGED_PACKAGE_EDIT_ROLES.has(userRole || '');
     const editableStatuses: PackageStatus[] = hasPrivilegedEditAccess
       ? [PackageStatus.PENDING_PAYMENT, PackageStatus.WAITING_VERIFICATION, PackageStatus.ACTIVE]
@@ -162,6 +164,7 @@ export class PackageEditService {
         this.editPackageInPlace({
           db: transaction,
           data,
+          normalizedAddOns,
           userId,
           memberPackage,
           packagesInEditScope,
@@ -204,8 +207,9 @@ export class PackageEditService {
   private async editPackageInPlace(params: {
     db: Prisma.TransactionClient;
     data: EditPackageInput;
+    normalizedAddOns: NormalizedAddOnAssignment[];
     userId: string;
-    memberPackage: any;
+    memberPackage: EditableMemberPackage;
     packagesInEditScope: Array<{ id: string; packageCode: string; usedSessions: number }>;
     purchaseGroupId: string | null;
     memberId: string;
@@ -214,6 +218,7 @@ export class PackageEditService {
     const {
       db,
       data,
+      normalizedAddOns,
       userId,
       memberPackage,
       packagesInEditScope,
@@ -261,12 +266,12 @@ export class PackageEditService {
       };
     }
 
-    const willHaveGroup = selectedPackages.length > 1 || (data.addOns && data.addOns.length > 0);
+    const willHaveGroup = selectedPackages.length > 1 || normalizedAddOns.length > 0;
     const targetPurchaseGroupId = willHaveGroup
       ? purchaseGroupId || `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
       : null;
     const remainingSelections = [...selectedPackages];
-    const updatedPackages: any[] = [];
+    const updatedPackages: MemberPackage[] = [];
     const packageIdsToCancel: string[] = [];
 
     for (const currentPackage of currentPackages) {
@@ -353,6 +358,7 @@ export class PackageEditService {
       paymentPlanStatus: memberPackage.paymentPlanStatus,
       totalVerifiedPaid: memberPackage.totalVerifiedPaid,
     };
+    const installmentSchedule = memberPackage.installmentSchedule ?? Prisma.JsonNull;
 
     for (const { selection, pricing } of remainingSelections) {
       const newPackage = await db.memberPackage.create({
@@ -369,7 +375,7 @@ export class PackageEditService {
           status: replacementStatus,
           paymentPlanType: memberPackage.paymentPlanType,
           installmentTotal: memberPackage.installmentTotal,
-          installmentSchedule: memberPackage.installmentSchedule as any,
+          installmentSchedule,
           totalVerifiedPaid: sourcePaymentData.totalVerifiedPaid || 0,
           paymentPlanStatus: sourcePaymentData.paymentPlanStatus || null,
           boosterType: selection.boosterType || pricing.boosterType,
@@ -393,8 +399,15 @@ export class PackageEditService {
 
     const oldAddOns = await db.memberAddOn.findMany({
       where: { packageId: { in: packageIdsToKeepOrReplace } },
-      select: { id: true },
     });
+
+    if (replacementStatus === PackageStatus.ACTIVE && (oldAddOns.length > 0 || normalizedAddOns.length > 0)) {
+      throw {
+        status: 409,
+        code: 'ACTIVE_ADD_ON_EDIT_FORBIDDEN',
+        message: 'Add-on pada transaksi ACTIVE tidak dapat diubah dari menu edit paket. Gunakan proses refund/retur agar stok dan HPP tetap tercatat benar.',
+      };
+    }
     const oldInvoiceItemIds = [
       ...packageIdsToKeepOrReplace,
       ...oldAddOns.map(addOn => addOn.id),
@@ -409,30 +422,58 @@ export class PackageEditService {
       });
     }
 
-    await db.memberAddOn.updateMany({
-      where: { packageId: { in: packageIdsToKeepOrReplace } },
-      data: { status: PackageStatus.CANCELLED },
-    });
+    for (const oldAddOn of oldAddOns) {
+      await releaseAddOnStockInTransaction(
+        oldAddOn.id,
+        userId,
+        'Reservasi dilepas karena transaksi paket diedit',
+        db,
+      );
+    }
+    if (oldAddOns.length > 0) {
+      await db.memberAddOn.updateMany({
+        where: { id: { in: oldAddOns.map((addOn) => addOn.id) } },
+        data: { status: PackageStatus.CANCELLED },
+      });
+    }
 
     let packageRecords = [...updatedPackages];
-    const createdAddOns: any[] = [];
+    const createdAddOns: MemberAddOn[] = [];
 
-    if (data.addOns && data.addOns.length > 0) {
-      for (const addon of data.addOns) {
+    if (normalizedAddOns.length > 0) {
+      const date = new Date();
+      const addOnDate = `${date.getFullYear().toString().slice(-2)}${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+      const addOnPattern = `ADO-${memberPackage.branch.branchCode}-${addOnDate}-%`;
+      await db.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${`MEMBER_ADD_ON:${memberPackage.branchId}:${addOnDate}`}))::text AS "lockResult"
+      `;
+      const lastAddOn = await db.$queryRaw<Array<{ addOnCode: string }>>`
+        SELECT "addOnCode" FROM "member_add_ons"
+        WHERE "branchId" = ${memberPackage.branchId}
+          AND "addOnCode" LIKE ${addOnPattern}
+        ORDER BY "addOnCode" DESC
+        LIMIT 1
+      `;
+      const lastSequence = lastAddOn[0]
+        ? Number.parseInt(lastAddOn[0].addOnCode.split('-').at(-1) || '0', 10)
+        : 0;
+      let nextSequence = Number.isNaN(lastSequence) ? 1 : lastSequence + 1;
+
+      for (const addon of normalizedAddOns) {
         const createdAddOn = await db.memberAddOn.create({
           data: {
-            addOnCode: `ADO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            addOnCode: `ADO-${memberPackage.branch.branchCode}-${addOnDate}-${(nextSequence++).toString().padStart(4, '0')}`,
             memberId,
             branchId: memberPackage.branchId,
             packageId: packageRecords[0]?.id,
-            addOnType: addon.type as any,
+            addOnType: addon.type as AddOnType,
             quantity: addon.quantity,
             pricePerUnit: addon.price,
             totalPrice: addon.price * addon.quantity,
             status: replacementStatus,
             paymentPlanType: memberPackage.paymentPlanType,
             installmentTotal: memberPackage.installmentTotal,
-            installmentSchedule: memberPackage.installmentSchedule as any,
+            installmentSchedule,
             totalVerifiedPaid: sourcePaymentData.totalVerifiedPaid || 0,
             paymentPlanStatus: sourcePaymentData.paymentPlanStatus || null,
             paidAt: sourcePaymentData.paidAt || null,
@@ -442,11 +483,17 @@ export class PackageEditService {
             paymentProofFileName: sourcePaymentData.paymentProofFileName || null,
             paymentProofFileSize: sourcePaymentData.paymentProofFileSize || null,
             paymentProofMimeType: sourcePaymentData.paymentProofMimeType || null,
-            notes: addon.name,
+            notes: `${addon.name} (${addon.code})${data.notes ? ` - ${data.notes}` : ''}`,
+            productCode: addon.code,
+            inventorySku: addon.inventorySku || null,
+            stockQuantity: addon.inventoryQuantityPerUnit
+              ? addon.inventoryQuantityPerUnit * addon.quantity
+              : null,
             assignedBy: userId,
           },
         });
 
+        await reserveAddOnStockInTransaction(createdAddOn, userId, db);
         createdAddOns.push(createdAddOn);
       }
     }
@@ -511,9 +558,9 @@ export class PackageEditService {
 
   private async rebuildInvoiceItems(
     db: Prisma.TransactionClient,
-    invoice: any,
-    packages: any[],
-    addOns: any[],
+    invoice: Invoice,
+    packages: MemberPackage[],
+    addOns: MemberAddOn[],
   ) {
     await db.invoiceItem.deleteMany({
       where: { invoiceId: invoice.id },

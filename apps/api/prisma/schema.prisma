@@ -347,6 +347,12 @@ enum StockReservationStatus {
   CONSUMED
 }
 
+enum AddOnStockReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+}
+
 enum PaymentVerificationStatus {
   PENDING
   VERIFIED
@@ -1591,6 +1597,12 @@ model MemberAddOn {
   paymentPlanStatus   String?
   notes               String?
 
+  // Canonical commerce/inventory identity for physical add-ons.
+  productCode        String?
+  inventorySku       String?
+  stockQuantity      Decimal? @db.Decimal(18, 4)
+  inventoryPostingId String?
+
   // Payment proof (bukti pembayaran)
   paymentProofUrl      String?
   paymentProofFileName String?
@@ -1607,18 +1619,47 @@ model MemberAddOn {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  member         Member         @relation(fields: [memberId], references: [id])
-  branch         Branch         @relation(fields: [branchId], references: [id])
-  package        MemberPackage? @relation(fields: [packageId], references: [id])
-  assignedByUser User           @relation("AddOnAssignedBy", fields: [assignedBy], references: [id])
-  verifiedByUser User?          @relation("AddOnVerifiedBy", fields: [verifiedBy], references: [id])
-  rejectedByUser User?          @relation("AddOnRejectedBy", fields: [rejectedBy], references: [id])
+  member            Member                  @relation(fields: [memberId], references: [id])
+  branch            Branch                  @relation(fields: [branchId], references: [id])
+  package           MemberPackage?          @relation(fields: [packageId], references: [id])
+  assignedByUser    User                    @relation("AddOnAssignedBy", fields: [assignedBy], references: [id])
+  verifiedByUser    User?                   @relation("AddOnVerifiedBy", fields: [verifiedBy], references: [id])
+  rejectedByUser    User?                   @relation("AddOnRejectedBy", fields: [rejectedBy], references: [id])
+  stockReservations AddOnStockReservation[]
 
   @@index([memberId, status])
   @@index([branchId, status])
   @@index([addOnCode])
   @@index([paymentProofUrl])
+  @@index([productCode])
+  @@index([inventorySku])
+  @@index([inventoryPostingId])
   @@map("member_add_ons")
+}
+
+model AddOnStockReservation {
+  id                 String                      @id @default(cuid())
+  memberAddOnId      String
+  inventoryBalanceId String
+  quantity           Decimal                     @db.Decimal(18, 4)
+  status             AddOnStockReservationStatus @default(ACTIVE)
+  reservedBy         String
+  reservedAt         DateTime                    @default(now())
+  consumedBy         String?
+  consumedAt         DateTime?
+  releasedBy         String?
+  releasedAt         DateTime?
+  releaseReason      String?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  memberAddOn      MemberAddOn      @relation(fields: [memberAddOnId], references: [id], onDelete: Restrict)
+  inventoryBalance InventoryBalance @relation(fields: [inventoryBalanceId], references: [id], onDelete: Restrict)
+
+  @@unique([memberAddOnId, inventoryBalanceId])
+  @@index([memberAddOnId, status])
+  @@index([inventoryBalanceId, status])
+  @@map("add_on_stock_reservations")
 }
 
 // ============================================================
@@ -3518,6 +3559,7 @@ model InventoryBalance {
   costLayers             InventoryCostLayer[]
   stockMutations         StockMutation[]
   reservations           StockReservation[]
+  addOnReservations      AddOnStockReservation[]
   shipmentTransferLayers ShipmentTransferLayer[]
   shipmentReceiptItems   ShipmentReceiptItem[]
   goodsReceiptItems      GoodsReceiptItem[]

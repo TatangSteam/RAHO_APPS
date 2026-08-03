@@ -205,6 +205,7 @@ export default function MemberDetailPage() {
   const [refundAmount, setRefundAmount] = useState(0);
   const [refundPackageCode, setRefundPackageCode] = useState('');
   const [refundFinalPrice, setRefundFinalPrice] = useState(0);
+  const [returnAddOnsToStock, setReturnAddOnsToStock] = useState(false);
   const [refundProof, setRefundProof] = useState<{ file: File | null; preview: string | null }>({ file: null, preview: null });
 
   // Cancel modal state
@@ -618,12 +619,14 @@ export default function MemberDetailPage() {
       await packagesApi.refundPackage(selectedPackageId, {
         reason: refundReason,
         refundAmount,
-        refundProof: refundProof.file || undefined
+        refundProof: refundProof.file || undefined,
+        returnAddOnsToStock,
       });
       showToast.success('Paket berhasil di-refund');
       setShowRefundModal(false);
       setRefundReason('');
       setRefundAmount(0);
+      setReturnAddOnsToStock(false);
       setRefundProof({ file: null, preview: null });
       setSelectedPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
@@ -981,17 +984,20 @@ export default function MemberDetailPage() {
         finalPrice={refundFinalPrice}
         reason={refundReason}
         refundAmount={refundAmount}
+        returnAddOnsToStock={returnAddOnsToStock}
         refundProof={refundProof}
         submitting={submitting}
         onClose={() => {
           setShowRefundModal(false);
           setRefundReason('');
           setRefundAmount(0);
+          setReturnAddOnsToStock(false);
           setRefundProof({ file: null, preview: null });
           setSelectedPackageId('');
         }}
         onReasonChange={setRefundReason}
         onRefundAmountChange={setRefundAmount}
+        onReturnAddOnsToStockChange={setReturnAddOnsToStock}
         onProofChange={setRefundProof}
         onSubmit={handleRefundPackage}
       />

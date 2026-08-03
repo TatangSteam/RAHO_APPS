@@ -115,7 +115,7 @@ export const packagesApi = {
   },
 
   // Refund package (ACTIVE → CANCELLED)
-  refundPackage: async (packageId: string, data: { reason: string; refundAmount?: number; refundProof?: File }) => {
+  refundPackage: async (packageId: string, data: { reason: string; refundAmount?: number; refundProof?: File; returnAddOnsToStock?: boolean }) => {
     // If refund proof is provided, send as FormData
     if (data.refundProof) {
       const formData = new FormData();
@@ -123,6 +123,7 @@ export const packagesApi = {
       if (data.refundAmount !== undefined) {
         formData.append('refundAmount', data.refundAmount.toString());
       }
+      formData.append('returnAddOnsToStock', String(data.returnAddOnsToStock ?? false));
       formData.append('refundProof', data.refundProof);
       
       const response = await api.post(`/packages/${packageId}/refund`, formData);
@@ -132,7 +133,8 @@ export const packagesApi = {
     // Otherwise send as JSON
     const response = await api.post(`/packages/${packageId}/refund`, {
       reason: data.reason,
-      refundAmount: data.refundAmount
+      refundAmount: data.refundAmount,
+      returnAddOnsToStock: data.returnAddOnsToStock ?? false,
     });
     return response.data.data || response.data;
   },

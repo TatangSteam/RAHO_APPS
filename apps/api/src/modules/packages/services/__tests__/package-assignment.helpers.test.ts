@@ -21,10 +21,12 @@ describe('package assignment helpers', () => {
       ).toEqual([
         {
           type: 'AIR_NANO',
-          code: 'ARN-CK-V06-BT',
+          code: 'PRD-ANN-KNG-001',
           name: 'Air Nano Kuning 600ml 1 Botol',
           price: 15_000,
           quantity: 2,
+          inventorySku: 'PRD-ANN-KNG-001',
+          inventoryQuantityPerUnit: 1,
         },
       ]);
     });
@@ -42,7 +44,31 @@ describe('package assignment helpers', () => {
           { ...input, quantity: 1 },
           { ...input, quantity: 2 },
         ]),
-      ).toEqual([{ ...input, quantity: 3 }]);
+      ).toEqual([{
+        ...input,
+        code: 'PRD-CON-RKK-001',
+        quantity: 3,
+        inventorySku: 'PRD-CON-RKK-001',
+        inventoryQuantityPerUnit: 1,
+      }]);
+    });
+
+    it('maps a dus sale to the bottle-based inventory quantity', () => {
+      expect(normalizeAddOnAssignments([{
+        type: 'AIR_NANO',
+        code: 'PRD-ANN-BRU-003',
+        name: 'client display',
+        price: 1,
+        quantity: 2,
+      }])).toEqual([{
+        type: 'AIR_NANO',
+        code: 'PRD-ANN-BRU-003',
+        name: 'Air Nano Biru 600ml 1 Dus',
+        price: 360_000,
+        quantity: 2,
+        inventorySku: 'PRD-ANN-BRU-001',
+        inventoryQuantityPerUnit: 24,
+      }]);
     });
 
     it('rejects an unknown code or mismatched type', () => {

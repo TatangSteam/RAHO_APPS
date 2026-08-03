@@ -175,27 +175,27 @@ export interface AddOnPricing {
 // Air Nano Pricing Configuration
 export const AIR_NANO_PRICING: AddOnPricing[] = [
   // 600ml Botol
-  { type: 'AIR_NANO', name: 'Air Nano Kuning 600ml 1 Botol', code: 'ARN-CK-V06-BT', price: 15000, color: 'KUNING', volume: 'ML_600', unit: 'BOTOL' },
-  { type: 'AIR_NANO', name: 'Air Nano Biru 600ml 1 Botol', code: 'ARN-CB-V06-BT', price: 15000, color: 'BIRU', volume: 'ML_600', unit: 'BOTOL' },
-  { type: 'AIR_NANO', name: 'Air Nano Hijau H2S 600ml 1 Botol', code: 'ARN-CH-V06-BT', price: 15000, color: 'HIJAU', volume: 'ML_600', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Kuning 600ml 1 Botol', code: 'PRD-ANN-KNG-001', price: 15000, color: 'KUNING', volume: 'ML_600', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Biru 600ml 1 Botol', code: 'PRD-ANN-BRU-001', price: 15000, color: 'BIRU', volume: 'ML_600', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Hijau 600ml 1 Botol', code: 'PRD-ANN-HJU-001', price: 15000, color: 'HIJAU', volume: 'ML_600', unit: 'BOTOL' },
   // 1500ml Botol
-  { type: 'AIR_NANO', name: 'Air Nano Kuning 1500ml 1 Botol', code: 'ARN-CK-V15-BT', price: 35000, color: 'KUNING', volume: 'ML_1500', unit: 'BOTOL' },
-  { type: 'AIR_NANO', name: 'Air Nano Biru 1500ml 1 Botol', code: 'ARN-CB-V15-BT', price: 35000, color: 'BIRU', volume: 'ML_1500', unit: 'BOTOL' },
-  { type: 'AIR_NANO', name: 'Air Nano Hijau H2S 1500ml 1 Botol', code: 'ARN-CH-V15-BT', price: 35000, color: 'HIJAU', volume: 'ML_1500', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Kuning 1500ml 1 Botol', code: 'PRD-ANN-KNG-002', price: 35000, color: 'KUNING', volume: 'ML_1500', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Biru 1500ml 1 Botol', code: 'PRD-ANN-BRU-002', price: 35000, color: 'BIRU', volume: 'ML_1500', unit: 'BOTOL' },
+  { type: 'AIR_NANO', name: 'Air Nano Hijau 1500ml 1 Botol', code: 'PRD-ANN-HJU-002', price: 35000, color: 'HIJAU', volume: 'ML_1500', unit: 'BOTOL' },
   // 600ml Dus
-  { type: 'AIR_NANO', name: 'Air Nano Kuning 600ml 1 Dus', code: 'ARN-CK-V06-DS', price: 360000, color: 'KUNING', volume: 'ML_600', unit: 'DUS' },
-  { type: 'AIR_NANO', name: 'Air Nano Biru 600ml 1 Dus', code: 'ARN-CB-V06-DS', price: 360000, color: 'BIRU', volume: 'ML_600', unit: 'DUS' },
-  { type: 'AIR_NANO', name: 'Air Nano Hijau H2S 600ml 1 Dus', code: 'ARN-CH-V06-DS', price: 360000, color: 'HIJAU', volume: 'ML_600', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Kuning 600ml 1 Dus', code: 'PRD-ANN-KNG-003', price: 360000, color: 'KUNING', volume: 'ML_600', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Biru 600ml 1 Dus', code: 'PRD-ANN-BRU-003', price: 360000, color: 'BIRU', volume: 'ML_600', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Hijau 600ml 1 Dus', code: 'PRD-ANN-HJU-003', price: 360000, color: 'HIJAU', volume: 'ML_600', unit: 'DUS' },
   // 1500ml Dus
-  { type: 'AIR_NANO', name: 'Air Nano Kuning 1500ml 1 Dus', code: 'ARN-CK-V15-DS', price: 420000, color: 'KUNING', volume: 'ML_1500', unit: 'DUS' },
-  { type: 'AIR_NANO', name: 'Air Nano Biru 1500ml 1 Dus', code: 'ARN-CB-V15-DS', price: 420000, color: 'BIRU', volume: 'ML_1500', unit: 'DUS' },
-  { type: 'AIR_NANO', name: 'Air Nano Hijau H2S 1500ml 1 Dus', code: 'ARN-CH-V15-DS', price: 420000, color: 'HIJAU', volume: 'ML_1500', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Kuning 1500ml 1 Dus', code: 'PRD-ANN-KNG-004', price: 420000, color: 'KUNING', volume: 'ML_1500', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Biru 1500ml 1 Dus', code: 'PRD-ANN-BRU-004', price: 420000, color: 'BIRU', volume: 'ML_1500', unit: 'DUS' },
+  { type: 'AIR_NANO', name: 'Air Nano Hijau 1500ml 1 Dus', code: 'PRD-ANN-HJU-004', price: 420000, color: 'HIJAU', volume: 'ML_1500', unit: 'DUS' },
 ];
 
 export const ROKOK_KENKOU_PRICING: AddOnPricing = {
   type: 'ROKOK_KENKOU',
   name: 'Rokok Kenkou 1 Bungkus',
-  code: 'RKK-KK-BK',
+  code: 'PRD-CON-RKK-001',
   price: 20000
 };
 

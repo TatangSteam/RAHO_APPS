@@ -19,7 +19,9 @@ import {
   calculatePurchaseDiscount,
   normalizeAddOnAssignments,
   type AddOnAssignmentInput,
+  type NormalizedAddOnAssignment,
 } from './package-assignment.helpers';
+import { reserveAddOnStockInTransaction } from './add-on-inventory.service';
 
 type NormalizedPaymentPlan = {
   type: 'FULL_PAYMENT' | 'INSTALLMENT';
@@ -61,7 +63,7 @@ interface PackageAssignmentTransactionParams {
   branchId: string;
   branch: Pick<Branch, 'branchCode'>;
   packageDetails: PackageDetail[];
-  addOns: AddOnAssignmentInput[];
+  addOns: NormalizedAddOnAssignment[];
   totalSubtotal: number;
   totalDiscountAmount: number;
   discountPercent?: number;
@@ -70,6 +72,7 @@ interface PackageAssignmentTransactionParams {
   purchaseGroupId?: string;
   userId: string;
   paymentPlan: NormalizedPaymentPlan;
+  member: { id: string; registrationBranchId: string };
 }
 
 /**
@@ -211,23 +214,10 @@ export class PackageAssignmentService {
         purchaseGroupId,
         userId,
         paymentPlan,
+        member,
       },
       basicSequence,
       boosterSequence
-    );
-
-    // Create invoice immediately for unpaid assigned packages/add-ons.
-    await this.invoiceService.generatePendingInvoiceForPackages(
-      result.createdPackages,
-      result.createdAddOns,
-      member,
-      userId,
-      paymentPlan,
-      {
-        discountAmount: totalDiscountAmount,
-        discountPercent: data.discountPercent || 0,
-        discountNote: data.discountNote,
-      },
     );
 
     // Audit logs
@@ -520,23 +510,29 @@ export class PackageAssignmentService {
       // Buying a package only creates the voucher inventory and keeps it on hold.
 
       // Create add-ons
+      const addonDateStr = `${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}`;
+      const addonPattern = `ADO-${params.branch.branchCode}-${addonDateStr}-%`;
+      const addOnSequenceLock = `MEMBER_ADD_ON:${params.branchId}:${addonDateStr}`;
+      await tx.$queryRaw`
+        SELECT pg_advisory_xact_lock(hashtext(${addOnSequenceLock}))::text AS "lockResult"
+      `;
+      const lastAddon = await tx.$queryRaw<Array<{ addOnCode: string }>>`
+        SELECT "addOnCode" FROM "member_add_ons"
+        WHERE "branchId" = ${params.branchId}
+          AND "addOnCode" LIKE ${addonPattern}
+        ORDER BY "addOnCode" DESC
+        LIMIT 1
+      `;
+      let addonSeq = 1;
+      if (lastAddon.length > 0) {
+        const parts = lastAddon[0].addOnCode.split('-');
+        const lastSeq = Number.parseInt(parts[parts.length - 1], 10);
+        addonSeq = Number.isNaN(lastSeq) ? 1 : lastSeq + 1;
+      }
+
       for (const addon of params.addOns) {
-        const addonDateStr = `${new Date().getFullYear().toString().slice(-2)}${(new Date().getMonth() + 1).toString().padStart(2, '0')}`;
-        const addonPattern = `ADO-${params.branch.branchCode}-${addonDateStr}-%`;
-        const lastAddon = await tx.$queryRaw<Array<{ addOnCode: string }>>`
-          SELECT "addOnCode" FROM "member_add_ons"
-          WHERE "branchId" = ${params.branchId}
-            AND "addOnCode" LIKE ${addonPattern}
-          ORDER BY "addOnCode" DESC
-          LIMIT 1
-        `;
-        let addonSeq = 1;
-        if (lastAddon && lastAddon.length > 0) {
-          const parts = lastAddon[0].addOnCode.split('-');
-          const lastSeq = parseInt(parts[parts.length - 1], 10);
-          addonSeq = isNaN(lastSeq) ? 1 : lastSeq + 1;
-        }
         const addOnCode = `ADO-${params.branch.branchCode}-${addonDateStr}-${addonSeq.toString().padStart(4, '0')}`;
+        addonSeq += 1;
 
         const linkedPackageId = createdPackages.length > 0 ? createdPackages[0].id : null;
 
@@ -557,9 +553,16 @@ export class PackageAssignmentService {
             totalVerifiedPaid: 0,
             paymentPlanStatus: params.paymentPlan.type === 'INSTALLMENT' ? 'PENDING_FIRST_PAYMENT' : null,
             notes: `${addon.name} (${addon.code})${params.notes ? ' - ' + params.notes : ''}`,
+            productCode: addon.code,
+            inventorySku: addon.inventorySku || null,
+            stockQuantity: addon.inventoryQuantityPerUnit
+              ? addon.inventoryQuantityPerUnit * addon.quantity
+              : null,
             assignedBy: params.userId,
           },
         });
+
+        await reserveAddOnStockInTransaction(memberAddOn, params.userId, tx);
 
         createdAddOns.push({
           ...memberAddOn,
@@ -568,6 +571,20 @@ export class PackageAssignmentService {
           originalType: addon.type,
         });
       }
+
+      await this.invoiceService.generatePendingInvoiceForPackages(
+        createdPackages,
+        createdAddOns,
+        params.member,
+        params.userId,
+        params.paymentPlan,
+        {
+          discountAmount: params.totalDiscountAmount,
+          discountPercent: params.discountPercent || 0,
+          discountNote: params.discountNote,
+        },
+        tx,
+      );
 
       return { createdPackages, createdAddOns, purchaseGroupId: params.purchaseGroupId, totalBasicSessions };
     });

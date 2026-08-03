@@ -7,18 +7,23 @@ jest.mock('nanoid', () => ({
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
+    $queryRaw: jest.fn(),
     invoice: {
       findFirst: jest.fn(),
     },
   },
 }));
 
-const prismaMock = prisma as any;
+const prismaMock = prisma as unknown as {
+  $queryRaw: jest.Mock;
+  invoice: { findFirst: jest.Mock };
+};
 const july2026 = new Date(2026, 6, 3, 12, 0, 0);
 
 describe('generateInvoiceNumber', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    prismaMock.$queryRaw.mockResolvedValue([{ lockResult: '' }]);
   });
 
   it('starts at one for a branch in a new month', async () => {
