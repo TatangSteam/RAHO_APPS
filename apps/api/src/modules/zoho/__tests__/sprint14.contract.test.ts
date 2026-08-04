@@ -76,6 +76,8 @@ describe('Sprint 14 additive and local-independence contract', () => {
     expect(goLive).toContain("'ZOHO_WORKER_DISABLED'");
     expect(goLive).toContain("'ZOHO_RUNTIME_CONFIG_INCOMPLETE'");
     expect(goLive).toContain("source: 'CONFIGURATION_INVALID'");
+    expect(goLive).toContain("mode: 'DRY_RUN'");
+    expect(goLive).not.toContain("mode: env.ZOHO_SYNC_DRY_RUN ? 'DRY_RUN' : 'LIVE'");
     expect(goLive).toContain("where: { status: 'DRY_RUN' }");
     expect(goLive).toContain("status: 'PENDING'");
     expect(goLive).toContain('attempts: 0');

@@ -1,6 +1,7 @@
 import {
   buildZohoInvoicePayload,
   invoiceTaxMappingKey,
+  validateRecoveredInvoice,
   validateInvoiceSnapshot,
   ZohoInvoiceSnapshot,
 } from '../zoho.invoice.policy';
@@ -151,5 +152,31 @@ describe('Zoho Sprint 5 invoice policy', () => {
       itemIds: { 'MASTER_PRODUCT:product-1': 'item' },
     }));
     expect(serialized).not.toMatch(/diagnosis|therapy_plan|medical_record|treatment_bom|batch|expiry|payment_proof/i);
+  });
+
+  it('recovers an existing invoice only when its critical identity and value match', () => {
+    const source = snapshot();
+    expect(validateRecoveredInvoice(source, { customerId: 'customer-1' }, {
+      invoice_id: 'invoice-z-1',
+      reference_number: source.invoiceNumber,
+      customer_id: 'customer-1',
+      currency_code: 'IDR',
+      total: 210_900,
+      status: 'sent',
+    })).toEqual([]);
+
+    expect(validateRecoveredInvoice(source, { customerId: 'customer-1' }, {
+      invoice_id: 'invoice-z-2',
+      reference_number: source.invoiceNumber,
+      customer_id: 'customer-lain',
+      currency_code: 'USD',
+      total: 1,
+      status: 'void',
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining('Customer'),
+      expect.stringContaining('Currency'),
+      expect.stringContaining('Total'),
+      expect.stringContaining('void'),
+    ]));
   });
 });

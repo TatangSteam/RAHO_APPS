@@ -90,7 +90,9 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
       };
     }
     return {
-      mode: env.ZOHO_SYNC_DRY_RUN ? 'DRY_RUN' : 'LIVE',
+      // Tanpa control record, worker hanya boleh rehearsal. LIVE wajib melalui
+      // configureGoLiveControl + approval/reconciliation/canary yang eksplisit.
+      mode: 'DRY_RUN',
       connectionId: connection.id,
       canaryBranchIds: [],
       masterFrozen: false,

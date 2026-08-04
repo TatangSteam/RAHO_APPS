@@ -8,6 +8,8 @@ import {
   invoiceLineMappingKey,
   invoiceTaxMappingKey,
   validateInvoiceSnapshot,
+  validateRecoveredInvoice,
+  ZohoExistingInvoice,
   ZohoInvoiceDependencies,
   ZohoInvoiceLineSnapshot,
   ZohoInvoiceSnapshot,
@@ -283,12 +285,7 @@ async function dependencies(
   };
 }
 
-type ZohoInvoiceCandidate = {
-  invoice_id?: string | number;
-  invoice_number?: string;
-  reference_number?: string;
-  status?: string;
-};
+type ZohoInvoiceCandidate = ZohoExistingInvoice;
 
 async function findExisting(client: ZohoClient, invoiceNumber: string): Promise<ZohoInvoiceCandidate[]> {
   const candidates = await client.listAll<ZohoInvoiceCandidate>(
@@ -367,6 +364,24 @@ export async function handleInvoiceEvent(event: IntegrationEvent) {
   let zohoId = matches[0]?.invoice_id == null ? null : String(matches[0].invoice_id);
   let zohoStatus = matches[0]?.status?.toLowerCase();
   let operation = 'RECOVER_EXISTING';
+  if (zohoId) {
+    const detail = await client.request<{ invoice?: ZohoInvoiceCandidate }>(`/books/v3/invoices/${zohoId}`);
+    const candidate = { ...matches[0], ...detail.invoice };
+    const recoveryIssues = validateRecoveredInvoice(
+      snapshot,
+      resolved as ZohoInvoiceDependencies,
+      candidate,
+    );
+    if (recoveryIssues.length) {
+      throw new ZohoApiError(
+        recoveryIssues.join(' '),
+        'ZOHO_INVOICE_RECOVERY_MISMATCH',
+        409,
+        false,
+      );
+    }
+    zohoStatus = candidate.status?.toLowerCase();
+  }
   if (!zohoId) {
     const response = await client.request<{ invoice?: { invoice_id?: string | number; status?: string } }>(
       '/books/v3/invoices',

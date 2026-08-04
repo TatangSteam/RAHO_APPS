@@ -9,7 +9,9 @@ import {
   buildZohoRefundPayload,
   paymentMethodMappingKey,
   reconcileReceivable,
+  validateRecoveredPayment,
   validatePaymentSnapshot,
+  ZohoExistingCustomerPayment,
   ZohoPaymentDependencies,
   ZohoPaymentRefundSnapshot,
   ZohoPaymentSnapshot,
@@ -179,17 +181,7 @@ async function paymentDependencies(
   };
 }
 
-type ZohoCustomerPayment = {
-  payment_id?: string | number;
-  reference_number?: string;
-  amount?: number;
-  invoices?: Array<{
-    invoice_id?: string | number;
-    invoice_payment_id?: string | number;
-    amount_applied?: number;
-    balance_amount?: number;
-  }>;
-};
+type ZohoCustomerPayment = ZohoExistingCustomerPayment;
 
 async function findExistingPayment(client: ZohoClient, referenceNumber: string) {
   const rows = await client.listAll<ZohoCustomerPayment>(
@@ -298,6 +290,25 @@ async function handleVerifiedPayment(event: IntegrationEvent) {
   }
   let payment = matches[0];
   let operation = 'RECOVER_EXISTING';
+  if (payment?.payment_id != null) {
+    const detail = await client.request<{ payment?: ZohoCustomerPayment }>(
+      `/books/v3/customerpayments/${payment.payment_id}`,
+    );
+    payment = { ...payment, ...detail.payment };
+    const recoveryIssues = validateRecoveredPayment(
+      snapshot,
+      resolved as ZohoPaymentDependencies,
+      payment,
+    );
+    if (recoveryIssues.length) {
+      throw new ZohoApiError(
+        recoveryIssues.join(' '),
+        'ZOHO_PAYMENT_RECOVERY_MISMATCH',
+        409,
+        false,
+      );
+    }
+  }
   if (!payment) {
     const response = await client.request<{ payment?: ZohoCustomerPayment }>(
       '/books/v3/customerpayments',

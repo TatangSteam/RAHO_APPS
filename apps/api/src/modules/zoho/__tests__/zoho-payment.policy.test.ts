@@ -3,6 +3,7 @@ import {
   buildZohoRefundPayload,
   paymentMethodMappingKey,
   reconcileReceivable,
+  validateRecoveredPayment,
   validatePaymentSnapshot,
   ZohoPaymentDependencies,
   ZohoPaymentRefundSnapshot,
@@ -145,6 +146,36 @@ describe('Zoho customer payment policy', () => {
       'ZohoBooks.customerpayments.CREATE',
       'ZohoBooks.customerpayments.UPDATE',
       'ZohoBooks.invoices.DELETE',
+    ]));
+  });
+
+  it('recovers an existing payment only when customer, account, amount, and application match', () => {
+    const source = payment();
+    expect(validateRecoveredPayment(source, dependencies, {
+      payment_id: 'payment-z-1',
+      reference_number: source.referenceNumber,
+      customer_id: dependencies.customerId,
+      account_id: dependencies.accountId,
+      amount: 250_000,
+      invoices: [{ invoice_id: dependencies.invoiceId, amount_applied: 250_000 }],
+    })).toEqual([]);
+
+    expect(validateRecoveredPayment(source, dependencies, {
+      payment_id: 'payment-z-2',
+      reference_number: source.referenceNumber,
+      customer_id: 'customer-lain',
+      account_id: 'bank-lain',
+      amount: 100_000,
+      invoices: [
+        { invoice_id: dependencies.invoiceId, amount_applied: 100_000 },
+        { invoice_id: 'invoice-lain', amount_applied: 1 },
+      ],
+    })).toEqual(expect.arrayContaining([
+      expect.stringContaining('Customer'),
+      expect.stringContaining('Rekening'),
+      expect.stringContaining('Nominal'),
+      expect.stringContaining('tidak cocok'),
+      expect.stringContaining('invoice lain'),
     ]));
   });
 });

@@ -32,6 +32,20 @@ export interface ZohoPaymentDependencies {
   paymentMode: string;
 }
 
+export interface ZohoExistingCustomerPayment {
+  payment_id?: string | number;
+  reference_number?: string;
+  customer_id?: string | number;
+  account_id?: string | number;
+  amount?: string | number | Prisma.Decimal;
+  invoices?: Array<{
+    invoice_id?: string | number;
+    invoice_payment_id?: string | number;
+    amount_applied?: string | number | Prisma.Decimal;
+    balance_amount?: string | number | Prisma.Decimal;
+  }>;
+}
+
 export interface ZohoPaymentRefundSnapshot {
   localEntityId: string;
   externalKey: string;
@@ -73,6 +87,39 @@ export function validatePaymentSnapshot(
   if (!dependencies.locationId) issues.push('Mapping lokasi cabang Zoho belum tersedia.');
   if (!dependencies.accountId) issues.push('Mapping rekening kas/bank Zoho belum tersedia.');
   if (!dependencies.paymentMode) issues.push(`Mapping metode pembayaran ${snapshot.paymentMethod} belum tersedia.`);
+  return issues;
+}
+
+export function validateRecoveredPayment(
+  snapshot: ZohoPaymentSnapshot,
+  dependencies: Pick<ZohoPaymentDependencies, 'customerId' | 'invoiceId' | 'accountId'>,
+  candidate: ZohoExistingCustomerPayment,
+): string[] {
+  const issues: string[] = [];
+  if (candidate.reference_number !== snapshot.referenceNumber) {
+    issues.push('Nomor referensi pembayaran Zoho berbeda dari pembayaran ERP.');
+  }
+  if (candidate.customer_id == null || String(candidate.customer_id) !== dependencies.customerId) {
+    issues.push('Customer pembayaran Zoho berbeda dari member ERP.');
+  }
+  if (candidate.account_id == null || String(candidate.account_id) !== dependencies.accountId) {
+    issues.push('Rekening pembayaran Zoho berbeda dari rekening ERP.');
+  }
+  if (candidate.amount == null || !new Prisma.Decimal(candidate.amount).toDecimalPlaces(2)
+    .equals(new Prisma.Decimal(snapshot.amount).toDecimalPlaces(2))) {
+    issues.push('Nominal pembayaran Zoho berbeda dari pembayaran ERP.');
+  }
+  const appliedInvoices = (candidate.invoices || []).filter((invoice) => (
+    invoice.amount_applied != null && new Prisma.Decimal(invoice.amount_applied).greaterThan(0)
+  ));
+  const target = appliedInvoices.find((invoice) => String(invoice.invoice_id) === dependencies.invoiceId);
+  if (!target || target.amount_applied == null || !new Prisma.Decimal(target.amount_applied).toDecimalPlaces(2)
+    .equals(new Prisma.Decimal(snapshot.amount).toDecimalPlaces(2))) {
+    issues.push('Aplikasi pembayaran Zoho tidak cocok dengan invoice ERP.');
+  }
+  if (appliedInvoices.some((invoice) => String(invoice.invoice_id) !== dependencies.invoiceId)) {
+    issues.push('Pembayaran Zoho juga diterapkan ke invoice lain.');
+  }
   return issues;
 }
 

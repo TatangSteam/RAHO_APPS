@@ -55,6 +55,16 @@ export type ZohoInvoiceDependencies = {
   itemIds: Record<string, string>;
 };
 
+export type ZohoExistingInvoice = {
+  invoice_id?: string | number;
+  invoice_number?: string;
+  reference_number?: string;
+  customer_id?: string | number;
+  currency_code?: string;
+  total?: string | number | Prisma.Decimal;
+  status?: string;
+};
+
 function money(value: string | number | Prisma.Decimal): Prisma.Decimal {
   return new Prisma.Decimal(value);
 }
@@ -129,6 +139,30 @@ export function validateInvoiceSnapshot(
     issues.push(`Pajak ${invoiceTaxMappingKey(snapshot.taxPercent)}% belum dipetakan ke Zoho.`);
   }
   return Array.from(new Set(issues));
+}
+
+export function validateRecoveredInvoice(
+  snapshot: ZohoInvoiceSnapshot,
+  dependencies: Pick<ZohoInvoiceDependencies, 'customerId'>,
+  candidate: ZohoExistingInvoice,
+): string[] {
+  const issues: string[] = [];
+  const referenceMatches = candidate.reference_number === snapshot.invoiceNumber
+    || candidate.invoice_number === snapshot.invoiceNumber;
+  if (!referenceMatches) issues.push('Nomor referensi invoice Zoho berbeda dari invoice ERP.');
+  if (candidate.customer_id == null || String(candidate.customer_id) !== dependencies.customerId) {
+    issues.push('Customer invoice Zoho berbeda dari member ERP.');
+  }
+  if (!candidate.currency_code || candidate.currency_code.toUpperCase() !== snapshot.currency.toUpperCase()) {
+    issues.push('Currency invoice Zoho berbeda dari invoice ERP.');
+  }
+  if (candidate.total == null || !money(candidate.total).toDecimalPlaces(2).equals(money(snapshot.totalAmount).toDecimalPlaces(2))) {
+    issues.push('Total invoice Zoho berbeda dari invoice ERP.');
+  }
+  if (candidate.status?.toLowerCase() === 'void') {
+    issues.push('Invoice Zoho dengan referensi tersebut sudah berstatus void.');
+  }
+  return issues;
 }
 
 export function buildZohoInvoicePayload(
