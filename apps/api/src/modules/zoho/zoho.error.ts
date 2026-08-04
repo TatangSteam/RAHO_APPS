@@ -13,6 +13,16 @@ export class ZohoApiError extends Error {
   }
 }
 
+export function isZohoReconnectRequired(
+  error: Pick<ZohoApiError, 'code' | 'message'> | string | null | undefined,
+): boolean {
+  if (!error) return false;
+  const value = typeof error === 'string'
+    ? error
+    : `${error.code} ${error.message}`;
+  return /ZOHO_REFRESH_FAILED|invalid_code|invalid_grant|refresh token.+(?:expired|revoked|invalid)/i.test(value);
+}
+
 function retryAfterMs(value: unknown): number | undefined {
   if (typeof value !== 'string') return undefined;
   const seconds = Number(value);

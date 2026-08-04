@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { getMissingRequiredScopes, parseGrantedScopes, ZOHO_REQUIRED_SCOPES } from '../zoho.client';
-import { ZohoApiError, normalizeZohoError } from '../zoho.error';
+import { isZohoReconnectRequired, ZohoApiError, normalizeZohoError } from '../zoho.error';
 import { sanitizeForAudit, stablePayloadHash } from '../zoho.sanitizer';
 import { calculateRetryAt } from '../zoho.worker';
 
@@ -27,6 +27,17 @@ describe('Zoho Sprint 1 foundation', () => {
     const error = new ZohoApiError('Too many requests', '4290', 429, true, 5_000);
     expect(normalizeZohoError(error)).toBe(error);
     expect(error.retryable).toBe(true);
+  });
+
+  it('classifies invalid or revoked refresh grants as requiring OAuth reconnect', () => {
+    expect(isZohoReconnectRequired(new ZohoApiError(
+      'invalid_code',
+      'ZOHO_REFRESH_FAILED',
+      401,
+      false,
+    ))).toBe(true);
+    expect(isZohoReconnectRequired('invalid_grant')).toBe(true);
+    expect(isZohoReconnectRequired(new ZohoApiError('Rate limited', '4290', 429, true))).toBe(false);
   });
 
   it('uses exponential retry delay and honors Retry-After', () => {

@@ -1040,6 +1040,7 @@ export default function ZohoIntegrationPage() {
       await loadStatus();
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Pemeriksaan koneksi Zoho gagal.'));
+      await loadStatus().catch(() => undefined);
     } finally { setAction(null); }
   }
 
@@ -1857,7 +1858,9 @@ export default function ZohoIntegrationPage() {
                         </p>
                         {connection.reconnectRequired && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
-                            Hubungkan ulang untuk scope baru: {connection.missingScopes.join(', ') || 'versi izin terbaru'}
+                            {connection.lastError?.match(/ZOHO_REFRESH_FAILED|invalid_code|invalid_grant/i)
+                              ? 'Token Zoho tidak berlaku. Klik “Hubungkan ulang” dan setujui kembali seluruh izin.'
+                              : `Hubungkan ulang untuk scope baru: ${connection.missingScopes.join(', ') || 'versi izin terbaru'}`}
                           </p>
                         )}
                         {!connection.contactSyncReady && (

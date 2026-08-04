@@ -11,7 +11,7 @@ import {
   ZOHO_REQUIRED_SCOPES,
   ZOHO_SCOPE_VERSION,
 } from './zoho.client';
-import { normalizeZohoError } from './zoho.error';
+import { isZohoReconnectRequired, normalizeZohoError } from './zoho.error';
 
 const SCOPES = ZOHO_REQUIRED_SCOPES.join(',');
 
@@ -191,7 +191,9 @@ export async function getStatus() {
           && !missingScopes.includes('ZohoBooks.vendorpayments.CREATE')
           && !missingScopes.includes('ZohoBooks.vendorpayments.UPDATE'),
         reconnectRequired:
-          connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION || missingScopes.length > 0,
+          connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
+          || missingScopes.length > 0
+          || isZohoReconnectRequired(connection.lastError),
       };
     }),
   };
@@ -209,6 +211,13 @@ export async function testConnection() {
     const normalized = normalizeZohoError(error);
     const detail = `${normalized.code}: ${normalized.message}`.slice(0, 500);
     await prisma.zohoConnection.update({ where: { id: connection.id }, data: { lastCheckedAt: new Date(), lastError: detail } });
+    if (isZohoReconnectRequired(normalized)) {
+      throw new AppError(
+        409,
+        'ZOHO_RECONNECT_REQUIRED',
+        'Izin Zoho sudah kedaluwarsa atau dicabut. Klik “Hubungkan ulang”, login ke Zoho, lalu setujui kembali seluruh izin.',
+      );
+    }
     throw new AppError(
       502,
       'ZOHO_CONNECTION_FAILED',
