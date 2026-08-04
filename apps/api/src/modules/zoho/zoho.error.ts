@@ -43,11 +43,18 @@ export function normalizeZohoError(error: unknown): ZohoApiError {
   }
 
   const status = error.response?.status;
-  const body = error.response?.data as { code?: string | number; message?: string } | undefined;
-  const code = body?.code == null ? `ZOHO_HTTP_${status || 'NETWORK'}` : String(body.code);
+  const body = error.response?.data as {
+    code?: string | number;
+    message?: string;
+    error?: string;
+    error_description?: string;
+  } | undefined;
+  const code = body?.code != null
+    ? String(body.code)
+    : body?.error || `ZOHO_HTTP_${status || 'NETWORK'}`;
   const retryable = status == null || status === 408 || status === 429 || status >= 500;
   return new ZohoApiError(
-    body?.message || error.message || 'Zoho request failed',
+    body?.message || body?.error_description || body?.error || error.message || 'Zoho request failed',
     code,
     status,
     retryable,

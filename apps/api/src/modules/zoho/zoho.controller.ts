@@ -176,10 +176,13 @@ export async function callback(req: Request, res: Response) {
   try {
     const code = typeof req.query.code === 'string' ? req.query.code : '';
     const state = typeof req.query.state === 'string' ? req.query.state : '';
+    const accountsServer = typeof req.query['accounts-server'] === 'string'
+      ? req.query['accounts-server']
+      : null;
     const zohoError = typeof req.query.error === 'string' ? req.query.error : '';
     if (zohoError) return res.redirect(service.webRedirect('error', zohoError));
     if (!code || !state) return res.redirect(service.webRedirect('error', 'Callback Zoho tidak lengkap.'));
-    return res.redirect(await service.handleCallback(code, state));
+    return res.redirect(await service.handleCallback(code, state, accountsServer));
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Koneksi Zoho gagal.';
     return res.redirect(service.webRedirect('error', message));

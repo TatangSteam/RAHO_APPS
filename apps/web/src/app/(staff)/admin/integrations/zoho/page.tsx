@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Ban,
@@ -45,6 +45,7 @@ type Connection = {
   lastError: string | null;
   missingScopes: string[];
   reconnectRequired: boolean;
+  authorizationReady: boolean;
   organizationCurrencyCode: string | null;
   discoveryLastRunAt: string | null;
   contactSyncReady: boolean;
@@ -820,6 +821,7 @@ export default function ZohoIntegrationPage() {
   const [selectedEvent, setSelectedEvent] = useState<SyncEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
+  const oauthCallbackHandled = useRef(false);
 
   const loadStatus = useCallback(async () => {
     const response = await api.get<{ data: Status }>('/integrations/zoho/status');
@@ -1014,11 +1016,25 @@ export default function ZohoIntegrationPage() {
 
   useEffect(() => {
     const result = searchParams.get('zoho');
-    if (!result) return;
-    if (result === 'success') toast.success('Zoho Books berhasil dihubungkan.');
-    else toast.error(searchParams.get('message') || 'Koneksi Zoho gagal.');
-    router.replace('/admin/integrations/zoho');
-    void loadStatus();
+    if (!result || oauthCallbackHandled.current) return;
+    oauthCallbackHandled.current = true;
+    const finishOAuth = async () => {
+      if (result === 'success') {
+        toast.success('Zoho Books berhasil dihubungkan. Memeriksa konfigurasi...');
+        try {
+          const response = await api.post<{ data: DiscoveryData }>('/integrations/zoho/discovery/run');
+          setDiscovery(response.data.data);
+          toast.success('Discovery Zoho selesai.');
+        } catch (error) {
+          toast.error(apiErrorMessage(error, 'Zoho terhubung, tetapi discovery belum selesai. Jalankan ulang dari tab Master Zoho.'));
+        }
+      } else {
+        toast.error(searchParams.get('message') || 'Koneksi Zoho gagal.');
+      }
+      await loadStatus().catch(() => undefined);
+      router.replace('/admin/integrations/zoho');
+    };
+    void finishOAuth();
   }, [loadStatus, router, searchParams]);
 
   async function connect() {
@@ -1824,7 +1840,9 @@ export default function ZohoIntegrationPage() {
                   )}
                   <button onClick={connect} disabled={!status?.configured || !!action} className="inline-flex max-w-full items-center gap-2 whitespace-normal rounded-lg bg-blue-600 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">
                     {action === 'connect' ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
-                    {status?.connected ? 'Hubungkan ulang' : 'Hubungkan Zoho'}
+                    {status?.connected || status?.connections.some((connection) => connection.reconnectRequired)
+                      ? 'Hubungkan ulang'
+                      : 'Hubungkan Zoho'}
                   </button>
                   {status?.connected && (
                     <button onClick={disconnect} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
@@ -1850,7 +1868,7 @@ export default function ZohoIntegrationPage() {
                 <div key={connection.id} className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-700 dark:bg-neutral-900">
                   <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
                     <div className="flex gap-3">
-                      <Building2 className={connection.isActive ? 'text-blue-600' : 'text-neutral-400'} />
+                      <Building2 className={connection.authorizationReady ? 'text-blue-600' : 'text-neutral-400'} />
                       <div>
                         <p className="font-semibold">{connection.organizationName}</p>
                         <p className="text-xs text-neutral-500">
@@ -1863,51 +1881,53 @@ export default function ZohoIntegrationPage() {
                               : `Hubungkan ulang untuk scope baru: ${connection.missingScopes.join(', ') || 'versi izin terbaru'}`}
                           </p>
                         )}
-                        {!connection.contactSyncReady && (
+                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.contactSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Contact live belum siap: buat custom field contact unik “RAHO External ID”, lalu jalankan discovery.
                           </p>
                         )}
-                        {!connection.itemSyncReady && (
+                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.itemSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Item live belum siap: petakan sales, purchase, dan inventory account.
                           </p>
                         )}
-                        {!connection.locationSyncReady && (
+                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.locationSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Scope cabang Zoho belum siap: jalankan discovery untuk memeriksa dukungan edition Zoho.
                           </p>
                         )}
-                        {!connection.invoiceSyncReady && (
+                        {!connection.reconnectRequired && !connection.invoiceSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Invoice live belum siap: hubungkan ulang untuk scope CREATE dan UPDATE.
                           </p>
                         )}
-                        {!connection.paymentSyncReady && (
+                        {!connection.reconnectRequired && !connection.paymentSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Customer Payment/refund belum siap: hubungkan ulang untuk scope pembayaran Sprint 6.
                           </p>
                         )}
-                        {!connection.expenseSyncReady && (
+                        {!connection.reconnectRequired && !connection.expenseSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Expense belum siap: hubungkan ulang untuk scope expense Sprint 8.
                           </p>
                         )}
-                        {!connection.purchaseOrderSyncReady && (
+                        {!connection.reconnectRequired && !connection.purchaseOrderSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Purchase Order belum siap: hubungkan ulang untuk scope purchase order.
                           </p>
                         )}
-                        {!connection.billSyncReady && (
+                        {!connection.reconnectRequired && !connection.billSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Bill belum siap: hubungkan ulang untuk scope Bill Sprint 11.
                           </p>
                         )}
-                        {connection.lastError && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
+                        {connection.lastError && !connection.reconnectRequired && <p className="mt-1 text-xs text-red-600">{connection.lastError}</p>}
                       </div>
                     </div>
-                    {connection.isActive ? (
+                    {connection.authorizationReady ? (
                       <span className="w-fit rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Aktif</span>
+                    ) : connection.reconnectRequired ? (
+                      <span className="w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">Perlu OAuth</span>
                     ) : canManageConnection ? (
                       <button onClick={() => activate(connection.id)} disabled={!!action} className="rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50 dark:border-neutral-700">
                         Gunakan organisasi ini

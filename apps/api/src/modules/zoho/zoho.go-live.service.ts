@@ -2,6 +2,8 @@ import { Prisma } from '@prisma/client';
 import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
+import { getMissingRequiredScopes } from './zoho.client';
+import { isZohoReconnectRequired } from './zoho.error';
 
 export type ZohoRuntimeMode = 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE';
 export type ZohoRuntimeGate = {
@@ -9,7 +11,7 @@ export type ZohoRuntimeGate = {
   connectionId: string | null;
   canaryBranchIds: string[];
   masterFrozen: boolean;
-  source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED' | 'CONFIGURATION_INVALID';
+  source: 'CONTROL' | 'LEGACY_ENV' | 'DISCONNECTED' | 'AUTHORIZATION_INVALID' | 'CONFIGURATION_INVALID';
 };
 
 function stringArray(value: Prisma.JsonValue | null | undefined): string[] {
@@ -66,6 +68,19 @@ export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
   const connection = await prisma.zohoConnection.findFirst({ where: { isActive: true } });
   if (!connection) {
     return { mode: 'OFF', connectionId: null, canaryBranchIds: [], masterFrozen: false, source: 'DISCONNECTED' };
+  }
+  if (
+    connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
+    || getMissingRequiredScopes(connection.scopes).length > 0
+    || isZohoReconnectRequired(connection.lastError)
+  ) {
+    return {
+      mode: 'OFF',
+      connectionId: connection.id,
+      canaryBranchIds: [],
+      masterFrozen: false,
+      source: 'AUTHORIZATION_INVALID',
+    };
   }
   const control = await prisma.zohoGoLiveControl.findUnique({
     where: { zohoConnectionId: connection.id },

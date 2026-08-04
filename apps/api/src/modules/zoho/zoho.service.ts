@@ -8,6 +8,8 @@ import {
   getActiveZohoClient,
   getMissingRequiredScopes,
   listOrganizationsWithToken,
+  resolveZohoAccountsBaseUrl,
+  type ZohoTokenResponse,
   ZOHO_REQUIRED_SCOPES,
   ZOHO_SCOPE_VERSION,
 } from './zoho.client';
@@ -41,7 +43,7 @@ export function getAuthorizationUrl(userId: string) {
     stateSecret(),
     { expiresIn: '10m', issuer: 'raho-api', audience: 'zoho-oauth' },
   );
-  const url = new URL('/oauth/v2/auth', env.ZOHO_ACCOUNTS_BASE_URL);
+  const url = new URL('/oauth/v2/auth', resolveZohoAccountsBaseUrl());
   url.searchParams.set('scope', SCOPES);
   url.searchParams.set('client_id', env.ZOHO_CLIENT_ID!);
   url.searchParams.set('response_type', 'code');
@@ -52,7 +54,7 @@ export function getAuthorizationUrl(userId: string) {
   return { authorizationUrl: url.toString() };
 }
 
-export async function handleCallback(code: string, state: string) {
+export async function handleCallback(code: string, state: string, accountsServer?: string | null) {
   assertConfigured();
   let payload: OAuthState;
   try {
@@ -67,9 +69,34 @@ export async function handleCallback(code: string, state: string) {
   const user = await prisma.user.findFirst({ where: { id: payload.userId, isActive: true, role: 'SUPER_ADMIN' } });
   if (!user) throw new AppError(403, 'AUTH_FORBIDDEN', 'Pengguna tidak berwenang menghubungkan Zoho.');
 
-  const token = await exchangeAuthorizationCode(code);
+  const accountsBaseUrl = resolveZohoAccountsBaseUrl(accountsServer);
+  let token: ZohoTokenResponse;
+  try {
+    token = await exchangeAuthorizationCode(code, accountsBaseUrl);
+  } catch (error) {
+    const normalized = normalizeZohoError(error);
+    if (/invalid_code|invalid_grant/i.test(`${normalized.code} ${normalized.message}`)) {
+      throw new AppError(
+        409,
+        'ZOHO_AUTHORIZATION_CODE_INVALID',
+        'Kode otorisasi Zoho sudah kedaluwarsa atau pernah dipakai. Kembali ke halaman integrasi lalu klik “Hubungkan ulang” satu kali.',
+      );
+    }
+    throw new AppError(502, 'ZOHO_TOKEN_FAILED', `Pertukaran token Zoho gagal (${normalized.code}).`);
+  }
   if (!token.access_token || !token.refresh_token) {
-    throw new AppError(502, 'ZOHO_TOKEN_FAILED', token.error || 'Zoho tidak mengembalikan refresh token. Cabut izin aplikasi lalu coba kembali.');
+    if (/invalid_code|invalid_grant/i.test(`${token.error || ''} ${token.error_description || ''}`)) {
+      throw new AppError(
+        409,
+        'ZOHO_AUTHORIZATION_CODE_INVALID',
+        'Kode otorisasi Zoho sudah kedaluwarsa atau pernah dipakai. Kembali ke halaman integrasi lalu klik “Hubungkan ulang” satu kali.',
+      );
+    }
+    throw new AppError(
+      502,
+      'ZOHO_TOKEN_FAILED',
+      token.error_description || token.error || 'Zoho tidak mengembalikan refresh token. Cabut izin aplikasi lalu coba kembali.',
+    );
   }
   const apiDomain = token.api_domain || env.ZOHO_API_BASE_URL;
   const organizations = await listOrganizationsWithToken(apiDomain, token.access_token);
@@ -80,7 +107,7 @@ export async function handleCallback(code: string, state: string) {
   const encryptedAccessToken = encryptToken(token.access_token);
   const encryptedRefreshToken = encryptToken(token.refresh_token);
   const expiresAt = new Date(Date.now() + (token.expires_in || 3600) * 1000);
-  const dataCenter = new URL(env.ZOHO_ACCOUNTS_BASE_URL).hostname;
+  const dataCenter = new URL(accountsBaseUrl).hostname;
   await prisma.$transaction(async (tx) => {
     await tx.zohoConnection.updateMany({ data: { isActive: false, updatedById: user.id } });
     for (const [index, organization] of organizations.entries()) {
@@ -150,52 +177,54 @@ export async function getStatus() {
     },
     select: { zohoConnectionId: true, localEntityId: true },
   });
+  const connectionStatuses = connections.map((connection) => {
+    const missingScopes = getMissingRequiredScopes(connection.scopes);
+    const reconnectRequired = connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
+      || missingScopes.length > 0
+      || isZohoReconnectRequired(connection.lastError);
+    return {
+      ...connection,
+      missingScopes,
+      authorizationReady: connection.isActive && !reconnectRequired,
+      contactSyncReady: Boolean(
+        connection.contactExternalIdFieldId
+        && connection.contactExternalIdApiName
+        && connection.contactExternalIdIsUnique
+      ),
+      itemSyncReady: new Set(
+        itemAccountMappings
+          .filter((mapping) => mapping.zohoConnectionId === connection.id)
+          .map((mapping) => mapping.localEntityId),
+      ).size === 3,
+      locationSyncReady: connection.locationsSupported === true,
+      invoiceSyncReady: !missingScopes.includes('ZohoBooks.invoices.CREATE')
+        && !missingScopes.includes('ZohoBooks.invoices.UPDATE'),
+      paymentSyncReady: !missingScopes.includes('ZohoBooks.customerpayments.CREATE')
+        && !missingScopes.includes('ZohoBooks.customerpayments.UPDATE')
+        && !missingScopes.includes('ZohoBooks.invoices.DELETE'),
+      expenseSyncReady: !missingScopes.includes('ZohoBooks.expenses.READ')
+        && !missingScopes.includes('ZohoBooks.expenses.CREATE')
+        && !missingScopes.includes('ZohoBooks.expenses.UPDATE'),
+      purchaseOrderSyncReady: !missingScopes.includes('ZohoBooks.purchaseorders.READ')
+        && !missingScopes.includes('ZohoBooks.purchaseorders.CREATE')
+        && !missingScopes.includes('ZohoBooks.purchaseorders.UPDATE'),
+      billSyncReady: !missingScopes.includes('ZohoBooks.bills.READ')
+        && !missingScopes.includes('ZohoBooks.bills.CREATE')
+        && !missingScopes.includes('ZohoBooks.bills.UPDATE'),
+      vendorPaymentSyncReady: !missingScopes.includes('ZohoBooks.vendorpayments.READ')
+        && !missingScopes.includes('ZohoBooks.vendorpayments.CREATE')
+        && !missingScopes.includes('ZohoBooks.vendorpayments.UPDATE'),
+      reconnectRequired,
+    };
+  });
   return {
     configured: Boolean(env.ZOHO_CLIENT_ID && env.ZOHO_CLIENT_SECRET && env.ZOHO_REDIRECT_URI && env.ZOHO_TOKEN_ENCRYPTION_KEY),
     redirectUri: env.ZOHO_REDIRECT_URI || null,
-    connected: connections.some((item) => item.isActive),
+    connected: connectionStatuses.some((item) => item.authorizationReady),
     dryRun: env.ZOHO_SYNC_DRY_RUN,
     workerEnabled: env.ZOHO_SYNC_WORKER_ENABLED,
     requiredScopeVersion: env.ZOHO_REQUIRED_SCOPE_VERSION,
-    connections: connections.map((connection) => {
-      const missingScopes = getMissingRequiredScopes(connection.scopes);
-      return {
-        ...connection,
-        missingScopes,
-        contactSyncReady: Boolean(
-          connection.contactExternalIdFieldId
-          && connection.contactExternalIdApiName
-          && connection.contactExternalIdIsUnique
-        ),
-        itemSyncReady: new Set(
-          itemAccountMappings
-            .filter((mapping) => mapping.zohoConnectionId === connection.id)
-            .map((mapping) => mapping.localEntityId),
-        ).size === 3,
-        locationSyncReady: connection.locationsSupported === true,
-        invoiceSyncReady: !missingScopes.includes('ZohoBooks.invoices.CREATE')
-          && !missingScopes.includes('ZohoBooks.invoices.UPDATE'),
-        paymentSyncReady: !missingScopes.includes('ZohoBooks.customerpayments.CREATE')
-          && !missingScopes.includes('ZohoBooks.customerpayments.UPDATE')
-          && !missingScopes.includes('ZohoBooks.invoices.DELETE'),
-        expenseSyncReady: !missingScopes.includes('ZohoBooks.expenses.READ')
-          && !missingScopes.includes('ZohoBooks.expenses.CREATE')
-          && !missingScopes.includes('ZohoBooks.expenses.UPDATE'),
-        purchaseOrderSyncReady: !missingScopes.includes('ZohoBooks.purchaseorders.READ')
-          && !missingScopes.includes('ZohoBooks.purchaseorders.CREATE')
-          && !missingScopes.includes('ZohoBooks.purchaseorders.UPDATE'),
-        billSyncReady: !missingScopes.includes('ZohoBooks.bills.READ')
-          && !missingScopes.includes('ZohoBooks.bills.CREATE')
-          && !missingScopes.includes('ZohoBooks.bills.UPDATE'),
-        vendorPaymentSyncReady: !missingScopes.includes('ZohoBooks.vendorpayments.READ')
-          && !missingScopes.includes('ZohoBooks.vendorpayments.CREATE')
-          && !missingScopes.includes('ZohoBooks.vendorpayments.UPDATE'),
-        reconnectRequired:
-          connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
-          || missingScopes.length > 0
-          || isZohoReconnectRequired(connection.lastError),
-      };
-    }),
+    connections: connectionStatuses,
   };
 }
 
@@ -229,6 +258,18 @@ export async function testConnection() {
 export async function activateConnection(id: string, userId: string) {
   const target = await prisma.zohoConnection.findUnique({ where: { id } });
   if (!target) throw new AppError(404, 'ZOHO_ORGANIZATION_NOT_FOUND', 'Organisasi Zoho tidak ditemukan.');
+  const missingScopes = getMissingRequiredScopes(target.scopes);
+  if (
+    target.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
+    || missingScopes.length > 0
+    || isZohoReconnectRequired(target.lastError)
+  ) {
+    throw new AppError(
+      409,
+      'ZOHO_RECONNECT_REQUIRED',
+      'Organisasi ini memakai token atau scope lama. Hubungkan ulang Zoho sebelum mengaktifkannya.',
+    );
+  }
   await prisma.$transaction([
     prisma.zohoConnection.updateMany({ data: { isActive: false, updatedById: userId } }),
     prisma.zohoConnection.update({ where: { id }, data: { isActive: true, updatedById: userId } }),

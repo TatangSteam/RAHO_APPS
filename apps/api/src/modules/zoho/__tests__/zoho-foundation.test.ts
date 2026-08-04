@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { getMissingRequiredScopes, parseGrantedScopes, ZOHO_REQUIRED_SCOPES } from '../zoho.client';
+import {
+  getMissingRequiredScopes,
+  parseGrantedScopes,
+  resolveZohoAccountsBaseUrl,
+  ZOHO_REQUIRED_SCOPES,
+} from '../zoho.client';
 import { isZohoReconnectRequired, ZohoApiError, normalizeZohoError } from '../zoho.error';
 import { sanitizeForAudit, stablePayloadHash } from '../zoho.sanitizer';
 import { calculateRetryAt } from '../zoho.worker';
@@ -68,6 +73,26 @@ describe('Zoho Sprint 2 scope versioning', () => {
     const missing = getMissingRequiredScopes('ZohoBooks.settings.READ');
     expect(missing).toContain('ZohoBooks.banking.READ');
     expect(missing).toContain('ZohoBooks.accountants.READ');
+  });
+
+  it('uses only trusted Zoho accounts servers from the OAuth callback', () => {
+    expect(resolveZohoAccountsBaseUrl('https://accounts.zoho.com.au/'))
+      .toBe('https://accounts.zoho.com.au');
+    expect(resolveZohoAccountsBaseUrl('accounts.zoho.eu'))
+      .toBe('https://accounts.zoho.eu');
+    expect(() => resolveZohoAccountsBaseUrl('https://accounts.zoho.com.evil.test'))
+      .toThrow('Accounts server Zoho tidak didukung.');
+    expect(() => resolveZohoAccountsBaseUrl('not a valid url'))
+      .toThrow(/Accounts server Zoho tidak/);
+  });
+
+  it('forwards the callback accounts server and suspends invalid refresh grants', () => {
+    const controller = fs.readFileSync(path.resolve(__dirname, '../zoho.controller.ts'), 'utf8');
+    const client = fs.readFileSync(path.resolve(__dirname, '../zoho.client.ts'), 'utf8');
+    expect(controller).toContain("req.query['accounts-server']");
+    expect(controller).toContain('handleCallback(code, state, accountsServer)');
+    expect(client).toContain('resolveZohoAccountsBaseUrl(connection.dataCenter)');
+    expect(client).toContain('reconnectRequired ? { isActive: false }');
   });
 
   it('retains all read-only scopes introduced in Sprint 2', () => {

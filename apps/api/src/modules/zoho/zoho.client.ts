@@ -5,7 +5,7 @@ import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
-import { normalizeZohoError, ZohoApiError } from './zoho.error';
+import { isZohoReconnectRequired, normalizeZohoError, ZohoApiError } from './zoho.error';
 
 export const ZOHO_INVENTORY_SCOPES = [
   'ZohoInventory.inventoryadjustments.READ',
@@ -57,6 +57,7 @@ export type ZohoTokenResponse = {
   api_domain?: string;
   scope?: string;
   error?: string;
+  error_description?: string;
 };
 
 export type ZohoOrganization = {
@@ -76,6 +77,16 @@ type RequestOptions = {
 };
 
 const refreshInFlight = new Map<string, Promise<string>>();
+const ZOHO_ACCOUNTS_HOSTS = new Set([
+  'accounts.zoho.com',
+  'accounts.zoho.eu',
+  'accounts.zoho.in',
+  'accounts.zoho.com.au',
+  'accounts.zoho.jp',
+  'accounts.zoho.ca',
+  'accounts.zoho.sa',
+  'accounts.zoho.com.cn',
+]);
 
 function configuredCredentials() {
   if (!env.ZOHO_CLIENT_ID || !env.ZOHO_CLIENT_SECRET) {
@@ -104,7 +115,33 @@ export function assertCurrentScopes(connection: Pick<ZohoConnection, 'scopes' | 
   }
 }
 
-export async function exchangeAuthorizationCode(code: string): Promise<ZohoTokenResponse> {
+export function resolveZohoAccountsBaseUrl(candidate?: string | null): string {
+  const value = candidate?.trim() || env.ZOHO_ACCOUNTS_BASE_URL;
+  let url: URL;
+  try {
+    url = new URL(value.includes('://') ? value : `https://${value}`);
+  } catch {
+    throw new AppError(400, 'ZOHO_ACCOUNTS_SERVER_INVALID', 'Accounts server Zoho tidak valid.');
+  }
+  if (
+    url.protocol !== 'https:'
+    || !ZOHO_ACCOUNTS_HOSTS.has(url.hostname.toLowerCase())
+    || (url.pathname !== '/' && url.pathname !== '')
+    || url.username
+    || url.password
+    || url.port
+    || url.search
+    || url.hash
+  ) {
+    throw new AppError(400, 'ZOHO_ACCOUNTS_SERVER_INVALID', 'Accounts server Zoho tidak didukung.');
+  }
+  return `https://${url.hostname.toLowerCase()}`;
+}
+
+export async function exchangeAuthorizationCode(
+  code: string,
+  accountsBaseUrl?: string | null,
+): Promise<ZohoTokenResponse> {
   const credentials = configuredCredentials();
   if (!env.ZOHO_REDIRECT_URI) {
     throw new AppError(503, 'ZOHO_NOT_CONFIGURED', 'Redirect URI Zoho belum dikonfigurasi.');
@@ -117,7 +154,7 @@ export async function exchangeAuthorizationCode(code: string): Promise<ZohoToken
     code,
   });
   const response = await axios.post<ZohoTokenResponse>(
-    new URL('/oauth/v2/token', env.ZOHO_ACCOUNTS_BASE_URL).toString(),
+    new URL('/oauth/v2/token', resolveZohoAccountsBaseUrl(accountsBaseUrl)).toString(),
     params,
     { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20_000 },
   );
@@ -153,13 +190,13 @@ export async function refreshZohoAccessToken(connection: ZohoConnection): Promis
         refresh_token: decryptToken(connection.encryptedRefreshToken),
       });
       const response = await axios.post<ZohoTokenResponse>(
-        new URL('/oauth/v2/token', env.ZOHO_ACCOUNTS_BASE_URL).toString(),
+        new URL('/oauth/v2/token', resolveZohoAccountsBaseUrl(connection.dataCenter)).toString(),
         params,
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, timeout: 20_000 },
       );
       if (!response.data.access_token) {
         throw new ZohoApiError(
-          response.data.error || 'Access token refresh failed',
+          response.data.error_description || response.data.error || 'Access token refresh failed',
           'ZOHO_REFRESH_FAILED',
           401,
           false,
@@ -176,9 +213,14 @@ export async function refreshZohoAccessToken(connection: ZohoConnection): Promis
       return response.data.access_token;
     } catch (error) {
       const normalized = normalizeZohoError(error);
+      const reconnectRequired = isZohoReconnectRequired(normalized);
       await prisma.zohoConnection.update({
         where: { id: connection.id },
-        data: { lastCheckedAt: new Date(), lastError: `${normalized.code}: ${normalized.message}`.slice(0, 500) },
+        data: {
+          lastCheckedAt: new Date(),
+          lastError: `${normalized.code}: ${normalized.message}`.slice(0, 500),
+          ...(reconnectRequired ? { isActive: false } : {}),
+        },
       });
       throw normalized;
     }
