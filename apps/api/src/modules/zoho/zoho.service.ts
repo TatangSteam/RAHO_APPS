@@ -168,20 +168,41 @@ export async function getStatus() {
       createdAt: true, updatedAt: true,
     },
   });
-  const itemAccountMappings = await prisma.zohoEntityMapping.findMany({
-    where: {
-      zohoConnectionId: { in: connections.map((connection) => connection.id) },
-      entityType: 'ACCOUNT_ROLE',
-      localEntityId: { in: ['ITEM_SALES', 'ITEM_PURCHASE', 'ITEM_INVENTORY'] },
-      status: 'ACTIVE',
-    },
-    select: { zohoConnectionId: true, localEntityId: true },
-  });
+  const [itemAccountMappings, activeUomCount, uomMappings] = await Promise.all([
+    prisma.zohoEntityMapping.findMany({
+      where: {
+        zohoConnectionId: { in: connections.map((connection) => connection.id) },
+        entityType: 'ACCOUNT_ROLE',
+        localEntityId: { in: ['ITEM_SALES', 'ITEM_PURCHASE', 'ITEM_INVENTORY'] },
+        status: 'ACTIVE',
+      },
+      select: { zohoConnectionId: true, localEntityId: true },
+    }),
+    prisma.unitOfMeasure.count({ where: { isActive: true } }),
+    prisma.zohoEntityMapping.findMany({
+      where: {
+        zohoConnectionId: { in: connections.map((connection) => connection.id) },
+        entityType: 'UOM',
+        status: 'ACTIVE',
+      },
+      select: { zohoConnectionId: true, localEntityId: true },
+    }),
+  ]);
   const connectionStatuses = connections.map((connection) => {
     const missingScopes = getMissingRequiredScopes(connection.scopes);
     const reconnectRequired = connection.scopeVersion < env.ZOHO_REQUIRED_SCOPE_VERSION
       || missingScopes.length > 0
       || isZohoReconnectRequired(connection.lastError);
+    const itemAccountSyncReady = new Set(
+      itemAccountMappings
+        .filter((mapping) => mapping.zohoConnectionId === connection.id)
+        .map((mapping) => mapping.localEntityId),
+    ).size === 3;
+    const uomSyncReady = activeUomCount > 0 && new Set(
+      uomMappings
+        .filter((mapping) => mapping.zohoConnectionId === connection.id)
+        .map((mapping) => mapping.localEntityId),
+    ).size === activeUomCount;
     return {
       ...connection,
       missingScopes,
@@ -191,11 +212,9 @@ export async function getStatus() {
         && connection.contactExternalIdApiName
         && connection.contactExternalIdIsUnique
       ),
-      itemSyncReady: new Set(
-        itemAccountMappings
-          .filter((mapping) => mapping.zohoConnectionId === connection.id)
-          .map((mapping) => mapping.localEntityId),
-      ).size === 3,
+      itemAccountSyncReady,
+      uomSyncReady,
+      itemSyncReady: itemAccountSyncReady && uomSyncReady,
       locationSyncReady: connection.locationsSupported === true,
       invoiceSyncReady: !missingScopes.includes('ZohoBooks.invoices.CREATE')
         && !missingScopes.includes('ZohoBooks.invoices.UPDATE'),

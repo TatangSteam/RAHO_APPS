@@ -51,6 +51,8 @@ type Connection = {
   discoveryLastRunAt: string | null;
   contactSyncReady: boolean;
   itemSyncReady: boolean;
+  itemAccountSyncReady: boolean;
+  uomSyncReady: boolean;
   locationSyncReady: boolean;
   invoiceSyncReady: boolean;
   paymentSyncReady: boolean;
@@ -133,6 +135,11 @@ type SetupData = {
     role: 'ITEM_SALES' | 'ITEM_PURCHASE' | 'ITEM_INVENTORY';
     zohoAccountId: string | null;
     status: 'PRESERVED' | 'MAPPED' | 'REVIEW_REQUIRED';
+  }>;
+  uomMappings: Array<{
+    uomId: string;
+    zohoUnit: string;
+    status: 'PRESERVED' | 'MAPPED';
   }>;
   discovery: DiscoveryData;
 };
@@ -1920,9 +1927,14 @@ export default function ZohoIntegrationPage() {
                             Contact live belum siap: jalankan penyiapan otomatis untuk membuat field unik “RAHO External ID”.
                           </p>
                         )}
-                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.itemSyncReady && (
+                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.itemAccountSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
                             Item live belum siap: jalankan penyiapan otomatis untuk memetakan account standar Zoho.
+                          </p>
+                        )}
+                        {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.uomSyncReady && (
+                          <p className="mt-1 text-xs font-semibold text-amber-700">
+                            Item live belum siap: petakan seluruh UOM aktif pada tab Master Zoho.
                           </p>
                         )}
                         {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.locationSyncReady && (

@@ -92,6 +92,7 @@ describe('Sprint 14 additive and local-independence contract', () => {
     expect(goLive).toContain('zohoConnectionId: connection.id');
     expect(goLive).toContain("'ZOHO_CANARY_BUSINESS_DAY_REQUIRED'");
     expect(goLive).toContain("'ZOHO_CANARY_DAY_ALREADY_RECORDED'");
+    expect(goLive).toContain("'ZOHO_RECONCILIATION_EMPTY'");
     expect(schema).toContain('lastMismatchFreeBusinessDayAt DateTime?');
   });
 

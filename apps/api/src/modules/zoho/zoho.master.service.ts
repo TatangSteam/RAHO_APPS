@@ -853,6 +853,28 @@ export async function saveUomMapping(uomId: string, zohoUnit: string) {
   });
 }
 
+export async function ensureDefaultUomMappings() {
+  const connection = await prisma.zohoConnection.findFirst({ where: { isActive: true } });
+  if (!connection) throw new AppError(404, 'ZOHO_NOT_CONNECTED', 'Zoho Books belum terhubung.');
+  const [uoms, existingMappings] = await Promise.all([
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { code: 'asc' } }),
+    prisma.zohoEntityMapping.findMany({
+      where: { zohoConnectionId: connection.id, entityType: 'UOM', status: 'ACTIVE' },
+    }),
+  ]);
+  const results = [];
+  for (const uom of uoms) {
+    const existing = existingMappings.find((mapping) => mapping.localEntityId === uom.id);
+    if (existing) {
+      results.push({ uomId: uom.id, zohoUnit: existing.zohoEntityId, status: 'PRESERVED' as const });
+      continue;
+    }
+    const mapping = await saveUomMapping(uom.id, uom.name.trim());
+    results.push({ uomId: uom.id, zohoUnit: mapping.zohoEntityId, status: 'MAPPED' as const });
+  }
+  return results;
+}
+
 export async function approveMasterReview(
   userId: string,
   reviewId: string,

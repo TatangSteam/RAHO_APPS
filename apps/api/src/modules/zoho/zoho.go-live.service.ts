@@ -254,6 +254,13 @@ async function assertPromotionReady(mode: 'CANARY' | 'LIVE', control: {
     orderBy: { finishedAt: 'desc' },
   });
   if (!latest) throw new AppError(409, 'ZOHO_RECONCILIATION_REQUIRED', 'Reconciliation lengkap wajib dijalankan sebelum promosi.');
+  if (latest.totalChecked === 0) {
+    throw new AppError(
+      409,
+      'ZOHO_RECONCILIATION_EMPTY',
+      'Reconciliation belum memeriksa data apa pun. Sinkronkan data uji dan jalankan reconciliation ulang.',
+    );
+  }
   const unresolved = await prisma.zohoReconciliationResult.count({
     where: {
       runId: latest.id,
