@@ -50,8 +50,8 @@ export class SessionCreationService {
       await this.validateBoosterPackage(sessionData.boosterPackageId, branchId);
     }
 
-    // 8. Validate infus set stock availability
-    await this.validateInfusSetStock(branchId);
+    // 8. Validate every component of the current infusion kit.
+    await this.validateInfusKitStock(branchId);
 
     // 9. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
@@ -508,50 +508,99 @@ export class SessionCreationService {
    * IMPORTANT: "Infus Set + Pelengkap" (PRD-INF-SET-002) is mandatory for every therapy session
    * Session cannot be created if stock is not available
    */
-  private async validateInfusSetStock(branchId: string) {
+  private async validateInfusKitStock(branchId: string) {
     // Find the "Infus Set + Pelengkap" product (SKU: PRD-INF-SET-002)
     const infusSetProduct = await prisma.masterProduct.findFirst({
       where: {
-        sku: 'PRD-INF-SET-002', // Only "Infus Set + Pelengkap"
+        sku: 'PRD-INF-SET-002',
+        isActive: true,
+      },
+      include: {
+        kitComponents: {
+          where: { componentProduct: { isActive: true } },
+          include: { componentProduct: true },
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        },
       },
     });
 
-    if (!infusSetProduct) {
+    if (!infusSetProduct || infusSetProduct.kitComponents.length === 0) {
       throw {
         status: 422,
         code: 'INFUS_SET_NOT_CONFIGURED',
-        message: 'Produk "Infus Set + Pelengkap" (PRD-INF-SET-002) belum dikonfigurasi di sistem. Hubungi administrator.',
+        message: 'Komponen "Infus Set + Pelengkap" belum dikonfigurasi di inventory. Hubungi administrator.',
       };
     }
 
-    // Check inventory stock for this branch
-    const inventoryItem = await prisma.inventoryItem.findFirst({
+    const inventoryItems = await prisma.inventoryItem.findMany({
       where: {
         branchId,
-        masterProductId: infusSetProduct.id,
+        masterProductId: { in: infusSetProduct.kitComponents.map((item) => item.componentProductId) },
+      },
+      include: {
+        balances: {
+          include: {
+            costLayers: {
+              where: {
+                remainingQty: { gt: 0 },
+                unitCost: { not: null },
+                valuationStatus: 'VALUED',
+                isVoided: false,
+              },
+              select: { remainingQty: true },
+            },
+          },
+        },
       },
     });
+    const inventoryByProduct = new Map(inventoryItems.map((item) => [item.masterProductId, item]));
+    const issues = infusSetProduct.kitComponents.flatMap((component) => {
+      const inventoryItem = inventoryByProduct.get(component.componentProductId);
+      if (!inventoryItem) {
+        return [{ type: 'STOCK', message: `${component.componentProduct.name} belum ada di inventory cabang` }];
+      }
+      const available = inventoryItem.balances.reduce(
+        (sum, balance) => sum
+          + Number(balance.onHandQty)
+          - Number(balance.reservedQty)
+          - Number(balance.quarantineQty),
+        0,
+      );
+      const requiredBaseQuantity = Number(component.quantity)
+        / Number(component.componentProduct.conversionFactor);
+      if (available < requiredBaseQuantity) {
+        return [{
+          type: 'STOCK',
+          message: `${component.componentProduct.name} kurang ${(requiredBaseQuantity - available).toFixed(4)} ${component.componentProduct.baseUnit}`,
+        }];
+      }
+      const valuedAvailable = inventoryItem.balances.reduce(
+        (sum, balance) => sum + balance.costLayers.reduce(
+          (layerSum, layer) => layerSum + Number(layer.remainingQty),
+          0,
+        ),
+        0,
+      );
+      return valuedAvailable < requiredBaseQuantity
+        ? [{
+            type: 'VALUATION',
+            message: `${component.componentProduct.name} belum memiliki HPP FIFO untuk ${requiredBaseQuantity.toFixed(4)} ${component.componentProduct.baseUnit}`,
+          }]
+        : [];
+    });
 
-    if (!inventoryItem) {
+    if (issues.length > 0) {
+      const valuationRequired = issues.some((issue) => issue.type === 'VALUATION');
       throw {
         status: 422,
-        code: 'INFUS_SET_NOT_IN_INVENTORY',
-        message: `Produk "${infusSetProduct.name}" belum tersedia di inventory cabang ini. Silakan request stok terlebih dahulu.`,
+        code: valuationRequired ? 'INFUS_KIT_VALUATION_REQUIRED' : 'INFUS_KIT_STOCK_UNAVAILABLE',
+        message: valuationRequired
+          ? `Komponen "${infusSetProduct.name}" belum siap: ${issues.map((issue) => issue.message).join('; ')}. Isi Harga Pokok lalu lakukan Valuasi di Master Produk.`
+          : `Komponen "${infusSetProduct.name}" belum cukup: ${issues.map((issue) => issue.message).join('; ')}. Lakukan penerimaan stok terlebih dahulu.`,
       };
     }
 
-    const currentStock = Number(inventoryItem.stock);
-    if (currentStock < 1) {
-      throw {
-        status: 422,
-        code: 'INFUS_SET_OUT_OF_STOCK',
-        message: `Stok "${infusSetProduct.name}" habis (tersisa: ${currentStock}). Tidak dapat membuat sesi terapi. Silakan request stok terlebih dahulu.`,
-      };
-    }
-
-    console.log(`✅ [INFUS SET] Stock available: ${currentStock} ${infusSetProduct.unit || 'piece'} of "${infusSetProduct.name}"`);
-    
-    return { infusSetProduct, inventoryItem };
+    return { infusSetProduct, inventoryItems };
   }
 
   /**
@@ -701,6 +750,7 @@ export class SessionCreationService {
           doctorId: data.doctorId, // Primary doctor
           nurseId: data.nurseId,   // Primary nurse
           boosterPackageId: data.boosterPackageId,
+          materialPolicyVersion: 2,
           isCompleted: false,
         },
       });

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import {
   buildMemberRankMap,
   EMPTY_MEMBER_RANK,
@@ -38,6 +38,36 @@ export interface MemberFilters {
  * Service for retrieving member data
  */
 export class MemberRetrievalService {
+  /**
+   * Keep list queries small: the page only needs a session count and the
+   * latest completed-session timestamp, not every encounter/session row.
+   */
+  private async getMemberSessionStats(memberIds: string[]) {
+    if (memberIds.length === 0) {
+      return new Map<string, { sessionCount: number; lastInfusionDate: Date | null }>();
+    }
+
+    const rows = await prisma.$queryRaw<Array<{
+      memberId: string;
+      sessionCount: number;
+      lastInfusionDate: Date | null;
+    }>>(Prisma.sql`
+      SELECT
+        encounter."memberId" AS "memberId",
+        COUNT(session.id)::int AS "sessionCount",
+        MAX(session."createdAt") FILTER (WHERE session."isCompleted" = true) AS "lastInfusionDate"
+      FROM "encounters" encounter
+      LEFT JOIN "treatment_sessions" session ON session."encounterId" = encounter.id
+      WHERE encounter."memberId" IN (${Prisma.join(memberIds)})
+      GROUP BY encounter."memberId"
+    `);
+
+    return new Map(rows.map((row) => [row.memberId, {
+      sessionCount: Number(row.sessionCount),
+      lastInfusionDate: row.lastInfusionDate,
+    }]));
+  }
+
   /**
    * Get members with filtering and pagination
    */
@@ -212,94 +242,80 @@ export class MemberRetrievalService {
       }
     }
 
-    // Get total count
-    const total = await prisma.member.count({ where });
-
-    // Get members with pagination
-    const members = await prisma.member.findMany({
-      where,
-      include: {
-        user: {
-          include: {
-            profile: true,
+    const [total, members] = await Promise.all([
+      prisma.member.count({ where }),
+      prisma.member.findMany({
+        where,
+        include: {
+          user: {
+            include: {
+              profile: true,
+            },
           },
-        },
-        registrationBranch: {
-          select: {
-            id: true,
-            name: true,
-            branchCode: true,
+          registrationBranch: {
+            select: {
+              id: true,
+              name: true,
+              branchCode: true,
+            },
           },
-        },
-        branchAccesses: {
-          include: {
-            branch: {
-              select: {
-                id: true,
-                name: true,
-                branchCode: true,
+          branchAccesses: {
+            include: {
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                  branchCode: true,
+                },
               },
             },
           },
-        },
-        memberPackages: {
-          where: {
-            packageType: 'BASIC',
-            status: 'ACTIVE',
-          },
-          select: {
-            totalSessions: true,
-            usedSessions: true,
-          },
-        },
-        documents: {
-          where: {
-            documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
-          },
-          select: {
-            fileUrl: true,
-            documentType: true,
-            mimeType: true,
-          },
-        },
-        encounters: {
-          include: {
-            sessions: {
-              select: {
-                id: true,
-                createdAt: true,
-                isCompleted: true,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              },
+          memberPackages: {
+            where: {
+              packageType: 'BASIC',
+              status: 'ACTIVE',
+            },
+            select: {
+              totalSessions: true,
+              usedSessions: true,
             },
           },
-          orderBy: {
-            createdAt: 'desc',
+          documents: {
+            where: {
+              documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
+            },
+            select: {
+              fileUrl: true,
+              documentType: true,
+              mimeType: true,
+            },
+          },
+          diagnoses: {
+            select: {
+              diagnosa: true,
+              icdPrimer: true,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+            take: 1,
           },
         },
-        diagnoses: {
-          select: {
-            diagnosa: true,
-            icdPrimer: true,
-          },
-          orderBy: {
-            createdAt: 'desc',
-          },
-          take: 1,
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
-    const memberRanks = await this.getMemberRanks(members.map(member => member.id));
+    const memberIds = members.map((member) => member.id);
+    const [memberRanks, sessionStats] = await Promise.all([
+      this.getMemberRanks(memberIds),
+      this.getMemberSessionStats(memberIds),
+    ]);
 
     return {
       members: members.map(member => ({
-        ...this.formatMemberData(member),
+        ...this.formatMemberData(member, sessionStats.get(member.id)),
         ...(memberRanks.get(member.id) || EMPTY_MEMBER_RANK),
       })),
       pagination: {
@@ -364,65 +380,70 @@ export class MemberRetrievalService {
       where.AND.push({ status: status });
     }
 
-    const total = await prisma.member.count({ where });
-
-    const members = await prisma.member.findMany({
-      where,
-      include: {
-        user: {
-          include: {
-            profile: true,
+    const [total, members] = await Promise.all([
+      prisma.member.count({ where }),
+      prisma.member.findMany({
+        where,
+        include: {
+          user: {
+            include: {
+              profile: true,
+            },
           },
-        },
-        registrationBranch: {
-          select: {
-            id: true,
-            name: true,
-            branchCode: true,
+          registrationBranch: {
+            select: {
+              id: true,
+              name: true,
+              branchCode: true,
+            },
           },
-        },
-        branchAccesses: {
-          include: {
-            branch: {
-              select: {
-                id: true,
-                name: true,
-                branchCode: true,
+          branchAccesses: {
+            include: {
+              branch: {
+                select: {
+                  id: true,
+                  name: true,
+                  branchCode: true,
+                },
               },
             },
           },
+          memberPackages: {
+            where: {
+              packageType: 'BASIC',
+              status: 'ACTIVE',
+            },
+            select: {
+              totalSessions: true,
+              usedSessions: true,
+            },
+          },
+          documents: {
+            where: {
+              documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
+            },
+            select: {
+              fileUrl: true,
+              documentType: true,
+              mimeType: true,
+            },
+          },
         },
-        memberPackages: {
-          where: {
-            packageType: 'BASIC',
-            status: 'ACTIVE',
-          },
-          select: {
-            totalSessions: true,
-            usedSessions: true,
-          },
-        },
-        documents: {
-          where: {
-            documentType: { in: ['FOTO_PROFIL', 'PERSETUJUAN_SETELAH_PENJELASAN'] },
-          },
-          select: {
-            fileUrl: true,
-            documentType: true,
-            mimeType: true,
-          },
-        },
-      },
-      orderBy: { createdAt: 'desc' },
-      skip: (page - 1) * limit,
-      take: limit,
-    });
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+    ]);
 
-    const memberRanks = await this.getMemberRanks(members.map(member => member.id));
+    const memberIds = members.map((member) => member.id);
+    const [memberRanks, sessionStats] = await Promise.all([
+      this.getMemberRanks(memberIds),
+      this.getMemberSessionStats(memberIds),
+    ]);
 
     return {
       members: members.map(member => ({
-        ...this.formatMemberData(member),
+        ...this.formatMemberData(member, sessionStats.get(member.id)),
         ...(memberRanks.get(member.id) || EMPTY_MEMBER_RANK),
       })),
       pagination: {
@@ -774,7 +795,13 @@ export class MemberRetrievalService {
   /**
    * Format member data for response
    */
-  private formatMemberData(member: any) {
+  private formatMemberData(
+    member: any,
+    sessionStats: { sessionCount: number; lastInfusionDate: Date | null } = {
+      sessionCount: 0,
+      lastInfusionDate: null,
+    },
+  ) {
     // Calculate basic voucher count from packages
     const basicVoucherCount = member.memberPackages?.reduce(
       (sum: number, pkg: any) => sum + (pkg.totalSessions - pkg.usedSessions),
@@ -794,16 +821,6 @@ export class MemberRetrievalService {
       (access: any) => access.branchId !== member.registrationBranchId,
     ) || false;
 
-    // Flatten all sessions from encounters
-    const allSessions = member.encounters?.flatMap((e: any) => e.sessions || []) || [];
-    
-    // Calculate session count
-    const sessionCount = allSessions.length;
-
-    // Get last infusion date (most recent completed session)
-    const lastInfusionSession = allSessions.find((s: any) => s.isCompleted === true);
-    const lastInfusionDate = lastInfusionSession?.createdAt?.toISOString() || null;
-
     // Get primary diagnosis
     const primaryDiagnosis = member.diagnoses?.[0]?.diagnosa || null;
     const primaryDiagnosisIcd = member.diagnoses?.[0]?.icdPrimer || null;
@@ -819,8 +836,8 @@ export class MemberRetrievalService {
       age: calculateAge(member.dateOfBirth),
       voucherCount: member.voucherCount || 0,
       basicPackageCount: basicVoucherCount,
-      sessionCount,
-      lastInfusionDate,
+      sessionCount: sessionStats.sessionCount,
+      lastInfusionDate: sessionStats.lastInfusionDate?.toISOString() || null,
       primaryDiagnosis,
       primaryDiagnosisIcd,
       isActive: member.isActive,

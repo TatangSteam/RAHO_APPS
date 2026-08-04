@@ -42,10 +42,13 @@ export interface MaterialRecommendation {
   recommendedQuantity: string;
   tolerancePercent: string;
   isRequired: boolean;
-  treatmentBomItemId: string;
+  treatmentBomItemId: string | null;
   sourceBomCodes: string[];
   availableBaseQuantity: string;
   availableUsageQuantity: string;
+  valuedAvailableBaseQuantity: string;
+  valuedAvailableUsageQuantity: string;
+  availabilityReason: 'NOT_IN_BRANCH_INVENTORY' | 'INSUFFICIENT_STOCK' | 'VALUATION_REQUIRED' | null;
   isAvailable: boolean;
 }
 
@@ -53,6 +56,12 @@ export interface MaterialRecommendationsResponse {
   sessionId: string;
   branchId: string;
   hasActiveBom: boolean;
+  kits: Array<{
+    id: string;
+    kitCode: string;
+    name: string;
+    version: number;
+  }>;
   boms: Array<{
     id: string;
     bomCode: string;

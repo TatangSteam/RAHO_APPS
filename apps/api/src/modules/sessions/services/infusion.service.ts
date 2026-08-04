@@ -164,12 +164,17 @@ export class InfusionService {
       });
 
       // ✨ AUTO-USE PRODUCTS with isAutoUsedPerSession flag (e.g., Infus Set + Pelengkap)
-      const autoUseProducts = await tx.masterProduct.findMany({
-        where: {
-          isAutoUsedPerSession: true,
-          isActive: true,
-        },
-      });
+      // Legacy sessions still consume the historical bundle SKU here. New
+      // sessions post the configured kit components once through FIFO at
+      // completion, avoiding a duplicate stock deduction.
+      const autoUseProducts = session.materialPolicyVersion === 1
+        ? await tx.masterProduct.findMany({
+            where: {
+              isAutoUsedPerSession: true,
+              isActive: true,
+            },
+          })
+        : [];
 
       for (const autoProduct of autoUseProducts) {
         console.log(`🔄 Auto-using product: ${autoProduct.name} (${autoProduct.sku})`);

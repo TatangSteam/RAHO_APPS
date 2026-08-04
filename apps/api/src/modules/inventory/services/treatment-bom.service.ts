@@ -17,6 +17,10 @@ import type {
 
 type DbClient = Prisma.TransactionClient | typeof prisma;
 
+const CURRENT_MATERIAL_POLICY_VERSION = 2;
+const DEFAULT_INFUSION_KIT_SKU = 'PRD-INF-SET-002';
+const DEFAULT_INFUSION_KIT_CODE = 'KIT-INFUS-SET-PELENGKAP-V1';
+
 const bomInclude = Prisma.validator<Prisma.TreatmentBomInclude>()({
   branch: { select: { id: true, branchCode: true, name: true } },
   packagePricing: {
@@ -275,6 +279,7 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
       id: true,
       branchId: true,
       treatmentDate: true,
+      materialPolicyVersion: true,
       encounter: {
         select: {
           memberPackage: { select: { packagePricingId: true } },
@@ -288,24 +293,37 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
     session.encounter.memberPackage.packagePricingId,
     session.boosterPackage?.packagePricingId,
   ].filter((value): value is string => Boolean(value))));
-  if (packagePricingIds.length === 0) {
-    return { sessionId, branchId: session.branchId, hasActiveBom: false, boms: [], items: [] };
-  }
-
   const occurredAt = session.treatmentDate;
-  const candidates = await client.treatmentBom.findMany({
-    where: {
-      packagePricingId: { in: packagePricingIds },
-      branchScopeKey: { in: [session.branchId, 'GLOBAL'] },
-      status: TreatmentBomStatus.ACTIVE,
-      AND: [
-        { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: occurredAt } }] },
-        { OR: [{ effectiveTo: null }, { effectiveTo: { gt: occurredAt } }] },
-      ],
-    },
-    include: bomInclude,
-    orderBy: [{ version: 'desc' }],
-  });
+  const [candidates, kitComponents] = await Promise.all([
+    packagePricingIds.length > 0
+      ? client.treatmentBom.findMany({
+          where: {
+            packagePricingId: { in: packagePricingIds },
+            branchScopeKey: { in: [session.branchId, 'GLOBAL'] },
+            status: TreatmentBomStatus.ACTIVE,
+            AND: [
+              { OR: [{ effectiveFrom: null }, { effectiveFrom: { lte: occurredAt } }] },
+              { OR: [{ effectiveTo: null }, { effectiveTo: { gt: occurredAt } }] },
+            ],
+          },
+          include: bomInclude,
+          orderBy: [{ version: 'desc' }],
+        })
+      : Promise.resolve([]),
+    session.materialPolicyVersion >= CURRENT_MATERIAL_POLICY_VERSION
+      ? client.productKitComponent.findMany({
+          where: {
+            kitProduct: { sku: DEFAULT_INFUSION_KIT_SKU, isActive: true },
+            componentProduct: { isActive: true },
+          },
+          include: {
+            kitProduct: { select: { id: true, sku: true, name: true } },
+            componentProduct: true,
+          },
+          orderBy: [{ sortOrder: 'asc' }, { id: 'asc' }],
+        })
+      : Promise.resolve([]),
+  ]);
 
   const selectedBoms = packagePricingIds.flatMap((pricingId) => {
     const matches = candidates.filter((candidate) => candidate.packagePricingId === pricingId);
@@ -322,10 +340,25 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
     recommendedQuantity: Prisma.Decimal;
     tolerancePercent: Prisma.Decimal;
     isRequired: boolean;
-    treatmentBomItemId: string;
+    treatmentBomItemId: string | null;
     sourceBomCodes: string[];
     sourceBomItemIds: string[];
   }>();
+  kitComponents.forEach((component) => {
+    aggregate.set(component.componentProductId, {
+      masterProductId: component.componentProductId,
+      inventoryItemId: null,
+      productName: component.componentProduct.name,
+      sku: component.componentProduct.sku,
+      unit: component.componentProduct.usageUnit,
+      recommendedQuantity: component.quantity,
+      tolerancePercent: new Prisma.Decimal(0),
+      isRequired: component.isRequired,
+      treatmentBomItemId: null,
+      sourceBomCodes: [DEFAULT_INFUSION_KIT_CODE],
+      sourceBomItemIds: [],
+    });
+  });
   selectedBoms.forEach((bom) => {
     bom.items.forEach((item) => {
       const current = aggregate.get(item.masterProductId);
@@ -333,6 +366,7 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
         current.recommendedQuantity = current.recommendedQuantity.add(item.recommendedQuantity);
         current.tolerancePercent = Prisma.Decimal.max(current.tolerancePercent, item.tolerancePercent);
         current.isRequired = current.isRequired || item.isRequired;
+        current.treatmentBomItemId ||= item.id;
         current.sourceBomCodes.push(bom.bomCode);
         current.sourceBomItemIds.push(item.id);
       } else {
@@ -355,7 +389,22 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
 
   const inventoryItems = await client.inventoryItem.findMany({
     where: { branchId: session.branchId, masterProductId: { in: Array.from(aggregate.keys()) } },
-    include: { balances: true, masterProduct: true },
+    include: {
+      balances: {
+        include: {
+          costLayers: {
+            where: {
+              remainingQty: { gt: 0 },
+              unitCost: { not: null },
+              valuationStatus: 'VALUED',
+              isVoided: false,
+            },
+            select: { remainingQty: true },
+          },
+        },
+      },
+      masterProduct: true,
+    },
   });
   const inventoryByProduct = new Map(inventoryItems.map((item) => [item.masterProductId, item]));
   const items = Array.from(aggregate.values()).map((item) => {
@@ -366,7 +415,21 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
           new Prisma.Decimal(0),
         )
       : new Prisma.Decimal(0);
+    const valuedAvailableBaseQuantity = inventoryItem
+      ? inventoryItem.balances.reduce(
+          (sum, balance) => balance.costLayers.reduce(
+            (layerSum, layer) => layerSum.add(layer.remainingQty),
+            sum,
+          ),
+          new Prisma.Decimal(0),
+        )
+      : new Prisma.Decimal(0);
     const conversionFactor = inventoryItem?.masterProduct.conversionFactor ?? new Prisma.Decimal(1);
+    const requiredBaseQuantity = item.recommendedQuantity.div(conversionFactor);
+    const hasPhysicalStock = Boolean(inventoryItem)
+      && availableBaseQuantity.greaterThanOrEqualTo(requiredBaseQuantity);
+    const hasValuedStock = Boolean(inventoryItem)
+      && valuedAvailableBaseQuantity.greaterThanOrEqualTo(requiredBaseQuantity);
     return {
       ...item,
       inventoryItemId: inventoryItem?.id ?? null,
@@ -374,13 +437,28 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
       tolerancePercent: item.tolerancePercent.toFixed(2),
       availableBaseQuantity: availableBaseQuantity.toFixed(4),
       availableUsageQuantity: availableBaseQuantity.mul(conversionFactor).toFixed(4),
-      isAvailable: Boolean(inventoryItem) && availableBaseQuantity.greaterThan(0),
+      valuedAvailableBaseQuantity: valuedAvailableBaseQuantity.toFixed(4),
+      valuedAvailableUsageQuantity: valuedAvailableBaseQuantity.mul(conversionFactor).toFixed(4),
+      availabilityReason: !inventoryItem
+        ? 'NOT_IN_BRANCH_INVENTORY'
+        : !hasPhysicalStock
+          ? 'INSUFFICIENT_STOCK'
+          : !hasValuedStock
+            ? 'VALUATION_REQUIRED'
+            : null,
+      isAvailable: hasPhysicalStock && hasValuedStock,
     };
   });
   return {
     sessionId,
     branchId: session.branchId,
-    hasActiveBom: selectedBoms.length > 0,
+    hasActiveBom: selectedBoms.length > 0 || kitComponents.length > 0,
+    kits: kitComponents.length > 0 ? [{
+      id: kitComponents[0].kitProduct.id,
+      kitCode: DEFAULT_INFUSION_KIT_CODE,
+      name: kitComponents[0].kitProduct.name,
+      version: session.materialPolicyVersion,
+    }] : [],
     boms: selectedBoms.map((bom) => ({
       id: bom.id,
       bomCode: bom.bomCode,

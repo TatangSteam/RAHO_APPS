@@ -2645,6 +2645,8 @@ model TreatmentSession {
   completionStatus           TreatmentCompletionStatus   @default(IN_PROGRESS)
   // 1 = sesi yang sudah ada sebelum cutover; 2 = completion inventory/finance/event terbaru
   completionFlowVersion      Int                         @default(2)
+  // 1 = SKU bundle legacy; 2 = komponen kit inventory yang diposting melalui FIFO
+  materialPolicyVersion      Int                         @default(2)
   adminLayananId             String
   doctorId                   String // Primary doctor (backward compatibility)
   nurseId                    String // Primary nurse (backward compatibility)
@@ -2703,6 +2705,7 @@ model TreatmentSession {
   @@index([isCompleted])
   @@index([completionStatus, completedAt])
   @@index([completionFlowVersion])
+  @@index([materialPolicyVersion])
   @@index([revenuePackageId])
   @@map("treatment_sessions")
 }
@@ -3348,6 +3351,8 @@ model MasterProduct {
   purchaseRequestItems     PurchaseRequestItem[]
   purchaseOrderItems       PurchaseOrderItem[]
   treatmentBomItems        TreatmentBomItem[]
+  kitComponents            ProductKitComponent[]     @relation("KitProduct")
+  componentOfKits          ProductKitComponent[]     @relation("KitComponentProduct")
 
   @@index([category, isActive])
   @@index([isActive])
@@ -3356,6 +3361,24 @@ model MasterProduct {
   @@index([baseUomId])
   @@index([usageUomId])
   @@map("master_products")
+}
+
+model ProductKitComponent {
+  id                 String   @id @default(cuid())
+  kitProductId       String
+  componentProductId String
+  quantity           Decimal  @db.Decimal(18, 4)
+  isRequired         Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  kitProduct       MasterProduct @relation("KitProduct", fields: [kitProductId], references: [id], onDelete: Cascade)
+  componentProduct MasterProduct @relation("KitComponentProduct", fields: [componentProductId], references: [id], onDelete: Restrict)
+
+  @@unique([kitProductId, componentProductId])
+  @@index([componentProductId])
+  @@map("product_kit_components")
 }
 
 model Warehouse {

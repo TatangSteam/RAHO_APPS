@@ -420,6 +420,20 @@ export default function Step6Materials({
               {bom.bomCode}
             </span>
           ))}
+          {recommendations?.kits.map((kit) => (
+            <span
+              key={kit.id}
+              style={{
+                padding: '2px 7px',
+                borderRadius: '4px',
+                background: 'rgba(34,197,94,0.12)',
+                color: '#86efac',
+                fontSize: '11px',
+              }}
+            >
+              {kit.name}
+            </span>
+          ))}
         </div>
 
         {loadingRecommendations ? (
@@ -468,7 +482,13 @@ export default function Step6Materials({
                       fontWeight: 600,
                     }}
                   >
-                    {recorded ? 'Sudah dicatat' : recommendation.isAvailable ? 'Gunakan' : 'Stok tidak tersedia'}
+                    {recorded
+                      ? 'Sudah dicatat'
+                      : recommendation.isAvailable
+                        ? 'Gunakan'
+                        : recommendation.availabilityReason === 'VALUATION_REQUIRED'
+                          ? 'HPP belum diisi'
+                          : 'Stok tidak tersedia'}
                   </button>
                 </div>
               );

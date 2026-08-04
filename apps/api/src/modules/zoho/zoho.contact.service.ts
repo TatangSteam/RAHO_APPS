@@ -38,6 +38,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
     return {
       entityType,
       localEntityId: member.id,
+      branchId: member.registrationBranchId,
       externalKey: `RAHO:MEMBER:${member.id}`,
       displayName: member.user.profile?.fullName?.trim() || member.memberNo,
       email: member.user.email || null,
@@ -60,6 +61,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
     return {
       entityType,
       localEntityId: branch.id,
+      branchId: branch.id,
       externalKey: `RAHO:PARTNERSHIP:${branch.id}`,
       displayName: `[${branch.branchCode}] ${branch.name}`,
       email: null,
@@ -243,12 +245,14 @@ export async function enqueueContact(entityTypeValue: string, id: string) {
           ? 'Supplier'
           : 'Branch',
       aggregateId: snapshot.localEntityId,
+      branchId: snapshot.branchId ?? null,
       payload: payload as Prisma.InputJsonValue,
       status: 'PENDING',
       occurredAt: new Date(),
     },
     update: {
       payload: payload as Prisma.InputJsonValue,
+      branchId: snapshot.branchId ?? null,
       status: 'PENDING',
       attempts: 0,
       availableAt: new Date(),

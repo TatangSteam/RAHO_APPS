@@ -4,6 +4,7 @@ export type ZohoContactType = 'customer' | 'vendor';
 export type LocalContactSnapshot = {
   entityType: ContactEntityType;
   localEntityId: string;
+  branchId?: string | null;
   externalKey: string;
   displayName: string;
   email: string | null;
