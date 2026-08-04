@@ -9,6 +9,7 @@ import {
   buildZohoLocationPayload,
   decideItemMatch,
   decideLocationMatch,
+  findDefaultItemAccount,
   ITEM_ACCOUNT_ROLES,
   ItemAccountConfig,
   ItemAccountRole,
@@ -16,6 +17,7 @@ import {
   LocalLocationSnapshot,
   MasterMatchDecision,
   validateItemSnapshot,
+  isValidItemAccount,
   ZohoItemCandidate,
   ZohoLocationCandidate,
   ZohoMasterEntityType,
@@ -750,6 +752,13 @@ export async function saveAccountRoleMapping(role: string, zohoAccountId: string
     },
   });
   if (!account) throw new AppError(422, 'ZOHO_ACCOUNT_INVALID', 'Account Zoho tidak ditemukan pada discovery aktif.');
+  if (!isValidItemAccount(role as ItemAccountRole, account)) {
+    throw new AppError(
+      422,
+      'ZOHO_ITEM_ACCOUNT_TYPE_INVALID',
+      `Tipe account ${account.name} tidak sesuai untuk peran ${role}.`,
+    );
+  }
   return prisma.zohoEntityMapping.upsert({
     where: {
       zohoConnectionId_entityType_localEntityId: {
@@ -775,6 +784,42 @@ export async function saveAccountRoleMapping(role: string, zohoAccountId: string
       metadata: { accountName: account.name, accountCode: account.code },
     },
   });
+}
+
+export async function ensureDefaultItemAccountMappings() {
+  const connection = await prisma.zohoConnection.findFirst({ where: { isActive: true } });
+  if (!connection) throw new AppError(404, 'ZOHO_NOT_CONNECTED', 'Zoho Books belum terhubung.');
+  const [accounts, existingMappings] = await Promise.all([
+    prisma.zohoDiscoveryCache.findMany({
+      where: { zohoConnectionId: connection.id, resourceType: 'ACCOUNT', isActive: true },
+      select: { zohoId: true, name: true, payload: true },
+    }),
+    prisma.zohoEntityMapping.findMany({
+      where: {
+        zohoConnectionId: connection.id,
+        entityType: 'ACCOUNT_ROLE',
+        localEntityId: { in: [...ITEM_ACCOUNT_ROLES] },
+        status: 'ACTIVE',
+      },
+    }),
+  ]);
+
+  const results = [];
+  for (const role of ITEM_ACCOUNT_ROLES) {
+    const existing = existingMappings.find((mapping) => mapping.localEntityId === role);
+    if (existing) {
+      results.push({ role, zohoAccountId: existing.zohoEntityId, status: 'PRESERVED' as const });
+      continue;
+    }
+    const account = findDefaultItemAccount(role, accounts);
+    if (!account) {
+      results.push({ role, zohoAccountId: null, status: 'REVIEW_REQUIRED' as const });
+      continue;
+    }
+    await saveAccountRoleMapping(role, account.zohoId);
+    results.push({ role, zohoAccountId: account.zohoId, status: 'MAPPED' as const });
+  }
+  return results;
 }
 
 export async function saveUomMapping(uomId: string, zohoUnit: string) {

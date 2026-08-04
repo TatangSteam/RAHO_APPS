@@ -3,6 +3,8 @@ import {
   buildZohoLocationPayload,
   decideItemMatch,
   decideLocationMatch,
+  findDefaultItemAccount,
+  isValidItemAccount,
   LocalItemSnapshot,
   LocalLocationSnapshot,
   validateItemSnapshot,
@@ -105,6 +107,18 @@ describe('Zoho Sprint 4 item policy', () => {
       'ZohoBooks.settings.UPDATE',
     ]));
     expect(ZOHO_REQUIRED_SCOPES).not.toContain('ZohoBooks.items.READ');
+  });
+
+  it('selects only the unambiguous default account for each item role', () => {
+    const discovered = [
+      { zohoId: 'sales', name: 'Sales', payload: { account_type: 'income' } },
+      { zohoId: 'cogs', name: 'Cost of Goods Sold', payload: { account_type: 'cost_of_goods_sold' } },
+      { zohoId: 'stock', name: 'Inventory Asset', payload: { account_type: 'stock' } },
+    ];
+    expect(findDefaultItemAccount('ITEM_SALES', discovered)?.zohoId).toBe('sales');
+    expect(findDefaultItemAccount('ITEM_PURCHASE', discovered)?.zohoId).toBe('cogs');
+    expect(findDefaultItemAccount('ITEM_INVENTORY', discovered)?.zohoId).toBe('stock');
+    expect(isValidItemAccount('ITEM_INVENTORY', discovered[0])).toBe(false);
   });
 });
 

@@ -19,6 +19,7 @@ import * as inventoryAdjustmentService from './zoho.inventory-adjustment.service
 import * as webhookService from './zoho.webhook.service';
 import * as reconciliationService from './zoho.reconciliation.service';
 import * as goLiveService from './zoho.go-live.service';
+import * as setupService from './zoho.setup.service';
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -237,6 +238,10 @@ export async function discovery(req: Request, res: Response, next: NextFunction)
 
 export async function runDiscovery(_req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await discoveryService.runDiscovery()); } catch (error) { next(error); }
+}
+
+export async function setup(_req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await setupService.setupZohoReadiness()); } catch (error) { next(error); }
 }
 
 export async function contacts(req: Request, res: Response, next: NextFunction) {

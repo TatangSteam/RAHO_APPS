@@ -16,6 +16,39 @@ export type ItemAccountConfig = {
   inventoryAccountId?: string;
 };
 
+export type ZohoAccountCandidate = {
+  zohoId: string;
+  name: string;
+  payload: unknown;
+};
+
+const ITEM_ACCOUNT_DEFAULTS: Record<ItemAccountRole, { name: string; accountType: string }> = {
+  ITEM_SALES: { name: 'sales', accountType: 'income' },
+  ITEM_PURCHASE: { name: 'cost of goods sold', accountType: 'cost_of_goods_sold' },
+  ITEM_INVENTORY: { name: 'inventory asset', accountType: 'stock' },
+};
+
+function accountType(account: ZohoAccountCandidate): string {
+  if (!account.payload || typeof account.payload !== 'object' || Array.isArray(account.payload)) return '';
+  const value = (account.payload as Record<string, unknown>).account_type;
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
+
+export function isValidItemAccount(role: ItemAccountRole, account: ZohoAccountCandidate): boolean {
+  return accountType(account) === ITEM_ACCOUNT_DEFAULTS[role].accountType;
+}
+
+export function findDefaultItemAccount(
+  role: ItemAccountRole,
+  accounts: ZohoAccountCandidate[],
+): ZohoAccountCandidate | null {
+  const expected = ITEM_ACCOUNT_DEFAULTS[role];
+  const matches = accounts.filter(
+    (account) => normalized(account.name) === expected.name && isValidItemAccount(role, account),
+  );
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export type LocalItemSnapshot = {
   entityType: ZohoItemEntityType;
   localEntityId: string;

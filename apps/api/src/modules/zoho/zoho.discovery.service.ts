@@ -110,24 +110,88 @@ async function fetchAll(client: ZohoClient) {
   };
 }
 
-async function fetchContactExternalIdField(client: ZohoClient) {
+async function listContactExternalIdFields(client: ZohoClient) {
   const fields = await client.listAll<ZohoRecord>('/books/v3/settings/fields', 'fields', {
     entity: 'contact',
     filter_custom_fields: true,
     skip_inactive_fields: true,
   });
-  const matches = fields.filter((field) => {
-    const identity = `${text(field, 'label') || ''} ${text(field, 'api_name') || ''}`
+  return fields.filter((field) => {
+    const identity = `${text(field, 'label') || ''} ${text(field, 'field_name') || ''} ${text(field, 'api_name') || ''}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, ' ');
     return identity.includes('raho') && (identity.includes('external') || identity.includes('id'));
   });
-  if (matches.length !== 1) return null;
+}
+
+function contactExternalIdField(field: ZohoRecord) {
   return {
-    fieldId: text(matches[0], 'field_id') || null,
-    apiName: text(matches[0], 'api_name') || null,
-    isUnique: matches[0].is_unique === true,
+    fieldId: text(field, 'field_id') || null,
+    apiName: text(field, 'api_name') || null,
+    isUnique: field.is_unique === true,
   };
+}
+
+async function fetchContactExternalIdField(client: ZohoClient) {
+  const matches = await listContactExternalIdFields(client);
+  return matches.length === 1 ? contactExternalIdField(matches[0]) : null;
+}
+
+export async function ensureContactExternalIdField() {
+  const client = await getActiveZohoClient(true);
+  const matches = await listContactExternalIdFields(client);
+  if (matches.length > 1) {
+    throw new AppError(
+      409,
+      'ZOHO_CONTACT_EXTERNAL_ID_FIELD_AMBIGUOUS',
+      'Ditemukan lebih dari satu custom field RAHO External ID. Nonaktifkan field duplikat sebelum melanjutkan.',
+    );
+  }
+
+  if (matches.length === 1) {
+    const existing = matches[0];
+    if (text(existing, 'data_type') !== 'string') {
+      throw new AppError(
+        409,
+        'ZOHO_CONTACT_EXTERNAL_ID_FIELD_TYPE_INVALID',
+        'Custom field RAHO External ID harus bertipe teks.',
+      );
+    }
+    if (existing.is_unique !== true) {
+      const fieldId = text(existing, 'field_id');
+      if (!fieldId) throw new AppError(502, 'ZOHO_CONTACT_EXTERNAL_ID_FIELD_INVALID', 'Field ID Zoho tidak tersedia.');
+      await client.request(`/books/v3/settings/fields/${fieldId}`, {
+        method: 'PUT',
+        data: { is_unique: true },
+      });
+    }
+  } else {
+    await client.request('/books/v3/settings/fields', {
+      method: 'POST',
+      data: {
+        label: 'RAHO External ID',
+        data_type: 'string',
+        entity: 'contact',
+        show_on_pdf: false,
+        is_mandatory: false,
+        is_unique: true,
+        value_length: 255,
+        help_text: 'ID integrasi unik dari RAHO ERP. Jangan diubah manual.',
+        edit_on_portal: false,
+        show_on_portal: false,
+      },
+    });
+  }
+
+  const verified = await fetchContactExternalIdField(client);
+  if (!verified?.fieldId || !verified.apiName || !verified.isUnique) {
+    throw new AppError(
+      502,
+      'ZOHO_CONTACT_EXTERNAL_ID_FIELD_NOT_READY',
+      'Zoho belum mengaktifkan RAHO External ID sebagai field unik.',
+    );
+  }
+  return verified;
 }
 
 async function replaceResource(

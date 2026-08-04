@@ -25,6 +25,7 @@ import {
   ShoppingCart,
   Unplug,
   Users,
+  Wrench,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
@@ -121,6 +122,19 @@ type DiscoveryData = {
     supported: boolean | null;
     error: string | null;
   };
+};
+type SetupData = {
+  contactExternalIdField: {
+    fieldId: string;
+    apiName: string;
+    isUnique: true;
+  };
+  itemAccountMappings: Array<{
+    role: 'ITEM_SALES' | 'ITEM_PURCHASE' | 'ITEM_INVENTORY';
+    zohoAccountId: string | null;
+    status: 'PRESERVED' | 'MAPPED' | 'REVIEW_REQUIRED';
+  }>;
+  discovery: DiscoveryData;
 };
 type ContactCandidate = {
   contact_id: string;
@@ -1020,13 +1034,13 @@ export default function ZohoIntegrationPage() {
     oauthCallbackHandled.current = true;
     const finishOAuth = async () => {
       if (result === 'success') {
-        toast.success('Zoho Books berhasil dihubungkan. Memeriksa konfigurasi...');
+        toast.success('Zoho Books berhasil dihubungkan. Menyiapkan integrasi...');
         try {
-          const response = await api.post<{ data: DiscoveryData }>('/integrations/zoho/discovery/run');
-          setDiscovery(response.data.data);
-          toast.success('Discovery Zoho selesai.');
+          const response = await api.post<{ data: SetupData }>('/integrations/zoho/setup');
+          setDiscovery(response.data.data.discovery);
+          toast.success('Prasyarat Contact dan Item Zoho berhasil disiapkan.');
         } catch (error) {
-          toast.error(apiErrorMessage(error, 'Zoho terhubung, tetapi discovery belum selesai. Jalankan ulang dari tab Master Zoho.'));
+          toast.error(apiErrorMessage(error, 'Zoho terhubung, tetapi konfigurasi otomatis belum selesai. Klik “Siapkan otomatis”.'));
         }
       } else {
         toast.error(searchParams.get('message') || 'Koneksi Zoho gagal.');
@@ -1118,6 +1132,18 @@ export default function ZohoIntegrationPage() {
       toast.success('Master Zoho berhasil diperbarui.');
     } catch (error) {
       toast.error(apiErrorMessage(error, 'Discovery Zoho gagal.'));
+    } finally { setAction(null); }
+  }
+
+  async function setupZoho() {
+    setAction('setup');
+    try {
+      const response = await api.post<{ data: SetupData }>('/integrations/zoho/setup');
+      setDiscovery(response.data.data.discovery);
+      await loadStatus();
+      toast.success('Custom field Contact dan account Item berhasil disiapkan.');
+    } catch (error) {
+      toast.error(apiErrorMessage(error, 'Prasyarat Zoho tidak dapat disiapkan otomatis.'));
     } finally { setAction(null); }
   }
 
@@ -1838,6 +1864,14 @@ export default function ZohoIntegrationPage() {
                       <RefreshCw size={16} className={action === 'test' ? 'animate-spin' : ''} /> Tes
                     </button>
                   )}
+                  {status?.connected && status.connections.some((connection) => (
+                    connection.authorizationReady && (!connection.contactSyncReady || !connection.itemSyncReady)
+                  )) && (
+                    <button onClick={setupZoho} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                      {action === 'setup' ? <Loader2 size={16} className="animate-spin" /> : <Wrench size={16} />}
+                      Siapkan otomatis
+                    </button>
+                  )}
                   <button onClick={connect} disabled={!status?.configured || !!action} className="inline-flex max-w-full items-center gap-2 whitespace-normal rounded-lg bg-blue-600 px-4 py-2 text-left text-sm font-semibold text-white disabled:opacity-50">
                     {action === 'connect' ? <Loader2 size={16} className="animate-spin" /> : <ExternalLink size={16} />}
                     {status?.connected || status?.connections.some((connection) => connection.reconnectRequired)
@@ -1883,12 +1917,12 @@ export default function ZohoIntegrationPage() {
                         )}
                         {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.contactSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
-                            Contact live belum siap: buat custom field contact unik “RAHO External ID”, lalu jalankan discovery.
+                            Contact live belum siap: jalankan penyiapan otomatis untuk membuat field unik “RAHO External ID”.
                           </p>
                         )}
                         {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.itemSyncReady && (
                           <p className="mt-1 text-xs font-semibold text-amber-700">
-                            Item live belum siap: petakan sales, purchase, dan inventory account.
+                            Item live belum siap: jalankan penyiapan otomatis untuk memetakan account standar Zoho.
                           </p>
                         )}
                         {!connection.reconnectRequired && connection.discoveryLastRunAt && !connection.locationSyncReady && (
@@ -1985,9 +2019,17 @@ export default function ZohoIntegrationPage() {
               <h2 className="font-semibold">Master read-only dari Zoho</h2>
               <p className="text-sm text-neutral-500">Terakhir diperbarui: {when(discovery?.lastRunAt || null)}</p>
             </div>
-            <button onClick={runDiscovery} disabled={!status?.connected || action === 'discovery'} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
-              <RefreshCw size={16} className={action === 'discovery' ? 'animate-spin' : ''} /> Ambil ulang dari Zoho
-            </button>
+            <div className="flex flex-wrap gap-2">
+              {discovery && !discovery.contactExternalIdField.ready && canManageConnection && (
+                <button onClick={setupZoho} disabled={!!action} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                  {action === 'setup' ? <Loader2 size={16} className="animate-spin" /> : <Wrench size={16} />}
+                  Siapkan otomatis
+                </button>
+              )}
+              <button onClick={runDiscovery} disabled={!status?.connected || action === 'discovery'} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                <RefreshCw size={16} className={action === 'discovery' ? 'animate-spin' : ''} /> Ambil ulang dari Zoho
+              </button>
+            </div>
           </div>
           <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(discovery?.counts || {}).map(([resource, count]) => (

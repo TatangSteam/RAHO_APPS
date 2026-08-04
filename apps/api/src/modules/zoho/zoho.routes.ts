@@ -15,6 +15,7 @@ router.post('/events/:id/retry', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY),
 router.post('/events/:id/ignore', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.ignoreEvent);
 router.get('/discovery', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.discovery);
 router.post('/discovery/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.runDiscovery);
+router.post('/setup', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.setup);
 router.get('/contacts', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.contacts);
 router.get('/contacts/:entityType/:id/preview', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.previewContact);
 router.post('/contacts/:entityType/:id/match', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.matchContact);
