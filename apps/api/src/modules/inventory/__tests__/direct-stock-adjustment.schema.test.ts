@@ -13,9 +13,9 @@ describe('directStockAdjustmentSchema', () => {
   it('menerima penambahan dan pengurangan stok serta memakai reason OTHER', () => {
     const incoming = directStockAdjustmentSchema.parse(validInput);
     const outgoing = directStockAdjustmentSchema.parse({ ...validInput, adjustment: '-2.5' });
-    const withoutUnitCost = directStockAdjustmentSchema.parse({
+    const outgoingWithoutUnitCost = directStockAdjustmentSchema.parse({
       idempotencyKey: 'DIRECT-STOCK-002',
-      adjustment: 3,
+      adjustment: -3,
       notes: 'Koreksi stok tanpa input harga',
     });
 
@@ -23,11 +23,17 @@ describe('directStockAdjustmentSchema', () => {
     expect(incoming.unitCost).toBe('25000');
     expect(incoming.reasonCode).toBe('OTHER');
     expect(outgoing.adjustment).toBe('-2.5');
-    expect(withoutUnitCost.unitCost).toBeUndefined();
+    expect(outgoingWithoutUnitCost.unitCost).toBeUndefined();
+    expect(directStockAdjustmentSchema.safeParse({
+      idempotencyKey: 'DIRECT-STOCK-003',
+      adjustment: 3,
+      notes: 'Penambahan stok tanpa harga',
+    }).success).toBe(false);
   });
 
-  it('menolak adjustment nol dan harga pokok nol', () => {
-    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(false);
+  it('menerima adjustment nol hanya untuk valuasi stok lama', () => {
+    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(true);
+    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0, unitCost: undefined }).success).toBe(false);
     expect(directStockAdjustmentSchema.safeParse({ ...validInput, unitCost: 0 }).success).toBe(false);
   });
 

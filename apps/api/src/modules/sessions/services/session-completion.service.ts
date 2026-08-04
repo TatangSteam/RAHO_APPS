@@ -36,6 +36,7 @@ import {
 } from '@modules/zoho/zoho.inventory-adjustment.policy';
 import { selectTreatmentRevenueSource } from './treatment-revenue-source';
 import {
+  calculatePhysicalAvailableBaseQuantity,
   calculateValuedAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from './material-usage.helpers';
@@ -190,9 +191,16 @@ export class SessionCompletionService {
       for (const material of session.materials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
         const valuedAvailable = calculateValuedAvailableBaseQuantity(material.inventoryItem.balances);
         if (valuedAvailable.lessThan(material.baseQuantity)) {
+          const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
+          if (physicalAvailable.greaterThanOrEqualTo(material.baseQuantity)) {
+            throw errors.unprocessable(
+              'INVENTORY_VALUATION_REQUIRED',
+              `Stok fisik ${material.inventoryItem.masterProduct.name} tersedia, tetapi ${material.baseQuantity.sub(valuedAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit} belum memiliki harga pokok FIFO. Super Admin perlu membuka Master Produk > Edit Stok, mengisi Harga Pokok, lalu pilih Valuasi.`,
+            );
+          }
           throw errors.unprocessable(
             'INSUFFICIENT_VALUED_STOCK',
-            `Stok FIFO ${material.inventoryItem.masterProduct.name} kurang ${material.baseQuantity.sub(valuedAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit}. Lakukan penerimaan stok atau rekonsiliasi Stock Opname.`,
+            `Stok ${material.inventoryItem.masterProduct.name} kurang ${material.baseQuantity.sub(physicalAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit}. Lakukan penerimaan stok terlebih dahulu.`,
           );
         }
       }

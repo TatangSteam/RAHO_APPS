@@ -69,6 +69,15 @@ export class MasterProductAdminService {
                 materialUsages: true,
               },
             },
+            balances: {
+              select: {
+                onHandQty: true,
+                costLayers: {
+                  where: { remainingQty: { gt: 0 }, isVoided: false },
+                  select: { remainingQty: true, unitCost: true, valuationStatus: true },
+                },
+              },
+            },
           },
         },
         _count: {
@@ -87,17 +96,38 @@ export class MasterProductAdminService {
 
     return {
       products: products.map(product => {
-        const branches = product.inventoryItems.map(item => ({
-          inventoryItemId: item.id,
-          branchId: item.branch.id,
-          branchCode: item.branch.branchCode,
-          branchName: item.branch.name,
-          stock: Number(item.stock),
-          minThreshold: Number(item.minThreshold),
-          isLowStock: Number(item.stock) <= Number(item.minThreshold),
-          isOutOfStock: Number(item.stock) <= 0,
-          sessionUsageCount: item._count.materialUsages,
-        }));
+        const branches = product.inventoryItems.map(item => {
+          const stock = Number(item.stock);
+          const ledgerStock = item.balances.reduce(
+            (sum, balance) => sum + Number(balance.onHandQty),
+            0,
+          );
+          const pendingLayerQty = item.balances.reduce(
+            (sum, balance) => sum + balance.costLayers.reduce(
+              (layerSum, layer) => layerSum + (
+                layer.valuationStatus === 'PENDING_VALUATION' || layer.unitCost === null
+                  ? Number(layer.remainingQty)
+                  : 0
+              ),
+              0,
+            ),
+            0,
+          );
+          const pendingValuationQty = pendingLayerQty + Math.max(stock - ledgerStock, 0);
+          return {
+            inventoryItemId: item.id,
+            branchId: item.branch.id,
+            branchCode: item.branch.branchCode,
+            branchName: item.branch.name,
+            stock,
+            minThreshold: Number(item.minThreshold),
+            isLowStock: stock <= Number(item.minThreshold),
+            isOutOfStock: stock <= 0,
+            sessionUsageCount: item._count.materialUsages,
+            pendingValuationQty,
+            isValuationPending: pendingValuationQty > 0,
+          };
+        });
 
         const totalStock = branches.reduce((sum, b) => sum + b.stock, 0);
         const totalSessionUsage = branches.reduce((sum, b) => sum + b.sessionUsageCount, 0);

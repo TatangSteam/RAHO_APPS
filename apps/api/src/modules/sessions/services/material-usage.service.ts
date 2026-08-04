@@ -84,8 +84,8 @@ export class MaterialUsageService {
     const valuedAvailableBaseQuantity = calculateValuedAvailableBaseQuantity(inventoryItem.balances);
     if (valuedAvailableBaseQuantity.lessThan(baseQuantity)) {
       throw errors.unprocessable(
-        'INSUFFICIENT_VALUED_STOCK',
-        `Stok FIFO bernilai ${inventoryItem.masterProduct.name} hanya ${valuedAvailableBaseQuantity.mul(conversionFactor).toFixed(4)} ${inventoryItem.masterProduct.usageUnit}. Lakukan penerimaan stok atau rekonsiliasi Stock Opname terlebih dahulu.`,
+        'INVENTORY_VALUATION_REQUIRED',
+        `Stok fisik ${inventoryItem.masterProduct.name} tersedia, tetapi ${baseQuantity.sub(valuedAvailableBaseQuantity).toFixed(4)} ${inventoryItem.masterProduct.baseUnit} belum memiliki harga pokok FIFO. Super Admin perlu membuka Master Produk > Edit Stok, mengisi Harga Pokok, lalu pilih Valuasi.`,
       );
     }
 

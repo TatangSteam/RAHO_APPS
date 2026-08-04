@@ -472,12 +472,179 @@ async function resolveDirectAdjustmentUnitCost(
     return { unitCost: latestRequest.estimatedUnitCost, source: 'LATEST_PURCHASE_REQUEST' };
   }
 
-  const configuredFallback = new Prisma.Decimal(
-    process.env.INVENTORY_DIRECT_ADJUSTMENT_FALLBACK_UNIT_COST || '1',
+  throw errors.unprocessable(
+    'VALUATION_UNIT_COST_REQUIRED',
+    'Harga pokok belum tersedia dari riwayat penerimaan/pembelian. Isi Harga Pokok aktual agar valuasi inventory dan jurnal finance tetap benar.',
   );
+}
+
+type PendingValuationResult = {
+  journalEntryId: string;
+  quantityValued: Prisma.Decimal;
+  totalValue: Prisma.Decimal;
+  layersValued: number;
+  idempotentReplay: boolean;
+};
+
+async function valuePendingStockInTransaction(
+  tx: Tx,
+  input: {
+    actorUserId: string;
+    inventoryItemId: string;
+    branchId: string;
+    stockLocationId: string;
+    batchId?: string;
+    unitCost: Prisma.Decimal;
+    reasonCode: string;
+    notes: string;
+    idempotencyKey: string;
+    payloadHash: string;
+    sourceNumber: string;
+  },
+): Promise<PendingValuationResult | null> {
+  const postingKey = `INVENTORY_REVALUATION:${input.idempotencyKey}`;
+  const existing = await tx.journalEntry.findUnique({
+    where: { postingKey },
+    select: { id: true, metadata: true },
+  });
+  if (existing) {
+    const metadata = (existing.metadata || {}) as Prisma.JsonObject;
+    if (metadata.valuationPayloadHash !== input.payloadHash) {
+      throw errors.conflict(
+        'VALUATION_KEY_REUSED',
+        'Idempotency key valuasi digunakan untuk payload yang berbeda.',
+      );
+    }
+    return {
+      journalEntryId: existing.id,
+      quantityValued: new Prisma.Decimal(String(metadata.quantityValued || 0)),
+      totalValue: new Prisma.Decimal(String(metadata.totalValue || 0)),
+      layersValued: Number(metadata.layersValued || 0),
+      idempotentReplay: true,
+    };
+  }
+
+  const batchFilter = input.batchId
+    ? Prisma.sql`AND b."batchId" = ${input.batchId}`
+    : Prisma.empty;
+  const layers = await tx.$queryRaw<Array<{ id: string; remainingQty: Prisma.Decimal }>>(Prisma.sql`
+    SELECT l."id", l."remainingQty"
+    FROM "inventory_cost_layers" l
+    INNER JOIN "inventory_balances" b ON b."id" = l."inventoryBalanceId"
+    WHERE b."inventoryItemId" = ${input.inventoryItemId}
+      AND b."stockLocationId" = ${input.stockLocationId}
+      ${batchFilter}
+      AND l."remainingQty" > 0
+      AND l."valuationStatus" = 'PENDING_VALUATION'::"InventoryValuationStatus"
+      AND l."unitCost" IS NULL
+      AND l."isVoided" = false
+    ORDER BY l."receivedAt" ASC, l."id" ASC
+    FOR UPDATE
+  `);
+  if (layers.length === 0) return null;
+
+  const reason = await tx.inventoryAdjustmentReasonCode.findUnique({
+    where: { code: input.reasonCode },
+  });
+  if (!reason?.isActive) {
+    throw errors.badRequest(
+      'ADJUSTMENT_REASON_INVALID',
+      'Reason code valuasi tidak aktif atau tidak ditemukan.',
+    );
+  }
+
+  const quantityValued = layers.reduce(
+    (total, layer) => total.add(layer.remainingQty),
+    new Prisma.Decimal(0),
+  );
+  const totalValue = money(quantityValued.mul(input.unitCost));
+  if (!totalValue.greaterThan(0)) {
+    throw errors.unprocessable('VALUATION_ZERO_VALUE', 'Nilai valuasi stok harus minimal Rp0,01.');
+  }
+
+  const updated = await tx.inventoryCostLayer.updateMany({
+    where: {
+      id: { in: layers.map((layer) => layer.id) },
+      valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+      unitCost: null,
+      isVoided: false,
+    },
+    data: {
+      unitCost: input.unitCost,
+      valuationStatus: InventoryValuationStatus.VALUED,
+    },
+  });
+  if (updated.count !== layers.length) {
+    throw errors.conflict(
+      'VALUATION_CONCURRENT_UPDATE',
+      'Layer stok berubah saat proses valuasi. Muat ulang data lalu coba kembali.',
+    );
+  }
+
+  const layersValued = layers.length;
+  const journal = await postInventoryAdjustmentDerivedJournal({
+    postingKey,
+    transactionDate: new Date(),
+    branchId: input.branchId,
+    actorUserId: input.actorUserId,
+    description: `Valuasi FIFO ${input.sourceNumber}: ${input.notes}`,
+    lines: [
+      {
+        accountCode: '1300',
+        debit: totalValue,
+        metadata: { adjustmentRole: 'INVENTORY_IN' },
+      },
+      {
+        accountCode: reason.gainAccountCode,
+        credit: totalValue,
+        metadata: { adjustmentRole: 'GAIN' },
+      },
+    ],
+    sourceLinks: [{
+      sourceType: 'INVENTORY_REVALUATION',
+      sourceId: input.inventoryItemId,
+      sourceNumber: input.sourceNumber,
+    }],
+    metadata: {
+      valuationPayloadHash: input.payloadHash,
+      inventoryItemId: input.inventoryItemId,
+      stockLocationId: input.stockLocationId,
+      quantityValued: quantityValued.toFixed(4),
+      unitCost: input.unitCost.toFixed(4),
+      totalValue: totalValue.toFixed(2),
+      layersValued,
+      reasonCode: input.reasonCode,
+    },
+  }, tx);
+
+  await tx.auditLog.create({ data: {
+    userId: input.actorUserId,
+    branchId: input.branchId,
+    action: 'STOCK_ADJUSTMENT',
+    module: 'INVENTORY',
+    resource: 'InventoryValuation',
+    resourceId: journal.journal.id,
+    entityType: 'InventoryItem',
+    entityId: input.inventoryItemId,
+    entityCode: input.sourceNumber,
+    description: `Stok lama ${input.sourceNumber} diberi valuasi FIFO tanpa mengubah kuantitas.`,
+    afterData: {
+      stockLocationId: input.stockLocationId,
+      quantityValued: quantityValued.toFixed(4),
+      unitCost: input.unitCost.toFixed(4),
+      totalValue: totalValue.toFixed(2),
+      layersValued,
+      journalEntryId: journal.journal.id,
+      notes: input.notes,
+    },
+  } });
+
   return {
-    unitCost: configuredFallback.greaterThan(0) ? configuredFallback : new Prisma.Decimal(1),
-    source: 'SYSTEM_FALLBACK',
+    journalEntryId: journal.journal.id,
+    quantityValued,
+    totalValue,
+    layersValued,
+    idempotentReplay: false,
   };
 }
 
@@ -594,6 +761,7 @@ export async function directAdjustStock(
 
     const valuation = await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
     const directUnitCost = valuation.unitCost;
+    const adjustment = new Prisma.Decimal(input.adjustment);
     let bootstrappedLegacyStock = false;
     if (balances.length === 0 && mirrorQty.greaterThan(0)) {
       const batchKey = input.batchId || 'NO_BATCH';
@@ -616,37 +784,28 @@ export async function directAdjustStock(
           sourceId: item.id,
           originalQty: mirrorQty,
           remainingQty: mirrorQty,
-          unitCost: directUnitCost,
+          unitCost: null,
           currency: 'IDR',
-          valuationStatus: InventoryValuationStatus.VALUED,
+          valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
           receivedAt: new Date(),
         },
       });
       bootstrappedLegacyStock = true;
     }
 
-    const locationBalanceIds = await tx.inventoryBalance.findMany({
-      where: {
-        inventoryItemId: item.id,
-        stockLocationId: location.id,
-        ...(input.batchId ? { batchId: input.batchId } : {}),
-      },
-      select: { id: true },
+    const pendingValuation = await valuePendingStockInTransaction(tx, {
+      actorUserId: userId,
+      inventoryItemId: item.id,
+      branchId: item.branchId,
+      stockLocationId: location.id,
+      batchId: input.batchId,
+      unitCost: directUnitCost,
+      reasonCode: input.reasonCode,
+      notes: input.notes,
+      idempotencyKey: input.idempotencyKey,
+      payloadHash,
+      sourceNumber: item.masterProduct.sku || item.masterProduct.name,
     });
-    const valuedLegacyLayers = locationBalanceIds.length === 0
-      ? { count: 0 }
-      : await tx.inventoryCostLayer.updateMany({
-        where: {
-          inventoryBalanceId: { in: locationBalanceIds.map((balance) => balance.id) },
-          valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
-          unitCost: null,
-          isVoided: false,
-        },
-        data: {
-          unitCost: directUnitCost,
-          valuationStatus: InventoryValuationStatus.VALUED,
-        },
-      });
 
     if (item.stockLocationId !== location.id || item.warehouseId !== location.warehouseId) {
       await tx.inventoryItem.update({
@@ -655,7 +814,27 @@ export async function directAdjustStock(
       });
     }
 
-    const adjustment = new Prisma.Decimal(input.adjustment);
+    if (adjustment.isZero()) {
+      if (!pendingValuation) {
+        throw errors.unprocessable(
+          'NO_PENDING_VALUATION',
+          'Tidak ada stok lama yang menunggu valuasi pada lokasi ini.',
+        );
+      }
+      return {
+        valuation: {
+          inventoryItemId: item.id,
+          journalEntryId: pendingValuation.journalEntryId,
+          quantityValued: pendingValuation.quantityValued.toFixed(4),
+          unitCost: directUnitCost.toFixed(4),
+          totalValue: pendingValuation.totalValue.toFixed(2),
+          layersValued: pendingValuation.layersValued,
+        },
+        idempotentReplay: pendingValuation.idempotentReplay,
+        direct: true,
+      };
+    }
+
     const normalized: ScopedAdjustmentInput = {
       idempotencyKey: input.idempotencyKey,
       branchId: item.branchId,
@@ -713,7 +892,8 @@ export async function directAdjustStock(
         valuationSource: valuation.source,
         stockLocationId: location.id,
         bootstrappedLegacyStock,
-        valuedLegacyLayers: valuedLegacyLayers.count,
+        valuedLegacyLayers: pendingValuation?.layersValued ?? 0,
+        valuationJournalEntryId: pendingValuation?.journalEntryId ?? null,
       },
     } });
     const posted = await postAdjustmentInTransaction(tx, document.id, userId);

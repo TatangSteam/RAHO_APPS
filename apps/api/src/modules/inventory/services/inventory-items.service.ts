@@ -301,6 +301,13 @@ export class InventoryItemsService {
     usageStock?: number;
     minThresholdUsage?: number;
   }, branchId: string, userId: string) {
+    if (Number(data.stock || 0) > 0) {
+      throw {
+        status: 422,
+        code: 'INITIAL_STOCK_POSTING_REQUIRED',
+        message: 'Tambahkan item dengan stok 0. Catat stok awal melalui Edit Stok atau Opening Balance agar FIFO dan jurnal finance terbentuk.',
+      };
+    }
     // If masterProductId is provided, use existing master product
     if (data.masterProductId) {
       return await this.createInventoryItemFromMasterProduct(data, branchId, userId);
@@ -667,6 +674,11 @@ export class InventoryItemsService {
     const result = await prisma.$transaction(async (tx) => {
       for (const item of items) {
         try {
+          if (Number(item.stock || 0) > 0) {
+            errors.push(`Stok awal ${item.masterProductId} harus 0; gunakan Edit Stok atau Opening Balance`);
+            skipped++;
+            continue;
+          }
           // Verify master product exists
           const masterProduct = await tx.masterProduct.findUnique({
             where: { id: item.masterProductId },

@@ -28,6 +28,8 @@ interface BranchStockInfo {
   isLowStock: boolean;
   isOutOfStock: boolean;
   sessionUsageCount: number;
+  pendingValuationQty: number;
+  isValuationPending: boolean;
 }
 
 interface MasterProduct {
@@ -332,7 +334,7 @@ export default function MasterProductsPage() {
   ): Promise<boolean> => {
     if (newStock < 0) { showToast.error('Stok tidak boleh negatif'); return false; }
     const adjustment = newStock - branchInfo.stock;
-    if (adjustment === 0) { showToast.error('Tidak ada perubahan stok'); return false; }
+    if (adjustment === 0 && !branchInfo.isValuationPending) { showToast.error('Tidak ada perubahan stok atau valuasi tertunda'); return false; }
     if (!notes.trim()) { showToast.error('Catatan perubahan stok wajib diisi'); return false; }
     if (!Number.isFinite(unitCost) || unitCost <= 0) { showToast.error('Harga pokok harus lebih dari 0'); return false; }
     try {
@@ -350,7 +352,9 @@ export default function MasterProductsPage() {
         const err = await response.json();
         throw new Error(err.error?.message || err.message || 'Gagal mengubah stok');
       }
-      showToast.success(`Stok ${branchInfo.branchCode} berhasil diubah: ${branchInfo.stock} → ${newStock} ${stockEditProduct?.baseUnit ?? ''}`);
+      showToast.success(adjustment === 0
+        ? `Valuasi FIFO ${branchInfo.branchCode} berhasil dicatat tanpa mengubah jumlah stok`
+        : `Stok ${branchInfo.branchCode} berhasil diubah: ${branchInfo.stock} → ${newStock} ${stockEditProduct?.baseUnit ?? ''}`);
       const params = new URLSearchParams();
       if (categoryFilter) params.append('category', categoryFilter);
       if (statusFilter) params.append('isActive', statusFilter);
@@ -1033,7 +1037,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
         <div className={styles.modalHeader}>
           <div>
             <h2 className={styles.modalTitle}><Box size={20} /> Edit Stok — {product.name}</h2>
-            <p className={styles.modalSubtitle}>Atur stok manual untuk tiap cabang. Perubahan akan dicatat di riwayat mutasi stok.</p>
+            <p className={styles.modalSubtitle}>Koreksi jumlah stok atau beri harga pokok pada stok lama. Semua perubahan dicatat ke inventory dan jurnal finance.</p>
           </div>
           <button onClick={onClose} className={styles.closeBtn}><X size={20} /></button>
         </div>
@@ -1106,6 +1110,9 @@ function StockEditModal({ product, onClose, onAdjust }: {
                   </div>
                   <div className={`${styles.stockEditCurrent} ${b.isOutOfStock ? styles.stockRed : b.isLowStock ? styles.stockYellow : styles.stockGreen}`}>
                     {b.isOutOfStock ? '🔴' : b.isLowStock ? '🟡' : '🟢'} {currentStockDisplay} {currentUnit}
+                    {b.isValuationPending && (
+                      <span className={styles.stockYellow}> ⚠ {b.pendingValuationQty} belum dinilai</span>
+                    )}
                   </div>
                   <div className={styles.stockEditInput}>
                     <input
@@ -1134,10 +1141,10 @@ function StockEditModal({ product, onClose, onAdjust }: {
                   </div>
                   <button
                     onClick={() => handleSave(b)}
-                    disabled={!isDirty || isLoadingThis || !notes.trim() || !unitCost || Number(unitCost) <= 0}
+                    disabled={(!isDirty && !b.isValuationPending) || isLoadingThis || !notes.trim() || !unitCost || Number(unitCost) <= 0}
                     className={styles.stockEditSaveBtn}
                   >
-                    {isLoadingThis ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Simpan
+                    {isLoadingThis ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {isDirty ? 'Simpan' : 'Valuasi'}
                   </button>
                 </div>
               );
@@ -1167,7 +1174,6 @@ function AssignToBranchModal({ product, allBranches, onClose, onAssign }: {
   const availableBranches = allBranches.filter(b => !existingBranchIds.has(b.id));
   
   const [selectedBranches, setSelectedBranches] = useState<Set<string>>(new Set());
-  const [stock, setStock] = useState(0);
   const [minThreshold, setMinThreshold] = useState(10);
   const [submitting, setSubmitting] = useState(false);
 
@@ -1193,7 +1199,7 @@ function AssignToBranchModal({ product, allBranches, onClose, onAssign }: {
     setSubmitting(true);
     let successCount = 0;
     for (const branchId of Array.from(selectedBranches)) {
-      const ok = await onAssign(branchId, stock, minThreshold);
+      const ok = await onAssign(branchId, 0, minThreshold);
       if (ok) successCount++;
     }
     setSubmitting(false);
@@ -1220,11 +1226,12 @@ function AssignToBranchModal({ product, allBranches, onClose, onAssign }: {
           ) : (
             <>
               <div className={styles.formSection}>
-                <h3 className={styles.formSectionTitle}><Box size={16} /> Pengaturan Stok Awal</h3>
+                <h3 className={styles.formSectionTitle}><Box size={16} /> Pengaturan Inventory</h3>
                 <div className={styles.formRow}>
                   <div className={styles.formGroup}>
                     <label>Stok Awal ({product.baseUnit})</label>
-                    <input type="number" min="0" value={stock} onChange={(e) => setStock(Number(e.target.value) || 0)} />
+                    <input type="number" value={0} disabled />
+                    <p className={styles.hint}>Setelah item ditambahkan, gunakan Edit Stok untuk memasukkan jumlah dan harga pokok secara tercatat.</p>
                   </div>
                   <div className={styles.formGroup}>
                     <label>Min. Threshold ({product.baseUnit})</label>

@@ -243,9 +243,9 @@ async function autoAddProductsToBranchInventory(branchId: string) {
     });
 
     if (!existing) {
-      // Use defaultInitialStock or 100 for Infus Set
-      const initialStock = product.defaultInitialStock || 
-        (product.sku?.startsWith('PRD-INF-SET') ? 100 : 0);
+      // A branch starts without stock. Opening quantity must enter through an
+      // auditable receipt/opening-balance flow that also supplies FIFO cost.
+      const initialStock = 0;
       
       await prisma.$transaction(async (tx) => {
         const inventoryItem = await tx.inventoryItem.create({

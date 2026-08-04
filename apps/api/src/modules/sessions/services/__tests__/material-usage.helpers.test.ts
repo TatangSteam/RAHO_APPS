@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import {
+  calculatePhysicalAvailableBaseQuantity,
   calculateValuedAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from '../material-usage.helpers';
@@ -24,6 +25,17 @@ describe('material usage deviation', () => {
     ]);
 
     expect(valued.toFixed(4)).toBe('8.0000');
+  });
+
+  it('calculates physical availability independently from FIFO valuation', () => {
+    const available = calculatePhysicalAvailableBaseQuantity([{
+      onHandQty: decimal('10'),
+      reservedQty: decimal('2'),
+      quarantineQty: decimal('1'),
+      costLayers: [],
+    }]);
+
+    expect(available.toFixed(4)).toBe('7.0000');
   });
 
   it('does not require a reason when no BOM is active', () => {

@@ -21,6 +21,15 @@ export function calculateValuedAvailableBaseQuantity(balances: ValuedBalance[]):
   }, new Prisma.Decimal(0));
 }
 
+export function calculatePhysicalAvailableBaseQuantity(balances: ValuedBalance[]): Prisma.Decimal {
+  return balances.reduce((total, balance) => {
+    const available = balance.onHandQty
+      .sub(balance.reservedQty)
+      .sub(balance.quarantineQty);
+    return available.isPositive() ? total.add(available) : total;
+  }, new Prisma.Decimal(0));
+}
+
 export function requiresMaterialDeviationReason(
   actualQuantity: Prisma.Decimal,
   recommendedQuantity: Prisma.Decimal | null,

@@ -458,7 +458,7 @@ export async function postInventoryAdjustmentDerivedJournal(input: PostJournalIn
     throw errors.badRequest('ADJUSTMENT_JOURNAL_SOURCE_INVALID', 'Jurnal adjustment wajib memiliki satu source document.');
   }
   const sourceType = posting.sourceLinks[0].sourceType.trim().toUpperCase();
-  if (!['INVENTORY_ADJUSTMENT', 'STOCK_OPNAME', 'SHIPMENT_DISCREPANCY'].includes(sourceType)) {
+  if (!['INVENTORY_ADJUSTMENT', 'INVENTORY_REVALUATION', 'STOCK_OPNAME', 'SHIPMENT_DISCREPANCY'].includes(sourceType)) {
     throw errors.badRequest('ADJUSTMENT_JOURNAL_SOURCE_INVALID', 'Source jurnal adjustment tidak didukung.');
   }
   const allowedRoles = new Set(['INVENTORY_IN', 'INVENTORY_OUT', 'GAIN', 'LOSS']);

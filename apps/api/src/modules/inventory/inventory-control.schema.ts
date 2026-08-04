@@ -10,8 +10,8 @@ const positiveUnitCost = z.union([z.string(), z.number()]).transform(String)
   .refine((value) => /^\d+(?:\.\d{1,4})?$/.test(value) && Number(value) > 0, 'Harga pokok harus lebih dari 0 dengan maksimal 4 desimal.');
 const signedAdjustment = z.union([z.string(), z.number()]).transform(String)
   .refine(
-    (value) => /^-?\d+(?:\.\d{1,4})?$/.test(value) && Number(value) !== 0,
-    'Penyesuaian stok harus bukan 0 dengan maksimal 4 desimal.',
+    (value) => /^-?\d+(?:\.\d{1,4})?$/.test(value),
+    'Penyesuaian stok maksimal 4 desimal.',
   );
 
 export const createAdjustmentSchema = z.object({
@@ -46,6 +46,14 @@ export const directStockAdjustmentSchema = z.object({
   stockLocationId: z.string().trim().min(1).optional(),
   batchId: z.string().trim().min(1).optional(),
   reasonCode: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()).default('OTHER'),
+}).superRefine((input, context) => {
+  if (Number(input.adjustment) >= 0 && !input.unitCost) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['unitCost'],
+      message: 'Harga pokok wajib diisi untuk penambahan atau valuasi stok.',
+    });
+  }
 });
 
 export const listInventoryControlSchema = z.object({
