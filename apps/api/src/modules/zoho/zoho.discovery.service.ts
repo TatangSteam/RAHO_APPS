@@ -97,7 +97,15 @@ async function fetchAll(client: ZohoClient) {
       [ZohoDiscoveryResourceType.TAX]: taxes.map((value) => item(value, 'tax_id', 'tax_name')),
       [ZohoDiscoveryResourceType.LOCATION]: locations.map((value) => item(value, 'location_id', 'location_name')),
       [ZohoDiscoveryResourceType.ITEM]: zohoItems.map((value) => item(value, 'item_id', 'name', 'sku')),
-      [ZohoDiscoveryResourceType.BANK_ACCOUNT]: bankAccounts.map((value) => item(value, 'account_id', 'account_name', 'account_code')),
+      // Zoho exposes ordinary cash ledgers through Chart of Accounts, while
+      // bankaccounts may only contain accounts managed by the banking module.
+      // Both are valid paid-through accounts for payments and expenses.
+      [ZohoDiscoveryResourceType.BANK_ACCOUNT]: [
+        ...bankAccounts,
+        ...accounts.filter((value) => text(value, 'account_type')?.toLowerCase() === 'cash'),
+      ]
+        .map((value) => item(value, 'account_id', 'account_name', 'account_code'))
+        .filter((value, index, values) => values.findIndex((candidate) => candidate.zohoId === value.zohoId) === index),
       [ZohoDiscoveryResourceType.PAYMENT_MODE]: PAYMENT_MODES.map((mode) => ({
         zohoId: mode,
         name: mode,
@@ -238,10 +246,16 @@ async function replaceResource(
         },
       });
     }
+    const externalTypeFilter = {
+      OR: [
+        { zohoEntityType: resourceType },
+        { zohoEntityType: { startsWith: `${resourceType}:` } },
+      ],
+    };
     await tx.zohoEntityMapping.updateMany({
       where: {
         zohoConnectionId: connectionId,
-        zohoEntityType: resourceType,
+        ...externalTypeFilter,
         zohoEntityId: { in: ids },
         status: 'INACTIVE',
       },
@@ -255,7 +269,7 @@ async function replaceResource(
       await tx.zohoEntityMapping.updateMany({
         where: {
           zohoConnectionId: connectionId,
-          zohoEntityType: resourceType,
+          ...externalTypeFilter,
           zohoEntityId: { in: inactive.map((entry) => entry.zohoId) },
           status: 'ACTIVE',
         },

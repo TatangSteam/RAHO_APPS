@@ -686,6 +686,13 @@ async function saveConfigMapping(
     where: { zohoConnectionId: connection.id, resourceType, zohoId, isActive: true },
   });
   if (!discovered) throw new AppError(422, 'ZOHO_CONFIG_INVALID', 'Data konfigurasi Zoho tidak ditemukan pada discovery aktif.');
+  // Several ERP methods legitimately share one Zoho payment mode (for
+  // example DEBIT and CREDIT both use creditcard). Scope the external type
+  // by method so the generic one-to-one mapping constraint remains useful
+  // for every other mapping family.
+  const zohoEntityType = entityType === 'PAYMENT_METHOD'
+    ? `${resourceType}:${localEntityId}`
+    : resourceType;
   return prisma.zohoEntityMapping.upsert({
     where: {
       zohoConnectionId_entityType_localEntityId: {
@@ -698,14 +705,14 @@ async function saveConfigMapping(
       zohoConnectionId: connection.id,
       entityType,
       localEntityId,
-      zohoEntityType: resourceType,
+      zohoEntityType,
       zohoEntityId: zohoId,
       externalKey: localEntityId,
       status: 'ACTIVE',
       metadata: { name: discovered.name, code: discovered.code },
     },
     update: {
-      zohoEntityType: resourceType,
+      zohoEntityType,
       zohoEntityId: zohoId,
       status: 'ACTIVE',
       metadata: { name: discovered.name, code: discovered.code },

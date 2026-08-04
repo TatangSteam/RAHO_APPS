@@ -240,8 +240,8 @@ export async function runDiscovery(_req: Request, res: Response, next: NextFunct
   try { sendSuccess(res, await discoveryService.runDiscovery()); } catch (error) { next(error); }
 }
 
-export async function setup(_req: Request, res: Response, next: NextFunction) {
-  try { sendSuccess(res, await setupService.setupZohoReadiness()); } catch (error) { next(error); }
+export async function setup(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await setupService.setupZohoReadiness(req.user.userId)); } catch (error) { next(error); }
 }
 
 export async function contacts(req: Request, res: Response, next: NextFunction) {
