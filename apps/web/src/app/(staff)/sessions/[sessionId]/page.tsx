@@ -1083,7 +1083,7 @@ export default function SessionDetailPage() {
             Completion Dibatalkan
           </h3>
           <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-            {sessionInfo.cancellationReason || 'Posting revenue, HPP, dan persediaan telah dibalik.'}
+            {sessionInfo.cancellationReason || 'Posting revenue dan quantity persediaan telah dibalik.'}
           </p>
         </div>
       )}
@@ -1104,7 +1104,7 @@ export default function SessionDetailPage() {
               <div>
                 <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '6px' }}>Batalkan Completion</h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
-                  Revenue, HPP, dan konsumsi FIFO akan dibalik dalam satu transaksi.
+                  Revenue dan konsumsi quantity inventory akan dibalik dalam satu transaksi.
                 </p>
               </div>
               <button

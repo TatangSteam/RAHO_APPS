@@ -11,6 +11,7 @@ import {
 } from '@modules/iam/authorization.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import { getPaymentConfig } from './zoho.payment.service';
 import { reconcileBills } from './zoho.bill.service';
 import { stablePayloadHash } from './zoho.sanitizer';
@@ -275,6 +276,9 @@ async function saveMapping(input: {
       zohoEntityType: 'VENDOR_PAYMENT',
       zohoEntityId: zohoId,
       externalKey: input.snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -289,6 +293,9 @@ async function saveMapping(input: {
     },
     update: {
       zohoEntityId: zohoId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -332,6 +339,7 @@ export async function handleSupplierPaymentPosted(event: IntegrationEvent) {
     },
   });
   if (existingMapping) {
+    assertErpManaged(existingMapping, 'Vendor Payment Zoho');
     return { operation: 'ALREADY_MAPPED', zohoPaymentId: existingMapping.zohoEntityId };
   }
   const resolved = await dependencies(client.connection.id, snapshot);
@@ -363,6 +371,13 @@ export async function handleSupplierPaymentPosted(event: IntegrationEvent) {
   }
   let remote = matches[0];
   const operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
+  if (remote?.payment_id != null) {
+    const detail = await client.request<{ vendorpayment?: ZohoVendorPaymentRemote }>(
+      `/books/v3/vendorpayments/${remote.payment_id}`,
+    );
+    remote = { ...remote, ...detail.vendorpayment };
+    assertRemoteErpOrigin(remote, snapshot.externalKey, 'Vendor Payment');
+  }
   if (!remote) {
     const response = await client.request<{ vendorpayment?: ZohoVendorPaymentRemote }>(
       '/books/v3/vendorpayments',
@@ -444,6 +459,7 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
     },
   });
   if (mappedRefund) {
+    assertErpManaged(mappedRefund, 'Refund Vendor Payment Zoho');
     return { operation: 'ALREADY_MAPPED', zohoRefundId: mappedRefund.zohoEntityId };
   }
   const [paymentMapping, originalEvent, accountMapping, methodMapping] = await Promise.all([
@@ -491,6 +507,7 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
       false,
     );
   }
+  assertErpManaged(paymentMapping, 'Vendor Payment Zoho');
   const original = originalEvent.payload as unknown as ZohoVendorPaymentSnapshot;
   const resolved = await dependencies(client.connection.id, original);
   const issues = validateVendorPaymentSnapshot(original, resolved);
@@ -507,7 +524,8 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
     `/books/v3/vendorpayments/${paymentId}/refunds`,
     'vendorpayment_refunds',
   );
-  let refund = refunds.find((row) => row.reference_number === snapshot.referenceNumber);
+  let refund = refunds.find((row) => row.reference_number === snapshot.externalKey);
+  if (refund) assertRemoteErpOrigin(refund, snapshot.externalKey, 'Refund Vendor Payment');
   const operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
   if (!refund) {
     const updatePayload = buildZohoVendorPaymentPayload(
@@ -556,6 +574,9 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
       zohoEntityType: 'VENDOR_PAYMENT_REFUND',
       zohoEntityId: String(refund.vendorpayment_refund_id),
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,
@@ -568,6 +589,9 @@ export async function handleSupplierPaymentRefunded(event: IntegrationEvent) {
     },
     update: {
       zohoEntityId: String(refund.vendorpayment_refund_id),
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,

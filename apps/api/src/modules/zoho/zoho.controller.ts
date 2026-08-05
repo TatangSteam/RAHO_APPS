@@ -20,6 +20,13 @@ import * as webhookService from './zoho.webhook.service';
 import * as reconciliationService from './zoho.reconciliation.service';
 import * as goLiveService from './zoho.go-live.service';
 import * as setupService from './zoho.setup.service';
+import * as originService from './zoho.origin.service';
+
+const resolveMappingOriginSchema = z.object({
+  dataOrigin: z.enum(['ERP', 'MANUAL_ZOHO']),
+  managementMode: z.enum(['ERP_MANAGED', 'MANUAL_ONLY']),
+  note: z.string().trim().min(5).max(500),
+});
 
 const queueQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
@@ -825,6 +832,19 @@ export async function resolveReconciliationException(
       req.user.userId,
       input.note,
     ));
+  } catch (error) { next(error); }
+}
+
+export async function resolveMappingOrigin(req: Request, res: Response, next: NextFunction) {
+  try {
+    const input = resolveMappingOriginSchema.parse(req.body);
+    sendSuccess(res, await originService.resolveMappingOrigin({
+      mappingId: req.params.id,
+      actorUserId: req.user.userId,
+      dataOrigin: input.dataOrigin!,
+      managementMode: input.managementMode!,
+      note: input.note!,
+    }));
   } catch (error) { next(error); }
 }
 

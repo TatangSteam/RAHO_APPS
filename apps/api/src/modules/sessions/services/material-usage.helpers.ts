@@ -1,27 +1,12 @@
 import { Prisma } from '@prisma/client';
 
-type ValuedBalance = {
+type PhysicalBalance = {
   onHandQty: Prisma.Decimal;
   reservedQty: Prisma.Decimal;
   quarantineQty: Prisma.Decimal;
-  costLayers: Array<{ remainingQty: Prisma.Decimal }>;
 };
 
-export function calculateValuedAvailableBaseQuantity(balances: ValuedBalance[]): Prisma.Decimal {
-  return balances.reduce((total, balance) => {
-    const balanceAvailable = balance.onHandQty
-      .sub(balance.reservedQty)
-      .sub(balance.quarantineQty);
-    const valuedLayerQuantity = balance.costLayers.reduce(
-      (sum, layer) => sum.add(layer.remainingQty),
-      new Prisma.Decimal(0),
-    );
-    const allocatable = Prisma.Decimal.min(balanceAvailable, valuedLayerQuantity);
-    return allocatable.isPositive() ? total.add(allocatable) : total;
-  }, new Prisma.Decimal(0));
-}
-
-export function calculatePhysicalAvailableBaseQuantity(balances: ValuedBalance[]): Prisma.Decimal {
+export function calculatePhysicalAvailableBaseQuantity(balances: PhysicalBalance[]): Prisma.Decimal {
   return balances.reduce((total, balance) => {
     const available = balance.onHandQty
       .sub(balance.reservedQty)

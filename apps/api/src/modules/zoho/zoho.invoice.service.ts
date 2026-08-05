@@ -3,6 +3,7 @@ import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import {
   buildZohoInvoicePayload,
   invoiceLineMappingKey,
@@ -318,12 +319,18 @@ async function saveInvoiceMapping(
       zohoEntityType: 'INVOICE',
       zohoEntityId: zohoInvoiceId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({ operation, invoiceNumber: snapshot.invoiceNumber, totalAmount: snapshot.totalAmount }),
       lastSyncedAt: new Date(),
     },
     update: {
       zohoEntityId: zohoInvoiceId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({ operation, invoiceNumber: snapshot.invoiceNumber, totalAmount: snapshot.totalAmount }),
       lastSyncedAt: new Date(),
@@ -347,7 +354,10 @@ export async function handleInvoiceEvent(event: IntegrationEvent) {
       },
     },
   });
-  if (existingMapping) return { operation: 'ALREADY_MAPPED', zohoId: existingMapping.zohoEntityId };
+  if (existingMapping) {
+    assertErpManaged(existingMapping, 'Invoice Zoho');
+    return { operation: 'ALREADY_MAPPED', zohoId: existingMapping.zohoEntityId };
+  }
 
   const resolved = await dependencies(client.connection.id, snapshot);
   const issues = validateInvoiceSnapshot(snapshot, resolved);
@@ -367,6 +377,7 @@ export async function handleInvoiceEvent(event: IntegrationEvent) {
   if (zohoId) {
     const detail = await client.request<{ invoice?: ZohoInvoiceCandidate }>(`/books/v3/invoices/${zohoId}`);
     const candidate = { ...matches[0], ...detail.invoice };
+    assertRemoteErpOrigin(candidate, snapshot.externalKey, 'Invoice');
     const recoveryIssues = validateRecoveredInvoice(
       snapshot,
       resolved as ZohoInvoiceDependencies,
@@ -422,6 +433,7 @@ async function handleInvoiceVoided(event: IntegrationEvent) {
     },
   });
   if (mapping?.status === 'INACTIVE') return { operation: 'ALREADY_VOID', zohoId: mapping.zohoEntityId };
+  if (mapping) assertErpManaged(mapping, 'Invoice Zoho');
   let zohoId = mapping?.zohoEntityId || null;
   if (!zohoId) {
     const matches = await findExisting(client, payload.invoiceNumber);
@@ -452,7 +464,8 @@ async function handleInvoiceVoided(event: IntegrationEvent) {
       waiting ? 5_000 : undefined,
     );
   }
-  const detail = await client.request<{ invoice?: { status?: string } }>(`/books/v3/invoices/${zohoId}`);
+  const detail = await client.request<{ invoice?: Record<string, unknown> & { status?: string } }>(`/books/v3/invoices/${zohoId}`);
+  assertRemoteErpOrigin(detail.invoice, `RAHO:INVOICE:${payload.invoiceId}`, 'Invoice untuk void');
   const alreadyVoid = detail.invoice?.status?.toLowerCase() === 'void';
   if (!alreadyVoid) {
     await client.request(`/books/v3/invoices/${zohoId}/status/void`, { method: 'POST' });
@@ -472,6 +485,9 @@ async function handleInvoiceVoided(event: IntegrationEvent) {
       zohoEntityType: 'INVOICE',
       zohoEntityId: zohoId,
       externalKey: `RAHO:INVOICE:${payload.invoiceId}`,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'INACTIVE',
       metadata: json({
         operation: alreadyVoid ? 'VOID_RECOVER_EXISTING' : 'VOID',
@@ -481,6 +497,9 @@ async function handleInvoiceVoided(event: IntegrationEvent) {
     },
     update: {
       zohoEntityId: zohoId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'INACTIVE',
       metadata: json({
         operation: alreadyVoid ? 'ALREADY_VOID' : 'VOID',
@@ -666,11 +685,17 @@ export async function saveTaxMapping(percent: number, zohoTaxId: string) {
       zohoEntityType: `TAX_RATE:${key}`,
       zohoEntityId: zohoTaxId,
       externalKey: `${key}%`,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       metadata: json({ taxName: tax.name }),
     },
     update: {
       zohoEntityType: `TAX_RATE:${key}`,
       zohoEntityId: zohoTaxId,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({ taxName: tax.name }),
     },

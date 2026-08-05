@@ -12,16 +12,8 @@ import { resolveSessionMaterialRecommendations } from '@modules/inventory/servic
 import { logAudit } from '@utils/auditLog';
 import type { CreateMaterialUsageInput } from '../sessions.schema';
 import {
-  calculateValuedAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from './material-usage.helpers';
-
-const valuedCostLayerFilter = {
-  remainingQty: { gt: 0 },
-  unitCost: { not: null },
-  valuationStatus: 'VALUED' as const,
-  isVoided: false,
-};
 
 export class MaterialUsageService {
   async createMaterialUsage(
@@ -44,14 +36,7 @@ export class MaterialUsageService {
       where: { id: data.inventoryItemId },
       include: {
         masterProduct: true,
-        balances: {
-          include: {
-            costLayers: {
-              where: valuedCostLayerFilter,
-              select: { remainingQty: true },
-            },
-          },
-        },
+        balances: true,
       },
     });
     if (!inventoryItem || inventoryItem.branchId !== session.branchId || !inventoryItem.masterProduct.isActive) {
@@ -78,14 +63,6 @@ export class MaterialUsageService {
       throw errors.unprocessable(
         'INSUFFICIENT_AVAILABLE_STOCK',
         `Stok tersedia ${availableBaseQuantity.mul(conversionFactor).toFixed(4)} ${inventoryItem.masterProduct.usageUnit}.`,
-      );
-    }
-
-    const valuedAvailableBaseQuantity = calculateValuedAvailableBaseQuantity(inventoryItem.balances);
-    if (valuedAvailableBaseQuantity.lessThan(baseQuantity)) {
-      throw errors.unprocessable(
-        'INVENTORY_VALUATION_REQUIRED',
-        `Stok fisik ${inventoryItem.masterProduct.name} tersedia, tetapi ${baseQuantity.sub(valuedAvailableBaseQuantity).toFixed(4)} ${inventoryItem.masterProduct.baseUnit} belum memiliki harga pokok FIFO. Super Admin perlu membuka Master Produk > Edit Stok, mengisi Harga Pokok, lalu pilih Valuasi.`,
       );
     }
 
@@ -225,14 +202,7 @@ export class MaterialUsageService {
       where: { branchId, masterProduct: { isActive: true } },
       include: {
         masterProduct: true,
-        balances: {
-          include: {
-            costLayers: {
-              where: valuedCostLayerFilter,
-              select: { remainingQty: true },
-            },
-          },
-        },
+        balances: true,
       },
       orderBy: [
         { masterProduct: { category: 'asc' } },
@@ -244,7 +214,7 @@ export class MaterialUsageService {
         (sum, balance) => sum.add(balance.onHandQty).sub(balance.reservedQty).sub(balance.quarantineQty),
         new Prisma.Decimal(0),
       );
-      const availableBase = calculateValuedAvailableBaseQuantity(item.balances);
+      const availableBase = physicalAvailableBase;
       const conversionFactor = item.masterProduct.conversionFactor;
       const availableUsage = availableBase.mul(conversionFactor);
       const minThresholdUsage = item.minThreshold.mul(conversionFactor);
@@ -261,7 +231,7 @@ export class MaterialUsageService {
           displayText: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(2)} ${item.masterProduct.usageUnit} tersedia)`,
           displayShort: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(0)} ${item.masterProduct.usageUnit})`,
           physicalBaseStock: physicalAvailableBase,
-          requiresValuationReconciliation: physicalAvailableBase.greaterThan(availableBase),
+          requiresValuationReconciliation: false,
         },
       };
     });

@@ -67,7 +67,7 @@ describe('Zoho vendor payment policy', () => {
       paid_through_account_id: 'zoho-bank-1',
       payment_mode: 'banktransfer',
       reference_number: 'SP/2026/ABC123',
-      description: 'Pembayaran ERP SI/2026/001 - Bukti BANK-001',
+      description: '[RAHO ERP] RAHO:SUPPLIER_PAYMENT:supplier-payment-1 - Pembayaran ERP SI/2026/001 - Bukti BANK-001',
     });
   });
 
@@ -120,10 +120,10 @@ describe('Zoho vendor payment policy', () => {
     }, 'zoho-bank-1', 'banktransfer')).toEqual({
       date: '2026-07-30',
       refund_mode: 'banktransfer',
-      reference_number: 'SPR/2026/001',
+      reference_number: 'RAHO:SUPPLIER_PAYMENT_REFUND:supplier-payment-refund-1',
       amount: 100,
       to_account_id: 'zoho-bank-1',
-      description: 'Dana dikembalikan supplier (ERP SI/2026/001)',
+      description: '[RAHO ERP] RAHO:SUPPLIER_PAYMENT_REFUND:supplier-payment-refund-1 - Dana dikembalikan supplier (ERP SI/2026/001)',
     });
   });
 });

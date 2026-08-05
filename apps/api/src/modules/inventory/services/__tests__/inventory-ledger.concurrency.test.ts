@@ -1,7 +1,13 @@
 import { randomUUID } from 'crypto';
-import { ProductCategory, Role } from '@prisma/client';
+import { InventoryValuationStatus, ProductCategory, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
-import { issueInventory, receiveInventory, reverseInventoryPosting } from '../inventory-ledger.service';
+import {
+  issueInventory,
+  issueInventoryInTransaction,
+  receiveInventory,
+  reverseInventoryPosting,
+  reverseInventoryPostingInTransaction,
+} from '../inventory-ledger.service';
 
 const describeDatabase = process.env.RUN_INVENTORY_DB_TESTS === 'true' ? describe : describe.skip;
 
@@ -14,6 +20,9 @@ describeDatabase('inventory ledger PostgreSQL concurrency', () => {
   const uomId = `fifo_uom_${runId}`;
   const productId = `fifo_product_${runId}`;
   const inventoryItemId = `fifo_item_${runId}`;
+  const quantityOnlyProductId = `qty_product_${runId}`;
+  const quantityOnlyItemId = `qty_item_${runId}`;
+  const quantityOnlyBalanceId = `qty_balance_${runId}`;
 
   beforeAll(async () => {
     await prisma.user.create({
@@ -60,6 +69,52 @@ describeDatabase('inventory ledger PostgreSQL concurrency', () => {
         stock: 0,
       },
     });
+    await prisma.masterProduct.create({
+      data: {
+        id: quantityOnlyProductId,
+        sku: `QTY-${runId}`,
+        name: `Quantity-only Product ${runId}`,
+        category: ProductCategory.CONSUMABLE,
+        unit: 'unit',
+        baseUnit: 'unit',
+        usageUnit: 'unit',
+        baseUomId: uomId,
+        usageUomId: uomId,
+        conversionFactor: '1',
+      },
+    });
+    await prisma.inventoryItem.create({
+      data: {
+        id: quantityOnlyItemId,
+        masterProductId: quantityOnlyProductId,
+        branchId,
+        warehouseId,
+        stockLocationId: locationId,
+        stock: 5,
+      },
+    });
+    await prisma.inventoryBalance.create({
+      data: {
+        id: quantityOnlyBalanceId,
+        inventoryItemId: quantityOnlyItemId,
+        stockLocationId: locationId,
+        masterProductId: quantityOnlyProductId,
+        branchId,
+        onHandQty: 5,
+      },
+    });
+    await prisma.inventoryCostLayer.create({
+      data: {
+        inventoryBalanceId: quantityOnlyBalanceId,
+        sourceType: 'LEGACY_MIGRATION',
+        sourceId: quantityOnlyItemId,
+        originalQty: 5,
+        remainingQty: 5,
+        unitCost: null,
+        valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+        receivedAt: new Date(Date.now() - 60_000),
+      },
+    });
     await receiveInventory(actorId, {
       idempotencyKey: `FIFO-RECEIPT-${runId}`,
       branchId,
@@ -78,14 +133,14 @@ describeDatabase('inventory ledger PostgreSQL concurrency', () => {
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId }] } });
     await prisma.inventoryCostAllocation.deleteMany({ where: { posting: { branchId } } });
-    await prisma.stockMutation.deleteMany({ where: { inventoryItemId } });
+    await prisma.stockMutation.deleteMany({ where: { inventoryItem: { branchId } } });
     await prisma.inventoryCostLayer.deleteMany({ where: { inventoryBalance: { branchId } } });
     await prisma.inventoryBalance.deleteMany({ where: { branchId } });
     await prisma.inventoryPosting.deleteMany({ where: { branchId } });
-    await prisma.inventoryItem.deleteMany({ where: { id: inventoryItemId } });
+    await prisma.inventoryItem.deleteMany({ where: { id: { in: [inventoryItemId, quantityOnlyItemId] } } });
     await prisma.stockLocation.deleteMany({ where: { warehouseId } });
     await prisma.warehouse.deleteMany({ where: { id: warehouseId } });
-    await prisma.masterProduct.deleteMany({ where: { id: productId } });
+    await prisma.masterProduct.deleteMany({ where: { id: { in: [productId, quantityOnlyProductId] } } });
     await prisma.unitOfMeasure.deleteMany({ where: { id: uomId } });
     await prisma.branch.deleteMany({ where: { id: branchId } });
     await prisma.user.deleteMany({ where: { id: actorId } });
@@ -166,4 +221,39 @@ describeDatabase('inventory ledger PostgreSQL concurrency', () => {
     expect(negativeLayers).toBe(0);
     expect(await prisma.auditLog.count({ where: { branchId, resource: 'InventoryPosting' } })).toBeGreaterThan(0);
   }, 60_000);
+
+  it('allows treatment quantity consumption and reversal without unit cost', async () => {
+    const occurredAt = new Date();
+    const postingId = await prisma.$transaction((tx) => issueInventoryInTransaction(actorId, {
+      idempotencyKey: `TREATMENT-QTY-${runId}`,
+      branchId,
+      sourceType: 'TREATMENT_SESSION',
+      sourceId: `SESSION-${runId}`,
+      sourceNumber: `SESSION-${runId}`,
+      reasonCode: 'TREATMENT_MATERIAL_USAGE',
+      occurredAt,
+      lines: [{ inventoryItemId: quantityOnlyItemId, stockLocationId: locationId, quantity: '2' }],
+    }, tx, { allowUnvaluedQuantity: true }));
+
+    const [itemAfterIssue, layerAfterIssue, mutation] = await Promise.all([
+      prisma.inventoryItem.findUniqueOrThrow({ where: { id: quantityOnlyItemId } }),
+      prisma.inventoryCostLayer.findFirstOrThrow({ where: { inventoryBalanceId: quantityOnlyBalanceId } }),
+      prisma.stockMutation.findFirstOrThrow({ where: { inventoryPostingId: postingId } }),
+    ]);
+    expect(itemAfterIssue.stock.toFixed(4)).toBe('3.0000');
+    expect(layerAfterIssue.remainingQty.toFixed(4)).toBe('3.0000');
+    expect(mutation.actualCost?.toFixed(4)).toBe('0.0000');
+
+    await prisma.$transaction((tx) => reverseInventoryPostingInTransaction(actorId, postingId, {
+      idempotencyKey: `TREATMENT-QTY-REV-${runId}`,
+      reasonCode: 'TREATMENT_CANCELLED',
+      occurredAt: new Date(),
+    }, tx));
+    const [itemAfterReversal, layerAfterReversal] = await Promise.all([
+      prisma.inventoryItem.findUniqueOrThrow({ where: { id: quantityOnlyItemId } }),
+      prisma.inventoryCostLayer.findFirstOrThrow({ where: { inventoryBalanceId: quantityOnlyBalanceId } }),
+    ]);
+    expect(itemAfterReversal.stock.toFixed(4)).toBe('5.0000');
+    expect(layerAfterReversal.remainingQty.toFixed(4)).toBe('5.0000');
+  }, 30_000);
 });

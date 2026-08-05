@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 
 export const PARTNERSHIP_PAYMENT_VERIFIED_EVENT = 'PARTNERSHIP_PAYMENT_VERIFIED';
 
@@ -155,8 +156,8 @@ export function buildPartnershipSalesInvoicePayload(input: {
       location_id: dependencies.sourceLocationId,
     })),
     notes: [
+      erpOriginMarker(`RAHO:PARTNERSHIP_SHIPMENT:${input.shipmentId}`),
       `Penjualan barang Partnership dari shipment ${snapshot.shipmentCode}.`,
-      `RAHO:PARTNERSHIP_SHIPMENT:${input.shipmentId}`,
       `HPP FIFO ERP ${decimal(snapshot.costAmount).toFixed(2)}.`,
     ].join(' '),
   };
@@ -195,7 +196,7 @@ export function buildPartnershipCustomerPaymentPayload(
     amount: Number(decimal(snapshot.amount).toFixed(2)),
     date: snapshot.paymentDate,
     reference_number: snapshot.referenceNumber,
-    description: `Pembayaran order Partnership ${snapshot.invoiceNumber}`,
+    description: `${erpOriginMarker(`RAHO:PARTNERSHIP_PAYMENT:${snapshot.stockRequestInvoiceId}`)} - Pembayaran order Partnership ${snapshot.invoiceNumber}`,
     account_id: dependencies.accountId,
     invoices: dependencies.invoiceId
       ? [{ invoice_id: dependencies.invoiceId, amount_applied: Number(decimal(snapshot.amount).toFixed(2)) }]

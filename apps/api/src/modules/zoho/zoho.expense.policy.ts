@@ -1,3 +1,5 @@
+import { erpOriginMarker } from './zoho.origin';
+
 export type ZohoExpenseEvidence = {
   fileName: string;
   fileSize: number;
@@ -96,7 +98,7 @@ export function buildZohoExpensePayload(
     date: snapshot.expenseDate,
     amount: amount(snapshot.amount),
     reference_number: text(snapshot.referenceNumber, 100),
-    description: text(`${snapshot.category} - ${snapshot.description}`, 100),
+    description: text(`${erpOriginMarker(snapshot.externalKey)} - ${snapshot.category} - ${snapshot.description}`, 100),
     is_billable: false,
     ...(dependencies.locationId ? { location_id: dependencies.locationId } : {}),
   };

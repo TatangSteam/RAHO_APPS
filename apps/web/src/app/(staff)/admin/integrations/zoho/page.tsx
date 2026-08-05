@@ -35,6 +35,29 @@ import { ZohoExistingDataGuide } from '@/components/zoho/ZohoExistingDataGuide';
 
 type Tab = 'connection' | 'queue' | 'discovery' | 'contacts' | 'masters' | 'invoices' | 'payments' | 'retainers' | 'partnership' | 'purchaseOrders' | 'bills' | 'vendorPayments' | 'inventoryAdjustments' | 'operations' | 'expenses';
 type EventStatus = 'PENDING' | 'PROCESSING' | 'PROCESSED' | 'FAILED' | 'DRY_RUN' | 'DEAD_LETTER' | 'IGNORED';
+type ZohoDataOrigin = 'UNKNOWN' | 'ERP' | 'MANUAL_ZOHO';
+type ZohoManagementMode = 'REVIEW_REQUIRED' | 'ERP_MANAGED' | 'MANUAL_ONLY';
+type OriginAwareMapping = {
+  dataOrigin?: ZohoDataOrigin;
+  managementMode?: ZohoManagementMode;
+};
+
+function MappingOriginBadge({ mapping }: { mapping: unknown }) {
+  const value = (mapping || {}) as OriginAwareMapping;
+  const config = value.dataOrigin === 'ERP'
+    ? { label: 'DARI ERP', className: 'bg-blue-100 text-blue-700' }
+    : value.dataOrigin === 'MANUAL_ZOHO'
+      ? { label: 'INPUT MANUAL ZOHO', className: 'bg-amber-100 text-amber-800' }
+      : { label: 'ASAL BELUM DIVERIFIKASI', className: 'bg-red-100 text-red-700' };
+  return (
+    <span
+      className={`ml-2 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${config.className}`}
+      title={`Pengelolaan: ${value.managementMode || 'REVIEW_REQUIRED'}`}
+    >
+      {config.label}
+    </span>
+  );
+}
 
 type Connection = {
   id: string;
@@ -163,7 +186,7 @@ type ContactMappingRow = {
   name: string;
   email: string | null;
   isActive: boolean;
-  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  mapping: { zohoEntityId: string; status: string; dataOrigin: ZohoDataOrigin; managementMode: ZohoManagementMode; lastSyncedAt: string | null } | null;
   review: ContactReview | null;
 };
 type ContactData = {
@@ -193,7 +216,7 @@ type MasterMappingRow = {
   subtype?: string;
   isActive: boolean;
   eligible?: boolean;
-  mapping: { zohoEntityId: string; status: string; lastSyncedAt: string | null } | null;
+  mapping: { zohoEntityId: string; status: string; dataOrigin: ZohoDataOrigin; managementMode: ZohoManagementMode; lastSyncedAt: string | null } | null;
   review: MasterReview | null;
 };
 type MasterData = {
@@ -343,14 +366,14 @@ type RetainerData = {
     recognizedAmount: string;
     remainingDeferredAmount: string;
     status: string;
-    retainerMapping: { zohoEntityId: string; status: string } | null;
+    retainerMapping: ({ zohoEntityId: string; status: string } & OriginAwareMapping) | null;
     recognitions: Array<{
       id: string;
       sessionCode: string;
       amount: string;
       status: string;
       recognizedAt: string | null;
-      zohoMapping: { zohoEntityId: string; status: string } | null;
+      zohoMapping: ({ zohoEntityId: string; status: string } & OriginAwareMapping) | null;
     }>;
   }>;
   pagination: { page: number; limit: number; total: number; totalPages: number };
@@ -656,23 +679,14 @@ type VendorPaymentReconciliation = {
   }>;
 };
 type InventoryAdjustmentData = {
-  items: SyncEvent[];
+  items: Array<SyncEvent & { mapping: ({ zohoEntityId: string } & OriginAwareMapping) | null }>;
   pagination: { page: number; limit: number; total: number; totalPages: number };
 };
 type InventoryAdjustmentCapability = {
   supported: boolean | null;
   error: string | null;
   checkedAt: string | null;
-  fallback: 'CONTROLLED_EXPORT_OR_ENABLE_ZOHO_INVENTORY' | null;
-};
-type InventoryAdjustmentReconciliation = {
-  checked: number;
-  results: Array<{
-    localEntityId: string;
-    referenceMatched: boolean;
-    quantityMatched: boolean;
-    valueMatched: boolean;
-  }>;
+  fallback: 'CONTROLLED_EXPORT_TO_ZOHO_BOOKS';
 };
 type WebhookInboxData = {
   items: Array<{
@@ -833,7 +847,6 @@ export default function ZohoIntegrationPage() {
   const [vendorPaymentReconciliation, setVendorPaymentReconciliation] = useState<VendorPaymentReconciliation | null>(null);
   const [inventoryAdjustments, setInventoryAdjustments] = useState<InventoryAdjustmentData | null>(null);
   const [inventoryAdjustmentCapability, setInventoryAdjustmentCapability] = useState<InventoryAdjustmentCapability | null>(null);
-  const [inventoryAdjustmentReconciliation, setInventoryAdjustmentReconciliation] = useState<InventoryAdjustmentReconciliation | null>(null);
   const [webhookInbox, setWebhookInbox] = useState<WebhookInboxData | null>(null);
   const [reconciliationRuns, setReconciliationRuns] = useState<ReconciliationRunsData | null>(null);
   const [goLive, setGoLive] = useState<GoLiveData | null>(null);
@@ -1666,34 +1679,6 @@ export default function ZohoIntegrationPage() {
     } finally { setAction(null); }
   }
 
-  async function probeInventoryCapability() {
-    setAction('inventory-capability');
-    try {
-      const response = await api.post<{ data: InventoryAdjustmentCapability }>(
-        '/integrations/zoho/inventory-adjustments/capability/probe',
-      );
-      setInventoryAdjustmentCapability(response.data.data);
-      toast.success(response.data.data.supported
-        ? 'API adjustment Zoho Inventory tersedia.'
-        : 'API adjustment belum tersedia; gunakan ekspor terkontrol.');
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Capability probe gagal.'));
-    } finally { setAction(null); }
-  }
-
-  async function runInventoryAdjustmentReconciliation() {
-    setAction('inventory-reconcile');
-    try {
-      const response = await api.post<{ data: InventoryAdjustmentReconciliation }>(
-        '/integrations/zoho/inventory-adjustments/reconcile/run',
-      );
-      setInventoryAdjustmentReconciliation(response.data.data);
-      toast.success('Rekonsiliasi quantity dan value selesai.');
-    } catch (error) {
-      toast.error(apiErrorMessage(error, 'Rekonsiliasi adjustment gagal.'));
-    } finally { setAction(null); }
-  }
-
   async function downloadInventoryAdjustmentExport() {
     setAction('inventory-export');
     try {
@@ -2121,6 +2106,7 @@ export default function ZohoIntegrationPage() {
                         <>
                           <span className="block font-mono text-xs">{row.mapping.zohoEntityId}</span>
                           <span className="text-xs text-emerald-600">{row.mapping.status}</span>
+                          <MappingOriginBadge mapping={row.mapping} />
                         </>
                       ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
                     </td>
@@ -2270,6 +2256,7 @@ export default function ZohoIntegrationPage() {
                           <>
                             <span className="block font-mono text-xs">{row.mapping.zohoEntityId}</span>
                             <span className="text-xs text-emerald-600">{row.mapping.status}</span>
+                            <MappingOriginBadge mapping={row.mapping} />
                           </>
                         ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
                       </td>
@@ -2434,6 +2421,7 @@ export default function ZohoIntegrationPage() {
                             <span className={row.mapping.status === 'ACTIVE' ? 'text-xs text-emerald-600' : 'text-xs text-neutral-500'}>
                               {row.mapping.status}
                             </span>
+                            <MappingOriginBadge mapping={row.mapping} />
                           </>
                         ) : <span className="text-xs text-neutral-500">Belum dipetakan</span>}
                       </td>
@@ -2611,6 +2599,7 @@ export default function ZohoIntegrationPage() {
                           <>
                             <span className="block font-mono">{row.mapping.zohoEntityId}</span>
                             <span className="text-emerald-600">{row.mapping.status}</span>
+                            <MappingOriginBadge mapping={row.mapping} />
                           </>
                         ) : (
                           <span className={row.event?.lastError ? 'text-red-600' : 'text-neutral-500'}>
@@ -2744,11 +2733,12 @@ export default function ZohoIntegrationPage() {
                         </span>
                         <span className="block">
                           Advance/payment: {row.paymentMapping?.zohoEntityId || 'belum tersinkron'}
+                          {row.paymentMapping && <MappingOriginBadge mapping={row.paymentMapping} />}
                         </span>
                       </td>
                       <td className="p-3 text-xs">
                         {row.invoiceMapping ? (
-                          <span className="font-mono text-emerald-700">{row.invoiceMapping.zohoEntityId}</span>
+                          <><span className="font-mono text-emerald-700">{row.invoiceMapping.zohoEntityId}</span><MappingOriginBadge mapping={row.invoiceMapping} /></>
                         ) : <span className="text-amber-700">Belum tersinkron</span>}
                         {row.event && (
                           <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>
@@ -2878,7 +2868,7 @@ export default function ZohoIntegrationPage() {
                         </td>
                         <td className="p-3 text-xs">
                           {row.mapping ? (
-                            <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span>
+                            <><span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span><MappingOriginBadge mapping={row.mapping} /></>
                           ) : <span className="text-amber-700">{partnership ? 'Dikecualikan' : 'Belum tersinkron'}</span>}
                           {latestEvent && (
                             <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[latestEvent.status]}`}>
@@ -3070,7 +3060,7 @@ export default function ZohoIntegrationPage() {
                           <span>{row.status}</span>
                         </td>
                         <td className="p-3 text-xs">
-                          {row.mapping ? <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span> : <span className="text-amber-700">{partnership ? 'Dikecualikan' : 'Belum tersinkron'}</span>}
+                          {row.mapping ? <><span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span><MappingOriginBadge mapping={row.mapping} /></> : <span className="text-amber-700">{partnership ? 'Dikecualikan' : 'Belum tersinkron'}</span>}
                           {row.event && <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>{row.event.status}</span>}
                           {row.event?.lastError && <span className="mt-1 block max-w-xs text-red-600">{row.event.lastError}</span>}
                         </td>
@@ -3182,7 +3172,7 @@ export default function ZohoIntegrationPage() {
                       </td>
                       <td className="p-3 text-xs">
                         {row.mapping
-                          ? <span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span>
+                          ? <><span className="font-mono text-emerald-700">{row.mapping.zohoEntityId}</span><MappingOriginBadge mapping={row.mapping} /></>
                           : <span className="text-amber-700">{row.eligible ? 'Belum tersinkron' : 'Dikecualikan'}</span>}
                         {row.event && <span className={`mt-1 block w-fit rounded px-2 py-0.5 ${badge[row.event.status]}`}>{row.event.status}</span>}
                         {row.event?.lastError && <span className="mt-1 block max-w-xs text-red-600">{row.event.lastError}</span>}
@@ -3208,57 +3198,26 @@ export default function ZohoIntegrationPage() {
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-700 dark:bg-neutral-900">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h2 className="font-semibold">Treatment & Inventory Adjustment</h2>
+                <h2 className="font-semibold">Pemakaian Stok ERP — Zoho Books-only</h2>
                 <p className="mt-1 text-sm text-neutral-500">
-                  Consumer inventory berdiri sendiri dari finance. Error atau retry stok tidak memposting ulang omzet/HPP.
+                  Stok detail tetap menjadi otoritas ERP. Zoho Books menerima transaksi finance, sedangkan adjustment stok dikirim melalui ekspor terkontrol.
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button onClick={() => void probeInventoryCapability()} disabled={!!action} className="rounded-lg border px-3 py-2 text-sm font-semibold dark:border-neutral-700">
-                  Tes capability
-                </button>
                 <button onClick={() => void downloadInventoryAdjustmentExport()} disabled={!!action} className="rounded-lg border px-3 py-2 text-sm font-semibold dark:border-neutral-700">
-                  Ekspor CSV
-                </button>
-                <button
-                  onClick={() => void runInventoryAdjustmentReconciliation()}
-                  disabled={!!action || inventoryAdjustmentCapability?.supported !== true || status?.dryRun}
-                  className="rounded-lg bg-violet-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  Rekonsiliasi
+                  Ekspor adjustment untuk Zoho Books
                 </button>
               </div>
             </div>
 
-            <div className={`mt-4 rounded-xl border p-4 text-sm ${
-              inventoryAdjustmentCapability?.supported === true
-                ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
-                : 'border-amber-200 bg-amber-50 text-amber-900'
-            }`}>
-              <p className="font-semibold">
-                Capability: {inventoryAdjustmentCapability?.supported === true
-                  ? 'Tersedia'
-                  : inventoryAdjustmentCapability?.supported === false
-                    ? 'Tidak tersedia'
-                    : 'Belum dites'}
-              </p>
+            <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950">
+              <p className="font-semibold">Mode aman: hanya Zoho Books</p>
               <p className="mt-1 text-xs">
                 {inventoryAdjustmentCapability?.error
-                  || 'Bila endpoint tidak tersedia, transaksi lokal tetap jalan dan data dapat diekspor tanpa jurnal palsu.'}
+                  || 'Tidak ada penulisan ke endpoint Zoho Inventory. Transaksi stok lokal tetap berjalan dan dapat diekspor dengan referensi ERP.'}
               </p>
-              <p className="mt-1 text-xs">Terakhir dicek: {when(inventoryAdjustmentCapability?.checkedAt || null)}</p>
+              <p className="mt-1 text-xs">Setiap baris memakai referensi RAHO/ERP untuk membantu mendeteksi duplikasi saat input ke Books.</p>
             </div>
-
-            {inventoryAdjustmentReconciliation && (
-              <div className="mt-4 rounded-xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-950">
-                <p className="font-semibold">Diperiksa: {inventoryAdjustmentReconciliation.checked}</p>
-                <p className="mt-1 text-xs">
-                  Selisih: {inventoryAdjustmentReconciliation.results.filter((row) => (
-                    !row.referenceMatched || !row.quantityMatched || !row.valueMatched
-                  )).length}
-                </p>
-              </div>
-            )}
 
             <div className="mt-4 overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -3286,6 +3245,7 @@ export default function ZohoIntegrationPage() {
                         <td className="p-3 text-xs">
                           <span className="block font-mono">{payload.externalKey || row.aggregateId}</span>
                           <span className="text-neutral-500">{payload.postingReference || '-'}</span>
+                          {row.mapping && <MappingOriginBadge mapping={row.mapping} />}
                         </td>
                         <td className="p-3 text-xs">
                           <span className="block">{row.branchId || '-'}</span>
@@ -3589,6 +3549,7 @@ export default function ZohoIntegrationPage() {
                           <>
                             <span className="block font-mono">{row.mapping.zohoEntityId}</span>
                             <span className="text-emerald-600">{row.mapping.status}</span>
+                            <MappingOriginBadge mapping={row.mapping} />
                             <span className="block">Receipt: {String(row.mapping.metadata?.receiptStatus || (row.hasEvidence ? 'PENDING' : 'NOT_PROVIDED'))}</span>
                           </>
                         ) : <span className="text-amber-700">Belum tersinkron</span>}
@@ -3734,6 +3695,7 @@ export default function ZohoIntegrationPage() {
                           <>
                             <span className="block font-mono">{row.retainerMapping.zohoEntityId}</span>
                             <span className="text-emerald-600">{row.retainerMapping.status}</span>
+                            <MappingOriginBadge mapping={row.retainerMapping} />
                           </>
                         ) : <span className="text-amber-700">Belum tersinkron</span>}
                       </td>
@@ -3742,6 +3704,7 @@ export default function ZohoIntegrationPage() {
                           <span key={recognition.id} className="mb-1 block">
                             {recognition.sessionCode} · IDR {Number(recognition.amount).toLocaleString('id-ID')}
                             {' · '}{recognition.zohoMapping ? 'Zoho OK' : recognition.status}
+                            {recognition.zohoMapping && <MappingOriginBadge mapping={recognition.zohoMapping} />}
                           </span>
                         ))}
                         {!row.recognitions.length && <span className="text-neutral-500">Belum ada terapi selesai</span>}

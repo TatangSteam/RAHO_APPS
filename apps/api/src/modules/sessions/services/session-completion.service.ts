@@ -37,7 +37,6 @@ import {
 import { selectTreatmentRevenueSource } from './treatment-revenue-source';
 import {
   calculatePhysicalAvailableBaseQuantity,
-  calculateValuedAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from './material-usage.helpers';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
@@ -110,19 +109,7 @@ export class SessionCompletionService {
               inventoryItem: {
                 include: {
                   masterProduct: true,
-                  balances: {
-                    include: {
-                      costLayers: {
-                        where: {
-                          remainingQty: { gt: 0 },
-                          unitCost: { not: null },
-                          valuationStatus: 'VALUED',
-                          isVoided: false,
-                        },
-                        select: { remainingQty: true },
-                      },
-                    },
-                  },
+                  balances: true,
                 },
               },
             },
@@ -189,17 +176,10 @@ export class SessionCompletionService {
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
 
       for (const material of session.materials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
-        const valuedAvailable = calculateValuedAvailableBaseQuantity(material.inventoryItem.balances);
-        if (valuedAvailable.lessThan(material.baseQuantity)) {
-          const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
-          if (physicalAvailable.greaterThanOrEqualTo(material.baseQuantity)) {
-            throw errors.unprocessable(
-              'INVENTORY_VALUATION_REQUIRED',
-              `Stok fisik ${material.inventoryItem.masterProduct.name} tersedia, tetapi ${material.baseQuantity.sub(valuedAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit} belum memiliki harga pokok FIFO. Super Admin perlu membuka Master Produk > Edit Stok, mengisi Harga Pokok, lalu pilih Valuasi.`,
-            );
-          }
+        const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
+        if (physicalAvailable.lessThan(material.baseQuantity)) {
           throw errors.unprocessable(
-            'INSUFFICIENT_VALUED_STOCK',
+            'INSUFFICIENT_AVAILABLE_STOCK',
             `Stok ${material.inventoryItem.masterProduct.name} kurang ${material.baseQuantity.sub(physicalAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit}. Lakukan penerimaan stok terlebih dahulu.`,
           );
         }
@@ -271,7 +251,7 @@ export class SessionCompletionService {
             stockLocationId: material.inventoryItem.stockLocationId ?? undefined,
             quantity: material.baseQuantity.toFixed(4),
           })),
-        }, tx);
+        }, tx, { allowUnvaluedQuantity: true });
 
         const mutations = await tx.stockMutation.findMany({
           where: { inventoryPostingId: materialPostingId },
@@ -280,7 +260,7 @@ export class SessionCompletionService {
         const mutationByItem = new Map(mutations.map((mutation) => [mutation.inventoryItemId, mutation]));
         for (const material of postableDraftMaterials) {
           const mutation = mutationByItem.get(material.inventoryItemId);
-          if (!mutation?.actualCost) throw errors.conflict('MATERIAL_COST_MISSING', 'Actual cost FIFO material tidak ditemukan.');
+          if (!mutation) throw errors.conflict('MATERIAL_MUTATION_MISSING', 'Mutasi quantity material tidak ditemukan.');
           await tx.materialUsage.update({
             where: { id: material.id },
             data: {
@@ -348,26 +328,33 @@ export class SessionCompletionService {
         session.boosterPackageId,
       );
       const revenuePackageId = selectedRevenueSource.revenuePackageId;
-      const revenueSourceType = selectedRevenueSource.revenueSourceType === 'BOOSTER'
-        ? TreatmentRevenueSourceType.BOOSTER
+      const revenueSourceType = selectedRevenueSource.revenueSourceType === 'BASIC_WITH_BOOSTER'
+        ? TreatmentRevenueSourceType.BASIC_WITH_BOOSTER
         : TreatmentRevenueSourceType.BASIC;
-      const revenuePackage = await tx.memberPackage.findUnique({
-        where: { id: revenuePackageId },
+      const revenuePackages = await tx.memberPackage.findMany({
+        where: { id: { in: selectedRevenueSource.revenuePackageIds } },
         select: { id: true, memberId: true, packageType: true },
       });
-      if (!revenuePackage || revenuePackage.memberId !== session.encounter.memberId) {
+      if (
+        revenuePackages.length !== selectedRevenueSource.revenuePackageIds.length
+        || revenuePackages.some((pkg) => pkg.memberId !== session.encounter.memberId)
+      ) {
         throw errors.unprocessable(
           'TREATMENT_REVENUE_PACKAGE_INVALID',
-          'Paket sumber omzet tidak ditemukan atau bukan milik member sesi.',
+          'Paket Basic/Booster sumber omzet tidak ditemukan atau bukan milik member sesi.',
         );
       }
-      const expectedPackageType = revenueSourceType === TreatmentRevenueSourceType.BOOSTER
-        ? PackageType.BOOSTER
-        : PackageType.BASIC;
-      if (revenuePackage.packageType !== expectedPackageType) {
+      const basicPackage = revenuePackages.find((pkg) => pkg.id === session.encounter.memberPackageId);
+      const boosterPackage = session.boosterPackageId
+        ? revenuePackages.find((pkg) => pkg.id === session.boosterPackageId)
+        : null;
+      if (
+        basicPackage?.packageType !== PackageType.BASIC
+        || (session.boosterPackageId && boosterPackage?.packageType !== PackageType.BOOSTER)
+      ) {
         throw errors.unprocessable(
           'TREATMENT_REVENUE_SOURCE_MISMATCH',
-          `Sumber omzet ${revenueSourceType} tidak cocok dengan jenis paket yang dipilih.`,
+          'Sumber omzet wajib menggunakan paket Basic, ditambah paket Booster bila dipakai.',
         );
       }
       await tx.treatmentSession.update({
@@ -382,7 +369,7 @@ export class SessionCompletionService {
         memberId: session.encounter.memberId,
         treatmentDate: session.treatmentDate,
         completedAt,
-        packageIds: [revenuePackageId],
+        packageIds: selectedRevenueSource.revenuePackageIds,
       }, tx);
 
       const finance = await postTreatmentCompletionFinancialsInTransaction({

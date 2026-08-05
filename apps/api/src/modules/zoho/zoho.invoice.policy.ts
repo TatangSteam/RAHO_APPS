@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 
 export type InvoiceRevenueClassification = 'NORMAL_SALE' | 'THERAPY_ADVANCE';
 
@@ -194,6 +195,7 @@ export function buildZohoInvoicePayload(
       ...(dependencies.locationId ? { location_id: dependencies.locationId } : {}),
       ...(hasTax && dependencies.taxId ? { tax_id: dependencies.taxId } : {}),
     })),
-    notes: snapshot.notes?.slice(0, 2_000) || `Sinkron dari RAHO ERP (${snapshot.externalKey})`,
+    notes: [erpOriginMarker(snapshot.externalKey), snapshot.notes]
+      .filter(Boolean).join('\n').slice(0, 2_000),
   };
 }

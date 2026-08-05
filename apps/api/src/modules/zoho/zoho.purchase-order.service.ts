@@ -13,6 +13,7 @@ import {
 import { enqueueContact } from './zoho.contact.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import { enqueueMaster } from './zoho.master.service';
 import {
   buildZohoPurchaseOrderPayload,
@@ -276,6 +277,9 @@ async function saveMapping(input: {
       zohoEntityType: 'PURCHASE_ORDER',
       zohoEntityId: input.zohoPurchaseOrderId,
       externalKey: input.snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -287,6 +291,9 @@ async function saveMapping(input: {
     },
     update: {
       zohoEntityId: input.zohoPurchaseOrderId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -328,6 +335,7 @@ export async function handlePurchaseOrderEvent(event: IntegrationEvent) {
     },
   });
   if (mapping) {
+    assertErpManaged(mapping, 'Purchase Order Zoho');
     return { operation: 'ALREADY_MAPPED', zohoPurchaseOrderId: mapping.zohoEntityId };
   }
   const resolved = await dependencies(client.connection.id, snapshot);
@@ -346,6 +354,13 @@ export async function handlePurchaseOrderEvent(event: IntegrationEvent) {
   }
   let remote = matches[0];
   const operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
+  if (remote?.purchaseorder_id != null) {
+    const detail = await client.request<{ purchaseorder?: ZohoPurchaseOrderRemote }>(
+      `/books/v3/purchaseorders/${remote.purchaseorder_id}`,
+    );
+    remote = { ...remote, ...detail.purchaseorder };
+    assertRemoteErpOrigin(remote, snapshot.externalKey, 'Purchase Order');
+  }
   const local = await prisma.purchaseOrder.findUnique({
     where: { id: snapshot.localEntityId },
     select: { status: true },
@@ -451,6 +466,11 @@ async function handlePurchaseOrderCancelled(event: IntegrationEvent) {
         ? null
         : String(remote.purchaseorder_id);
       if (zohoId) {
+        const detail = await client.request<{ purchaseorder?: ZohoPurchaseOrderRemote }>(
+          `/books/v3/purchaseorders/${zohoId}`,
+        );
+        remote = { ...remote, ...detail.purchaseorder };
+        assertRemoteErpOrigin(remote, snapshot.externalKey, 'Purchase Order untuk pembatalan');
         mapping = await saveMapping({
           connectionId: client.connection.id,
           snapshot,
@@ -463,6 +483,7 @@ async function handlePurchaseOrderCancelled(event: IntegrationEvent) {
   if (!mapping) {
     return { operation: 'NO_REMOTE_PO', poNumber: payload.poNumber };
   }
+  assertErpManaged(mapping, 'Purchase Order Zoho');
   if (!remote) {
     const response = await client.request<{ purchaseorder?: ZohoPurchaseOrderRemote }>(
       `/books/v3/purchaseorders/${mapping.zohoEntityId}`,

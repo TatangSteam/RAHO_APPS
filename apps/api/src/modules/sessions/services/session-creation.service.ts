@@ -47,7 +47,7 @@ export class SessionCreationService {
 
     // 7. Validate booster package if provided
     if (sessionData.boosterPackageId) {
-      await this.validateBoosterPackage(sessionData.boosterPackageId, branchId);
+      await this.validateBoosterPackage(sessionData.boosterPackageId, sessionData.memberId, branchId);
     }
 
     // 8. Validate every component of the current infusion kit.
@@ -246,6 +246,14 @@ export class SessionCreationService {
         status: 403,
         code: 'PACKAGE_MEMBER_MISMATCH',
         message: 'Paket tidak terdaftar untuk member ini',
+      };
+    }
+
+    if (memberPackage.packageType !== 'BASIC') {
+      throw {
+        status: 422,
+        code: 'BASIC_PACKAGE_REQUIRED',
+        message: 'Paket utama sesi wajib bertipe BASIC. Booster hanya boleh ditambahkan sebagai paket pendamping.',
       };
     }
 
@@ -466,7 +474,7 @@ export class SessionCreationService {
   /**
    * Validate booster package
    */
-  private async validateBoosterPackage(boosterPackageId: string, branchId: string) {
+  private async validateBoosterPackage(boosterPackageId: string, memberId: string, branchId: string) {
     const boosterPackage = await prisma.memberPackage.findUnique({
       where: { id: boosterPackageId },
     });
@@ -484,6 +492,14 @@ export class SessionCreationService {
         status: 403,
         code: 'BOOSTER_BRANCH_MISMATCH',
         message: 'Paket booster tidak terdaftar di cabang ini',
+      };
+    }
+
+    if (boosterPackage.memberId !== memberId) {
+      throw {
+        status: 403,
+        code: 'BOOSTER_MEMBER_MISMATCH',
+        message: 'Paket booster bukan milik member pada sesi ini',
       };
     }
 
@@ -537,21 +553,7 @@ export class SessionCreationService {
         branchId,
         masterProductId: { in: infusSetProduct.kitComponents.map((item) => item.componentProductId) },
       },
-      include: {
-        balances: {
-          include: {
-            costLayers: {
-              where: {
-                remainingQty: { gt: 0 },
-                unitCost: { not: null },
-                valuationStatus: 'VALUED',
-                isVoided: false,
-              },
-              select: { remainingQty: true },
-            },
-          },
-        },
-      },
+      include: { balances: true },
     });
     const inventoryByProduct = new Map(inventoryItems.map((item) => [item.masterProductId, item]));
     const issues = infusSetProduct.kitComponents.flatMap((component) => {
@@ -574,29 +576,14 @@ export class SessionCreationService {
           message: `${component.componentProduct.name} kurang ${(requiredBaseQuantity - available).toFixed(4)} ${component.componentProduct.baseUnit}`,
         }];
       }
-      const valuedAvailable = inventoryItem.balances.reduce(
-        (sum, balance) => sum + balance.costLayers.reduce(
-          (layerSum, layer) => layerSum + Number(layer.remainingQty),
-          0,
-        ),
-        0,
-      );
-      return valuedAvailable < requiredBaseQuantity
-        ? [{
-            type: 'VALUATION',
-            message: `${component.componentProduct.name} belum memiliki HPP FIFO untuk ${requiredBaseQuantity.toFixed(4)} ${component.componentProduct.baseUnit}`,
-          }]
-        : [];
+      return [];
     });
 
     if (issues.length > 0) {
-      const valuationRequired = issues.some((issue) => issue.type === 'VALUATION');
       throw {
         status: 422,
-        code: valuationRequired ? 'INFUS_KIT_VALUATION_REQUIRED' : 'INFUS_KIT_STOCK_UNAVAILABLE',
-        message: valuationRequired
-          ? `Komponen "${infusSetProduct.name}" belum siap: ${issues.map((issue) => issue.message).join('; ')}. Isi Harga Pokok lalu lakukan Valuasi di Master Produk.`
-          : `Komponen "${infusSetProduct.name}" belum cukup: ${issues.map((issue) => issue.message).join('; ')}. Lakukan penerimaan stok terlebih dahulu.`,
+        code: 'INFUS_KIT_STOCK_UNAVAILABLE',
+        message: `Komponen "${infusSetProduct.name}" belum cukup: ${issues.map((issue) => issue.message).join('; ')}. Lakukan penerimaan stok terlebih dahulu.`,
       };
     }
 

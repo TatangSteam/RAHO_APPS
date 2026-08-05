@@ -58,12 +58,11 @@ export function buildRetainerPaymentPayload(input: {
 
 export function buildTreatmentInvoicePayload(input: {
   customerId: string;
-  itemId: string;
   locationId?: string;
   referenceNumber: string;
   date: string;
   sessionCode: string;
-  recognition: TreatmentRecognitionSnapshot;
+  lines: Array<{ itemId: string; recognition: TreatmentRecognitionSnapshot }>;
 }) {
   return {
     customer_id: input.customerId,
@@ -71,13 +70,13 @@ export function buildTreatmentInvoicePayload(input: {
     date: input.date,
     due_date: input.date,
     ...(input.locationId ? { location_id: input.locationId } : {}),
-    line_items: [{
-      item_id: input.itemId,
-      description: `Pengakuan omzet ${input.recognition.sourceType} sesi ${input.sessionCode} ke-${input.recognition.sessionOrdinal}`,
+    line_items: input.lines.map(({ itemId, recognition }) => ({
+      item_id: itemId,
+      description: `Pengakuan omzet ${recognition.sourceType} sesi ${input.sessionCode} ke-${recognition.sessionOrdinal}`,
       quantity: 1,
-      rate: Number(input.recognition.amount),
-    }],
-    notes: `Omzet diakui saat terapi selesai. Recognition ${input.recognition.recognitionId}.`,
+      rate: Number(recognition.amount),
+    })),
+    notes: `Omzet paket diakui saat terapi selesai. Recognition ${input.lines.map((line) => line.recognition.recognitionId).join(', ')}.`,
   };
 }
 
@@ -95,11 +94,13 @@ export function buildTreatmentJournalPayload(input: {
   referenceNumber: string;
   date: string;
   locationId?: string;
-  deferredAccountId: string;
-  revenueAccountId: string;
   customerId?: string;
   sessionCode: string;
-  amount: string;
+  lines: Array<{
+    deferredAccountId: string;
+    revenueAccountId: string;
+    recognition: TreatmentRecognitionSnapshot;
+  }>;
 }) {
   const common = {
     ...(input.customerId ? { customer_id: input.customerId } : {}),
@@ -111,21 +112,21 @@ export function buildTreatmentJournalPayload(input: {
     notes: `Pengakuan deferred revenue terapi ${input.sessionCode}`,
     journal_type: 'both',
     ...(input.locationId ? { location_id: input.locationId } : {}),
-    line_items: [
+    line_items: input.lines.flatMap(({ deferredAccountId, revenueAccountId, recognition }) => [
       {
-        account_id: input.deferredAccountId,
+        account_id: deferredAccountId,
         debit_or_credit: 'debit',
-        amount: Number(input.amount),
-        description: `Pelepasan uang muka ${input.sessionCode}`,
+        amount: Number(recognition.amount),
+        description: `Pelepasan uang muka ${recognition.sourceType} ${input.sessionCode}`,
         ...common,
       },
       {
-        account_id: input.revenueAccountId,
+        account_id: revenueAccountId,
         debit_or_credit: 'credit',
-        amount: Number(input.amount),
-        description: `Omzet terapi ${input.sessionCode}`,
+        amount: Number(recognition.amount),
+        description: `Omzet terapi ${recognition.sourceType} ${input.sessionCode}`,
         ...common,
       },
-    ],
+    ]),
   };
 }

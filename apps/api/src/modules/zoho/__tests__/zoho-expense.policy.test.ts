@@ -47,7 +47,7 @@ describe('Zoho expense policy', () => {
       date: '2026-07-29',
       amount: 125000,
       reference_number: 'EXP/HQ/2026/0001',
-      description: 'Operasional - Pembelian alat tulis',
+      description: '[RAHO ERP] RAHO:EXPENSE:expense-1 - Operasional - Pembelian alat tulis',
       is_billable: false,
       location_id: 'zoho-location',
     });

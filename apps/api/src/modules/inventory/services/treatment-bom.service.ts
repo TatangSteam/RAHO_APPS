@@ -390,19 +390,7 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
   const inventoryItems = await client.inventoryItem.findMany({
     where: { branchId: session.branchId, masterProductId: { in: Array.from(aggregate.keys()) } },
     include: {
-      balances: {
-        include: {
-          costLayers: {
-            where: {
-              remainingQty: { gt: 0 },
-              unitCost: { not: null },
-              valuationStatus: 'VALUED',
-              isVoided: false,
-            },
-            select: { remainingQty: true },
-          },
-        },
-      },
+      balances: true,
       masterProduct: true,
     },
   });
@@ -415,21 +403,10 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
           new Prisma.Decimal(0),
         )
       : new Prisma.Decimal(0);
-    const valuedAvailableBaseQuantity = inventoryItem
-      ? inventoryItem.balances.reduce(
-          (sum, balance) => balance.costLayers.reduce(
-            (layerSum, layer) => layerSum.add(layer.remainingQty),
-            sum,
-          ),
-          new Prisma.Decimal(0),
-        )
-      : new Prisma.Decimal(0);
     const conversionFactor = inventoryItem?.masterProduct.conversionFactor ?? new Prisma.Decimal(1);
     const requiredBaseQuantity = item.recommendedQuantity.div(conversionFactor);
     const hasPhysicalStock = Boolean(inventoryItem)
       && availableBaseQuantity.greaterThanOrEqualTo(requiredBaseQuantity);
-    const hasValuedStock = Boolean(inventoryItem)
-      && valuedAvailableBaseQuantity.greaterThanOrEqualTo(requiredBaseQuantity);
     return {
       ...item,
       inventoryItemId: inventoryItem?.id ?? null,
@@ -437,16 +414,14 @@ export async function resolveSessionMaterialRecommendations(sessionId: string, c
       tolerancePercent: item.tolerancePercent.toFixed(2),
       availableBaseQuantity: availableBaseQuantity.toFixed(4),
       availableUsageQuantity: availableBaseQuantity.mul(conversionFactor).toFixed(4),
-      valuedAvailableBaseQuantity: valuedAvailableBaseQuantity.toFixed(4),
-      valuedAvailableUsageQuantity: valuedAvailableBaseQuantity.mul(conversionFactor).toFixed(4),
+      valuedAvailableBaseQuantity: availableBaseQuantity.toFixed(4),
+      valuedAvailableUsageQuantity: availableBaseQuantity.mul(conversionFactor).toFixed(4),
       availabilityReason: !inventoryItem
         ? 'NOT_IN_BRANCH_INVENTORY'
-        : !hasPhysicalStock
-          ? 'INSUFFICIENT_STOCK'
-          : !hasValuedStock
-            ? 'VALUATION_REQUIRED'
+          : !hasPhysicalStock
+            ? 'INSUFFICIENT_STOCK'
             : null,
-      isAvailable: hasPhysicalStock && hasValuedStock,
+      isAvailable: hasPhysicalStock,
     };
   });
   return {

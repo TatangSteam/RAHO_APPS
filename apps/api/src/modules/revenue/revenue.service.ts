@@ -144,15 +144,20 @@ export async function createTreatmentCompletedEventInTransaction(input: {
 
 /** Sprint 8 consumer contract. Reservation is idempotent and does not post revenue yet. */
 export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) {
-  const event = await tx.domainEvent.findUnique({ where: { id: eventId }, include: { treatmentSession: true } });
+  const event = await tx.domainEvent.findUnique({
+    where: { id: eventId },
+    include: { treatmentSession: { include: { encounter: true } } },
+  });
   if (!event || event.eventType !== 'TREATMENT_COMPLETED' || !event.treatmentSession) throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
-  const packageIds = event.treatmentSession.revenuePackageId
-    ? [event.treatmentSession.revenuePackageId]
-    : [];
-  if (packageIds.length !== 1 || !event.treatmentSession.revenueSourceType) {
+  const basicPackageId = event.treatmentSession.encounter.memberPackageId;
+  const packageIds = [...new Set([
+    basicPackageId,
+    ...(event.treatmentSession.boosterPackageId ? [event.treatmentSession.boosterPackageId] : []),
+  ])];
+  if (!basicPackageId || !event.treatmentSession.revenueSourceType) {
     throw errors.unprocessable(
       'TREATMENT_REVENUE_SOURCE_MISSING',
-      'Sumber omzet sesi belum dipilih. Sesi harus memakai tepat satu paket Basic atau Booster.',
+      'Sumber omzet sesi belum lengkap. Paket Basic wajib dan Booster ditambahkan bila dipakai.',
     );
   }
   const [packages, contracts] = await Promise.all([

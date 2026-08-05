@@ -13,6 +13,7 @@ router.get('/events', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.
 router.get('/events/:id', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.event);
 router.post('/events/:id/retry', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.retryEvent);
 router.post('/events/:id/ignore', requirePermission(PERMISSIONS.ZOHO_SYNC_RETRY), controller.ignoreEvent);
+router.patch('/mappings/:id/origin', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.resolveMappingOrigin);
 router.get('/discovery', requirePermission(PERMISSIONS.ZOHO_SYNC_READ), controller.discovery);
 router.post('/discovery/run', requirePermission(PERMISSIONS.ZOHO_RECONCILE_RUN), controller.runDiscovery);
 router.post('/setup', requirePermission(PERMISSIONS.ZOHO_MAPPING_MANAGE), controller.setup);

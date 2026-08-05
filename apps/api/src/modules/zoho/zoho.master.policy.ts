@@ -1,3 +1,5 @@
+import { erpOriginMarker, remoteHasErpOrigin } from './zoho.origin';
+
 export type ZohoMasterEntityType =
   | 'MASTER_PRODUCT'
   | 'PACKAGE_PRICING'
@@ -82,6 +84,7 @@ export type ZohoItemCandidate = {
   sku?: string;
   status?: string;
   product_type?: string;
+  description?: string;
 };
 
 export type ZohoLocationCandidate = {
@@ -129,7 +132,8 @@ export function buildZohoItemPayload(
       unit: snapshot.unit,
       rate: snapshot.rate,
       account_id: accounts.salesAccountId,
-      ...(snapshot.description ? { description: snapshot.description } : {}),
+      description: [erpOriginMarker(snapshot.externalKey), snapshot.description]
+        .filter(Boolean).join('\n').slice(0, 2_000),
     };
   }
   return {
@@ -141,7 +145,8 @@ export function buildZohoItemPayload(
     account_id: accounts.salesAccountId,
     purchase_account_id: accounts.purchaseAccountId,
     inventory_account_id: accounts.inventoryAccountId,
-    ...(snapshot.description ? { description: snapshot.description } : {}),
+    description: [erpOriginMarker(snapshot.externalKey), snapshot.description]
+      .filter(Boolean).join('\n').slice(0, 2_000),
   };
 }
 
@@ -151,7 +156,11 @@ export function decideItemMatch(
 ): MasterMatchDecision<ZohoItemCandidate> {
   const exactSku = candidates.filter((candidate) => normalized(candidate.sku) === normalized(snapshot.sku));
   const expectedProductType = snapshot.entityType === 'PACKAGE_PRICING' ? 'service' : 'goods';
-  if (exactSku.length === 1 && normalized(exactSku[0].product_type) === expectedProductType) {
+  if (
+    exactSku.length === 1
+    && normalized(exactSku[0].product_type) === expectedProductType
+    && remoteHasErpOrigin(exactSku[0], snapshot.externalKey)
+  ) {
     return { kind: 'AUTO_MATCH', candidate: exactSku[0], candidates: exactSku };
   }
   if (exactSku.length) {
@@ -160,7 +169,9 @@ export function decideItemMatch(
       candidates: exactSku,
       reason: exactSku.length > 1
         ? 'Lebih dari satu item Zoho memiliki SKU yang sama.'
-        : 'SKU sama ditemukan, tetapi tipe goods/service berbeda.',
+        : normalized(exactSku[0].product_type) !== expectedProductType
+          ? 'SKU sama ditemukan, tetapi tipe goods/service berbeda.'
+          : 'SKU sama ditemukan tanpa penanda ERP. Review manusia diperlukan.',
     };
   }
   const sameName = candidates.filter((candidate) => normalized(candidate.name) === normalized(snapshot.name));
@@ -197,7 +208,11 @@ export function decideLocationMatch(
     (candidate) => normalized(candidate.location_name) === normalized(snapshot.name),
   );
   if (exactName.length === 1) {
-    return { kind: 'AUTO_MATCH', candidate: exactName[0], candidates: exactName };
+    return {
+      kind: 'REVIEW',
+      candidates: exactName,
+      reason: 'Location dengan nama yang sama sudah ada di Zoho. Review manusia diperlukan sebelum mapping.',
+    };
   }
   if (exactName.length > 1) {
     return {

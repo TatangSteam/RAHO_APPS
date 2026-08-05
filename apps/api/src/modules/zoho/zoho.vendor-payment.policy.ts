@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 import { paymentMethodMappingKey } from './zoho.payment.policy';
 
 export const AP_PAYMENT_POSTED_EVENT = 'AP_PAYMENT_POSTED';
@@ -114,6 +115,7 @@ export function buildZohoVendorPaymentPayload(
     payment_mode: dependencies.paymentMode,
     reference_number: snapshot.referenceNumber,
     description: [
+      erpOriginMarker(snapshot.externalKey),
       `Pembayaran ERP ${snapshot.invoiceNumber}`,
       `Bukti ${snapshot.paymentReference}`,
     ].join(' - '),
@@ -128,10 +130,10 @@ export function buildZohoVendorPaymentRefundPayload(
   return {
     date: snapshot.refundDate,
     refund_mode: refundMode,
-    reference_number: snapshot.referenceNumber,
+    reference_number: snapshot.externalKey,
     amount: Number(snapshot.amount),
     to_account_id: toAccountId,
-    description: `${snapshot.reason} (ERP ${snapshot.invoiceNumber})`,
+    description: `${erpOriginMarker(snapshot.externalKey)} - ${snapshot.reason} (ERP ${snapshot.invoiceNumber})`,
   };
 }
 

@@ -105,7 +105,7 @@ describe('Zoho customer payment policy', () => {
     expect(buildZohoRefundPayload(snapshot, 'z-bank', 'banktransfer')).toMatchObject({
       amount: 50000,
       from_account_id: 'z-bank',
-      reference_number: 'RFD/2026/001',
+      reference_number: 'RAHO:PAYMENT_REFUND:refund-1',
     });
   });
 

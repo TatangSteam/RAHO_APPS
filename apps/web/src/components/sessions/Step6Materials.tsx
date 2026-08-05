@@ -486,9 +486,7 @@ export default function Step6Materials({
                       ? 'Sudah dicatat'
                       : recommendation.isAvailable
                         ? 'Gunakan'
-                        : recommendation.availabilityReason === 'VALUATION_REQUIRED'
-                          ? 'HPP belum diisi'
-                          : 'Stok tidak tersedia'}
+                        : 'Stok tidak tersedia'}
                   </button>
                 </div>
               );
@@ -553,8 +551,8 @@ export default function Step6Materials({
                         <span style={{ fontSize: '12px', color: '#94a3b8' }}>{material.unit}</span>
                       </p>
                       <p style={{ fontSize: '11px', color: material.status === 'CONSUMED' ? '#86efac' : '#fbbf24' }}>
-                        {material.status === 'CONSUMED' ? 'FIFO consumed' : 'Draft'}
-                        {material.totalActualCost != null
+                        {material.status === 'CONSUMED' ? 'Stok terpakai' : 'Draft'}
+                        {material.totalActualCost != null && Number(material.totalActualCost) > 0
                           ? ` · Rp ${Number(material.totalActualCost).toLocaleString('id-ID')}`
                           : ''}
                       </p>

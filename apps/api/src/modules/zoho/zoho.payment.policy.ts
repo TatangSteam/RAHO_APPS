@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 
 export type ZohoPaymentClassification = 'NORMAL_SALE' | 'THERAPY_ADVANCE';
 
@@ -134,6 +135,7 @@ export function buildZohoCustomerPaymentPayload(
     date: snapshot.paymentDate,
     reference_number: snapshot.referenceNumber,
     description: [
+      erpOriginMarker(snapshot.externalKey),
       `Pembayaran ERP ${snapshot.invoiceNumber}`,
       snapshot.paymentReference ? `Ref ${snapshot.paymentReference}` : null,
     ].filter(Boolean).join(' - '),
@@ -156,8 +158,8 @@ export function buildZohoRefundPayload(
     amount: Number(snapshot.amount),
     from_account_id: fromAccountId,
     refund_mode: refundMode,
-    reference_number: snapshot.referenceNumber,
-    description: `${snapshot.reason} (ERP ${snapshot.invoiceNumber})`,
+    reference_number: snapshot.externalKey,
+    description: `${erpOriginMarker(snapshot.externalKey)} - ${snapshot.reason} (ERP ${snapshot.invoiceNumber})`,
   };
 }
 

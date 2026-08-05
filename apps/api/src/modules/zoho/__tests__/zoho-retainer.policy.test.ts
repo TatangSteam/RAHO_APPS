@@ -18,6 +18,16 @@ const recognition = {
   deferredRevenueAccountCode: '2200',
   revenueAccountCode: '4100',
 };
+const basicRecognition = {
+  ...recognition,
+  recognitionId: 'rec-basic',
+  memberPackageId: 'pkg-basic',
+  sourceType: 'BASIC' as const,
+  productCode: 'BSC-01',
+  packagePricingId: 'pricing-basic',
+  amount: '500000.00',
+  sessionOrdinal: 1,
+};
 
 describe('Zoho retainer and treatment revenue policy', () => {
   it('creates a liability retainer document and associates its payment', () => {
@@ -49,30 +59,35 @@ describe('Zoho retainer and treatment revenue policy', () => {
     });
   });
 
-  it('recognizes exactly one package source by document or journal, never both', () => {
+  it('recognizes Basic plus optional Booster as invoice lines or journal pairs', () => {
     expect(buildTreatmentInvoicePayload({
       customerId: 'customer-1',
-      itemId: 'item-booster',
       referenceNumber: 'RAHO-SESSION:session-1',
       date: '2026-07-28',
       sessionCode: 'TRX-1',
-      recognition,
-    }).line_items).toEqual([expect.objectContaining({
-      item_id: 'item-booster',
-      rate: 250000,
-    })]);
+      lines: [
+        { itemId: 'item-basic', recognition: basicRecognition },
+        { itemId: 'item-booster', recognition },
+      ],
+    }).line_items).toEqual([
+      expect.objectContaining({ item_id: 'item-basic', rate: 500000 }),
+      expect.objectContaining({ item_id: 'item-booster', rate: 250000 }),
+    ]);
     expect(buildRetainerApplicationPayload('invoice-1', recognition.amount, '2026-07-28'))
       .toEqual({ invoice_payments: [{ invoice_id: 'invoice-1', amount_applied: 250000, apply_date: '2026-07-28' }] });
     expect(buildTreatmentJournalPayload({
       referenceNumber: 'RAHO-SESSION:session-1',
       date: '2026-07-28',
-      deferredAccountId: 'deferred-1',
-      revenueAccountId: 'revenue-1',
       sessionCode: 'TRX-1',
-      amount: recognition.amount,
+      lines: [
+        { deferredAccountId: 'deferred-basic', revenueAccountId: 'revenue-basic', recognition: basicRecognition },
+        { deferredAccountId: 'deferred-booster', revenueAccountId: 'revenue-booster', recognition },
+      ],
     }).line_items).toEqual([
-      expect.objectContaining({ account_id: 'deferred-1', debit_or_credit: 'debit', amount: 250000 }),
-      expect.objectContaining({ account_id: 'revenue-1', debit_or_credit: 'credit', amount: 250000 }),
+      expect.objectContaining({ account_id: 'deferred-basic', debit_or_credit: 'debit', amount: 500000 }),
+      expect.objectContaining({ account_id: 'revenue-basic', debit_or_credit: 'credit', amount: 500000 }),
+      expect.objectContaining({ account_id: 'deferred-booster', debit_or_credit: 'debit', amount: 250000 }),
+      expect.objectContaining({ account_id: 'revenue-booster', debit_or_credit: 'credit', amount: 250000 }),
     ]);
     expect(ZOHO_SCOPE_VERSION).toBe(12);
     expect(ZOHO_REQUIRED_SCOPES).toEqual(expect.arrayContaining([

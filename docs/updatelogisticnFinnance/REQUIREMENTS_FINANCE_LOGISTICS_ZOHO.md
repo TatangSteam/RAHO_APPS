@@ -35,8 +35,8 @@ Belum selesai:
 - mapping seluruh entity RAHO–Zoho;
 - outbox worker dan adapter transaksi Zoho;
 - reconciliation dan exception dashboard;
-- pemilihan sumber omzet Basic/Booster yang eksklusif;
-- event versi 3 dengan rincian recognition per service item;
+- pengakuan omzet Basic wajib ditambah Booster bila digunakan;
+- event versi 4 dengan rincian recognition per paket;
 - routing khusus `Branch.type=PARTNERSHIP`;
 - role gabungan `FINANCE_LOGISTICS_CONTROLLER`.
 
@@ -443,7 +443,7 @@ Contoh aman:
 ```json
 {
   "eventType": "TREATMENT_COMPLETED",
-  "eventVersion": 3,
+  "eventVersion": 4,
   "aggregateType": "TreatmentSession",
   "aggregateId": "session-id",
   "occurredAt": "2026-07-28T10:00:00.000Z",

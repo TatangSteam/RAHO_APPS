@@ -4,6 +4,7 @@ import { AppError } from '@middleware/errorHandler';
 import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import {
   buildZohoCustomerPaymentPayload,
   buildZohoRefundPayload,
@@ -215,6 +216,9 @@ async function savePaymentMapping(
       zohoEntityType: 'CUSTOMER_PAYMENT',
       zohoEntityId: zohoId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,
@@ -230,6 +234,9 @@ async function savePaymentMapping(
     },
     update: {
       zohoEntityId: zohoId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,
@@ -264,7 +271,10 @@ async function handleVerifiedPayment(event: IntegrationEvent) {
       },
     },
   });
-  if (mapped) return { operation: 'ALREADY_MAPPED', zohoId: mapped.zohoEntityId };
+  if (mapped) {
+    assertErpManaged(mapped, 'Customer Payment Zoho');
+    return { operation: 'ALREADY_MAPPED', zohoId: mapped.zohoEntityId };
+  }
 
   const resolved = await paymentDependencies(client.connection.id, snapshot);
   const issues = validatePaymentSnapshot(snapshot, resolved);
@@ -295,6 +305,7 @@ async function handleVerifiedPayment(event: IntegrationEvent) {
       `/books/v3/customerpayments/${payment.payment_id}`,
     );
     payment = { ...payment, ...detail.payment };
+    assertRemoteErpOrigin(payment, snapshot.externalKey, 'Customer Payment');
     const recoveryIssues = validateRecoveredPayment(
       snapshot,
       resolved as ZohoPaymentDependencies,
@@ -352,7 +363,10 @@ async function handlePaymentRefund(event: IntegrationEvent) {
       },
     },
   });
-  if (existingMapping) return { operation: 'ALREADY_MAPPED', zohoId: existingMapping.zohoEntityId };
+  if (existingMapping) {
+    assertErpManaged(existingMapping, 'Customer Payment Zoho');
+    return { operation: 'ALREADY_MAPPED', zohoId: existingMapping.zohoEntityId };
+  }
 
   const [paymentMapping, invoiceMapping, bankMapping, methodMapping] = await Promise.all([
     prisma.zohoEntityMapping.findUnique({
@@ -400,13 +414,16 @@ async function handlePaymentRefund(event: IntegrationEvent) {
       false,
     );
   }
+  assertErpManaged(paymentMapping, 'Customer Payment Zoho');
+  assertErpManaged(invoiceMapping, 'Invoice Zoho');
 
   const paymentId = paymentMapping.zohoEntityId;
   const refunds = await client.listAll<RefundCandidate>(
     `/books/v3/customerpayments/${paymentId}/refunds`,
     'refunds',
   );
-  let refund = refunds.find((row) => row.reference_number === snapshot.referenceNumber);
+  let refund = refunds.find((row) => row.reference_number === snapshot.externalKey);
+  if (refund) assertRemoteErpOrigin(refund, snapshot.externalKey, 'Refund Customer Payment');
   const operation = refund ? 'RECOVER_EXISTING' : 'REFUND';
   const paymentDetail = await client.request<{ payment?: ZohoCustomerPayment }>(
     `/books/v3/customerpayments/${paymentId}`,
@@ -475,6 +492,9 @@ async function handlePaymentRefund(event: IntegrationEvent) {
       zohoEntityType: 'CUSTOMER_PAYMENT_REFUND',
       zohoEntityId: String(refund.refund_id),
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,
@@ -708,12 +728,18 @@ async function saveConfigMapping(
       zohoEntityType,
       zohoEntityId: zohoId,
       externalKey: localEntityId,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { name: discovered.name, code: discovered.code },
     },
     update: {
       zohoEntityType,
       zohoEntityId: zohoId,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { name: discovered.name, code: discovered.code },
     },

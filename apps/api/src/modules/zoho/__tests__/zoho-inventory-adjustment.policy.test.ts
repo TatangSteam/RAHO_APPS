@@ -1,10 +1,8 @@
 import {
   assertInventoryOutboundPrivacy,
-  buildZohoInventoryAdjustmentPayload,
   InventorySyncSnapshot,
-  reconcileInventoryAdjustment,
 } from '../zoho.inventory-adjustment.policy';
-import { ZOHO_INVENTORY_SCOPES, ZOHO_SCOPE_VERSION } from '../zoho.client';
+import { ZOHO_REQUIRED_SCOPES, ZOHO_SCOPE_VERSION } from '../zoho.client';
 
 const snapshot: InventorySyncSnapshot = {
   eventVersion: 1,
@@ -25,32 +23,12 @@ const snapshot: InventorySyncSnapshot = {
   }],
 };
 
-const dependencies = {
-  itemIds: new Map([['inventory-item-1', 'zoho-item-1']]),
-  locationIds: new Map([['location-1', 'zoho-location-1']]),
-};
-
 describe('Sprint 13 Zoho inventory adjustment policy', () => {
-  it('meminta scope resmi Zoho Inventory pada kontrak OAuth Sprint 13', () => {
+  it('menggunakan kontrak OAuth Zoho Books-only tanpa scope Zoho Inventory', () => {
     expect(ZOHO_SCOPE_VERSION).toBe(12);
-    expect(ZOHO_INVENTORY_SCOPES).toEqual(expect.arrayContaining([
-      'ZohoInventory.inventoryadjustments.READ',
-      'ZohoInventory.inventoryadjustments.CREATE',
-    ]));
-  });
-
-  it('ADJ-U05 hanya membentuk payload inventory yang diizinkan', () => {
-    const payload = buildZohoInventoryAdjustmentPayload(snapshot, dependencies);
-    expect(payload).toEqual(expect.objectContaining({
-      reference_number: snapshot.externalKey,
-      adjustment_type: 'quantity',
-      line_items: [{
-        item_id: 'zoho-item-1',
-        location_id: 'zoho-location-1',
-        quantity_adjusted: -2,
-      }],
-    }));
-    expect(JSON.stringify(payload)).not.toMatch(/patient|member|diagnosis|complaint|doctor|lab|photo/i);
+    expect(ZOHO_REQUIRED_SCOPES.length).toBeGreaterThan(0);
+    expect(ZOHO_REQUIRED_SCOPES.every((scope) => scope.startsWith('ZohoBooks.'))).toBe(true);
+    expect(ZOHO_REQUIRED_SCOPES.some((scope) => scope.startsWith('ZohoInventory.'))).toBe(false);
   });
 
   it('ADJ-U05 menolak field klinis walaupun bersarang', () => {
@@ -60,33 +38,8 @@ describe('Sprint 13 Zoho inventory adjustment policy', () => {
     })).toThrow('ZOHO_INVENTORY_PRIVACY_VIOLATION');
   });
 
-  it('ADJ-C02 reversal membalik quantity dan tetap dapat direkonsiliasi', () => {
-    const reversal = {
-      ...snapshot,
-      sourceType: 'TREATMENT_CANCELLATION' as const,
-      quantity: undefined,
-      lines: snapshot.lines.map((line) => ({ ...line, quantityAdjusted: '2.0000', value: '25000.0000' })),
-    };
-    expect(buildZohoInventoryAdjustmentPayload(reversal, dependencies).line_items[0].quantity_adjusted).toBe(2);
-    expect(reconcileInventoryAdjustment(reversal, {
-      reference_number: reversal.externalKey,
-      total: 25000,
-      line_items: [{ quantity_adjusted: 2, item_total: 25000 }],
-    })).toEqual(expect.objectContaining({
-      referenceMatched: true,
-      quantityMatched: true,
-      valueMatched: true,
-    }));
-  });
-
-  it('ADJ-C01 mendeteksi selisih quantity/value', () => {
-    expect(reconcileInventoryAdjustment(snapshot, {
-      reference_number: snapshot.externalKey,
-      total: 12000,
-      line_items: [{ quantity_adjusted: -1, item_total: -12000 }],
-    })).toEqual(expect.objectContaining({
-      quantityMatched: false,
-      valueMatched: false,
-    }));
+  it('ADJ-U05 menerima snapshot ERP yang hanya berisi data logistik', () => {
+    expect(() => assertInventoryOutboundPrivacy(snapshot)).not.toThrow();
+    expect(JSON.stringify(snapshot)).not.toMatch(/patient|member|diagnosis|complaint|doctor|lab|photo/i);
   });
 });

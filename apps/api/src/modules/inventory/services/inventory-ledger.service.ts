@@ -226,20 +226,24 @@ async function lockValidLayers(
   stockLocationId: string,
   occurredAt: Date,
   batchId?: string,
+  allowUnvaluedQuantity = false,
 ): Promise<LockedLayer[]> {
   const batchFilter = batchId
     ? Prisma.sql`AND l."batchId" = ${batchId}`
     : Prisma.empty;
+  const valuationFilter = allowUnvaluedQuantity
+    ? Prisma.empty
+    : Prisma.sql`AND l."unitCost" IS NOT NULL AND l."valuationStatus" = 'VALUED'`;
   return tx.$queryRaw<LockedLayer[]>(Prisma.sql`
-    SELECT l."id", l."inventoryBalanceId", l."batchId", l."receivedAt", l."remainingQty", l."unitCost"
+    SELECT l."id", l."inventoryBalanceId", l."batchId", l."receivedAt", l."remainingQty",
+           COALESCE(l."unitCost", 0) AS "unitCost"
     FROM "inventory_cost_layers" l
     JOIN "inventory_balances" b ON b."id" = l."inventoryBalanceId"
     LEFT JOIN "inventory_batches" batch ON batch."id" = l."batchId"
     WHERE b."inventoryItemId" = ${inventoryItemId}
       AND b."stockLocationId" = ${stockLocationId}
       AND l."remainingQty" > 0
-      AND l."unitCost" IS NOT NULL
-      AND l."valuationStatus" = 'VALUED'
+      ${valuationFilter}
       AND l."isVoided" = false
       AND l."receivedAt" <= ${occurredAt}
       AND (batch."id" IS NULL OR (batch."isBlocked" = false AND (batch."expiryDate" IS NULL OR batch."expiryDate" > ${occurredAt})))
@@ -247,6 +251,43 @@ async function lockValidLayers(
     ORDER BY l."receivedAt" ASC, l."id" ASC
     FOR UPDATE OF l
   `);
+}
+
+async function ensureQuantityTraceLayers(
+  tx: Tx,
+  balances: LockedBalance[],
+  postingId: string,
+  occurredAt: Date,
+): Promise<void> {
+  for (const balance of balances) {
+    const physicalAvailable = balance.onHandQty.sub(balance.reservedQty).sub(balance.quarantineQty);
+    if (physicalAvailable.lessThanOrEqualTo(0)) continue;
+    const existing = await tx.inventoryCostLayer.aggregate({
+      where: {
+        inventoryBalanceId: balance.id,
+        remainingQty: { gt: 0 },
+        isVoided: false,
+        receivedAt: { lte: occurredAt },
+      },
+      _sum: { remainingQty: true },
+    });
+    const tracedQuantity = existing._sum.remainingQty ?? new Prisma.Decimal(0);
+    const missingTrace = physicalAvailable.sub(tracedQuantity);
+    if (missingTrace.lessThanOrEqualTo(0)) continue;
+    await tx.inventoryCostLayer.create({
+      data: {
+        inventoryBalanceId: balance.id,
+        batchId: balance.batchId,
+        sourceType: 'TREATMENT_QUANTITY_ONLY',
+        sourceId: `${postingId}:${balance.id}`,
+        originalQty: missingTrace,
+        remainingQty: missingTrace,
+        unitCost: null,
+        valuationStatus: InventoryValuationStatus.PENDING_VALUATION,
+        receivedAt: occurredAt,
+      },
+    });
+  }
 }
 
 function capLayersToAvailableBalances(layers: LockedLayer[], balances: LockedBalance[]): LockedLayer[] {
@@ -579,15 +620,23 @@ export async function issueInventoryInTransaction(
   actorUserId: string,
   input: IssueInventoryInput,
   tx: Tx,
-  options: { postingType?: InventoryPostingType; mutationType?: StockMutationType; stockOpnameBypassId?: string } = {},
+  options: {
+    postingType?: InventoryPostingType;
+    mutationType?: StockMutationType;
+    stockOpnameBypassId?: string;
+    allowUnvaluedQuantity?: boolean;
+  } = {},
 ): Promise<string> {
   ensureUniqueIssueLines(input);
   const normalizedLines = [...input.lines].sort((a, b) => `${a.inventoryItemId}:${a.batchId ?? ''}`.localeCompare(`${b.inventoryItemId}:${b.batchId ?? ''}`));
   const postingType = options.postingType || InventoryPostingType.ISSUE;
   const mutationType = options.mutationType || StockMutationType.USED;
-  const payloadHash = hashPayload(postingType === InventoryPostingType.ISSUE && mutationType === StockMutationType.USED
+  const basePayload = postingType === InventoryPostingType.ISSUE && mutationType === StockMutationType.USED
     ? { ...input, lines: normalizedLines }
-    : { ...input, lines: normalizedLines, postingType, mutationType });
+    : { ...input, lines: normalizedLines, postingType, mutationType };
+  const payloadHash = hashPayload(options.allowUnvaluedQuantity
+    ? { ...basePayload, valuationMode: 'QUANTITY_ONLY' }
+    : basePayload);
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing.id;
 
@@ -621,7 +670,17 @@ export async function issueInventoryInTransaction(
       throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', `Stok tersedia hanya ${available.toFixed(4)} unit.`);
     }
 
-    const layers = await lockValidLayers(tx, item.id, location.id, input.occurredAt, line.batchId);
+    if (options.allowUnvaluedQuantity) {
+      await ensureQuantityTraceLayers(tx, balances, posting.id, input.occurredAt);
+    }
+    const layers = await lockValidLayers(
+      tx,
+      item.id,
+      location.id,
+      input.occurredAt,
+      line.batchId,
+      options.allowUnvaluedQuantity,
+    );
     const allocations = allocateFifo(quantity, capLayersToAvailableBalances(layers, balances));
     const lineCost = sumAllocationCost(allocations);
     postingCost = postingCost.add(lineCost);

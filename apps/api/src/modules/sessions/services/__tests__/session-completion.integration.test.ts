@@ -291,6 +291,9 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
         branchInfusKe: 1,
         pelaksanaan: SessionType.ON_SITE,
         treatmentDate: new Date('2026-07-20T00:00:00.000Z'),
+        // This fixture validates its explicit package BOM only. Keep it isolated
+        // from globally seeded infusion-kit components in shared test databases.
+        materialPolicyVersion: 1,
         adminLayananId: actorId,
         doctorId: actorId,
         nurseId: actorId,
@@ -745,7 +748,7 @@ describeDatabase('AC-002/004/006 logistics-to-treatment PostgreSQL E2E', () => {
       where: { eventType_aggregateId: { eventType: 'TREATMENT_COMPLETED', aggregateId: sessionId } },
     });
     expect(event.status).toBe('PENDING');
-    expect((event.payload as any).eventVersion).toBe(3);
+    expect((event.payload as any).eventVersion).toBe(4);
     expect((event.payload as any).session).toMatchObject({
       revenueSourceType: 'BASIC',
       revenuePackageId: memberPackageId,

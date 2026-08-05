@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 
 export const SUPPLIER_INVOICE_POSTED_EVENT = 'SUPPLIER_INVOICE_POSTED';
 
@@ -176,7 +177,7 @@ export function buildZohoBillPayload(
       unit: dependencies.units[billUomKey(line)],
       item_order: line.lineNo,
     })),
-    notes: `Supplier invoice dari RAHO ERP (${snapshot.externalKey}).`,
+    notes: erpOriginMarker(snapshot.externalKey),
   };
 }
 

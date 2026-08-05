@@ -80,13 +80,20 @@ describe('Zoho Sprint 4 item policy', () => {
     expect(payload).not.toHaveProperty('inventory_account_id');
   });
 
-  it('auto-matches one exact SKU with the correct product type', () => {
+  it('auto-matches one exact SKU only when the ERP marker is present', () => {
     expect(decideItemMatch(goods, [{
       item_id: 'z-item-1',
       name: goods.name,
       sku: goods.sku!,
       product_type: 'goods',
+      description: `[RAHO ERP] ${goods.externalKey}`,
     }]).kind).toBe('AUTO_MATCH');
+    expect(decideItemMatch(goods, [{
+      item_id: 'manual-item',
+      name: goods.name,
+      sku: goods.sku!,
+      product_type: 'goods',
+    }]).kind).toBe('REVIEW');
   });
 
   it('requires review for duplicate SKU or a wrong goods/service type', () => {
@@ -145,11 +152,11 @@ describe('Zoho Sprint 4 location policy', () => {
     });
   });
 
-  it('auto-matches one exact coded name and reviews duplicates', () => {
+  it('requires review even for one exact coded name because Location has no ERP marker field', () => {
     expect(decideLocationMatch(location, [{
       location_id: 'loc-1',
       location_name: location.name,
-    }]).kind).toBe('AUTO_MATCH');
+    }]).kind).toBe('REVIEW');
     expect(decideLocationMatch(location, [
       { location_id: 'loc-1', location_name: location.name },
       { location_id: 'loc-2', location_name: location.name },

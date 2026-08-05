@@ -1,6 +1,7 @@
 export type TreatmentRevenueSource = {
-  revenueSourceType: 'BASIC' | 'BOOSTER';
+  revenueSourceType: 'BASIC' | 'BASIC_WITH_BOOSTER';
   revenuePackageId: string;
+  revenuePackageIds: string[];
 };
 
 export function selectTreatmentRevenueSource(
@@ -8,6 +9,14 @@ export function selectTreatmentRevenueSource(
   boosterPackageId: string | null,
 ): TreatmentRevenueSource {
   return boosterPackageId
-    ? { revenueSourceType: 'BOOSTER', revenuePackageId: boosterPackageId }
-    : { revenueSourceType: 'BASIC', revenuePackageId: basicPackageId };
+    ? {
+        revenueSourceType: 'BASIC_WITH_BOOSTER',
+        revenuePackageId: basicPackageId,
+        revenuePackageIds: [basicPackageId, boosterPackageId],
+      }
+    : {
+        revenueSourceType: 'BASIC',
+        revenuePackageId: basicPackageId,
+        revenuePackageIds: [basicPackageId],
+      };
 }

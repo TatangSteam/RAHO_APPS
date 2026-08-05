@@ -1,38 +1,17 @@
 import { Prisma } from '@prisma/client';
 import {
   calculatePhysicalAvailableBaseQuantity,
-  calculateValuedAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from '../material-usage.helpers';
 
 const decimal = (value: string) => new Prisma.Decimal(value);
 
 describe('material usage deviation', () => {
-  it('caps selectable stock to valued FIFO quantity for each balance', () => {
-    const valued = calculateValuedAvailableBaseQuantity([
-      {
-        onHandQty: decimal('10'),
-        reservedQty: decimal('2'),
-        quarantineQty: decimal('1'),
-        costLayers: [{ remainingQty: decimal('5') }],
-      },
-      {
-        onHandQty: decimal('3'),
-        reservedQty: decimal('0'),
-        quarantineQty: decimal('0'),
-        costLayers: [{ remainingQty: decimal('8') }],
-      },
-    ]);
-
-    expect(valued.toFixed(4)).toBe('8.0000');
-  });
-
-  it('calculates physical availability independently from FIFO valuation', () => {
+  it('uses physical availability without requiring item valuation', () => {
     const available = calculatePhysicalAvailableBaseQuantity([{
       onHandQty: decimal('10'),
       reservedQty: decimal('2'),
       quarantineQty: decimal('1'),
-      costLayers: [],
     }]);
 
     expect(available.toFixed(4)).toBe('7.0000');

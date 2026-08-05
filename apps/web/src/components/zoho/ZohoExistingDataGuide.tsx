@@ -29,7 +29,7 @@ export function ZohoExistingDataGuide() {
 
       <div className="mt-5 grid min-w-0 gap-4 lg:grid-cols-2">
         <div className="min-w-0 overflow-hidden rounded-xl border border-white/80 bg-white/80 p-4 dark:border-neutral-800 dark:bg-neutral-900/70">
-          <h3 className="break-words font-semibold">Tarik dari Zoho (read-only)</h3>
+          <h3 className="break-words font-semibold">Periksa Zoho (read-only, tanpa inbound sync)</h3>
           <ul className="mt-2 min-w-0 list-disc space-y-2 break-words pl-5 text-sm text-neutral-600 dark:text-neutral-300">
             {pullItems.map((item) => <li key={item}>{item}</li>)}
           </ul>
@@ -49,7 +49,7 @@ export function ZohoExistingDataGuide() {
           </thead>
           <tbody className="divide-y dark:divide-neutral-800">
             <tr><td className="p-3">Ada di Zoho dan RAHO</td><td className="p-3">Link/mapping ID; jangan create ulang.</td></tr>
-            <tr><td className="p-3">Master hanya ada di Zoho</td><td className="p-3">Ambil lewat discovery, review, lalu hubungkan.</td></tr>
+            <tr><td className="p-3">Master hanya ada di Zoho</td><td className="p-3">Tandai sebagai input manual, review, lalu hubungkan tanpa menyalin ke ERP.</td></tr>
             <tr><td className="p-3">Master hanya ada di RAHO</td><td className="p-3">Push setelah mapping dan tanggal cut-off disetujui.</td></tr>
             <tr><td className="p-3">Transaksi historis ada di Zoho</td><td className="p-3">Jangan push ulang; gunakan saldo awal dan rekonsiliasi.</td></tr>
             <tr><td className="p-3">Transaksi baru setelah cut-off</td><td className="p-3">RAHO menjadi sumber transaksi, Zoho menerima melalui antrean.</td></tr>

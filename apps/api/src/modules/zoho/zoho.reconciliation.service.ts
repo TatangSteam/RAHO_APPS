@@ -28,7 +28,6 @@ const RESOURCES: ResourceConfig[] = [
   { zohoEntityType: 'PURCHASE_ORDER', path: '/books/v3/purchaseorders', collectionKey: 'purchaseorders', idKeys: ['purchaseorder_id'], referenceKeys: ['reference_number', 'purchaseorder_number'], amountKeys: ['total'] },
   { zohoEntityType: 'BILL', path: '/books/v3/bills', collectionKey: 'bills', idKeys: ['bill_id'], referenceKeys: ['reference_number', 'bill_number'], amountKeys: ['total'] },
   { zohoEntityType: 'VENDOR_PAYMENT', path: '/books/v3/vendorpayments', collectionKey: 'vendorpayments', idKeys: ['payment_id'], referenceKeys: ['reference_number'], amountKeys: ['amount'] },
-  { zohoEntityType: 'INVENTORY_ADJUSTMENT', path: '/inventory/v1/inventoryadjustments', collectionKey: 'inventory_adjustments', idKeys: ['inventory_adjustment_id'], referenceKeys: ['reference_number'], amountKeys: ['total'] },
 ];
 
 const json = (value: unknown): Prisma.InputJsonValue => value as Prisma.InputJsonValue;
@@ -135,10 +134,6 @@ async function reconcileResource(
   runId: string,
   config: ResourceConfig,
 ): Promise<{ checked: number; matched: number; exceptions: number }> {
-  if (config.zohoEntityType === 'INVENTORY_ADJUSTMENT'
-    && (!env.ZOHO_INVENTORY_SYNC_ENABLED || client.connection.inventoryAdjustmentsSupported !== true)) {
-    return { checked: 0, matched: 0, exceptions: 0 };
-  }
   const [remoteRows, mappings] = await Promise.all([
     client.listAll<RemoteRow>(config.path, config.collectionKey),
     prisma.zohoEntityMapping.findMany({

@@ -40,9 +40,9 @@ Gap yang wajib diperbaiki sebelum finance consumer Zoho diaktifkan:
   Booster dari Session sekaligus;
 - `TREATMENT_COMPLETED` versi 2 hanya membawa total `recognizedRevenue`, belum
   membawa satu sumber omzet yang eksplisit;
-- target bisnis baru mewajibkan pilihan eksklusif: sesi Basic hanya mengurangi
-  deferred Basic, sedangkan sesi Booster hanya mengurangi deferred Booster;
-- event target dinaikkan menjadi versi 3 dengan `finance.recognitions[]`.
+- aturan bisnis final mewajibkan Basic selalu mengurangi deferred Basic dan
+  Booster ikut mengurangi deferred Booster bila digunakan;
+- event target dinaikkan menjadi versi 4 dengan `finance.recognitions[]`.
 - vertical slice awal sudah menambahkan role
   `FINANCE_LOGISTICS_CONTROLLER`, branch-scoped menu/API inventory, routing
   shipment Partnership, serta outbox event `PARTNERSHIP_GOODS_SHIPPED`;
@@ -778,11 +778,10 @@ Gate penting:
 
 Aturan:
 
-- satu `TREATMENT_COMPLETED` menghasilkan tepat satu pengakuan dari sumber Basic
-  atau Booster yang dipilih, satu invoice sesi, satu aplikasi retainer, dan
-  maksimal satu adjustment per posting;
-- event versi 3 harus membawa `finance.recognitions[]` yang berisi tepat satu
-  sumber omzet, serta snapshot `recognizedRevenue`, `materialCost`,
+- satu `TREATMENT_COMPLETED` selalu menghasilkan pengakuan Basic dan menambahkan
+  pengakuan Booster bila digunakan, dalam satu invoice sesi dengan aplikasi
+  retainer per paket;
+- event versi 4 harus membawa `finance.recognitions[]` per paket, serta snapshot `recognizedRevenue`, `materialCost`,
   `grossProfit`, posting material, dan daftar material;
 - finance consumer dan inventory consumer boleh retry terpisah tetapi memakai
   event/aggregate key yang sama;

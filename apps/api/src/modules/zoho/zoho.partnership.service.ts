@@ -13,6 +13,7 @@ import {
 import { enqueueContact } from './zoho.contact.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import { paymentMethodMappingKey } from './zoho.payment.policy';
 import {
   buildPartnershipCustomerPaymentPayload,
@@ -186,6 +187,9 @@ async function saveInvoiceMapping(input: {
       zohoEntityType: PARTNERSHIP_INVOICE_MAPPING,
       zohoEntityId: input.zohoInvoiceId,
       externalKey: `RAHO:PARTNERSHIP_SHIPMENT:${input.shipmentId}`,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -202,6 +206,9 @@ async function saveInvoiceMapping(input: {
     },
     update: {
       zohoEntityId: input.zohoInvoiceId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -235,6 +242,7 @@ async function applyPartnershipAdvance(
     },
   });
   if (!paymentMapping?.zohoEntityId) return { status: 'NO_VERIFIED_ADVANCE' as const };
+  assertErpManaged(paymentMapping, 'Pembayaran Partnership Zoho');
   const payment = await client.request<{
     payment?: {
       amount?: number;
@@ -306,6 +314,7 @@ export async function handlePartnershipGoodsShipped(event: IntegrationEvent) {
     },
   });
   let operation = 'ALREADY_MAPPED';
+  if (mapping) assertErpManaged(mapping, 'Invoice Partnership Zoho');
   if (!mapping) {
     const matches = await findPartnershipInvoice(client, snapshot);
     if (matches.length > 1) {
@@ -318,6 +327,17 @@ export async function handlePartnershipGoodsShipped(event: IntegrationEvent) {
     }
     let remote = matches[0];
     operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
+    if (remote?.invoice_id != null) {
+      const detail = await client.request<{ invoice?: ZohoPartnershipInvoiceRemote }>(
+        `/books/v3/invoices/${remote.invoice_id}`,
+      );
+      remote = { ...remote, ...detail.invoice };
+      assertRemoteErpOrigin(
+        remote,
+        `RAHO:PARTNERSHIP_SHIPMENT:${event.aggregateId}`,
+        'Invoice Partnership',
+      );
+    }
     if (!remote) {
       const response = await client.request<{ invoice?: ZohoPartnershipInvoiceRemote }>(
         '/books/v3/invoices',
@@ -466,6 +486,7 @@ export async function handlePartnershipPaymentVerified(event: IntegrationEvent) 
     },
   });
   if (existingMapping) {
+    assertErpManaged(existingMapping, 'Pembayaran Partnership Zoho');
     return {
       operation: 'ALREADY_MAPPED',
       zohoPaymentId: existingMapping.zohoEntityId,
@@ -482,6 +503,14 @@ export async function handlePartnershipPaymentVerified(event: IntegrationEvent) 
   }
   let candidate = matches[0];
   const operation = candidate ? 'RECOVER_EXISTING' : 'CREATE';
+  const externalKey = `RAHO:PARTNERSHIP_PAYMENT:${snapshot.stockRequestInvoiceId}`;
+  if (candidate?.payment_id != null) {
+    const detail = await client.request<{ payment?: Record<string, unknown> }>(
+      `/books/v3/customerpayments/${candidate.payment_id}`,
+    );
+    candidate = { ...candidate, ...detail.payment };
+    assertRemoteErpOrigin(candidate, externalKey, 'Pembayaran Partnership');
+  }
   if (!candidate) {
     const response = await client.request<{
       payment?: { payment_id?: string | number; reference_number?: string };
@@ -510,7 +539,10 @@ export async function handlePartnershipPaymentVerified(event: IntegrationEvent) 
       localEntityId: snapshot.stockRequestInvoiceId,
       zohoEntityType: 'CUSTOMER_PAYMENT',
       zohoEntityId: zohoPaymentId,
-      externalKey: snapshot.referenceNumber,
+      externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,

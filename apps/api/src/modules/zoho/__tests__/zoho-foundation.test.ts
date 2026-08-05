@@ -61,6 +61,45 @@ describe('Zoho Sprint 1 foundation', () => {
     expect(migration).toContain('"zoho_sync_attempts"');
     expect(migration).toContain('"zoho_discovery_cache"');
   });
+
+  it('tracks ERP versus manual Zoho origin and rejects duplicate external keys', () => {
+    const migration = fs.readFileSync(
+      path.resolve(__dirname, '../../../../prisma/migrations/20260805090000_add_zoho_data_origin/migration.sql'),
+      'utf8',
+    );
+    expect(migration).toContain("'ERP', 'MANUAL_ZOHO'");
+    expect(migration).toContain('"originVerifiedAt"');
+    expect(migration).toContain('zoho_entity_mappings_zohoConnectionId_externalKey_key');
+    expect(migration).toContain('Duplicate Zoho externalKey ditemukan');
+  });
+
+  it('backfills origin safely and scopes external-key uniqueness by entity type', () => {
+    const migration = fs.readFileSync(
+      path.resolve(__dirname, '../../../../prisma/migrations/20260805100000_harden_zoho_origin_management/migration.sql'),
+      'utf8',
+    );
+    expect(migration).toContain("'UNKNOWN', 'ERP', 'MANUAL_ZOHO'");
+    expect(migration).toContain("'REVIEW_REQUIRED', 'ERP_MANAGED', 'MANUAL_ONLY'");
+    expect(migration).toContain('"entityType", "externalKey"');
+    expect(migration).toContain('"dataOrigin" = \'UNKNOWN\'');
+    expect(migration).toContain("'ACCOUNT_ROLE', 'UOM', 'CASH_BANK_ACCOUNT'");
+  });
+
+  it('enforces Zoho Books-only in OAuth, runtime adapters, and stored capability', () => {
+    const moduleDir = path.resolve(__dirname, '..');
+    const runtimeSources = fs.readdirSync(moduleDir)
+      .filter((name) => name.endsWith('.ts'))
+      .map((name) => fs.readFileSync(path.join(moduleDir, name), 'utf8'))
+      .join('\n');
+    const migration = fs.readFileSync(
+      path.resolve(__dirname, '../../../../prisma/migrations/20260805110000_enforce_zoho_books_only/migration.sql'),
+      'utf8',
+    );
+    expect(runtimeSources).not.toContain('/inventory/v1');
+    expect(runtimeSources).not.toContain('ZohoInventory.');
+    expect(ZOHO_REQUIRED_SCOPES.every((scope) => scope.startsWith('ZohoBooks.'))).toBe(true);
+    expect(migration).toContain('"inventoryAdjustmentsSupported" = FALSE');
+  });
 });
 
 describe('Zoho Sprint 2 scope versioning', () => {

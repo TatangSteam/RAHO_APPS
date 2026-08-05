@@ -4,6 +4,7 @@ import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged } from './zoho.origin';
 import {
   buildZohoItemPayload,
   buildZohoLocationPayload,
@@ -205,9 +206,15 @@ async function findCandidates(client: ZohoClient, snapshot: MasterSnapshot): Pro
     const batches = await Promise.all(
       queries.map((query) => client.listAll<ZohoItemCandidate>('/books/v3/items', 'items', query)),
     );
-    return Array.from(
+    const candidates = Array.from(
       new Map(batches.flat().map((candidate) => [String(candidate.item_id), candidate])).values(),
     );
+    return Promise.all(candidates.map(async (candidate) => {
+      const detail = await client.request<{ item?: ZohoItemCandidate }>(
+        `/books/v3/items/${candidate.item_id}`,
+      );
+      return { ...candidate, ...detail.item };
+    }));
   }
   return client.listAll<ZohoLocationCandidate>('/books/v3/locations', 'locations');
 }
@@ -281,6 +288,9 @@ async function saveMapping(
       zohoEntityType: zohoEntityTypeFor(snapshot.entityType),
       zohoEntityId: zohoId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { operation },
       lastSyncedAt: new Date(),
@@ -289,6 +299,9 @@ async function saveMapping(
       zohoEntityType: zohoEntityTypeFor(snapshot.entityType),
       zohoEntityId: zohoId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { operation },
       lastSyncedAt: new Date(),
@@ -543,6 +556,7 @@ export async function handleMasterEvent(event: { aggregateId: string; aggregateT
   });
   const basePath = isItemSnapshot(snapshot) ? '/books/v3/items' : '/books/v3/locations';
   if (mapping) {
+    assertErpManaged(mapping, 'Master Zoho');
     if (!snapshot.isActive) {
       await client.request(`${basePath}/${mapping.zohoEntityId}/inactive`, { method: 'POST' });
       await prisma.zohoEntityMapping.update({
@@ -774,12 +788,18 @@ export async function saveAccountRoleMapping(role: string, zohoAccountId: string
       zohoEntityType: `ACCOUNT_ROLE:${role}`,
       zohoEntityId: zohoAccountId,
       externalKey: role,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { accountName: account.name, accountCode: account.code },
     },
     update: {
       zohoEntityType: `ACCOUNT_ROLE:${role}`,
       zohoEntityId: zohoAccountId,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { accountName: account.name, accountCode: account.code },
     },
@@ -842,11 +862,17 @@ export async function saveUomMapping(uomId: string, zohoUnit: string) {
       zohoEntityType: 'UOM',
       zohoEntityId: zohoUnit,
       externalKey: uom.code,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { localName: uom.name },
     },
     update: {
       zohoEntityId: zohoUnit,
+      dataOrigin: 'MANUAL_ZOHO',
+      managementMode: 'MANUAL_ONLY',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: { localName: uom.name },
     },
@@ -906,11 +932,17 @@ export async function approveMasterReview(
         zohoEntityType: review.expectedZohoEntityType,
         zohoEntityId,
         externalKey: snapshot.externalKey,
+        dataOrigin: 'MANUAL_ZOHO',
+        managementMode: 'ERP_MANAGED',
+        originVerifiedAt: new Date(),
         status: 'ACTIVE',
         metadata: { operation: 'MANUAL_APPROVAL', reviewId },
       },
       update: {
         zohoEntityId,
+        dataOrigin: 'MANUAL_ZOHO',
+        managementMode: 'ERP_MANAGED',
+        originVerifiedAt: new Date(),
         status: 'ACTIVE',
         metadata: { operation: 'MANUAL_APPROVAL', reviewId },
       },

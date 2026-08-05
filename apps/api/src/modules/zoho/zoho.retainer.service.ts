@@ -5,6 +5,7 @@ import { AppError } from '@middleware/errorHandler';
 import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import { paymentMethodMappingKey } from './zoho.payment.policy';
 import {
   buildRetainerApplicationPayload,
@@ -53,6 +54,8 @@ async function saveMapping(input: {
   externalKey: string;
   metadata: Record<string, unknown>;
   status?: ZohoMappingStatus;
+  dataOrigin?: 'ERP' | 'MANUAL_ZOHO';
+  managementMode?: 'ERP_MANAGED' | 'MANUAL_ONLY';
 }) {
   return prisma.zohoEntityMapping.upsert({
     where: {
@@ -69,12 +72,18 @@ async function saveMapping(input: {
       zohoEntityType: input.zohoEntityType,
       zohoEntityId: input.zohoEntityId,
       externalKey: input.externalKey,
+      dataOrigin: input.dataOrigin || 'ERP',
+      managementMode: input.managementMode || 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: input.status || ZohoMappingStatus.ACTIVE,
       metadata: json(input.metadata),
       lastSyncedAt: new Date(),
     },
     update: {
       zohoEntityId: input.zohoEntityId,
+      dataOrigin: input.dataOrigin || 'ERP',
+      managementMode: input.managementMode || 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: input.status || ZohoMappingStatus.ACTIVE,
       metadata: json(input.metadata),
       lastSyncedAt: new Date(),
@@ -161,6 +170,7 @@ export async function handleRetainerFundingPayment(paymentId: string) {
       || movement.memberPackage.packageCode;
     const retainerReference = `RAHO-RET:${contract.id}`;
     let retainerMap = await mapping(client.connection.id, 'RETAINER_INVOICE', contract.id);
+    if (retainerMap) assertErpManaged(retainerMap, 'Retainer Invoice Zoho');
     let retainerId = retainerMap?.zohoEntityId;
     let retainerOperation = 'ALREADY_MAPPED';
     if (!retainerId) {
@@ -170,6 +180,7 @@ export async function handleRetainerFundingPayment(paymentId: string) {
         'retainerinvoices',
         retainerReference,
       );
+      if (candidate) assertRemoteErpOrigin(candidate, retainerReference, 'Retainer Invoice');
       retainerOperation = candidate ? 'RECOVER_EXISTING' : 'CREATE';
       if (!candidate) {
         const response = await client.request<{ retainerinvoice?: ZohoRetainer }>(
@@ -215,6 +226,7 @@ export async function handleRetainerFundingPayment(paymentId: string) {
 
     const paymentReference = `RAHO-RETPAY:${movement.id}`;
     let retainerPaymentMap = await mapping(client.connection.id, 'RETAINER_PAYMENT', movement.id);
+    if (retainerPaymentMap) assertErpManaged(retainerPaymentMap, 'Retainer Payment Zoho');
     let paymentOperation = 'ALREADY_MAPPED';
     if (!retainerPaymentMap) {
       let candidate = await findOne<ZohoPayment>(
@@ -223,6 +235,7 @@ export async function handleRetainerFundingPayment(paymentId: string) {
         'customerpayments',
         paymentReference,
       );
+      if (candidate) assertRemoteErpOrigin(candidate, paymentReference, 'Retainer Payment');
       paymentOperation = candidate ? 'RECOVER_EXISTING' : 'CREATE';
       if (!candidate) {
         const response = await client.request<{ payment?: ZohoPayment }>(
@@ -297,37 +310,43 @@ async function treatmentDependencies(
 async function handleDocumentRecognition(
   client: ZohoClient,
   payload: TreatmentCompletedEventPayload,
-  recognition: TreatmentRecognitionSnapshot,
+  recognitions: TreatmentRecognitionSnapshot[],
 ) {
-  const deps = await treatmentDependencies(client.connection.id, payload, recognition);
-  const customerId = requireId(deps.customer?.zohoEntityId, 'Mapping member Zoho belum tersedia.');
-  const itemId = requireId(
-    deps.item?.zohoEntityId,
-    `Mapping item Zoho paket ${recognition.productCode || recognition.memberPackageId} belum tersedia.`,
+  const dependencyRows = await Promise.all(
+    recognitions.map((recognition) => treatmentDependencies(client.connection.id, payload, recognition)),
   );
-  const retainerId = requireId(
-    deps.retainer?.zohoEntityId,
-    'Retainer Invoice paket belum tersinkron. Proses ulang pembayaran paket terlebih dahulu.',
-    'ZOHO_TREATMENT_WAITING_RETAINER',
-  );
+  const customerId = requireId(dependencyRows[0]?.customer?.zohoEntityId, 'Mapping member Zoho belum tersedia.');
+  const invoiceLines = recognitions.map((recognition, index) => ({
+    recognition,
+    itemId: requireId(
+      dependencyRows[index].item?.zohoEntityId,
+      `Mapping item Zoho paket ${recognition.productCode || recognition.memberPackageId} belum tersedia.`,
+    ),
+    retainerId: requireId(
+      dependencyRows[index].retainer?.zohoEntityId,
+      `Retainer Invoice paket ${recognition.productCode || recognition.memberPackageId} belum tersinkron.`,
+      'ZOHO_TREATMENT_WAITING_RETAINER',
+    ),
+  }));
   const referenceNumber = `RAHO-SESSION:${payload.session.id}`;
   let invoiceMap = await mapping(client.connection.id, 'TREATMENT_REVENUE_INVOICE', payload.session.id);
+  if (invoiceMap) assertErpManaged(invoiceMap, 'Invoice treatment Zoho');
   let invoiceId = invoiceMap?.zohoEntityId;
   let operation = 'ALREADY_MAPPED';
   if (!invoiceId) {
     let candidate = await findOne<ZohoInvoice>(client, '/books/v3/invoices', 'invoices', referenceNumber);
+    if (candidate) assertRemoteErpOrigin(candidate, referenceNumber, 'Invoice pengakuan treatment');
     operation = candidate ? 'RECOVER_EXISTING' : 'CREATE';
     if (!candidate) {
       const response = await client.request<{ invoice?: ZohoInvoice }>('/books/v3/invoices', {
         method: 'POST',
         data: buildTreatmentInvoicePayload({
           customerId,
-          itemId,
-          locationId: deps.location?.zohoEntityId,
+          locationId: dependencyRows[0]?.location?.zohoEntityId,
           referenceNumber,
           date: day(payload.session.completedAt),
           sessionCode: payload.session.sessionCode,
-          recognition,
+          lines: invoiceLines.map(({ itemId, recognition }) => ({ itemId, recognition })),
         }),
       });
       candidate = response.invoice;
@@ -348,54 +367,62 @@ async function handleDocumentRecognition(
       externalKey: referenceNumber,
       metadata: {
         operation,
-        recognitionId: recognition.recognitionId,
-        memberPackageId: recognition.memberPackageId,
-        sourceType: recognition.sourceType,
-        amount: recognition.amount,
-        retainerInvoiceId: retainerId,
+        recognitionIds: recognitions.map((recognition) => recognition.recognitionId),
+        memberPackageIds: recognitions.map((recognition) => recognition.memberPackageId),
+        sourceTypes: recognitions.map((recognition) => recognition.sourceType),
+        amount: recognitions.reduce((total, recognition) => total + Number(recognition.amount), 0).toFixed(2),
+        retainerInvoiceIds: invoiceLines.map((line) => line.retainerId),
       },
     });
   }
 
-  const application = await mapping(client.connection.id, 'RETAINER_APPLICATION', recognition.recognitionId);
-  if (!application) {
-    await client.request(`/books/v3/retainerinvoices/${retainerId}/invoices`, {
-      method: 'POST',
-      data: buildRetainerApplicationPayload(invoiceId, recognition.amount, day(payload.session.completedAt)),
-    });
-    await saveMapping({
-      connectionId: client.connection.id,
-      entityType: 'RETAINER_APPLICATION',
-      localEntityId: recognition.recognitionId,
-      zohoEntityType: 'RETAINER_APPLICATION',
-      zohoEntityId: `${retainerId}:${invoiceId}`,
-      externalKey: `RAHO-RETAPP:${recognition.recognitionId}`,
-      metadata: {
-        retainerInvoiceId: retainerId,
-        invoiceId,
-        amount: recognition.amount,
-        appliedAt: payload.session.completedAt,
-      },
-    });
+  for (const { recognition, retainerId } of invoiceLines) {
+    const application = await mapping(client.connection.id, 'RETAINER_APPLICATION', recognition.recognitionId);
+    if (!application) {
+      await client.request(`/books/v3/retainerinvoices/${retainerId}/invoices`, {
+        method: 'POST',
+        data: buildRetainerApplicationPayload(invoiceId, recognition.amount, day(payload.session.completedAt)),
+      });
+      await saveMapping({
+        connectionId: client.connection.id,
+        entityType: 'RETAINER_APPLICATION',
+        localEntityId: recognition.recognitionId,
+        zohoEntityType: 'RETAINER_APPLICATION',
+        zohoEntityId: `${retainerId}:${invoiceId}`,
+        externalKey: `RAHO-RETAPP:${recognition.recognitionId}`,
+        metadata: {
+          retainerInvoiceId: retainerId,
+          invoiceId,
+          amount: recognition.amount,
+          appliedAt: payload.session.completedAt,
+        },
+      });
+    }
   }
-  return { operation, invoiceId: invoiceMap.zohoEntityId, retainerId };
+  return { operation, invoiceId: invoiceMap.zohoEntityId, retainerIds: invoiceLines.map((line) => line.retainerId) };
 }
 
 async function handleJournalRecognition(
   client: ZohoClient,
   payload: TreatmentCompletedEventPayload,
-  recognition: TreatmentRecognitionSnapshot,
+  recognitions: TreatmentRecognitionSnapshot[],
 ) {
-  const [customer, location, deferredAccount, revenueAccount] = await Promise.all([
+  const [customer, location, ...accountMappings] = await Promise.all([
     mapping(client.connection.id, 'MEMBER', payload.session.memberId),
     mapping(client.connection.id, 'BRANCH_LOCATION', payload.session.branchId),
-    mapping(client.connection.id, 'GL_ACCOUNT', recognition.deferredRevenueAccountCode),
-    mapping(client.connection.id, 'GL_ACCOUNT', recognition.revenueAccountCode),
+    ...recognitions.flatMap((recognition) => [
+      mapping(client.connection.id, 'GL_ACCOUNT', recognition.deferredRevenueAccountCode),
+      mapping(client.connection.id, 'GL_ACCOUNT', recognition.revenueAccountCode),
+    ]),
   ]);
   const referenceNumber = `RAHO-SESSION:${payload.session.id}`;
   const journalMap = await mapping(client.connection.id, 'TREATMENT_REVENUE_JOURNAL', payload.session.id);
-  if (journalMap) return { operation: 'ALREADY_MAPPED', journalId: journalMap.zohoEntityId };
+  if (journalMap) {
+    assertErpManaged(journalMap, 'Jurnal treatment Zoho');
+    return { operation: 'ALREADY_MAPPED', journalId: journalMap.zohoEntityId };
+  }
   let candidate = await findOne<ZohoJournal>(client, '/books/v3/journals', 'journals', referenceNumber);
+  if (candidate) assertRemoteErpOrigin(candidate, referenceNumber, 'Jurnal pengakuan treatment');
   const operation = candidate ? 'RECOVER_EXISTING' : 'CREATE';
   if (!candidate) {
     const response = await client.request<{ journal?: ZohoJournal }>('/books/v3/journals', {
@@ -404,11 +431,13 @@ async function handleJournalRecognition(
         referenceNumber,
         date: day(payload.session.completedAt),
         locationId: location?.zohoEntityId,
-        deferredAccountId: requireId(deferredAccount?.zohoEntityId, `Mapping akun ${recognition.deferredRevenueAccountCode} belum tersedia.`),
-        revenueAccountId: requireId(revenueAccount?.zohoEntityId, `Mapping akun ${recognition.revenueAccountCode} belum tersedia.`),
         customerId: customer?.zohoEntityId,
         sessionCode: payload.session.sessionCode,
-        amount: recognition.amount,
+        lines: recognitions.map((recognition, index) => ({
+          recognition,
+          deferredAccountId: requireId(accountMappings[index * 2]?.zohoEntityId, `Mapping akun ${recognition.deferredRevenueAccountCode} belum tersedia.`),
+          revenueAccountId: requireId(accountMappings[index * 2 + 1]?.zohoEntityId, `Mapping akun ${recognition.revenueAccountCode} belum tersedia.`),
+        })),
       }),
     });
     candidate = response.journal;
@@ -422,7 +451,11 @@ async function handleJournalRecognition(
     zohoEntityType: 'JOURNAL',
     zohoEntityId: journalId,
     externalKey: referenceNumber,
-    metadata: { operation, recognitionId: recognition.recognitionId, amount: recognition.amount },
+    metadata: {
+      operation,
+      recognitionIds: recognitions.map((recognition) => recognition.recognitionId),
+      amount: recognitions.reduce((total, recognition) => total + Number(recognition.amount), 0).toFixed(2),
+    },
   });
   return { operation, journalId };
 }
@@ -433,25 +466,27 @@ export async function handleTreatmentCompleted(event: IntegrationEvent) {
   if (branch?.type === 'PARTNERSHIP') {
     return { operation: 'SKIP_PARTNERSHIP', reason: 'Partnership tidak mengakui omzet per infus.' };
   }
-  if (payload.eventVersion !== 3) {
-    throw new ZohoApiError('Event treatment harus versi 3.', 'ZOHO_TREATMENT_EVENT_VERSION_INVALID', 422, false);
+  if (![3, 4].includes(payload.eventVersion)) {
+    throw new ZohoApiError('Event treatment harus versi 3 atau 4.', 'ZOHO_TREATMENT_EVENT_VERSION_INVALID', 422, false);
   }
   if (payload.finance.recognitions.length === 0) {
     return { operation: 'SKIP_ZERO_REVENUE', reason: 'Sesi tidak memiliki revenue berbayar.' };
   }
-  if (payload.finance.recognitions.length !== 1) {
+  if (payload.finance.recognitions.length > 2) {
     throw new ZohoApiError(
-      'Satu sesi harus memiliki tepat satu recognition Basic atau Booster.',
-      'ZOHO_TREATMENT_RECOGNITION_NOT_EXCLUSIVE',
+      'Satu sesi hanya boleh memiliki recognition Basic dan Booster.',
+      'ZOHO_TREATMENT_RECOGNITION_INVALID',
       422,
       false,
     );
   }
-  const recognition = payload.finance.recognitions[0];
-  if (
-    recognition.memberPackageId !== payload.session.revenuePackageId
-    || recognition.sourceType !== payload.session.revenueSourceType
-  ) {
+  const expectedSources = new Map([
+    [payload.session.memberPackageId, 'BASIC'],
+    ...(payload.session.boosterPackageId ? [[payload.session.boosterPackageId, 'BOOSTER']] : []),
+  ] as Array<[string, 'BASIC' | 'BOOSTER']>);
+  if (payload.finance.recognitions.some((recognition) => (
+    expectedSources.get(recognition.memberPackageId) !== recognition.sourceType
+  ))) {
     throw new ZohoApiError(
       'Recognition tidak cocok dengan sumber omzet sesi.',
       'ZOHO_TREATMENT_RECOGNITION_SOURCE_MISMATCH',
@@ -461,8 +496,8 @@ export async function handleTreatmentCompleted(event: IntegrationEvent) {
   }
   const client = await getActiveZohoClient(true);
   return env.ZOHO_TREATMENT_REVENUE_MODE === 'JOURNAL'
-    ? handleJournalRecognition(client, payload, recognition)
-    : handleDocumentRecognition(client, payload, recognition);
+    ? handleJournalRecognition(client, payload, payload.finance.recognitions)
+    : handleDocumentRecognition(client, payload, payload.finance.recognitions);
 }
 
 export async function handleTreatmentCancellation(event: IntegrationEvent) {
@@ -482,6 +517,7 @@ export async function handleTreatmentCancellation(event: IntegrationEvent) {
     const journalMap = await mapping(client.connection.id, 'TREATMENT_REVENUE_JOURNAL', session.id);
     const journalMetadata = (journalMap?.metadata || {}) as Record<string, unknown>;
     if (!journalMap || journalMetadata.reversedByEventId) return { operation: 'ALREADY_REVERSED' };
+    assertErpManaged(journalMap, 'Jurnal treatment Zoho');
     await client.request(`/books/v3/journals/${journalMap.zohoEntityId}/reverse`, { method: 'POST' });
     await saveMapping({
       connectionId: client.connection.id,
@@ -500,6 +536,7 @@ export async function handleTreatmentCancellation(event: IntegrationEvent) {
   if (!invoiceMap || ((invoiceMap.metadata || {}) as Record<string, unknown>).reversedByEventId) {
     return { operation: 'ALREADY_REVERSED' };
   }
+  assertErpManaged(invoiceMap, 'Invoice treatment Zoho');
   const metadata = (invoiceMap.metadata || {}) as Record<string, unknown>;
   const retainerId = String(metadata.retainerInvoiceId || '');
   if (!retainerId) {
@@ -744,6 +781,8 @@ export async function saveGlAccountMapping(accountCode: string, zohoAccountId: s
     zohoEntityType: 'ACCOUNT',
     zohoEntityId: discovered.zohoId,
     externalKey: `RAHO:GL:${localAccount.code}`,
+    dataOrigin: 'MANUAL_ZOHO',
+    managementMode: 'MANUAL_ONLY',
     metadata: { name: discovered.name, code: discovered.code },
   });
 }

@@ -1,5 +1,5 @@
 export const TREATMENT_COMPLETED_EVENT_TYPE = 'TREATMENT_COMPLETED' as const;
-export const TREATMENT_COMPLETED_EVENT_VERSION = 3 as const;
+export const TREATMENT_COMPLETED_EVENT_VERSION = 4 as const;
 
 export interface TreatmentRevenueRecognitionPayload {
   recognitionId: string;
@@ -42,7 +42,7 @@ export interface TreatmentCompletedEventPayload {
     memberId: string;
     memberPackageId: string;
     boosterPackageId: string | null;
-    revenueSourceType: 'BASIC' | 'BOOSTER';
+    revenueSourceType: 'BASIC' | 'BASIC_WITH_BOOSTER';
     revenuePackageId: string;
   };
   inventory: {

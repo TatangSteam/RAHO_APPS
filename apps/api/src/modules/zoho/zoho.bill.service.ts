@@ -13,6 +13,7 @@ import {
 import { enqueueContact } from './zoho.contact.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import { enqueueMaster } from './zoho.master.service';
 import {
   enqueuePurchaseOrder,
@@ -289,6 +290,9 @@ async function saveMapping(input: {
       zohoEntityType: 'BILL',
       zohoEntityId: input.zohoBillId,
       externalKey: input.snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -300,6 +304,9 @@ async function saveMapping(input: {
     },
     update: {
       zohoEntityId: input.zohoBillId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation: input.operation,
@@ -339,7 +346,10 @@ export async function handleSupplierInvoicePosted(event: IntegrationEvent) {
       },
     },
   });
-  if (mapping) return { operation: 'ALREADY_MAPPED', zohoBillId: mapping.zohoEntityId };
+  if (mapping) {
+    assertErpManaged(mapping, 'Bill Zoho');
+    return { operation: 'ALREADY_MAPPED', zohoBillId: mapping.zohoEntityId };
+  }
 
   const resolved = await resolveDependencies(client, snapshot);
   const issues = validateBillSnapshot(snapshot, resolved);
@@ -357,6 +367,13 @@ export async function handleSupplierInvoicePosted(event: IntegrationEvent) {
   }
   let remote = matches[0];
   const operation = remote ? 'RECOVER_EXISTING' : 'CREATE';
+  if (remote?.bill_id != null) {
+    const detail = await client.request<{ bill?: ZohoBillRemote }>(
+      `/books/v3/bills/${remote.bill_id}`,
+    );
+    remote = { ...remote, ...detail.bill };
+    assertRemoteErpOrigin(remote, snapshot.externalKey, 'Bill');
+  }
   if (!remote) {
     const response = await client.request<{ bill?: ZohoBillRemote }>('/books/v3/bills', {
       method: 'POST',

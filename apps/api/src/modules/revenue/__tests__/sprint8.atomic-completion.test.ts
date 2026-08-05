@@ -22,6 +22,29 @@ describe('Sprint 8 atomic treatment completion', () => {
     ]);
   });
 
+  it('menjumlahkan omzet Basic dan Booster tanpa mewajibkan HPP material', () => {
+    const lines = buildTreatmentCompletionJournalLines([
+      {
+        amount: new Prisma.Decimal('1000000.00'),
+        contract: { valuation: { deferredRevenueAccountCode: '2200', revenueAccountCode: '4100' } },
+      },
+      {
+        amount: new Prisma.Decimal('250000.00'),
+        contract: { valuation: { deferredRevenueAccountCode: '2200', revenueAccountCode: '4100' } },
+      },
+    ], '0');
+
+    expect(lines.map((line) => ({
+      accountCode: line.accountCode,
+      debit: 'debit' in line ? line.debit.toFixed(2) : undefined,
+      credit: 'credit' in line ? line.credit.toFixed(2) : undefined,
+      role: line.metadata.treatmentRole,
+    }))).toEqual([
+      { accountCode: '2200', debit: '1250000.00', credit: undefined, role: 'DEFERRED_RELEASE' },
+      { accountCode: '4100', debit: undefined, credit: '1250000.00', role: 'REVENUE' },
+    ]);
+  });
+
   it('mengikat session, stock, revenue, HPP dan journal dalam satu Prisma transaction', () => {
     const apiRoot = path.resolve(__dirname, '..', '..', '..');
     const completion = fs.readFileSync(path.join(apiRoot, 'modules', 'sessions', 'services', 'session-completion.service.ts'), 'utf8');

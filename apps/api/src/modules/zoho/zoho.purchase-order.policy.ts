@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { erpOriginMarker } from './zoho.origin';
 
 export const PO_ISSUED_EVENT = 'PO_ISSUED';
 export const PO_CANCELLED_EVENT = 'PO_CANCELLED';
@@ -147,8 +148,8 @@ export function buildZohoPurchaseOrderPayload(
       item_order: line.lineNo,
       location_id: dependencies.locationId,
     })),
-    notes: snapshot.notes?.slice(0, 2_000)
-      || `Purchase Order dari RAHO ERP (${snapshot.externalKey}).`,
+    notes: [erpOriginMarker(snapshot.externalKey), snapshot.notes]
+      .filter(Boolean).join('\n').slice(0, 2_000),
   };
 }
 

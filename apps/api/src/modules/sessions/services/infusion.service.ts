@@ -165,7 +165,7 @@ export class InfusionService {
 
       // ✨ AUTO-USE PRODUCTS with isAutoUsedPerSession flag (e.g., Infus Set + Pelengkap)
       // Legacy sessions still consume the historical bundle SKU here. New
-      // sessions post the configured kit components once through FIFO at
+      // sessions post the configured kit components once by physical quantity at
       // completion, avoiding a duplicate stock deduction.
       const autoUseProducts = session.materialPolicyVersion === 1
         ? await tx.masterProduct.findMany({

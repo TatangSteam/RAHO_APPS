@@ -13,6 +13,7 @@ import {
   ZohoContactCandidate,
 } from './zoho.contact.policy';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged } from './zoho.origin';
 
 export const MEMBER_CONTACT_EVENT = 'MEMBER_CONTACT_UPSERTED';
 export const SUPPLIER_CONTACT_EVENT = 'SUPPLIER_CONTACT_UPSERTED';
@@ -302,6 +303,9 @@ async function saveMapping(
       zohoEntityType: zohoEntityTypeFor(snapshot.entityType),
       zohoEntityId: zohoContactId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata,
       lastSyncedAt: new Date(),
@@ -310,6 +314,9 @@ async function saveMapping(
       zohoEntityType: zohoEntityTypeFor(snapshot.entityType),
       zohoEntityId: zohoContactId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata,
       lastSyncedAt: new Date(),
@@ -339,6 +346,7 @@ export async function handleContactEvent(event: { aggregateId: string; aggregate
     },
   });
   if (mapping) {
+    assertErpManaged(mapping, 'Contact Zoho');
     if (!snapshot.isActive) {
       await client.request(`/books/v3/contacts/${mapping.zohoEntityId}/inactive`, { method: 'POST' });
       await prisma.zohoEntityMapping.update({
@@ -579,11 +587,17 @@ export async function approveContactReview(userId: string, reviewId: string, zoh
         zohoEntityType: review.expectedZohoEntityType,
         zohoEntityId: zohoContactId,
         externalKey: snapshot.externalKey,
+        dataOrigin: 'MANUAL_ZOHO',
+        managementMode: 'ERP_MANAGED',
+        originVerifiedAt: new Date(),
         status: 'ACTIVE',
         metadata: { operation: 'MANUAL_APPROVAL', reviewId },
       },
       update: {
         zohoEntityId: zohoContactId,
+        dataOrigin: 'MANUAL_ZOHO',
+        managementMode: 'ERP_MANAGED',
+        originVerifiedAt: new Date(),
         status: 'ACTIVE',
         metadata: { operation: 'MANUAL_APPROVAL', reviewId },
       },

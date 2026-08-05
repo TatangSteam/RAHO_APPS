@@ -98,6 +98,7 @@ enum PackageType {
 enum TreatmentRevenueSourceType {
   BASIC
   BOOSTER
+  BASIC_WITH_BOOSTER
 }
 
 enum PackageStatus {
@@ -283,6 +284,18 @@ enum ZohoMappingStatus {
   ACTIVE
   NEEDS_REVIEW
   INACTIVE
+}
+
+enum ZohoDataOrigin {
+  UNKNOWN
+  ERP
+  MANUAL_ZOHO
+}
+
+enum ZohoManagementMode {
+  REVIEW_REQUIRED
+  ERP_MANAGED
+  MANUAL_ONLY
 }
 
 enum ZohoSyncAttemptStatus {
@@ -3026,6 +3039,9 @@ model ZohoEntityMapping {
   zohoEntityType   String
   zohoEntityId     String
   externalKey      String?
+  dataOrigin       ZohoDataOrigin    @default(UNKNOWN)
+  managementMode   ZohoManagementMode @default(REVIEW_REQUIRED)
+  originVerifiedAt DateTime?
   status           ZohoMappingStatus @default(ACTIVE)
   metadata         Json?
   lastSyncedAt     DateTime?
@@ -3036,6 +3052,7 @@ model ZohoEntityMapping {
 
   @@unique([zohoConnectionId, entityType, localEntityId])
   @@unique([zohoConnectionId, zohoEntityType, zohoEntityId])
+  @@unique([zohoConnectionId, entityType, externalKey])
   @@index([status, entityType])
   @@map("zoho_entity_mappings")
 }

@@ -43,10 +43,6 @@ export const envSchema = z.object({
   ZOHO_API_BASE_URL: z.string().url().default('https://www.zohoapis.com'),
   ZOHO_WEB_REDIRECT_URL: z.preprocess(emptyStringToUndefined, z.string().url().optional()),
   ZOHO_REQUIRED_SCOPE_VERSION: z.coerce.number().int().positive().default(12),
-  ZOHO_INVENTORY_SYNC_ENABLED: z.preprocess(
-    (value) => value === 'true' || value === true,
-    z.boolean().default(false),
-  ),
   ZOHO_GRNI_SLA_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   ZOHO_TREATMENT_REVENUE_MODE: z.enum(['DOCUMENT', 'JOURNAL']).default('DOCUMENT'),
   ZOHO_CONTACT_RAHO_ID_CUSTOM_FIELD_ID: z.preprocess(

@@ -1,17 +1,19 @@
 import { selectTreatmentRevenueSource } from '../treatment-revenue-source';
 
-describe('exclusive treatment revenue source', () => {
-  it('uses only Basic when no Booster is selected', () => {
+describe('additive treatment revenue source', () => {
+  it('always recognizes Basic when no Booster is selected', () => {
     expect(selectTreatmentRevenueSource('basic-1', null)).toEqual({
       revenueSourceType: 'BASIC',
       revenuePackageId: 'basic-1',
+      revenuePackageIds: ['basic-1'],
     });
   });
 
-  it('uses only Booster when a Booster is selected, never Basic plus Booster', () => {
+  it('recognizes Basic plus Booster when a Booster is selected', () => {
     expect(selectTreatmentRevenueSource('basic-1', 'booster-1')).toEqual({
-      revenueSourceType: 'BOOSTER',
-      revenuePackageId: 'booster-1',
+      revenueSourceType: 'BASIC_WITH_BOOSTER',
+      revenuePackageId: 'basic-1',
+      revenuePackageIds: ['basic-1', 'booster-1'],
     });
   });
 });

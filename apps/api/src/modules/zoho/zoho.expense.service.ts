@@ -5,6 +5,7 @@ import { AppError } from '@middleware/errorHandler';
 import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
+import { assertErpManaged, assertRemoteErpOrigin } from './zoho.origin';
 import {
   buildZohoExpensePayload,
   reconcileExpense,
@@ -176,6 +177,9 @@ async function saveExpenseMapping(
       zohoEntityType: 'EXPENSE',
       zohoEntityId,
       externalKey: snapshot.externalKey,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         operation,
@@ -187,6 +191,9 @@ async function saveExpenseMapping(
     },
     update: {
       zohoEntityId,
+      dataOrigin: 'ERP',
+      managementMode: 'ERP_MANAGED',
+      originVerifiedAt: new Date(),
       status: 'ACTIVE',
       metadata: json({
         ...metadata((await prisma.zohoEntityMapping.findUnique({
@@ -295,6 +302,7 @@ export async function handleExpensePaid(event: IntegrationEvent) {
     },
   });
   let operation = 'MAPPING_REUSED';
+  if (mapping) assertErpManaged(mapping, 'Expense Zoho');
   if (!mapping) {
     const matches = await findExistingExpense(client, snapshot.referenceNumber);
     if (matches.length > 1) {
@@ -307,6 +315,13 @@ export async function handleExpensePaid(event: IntegrationEvent) {
     }
     let remote = matches[0];
     operation = remote ? 'MATCHED_BY_REFERENCE' : 'CREATED';
+    if (remote?.expense_id != null) {
+      const detail = await client.request<{ expense?: ZohoExpenseRemote }>(
+        `/books/v3/expenses/${remote.expense_id}`,
+      );
+      remote = { ...remote, ...detail.expense };
+      assertRemoteErpOrigin(remote, snapshot.externalKey, 'Expense');
+    }
     if (!remote) {
       const response = await client.request<{ expense?: ZohoExpenseRemote }>(
         '/books/v3/expenses',

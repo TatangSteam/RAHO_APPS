@@ -7,11 +7,6 @@ import { AppError } from '@middleware/errorHandler';
 import { decryptToken, encryptToken } from './zoho.crypto';
 import { isZohoReconnectRequired, normalizeZohoError, ZohoApiError } from './zoho.error';
 
-export const ZOHO_INVENTORY_SCOPES = [
-  'ZohoInventory.inventoryadjustments.READ',
-  'ZohoInventory.inventoryadjustments.CREATE',
-] as const;
-
 const ZOHO_BOOKS_SCOPES = [
   'ZohoBooks.settings.READ',
   'ZohoBooks.settings.CREATE',
@@ -44,11 +39,8 @@ const ZOHO_BOOKS_SCOPES = [
   'ZohoBooks.vendorpayments.UPDATE',
 ] as const;
 
-export const ZOHO_SCOPE_VERSION = env.ZOHO_INVENTORY_SYNC_ENABLED ? 13 : 12;
-export const ZOHO_REQUIRED_SCOPES = [
-  ...ZOHO_BOOKS_SCOPES,
-  ...(env.ZOHO_INVENTORY_SYNC_ENABLED ? ZOHO_INVENTORY_SCOPES : []),
-] as const;
+export const ZOHO_SCOPE_VERSION = 12;
+export const ZOHO_REQUIRED_SCOPES = ZOHO_BOOKS_SCOPES;
 
 export type ZohoTokenResponse = {
   access_token: string;
