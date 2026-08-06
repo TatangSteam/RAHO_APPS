@@ -1,19 +1,20 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { inventoryApi } from '@/lib/api/inventoryApi';
+import { InventoryMasterProduct, inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
 import styles from '../operations.module.css';
 
 type Tab = 'UOM' | 'PRODUCT' | 'BATCH';
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 
 export default function InventoryMasterDataPage() {
   const [tab, setTab] = useState<Tab>('PRODUCT');
   const [uoms, setUoms] = useState<Row[]>([]);
-  const [products, setProducts] = useState<Row[]>([]);
+  const [products, setProducts] = useState<InventoryMasterProduct[]>([]);
   const [batches, setBatches] = useState<Row[]>([]);
   const [permissions, setPermissions] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -49,7 +50,8 @@ export default function InventoryMasterDataPage() {
 
       const batchResponse = await inventoryApi.getBatches();
       setBatches(batchResponse.data?.data || []);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Gagal memuat master inventory.');
     } finally {
       setLoading(false);
@@ -66,7 +68,8 @@ export default function InventoryMasterDataPage() {
       reset();
       showToast.success('Master data berhasil disimpan.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Master data gagal disimpan.');
     } finally {
       setSaving(false);
@@ -98,7 +101,8 @@ export default function InventoryMasterDataPage() {
       setSaving(true);
       const response = await inventoryApi.previewConversion(previewForm);
       setPreviewResult(response.data?.data?.result || '');
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setPreviewResult('');
       showToast.error(requestError.response?.data?.error?.message || 'Preview konversi gagal.');
     } finally {

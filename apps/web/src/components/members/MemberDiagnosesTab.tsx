@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Trash2, Stethoscope, User, FileText, Info, AlertTriangle, Loader2, ChevronDown, Check, Edit, RefreshCw } from 'lucide-react';
@@ -117,6 +118,7 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       const data = await usersApi.getDoctors(branchIdToUse);
       setDoctors(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load doctors:', error);
       setDoctors([]);
       setDoctorsError('Daftar dokter gagal dimuat.');
@@ -129,11 +131,6 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
     setMounted(true);
     return () => setMounted(false);
   }, []);
-
-  useEffect(() => {
-    loadDiagnoses();
-    loadCategoryOptions();
-  }, [memberId]);
 
   useEffect(() => {
     if (showCreateModal) {
@@ -150,18 +147,19 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
     return () => { document.body.style.overflow = ''; };
   }, [showCreateModal]);
 
-  const loadDiagnoses = async () => {
+  const loadDiagnoses = useCallback(async () => {
     try {
       setLoading(true);
       const data = await diagnosisApi.getMemberDiagnoses(memberId);
       setDiagnoses(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load diagnoses:', error);
       showToast.error('Gagal memuat data diagnosa');
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
 
   const loadCategoryOptions = async () => {
     try {
@@ -176,10 +174,16 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
         );
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load diagnosis categories:', error);
       setCategoryOptions(DEFAULT_CATEGORY_OPTIONS);
     }
   };
+
+  useEffect(() => {
+    void loadDiagnoses();
+    void loadCategoryOptions();
+  }, [loadDiagnoses, memberId]);
 
   const handleAddExam = () => {
     setAdditionalExams([...additionalExams, { key: '', value: '' }]);
@@ -256,7 +260,8 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       setEditingDiagnosis(null);
       resetForm();
       loadDiagnoses();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       setError(error.response?.data?.error?.message || `Gagal ${editingDiagnosis ? 'memperbarui' : 'membuat'} diagnosa`);
     } finally {
       setSubmitting(false);
@@ -341,7 +346,8 @@ export default function MemberDiagnosesTab({ memberId, memberBranchId, canEdit =
       await diagnosisApi.deleteDiagnosis(memberId, diagnosis.id);
       showToast.success('Diagnosa berhasil dihapus');
       await loadDiagnoses();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to delete diagnosis:', error);
       showToast.error(
         error.response?.data?.error?.message ||

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Eye, EyeOff } from 'lucide-react';
 import { showToast } from '@/lib/toast';
@@ -44,14 +45,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
     return () => setMounted(false);
   }, []);
 
-  // Fetch branches for global staff creators
-  useEffect(() => {
-    if (show && canSelectBranch) {
-      loadBranches();
-    }
-  }, [show, canSelectBranch]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       setLoadingBranches(true);
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/branches/all`, {
@@ -65,12 +59,20 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
       const result = await response.json();
       setBranches(result.data || []);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoadingBranches(false);
     }
-  };
+  }, [accessToken]);
+
+  // Fetch branches for global staff creators
+  useEffect(() => {
+    if (show && canSelectBranch) {
+      void loadBranches();
+    }
+  }, [canSelectBranch, loadBranches, show]);
 
   useEffect(() => {
     if (show) {
@@ -184,7 +186,8 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
       showToast.success(`User ${result.data.profile.fullName} berhasil dibuat dengan kode ${result.data.staffCode}`);
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error creating staff:', error);
       showToast.error(error.message || 'Gagal membuat user');
     } finally {

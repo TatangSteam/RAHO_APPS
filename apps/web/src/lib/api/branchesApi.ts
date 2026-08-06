@@ -69,7 +69,7 @@ export const branchesApi = {
    * Get all branches with stats (no pagination)
    */
   getAllBranches: () => {
-    return api.get('/branches/all');
+    return api.get<{ data: Branch[] }>('/branches/all');
   },
 
   /**

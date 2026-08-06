@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { PackageType } from '@prisma/client';
+import { PackageType, Prisma } from '@prisma/client';
 import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
 function normalizeNullableString(value: string | null | undefined) {
@@ -19,7 +18,7 @@ function buildPricingIdentityWhere(params: {
   productCode: string | null;
   excludeId?: string;
 }) {
-  const where: any = {
+  const where: Prisma.PackagePricingWhereInput = {
     packageType: params.packageType,
     boosterType: params.boosterType,
     serviceType: params.serviceType,
@@ -70,7 +69,7 @@ export class PackagePricingAdminService {
     } = filters;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.PackagePricingWhereInput = {};
 
     if (packageType) {
       where.packageType = packageType;
@@ -384,7 +383,7 @@ export class PackagePricingAdminService {
     }
 
     // Build update data object (only include fields that are provided)
-    const updateData: any = {};
+    const updateData: Prisma.PackagePricingUncheckedUpdateInput = {};
     if (data.packageType !== undefined) updateData.packageType = data.packageType;
     if (data.boosterType !== undefined || newPackageType === 'BASIC') updateData.boosterType = normalizedBoosterType;
     if (data.serviceType !== undefined) updateData.serviceType = normalizedServiceType;

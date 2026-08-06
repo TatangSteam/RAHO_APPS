@@ -1,4 +1,5 @@
 'use client'
+import { assertCaughtError } from '@/lib/caughtError';
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuthStore } from '@/stores/authStore'
 import { useEffect, useState, useCallback, useRef } from 'react'
@@ -59,6 +60,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
       const blobUrl = URL.createObjectURL(response.data)
       setAvatarBlobUrl(blobUrl)
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load avatar:', error)
       setAvatarBlobUrl(null)
     }
@@ -77,6 +79,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
         loadAvatar(profile.avatarUrl)
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch profile for avatar:', error)
     }
   }, [loadAvatar, updateUserAvatar])
@@ -112,6 +115,7 @@ export default function MemberLayout({ children }: { children: React.ReactNode }
         await logoutApi(refreshToken)
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Logout API error:', error)
     } finally {
       clearAuth()

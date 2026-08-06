@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import type { CreatePackagePricingInput, UpdatePackagePricingInput } from '../packages.schema';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
 function normalizeNullableString(value: string | null | undefined) {
@@ -146,7 +145,7 @@ export class PackagePricingService {
         boosterType,
         serviceType,
         productCode,
-      },
+      } as Prisma.PackagePricingUncheckedCreateInput,
     });
 
     await logAudit({
@@ -216,7 +215,7 @@ export class PackagePricingService {
       };
     }
 
-    const updateData: any = { ...data };
+    const updateData: Prisma.PackagePricingUncheckedUpdateInput = { ...data };
     if (data.packageType !== undefined) updateData.packageType = packageType;
     if (data.boosterType !== undefined || packageType === 'BASIC') updateData.boosterType = boosterType;
     if (data.serviceType !== undefined) updateData.serviceType = serviceType;

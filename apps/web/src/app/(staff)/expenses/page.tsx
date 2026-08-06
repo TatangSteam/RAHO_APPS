@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useEffect, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -33,14 +34,16 @@ export default function ExpensesPage() {
       ]);
       setRows(expenses); setBranches(branchResponse.data.data || []); setAccounts(coa.filter((row) => row.type === 'EXPENSE' && row.allowPosting)); setCashAccounts(cash);
       setPermissions(new Set(access.data.data?.permissions || []));
-    } catch (error: any) { showToast.error(error.response?.data?.error?.message || 'Gagal memuat expense.'); }
+    } catch (error) {
+      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal memuat expense.'); }
     finally { setLoading(false); }
   };
   useEffect(() => { void reload(); }, []);
 
   const action = async (operation: () => Promise<unknown>, message: string) => {
     try { await operation(); showToast.success(message); await reload(); }
-    catch (error: any) { showToast.error(error.response?.data?.error?.message || 'Aksi gagal.'); }
+    catch (error) {
+      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Aksi gagal.'); }
   };
 
   return <div className="mx-auto max-w-7xl space-y-6">
@@ -53,7 +56,8 @@ export default function ExpensesPage() {
 function ExpenseForm({ branches, accounts, cashAccounts, onSaved }: { branches: Branch[]; accounts: Account[]; cashAccounts: CashBankAccount[]; onSaved: () => void }) {
   const [form, setForm] = useState({ branchId: '', expenseDate: new Date().toISOString().slice(0, 10), category: '', description: '', amount: '', expenseAccountCode: '', cashBankAccountId: '' });
   const [evidence, setEvidence] = useState<File | null>(null);
-  const submit = async (event: FormEvent) => { event.preventDefault(); try { const data = new FormData(); Object.entries(form).forEach(([key, value]) => data.append(key, value)); data.append('postingKey', crypto.randomUUID()); if (evidence) data.append('evidence', evidence); await expenseApi.create(data); showToast.success('Draft expense dibuat.'); onSaved(); } catch (error: any) { showToast.error(error.response?.data?.error?.message || 'Gagal membuat expense.'); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); try { const data = new FormData(); Object.entries(form).forEach(([key, value]) => data.append(key, value)); data.append('postingKey', crypto.randomUUID()); if (evidence) data.append('evidence', evidence); await expenseApi.create(data); showToast.success('Draft expense dibuat.'); onSaved(); } catch (error) {
+      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal membuat expense.'); } };
   return <form onSubmit={submit} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-3 dark:border-neutral-800 dark:bg-neutral-900"><Field label="Cabang"><select required value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value, cashBankAccountId: '' })}><option value="">Pilih</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} — {branch.name}</option>)}</select></Field><Field label="Tanggal"><input required type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} /></Field><Field label="Kategori"><input required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></Field><Field label="Akun beban"><select required value={form.expenseAccountCode} onChange={(e) => setForm({ ...form, expenseAccountCode: e.target.value })}><option value="">Pilih</option>{accounts.map((account) => <option key={account.id} value={account.code}>{account.code} — {account.name}</option>)}</select></Field><Field label="Kas/bank"><select required value={form.cashBankAccountId} onChange={(e) => setForm({ ...form, cashBankAccountId: e.target.value })}><option value="">Pilih</option>{cashAccounts.filter((account) => account.branchId === form.branchId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></Field><Field label="Nominal"><input required inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Keterangan"><input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field><Field label="Evidence"><input required type="file" accept="image/*,application/pdf" onChange={(e) => setEvidence(e.target.files?.[0] || null)} /></Field><button className="self-end rounded-lg bg-blue-600 px-4 py-2 text-white">Simpan draft</button></form>;
 }
 

@@ -3,11 +3,17 @@ import auditRouter from '../audit.routes';
 describe('audit log API immutability contract', () => {
   it('exposes read/export endpoints only', () => {
     const routes = auditRouter.stack
-      .filter((layer: any) => layer.route)
-      .map((layer: any) => ({
-        path: layer.route.path,
-        methods: Object.keys(layer.route.methods).sort(),
-      }));
+      .filter((layer) => layer.route)
+      .map((layer) => {
+        const route = layer.route as unknown as {
+          path: string;
+          methods: Record<string, boolean>;
+        };
+        return {
+          path: route.path,
+          methods: Object.keys(route.methods).sort(),
+        };
+      });
 
     expect(routes).toEqual([
       { path: '/', methods: ['get'] },

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Plus, Check, RefreshCw, Trash2, Package, Search, Filter, AlertTriangle, Info, Truck, Clock } from 'lucide-react';
@@ -75,12 +76,12 @@ export default function CreateRequestModal({
         let pendingShipments: Array<{ shipmentCode: string; status: string }> = [];
         
         // Extract shipments for this branch
-        const extractShipments = (response: any) => {
+        const extractShipments = (response: Awaited<ReturnType<typeof inventoryApi.getShipments>>) => {
           const data = response.data?.data;
           if (Array.isArray(data)) {
             return data
-              .filter((s: any) => s.toBranchId === user.branchId)
-              .map((s: any) => ({ shipmentCode: s.shipmentCode, status: s.status }));
+              .filter((s) => s.toBranchId === user.branchId)
+              .map((s) => ({ shipmentCode: s.shipmentCode, status: s.status }));
           }
           return [];
         };
@@ -97,12 +98,12 @@ export default function CreateRequestModal({
         const requestsData = requestsResponse.data?.data;
         if (Array.isArray(requestsData)) {
           pendingRequests = requestsData
-            .filter((r: any) => 
+            .filter((r) =>
               r.branchId === user.branchId && 
               ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'APPROVED', 'SHIPPED'].includes(r.status) &&
               !(r.status === 'SHIPPED' && r.shipment?.status === 'RECEIVED_WITH_ISSUE')
             )
-            .map((r: any) => ({ requestCode: r.requestCode, status: r.status }));
+            .map((r) => ({ requestCode: r.requestCode, status: r.status }));
         }
         
         setPendingInfo({
@@ -112,6 +113,7 @@ export default function CreateRequestModal({
           pendingRequests,
         });
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to fetch pending info:', error);
         setPendingInfo(null);
       } finally {
@@ -164,6 +166,7 @@ export default function CreateRequestModal({
           setOverstockPreview(response.data.data);
         }
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to fetch overstock preview:', error);
         setOverstockPreview([]);
       } finally {

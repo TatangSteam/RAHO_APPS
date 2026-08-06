@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -61,6 +63,7 @@ export default function Step7Photo({
           setPreview(objectUrl);
         }
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to load session photo URL:', error);
         if (!cancelled) {
           setPreview(null);
@@ -92,6 +95,7 @@ export default function Step7Photo({
         const photos = await getSupportingPhotosBySession(sessionId);
         setSupportingPhotos(photos);
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to load supporting photos:', error);
       }
     };
@@ -125,6 +129,7 @@ export default function Step7Photo({
             objectUrls.push(objectUrl);
             previews[supportingPhoto.id] = objectUrl;
           } catch (error) {
+      assertCaughtError(error);
             devError('Failed to load supporting photo URL:', error);
           }
         })
@@ -144,6 +149,23 @@ export default function Step7Photo({
       objectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
     };
   }, [supportingPhotos]);
+
+  const uploadPhoto = useCallback(async (file: File) => {
+    setUploading(true);
+
+    try {
+      await photoApi.uploadPhoto(sessionId, file, user?.userId || '');
+      showToast.success('Foto berhasil diupload');
+      onComplete();
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error uploading photo:', error);
+      showToast.error(error.message || 'Gagal upload foto');
+      setPreview(null);
+    } finally {
+      setUploading(false);
+    }
+  }, [onComplete, sessionId, user?.userId]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -174,6 +196,7 @@ export default function Step7Photo({
         // Upload the compressed file
         await uploadPhoto(result.file);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
@@ -187,23 +210,7 @@ export default function Step7Photo({
         setCompressing(false);
       }
     }
-  }, [sessionId, user?.userId, onComplete]);
-
-  const uploadPhoto = async (file: File) => {
-    setUploading(true);
-
-    try {
-      await photoApi.uploadPhoto(sessionId, file, user?.userId || '');
-      showToast.success('Foto berhasil diupload');
-      onComplete();
-    } catch (error: any) {
-      devError('Error uploading photo:', error);
-      showToast.error(error.message || 'Gagal upload foto');
-      setPreview(null);
-    } finally {
-      setUploading(false);
-    }
-  };
+  }, [uploadPhoto]);
 
   const handleDeletePhoto = async () => {
     if (!photo) return;
@@ -216,7 +223,8 @@ export default function Step7Photo({
       setPreview(null);
       setCompressionInfo(null);
       onComplete();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting photo:', error);
       showToast.error(error.message || 'Gagal menghapus foto');
     }
@@ -252,7 +260,8 @@ export default function Step7Photo({
       });
       setSupportingPhotos((current) => [newPhoto, ...current]);
       showToast.success('Foto penunjang berhasil diupload');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error uploading supporting photo:', error);
       showToast.error(error.message || 'Gagal upload foto penunjang');
     } finally {
@@ -268,7 +277,8 @@ export default function Step7Photo({
       await deleteSupportingPhoto(photoId);
       setSupportingPhotos((current) => current.filter((p) => p.id !== photoId));
       showToast.success('Foto penunjang berhasil dihapus');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting supporting photo:', error);
       showToast.error(error.message || 'Gagal menghapus foto penunjang');
     }
@@ -374,7 +384,7 @@ export default function Step7Photo({
               margin: '0 auto',
               marginBottom: '16px'
             }}>
-              <img
+              <AppImage
                 src={preview}
                 alt="Session photo"
                 style={{
@@ -608,7 +618,7 @@ export default function Step7Photo({
                 >
                   <div style={{ position: 'relative', paddingBottom: '75%', background: '#0f172a' }}>
                     {previewUrl ? (
-                      <img
+                      <AppImage
                         src={previewUrl}
                         alt={supportingPhoto.description || 'Supporting photo'}
                         style={{

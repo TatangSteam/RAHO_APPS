@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError, type CaughtError } from '@/lib/caughtError';
 import { FormEvent, useEffect, useState } from 'react';
 import { Plus, ShoppingCart, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -39,7 +40,8 @@ export default function PurchasingPage() {
         purchasingApi.accountsPayable(), cashBankApi.listAccounts({ isActive: 'true' }),
       ]);
       setSuppliers(s); setRequests(r); setOrders(o); setInvoices(ap); setCashAccounts(cash);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(apiMessage(error, 'Gagal memuat purchasing.'));
     } finally { setLoading(false); }
   };
@@ -48,9 +50,9 @@ export default function PurchasingPage() {
   useEffect(() => {
     Promise.all([branchesApi.getAllBranches(), api.get('/inventory/master-products')])
       .then(([branchResponse, productResponse]) => {
-        const branchPayload = branchResponse.data?.data ?? branchResponse.data;
+        const branchPayload = branchResponse.data.data;
         const productPayload = productResponse.data?.data ?? productResponse.data;
-        setBranches((Array.isArray(branchPayload) ? branchPayload : branchPayload?.branches ?? []).filter((row: Branch) => row.isActive));
+        setBranches(branchPayload.filter((row: Branch) => row.isActive));
         setProducts((Array.isArray(productPayload) ? productPayload : productPayload?.products ?? []).filter((row: MasterProduct) => row.isActive !== false));
       })
       .catch(() => undefined);
@@ -58,7 +60,8 @@ export default function PurchasingPage() {
 
   const act = async (fn: () => Promise<unknown>, message: string) => {
     try { await fn(); showToast.success(message); await reload(); }
-    catch (error: any) { showToast.error(apiMessage(error, 'Aksi gagal.')); }
+    catch (error) {
+      assertCaughtError(error); showToast.error(apiMessage(error, 'Aksi gagal.')); }
   };
 
   const postInvoiceForOrder = async (order: PurchaseOrder) => {
@@ -169,7 +172,8 @@ function CreatePrModal({ branches, products, onClose, onSaved }: { branches: Bra
         }),
       });
       showToast.success('Purchase Request dibuat sebagai DRAFT.'); await onSaved();
-    } catch (error: any) { showToast.error(apiMessage(error, 'Gagal membuat Purchase Request.')); }
+    } catch (error) {
+      assertCaughtError(error); showToast.error(apiMessage(error, 'Gagal membuat Purchase Request.')); }
     finally { setSaving(false); }
   };
   return <Modal title="Buat Purchase Request" subtitle="Isi kebutuhan pembelian. PR akan disimpan sebagai DRAFT." onClose={onClose}>
@@ -221,7 +225,8 @@ function ApprovalModal({ request, isFinance, onClose, onApproved }: { request: P
     try {
       await purchasingApi.approveRequest(request.id, request.items.map((item) => ({ itemId: item.id, approvedQty: quantities[item.id] })), note || undefined);
       showToast.success('Purchase Request disetujui.'); await onApproved();
-    } catch (error: any) { showToast.error(apiMessage(error, 'Approval gagal.')); }
+    } catch (error) {
+      assertCaughtError(error); showToast.error(apiMessage(error, 'Approval gagal.')); }
     finally { setSaving(false); }
   };
   return <Modal title={`Review ${request.requestNumber}`} subtitle={`Maker: ${request.creator?.email || '-'} · Ubah quantity untuk menguji batas approval.`} onClose={onClose}>
@@ -249,7 +254,8 @@ function CreatePoModal({ request, suppliers, onClose, onSaved }: { request: Purc
       const result = await purchasingApi.createOrder(request.id, supplierId);
       showToast.success(`PO ${result.purchaseOrder.poNumber} berhasil dibuat.`);
       await onSaved();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(apiMessage(error, 'Gagal membuat Purchase Order.'));
     } finally {
       setSaving(false);
@@ -283,7 +289,8 @@ function Modal({ title, subtitle, onClose, children }: { title: string; subtitle
 }
 function SupplierForm({ onSaved }: { onSaved: () => Promise<void> }) {
   const [form, setForm] = useState({ code: '', name: '', paymentTermsDays: '30' });
-  const submit = async (event: FormEvent) => { event.preventDefault(); try { await purchasingApi.createSupplier({ ...form, paymentTermsDays: Number(form.paymentTermsDays) }); showToast.success('Supplier dibuat.'); setForm({ code: '', name: '', paymentTermsDays: '30' }); await onSaved(); } catch (error: any) { showToast.error(apiMessage(error, 'Gagal membuat supplier.')); } };
+  const submit = async (event: FormEvent) => { event.preventDefault(); try { await purchasingApi.createSupplier({ ...form, paymentTermsDays: Number(form.paymentTermsDays) }); showToast.success('Supplier dibuat.'); setForm({ code: '', name: '', paymentTermsDays: '30' }); await onSaved(); } catch (error) {
+      assertCaughtError(error); showToast.error(apiMessage(error, 'Gagal membuat supplier.')); } };
   return <form onSubmit={submit} className="mb-4 grid gap-3 rounded-xl border p-4 md:grid-cols-4"><input className={inputClass} required placeholder="Kode" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })}/><input className={inputClass} required placeholder="Nama supplier" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}/><input className={inputClass} required type="number" min="0" placeholder="Termin hari" value={form.paymentTermsDays} onChange={(e) => setForm({ ...form, paymentTermsDays: e.target.value })}/><button className="rounded-lg bg-blue-600 px-4 py-2 text-white">Tambah supplier</button></form>;
 }
 function Table({ headers, children }: { headers: string[]; children: React.ReactNode }) { return <div className="overflow-x-auto rounded-xl border bg-white dark:bg-neutral-900"><table className="w-full text-sm"><thead><tr className="text-left">{headers.map((h) => <th key={h} className="p-3">{h}</th>)}</tr></thead><tbody>{children}</tbody></table></div>; }
@@ -297,5 +304,5 @@ const today = () => new Date().toISOString().slice(0, 10);
 const money = (value: string) => new Intl.NumberFormat('id-ID').format(Number(value));
 const onlyDigits = (value: string) => value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
 const formatRupiahInput = (value: string) => value ? new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(Number(value)) : '';
-const apiMessage = (error: any, fallback: string) => error.response?.data?.error?.message || fallback;
+const apiMessage = (error: CaughtError, fallback: string) => error.response?.data?.error?.message || fallback;
 function promptCash(rows: CashBankAccount[]) { const code = prompt(`Kode kas/bank:\n${rows.map((r) => `${r.code} — ${r.name}`).join('\n')}`)?.toUpperCase(); return rows.find((row) => row.code === code)?.id; }

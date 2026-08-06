@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import * as referralsApi from '@/lib/api/referralsApi';
 import { devError } from '@/lib/logger';
@@ -31,37 +32,34 @@ export default function ReferralDetailPage() {
   const [limit] = useState(20);
   const [showEditModal, setShowEditModal] = useState(false);
 
-  useEffect(() => {
-    fetchReferral();
-    fetchIncentives();
-  }, [referralId, page]);
-
-  const fetchReferral = async () => {
+  const fetchReferral = useCallback(async () => {
     try {
       setLoading(true);
       const response = await referralsApi.getReferralById(referralId);
       setReferral(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching referral:', error);
       showToast.error('Gagal memuat data referral');
       router.push('/referrals');
     } finally {
       setLoading(false);
     }
-  };
+  }, [referralId, router]);
 
-  const fetchIncentives = async () => {
+  const fetchIncentives = useCallback(async () => {
     try {
       setIncentivesLoading(true);
       const response = await referralsApi.getReferralIncentives(referralId, page, limit);
       setIncentives(response.data.data.records);
       setTotal(response.data.data.total);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching incentives:', error);
     } finally {
       setIncentivesLoading(false);
     }
-  };
+  }, [limit, page, referralId]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -74,10 +72,16 @@ export default function ReferralDetailPage() {
       const response = await request();
       downloadBlob(response.data, filename);
     } catch (error) {
+      assertCaughtError(error);
       devError(errorMessage, error);
       showToast.error(errorMessage);
     }
   };
+
+  useEffect(() => {
+    void fetchReferral();
+    void fetchIncentives();
+  }, [fetchIncentives, fetchReferral]);
 
   const handleExportExcel = async () => {
     await exportBlob(
@@ -273,7 +277,7 @@ export default function ReferralDetailPage() {
 }
 
 // Edit Referral Modal Component
-function EditReferralModal({
+const _EditReferralModal = function EditReferralModal({
   referral,
   onClose,
   onSuccess,
@@ -298,6 +302,7 @@ function EditReferralModal({
       await referralsApi.updateReferral(referral.id, formData);
       onSuccess();
     } catch (error) {
+      assertCaughtError(error);
       devError('Error updating referral:', error);
       showToast.error('Gagal mengupdate kode referral');
     } finally {
@@ -377,4 +382,4 @@ function EditReferralModal({
       </div>
     </div>
   );
-}
+};

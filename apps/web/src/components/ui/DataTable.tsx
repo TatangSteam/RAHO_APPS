@@ -1,6 +1,7 @@
 'use client';
 
-import { ReactNode, useEffect, useState } from 'react';
+import AppImage from '@/components/ui/AppImage';
+import { isValidElement, ReactNode, useEffect, useState } from 'react';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 
@@ -39,6 +40,14 @@ export interface DataTableProps<T> {
   hoverable?: boolean;
   bordered?: boolean;
   className?: string;
+}
+
+function readCellValue<T>(item: T, key: string): ReactNode {
+  const value = (item as Record<string, unknown>)[key];
+  if (value === null || value === undefined || typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 'Ya' : 'Tidak';
+  if (isValidElement(value)) return value;
+  return String(value);
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -243,7 +252,7 @@ export default function DataTable<T>({
                     >
                       {column.render 
                         ? column.render(item, index)
-                        : (item as any)[column.key]
+                        : readCellValue(item, column.key)
                       }
                     </td>
                   ))}
@@ -332,7 +341,7 @@ export function AvatarCell({
       <div className={`relative w-9 h-9 rounded-lg flex items-center justify-center font-semibold text-sm overflow-hidden ${colorClasses[color]}`}>
         {initial}
         {resolvedAvatarUrl && !imageFailed && (
-          <img
+          <AppImage
             src={resolvedAvatarUrl}
             alt={name || 'Avatar'}
             className="absolute inset-0 w-full h-full object-cover"

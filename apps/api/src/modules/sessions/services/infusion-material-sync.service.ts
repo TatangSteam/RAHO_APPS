@@ -1,4 +1,4 @@
-import { StockMutationType } from '@prisma/client';
+import { Prisma, StockMutationType } from '@prisma/client';
 
 const DEFAULT_NO_IN_IFA250_ML = 2.5;
 const MATERIAL_DELTA_EPSILON = 0.0001;
@@ -133,7 +133,7 @@ function buildActualDosesFromInfusion(infusion: Partial<Record<DoseField, unknow
   };
 }
 
-async function findInventoryItem(tx: any, branchId: string, material: MaterialDefinition) {
+async function findInventoryItem(tx: Prisma.TransactionClient, branchId: string, material: MaterialDefinition) {
   const bySku = await tx.inventoryItem.findFirst({
     where: {
       branchId,
@@ -167,7 +167,7 @@ function getMaterialQuantity(doses: DoseValues, material: MaterialDefinition): n
 }
 
 export async function syncSessionInfusionToTherapyPlan(
-  tx: any,
+  tx: Prisma.TransactionClient,
   params: {
     sessionId: string;
     therapyPlan: TherapyPlanLike;

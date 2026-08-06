@@ -1,5 +1,6 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
 import Link from 'next/link';
 import { useEffect } from 'react';
 import { Bell, Menu, Sun, Moon } from 'lucide-react';
@@ -117,7 +118,7 @@ export function Header({ onMobileMenuToggle, unreadCount = 0 }: HeaderProps) {
         >
           <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md shadow-amber-500/25 group-hover:shadow-amber-500/35 transition-shadow">
             {user.avatarUrl ? (
-              <img
+              <AppImage
                 src={user.avatarUrl}
                 alt={user.fullName}
                 className="w-full h-full object-cover"

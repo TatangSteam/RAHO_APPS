@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { StockRequest, FilterType } from '../types';
 import { showToast } from '@/lib/toast';
@@ -9,7 +10,7 @@ export function useStockRequests(accessToken: string | null, filter: FilterType)
   const [requests, setRequests] = useState<StockRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchRequests = async () => {
+  const fetchRequests = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -58,19 +59,20 @@ export function useStockRequests(accessToken: string | null, filter: FilterType)
       }
       
       setRequests(data.data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ Stock requests fetch error:', error);
       showToast.error(error.message || 'Gagal memuat request stok');
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, filter, router]);
 
   useEffect(() => {
     if (accessToken) {
-      fetchRequests();
+      void fetchRequests();
     }
-  }, [accessToken, filter]);
+  }, [accessToken, fetchRequests]);
 
   return {
     requests,

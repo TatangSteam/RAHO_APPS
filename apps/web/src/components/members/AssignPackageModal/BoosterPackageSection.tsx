@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { Rocket } from 'lucide-react';
 import { PackagePricing, ExtendedBoosterType, ServiceType, BOOSTER_TYPE_LABELS } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
+import type { PackageSelection } from './usePackageSelection';
 
 interface BoosterPackageSectionProps {
   pricingsList: PackagePricing[];
   isBoosterSelected: (pricingId: string, boosterType: ExtendedBoosterType) => boolean;
-  getBoosterSelection: (pricingId: string, boosterType: ExtendedBoosterType) => any;
+  getBoosterSelection: (pricingId: string, boosterType: ExtendedBoosterType) => PackageSelection | undefined;
   toggleBooster: (pricingId: string, boosterType: ExtendedBoosterType) => void;
   updateBoosterQty: (pricingId: string, boosterType: ExtendedBoosterType, quantity: number) => void;
   updateBoosterServiceType: (pricingId: string, boosterType: ExtendedBoosterType, serviceType: ServiceType) => void;

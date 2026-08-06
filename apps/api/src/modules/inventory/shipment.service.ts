@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ShipmentStatus, DiscrepancyType, Role, AuditAction, BranchType } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { errors } from '../../middleware/errorHandler';
@@ -13,7 +12,7 @@ import {
   receiveReservedShipment,
 } from './services/shipment-ledger.service';
 
-interface ReceiveShipmentInput {
+export interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
     receivedQty: number;
@@ -155,12 +154,13 @@ export class ShipmentService {
       select: { role: true },
     });
 
-    if (!user || ![
+    const shipmentEditorRoles: Role[] = [
       Role.SUPER_ADMIN,
       Role.ADMIN_MANAGER,
       Role.ADMIN_LOGISTIK,
       Role.FINANCE_LOGISTICS_CONTROLLER,
-    ].includes(user.role)) {
+    ];
+    if (!user || !shipmentEditorRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',

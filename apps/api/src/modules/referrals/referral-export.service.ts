@@ -6,12 +6,12 @@
 
 import ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { Response } from 'express';
 
 const prisma = new PrismaClient();
 
-interface ExportFilters {
+export interface ExportFilters {
   referralId?: string;
   branchId?: string;
   startDate?: Date;
@@ -24,7 +24,7 @@ interface ExportFilters {
 // ══════════════════════════════════════════════════════════
 
 async function fetchIncentiveData(filters: ExportFilters) {
-  const where: any = {};
+  const where: Prisma.ReferralIncentiveRecordWhereInput = {};
 
   if (filters.referralId) {
     where.referralCodeId = filters.referralId;
@@ -190,7 +190,7 @@ export async function exportIncentivesToExcel(
   };
 
   // Add borders to all cells
-  worksheet.eachRow((row, rowNumber) => {
+  worksheet.eachRow((row, _rowNumber) => {
     row.eachCell((cell) => {
       cell.border = {
         top: { style: 'thin' },
@@ -407,7 +407,7 @@ export async function exportReferralSummaryExcel(
   res: Response
 ): Promise<void> {
   // Fetch all referral codes with their stats
-  const where: any = { isActive: true };
+  const where: Prisma.ReferralCodeWhereInput = { isActive: true };
   
   if (filters.branchId) {
     where.branchId = filters.branchId;

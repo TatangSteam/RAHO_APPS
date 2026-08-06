@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
@@ -36,7 +37,7 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import styles from './logistics-dashboard.module.css';
 
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 type View = 'OVERVIEW' | 'STOCK_CARD' | 'VALUATION';
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -103,7 +104,8 @@ export default function LogisticsDashboardPage() {
       setStockItemId((current) => itemRows.some((item: Row) => item.id === current) ? current : (itemRows[0]?.id || ''));
       setDashboard(dashboardResponse);
       setValuation(valuationResponse);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Dashboard logistik gagal dimuat.');
     } finally {
       setLoading(false);
@@ -126,7 +128,8 @@ export default function LogisticsDashboardPage() {
         page: stockPage,
         limit: 25,
       }));
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Stock card gagal dimuat.');
     } finally {
       setCardLoading(false);

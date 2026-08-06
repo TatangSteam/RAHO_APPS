@@ -33,8 +33,8 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
   useEffect(() => {
     setItems(shipment.items.map(item => {
       // Get original requested qty and overstock info
-      const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
-      const overstockDeducted = (item as any).overstockDeducted || 0;
+      const originalRequestedQty = item.originalRequestedQty || item.requestedQty || item.sentQty;
+      const overstockDeducted = item.overstockDeducted || 0;
       
       return {
         masterProductId: item.masterProductId,

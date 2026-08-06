@@ -1,4 +1,5 @@
 'use client'
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
@@ -46,7 +47,7 @@ const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 export default function StaffProfilePage() {
-  const { user, updateUserAvatar } = useAuthStore()
+  const { updateUserAvatar } = useAuthStore()
   const [profile, setProfile] = useState<StaffProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -63,6 +64,7 @@ export default function StaffProfilePage() {
       const res = await api.get('/auth/me')
       setProfile(res.data.data)
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching profile:', error)
     } finally {
       setLoading(false)
@@ -100,6 +102,7 @@ export default function StaffProfilePage() {
           fileToUpload = result.file
           devLog(`[Profile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
         } catch (error) {
+      assertCaughtError(error);
           devError('Error compressing avatar:', error)
           // Continue with original file
         } finally {
@@ -128,6 +131,7 @@ export default function StaffProfilePage() {
       setUploadSuccess(true)
       setTimeout(() => setUploadSuccess(false), 2000)
     } catch (error) {
+      assertCaughtError(error);
       devError('Error uploading avatar:', error)
       alert('Gagal mengupload foto profil')
     } finally {

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type { AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
 import { PackageAssignmentService } from './services/package-assignment.service';
 import { PaymentVerificationService } from './services/payment-verification.service';

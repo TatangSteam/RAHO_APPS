@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Copy, CopyPlus, Plus, Package, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import {
@@ -147,21 +148,7 @@ export default function BulkTherapyPlanModal({
     };
   }, [mounted]);
 
-  useEffect(() => {
-    if (mounted) {
-      loadPackageSummary();
-    }
-  }, [memberId, mounted]);
-
-  useEffect(() => {
-    if (packageSummary) {
-      initializeTherapyPlans();
-      setNumGroupsInput('1');
-      setRowsPerGroupInput('3');
-    }
-  }, [packageSummary]);
-
-  const loadPackageSummary = async () => {
+  const loadPackageSummary = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -173,15 +160,16 @@ export default function BulkTherapyPlanModal({
       console.log('✅ Vouchers Used:', summary.package?.vouchersUsed);
       console.log('🔥 Vouchers Remaining:', summary.package?.vouchersRemaining);
       setPackageSummary(summary);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       console.error('❌ Error loading package summary:', err);
       setError(err.response?.data?.error?.message || 'Gagal memuat informasi paket');
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
 
-  const initializeTherapyPlans = () => {
+  const initializeTherapyPlans = useCallback(() => {
     if (!packageSummary) return;
 
     // Start with 1 group of 3 rows by default
@@ -245,7 +233,21 @@ export default function BulkTherapyPlanModal({
     setTherapyGroups(groups);
     setTherapyPlans(plans);
     setValidationErrors([]);
-  };
+  }, [packageSummary]);
+
+  useEffect(() => {
+    if (mounted) {
+      void loadPackageSummary();
+    }
+  }, [loadPackageSummary, mounted]);
+
+  useEffect(() => {
+    if (packageSummary) {
+      initializeTherapyPlans();
+      setNumGroupsInput('1');
+      setRowsPerGroupInput('3');
+    }
+  }, [initializeTherapyPlans, packageSummary]);
 
   const handleNumGroupsChange = (value: string) => {
     setNumGroupsInput(value);
@@ -396,7 +398,7 @@ export default function BulkTherapyPlanModal({
     value: string
   ) => {
     if (!decimalPattern.test(value)) return;
-    updateTherapyPlan(rowId, field, value === '' ? undefined : value as any);
+    updateTherapyPlan(rowId, field, value === '' ? undefined : value);
   };
 
   const copyToNextRow = (rowId: string) => {
@@ -550,7 +552,8 @@ export default function BulkTherapyPlanModal({
       showToast.success(response.message || 'Rencana terapi berhasil dibuat');
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       showToast.error(
         err.response?.data?.error?.message || 'Gagal membuat rencana terapi'
       );

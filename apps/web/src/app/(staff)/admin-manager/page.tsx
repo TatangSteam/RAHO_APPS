@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   UserCog, Building2, Users, ChevronRight, Loader2, 
-  ArrowLeft, Search, Plus, MoreVertical, Eye, UserX,
+  ArrowLeft,
   Shield, MapPin
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';

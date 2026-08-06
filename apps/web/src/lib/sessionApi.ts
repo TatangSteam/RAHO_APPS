@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import { api } from './api';
 import type {
   CreateSessionInput,
@@ -53,7 +54,7 @@ export const sessionApi = {
   updateSessionDetails: async (
     sessionId: string,
     data: UpdateSessionDetailsInput
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/details`, data);
     return response.data.data;
   },
@@ -71,7 +72,8 @@ export const sessionApi = {
     try {
       const response = await api.get(`/treatment-sessions/encounters/${encounterId}/diagnoses`);
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       if (error.response?.status === 404) {
         return null;
       }
@@ -97,7 +99,8 @@ export const sessionApi = {
     try {
       const response = await api.get(`/treatment-sessions/${sessionId}/therapy-plan`);
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       if (error.response?.status === 404) {
         return null;
       }
@@ -123,7 +126,7 @@ export const sessionApi = {
   // STEP 4: BOOSTER TYPE
   // ============================================================
 
-  updateBoosterType: async (sessionId: string, data: UpdateBoosterTypeInput): Promise<any> => {
+  updateBoosterType: async (sessionId: string, data: UpdateBoosterTypeInput): Promise<unknown> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/booster-type`, data);
     return response.data.data;
   },
@@ -131,7 +134,7 @@ export const sessionApi = {
   updateSessionBoosterPackage: async (
     sessionId: string,
     data: UpdateSessionBoosterPackageInput
-  ): Promise<any> => {
+  ): Promise<unknown> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/booster-package`, data);
     return response.data.data;
   },
@@ -157,7 +160,8 @@ export const sessionApi = {
     try {
       const response = await api.get(`/treatment-sessions/${sessionId}/infusion`);
       return response.data.data;
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       if (error.response?.status === 404) {
         return null;
       }
@@ -181,6 +185,7 @@ export const sessionApi = {
     limit?: number;
     branchId?: string;
     branchIds?: string;
+    diagnosisCategories?: string;
     memberId?: string;
     doctorId?: string;
     nurseId?: string;

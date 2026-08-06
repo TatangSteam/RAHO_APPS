@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
@@ -494,9 +495,9 @@ export default function SessionsPage() {
   const toggleAllInCategory = (categoryId: string, checked: boolean) => {
     const category = fieldCategories.find(c => c.id === categoryId);
     if (category) {
-      const updates: any = {};
+      const updates: Partial<typeof exportFields> = {};
       category.fields.forEach(field => {
-        updates[field.key] = checked;
+        updates[field.key as keyof typeof exportFields] = checked;
       });
       setExportFields(prev => ({ ...prev, ...updates }));
     }
@@ -516,18 +517,16 @@ export default function SessionsPage() {
   };
 
   const selectAllFields = () => {
-    const allTrue: any = {};
-    Object.keys(exportFields).forEach(key => {
-      allTrue[key] = true;
-    });
+    const allTrue = Object.fromEntries(
+      Object.keys(exportFields).map((key) => [key, true])
+    ) as typeof exportFields;
     setExportFields(allTrue);
   };
 
   const deselectAllFields = () => {
-    const allFalse: any = {};
-    Object.keys(exportFields).forEach(key => {
-      allFalse[key] = false;
-    });
+    const allFalse = Object.fromEntries(
+      Object.keys(exportFields).map((key) => [key, false])
+    ) as typeof exportFields;
     setExportFields(allFalse);
   };
 
@@ -674,6 +673,7 @@ export default function SessionsPage() {
       const parsed = JSON.parse(savedPreference) as { fields?: Record<string, boolean> };
       setTableFields(mergeTableFieldsWithDefault(parsed.fields));
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load saved session table columns:', error);
       localStorage.removeItem(storageKey);
       setTableFields({ ...DEFAULT_TABLE_FIELDS });
@@ -900,7 +900,7 @@ export default function SessionsPage() {
       jumlahJarum: () => formatDose(infusion?.jumlahJarum),
       deviationNotes: () => infusion?.deviationNotes || '-',
       materialsSummary: () => sessionDetail.materials?.length
-        ? sessionDetail.materials.map((item: any) => `${item.inventoryItem?.masterProduct?.name || 'Material'}: ${item.quantity} ${item.unit || ''}`).join('; ')
+        ? sessionDetail.materials.map((item) => `${item.inventoryItem?.masterProduct?.name || 'Material'}: ${item.quantity} ${item.unit || ''}`).join('; ')
         : '-',
       keluhan: () => sessionDetail.evaluation?.keluhan || '-',
       rekomendasi: () => sessionDetail.evaluation?.rekomendasi || '-',
@@ -943,6 +943,7 @@ export default function SessionsPage() {
         setDoctors(doctorsList.map(normalizeStaffOption).filter((staff): staff is Staff => Boolean(staff)));
         setNurses(nursesList.map(normalizeStaffOption).filter((staff): staff is Staff => Boolean(staff)));
       } catch (error) {
+      assertCaughtError(error);
         devError('Error loading filter options:', error);
       }
     };
@@ -953,7 +954,7 @@ export default function SessionsPage() {
   const loadSessions = useCallback(async () => {
     try {
       setLoading(true);
-      const params: any = { page, limit };
+      const params: NonNullable<Parameters<typeof sessionApi.getAllSessions>[0]> = { page, limit };
       
       // Apply filters
       if (filters.branchIds && filters.branchIds.length > 0) {
@@ -982,7 +983,8 @@ export default function SessionsPage() {
       } else if (response && response.length === limit) {
         setTotalPages(page + 1);
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading sessions:', error);
       showToast.error('Gagal memuat data sesi terapi');
     } finally {
@@ -1063,7 +1065,8 @@ export default function SessionsPage() {
 
       showToast.success('Export berhasil!');
       setShowExportModal(false);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Export error:', error);
       showToast.error('Gagal mengexport data');
     } finally {
@@ -1105,7 +1108,8 @@ export default function SessionsPage() {
       await sessionApi.deleteSession(sessionDetail.session.sessionId);
       showToast.success('Sesi terapi berhasil dihapus');
       await loadSessions();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting session:', error);
       showToast.error(
         error.response?.data?.error?.message ||

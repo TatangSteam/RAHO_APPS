@@ -10,8 +10,15 @@ import {
   exportIncentivesToExcel,
   exportIncentivesToPDF,
   exportReferralSummaryExcel,
+  type ExportFilters,
 } from './referral-export.service';
 import { logger } from '@lib/logger';
+
+function parseReferrerType(value: unknown): ExportFilters['referrerType'] {
+  return value === 'SALES' || value === 'DOKTER' || value === 'MEMBER'
+    ? value
+    : undefined;
+}
 
 export class ReferralsController {
   // GET /api/v1/referrals - List referrals
@@ -135,11 +142,11 @@ export class ReferralsController {
   // GET /api/v1/referrals/export/excel - Export incentives to Excel
   async exportIncentivesExcel(req: Request, res: Response, next: NextFunction) {
     try {
-      const filters: any = {};
+      const filters: ExportFilters = {};
 
       if (req.query.referralId) filters.referralId = req.query.referralId as string;
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
-      if (req.query.referrerType) filters.referrerType = req.query.referrerType as string;
+      filters.referrerType = parseReferrerType(req.query.referrerType);
       if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
       if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
 
@@ -152,11 +159,11 @@ export class ReferralsController {
   // GET /api/v1/referrals/export/pdf - Export incentives to PDF
   async exportIncentivesPDF(req: Request, res: Response, next: NextFunction) {
     try {
-      const filters: any = {};
+      const filters: ExportFilters = {};
 
       if (req.query.referralId) filters.referralId = req.query.referralId as string;
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
-      if (req.query.referrerType) filters.referrerType = req.query.referrerType as string;
+      filters.referrerType = parseReferrerType(req.query.referrerType);
       if (req.query.startDate) filters.startDate = new Date(req.query.startDate as string);
       if (req.query.endDate) filters.endDate = new Date(req.query.endDate as string);
 
@@ -169,10 +176,16 @@ export class ReferralsController {
   // GET /api/v1/referrals/export/summary - Export summary per referral to Excel
   async exportSummaryExcel(req: Request, res: Response, next: NextFunction) {
     try {
-      const filters: any = {};
+      const filters: ExportFilters = {};
 
       if (req.query.branchId) filters.branchId = req.query.branchId as string;
-      if (req.query.referrerType) filters.referrerType = req.query.referrerType as string;
+      if (
+        req.query.referrerType === 'SALES' ||
+        req.query.referrerType === 'DOKTER' ||
+        req.query.referrerType === 'MEMBER'
+      ) {
+        filters.referrerType = req.query.referrerType;
+      }
 
       await exportReferralSummaryExcel(filters, res);
     } catch (error) {

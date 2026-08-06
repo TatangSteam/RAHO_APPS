@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import type { CancelInvoiceInput } from '../invoices.schema';
 import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';

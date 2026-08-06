@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { diagnosisApi } from '@/lib/diagnosisApi';
@@ -61,7 +62,7 @@ export default function Step1Diagnosis({
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [memberDiagnoses, setMemberDiagnoses] = useState<any[]>([]);
+  const [memberDiagnoses, setMemberDiagnoses] = useState<Diagnosis[]>([]);
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
@@ -97,6 +98,7 @@ export default function Step1Diagnosis({
         devLog('📋 Loaded diagnoses for member:', memberId, 'count:', data?.length, data);
         setMemberDiagnoses(data || []);
       } catch (err) {
+      assertCaughtError(err);
         devError('Failed to load member diagnoses:', err);
         setMemberDiagnoses([]);
       }
@@ -149,11 +151,15 @@ export default function Step1Diagnosis({
 
       await sessionApi.createDiagnosis(encounterId, data);
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to save diagnosis:', err);
       const errorDetails = err.response?.data?.error?.details;
       if (errorDetails && Array.isArray(errorDetails)) {
-        const messages = errorDetails.map((d: any) => `${d.path?.join('.')}: ${d.message}`).join(', ');
+        const messages = errorDetails.map((detail) => {
+          const item = detail as { path?: string[]; message?: string };
+          return `${item.path?.join('.')}: ${item.message}`;
+        }).join(', ');
         setError(`Validasi gagal: ${messages}`);
       } else {
         setError(err.response?.data?.error?.message || 'Gagal menyimpan diagnosa');
@@ -163,7 +169,7 @@ export default function Step1Diagnosis({
     }
   };
 
-  const handleSelectExistingDiagnosis = (selectedDiagnosis: any) => {
+  const handleSelectExistingDiagnosis = (selectedDiagnosis: Diagnosis) => {
     devLog('📋 Selected diagnosis:', selectedDiagnosis);
     devLog('📋 doktorPemeriksa from diagnosis:', selectedDiagnosis.doktorPemeriksa);
     
@@ -205,7 +211,8 @@ export default function Step1Diagnosis({
       await sessionApi.deleteDiagnosisByEncounter(encounterId);
       showToast.success('Diagnosa sesi berhasil dihapus');
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to delete session diagnosis:', err);
       setError(err.response?.data?.error?.message || 'Gagal menghapus diagnosa sesi');
     } finally {

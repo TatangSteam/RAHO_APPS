@@ -1,15 +1,26 @@
-// @ts-nocheck
-import { Role } from '@prisma/client';
+import { DocumentType, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
 import { MemberRetrievalService, type MemberFilters } from './services/member-retrieval.service';
 import { MemberRegistrationService } from './services/member-registration.service';
 import { MemberUpdateService } from './services/member-update.service';
 import { MemberBranchAccessService } from './services/member-branch-access.service';
-import { MemberMedicalRecordsService } from './services/member-medical-records.service';
-import { MemberTherapyPlanBulkService } from './services/member-therapy-plan-bulk.service';
-import { MemberTherapyPlanEditService } from './services/member-therapy-plan-edit.service';
-import { MemberTherapyPlanSetEditService } from './services/member-therapy-plan-set-edit.service';
+import {
+  MemberMedicalRecordsService,
+  type MemberDiagnosisInput,
+} from './services/member-medical-records.service';
+import {
+  MemberTherapyPlanBulkService,
+  type BulkCreateTherapyPlansInput,
+} from './services/member-therapy-plan-bulk.service';
+import {
+  MemberTherapyPlanEditService,
+  type EditTherapyPlanInput,
+} from './services/member-therapy-plan-edit.service';
+import {
+  MemberTherapyPlanSetEditService,
+  type BulkEditSetInput,
+} from './services/member-therapy-plan-set-edit.service';
 
 /**
  * Main Members Service - Orchestrates all member-related operations
@@ -98,27 +109,7 @@ export class MembersService {
    * Create new member
    */
   async createMember(
-    data: {
-      fullName: string;
-      nik?: string;
-      birthPlace?: string;
-      birthDate: string;
-      gender?: string;
-      phone?: string;
-      email?: string;
-      address?: string;
-      occupation?: string;
-      maritalStatus?: string;
-      emergencyContact?: string;
-      emergencyContactPhone?: string;
-      infoSource?: string;
-      postalCode?: string;
-      isDeceased?: boolean;
-      memberUsername: string;
-      memberPassword: string;
-      referralCode?: string;
-      isConsentToPhoto?: boolean;
-    },
+    data: Parameters<MemberRegistrationService['createMember']>[0],
     files: {
       psp?: Express.Multer.File;
       photo?: Express.Multer.File;
@@ -198,14 +189,19 @@ export class MembersService {
   /**
    * Create member diagnosis
    */
-  async createMemberDiagnosis(memberId: string, data: any, userId: string) {
+  async createMemberDiagnosis(memberId: string, data: MemberDiagnosisInput, userId: string) {
     return await this.medicalRecordsService.createMemberDiagnosis(memberId, data, userId);
   }
 
   /**
    * Update member diagnosis
    */
-  async updateMemberDiagnosis(memberId: string, diagnosisId: string, data: any, userId: string) {
+  async updateMemberDiagnosis(
+    memberId: string,
+    diagnosisId: string,
+    data: MemberDiagnosisInput,
+    userId: string,
+  ) {
     return await this.medicalRecordsService.updateMemberDiagnosis(memberId, diagnosisId, data, userId);
   }
 
@@ -226,7 +222,7 @@ export class MembersService {
   /**
    * Create member therapy plan
    */
-  async createMemberTherapyPlan(_memberId: string, _data: any, _userId: string) {
+  async createMemberTherapyPlan(_memberId: string, _data: unknown, _userId: string) {
     throw {
       status: 410,
       code: 'THERAPY_PLAN_BULK_ONLY',
@@ -255,21 +251,25 @@ export class MembersService {
   /**
    * Bulk create therapy plans
    */
-  async bulkCreateTherapyPlans(memberId: string, data: any, userId: string) {
+  async bulkCreateTherapyPlans(
+    memberId: string,
+    data: BulkCreateTherapyPlansInput,
+    userId: string,
+  ) {
     return await this.therapyPlanBulkService.bulkCreateTherapyPlans(memberId, data, userId);
   }
 
   /**
    * Edit therapy plan by creating a new version for the whole set.
    */
-  async editTherapyPlan(therapyPlanId: string, data: any, _userId: string) {
+  async editTherapyPlan(therapyPlanId: string, data: EditTherapyPlanInput, _userId: string) {
     return await this.therapyPlanEditService.editTherapyPlan(therapyPlanId, data);
   }
 
   /**
    * Bulk edit therapy plan set (edit multiple plans at once, creates new set version)
    */
-  async bulkEditTherapyPlanSet(setId: string, data: any, _userId: string) {
+  async bulkEditTherapyPlanSet(setId: string, data: BulkEditSetInput, _userId: string) {
     return await this.therapyPlanSetEditService.bulkEditTherapyPlanSet(setId, data);
   }
 
@@ -326,13 +326,11 @@ export class MembersService {
   async uploadMemberDocument(
     memberId: string,
     file: Express.Multer.File,
-    documentType: string,
+    documentType: DocumentType,
     userId: string
   ) {
     const { uploadFile } = await import('../../config/minio');
     const { processFile } = await import('../../utils/imageProcessor');
-    const { DocumentType } = await import('@prisma/client');
-
     try {
       // Check if member exists
       const member = await prisma.member.findUnique({
@@ -373,7 +371,7 @@ export class MembersService {
       const existingDoc = await prisma.memberDocument.findFirst({
         where: {
           memberId,
-          documentType: documentType as any,
+          documentType,
         },
       });
 
@@ -394,7 +392,7 @@ export class MembersService {
         await prisma.memberDocument.create({
           data: {
             memberId,
-            documentType: documentType as any,
+            documentType,
             fileUrl: uploadResult.url,
             fileName: file.originalname,
             fileSize: processed.buffer.length,

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 
 /**
@@ -18,7 +17,7 @@ export class BranchPerformanceService {
         users: {
           where: { isActive: true },
         },
-        packages: {
+        memberPackages: {
           where: { status: 'ACTIVE' },
         },
       },
@@ -54,7 +53,7 @@ export class BranchPerformanceService {
           metrics: {
             totalMembers: branch.members.length,
             totalUsers: branch.users.length,
-            totalPackages: branch.packages.length,
+            totalPackages: branch.memberPackages.length,
             totalRevenue: Number(revenue._sum.amount || 0),
             monthlyRevenue: Number(monthlyRevenue._sum.amount || 0),
           },

@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
@@ -24,7 +25,8 @@ export function useBranchData(branchId: string, accessToken: string) {
 
       const result = await response.json();
       setBranch(result.data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch detail:', error);
       showToast.error(error.message || 'Gagal memuat detail cabang');
       throw error;
@@ -48,7 +50,8 @@ export function useBranchData(branchId: string, accessToken: string) {
 
       const result = await response.json();
       setUsers(result.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading users:', error);
       showToast.error(error.message || 'Gagal memuat data user');
     }
@@ -86,7 +89,8 @@ export function useBranchData(branchId: string, accessToken: string) {
       }
       
       setMembers(membersData);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ Error loading members:', error);
       showToast.error(error.message || 'Gagal memuat data member');
     }
@@ -108,7 +112,8 @@ export function useBranchData(branchId: string, accessToken: string) {
       const result = await response.json();
       const inventoryData = result.data?.items || result.data || [];
       setInventory(Array.isArray(inventoryData) ? inventoryData : []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch inventory:', error);
       showToast.error(error.message || 'Gagal memuat data stok');
       setInventory([]);
@@ -131,7 +136,8 @@ export function useBranchData(branchId: string, accessToken: string) {
       const result = await response.json();
       const sessionsData = result.data?.sessions || [];
       setSessions(Array.isArray(sessionsData) ? sessionsData : []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch sessions:', error);
       showToast.error(error.message || 'Gagal memuat data sesi terapi');
       setSessions([]);
@@ -154,7 +160,8 @@ export function useBranchData(branchId: string, accessToken: string) {
       showToast.success(`User berhasil ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}`);
       await loadBranchUsers();
       await loadBranchDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error toggling user status:', error);
       showToast.error(error.message || 'Gagal mengubah status user');
     }

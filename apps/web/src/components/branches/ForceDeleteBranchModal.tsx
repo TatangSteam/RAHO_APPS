@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Branch } from '@/lib/api/branchesApi';
 import { api } from '@/lib/api';
@@ -37,14 +38,7 @@ export default function ForceDeleteBranchModal({
     setMounted(true);
   }, []);
 
-  // Fetch branch stats when modal opens
-  useEffect(() => {
-    if (isOpen && branch) {
-      fetchBranchStats();
-    }
-  }, [isOpen, branch]);
-
-  const fetchBranchStats = async () => {
+  const fetchBranchStats = useCallback(async () => {
     if (!branch) return;
     
     try {
@@ -54,12 +48,20 @@ export default function ForceDeleteBranchModal({
       });
       setStats(response.data.data?.stats || null);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error fetching branch stats:', error);
       setStats(null);
     } finally {
       setLoadingStats(false);
     }
-  };
+  }, [branch]);
+
+  // Fetch branch stats when modal opens
+  useEffect(() => {
+    if (isOpen && branch) {
+      void fetchBranchStats();
+    }
+  }, [branch, fetchBranchStats, isOpen]);
 
   if (!isOpen || !branch || !mounted) return null;
 
@@ -85,11 +87,11 @@ export default function ForceDeleteBranchModal({
       resetModal();
       onClose();
     } catch (error) {
+      assertCaughtError(error);
       setIsDeleting(false);
     }
   };
 
-  const canProceedToStep2 = step === 1;
   const canProceedToStep3 = step === 2 && branchNameInput === branch.name;
   const canProceedToStep4 = step === 3 && understood;
   const canDelete = step === 4 && deleteConfirmInput === 'DELETE';
@@ -293,7 +295,7 @@ export default function ForceDeleteBranchModal({
                   disabled={isDeleting}
                 />
                 {deleteConfirmInput && deleteConfirmInput !== 'DELETE' && (
-                  <p className="mt-2 text-sm text-red-600">❌ Harus mengetik "DELETE" (huruf besar)</p>
+                  <p className="mt-2 text-sm text-red-600">❌ Harus mengetik &quot;DELETE&quot; (huruf besar)</p>
                 )}
                 {deleteConfirmInput === 'DELETE' && (
                   <p className="mt-2 text-sm text-red-600 font-bold animate-pulse">

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { CheckCircle2, XCircle, AlertTriangle, Info, X, Loader2 } from 'lucide-react';
@@ -136,6 +137,7 @@ export const showToast = {
       setTimeout(() => toastStore.dismiss(id), TOAST_DURATION_MS.success);
       return result;
     } catch (error) {
+      assertCaughtError(error);
       toastStore.update(id, { type: 'error', message: messages.error, duration: TOAST_DURATION_MS.error, dismissible: true });
       setTimeout(() => toastStore.dismiss(id), TOAST_DURATION_MS.error);
       throw error;

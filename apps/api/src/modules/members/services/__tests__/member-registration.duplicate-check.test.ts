@@ -35,7 +35,7 @@ const registrationData = {
   phone: '081234567890',
   memberUsername: 'budi.santoso',
   memberPassword: 'password123',
-};
+} as const;
 
 describe('MemberRegistrationService duplicate checks', () => {
   beforeEach(() => {

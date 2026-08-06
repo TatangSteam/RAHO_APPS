@@ -1,8 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { usersApi, StaffPerformance, StaffPerformanceSummaryResponse } from '@/lib/usersApi';
+import { usersApi, StaffPerformanceSummaryResponse } from '@/lib/usersApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi, ManagedBranch } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
@@ -78,10 +80,6 @@ export default function StaffPerformancePage() {
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
   useEffect(() => {
-    fetchBranches();
-  }, []);
-
-  useEffect(() => {
     // For ADMIN_CABANG, use their branch automatically
     if (isAdminCabang && user?.branchId) {
       setBranchFilter(user.branchId);
@@ -94,16 +92,9 @@ export default function StaffPerformancePage() {
     if (isAdminManager && branches.length > 0 && !branchFilter) {
       setBranchFilter(branches[0].id);
     }
-  }, [isAdminCabang, isSuperAdmin, isAdminManager, user?.branchId, branches]);
+  }, [branchFilter, branches, isAdminCabang, isAdminManager, isSuperAdmin, user?.branchId]);
 
-  useEffect(() => {
-    // Only fetch if we have a branch selected (required) or Super Admin with 'all'
-    if (branchFilter || isAdminCabang) {
-      fetchPerformance();
-    }
-  }, [page, branchFilter, startDate, endDate]);
-
-  const fetchBranches = async () => {
+  const fetchBranches = useCallback(async () => {
     try {
       console.log('🔍 fetchBranches - isAdminManager:', isAdminManager);
       
@@ -129,7 +120,8 @@ export default function StaffPerformancePage() {
         const branchList = response?.data?.data || [];
         setBranches(Array.isArray(branchList) ? branchList : []);
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       console.error('❌ Error fetching branches:', error);
       devError('Error fetching branches:', error);
       setBranches([]);
@@ -138,9 +130,9 @@ export default function StaffPerformancePage() {
         showToast.error('Gagal memuat daftar cabang');
       }
     }
-  };
+  }, [isAdminManager]);
 
-  const fetchPerformance = async () => {
+  const fetchPerformance = useCallback(async () => {
     try {
       console.log('🔍 fetchPerformance - branchFilter:', branchFilter);
       setLoading(true);
@@ -153,14 +145,15 @@ export default function StaffPerformancePage() {
       });
       console.log('✅ Performance result:', result);
       setData(result);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       console.error('❌ Error fetching performance:', error);
       devError('Error fetching performance:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat data kinerja');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchFilter, endDate, limit, page, startDate]);
 
   const handleViewDetail = (staffId: string) => {
     const params = new URLSearchParams();
@@ -171,6 +164,16 @@ export default function StaffPerformancePage() {
     const queryString = params.toString();
     router.push(`/staff-performance/${staffId}${queryString ? `?${queryString}` : ''}`);
   };
+
+  useEffect(() => {
+    void fetchBranches();
+  }, [fetchBranches]);
+
+  useEffect(() => {
+    if (branchFilter || isAdminCabang) {
+      void fetchPerformance();
+    }
+  }, [branchFilter, fetchPerformance, isAdminCabang]);
 
   // Filter staff by search
   const filteredStaff = data?.staff.filter((staff) =>
@@ -481,7 +484,7 @@ export default function StaffPerformancePage() {
                                 : 'bg-gradient-to-br from-neutral-200 to-neutral-300 dark:from-neutral-700 dark:to-neutral-600 text-neutral-700 dark:text-neutral-200'
                             }`}>
                               {staff.avatarUrl ? (
-                                <img src={staff.avatarUrl} alt={staff.fullName} className="w-full h-full object-cover" />
+                                <AppImage src={staff.avatarUrl} alt={staff.fullName} className="w-full h-full object-cover" />
                               ) : (
                                 staff.fullName.charAt(0).toUpperCase()
                               )}

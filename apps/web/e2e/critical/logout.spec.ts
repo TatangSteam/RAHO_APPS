@@ -34,7 +34,7 @@ test.describe('Logout Flow - All Roles', () => {
     });
   }
 
-  test('should clear session on logout', async ({ loginAs, page: newPage }) => {
+test('should clear session on logout', async ({ loginAs, page: _newPage }) => {
     const page = await loginAs('ADMIN_CABANG');
 
     // Get session storage before logout
@@ -124,7 +124,7 @@ test.describe('Logout Flow - All Roles', () => {
     await page2.close();
   });
 
-  test('should logout from a form page with unsaved changes', async ({ loginAs, page: newPage }) => {
+test('should logout from a form page with unsaved changes', async ({ loginAs, page: _newPage }) => {
     const page = await loginAs('ADMIN_CABANG');
 
     // Navigate to form page
@@ -141,7 +141,7 @@ test.describe('Logout Flow - All Roles', () => {
     await page.waitForURL(/\/login/, { timeout: 10000 });
   });
 
-  test('should timeout session after inactivity', async ({ loginAs, page: newPage }) => {
+test('should timeout session after inactivity', async ({ loginAs, page: _newPage }) => {
     test.slow(); // This test takes longer
     
     const page = await loginAs('ADMIN_CABANG');

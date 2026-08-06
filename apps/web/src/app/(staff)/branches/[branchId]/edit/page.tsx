@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { branchesApi, type UpdateBranchData } from '@/lib/api/branchesApi';
 import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
@@ -14,7 +15,7 @@ interface Branch {
   id: string;
   branchCode: string;
   name: string;
-  type: string;
+  type: 'PUSAT' | 'PREMIER' | 'PARTNERSHIP';
   address: string;
   city: string;
   phone: string;
@@ -51,10 +52,6 @@ export default function EditBranchPage() {
   });
 
   useEffect(() => {
-    loadBranch();
-  }, [branchId]);
-
-  useEffect(() => {
     if (canEditBranchCode && autoGenerateBranchCode && provinces.length === 0) {
       loadProvinces();
     }
@@ -69,7 +66,7 @@ export default function EditBranchPage() {
     loadRegencies(provinceCode);
   }, [autoGenerateBranchCode, provinceCode]);
 
-  const loadBranch = async () => {
+  const loadBranch = useCallback(async () => {
     try {
       setLoading(true);
       const response = await branchesApi.getBranch(branchId);
@@ -79,27 +76,33 @@ export default function EditBranchPage() {
       setFormData({
         branchCode: branch.branchCode,
         name: branch.name,
-        type: branch.type as any,
+        type: branch.type,
         address: branch.address,
         city: branch.city,
         phone: branch.phone,
         operatingHours: branch.operatingHours || '',
         isActive: branch.isActive,
       });
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch:', error);
       showToast.error('Gagal memuat data cabang');
       router.push('/branches');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId, router]);
+
+  useEffect(() => {
+    void loadBranch();
+  }, [loadBranch]);
 
   const loadProvinces = async () => {
     try {
       setLoadingProvinces(true);
       setProvinces(await wilayahApi.getProvinces());
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading provinces:', error);
       showToast.error('Gagal memuat data provinsi');
     } finally {
@@ -112,6 +115,7 @@ export default function EditBranchPage() {
       setLoadingRegencies(true);
       setRegencies(await wilayahApi.getRegencies(selectedProvinceCode));
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading regencies:', error);
       setRegencies([]);
       showToast.error('Gagal memuat data kota/kabupaten');
@@ -145,6 +149,7 @@ export default function EditBranchPage() {
       showToast.success('Cabang berhasil diperbarui');
       router.push(`/branches/${branchId}`);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error updating branch:', error);
       showToast.error(getApiErrorMessage(error));
     } finally {

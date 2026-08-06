@@ -67,7 +67,7 @@ describe('BoosterService.updateSessionBoosterPackage', () => {
         update: jest.fn(),
       },
     };
-    mockPrisma.$transaction.mockImplementation((callback: any) => callback(tx));
+    mockPrisma.$transaction.mockImplementation((callback) => callback(tx));
 
     await new BoosterService().updateSessionBoosterPackage(
       'session-1',

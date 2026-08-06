@@ -174,7 +174,7 @@ export const therapyPlanApi = {
     memberId: string,
     therapyPlanId: string,
     data: Partial<CreateTherapyPlanInput>
-  ): Promise<{ success: boolean; message: string; data: any }> => {
+  ): Promise<{ success: boolean; message: string; data: unknown }> => {
     const response = await api.put(`/members/${memberId}/therapy-plans/${therapyPlanId}`, data);
     return response.data;
   },

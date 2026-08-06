@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { deleteMemberApi, getMemberDetailApi, sendNotificationApi, updateMemberApi } from '@/lib/membersApi';
-import { packagesApi, type AssignPackageData } from '@/lib/packagesApi';
+import { packagesApi, type AssignPackageData, type EditPackageData } from '@/lib/packagesApi';
 import { invoiceApi } from '@/lib/invoiceApi';
 import type { MemberDetail } from '@/types/member';
-import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType } from '@/types/package';
+import type { PackageDisplay, PackagePricing, ExtendedBoosterType, ServiceType, AddOnType, MemberPackage, StandaloneAddOn } from '@/types/package';
 import type { Invoice } from '@/types/invoice';
 import { useAuthStore } from '@/stores/authStore';
 import { confirm as confirmDialog, showToast } from '@/lib/toast';
@@ -72,7 +73,7 @@ function getServiceTypeFromProductCode(productCode?: string | null): ServiceType
   return serviceCode as ServiceType | undefined;
 }
 
-function resolvePackagePricing(pkg: any, pricings: PackagePricing[]): PackagePricing | undefined {
+function resolvePackagePricing(pkg: MemberPackage, pricings: PackagePricing[]): PackagePricing | undefined {
   if (pkg.productCode) {
     const productCodeMatch = pricings.find((pricing) => pricing.productCode === pkg.productCode);
     if (productCodeMatch) return productCodeMatch;
@@ -102,7 +103,7 @@ function resolvePackagePricing(pkg: any, pricings: PackagePricing[]): PackagePri
   return pricings.find((pricing) => pricing.id === pkg.packagePricingId);
 }
 
-function buildEditPackageSelections(packages: any[], pricings: PackagePricing[]) {
+function buildEditPackageSelections(packages: MemberPackage[], pricings: PackagePricing[]) {
   const selections = new Map<string, {
     pricingId: string;
     quantity: number;
@@ -110,7 +111,7 @@ function buildEditPackageSelections(packages: any[], pricings: PackagePricing[])
     serviceType?: ServiceType;
   }>();
 
-  packages.forEach((pkg: any) => {
+  packages.forEach((pkg) => {
     const pricing = resolvePackagePricing(pkg, pricings);
     const pricingId = pricing?.id || pkg.packagePricingId || '';
     if (!pricingId) return;
@@ -292,28 +293,13 @@ export default function MemberDetailPage() {
   ) : false;
 
   useEffect(() => {
-    devLog('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
-    devLog('👤 [Member Detail] Current user:', user?.email, 'role:', user?.role);
-    loadMemberDetail();
-    loadPackages();
-  }, [memberId]);
-
-  useEffect(() => {
     const requestedTab = searchParams.get('tab');
     if (isMemberDetailTab(requestedTab)) {
       setActiveTab(requestedTab);
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    // Only load pricings for roles that can assign packages
-    // Reload when member data is available (to get the correct branchId)
-    if (activeTab === 'paket' && canAssignPackage && member) {
-      loadPricings();
-    }
-  }, [activeTab, canAssignPackage, member]);
-
-  const loadMemberDetail = async (showPageLoading = true) => {
+  const loadMemberDetail = useCallback(async (showPageLoading = true) => {
     try {
       if (showPageLoading) setLoading(true);
       devLog('📥 [Member Detail] Loading member detail for:', memberId);
@@ -325,7 +311,8 @@ export default function MemberDetailPage() {
       devLog(`⏱️ [Member Detail] loadMemberDetail: ${(endTime - startTime).toFixed(2)}ms`);
       devLog('✅ [Member Detail] Member data loaded:', data.memberNo, data.profile.fullName);
       setMember(data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ [Member Detail] Failed to load member detail:', error);
       devError('❌ [Member Detail] Error response:', error.response?.data);
       devError('❌ [Member Detail] Error status:', error.response?.status);
@@ -335,9 +322,9 @@ export default function MemberDetailPage() {
       if (showPageLoading) setLoading(false);
       devLog('🏁 [Member Detail] Loading finished');
     }
-  };
+  }, [memberId, router]);
 
-  const loadPackages = async () => {
+  const loadPackages = useCallback(async () => {
     try {
       setLoadingPackages(true);
       devLog('📦 [Member Detail] Loading packages for member:', memberId);
@@ -349,16 +336,17 @@ export default function MemberDetailPage() {
       devLog(`⏱️ [Member Detail] loadPackages: ${(endTime - startTime).toFixed(2)}ms`);
       devLog('✅ [Member Detail] Packages loaded:', data.packages?.length || 0, 'packages');
       setPackages(data.packages || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ [Member Detail] Failed to load packages:', error);
       showToast.error('Gagal memuat data paket: ' + (error.response?.data?.error?.message || error.message));
     } finally {
       setLoadingPackages(false);
       devLog('🏁 [Member Detail] Package loading finished');
     }
-  };
+  }, [memberId]);
 
-  const loadPricings = async () => {
+  const loadPricings = useCallback(async () => {
     try {
       // Fetch actual pricing from backend
       // Pass member's registration branch to get correct pricing
@@ -368,12 +356,13 @@ export default function MemberDetailPage() {
       devLog('Loaded pricings:', data);
       setPricings(Array.isArray(data) ? data : []);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load pricings:', error);
       showToast.error('Gagal memuat harga paket');
       // Set empty array as fallback
       setPricings([]);
     }
-  };
+  }, [member?.registrationBranch?.id]);
 
   const handleDeleteMember = async () => {
     if (!member || !canDeleteMember || deletingMember) return;
@@ -387,7 +376,8 @@ export default function MemberDetailPage() {
       await deleteMemberApi(memberId);
       showToast.success('Member berhasil dihapus');
       router.push('/members');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Delete member error:', error);
       showToast.error(
         error.response?.data?.error?.message ||
@@ -452,7 +442,8 @@ export default function MemberDetailPage() {
         },
       });
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Assign package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal assign paket');
     } finally {
@@ -532,7 +523,8 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
       loadPackages();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Verify payment error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal verifikasi pembayaran');
     } finally {
@@ -552,7 +544,8 @@ export default function MemberDetailPage() {
       setSelectedPackageId('');
       setSelectedPackageProof({ url: null, fileName: null, status: 'PENDING_PAYMENT' });
       loadPackages();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Reject payment error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menolak pembayaran');
       throw error; // Re-throw to let modal handle it
@@ -576,6 +569,7 @@ export default function MemberDetailPage() {
       setNotifTitle('');
       setNotifMessage('');
     } catch (error) {
+      assertCaughtError(error);
       alert('Gagal mengirim notifikasi');
     } finally {
       setSendingNotif(false);
@@ -597,7 +591,8 @@ export default function MemberDetailPage() {
       await updateMemberApi(memberId, { isDeceased: nextIsDeceased });
       showToast.success(`Status member berhasil diubah menjadi ${nextLabel}`);
       await loadMemberDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah status member');
     } finally {
       setUpdatingLifeStatus(false);
@@ -630,7 +625,8 @@ export default function MemberDetailPage() {
       setRefundProof({ file: null, preview: null });
       setSelectedPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Refund package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal refund paket');
     } finally {
@@ -654,7 +650,8 @@ export default function MemberDetailPage() {
       setCancelReason('');
       setSelectedPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Cancel package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal batalkan pembelian');
     } finally {
@@ -684,7 +681,7 @@ export default function MemberDetailPage() {
       setSubmitting(true);
       
       // Prepare payload similar to assign package
-      const payload: any = {
+      const payload: EditPackageData = {
         packages: editData.selectedPackages,
         discountPercent: editData.discountPercent || undefined,
         discountAmount: editData.discountAmount || undefined,
@@ -714,7 +711,8 @@ export default function MemberDetailPage() {
       });
       setEditingPackageId('');
       await Promise.all([loadPackages(), loadMemberDetail(false)]);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Edit package error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal edit paket');
     } finally {
@@ -722,6 +720,19 @@ export default function MemberDetailPage() {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    devLog('🔄 [Member Detail] useEffect triggered for memberId:', memberId);
+    devLog('👤 [Member Detail] Current user:', user?.email, 'role:', user?.role);
+    void loadMemberDetail();
+    void loadPackages();
+  }, [loadMemberDetail, loadPackages, memberId, user?.email, user?.role]);
+
+  useEffect(() => {
+    if (activeTab === 'paket' && canAssignPackage && member) {
+      void loadPricings();
+    }
+  }, [activeTab, canAssignPackage, loadPricings, member]);
 
   if (loading) {
     return (
@@ -843,6 +854,7 @@ export default function MemberDetailPage() {
                       setVerifyPaidAmount(getRemainingInvoiceAmount(invoice));
                     }
                   } catch (error) {
+      assertCaughtError(error);
                     devError('Load verification invoice error:', error);
                   }
                 } : undefined}
@@ -864,11 +876,11 @@ export default function MemberDetailPage() {
                 }}
                 canEditWaitingVerification={canEditWaitingVerificationPackage}
                 canEditVerified={canEditVerifiedPackage}
-                onEditPackage={canEditPackage ? (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
+                onEditPackage={canEditPackage ? (purchaseGroupId: string, packages: MemberPackage[], addOns: StandaloneAddOn[], discount: number, discountPercent: number, discountNote: string, notes: string) => {
                   // Load existing package data into edit modal
                   const selectedPackages = buildEditPackageSelections(packages, pricings);
                   
-                  const selectedAddOns = addOns.map((addon: any) => ({
+                  const selectedAddOns = addOns.map((addon) => ({
                     type: addon.addOnType as AddOnType,
                     code: addon.addOnCode,
                     name: addon.notes?.split('(')[0]?.trim() || addon.addOnCode,
@@ -881,10 +893,10 @@ export default function MemberDetailPage() {
                   let discountAmountOnly = discount;
                   if (discountPercent > 0 && packages.length > 0) {
                     // Calculate total final price for all packages
-                    const totalPackagesFinalPrice = packages.reduce((sum: number, pkg: any) => sum + Number(pkg.finalPrice || 0), 0);
+                    const totalPackagesFinalPrice = packages.reduce((sum, pkg) => sum + Number(pkg.finalPrice || 0), 0);
                     
                     // Calculate total add-ons price
-                    const totalAddOnsPrice = addOns.reduce((sum: number, addon: any) => sum + (Number(addon.pricePerUnit || 0) * addon.quantity), 0);
+                    const totalAddOnsPrice = addOns.reduce((sum, addon) => sum + (Number(addon.pricePerUnit || 0) * addon.quantity), 0);
                     
                     // Total final price (after discount)
                     const totalFinalPrice = totalPackagesFinalPrice + totalAddOnsPrice;

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useCallback } from 'react';
 import { 
   compressImageWithPreset, 
@@ -23,7 +24,7 @@ export interface UseImageUploadOptions {
   preset?: keyof typeof COMPRESSION_PRESETS;
   maxSizeMB?: number;
   onCompressionComplete?: (result: CompressionResult) => void;
-  onUploadComplete?: (response: any) => void;
+  onUploadComplete?: (response: unknown) => void;
   onError?: (error: Error) => void;
 }
 
@@ -93,6 +94,7 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
 
       return result.file;
     } catch (error) {
+      assertCaughtError(error);
       const err = error instanceof Error ? error : new Error('Gagal mengkompresi gambar');
       setState(prev => ({ ...prev, isCompressing: false, error: err.message }));
       onError?.(err);
@@ -103,10 +105,10 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
   /**
    * Upload a file with compression
    */
-  const uploadFile = useCallback(async (
+  const uploadFile = useCallback(async <T,>(
     file: File,
-    uploadFn: (file: File) => Promise<any>
-  ): Promise<any> => {
+    uploadFn: (file: File) => Promise<T>
+  ): Promise<T> => {
     setState(prev => ({ ...prev, isUploading: true, progress: 0, error: null }));
 
     try {
@@ -122,6 +124,7 @@ export function useImageUpload(options: UseImageUploadOptions = {}) {
 
       return response;
     } catch (error) {
+      assertCaughtError(error);
       const err = error instanceof Error ? error : new Error('Gagal mengupload file');
       setState(prev => ({ ...prev, isUploading: false, error: err.message }));
       onError?.(err);

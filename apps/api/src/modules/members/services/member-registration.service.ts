@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateMemberNo } from '../../../utils/codeGenerator';
-import { AuditAction, DocumentType } from '@prisma/client';
+import { AuditAction, DocumentType, Gender, IncentiveType, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { uploadFile } from '../../../config/minio';
 import { processFile } from '../../../utils/imageProcessor';
@@ -11,8 +10,17 @@ import {
   hasMatchingMemberName,
   parseMemberBirthDate,
   resolveMemberIdentityNumber,
+  type MemberIdentityType,
 } from './member-registration.helpers';
 import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
+
+type RegisteredMember = Prisma.MemberGetPayload<{
+  include: {
+    user: { include: { profile: true } };
+    registrationBranch: true;
+    referralCode: true;
+  };
+}>;
 
 /**
  * Service for member registration
@@ -24,7 +32,7 @@ export class MemberRegistrationService {
   async createMember(
     data: {
       fullName: string;
-      identityType?: string;
+      identityType?: MemberIdentityType;
       nik?: string;
       birthPlace?: string;
       birthDate: string;
@@ -242,7 +250,7 @@ export class MemberRegistrationService {
           nik: identityNumber,
           tempatLahir: data.birthPlace || null,
           dateOfBirth: birthDate,
-          jenisKelamin: data.gender as any || null,
+          jenisKelamin: data.gender ? data.gender as Gender : null,
           agama: data.religion || null,
           address: data.address || null,
           pekerjaan: data.occupation || null,
@@ -254,9 +262,13 @@ export class MemberRegistrationService {
           postalCode: data.postalCode || null,
           isDeceased: data.isDeceased ?? false,
           // Incentive fields (use user-provided values or defaults if referral code is provided)
-          firstIncentiveType: finalFirstIncentiveType as any || null,
+          firstIncentiveType: finalFirstIncentiveType
+            ? finalFirstIncentiveType as IncentiveType
+            : null,
           firstIncentiveValue: finalFirstIncentiveValue || null,
-          nextIncentiveType: finalNextIncentiveType as any || null,
+          nextIncentiveType: finalNextIncentiveType
+            ? finalNextIncentiveType as IncentiveType
+            : null,
           nextIncentiveValue: finalNextIncentiveValue || null,
         },
         include: {
@@ -423,7 +435,7 @@ export class MemberRegistrationService {
   /**
    * Format member data
    */
-  private formatMemberData(member: any) {
+  private formatMemberData(member: RegisteredMember) {
     return {
       id: member.id,
       memberNo: member.memberNo,

@@ -1,3 +1,5 @@
+import type { MaterialDeviationReason } from '@/lib/materialsApi';
+
 // ============================================================
 // SESSION TYPES
 // ============================================================
@@ -258,7 +260,7 @@ export interface SessionDetail {
   therapyPlan: TherapyPlan | null;
   vitalSigns: VitalSign[];
   infusion: InfusionExecution | null;
-  materials: any[];
+  materials: SessionMaterial[];
   photo: {
     id: string;
     fileUrl: string;
@@ -281,6 +283,25 @@ export interface SessionDetail {
     createdAt: string;
   } | null;
   steps: StepCompletion;
+}
+
+export interface SessionMaterial {
+  id: string;
+  inventoryItemId: string;
+  quantity: number;
+  unit: string;
+  recordedBy: string;
+  createdAt: string;
+  recommendedQuantity?: number | null;
+  deviationReason?: MaterialDeviationReason | null;
+  deviationNotes?: string | null;
+  status?: 'DRAFT' | 'CONSUMED' | 'REVERSED';
+  actualUnitCost?: number | null;
+  totalActualCost?: number | null;
+  inventoryItem: {
+    id: string;
+    masterProduct: { id: string; name: string; code: string };
+  };
 }
 
 // ============================================================

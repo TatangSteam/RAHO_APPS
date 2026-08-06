@@ -1,7 +1,17 @@
-// @ts-nocheck
 import { InventoryItemsService } from './services/inventory-items.service';
 import { prisma } from '../../lib/prisma';
-import { StockMutationType } from '@prisma/client';
+import { Prisma, StockMutationType } from '@prisma/client';
+import ExcelJS from 'exceljs';
+
+type StockMutationFilters = {
+  inventoryItemId?: string;
+  type?: StockMutationType;
+  startDate?: string;
+  endDate?: string;
+  branchIds?: string[];
+  page?: number;
+  limit?: number;
+};
 
 /**
  * Main Inventory Service - Orchestrates inventory items operations
@@ -105,15 +115,7 @@ export class InventoryService {
    * Get stock mutations with filters
    * Now supports filtering by multiple branches (for Admin Manager)
    */
-  async getStockMutations(filters: {
-    inventoryItemId?: string;
-    type?: StockMutationType;
-    startDate?: string;
-    endDate?: string;
-    branchIds?: string[];
-    page?: number;
-    limit?: number;
-  }) {
+  async getStockMutations(filters: StockMutationFilters) {
     const { 
       inventoryItemId, 
       type, 
@@ -136,7 +138,7 @@ export class InventoryService {
       };
     }
 
-    const where: any = {};
+    const where: Prisma.StockMutationWhereInput = {};
 
     // Filter by item
     if (inventoryItemId) {
@@ -199,9 +201,13 @@ export class InventoryService {
           const materialUsage = await prisma.materialUsage.findUnique({
             where: { id: mutation.referenceId },
             include: {
-              treatmentSession: {
+              session: {
                 include: {
-                  member: { include: { profile: true } },
+                  encounter: {
+                    include: {
+                      member: { include: { user: { include: { profile: true } } } },
+                    },
+                  },
                 },
               },
             },
@@ -211,9 +217,9 @@ export class InventoryService {
             referenceInfo = {
               type: 'session',
               id: materialUsage.treatmentSessionId,
-              sessionCode: materialUsage.treatmentSession.sessionCode,
-              memberName: materialUsage.treatmentSession.member.profile.fullName,
-              treatmentDate: materialUsage.treatmentSession.treatmentDate,
+              sessionCode: materialUsage.session.sessionCode,
+              memberName: materialUsage.session.encounter.member.user.profile?.fullName || 'Unknown',
+              treatmentDate: materialUsage.session.treatmentDate,
             };
           }
         } else if (mutation.referenceType === 'Shipment' && mutation.referenceId) {
@@ -221,8 +227,8 @@ export class InventoryService {
             where: { id: mutation.referenceId },
             select: {
               shipmentCode: true,
-              branchFrom: { select: { name: true } },
-              branchTo: { select: { name: true } },
+              fromBranch: { select: { name: true } },
+              toBranch: { select: { name: true } },
             },
           });
 
@@ -231,8 +237,8 @@ export class InventoryService {
               type: 'shipment',
               id: mutation.referenceId,
               shipmentCode: shipment.shipmentCode,
-              from: shipment.branchFrom.name,
-              to: shipment.branchTo.name,
+              from: shipment.fromBranch.name,
+              to: shipment.toBranch.name,
             };
           }
         }
@@ -265,11 +271,10 @@ export class InventoryService {
   /**
    * Export stock mutations to Excel
    */
-  async exportStockMutations(filters: any) {
+  async exportStockMutations(filters: StockMutationFilters) {
     const { data } = await this.getStockMutations({ ...filters, limit: 10000 });
 
     // Use ExcelJS to create workbook
-    const ExcelJS = require('exceljs');
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Stock Mutations');
 
@@ -288,7 +293,7 @@ export class InventoryService {
     ];
 
     // Add data
-    data.forEach((mutation: any) => {
+    data.forEach((mutation) => {
       worksheet.addRow({
         createdAt: new Date(mutation.createdAt).toLocaleString('id-ID'),
         itemName: mutation.inventoryItem.masterProduct.name,

@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Image as ImageIcon, Check, File } from 'lucide-react';
@@ -125,7 +127,8 @@ export default function UploadDocumentsModal({
       setPreview(null);
       onSuccess();
       onClose();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       console.error('Upload error:', err);
       console.error('Error response:', err.response?.data);
       
@@ -329,7 +332,7 @@ export default function UploadDocumentsModal({
                     </div>
                   ) : preview ? (
                     // Image preview
-                    <img
+                    <AppImage
                       src={preview}
                       alt="Preview"
                       className="w-full h-auto max-h-[400px] object-contain"

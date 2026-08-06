@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, Package, Users, CreditCard, CheckCircle2,
@@ -28,6 +29,25 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DashboardDateRange>('month');
+
+  const loadDashboard = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { startDate, endDate } = getDashboardDateRange(dateRange);
+      const data = await dashboardApi.getBranchDashboard(
+        startDate.toISOString(),
+        endDate.toISOString(),
+        user?.branchId || undefined
+      );
+      setStats(data);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Dashboard error:', error);
+      showToast.error('Gagal memuat data dashboard');
+    } finally {
+      setLoading(false);
+    }
+  }, [dateRange, user?.branchId]);
 
   useEffect(() => {
     if (!user) {
@@ -74,29 +94,8 @@ export default function DashboardPage() {
       return;
     }
 
-    loadDashboard();
-  }, [user, dateRange]);
-
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const { startDate, endDate } = getDashboardDateRange(dateRange);
-
-      // For ADMIN_MANAGER, backend will handle branch selection automatically
-      const data = await dashboardApi.getBranchDashboard(
-        startDate.toISOString(),
-        endDate.toISOString(),
-        user?.branchId || undefined
-      );
-      
-      setStats(data);
-    } catch (error) {
-      devError('Dashboard error:', error);
-      showToast.error('Gagal memuat data dashboard');
-    } finally {
-      setLoading(false);
-    }
-  };
+    void loadDashboard();
+  }, [loadDashboard, router, user]);
 
   if (loading) {
     return <DashboardLoadingState text="Memuat dashboard" color="blue" />;

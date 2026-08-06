@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -159,29 +160,12 @@ export default function MasterProductsPage() {
   useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
-    if (!mounted) return;
-    if (!user || !accessToken) { router.push('/login'); return; }
-    if (user.role !== 'SUPER_ADMIN') {
-      showToast.error('Akses ditolak - Hanya untuk Super Admin');
-      router.push('/dashboard');
-      return;
-    }
-    loadProducts();
-  }, [mounted, user, accessToken, categoryFilter, statusFilter]);
-
-  useEffect(() => {
     if (showModal) document.body.style.overflow = 'hidden';
     else document.body.style.overflow = '';
     return () => { document.body.style.overflow = ''; };
   }, [showModal]);
 
-  useEffect(() => {
-    const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && showModal) handleCloseModal(); };
-    window.addEventListener('keydown', onEsc);
-    return () => window.removeEventListener('keydown', onEsc);
-  }, [showModal]);
-
-  const loadProducts = async () => {
+  const loadProducts = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams();
@@ -194,13 +178,14 @@ export default function MasterProductsPage() {
       if (!response.ok) throw new Error('Gagal memuat produk');
       const result = await response.json();
       setProducts(result.data.products || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading products:', error);
       showToast.error(error.message || 'Gagal memuat produk');
     } finally {
       setLoading(false);
     }
-  };
+  }, [accessToken, categoryFilter, statusFilter]);
 
   const handleOpenModal = (product?: MasterProduct) => {
     if (product) {
@@ -216,7 +201,30 @@ export default function MasterProductsPage() {
     setShowModal(true);
   };
 
-  const handleCloseModal = () => { if (submitting) return; setShowModal(false); setEditingProduct(null); };
+  const handleCloseModal = useCallback(() => {
+    if (submitting) return;
+    setShowModal(false);
+    setEditingProduct(null);
+  }, [submitting]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    if (!user || !accessToken) { router.push('/login'); return; }
+    if (user.role !== 'SUPER_ADMIN') {
+      showToast.error('Akses ditolak - Hanya untuk Super Admin');
+      router.push('/dashboard');
+      return;
+    }
+    void loadProducts();
+  }, [accessToken, loadProducts, mounted, router, user]);
+
+  useEffect(() => {
+    const onEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) handleCloseModal();
+    };
+    window.addEventListener('keydown', onEsc);
+    return () => window.removeEventListener('keydown', onEsc);
+  }, [handleCloseModal, showModal]);
 
   const applyTemplate = (tpl: typeof QUICK_TEMPLATES[number]) => {
     setFormData(prev => ({ ...prev, category: tpl.category, baseUnit: tpl.baseUnit, usageUnit: tpl.usageUnit, conversionFactor: tpl.conversionFactor }));
@@ -242,7 +250,8 @@ export default function MasterProductsPage() {
       showToast.success(editingProduct ? 'Produk berhasil diupdate' : 'Produk berhasil ditambahkan');
       handleCloseModal();
       loadProducts();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal menyimpan produk');
     } finally {
       setSubmitting(false);
@@ -259,7 +268,8 @@ export default function MasterProductsPage() {
       if (!response.ok) throw new Error('Gagal mengubah status');
       showToast.success(`Produk ${product.isActive ? 'dinonaktifkan' : 'diaktifkan'}`);
       loadProducts();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal mengubah status');
     }
   };
@@ -276,7 +286,8 @@ export default function MasterProductsPage() {
       }
       showToast.success('Produk berhasil dihapus');
       loadProducts();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal menghapus produk');
     }
   };
@@ -292,7 +303,8 @@ export default function MasterProductsPage() {
       if (!response.ok) throw new Error('Gagal memuat cabang');
       const result = await response.json();
       setAllBranches(result.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches:', error);
     }
   };
@@ -319,7 +331,8 @@ export default function MasterProductsPage() {
       showToast.success('Produk berhasil ditambahkan ke cabang');
       await loadProducts();
       return true;
-    } catch (e: any) {
+    } catch (e) {
+      assertCaughtError(e);
       showToast.error(e.message || 'Gagal menambahkan ke cabang');
       return false;
     }
@@ -369,7 +382,8 @@ export default function MasterProductsPage() {
         }
       }
       return true;
-    } catch (e: any) {
+    } catch (e) {
+      assertCaughtError(e);
       showToast.error(e.message || 'Gagal mengubah stok');
       return false;
     }
@@ -512,7 +526,7 @@ export default function MasterProductsPage() {
             <option value="false">⛔ Nonaktif</option>
           </select>
 
-          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as any)} className={styles.filterSelect}>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className={styles.filterSelect}>
             <option value="name">↕ Urut: Nama (A-Z)</option>
             <option value="category">↕ Urut: Kategori</option>
             <option value="usage">↕ Urut: Paling Dipakai</option>
@@ -535,7 +549,7 @@ export default function MasterProductsPage() {
             <span className={styles.filterBarLabel}>Filter aktif:</span>
             {search && (
               <span className={styles.filterChip}>
-                <Search size={12} /> "{search}"
+                          <Search size={12} /> &quot;{search}&quot;
                 <button onClick={() => setSearch('')}><X size={12} /></button>
               </span>
             )}

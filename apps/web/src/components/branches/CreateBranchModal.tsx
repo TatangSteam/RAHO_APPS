@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { branchesApi, type CreateBranchData } from '@/lib/api/branchesApi';
 import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
@@ -67,6 +68,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       const data = await wilayahApi.getProvinces();
       setProvinces(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading provinces:', error);
       showToast.error('Gagal memuat data provinsi');
     } finally {
@@ -80,6 +82,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       const data = await wilayahApi.getRegencies(provinceCode);
       setRegencies(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading regencies:', error);
       showToast.error('Gagal memuat data kota/kabupaten');
       setRegencies([]);
@@ -132,7 +135,8 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
       await branchesApi.createBranch(formData);
       showToast.success(`Cabang ${formData.name} berhasil dibuat`);
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error creating branch:', error);
       showToast.error(error.message || 'Gagal membuat cabang');
     } finally {
@@ -188,7 +192,7 @@ export default function CreateBranchModal({ show, onClose, onSuccess }: Props) {
               </label>
               <select
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as CreateBranchData['type'] })}
                 className={styles.input}
                 disabled={loading}
               >

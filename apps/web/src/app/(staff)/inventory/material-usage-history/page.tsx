@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -194,6 +195,7 @@ export default function MaterialUsageHistoryPage() {
         const staff = await materialUsageHistoryApi.getStaffList(branchForStaff);
         setStaffList(staff);
       } catch (error) {
+      assertCaughtError(error);
         console.error('Error loading filters:', error);
         showToast.error('Gagal memuat data filter');
       } finally {
@@ -221,6 +223,7 @@ export default function MaterialUsageHistoryPage() {
       });
       setHistoryData(data);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error loading history:', error);
       showToast.error('Gagal memuat riwayat penggunaan barang');
     } finally {

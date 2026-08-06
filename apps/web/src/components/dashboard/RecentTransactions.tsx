@@ -1,7 +1,6 @@
 'use client';
 
-import Link from 'next/link';
-import { Receipt, ChevronRight } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatNumber';
 
 interface Transaction {

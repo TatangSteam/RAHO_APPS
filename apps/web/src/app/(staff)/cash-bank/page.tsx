@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useEffect, useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -39,7 +40,8 @@ export default function CashBankPage() {
       setTransactions(transactionResult.data || []);
       setBranches(branchResult.data.data || []);
       setPermissions(new Set(accessResult.data.data?.permissions || []));
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat kas/bank.');
     } finally { setLoading(false); }
   };
@@ -64,7 +66,8 @@ function AccountForm({ branches, onSaved }: { branches: Branch[]; onSaved: () =>
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     try { await cashBankApi.createAccount(form); showToast.success('Rekening kas/bank dibuat.'); onSaved(); }
-    catch (error: any) { showToast.error(error.response?.data?.error?.message || 'Gagal membuat rekening.'); }
+    catch (error) {
+      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal membuat rekening.'); }
   };
   return <form onSubmit={submit} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-3 dark:border-neutral-800 dark:bg-neutral-900">
     <Field label="Kode"><input required value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>

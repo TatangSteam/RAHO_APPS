@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Check,
@@ -18,7 +19,7 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import styles from '../operations.module.css';
 
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 type View = 'ADJUSTMENT' | 'OPNAME';
 type AdjustmentLine = {
   inventoryItemId: string;
@@ -93,7 +94,8 @@ export default function InventoryControlsPage() {
       setAdjustments(adjustmentResponse.data?.data?.data || []);
       setOpnames(opnameResponse.data?.data?.data || []);
       setBatches(batchResponse.data?.data || []);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Gagal memuat inventory control.');
     } finally {
       setLoading(false);
@@ -129,7 +131,8 @@ export default function InventoryControlsPage() {
       setAdjustmentForm((current) => ({ ...current, reasonCode: 'OTHER', description: '' }));
       setAdjustmentLines([emptyLine()]);
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Adjustment gagal dibuat.');
     } finally {
       setSaving(false);
@@ -145,7 +148,8 @@ export default function InventoryControlsPage() {
       else await inventoryApi.decideStockOpname(row.id, decision, note);
       showToast.success(decision === 'APPROVE' ? 'Dokumen disetujui.' : 'Dokumen ditolak.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Keputusan gagal disimpan.');
     } finally { setSaving(false); }
   };
@@ -157,7 +161,8 @@ export default function InventoryControlsPage() {
       else await inventoryApi.postStockOpname(row.id);
       showToast.success('Mutation dan journal berhasil diposting.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Posting gagal.');
     } finally { setSaving(false); }
   };
@@ -171,7 +176,8 @@ export default function InventoryControlsPage() {
       showToast.success('Snapshot dibuat dan scope stok cabang dikunci.');
       openCount(opname);
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Stock opname gagal dimulai.');
     } finally { setSaving(false); }
   };
@@ -179,7 +185,7 @@ export default function InventoryControlsPage() {
   const openCount = (opname: Row) => {
     setSelectedOpname(opname);
     setCounts(Object.fromEntries((opname.lines || []).map((line: Row) => [line.id, {
-      physicalQty: line.physicalQty ?? line.systemQty,
+      physicalQty: line.physicalQty ?? line.systemQty ?? '',
       resolvedUnitCost: line.resolvedUnitCost ?? line.systemUnitCost ?? '',
       resolutionNote: line.resolutionNote || '',
     }])));
@@ -189,7 +195,7 @@ export default function InventoryControlsPage() {
     if (!selectedOpname) return;
     try {
       setSaving(true);
-      const lines = selectedOpname.lines.map((line: Row) => {
+      const lines = (selectedOpname.lines || []).map((line: Row) => {
         const count = counts[line.id];
         const difference = Number(count.physicalQty) - Number(line.systemQty);
         return {
@@ -204,7 +210,8 @@ export default function InventoryControlsPage() {
       setSelectedOpname(response.data?.data);
       showToast.success('Hitungan opname disimpan.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Hitungan gagal disimpan.');
     } finally { setSaving(false); }
   };
@@ -217,7 +224,8 @@ export default function InventoryControlsPage() {
       setSelectedOpname(null);
       showToast.success('Hasil opname diajukan.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Opname gagal diajukan.');
     } finally { setSaving(false); }
   };
@@ -262,7 +270,7 @@ export default function InventoryControlsPage() {
         })}</div>
         <div className={styles.actions}><button className={styles.secondaryButton} type="button" onClick={() => setAdjustmentLines((current) => [...current, emptyLine()])}><Plus size={15} /> Tambah Baris</button><button className={styles.button} disabled={saving}><Send size={15} /> Ajukan</button></div>
       </form>}
-      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Dokumen</th><th>Reason</th><th>Baris</th><th className={styles.number}>Estimasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{adjustments.length === 0 ? <tr><td className={styles.empty} colSpan={6}>Belum ada adjustment.</td></tr> : adjustments.map((row) => <tr key={row.id}><td><strong>{row.adjustmentNumber}</strong><br />{new Date(row.createdAt).toLocaleString('id-ID')}</td><td>{row.reasonCode}<br />{row.description}</td><td>{row.lines?.length || 0}</td><td className={styles.number}>{formatMoney(row.totalEstimatedValue)}</td><td><span className={statusStyle(row.status)}>{row.status}</span></td><td><div className={styles.actions}>{canApprove && row.status === 'PENDING_APPROVAL' && <><button className={styles.secondaryButton} disabled={saving} onClick={() => void decide('ADJUSTMENT', row, 'APPROVE')} title="Setujui"><Check size={15} /></button><button className={styles.dangerButton} disabled={saving} onClick={() => void decide('ADJUSTMENT', row, 'REJECT')} title="Tolak"><X size={15} /></button></>}{canPost && row.status === 'APPROVED' && <button className={styles.button} disabled={saving} onClick={() => void post('ADJUSTMENT', row)}><Save size={15} /> Posting</button>}</div></td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Dokumen</th><th>Reason</th><th>Baris</th><th className={styles.number}>Estimasi</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{adjustments.length === 0 ? <tr><td className={styles.empty} colSpan={6}>Belum ada adjustment.</td></tr> : adjustments.map((row) => <tr key={row.id}><td><strong>{row.adjustmentNumber}</strong><br />{new Date(String(row.createdAt)).toLocaleString('id-ID')}</td><td>{row.reasonCode}<br />{row.description}</td><td>{row.lines?.length || 0}</td><td className={styles.number}>{formatMoney(row.totalEstimatedValue)}</td><td><span className={statusStyle(row.status || '')}>{row.status}</span></td><td><div className={styles.actions}>{canApprove && row.status === 'PENDING_APPROVAL' && <><button className={styles.secondaryButton} disabled={saving} onClick={() => void decide('ADJUSTMENT', row, 'APPROVE')} title="Setujui"><Check size={15} /></button><button className={styles.dangerButton} disabled={saving} onClick={() => void decide('ADJUSTMENT', row, 'REJECT')} title="Tolak"><X size={15} /></button></>}{canPost && row.status === 'APPROVED' && <button className={styles.button} disabled={saving} onClick={() => void post('ADJUSTMENT', row)}><Save size={15} /> Posting</button>}</div></td></tr>)}</tbody></table></div>
     </> : <>
       {canCount && <form className={styles.form} onSubmit={startOpname}>
         <div className={styles.field}><span>Scope stok</span><strong>{branches.find((branch) => branch.id === branchId)?.name || 'Cabang terpilih'}</strong></div>
@@ -271,10 +279,10 @@ export default function InventoryControlsPage() {
       </form>}
       {selectedOpname && <section className={styles.section}>
         <div className={styles.sectionHeader}><div><h2>{selectedOpname.opnameNumber}</h2><span>{selectedOpname.status}</span></div><button className={styles.secondaryButton} onClick={() => setSelectedOpname(null)} title="Tutup"><X size={15} /></button></div>
-        <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Item</th><th className={styles.number}>System</th><th className={styles.number}>Fisik</th><th className={styles.number}>Unit Cost</th><th>Catatan Selisih</th></tr></thead><tbody>{selectedOpname.lines.map((line: Row) => <tr key={line.id}><td>{itemById.get(line.inventoryItemId)?.masterProduct?.name || line.inventoryItemId}</td><td className={styles.number}>{formatQuantity(line.systemQty)}</td><td><input className={styles.input} inputMode="decimal" value={counts[line.id]?.physicalQty || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], physicalQty: event.target.value } }))} /></td><td><input className={styles.input} inputMode="decimal" value={counts[line.id]?.resolvedUnitCost || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], resolvedUnitCost: event.target.value } }))} /></td><td><input className={styles.input} value={counts[line.id]?.resolutionNote || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], resolutionNote: event.target.value } }))} /></td></tr>)}</tbody></table></div>
+        <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Item</th><th className={styles.number}>System</th><th className={styles.number}>Fisik</th><th className={styles.number}>Unit Cost</th><th>Catatan Selisih</th></tr></thead><tbody>{(selectedOpname.lines || []).map((line: Row) => <tr key={line.id}><td>{itemById.get(line.inventoryItemId || '')?.masterProduct?.name || line.inventoryItemId}</td><td className={styles.number}>{formatQuantity(line.systemQty)}</td><td><input className={styles.input} inputMode="decimal" value={counts[line.id]?.physicalQty || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], physicalQty: event.target.value } }))} /></td><td><input className={styles.input} inputMode="decimal" value={counts[line.id]?.resolvedUnitCost || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], resolvedUnitCost: event.target.value } }))} /></td><td><input className={styles.input} value={counts[line.id]?.resolutionNote || ''} onChange={(event) => setCounts((current) => ({ ...current, [line.id]: { ...current[line.id], resolutionNote: event.target.value } }))} /></td></tr>)}</tbody></table></div>
         <div className={styles.actions}><button className={styles.secondaryButton} disabled={saving} onClick={() => void saveCounts()}><Save size={15} /> Simpan Hitungan</button><button className={styles.button} disabled={saving} onClick={() => void submitOpname()}><Send size={15} /> Ajukan</button></div>
       </section>}
-      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Opname</th><th>Scope</th><th>Snapshot</th><th>Baris</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{opnames.length === 0 ? <tr><td className={styles.empty} colSpan={6}>Belum ada stock opname.</td></tr> : opnames.map((row) => <tr key={row.id}><td><strong>{row.opnameNumber}</strong></td><td>{branches.find((branch) => branch.id === row.branchId)?.name || 'Cabang'}</td><td>{new Date(row.snapshotAt).toLocaleString('id-ID')}</td><td>{row.lines?.length || 0}</td><td><span className={statusStyle(row.status)}>{row.status}</span></td><td><div className={styles.actions}>{canCount && row.status === 'COUNTING' && <button className={styles.secondaryButton} onClick={() => openCount(row)}><ListChecks size={15} /> Hitung</button>}{canApprove && row.status === 'PENDING_APPROVAL' && <><button className={styles.secondaryButton} disabled={saving} onClick={() => void decide('OPNAME', row, 'APPROVE')} title="Setujui"><Check size={15} /></button><button className={styles.dangerButton} disabled={saving} onClick={() => void decide('OPNAME', row, 'REJECT')} title="Tolak"><X size={15} /></button></>}{canPost && row.status === 'APPROVED' && <button className={styles.button} disabled={saving} onClick={() => void post('OPNAME', row)}><Save size={15} /> Posting</button>}</div></td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Opname</th><th>Scope</th><th>Snapshot</th><th>Baris</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{opnames.length === 0 ? <tr><td className={styles.empty} colSpan={6}>Belum ada stock opname.</td></tr> : opnames.map((row) => <tr key={row.id}><td><strong>{row.opnameNumber}</strong></td><td>{branches.find((branch) => branch.id === row.branchId)?.name || 'Cabang'}</td><td>{new Date(String(row.snapshotAt)).toLocaleString('id-ID')}</td><td>{row.lines?.length || 0}</td><td><span className={statusStyle(row.status || '')}>{row.status}</span></td><td><div className={styles.actions}>{canCount && row.status === 'COUNTING' && <button className={styles.secondaryButton} onClick={() => openCount(row)}><ListChecks size={15} /> Hitung</button>}{canApprove && row.status === 'PENDING_APPROVAL' && <><button className={styles.secondaryButton} disabled={saving} onClick={() => void decide('OPNAME', row, 'APPROVE')} title="Setujui"><Check size={15} /></button><button className={styles.dangerButton} disabled={saving} onClick={() => void decide('OPNAME', row, 'REJECT')} title="Tolak"><X size={15} /></button></>}{canPost && row.status === 'APPROVED' && <button className={styles.button} disabled={saving} onClick={() => void post('OPNAME', row)}><Save size={15} /> Posting</button>}</div></td></tr>)}</tbody></table></div>
     </>}
   </main>;
 }

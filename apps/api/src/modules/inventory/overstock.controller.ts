@@ -1,8 +1,7 @@
-// @ts-nocheck
 import { Request, Response, NextFunction } from 'express';
 import { OverstockService } from './services/overstock.service';
 import { sendSuccess, sendError } from '../../utils/response';
-import { Role } from '@prisma/client';
+import { OverstockStatus, Role } from '@prisma/client';
 
 const overstockService = new OverstockService();
 
@@ -16,7 +15,6 @@ export class OverstockController {
    */
   async getOverstock(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = req.user?.userId;
       const userRole = req.user?.role as Role;
       const userBranchId = req.user?.branchId;
 
@@ -28,7 +26,7 @@ export class OverstockController {
 
         const overstocks = await overstockService.getOverstockByBranch(userBranchId, {
           masterProductId: req.query.masterProductId as string,
-          status: req.query.status as any,
+          status: req.query.status as OverstockStatus | undefined,
         });
 
         return sendSuccess(res, overstocks);
@@ -44,7 +42,7 @@ export class OverstockController {
 
         const overstocks = await overstockService.getOverstockByBranch(branchId, {
           masterProductId: req.query.masterProductId as string,
-          status: req.query.status as any,
+          status: req.query.status as OverstockStatus | undefined,
         });
 
         return sendSuccess(res, overstocks);
@@ -62,7 +60,6 @@ export class OverstockController {
    */
   async getOverstockSummary(req: Request, res: Response, next: NextFunction) {
     try {
-      const userId = req.user?.userId;
       const userRole = req.user?.role as Role;
       const userBranchId = req.user?.branchId;
 

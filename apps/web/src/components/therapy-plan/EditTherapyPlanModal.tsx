@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { X, AlertTriangle } from 'lucide-react';
 import type { TherapyPlan } from '@/lib/therapyPlanApi';
@@ -85,7 +86,8 @@ export default function EditTherapyPlanModal({ plan, memberId, onClose, onSucces
       });
       showToast.success('Therapy plan berhasil diedit. Set baru versi ' + ((plan.setVersion || plan.version || 1) + 1) + ' telah dibuat.');
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengedit therapy plan');
     } finally {
       setLoading(false);

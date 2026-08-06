@@ -46,7 +46,6 @@ import {
   enqueueSupplierPaymentRefundedTx,
 } from '@modules/zoho/zoho.vendor-payment.service';
 
-type Tx = Prisma.TransactionClient;
 const MAX_TRANSACTION_ATTEMPTS = 3;
 const id = (prefix: string) => `${prefix}/${new Date().getUTCFullYear()}/${randomUUID().slice(0, 8).toUpperCase()}`;
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -88,7 +87,7 @@ async function readableBranches(userId: string, permission: string) {
     ? (await prisma.branch.findMany({ where: { isActive: true }, select: { id: true } })).map((row) => row.id)
     : accessible;
   return (await Promise.all(candidates.map(async (branchId) =>
-    (await hasPermission(userId, permission as any, branchId)) ? branchId : null
+    (await hasPermission(userId, permission, branchId)) ? branchId : null
   ))).filter((value): value is string => Boolean(value));
 }
 

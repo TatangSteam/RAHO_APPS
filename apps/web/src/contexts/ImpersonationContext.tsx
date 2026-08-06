@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError, type CaughtError } from '@/lib/caughtError';
 import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminManagersApi } from '@/lib/api/adminManagersApi';
@@ -81,7 +82,7 @@ function setAuthCookie(user: ImpersonatedUser): void {
 }
 
 // Helper to extract error message
-function extractErrorMessage(error: any): string {
+function extractErrorMessage(error: CaughtError): string {
   if (error?.response?.data?.message) {
     return error.response.data.message;
   }
@@ -142,6 +143,7 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
             impersonationChain: data.chain || [],
           }));
         } catch (e) {
+      assertCaughtError(e);
           // Silent fail - impersonation data was corrupted
           localStorage.removeItem('impersonation');
         }
@@ -214,7 +216,8 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
         window.location.reload();
       }, 500);
       
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       const errorMessage = extractErrorMessage(error);
       setState(prev => ({ ...prev, loading: false, error: errorMessage }));
       showToast.error(errorMessage);
@@ -282,7 +285,8 @@ export function ImpersonationProvider({ children }: { children: ReactNode }) {
         window.location.reload();
       }, 500);
       
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       const errorMessage = extractErrorMessage(error);
       setState(prev => ({ ...prev, loading: false, error: errorMessage }));
       showToast.error(errorMessage);

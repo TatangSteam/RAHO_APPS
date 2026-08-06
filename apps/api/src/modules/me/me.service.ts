@@ -1,6 +1,7 @@
 import { prisma } from '@lib/prisma';
 import { uploadFile } from '@config/minio';
 import { getDiagnosisCategoryList } from '../../utils/diagnosisCategories';
+import type { VitalSign } from '@prisma/client';
 
 
 interface MemberDashboardData {
@@ -853,7 +854,10 @@ interface MemberSessionDetail {
 }
 
 
-function parseVitalSigns(vitalSigns: any[], timing: 'SEBELUM' | 'SESUDAH'): VitalSignData | null {
+function parseVitalSigns(
+  vitalSigns: Array<Pick<VitalSign, 'waktuCatat' | 'value' | 'pencatatan'>>,
+  timing: 'SEBELUM' | 'SESUDAH',
+): VitalSignData | null {
   const filtered = vitalSigns.filter((v) => v.waktuCatat === timing);
   if (filtered.length === 0) return null;
 

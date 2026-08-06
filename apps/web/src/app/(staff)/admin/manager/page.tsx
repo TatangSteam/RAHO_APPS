@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -72,7 +73,8 @@ export default function AdminManagerPage() {
       setKpi(kpiRes.data);
       setSessionsPerBranch(sessionsRes.data || []);
       setBranches(branchesRes.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal memuat data');
     } finally {
       setLoading(false);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -188,24 +189,18 @@ export default function ExportMembersModal({
     }
   }, [isOpen, user?.role]);
 
-  useEffect(() => {
-    if (isOpen && activeTab === 'custom') {
-      const timer = setTimeout(() => loadPreviewCount(), 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isOpen, activeTab, filters]);
-
   const loadBranches = async () => {
     try {
       const response = await branchesApi.getAllBranches();
       const data = Array.isArray(response.data.data) ? response.data.data : [];
-      setBranches(data.map((b: any) => ({ id: b.id, branchCode: b.branchCode, name: b.name })));
+      setBranches(data.map((b) => ({ id: b.id, branchCode: b.branchCode, name: b.name })));
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load branches:', error);
     }
   };
 
-  const loadPreviewCount = async () => {
+  const loadPreviewCount = useCallback(async () => {
     try {
       setLoadingPreview(true);
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/members/export/preview`, {
@@ -218,11 +213,19 @@ export default function ExportMembersModal({
         setPreviewCount(data.data.count);
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load preview:', error);
     } finally {
       setLoadingPreview(false);
     }
-  };
+  }, [accessToken, filters]);
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'custom') {
+      const timer = setTimeout(() => void loadPreviewCount(), 500);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, isOpen, loadPreviewCount]);
 
   const columnsByCategory = useMemo(() => {
     const grouped: Record<string, ExportColumn[]> = {};
@@ -303,7 +306,8 @@ export default function ExportMembersModal({
 
       showToast.success('Data berhasil di-export');
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal export data');
     } finally {
       setLoading(false);

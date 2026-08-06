@@ -287,7 +287,7 @@ export class AuditLogPage {
   /**
    * Expect log timestamp is recent (within last X minutes)
    */
-  async expectRecentLog(minutes: number = 5) {
+  async expectRecentLog(_minutes: number = 5) {
     const latestLog = await this.getLatestLog();
     await expect(latestLog).toBeVisible();
     await expect(latestLog).toContainText(/\d{2}\s+\w+\s+\d{4}/i);

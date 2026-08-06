@@ -38,7 +38,9 @@ function hashPayload(input: CreateExpenseInput, evidence: ExpenseEvidence) {
   return createHash('sha256').update(JSON.stringify({ ...input, expenseDate: input.expenseDate.toISOString(), evidenceChecksum: evidence.checksum || null })).digest('hex');
 }
 
-function formatExpense(row: any) {
+type ExpenseWithRelations = Prisma.ExpenseGetPayload<{ include: typeof includeExpense }>;
+
+function formatExpense(row: ExpenseWithRelations) {
   return {
     ...row,
     amount: row.amount.toFixed(2),

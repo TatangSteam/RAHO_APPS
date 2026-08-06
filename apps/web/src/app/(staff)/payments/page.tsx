@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useId, useMemo, useState } from 'react';
 import {
   CheckCircle2,
@@ -263,6 +264,7 @@ export default function PaymentsPage() {
       setInvoices(result.data.map(toPaymentInvoice));
       setCashBankAccounts(accounts);
     } catch (error) {
+      assertCaughtError(error);
       setInvoices([]);
       setLoadError(getApiErrorMessage(error));
     } finally {
@@ -346,6 +348,7 @@ export default function PaymentsPage() {
       setToast(`Invoice ${selectedInvoice.invoiceNumber || selectedInvoice.id} difinalisasi; snapshot terkunci`);
       setModal(null);
     } catch (error) {
+      assertCaughtError(error);
       setFormError(getApiErrorMessage(error));
     } finally {
       setSubmittingPayment(false);
@@ -436,6 +439,7 @@ export default function PaymentsPage() {
       setToast('Pembayaran diajukan dan menunggu verifikasi');
       setModal(null);
     } catch (error) {
+      assertCaughtError(error);
       setFormError(getApiErrorMessage(error));
     } finally {
       setSubmittingPayment(false);
@@ -468,6 +472,7 @@ export default function PaymentsPage() {
       setToast(approved ? 'Pembayaran diverifikasi; evidence posting tersedia di layar' : 'Pembayaran ditolak');
       setModal(null);
     } catch (error) {
+      assertCaughtError(error);
       setFormError(getApiErrorMessage(error));
     } finally {
       setSubmittingPayment(false);

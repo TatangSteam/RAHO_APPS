@@ -4,8 +4,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { normalizeIfaSubstances, type TherapyPlanSubstance } from '@/utils/therapyPlanSubstances';
+import { Prisma } from '@prisma/client';
 
-interface BulkTherapyPlanInput {
+export interface BulkTherapyPlanInput {
   keterangan: string;
   ifa250?: number | null;
   ifa500?: number | null;
@@ -25,7 +26,7 @@ interface BulkTherapyPlanInput {
   ifaSubstanceTotalMl?: number | null;
 }
 
-interface BulkCreateTherapyPlansInput {
+export interface BulkCreateTherapyPlansInput {
   therapyPlans: BulkTherapyPlanInput[];
   name?: string | null;
 }
@@ -171,7 +172,7 @@ export class MemberTherapyPlanBulkService {
     let packageInfo: Awaited<ReturnType<typeof this.getMemberPackageSummary>>;
     try {
       packageInfo = await this.getMemberPackageSummary(memberId);
-    } catch (error: any) {
+    } catch (error) {
       // If no package, that's OK - allow creation anyway
       console.log('⚠️ No package found, but allowing therapy plan creation');
       return {
@@ -368,6 +369,10 @@ export class MemberTherapyPlanBulkService {
         const planNumber = index + 1;
         const planCode = `TP-${branchCode}-${member.memberNo}-${padSequence(setSequence)}-${padSequence(planNumber, 2)}`;
 
+        const normalizedIfaSubstances = normalizeIfaSubstances(
+          plan.ifaSubstances,
+          Boolean(plan.ifa250 && plan.ifa250 > 0),
+        );
         const createdPlan = await tx.therapyPlan.create({
           data: {
             planCode,
@@ -389,10 +394,11 @@ export class MemberTherapyPlanBulkService {
             h2s: plan.h2s,
             kcl: plan.kcl,
             jmlNb: plan.jmlNb,
-            ...(normalizeIfaSubstances(
-              plan.ifaSubstances,
-              Boolean(plan.ifa250 && plan.ifa250 > 0)
-            ) as any),
+            ifaSubstances: normalizedIfaSubstances.ifaSubstances
+              ? normalizedIfaSubstances.ifaSubstances as unknown as Prisma.InputJsonValue
+              : Prisma.JsonNull,
+            ifaSubstanceTotalMl: normalizedIfaSubstances.ifaSubstanceTotalMl,
+            noInIfa: normalizedIfaSubstances.noInIfa,
           },
         });
 

@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 
 export interface ColumnConfig {
@@ -57,6 +58,7 @@ export function useMemberColumns() {
         }
       }
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to load column config:', error);
     }
   }, []);
@@ -68,6 +70,7 @@ export function useMemberColumns() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedColumns));
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to save column config:', error);
     }
   };

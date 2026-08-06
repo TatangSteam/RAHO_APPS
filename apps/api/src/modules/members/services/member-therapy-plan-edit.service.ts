@@ -5,8 +5,9 @@
 
 import { prisma } from '@/lib/prisma';
 import { normalizeIfaSubstances, type TherapyPlanSubstance } from '@/utils/therapyPlanSubstances';
+import { Prisma } from '@prisma/client';
 
-interface EditTherapyPlanInput {
+export interface EditTherapyPlanInput {
   keterangan?: string;
   ifa250?: number | null;
   ifa500?: number | null;
@@ -133,6 +134,7 @@ export class MemberTherapyPlanEditService {
             : {
                 ifaSubstances: oldPlan.ifaSubstances,
                 ifaSubstanceTotalMl: oldPlan.ifaSubstanceTotalMl,
+                noInIfa: oldPlan.noInIfa,
               };
 
         const copiedPlan = await tx.therapyPlan.create({
@@ -156,9 +158,13 @@ export class MemberTherapyPlanEditService {
             h2s: isEditedPlan && input.h2s !== undefined ? input.h2s : oldPlan.h2s,
             kcl: isEditedPlan && input.kcl !== undefined ? input.kcl : oldPlan.kcl,
             jmlNb: isEditedPlan && input.jmlNb !== undefined ? input.jmlNb : oldPlan.jmlNb,
-            ...ifaSubstanceData,
+            ifaSubstances: ifaSubstanceData.ifaSubstances === null
+              ? Prisma.JsonNull
+              : ifaSubstanceData.ifaSubstances as Prisma.InputJsonValue,
+            ifaSubstanceTotalMl: ifaSubstanceData.ifaSubstanceTotalMl,
+            noInIfa: ifaSubstanceData.noInIfa,
             version: newVersion,
-          } as any,
+          },
         });
 
         copiedPlans.push({ oldPlan, copiedPlan });

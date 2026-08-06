@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import axios from 'axios';
 
 // Clinicaltables.nlm.nih.gov ICD-10-CM API
@@ -547,6 +548,7 @@ async function searchICDProxy(query: string, limit = DEFAULT_RESULT_LIMIT): Prom
       total: typeof payload.total === 'number' ? payload.total : results.length,
     };
   } catch (error) {
+      assertCaughtError(error);
     console.error('Failed to fetch ICD from local proxy:', error);
     return null;
   }
@@ -614,6 +616,7 @@ export const icdApi = {
         null
       );
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to fetch ICD by code:', error);
       return null;
     }
@@ -670,6 +673,7 @@ export const icdApi = {
       searchCache.set(cacheKey, { data, timestamp: Date.now() });
       return data;
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to fetch from Clinicaltables API:', error);
       return searchCodesInDataset(LOCAL_ICD_CODES, normalizedQuery, limit);
     }
@@ -718,6 +722,7 @@ export const icdApi = {
       // Use the main search function
       return await icdApi.searchICD(searchTerm);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to fetch ICD by category:', error);
       
       // Fallback to local codes

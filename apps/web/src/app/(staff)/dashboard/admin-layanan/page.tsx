@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -30,6 +31,7 @@ export default function AdminLayananDashboardPage() {
       const result = await dashboardApi.getAdminLayananDashboard();
       setData(result);
     } catch (error) {
+      assertCaughtError(error);
       setError(getDashboardLoadErrorMessage(error));
     } finally {
       setLoading(false);

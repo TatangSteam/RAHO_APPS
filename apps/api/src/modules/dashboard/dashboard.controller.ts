@@ -66,7 +66,12 @@ export class DashboardController {
 
       // Operational roles receive counts only, never monetary dashboard data.
       if (userRole === 'ADMIN_CABANG' || userRole === 'ADMIN_LAYANAN' || userRole === 'DOCTOR' || userRole === 'NURSE') {
-        const { revenue: financialRevenue, recentTransactions, topPackages, ...operationalStats } = stats;
+        const {
+          revenue: financialRevenue,
+          recentTransactions: _recentTransactions,
+          topPackages: _topPackages,
+          ...operationalStats
+        } = stats;
         return sendSuccess(res, {
           ...operationalStats,
           revenue: { transactionCount: financialRevenue.transactionCount },

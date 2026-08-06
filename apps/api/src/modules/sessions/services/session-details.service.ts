@@ -1,7 +1,13 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, PackageStatus, PackageType, Role } from '@prisma/client';
+import {
+  AuditAction,
+  type MemberPackage,
+  PackageStatus,
+  PackageType,
+  Prisma,
+  Role,
+} from '@prisma/client';
 import type { UpdateSessionDetailsInput } from '../sessions.schema';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
@@ -382,7 +388,7 @@ export class SessionDetailsService {
   }
 
   private async shiftSessionNumbersIfNeeded(
-    tx: any,
+    tx: Prisma.TransactionClient,
     input: {
       sessionId: string;
       memberId: string;
@@ -434,7 +440,10 @@ export class SessionDetailsService {
     return user;
   }
 
-  private async releasePackageUsage(tx: any, memberPackage: any) {
+  private async releasePackageUsage(
+    tx: Prisma.TransactionClient,
+    memberPackage: Pick<MemberPackage, 'id' | 'usedSessions' | 'status' | 'totalSessions' | 'expiredAt'>,
+  ) {
     const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
     await tx.memberPackage.update({
       where: { id: memberPackage.id },
@@ -454,7 +463,10 @@ export class SessionDetailsService {
     });
   }
 
-  private async consumePackageUsage(tx: any, memberPackage: any) {
+  private async consumePackageUsage(
+    tx: Prisma.TransactionClient,
+    memberPackage: Pick<MemberPackage, 'id' | 'usedSessions' | 'status' | 'totalSessions' | 'expiredAt'>,
+  ) {
     const usedSessions = memberPackage.usedSessions + 1;
     await tx.memberPackage.update({
       where: { id: memberPackage.id },

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
@@ -46,6 +47,7 @@ export default function CreateBranchPage() {
       const data = await wilayahApi.getProvinces();
       setProvinces(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading provinces:', error);
       showToast.error('Gagal memuat data provinsi');
     } finally {
@@ -59,6 +61,7 @@ export default function CreateBranchPage() {
       const data = await wilayahApi.getRegencies(provinceCode);
       setRegencies(data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading regencies:', error);
       showToast.error('Gagal memuat data kota/kabupaten');
       setRegencies([]);
@@ -75,7 +78,8 @@ export default function CreateBranchPage() {
       await branchesApi.createBranch(formData);
       showToast.success('Cabang berhasil dibuat');
       router.push('/branches');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error creating branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal membuat cabang');
     } finally {

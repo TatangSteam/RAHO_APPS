@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
@@ -324,6 +325,7 @@ export default function Step5Infusion({
 
         setSelectedSetPlans(plansInSelectedSet.length > 0 ? plansInSelectedSet : [therapyPlan]);
       } catch (err) {
+      assertCaughtError(err);
         devError('Failed to load selected therapy plan set:', err);
         if (!isMounted) return;
         setSelectedSetPlans([therapyPlan]);
@@ -383,7 +385,8 @@ export default function Step5Infusion({
         onNext();
         setShouldNavigateNext(false);
       }
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to create infusion:', err);
       setError(err.response?.data?.error?.message || 'Gagal menyimpan infus aktual');
       setShouldNavigateNext(false);

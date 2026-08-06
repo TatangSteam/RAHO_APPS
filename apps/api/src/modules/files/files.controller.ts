@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { FilesService } from './files.service';
-import { extractKeyFromUrl } from '../../config/minio';
 
 export class FilesController {
   private filesService: FilesService;
@@ -46,7 +45,7 @@ export class FilesController {
 
       // Stream the file
       result.stream.pipe(res);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }

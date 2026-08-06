@@ -26,8 +26,6 @@ import type {
 } from '../goods-receipt.schema';
 import { resolveBranchInventoryScope } from './inventory-scope.service';
 
-type Tx = Prisma.TransactionClient;
-
 type LockedInventoryItem = {
   id: string;
   masterProductId: string;

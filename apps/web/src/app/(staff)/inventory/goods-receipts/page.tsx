@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ClipboardCheck, PackageCheck, RefreshCw, X } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -12,7 +13,7 @@ import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import styles from '../operations.module.css';
 
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 
 type ReceiptLineForm = {
   purchaseOrderItemId: string;
@@ -89,7 +90,8 @@ export default function GoodsReceiptsPage() {
         (po: PurchaseOrderInventory) => po.status === 'ISSUED' || po.status === 'PARTIALLY_RECEIVED',
       ));
       setReceipts(receiptResponse.data?.data?.data || []);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Gagal memuat Goods Receipt.');
     } finally {
       setLoading(false);
@@ -160,7 +162,8 @@ export default function GoodsReceiptsPage() {
       closePurchaseOrder();
       await load();
       setView('RECEIPTS');
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Goods Receipt gagal diposting.');
     } finally {
       setSaving(false);
@@ -220,6 +223,6 @@ export default function GoodsReceiptsPage() {
         <div className={styles.actions}>{lines.some((line) => line.condition !== 'GOOD' && Number(line.quantity) > 0) && <span className={styles.warningBadge}><AlertTriangle size={13} /> Masuk quarantine</span>}<button className={styles.button} disabled={saving || !canPost}><PackageCheck size={16} /> Posting Goods Receipt</button></div>
       </form>}
       <div className={styles.requestList}>{purchaseOrders.length === 0 ? <div className={styles.empty}>Tidak ada PO yang dapat diterima.</div> : purchaseOrders.map((purchaseOrder) => <article className={styles.requestCard} key={purchaseOrder.id}><div className={styles.requestHeader}><div><strong>{purchaseOrder.poNumber}</strong><span>{purchaseOrder.supplier.supplierCode} / {purchaseOrder.supplier.name}</span><span>{new Date(purchaseOrder.orderDate).toLocaleDateString('id-ID')}</span></div><div className={styles.actions}><span className={purchaseOrder.status === 'ISSUED' ? styles.badge : styles.warningBadge}>{purchaseOrder.status}</span>{canPost && <button className={styles.secondaryButton} type="button" onClick={() => openPurchaseOrder(purchaseOrder)}><PackageCheck size={15} /> Terima</button>}</div></div><div className={styles.lineGrid}>{purchaseOrder.items.filter((item) => Number(item.remainingQty) > 0).map((item) => <div className={styles.lineRow} key={item.id}><div><strong>{item.masterProduct.sku || '-'}</strong><span>{item.masterProduct.name}</span></div><div><span>Ordered / Received</span><strong>{formatQuantity(item.orderedQty)} / {formatQuantity(item.receivedQty)}</strong></div><div><span>Sisa</span><strong>{formatQuantity(item.remainingQty)}</strong></div><div className={styles.number}>{formatMoney(item.unitCost, purchaseOrder.currency)}</div></div>)}</div></article>)}</div>
-    </> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Receipt / Tanggal</th><th>PO / Supplier</th><th>Posting</th><th className={styles.number}>Quantity</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Nilai</th><th>Status</th></tr></thead><tbody>{receipts.length === 0 ? <tr><td colSpan={7} className={styles.empty}>Belum ada Goods Receipt.</td></tr> : receipts.map((receipt) => <tr key={receipt.id}><td>{receipt.receiptNumber}<br />{new Date(receipt.receivedAt).toLocaleString('id-ID')}</td><td>{receipt.purchaseOrder?.poNumber}<br />{receipt.purchaseOrder?.supplier?.name}</td><td>{receipt.inventoryPosting?.postingNumber}</td><td className={styles.number}>{formatQuantity(receipt.totalQuantity)}</td><td className={styles.number}>{formatQuantity(receipt.quarantinedQuantity)}</td><td className={styles.number}>{formatMoney(receipt.totalCost, receipt.purchaseOrder?.currency)}</td><td><span className={styles.badge}>{receipt.status}</span></td></tr>)}</tbody></table></div>}
+    </> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Receipt / Tanggal</th><th>PO / Supplier</th><th>Posting</th><th className={styles.number}>Quantity</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Nilai</th><th>Status</th></tr></thead><tbody>{receipts.length === 0 ? <tr><td colSpan={7} className={styles.empty}>Belum ada Goods Receipt.</td></tr> : receipts.map((receipt) => <tr key={receipt.id}><td>{receipt.receiptNumber}<br />{new Date(String(receipt.receivedAt)).toLocaleString('id-ID')}</td><td>{receipt.purchaseOrder?.poNumber}<br />{receipt.purchaseOrder?.supplier?.name}</td><td>{receipt.inventoryPosting?.postingNumber}</td><td className={styles.number}>{formatQuantity(receipt.totalQuantity)}</td><td className={styles.number}>{formatQuantity(receipt.quarantinedQuantity)}</td><td className={styles.number}>{formatMoney(receipt.totalCost, receipt.purchaseOrder?.currency)}</td><td><span className={styles.badge}>{receipt.status}</span></td></tr>)}</tbody></table></div>}
   </main>;
 }

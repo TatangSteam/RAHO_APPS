@@ -1,8 +1,8 @@
 'use client'
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useCallback } from 'react'
 import { meApi, MemberInvoice } from '@/lib/api/meApi'
 import { api } from '@/lib/api'
-import { generateInvoicePDF } from '@/lib/pdfGenerator'
 import { 
   FileText, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, 
   Download, Image as ImageIcon, X, RefreshCw, ImageOff, Loader2 
@@ -34,9 +34,7 @@ export default function MemberInvoicesPage() {
   // PDF download loading state
   const [pdfLoading, setPdfLoading] = useState<string | null>(null)
 
-  useEffect(() => { loadInvoices() }, [page]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadInvoices = async () => {
+  const loadInvoices = useCallback(async () => {
     try {
       setLoading(true)
       const { data, meta } = await meApi.getInvoices(page, 10)
@@ -45,7 +43,11 @@ export default function MemberInvoicesPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [page])
+
+  useEffect(() => {
+    void loadInvoices()
+  }, [loadInvoices])
 
   const formatDate = (d: string | null) =>
     d ? new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'
@@ -73,6 +75,7 @@ export default function MemberInvoicesPage() {
       const blobUrl = URL.createObjectURL(response.data)
       setProofImageUrl(blobUrl)
     } catch (e) {
+      assertCaughtError(e);
       devError('Failed to load payment proof:', e)
       setProofError(true)
     } finally {
@@ -99,8 +102,10 @@ export default function MemberInvoicesPage() {
       // Fetch full invoice detail
       const fullInvoice = await meApi.getInvoiceDetail(invoiceId)
       // Generate PDF using the same function as admin
+      const { generateInvoicePDF } = await import('@/lib/pdfGenerator')
       await generateInvoicePDF(fullInvoice)
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to generate PDF:', error)
       alert('Gagal membuat PDF. Silakan coba lagi.')
     } finally {

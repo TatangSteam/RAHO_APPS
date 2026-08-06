@@ -9,9 +9,26 @@ import {
   hasPermission,
 } from '@modules/iam/authorization.service';
 import { PERMISSIONS, PermissionCode } from '@modules/iam/permission-catalog';
+import { Prisma } from '@prisma/client';
 
 type AuditWhere = Record<string, unknown>;
-type AuditLogRecord = Record<string, any>;
+
+const auditInclude = {
+  user: {
+    select: {
+      id: true,
+      email: true,
+      staffCode: true,
+      role: true,
+      profile: { select: { fullName: true } },
+    },
+  },
+  branch: {
+    select: { id: true, name: true, branchCode: true },
+  },
+} satisfies Prisma.AuditLogInclude;
+
+type AuditLogRecord = Prisma.AuditLogGetPayload<{ include: typeof auditInclude }>;
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -86,6 +103,25 @@ function appendAndFilter(where: AuditWhere, filter: Record<string, unknown>): vo
   }
   filters.push(filter);
   where.AND = filters;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function auditSnapshots(log: AuditLogRecord) {
+  const meta = asRecord(log.meta);
+  return {
+    meta,
+    actor: asRecord(meta.actorSnapshot),
+    branch: asRecord(meta.branchSnapshot),
+  };
 }
 
 export async function buildAuditWhere(req: Request, permission: PermissionCode = PERMISSIONS.AUDIT_READ): Promise<AuditWhere> {
@@ -184,38 +220,43 @@ function resolveModule(log: AuditLogRecord): string {
 }
 
 function resolveUserName(log: AuditLogRecord): string | null {
+  const { actor } = auditSnapshots(log);
   return (
     log.userName ||
     log.user?.profile?.fullName ||
     log.user?.email ||
-    log.meta?.actorSnapshot?.fullName ||
-    log.meta?.actorSnapshot?.email ||
+    optionalString(actor.fullName) ||
+    optionalString(actor.email) ||
     null
   );
 }
 
 function resolveUserRole(log: AuditLogRecord): string | null {
-  return log.userRole || log.user?.role || log.meta?.actorSnapshot?.role || null;
+  const { actor } = auditSnapshots(log);
+  return log.userRole || log.user?.role || optionalString(actor.role) || null;
 }
 
 function resolveBranchName(log: AuditLogRecord): string | null {
-  return log.branchName || log.branch?.name || log.meta?.branchSnapshot?.branchName || null;
+  const { branch } = auditSnapshots(log);
+  return log.branchName || log.branch?.name || optionalString(branch.branchName) || null;
 }
 
 function resolveEntityCode(log: AuditLogRecord): string | null {
+  const { meta } = auditSnapshots(log);
   return (
     log.entityCode ||
-    log.meta?.entityCode ||
-    log.meta?.sessionCode ||
-    log.meta?.memberNo ||
-    log.meta?.invoiceNo ||
-    log.meta?.shipmentCode ||
-    log.meta?.requestCode ||
+    optionalString(meta.entityCode) ||
+    optionalString(meta.sessionCode) ||
+    optionalString(meta.memberNo) ||
+    optionalString(meta.invoiceNo) ||
+    optionalString(meta.shipmentCode) ||
+    optionalString(meta.requestCode) ||
     null
   );
 }
 
 function formatAuditLog(log: AuditLogRecord) {
+  const { actor, branch: branchSnapshot } = auditSnapshots(log);
   const entityType = log.entityType || log.resource || 'System';
   const entityId = log.entityId || log.resourceId || null;
   const entityCode = resolveEntityCode(log);
@@ -225,11 +266,11 @@ function formatAuditLog(log: AuditLogRecord) {
     createdAt: log.createdAt,
     userId: log.userId,
     userName: resolveUserName(log),
-    userEmail: log.user?.email || log.meta?.actorSnapshot?.email || null,
+    userEmail: log.user?.email || optionalString(actor.email) || null,
     userRole: resolveUserRole(log),
     branchId: log.branchId,
     branchName: resolveBranchName(log),
-    branchCode: log.branch?.branchCode || log.meta?.branchSnapshot?.branchCode || null,
+    branchCode: log.branch?.branchCode || optionalString(branchSnapshot.branchCode) || null,
     action: log.action,
     module: resolveModule(log),
     entityType,
@@ -260,31 +301,6 @@ function formatAuditLog(log: AuditLogRecord) {
           branchCode: log.branch.branchCode,
         }
       : null,
-  };
-}
-
-function getAuditInclude() {
-  return {
-    user: {
-      select: {
-        id: true,
-        email: true,
-        staffCode: true,
-        role: true,
-        profile: {
-          select: {
-            fullName: true,
-          },
-        },
-      },
-    },
-    branch: {
-      select: {
-        id: true,
-        name: true,
-        branchCode: true,
-      },
-    },
   };
 }
 
@@ -330,14 +346,14 @@ function buildCsv(logs: ReturnType<typeof formatAuditLog>[]): string {
 
 async function findLogByIdForRole(req: Request, id: string) {
   const baseWhere = await buildAuditWhere(req);
-  return (prisma.auditLog as any).findFirst({
+  return prisma.auditLog.findFirst({
     where: {
       AND: [
         { id },
         baseWhere,
-      ],
+      ] as Prisma.AuditLogWhereInput[],
     },
-    include: getAuditInclude(),
+    include: auditInclude,
   });
 }
 
@@ -349,10 +365,10 @@ export async function getAuditLogs(req: Request, res: Response, next: NextFuncti
     const where = await buildAuditWhere(req);
 
     const [total, logs] = await Promise.all([
-      (prisma.auditLog as any).count({ where }),
-      (prisma.auditLog as any).findMany({
-        where,
-        include: getAuditInclude(),
+      prisma.auditLog.count({ where: where as Prisma.AuditLogWhereInput }),
+      prisma.auditLog.findMany({
+        where: where as Prisma.AuditLogWhereInput,
+        include: auditInclude,
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
@@ -382,9 +398,9 @@ export async function getAuditLogDetail(req: Request, res: Response, next: NextF
 export async function exportAuditLogs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const where = await buildAuditWhere(req, PERMISSIONS.AUDIT_EXPORT);
-    const logs = await (prisma.auditLog as any).findMany({
-      where,
-      include: getAuditInclude(),
+    const logs = await prisma.auditLog.findMany({
+      where: where as Prisma.AuditLogWhereInput,
+      include: auditInclude,
       orderBy: { createdAt: 'desc' },
       take: EXPORT_LIMIT,
     });
@@ -413,20 +429,20 @@ export async function getAuditLogStats(req: Request, res: Response, next: NextFu
     };
 
     const [totalActions, actionsByType, modulesByType, topUsers] = await Promise.all([
-      (prisma.auditLog as any).count({ where: statsWhere }),
-      (prisma.auditLog as any).groupBy({
+      prisma.auditLog.count({ where: statsWhere as Prisma.AuditLogWhereInput }),
+      prisma.auditLog.groupBy({
         by: ['action'],
-        where: statsWhere,
+        where: statsWhere as Prisma.AuditLogWhereInput,
         _count: { action: true },
       }),
-      (prisma.auditLog as any).groupBy({
+      prisma.auditLog.groupBy({
         by: ['module'],
-        where: statsWhere,
+        where: statsWhere as Prisma.AuditLogWhereInput,
         _count: { module: true },
       }),
-      (prisma.auditLog as any).groupBy({
+      prisma.auditLog.groupBy({
         by: ['userId'],
-        where: statsWhere,
+        where: statsWhere as Prisma.AuditLogWhereInput,
         _count: { userId: true },
         orderBy: { _count: { userId: 'desc' } },
         take: 10,
@@ -449,17 +465,17 @@ export async function getAuditLogStats(req: Request, res: Response, next: NextFu
 
     sendSuccess(res, {
       totalActions,
-      actionsByType: actionsByType.map((item: any) => ({
+      actionsByType: actionsByType.map((item) => ({
         action: item.action,
         count: item._count.action,
       })),
       modulesByType: modulesByType
-        .filter((item: any) => item.module)
-        .map((item: any) => ({
+        .filter((item) => item.module)
+        .map((item) => ({
           module: item.module,
           count: item._count.module,
         })),
-      topUsers: topUsers.map((item: any) => {
+      topUsers: topUsers.map((item) => {
         const user = users.find((candidate) => candidate.id === item.userId);
         return {
           userId: item.userId,

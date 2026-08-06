@@ -1,4 +1,5 @@
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
+import type { Request } from 'express';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
 
@@ -260,10 +261,12 @@ function toLegacyAuditLogData(data: AuditLogCreateData): AuditLogCreateData {
 
 async function createAuditLog(data: AuditLogCreateData): Promise<void> {
   try {
-    await (prisma.auditLog as any).create({ data });
+    await prisma.auditLog.create({ data: data as Prisma.AuditLogUncheckedCreateInput });
   } catch (error) {
     if (!isUnknownAuditLogFieldError(error)) throw error;
-    await (prisma.auditLog as any).create({ data: toLegacyAuditLogData(data) });
+    await prisma.auditLog.create({
+      data: toLegacyAuditLogData(data) as Prisma.AuditLogUncheckedCreateInput,
+    });
   }
 }
 
@@ -393,7 +396,7 @@ export async function logAudit(payload: AuditLogPayload): Promise<void> {
  * Automatically handles impersonation tracking.
  */
 export async function logAuditFromRequest(
-  req: any,
+  req: Request,
   action: AuditActionValue,
   resource: string,
   resourceId: string,

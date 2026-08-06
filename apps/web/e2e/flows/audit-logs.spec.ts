@@ -302,7 +302,7 @@ test.describe('Audit Log Accuracy', () => {
 
   test('should log login action', async ({ loginAs }) => {
     // Login creates audit log automatically
-    const page = await loginAs('ADMIN_CABANG');
+    await loginAs('ADMIN_CABANG');
 
     // Switch to super admin to view logs
     const adminPage = await loginAs('SUPER_ADMIN');

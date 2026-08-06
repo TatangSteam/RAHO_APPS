@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Gender, IncentiveType, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { deleteFileByUrl } from '../../../config/minio';
 import {
@@ -12,6 +11,14 @@ import {
 import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
 
 const HASH_ROUNDS = 12;
+
+type UpdatedMember = Prisma.MemberGetPayload<{
+  include: {
+    user: { include: { profile: true } };
+    registrationBranch: true;
+    branchAccesses: { include: { branch: true } };
+  };
+}>;
 
 /**
  * Service for updating member data
@@ -185,11 +192,13 @@ export class MemberUpdateService {
       }
 
       // Update Member table (member-specific fields)
-      const memberUpdateData: any = {};
+      const memberUpdateData: Prisma.MemberUncheckedUpdateInput = {};
       if (data.nik !== undefined) memberUpdateData.nik = data.nik || null;
       if (data.birthPlace !== undefined) memberUpdateData.tempatLahir = data.birthPlace || null;
       if (data.birthDate !== undefined) memberUpdateData.dateOfBirth = requestedBirthDate;
-      if (data.gender !== undefined) memberUpdateData.jenisKelamin = data.gender || null;
+      if (data.gender !== undefined) {
+        memberUpdateData.jenisKelamin = data.gender ? data.gender as Gender : null;
+      }
       if (data.religion !== undefined) memberUpdateData.agama = data.religion || null;
       if (data.address !== undefined) memberUpdateData.address = data.address || null;
       if (data.occupation !== undefined) memberUpdateData.pekerjaan = data.occupation || null;
@@ -204,9 +213,17 @@ export class MemberUpdateService {
       if (data.postalCode !== undefined) memberUpdateData.postalCode = data.postalCode || null;
       if (data.isActive !== undefined) memberUpdateData.isActive = data.isActive;
       if (data.isDeceased !== undefined) memberUpdateData.isDeceased = data.isDeceased;
-      if (data.firstIncentiveType !== undefined) memberUpdateData.firstIncentiveType = data.firstIncentiveType || null;
+      if (data.firstIncentiveType !== undefined) {
+        memberUpdateData.firstIncentiveType = data.firstIncentiveType
+          ? data.firstIncentiveType as IncentiveType
+          : null;
+      }
       if (data.firstIncentiveValue !== undefined) memberUpdateData.firstIncentiveValue = data.firstIncentiveValue ?? null;
-      if (data.nextIncentiveType !== undefined) memberUpdateData.nextIncentiveType = data.nextIncentiveType || null;
+      if (data.nextIncentiveType !== undefined) {
+        memberUpdateData.nextIncentiveType = data.nextIncentiveType
+          ? data.nextIncentiveType as IncentiveType
+          : null;
+      }
       if (data.nextIncentiveValue !== undefined) memberUpdateData.nextIncentiveValue = data.nextIncentiveValue ?? null;
 
       if (Object.keys(memberUpdateData).length > 0) {
@@ -293,7 +310,7 @@ export class MemberUpdateService {
       where: { id: memberId },
       include: {
         documents: true,
-        packages: true,
+        memberPackages: true,
         user: {
           include: {
             profile: true,
@@ -327,7 +344,7 @@ export class MemberUpdateService {
     }
 
     // Delete payment proofs from packages
-    for (const pkg of member.packages) {
+    for (const pkg of member.memberPackages) {
       if (pkg.paymentProofUrl) {
         console.log(`[Member] Deleting package payment proof: ${pkg.paymentProofUrl}`);
         await deleteFileByUrl(pkg.paymentProofUrl);
@@ -367,7 +384,7 @@ export class MemberUpdateService {
   /**
    * Format member data
    */
-  private formatMemberData(member: any) {
+  private formatMemberData(member: UpdatedMember) {
     return {
       id: member.id,
       memberNo: member.memberNo,
@@ -387,11 +404,11 @@ export class MemberUpdateService {
         name: member.registrationBranch.name,
         branchCode: member.registrationBranch.branchCode,
       } : null,
-      branchAccesses: member.branchAccesses?.map((access: any) => ({
+      branchAccesses: member.branchAccesses?.map((access) => ({
         branchId: access.branchId,
         branchName: access.branch.name,
         branchCode: access.branch.branchCode,
-        grantedAt: access.grantedAt.toISOString(),
+        grantedAt: access.createdAt.toISOString(),
       })) || [],
       userId: member.userId,
       userEmail: member.user?.email,

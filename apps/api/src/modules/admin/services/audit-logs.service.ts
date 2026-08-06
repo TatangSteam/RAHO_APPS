@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 
 /**
  * Service for audit log management
@@ -29,7 +28,7 @@ export class AuditLogsService {
     } = filters;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.AuditLogWhereInput = {};
 
     if (userId) {
       where.userId = userId;

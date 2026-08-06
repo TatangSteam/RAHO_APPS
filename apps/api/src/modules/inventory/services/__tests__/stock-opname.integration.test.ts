@@ -24,8 +24,6 @@ describeDatabase('Sprint 9 stock opname atomic posting', () => {
   const productId = `s9_product_${suffix}`;
   const itemId = `s9_item_${suffix}`;
   const automaticReasonCode = `S9_AUTO_${suffix}`.toUpperCase();
-  let opnameId: string;
-
   beforeAll(async () => {
     await prisma.user.createMany({ data: [
       { id: makerId, email: `s9-maker-${suffix}@test.local`, password: 'test', role: Role.ADMIN_LOGISTIK },
@@ -60,8 +58,6 @@ describeDatabase('Sprint 9 stock opname atomic posting', () => {
 
   it('locks the location, posts variance mutation and journal exactly once', async () => {
     const opname = await startStockOpname(makerId, { branchId, stockLocationId: locationId, notes: 'Monthly count' });
-    opnameId = opname.id;
-
     await expect(issueInventory(makerId, {
       idempotencyKey: `S9-LOCK-${suffix}`, branchId, sourceType: 'LOCK_TEST', sourceId: suffix,
       reasonCode: 'LOCK_TEST', occurredAt: new Date('2026-07-22T09:00:00.000Z'),

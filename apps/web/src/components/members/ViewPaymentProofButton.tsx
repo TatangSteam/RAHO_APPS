@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import PaymentProofModal from '../invoices/PaymentProofModal';
 import { invoiceApi } from '@/lib/invoiceApi';
@@ -15,7 +16,7 @@ interface Props {
 
 export default function ViewPaymentProofButton({ 
   packageId, 
-  packageCode, 
+  packageCode: _packageCode,
   status
 }: Props) {
   const [showModal, setShowModal] = useState(false);
@@ -57,7 +58,7 @@ export default function ViewPaymentProofButton({
       });
       
       // Check if invoice has payment proof
-      const hasPaymentProof = data.payments && data.payments.some((p: any) => p.proofFileUrl);
+      const hasPaymentProof = data.payments && data.payments.some((p) => p.proofFileUrl);
       
       if (!hasPaymentProof) {
         setError('Bukti pembayaran belum tersedia untuk invoice ini');
@@ -67,7 +68,8 @@ export default function ViewPaymentProofButton({
 
       setInvoice(data);
       setShowModal(true);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Error fetching invoice:', err);
       devError('Error response:', err.response);
       

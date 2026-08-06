@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -65,6 +66,7 @@ export default function MemberHistoricalImportPage() {
       setBranches(data);
       if (data.length === 1) setBranchId(data[0].id);
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     } finally {
       setLoadingBranches(false);
@@ -88,6 +90,7 @@ export default function MemberHistoricalImportPage() {
       setDryRun(result);
       showToast.success('Dry-run selesai');
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     } finally {
       setDryRunLoading(false);
@@ -111,6 +114,7 @@ export default function MemberHistoricalImportPage() {
       setExecuteResult(result);
       showToast.success('Import selesai');
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     } finally {
       setExecuteLoading(false);

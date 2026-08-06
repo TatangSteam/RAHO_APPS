@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { AdminManagerAccessScope, Prisma, PackageType } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { logger } from '@lib/logger';
@@ -162,7 +161,7 @@ async function createDefaultPackagePricingForBranch(branchId: string) {
         data: {
           branchId,
           packageType: PackageType.BOOSTER,
-          boosterType: boosterType.code as any,
+          boosterType: boosterType.code,
           serviceType: serviceType.code,
           name,
           totalSessions: 1,
@@ -334,7 +333,7 @@ const branchSelect = {
 } satisfies Prisma.BranchSelect;
 
 // ── List Branches ─────────────────────────────────────────────
-export async function listBranchesService(query: ListBranchesQuery, userId?: string, userRole?: string) {
+export async function listBranchesService(query: ListBranchesQuery, userId?: string, _userRole?: string) {
   const { page, limit, search, isActive, type } = query;
   const skip = (page - 1) * limit;
 
@@ -354,8 +353,7 @@ export async function listBranchesService(query: ListBranchesQuery, userId?: str
 
   where.id = { in: userId ? await getReadableBranchIds(userId) : [] };
 
-  const summaryWhere = { ...where } as Prisma.BranchWhereInput;
-  delete (summaryWhere as any).isActive;
+  const { isActive: _excludedStatus, ...summaryWhere } = where;
 
   const [total, activeTotal, inactiveTotal, branches] = await Promise.all([
     prisma.branch.count({ where }),
@@ -451,7 +449,7 @@ export async function getBranchWithStatsService(branchId: string) {
 }
 
 // ── Get All Branches with Stats ───────────────────────────────
-export async function getAllBranchesWithStatsService(userId?: string, userRole?: string) {
+export async function getAllBranchesWithStatsService(userId?: string, _userRole?: string) {
   
   // Build where clause - ADMIN_MANAGER only sees branches they manage via ManagerBranch
   const where: Prisma.BranchWhereInput = {
@@ -506,7 +504,7 @@ export async function getAllBranchesWithStatsService(userId?: string, userRole?:
 }
 
 // ── Create Branch ─────────────────────────────────────────────
-export async function createBranchService(input: CreateBranchInput, createdBy: string, userRole?: string) {
+export async function createBranchService(input: CreateBranchInput, createdBy: string, _userRole?: string) {
   const branchCode = await generateUniqueBranchCode(input);
 
   // Check if branch code already exists
@@ -526,6 +524,7 @@ export async function createBranchService(input: CreateBranchInput, createdBy: s
   const branch = await prisma.branch.create({
     data: {
       ...branchInput,
+      name: input.name,
       branchCode,
       createdBy,
     },

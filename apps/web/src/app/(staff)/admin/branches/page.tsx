@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -49,7 +50,8 @@ export default function BranchesPage() {
       setLoading(true);
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches:', error);
       showToast.error(error.message || 'Gagal memuat data cabang');
     } finally {
@@ -66,7 +68,8 @@ export default function BranchesPage() {
       await branchesApi.deleteBranch(branchId);
       showToast.success('Cabang berhasil dihapus permanen');
       loadBranches();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting branch:', error);
       showToast.error(
         error.response?.data?.error?.message ||
@@ -85,7 +88,8 @@ export default function BranchesPage() {
       showToast.success(`Cabang ${forceDeleteBranch.name} dan SEMUA datanya berhasil dihapus PERMANEN`);
       setForceDeleteBranch(null);
       loadBranches();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error force deleting branch:', error);
       showToast.error(
         error.response?.data?.error?.message ||

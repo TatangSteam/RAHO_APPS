@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { createMemberApi } from '@/lib/membersApi';
@@ -127,6 +128,7 @@ export default function NewMemberPage() {
         // Note: Files cannot be saved to localStorage, user will need to re-upload
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading saved form data:', error);
     }
   }, [FORM_STORAGE_KEY, requestedBranchId]);
@@ -141,6 +143,7 @@ export default function NewMemberPage() {
         };
         localStorage.setItem(FORM_STORAGE_KEY, JSON.stringify(dataToSave));
       } catch (error) {
+      assertCaughtError(error);
         devError('Error saving form data:', error);
       }
     }, 1000); // Save after 1 second of inactivity
@@ -153,6 +156,7 @@ export default function NewMemberPage() {
     try {
       localStorage.removeItem(FORM_STORAGE_KEY);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error clearing saved form data:', error);
     }
   };
@@ -360,7 +364,8 @@ export default function NewMemberPage() {
       clearSavedFormData();
       
       router.push(`/members/${result.memberId}`);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       const errorMessage = err.response?.data?.error?.message || 'Gagal mendaftarkan member';
       const errorCode = err.response?.data?.error?.code;
       const status = err.response?.status;

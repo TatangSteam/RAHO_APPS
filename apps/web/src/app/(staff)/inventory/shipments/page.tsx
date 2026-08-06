@@ -45,17 +45,7 @@ export default function ShipmentsPage() {
       }
 
       const response = await inventoryApi.getShipments(params);
-      const responseBody = response.data;
-      
-      let shipmentsData: Shipment[] = [];
-      
-      if (responseBody?.data) {
-        if (Array.isArray(responseBody.data)) {
-          shipmentsData = responseBody.data;
-        } else if (responseBody.data.data && Array.isArray(responseBody.data.data)) {
-          shipmentsData = responseBody.data.data;
-        }
-      }
+      const shipmentsData: Shipment[] = response.data.data;
       
       setShipments(shipmentsData);
     } catch (error: unknown) {

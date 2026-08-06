@@ -1,14 +1,15 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, PackagePlus, RefreshCw, RotateCcw } from 'lucide-react';
 import { api } from '@/lib/api';
-import { inventoryApi } from '@/lib/api/inventoryApi';
+import { InventoryMasterProduct, inventoryApi } from '@/lib/api/inventoryApi';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import styles from '../operations.module.css';
 
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 
 function idempotencyKey(prefix: string) {
   return `${prefix}:${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`}`;
@@ -35,7 +36,7 @@ export default function InventoryLedgerPage() {
   const [balances, setBalances] = useState<Row[]>([]);
   const [postings, setPostings] = useState<Row[]>([]);
   const [items, setItems] = useState<Row[]>([]);
-  const [products, setProducts] = useState<Row[]>([]);
+  const [products, setProducts] = useState<InventoryMasterProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -88,9 +89,10 @@ export default function InventoryLedgerPage() {
       setBalances(balanceResponse.data?.data?.data || []);
       setPostings(postingResponse.data?.data || []);
       setItems(itemResponse.data?.data?.items || itemResponse.data?.data || []);
-      setProducts((productResponse.data?.data?.products || []).filter((product: Row) => product.isActive));
+      setProducts((productResponse.data?.data?.products || []).filter((product) => product.isActive));
       setReconciliation(reconciliationResponse?.data?.data || null);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Gagal memuat inventory ledger. Jalankan migration terlebih dahulu.');
     } finally {
       setLoading(false);
@@ -119,7 +121,8 @@ export default function InventoryLedgerPage() {
       setLastInboundPosting(response.data?.data || null);
       showToast.success(inboundMode === 'OPENING' ? 'Opening stock berhasil diposting.' : 'Receipt berhasil diposting.');
       await load();
-    } catch (requestError: any) { showToast.error(requestError.response?.data?.error?.message || 'Receipt gagal.'); }
+    } catch (requestError) {
+      assertCaughtError(requestError); showToast.error(requestError.response?.data?.error?.message || 'Receipt gagal.'); }
     finally { setSaving(false); }
   };
 
@@ -135,7 +138,8 @@ export default function InventoryLedgerPage() {
       setIssue({ inventoryItemId: '', quantity: '', sourceId: '' });
       showToast.success('Issue FIFO berhasil diposting.');
       await load();
-    } catch (requestError: any) { showToast.error(requestError.response?.data?.error?.message || 'Issue FIFO gagal.'); }
+    } catch (requestError) {
+      assertCaughtError(requestError); showToast.error(requestError.response?.data?.error?.message || 'Issue FIFO gagal.'); }
     finally { setSaving(false); }
   };
 
@@ -147,7 +151,8 @@ export default function InventoryLedgerPage() {
       await inventoryApi.reverseInventoryPosting(posting.id, { idempotencyKey: idempotencyKey('REVERSAL'), reasonCode: reason });
       showToast.success('Posting berhasil dibalik.');
       await load();
-    } catch (requestError: any) { showToast.error(requestError.response?.data?.error?.message || 'Reversal gagal.'); }
+    } catch (requestError) {
+      assertCaughtError(requestError); showToast.error(requestError.response?.data?.error?.message || 'Reversal gagal.'); }
     finally { setSaving(false); }
   };
 
@@ -192,6 +197,6 @@ export default function InventoryLedgerPage() {
     {reconciliation && <div className={styles.summary}><div className={styles.summaryItem}><span>Nilai cost layer</span><strong>Rp {Number(reconciliation.layerValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Nilai in-transit</span><strong>Rp {Number(reconciliation.inTransitValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Total inventory value</span><strong>Rp {Number(reconciliation.totalInventoryValue || 0).toLocaleString('id-ID')}</strong></div><div className={styles.summaryItem}><span>Mismatch</span><strong>{reconciliation.mismatchCount || 0}</strong></div></div>}
     <nav className={styles.tabs}><button className={`${styles.tab} ${view === 'BALANCE' ? styles.tabActive : ''}`} onClick={() => setView('BALANCE')}>Saldo</button><button className={`${styles.tab} ${view === 'POSTING' ? styles.tabActive : ''}`} onClick={() => setView('POSTING')}>Posting & FIFO</button></nav>
     {error && <div className={styles.error}>{error}</div>}
-    {loading ? <div className={styles.loading}>Memuat ledger...</div> : view === 'BALANCE' ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Produk</th><th>Batch</th><th className={styles.number}>On hand</th><th className={styles.number}>Reserved</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Available</th></tr></thead><tbody>{balances.map((row) => <tr key={row.id}><td>{row.masterProduct?.sku}<br />{row.masterProduct?.name}</td><td>{row.batch?.batchNumber || '-'}</td><td className={styles.number}>{String(row.onHandQty)}</td><td className={styles.number}>{String(row.reservedQty)}</td><td className={styles.number}>{String(row.quarantineQty)}</td><td className={styles.number}>{String(row.availableQty)}</td></tr>)}</tbody></table></div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Nomor / Tanggal</th><th>Type</th><th>Source</th><th>Mutation</th><th>FIFO layer</th><th className={styles.number}>Actual cost</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{postings.map((posting) => <tr key={posting.id}><td>{posting.postingNumber}<br />{new Date(posting.occurredAt).toLocaleString('id-ID')}</td><td>{posting.type}</td><td>{posting.sourceType}<br />{posting.sourceId}</td><td>{posting.stockMutations?.map((mutation: Row) => `${mutation.inventoryItem?.masterProduct?.name}: ${mutation.quantity}`).join(', ') || '-'}</td><td>{posting.costLayers?.map((layer: Row) => `${layer.batch?.batchNumber || 'NO_BATCH'}: ${layer.originalQty} → ${layer.remainingQty} @ ${layer.unitCost}`).join(', ') || '-'}</td><td className={styles.number}>{String(posting.totalCost)}</td><td><span className={posting.status === 'POSTED' ? styles.badge : styles.inactiveBadge}>{posting.status}</span></td><td>{canReverse && posting.type === 'ISSUE' && posting.status === 'POSTED' ? <button className={styles.secondaryButton} disabled={saving} onClick={() => void reverse(posting)} title="Reverse"><RotateCcw size={15} /></button> : '-'}</td></tr>)}</tbody></table></div>}
+    {loading ? <div className={styles.loading}>Memuat ledger...</div> : view === 'BALANCE' ? <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Produk</th><th>Batch</th><th className={styles.number}>On hand</th><th className={styles.number}>Reserved</th><th className={styles.number}>Quarantine</th><th className={styles.number}>Available</th></tr></thead><tbody>{balances.map((row) => <tr key={row.id}><td>{row.masterProduct?.sku}<br />{row.masterProduct?.name}</td><td>{row.batch?.batchNumber || '-'}</td><td className={styles.number}>{String(row.onHandQty)}</td><td className={styles.number}>{String(row.reservedQty)}</td><td className={styles.number}>{String(row.quarantineQty)}</td><td className={styles.number}>{String(row.availableQty)}</td></tr>)}</tbody></table></div> : <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>Nomor / Tanggal</th><th>Type</th><th>Source</th><th>Mutation</th><th>FIFO layer</th><th className={styles.number}>Actual cost</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{postings.map((posting) => <tr key={posting.id}><td>{posting.postingNumber}<br />{new Date(String(posting.occurredAt)).toLocaleString('id-ID')}</td><td>{posting.type}</td><td>{posting.sourceType}<br />{posting.sourceId}</td><td>{posting.stockMutations?.map((mutation: Row) => `${mutation.inventoryItem?.masterProduct?.name}: ${mutation.quantity}`).join(', ') || '-'}</td><td>{posting.costLayers?.map((layer: Row) => `${layer.batch?.batchNumber || 'NO_BATCH'}: ${layer.originalQty} → ${layer.remainingQty} @ ${layer.unitCost}`).join(', ') || '-'}</td><td className={styles.number}>{String(posting.totalCost)}</td><td><span className={posting.status === 'POSTED' ? styles.badge : styles.inactiveBadge}>{posting.status}</span></td><td>{canReverse && posting.type === 'ISSUE' && posting.status === 'POSTED' ? <button className={styles.secondaryButton} disabled={saving} onClick={() => void reverse(posting)} title="Reverse"><RotateCcw size={15} /></button> : '-'}</td></tr>)}</tbody></table></div>}
   </main>;
 }

@@ -2,12 +2,16 @@ import { api } from '@/lib/api';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { devLog } from '@/lib/logger';
 import type {
-  Member,
   MemberDetail,
   MemberLookup,
   CreateMemberData,
   MembersResponse,
 } from '@/types/member';
+
+export type UpdateMemberData = Partial<CreateMemberData> & {
+  username?: string;
+  emergencyContactName?: string;
+};
 
 // ── Get Members List ───────────────────────────────────────────
 export async function getMembersApi(params?: {
@@ -96,7 +100,7 @@ export async function getMemberDetailApi(memberId: string): Promise<MemberDetail
 // ── Update Member ──────────────────────────────────────────────
 export async function updateMemberApi(
   memberId: string,
-  updateData: Partial<CreateMemberData>
+  updateData: UpdateMemberData
 ): Promise<{ message: string }> {
   const { data } = await api.patch<{ data: { message: string } }>(
     `/members/${memberId}`,

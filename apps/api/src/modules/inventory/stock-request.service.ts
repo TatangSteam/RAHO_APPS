@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { StockRequestStatus, Role, AuditAction, InvoiceStatus, PaymentVerificationStatus } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
@@ -74,7 +73,8 @@ export class StockRequestService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    const requestEditorRoles: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
+    if (!user || !requestEditorRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -108,7 +108,8 @@ export class StockRequestService {
       };
     }
 
-    if (![StockRequestStatus.PENDING, StockRequestStatus.WAITING_PAYMENT].includes(request.status)) {
+    const editableStatuses: StockRequestStatus[] = [StockRequestStatus.PENDING, StockRequestStatus.WAITING_PAYMENT];
+    if (!editableStatuses.includes(request.status)) {
       throw {
         status: 422,
         code: 'REQUEST_NOT_EDITABLE',

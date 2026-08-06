@@ -1,10 +1,11 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
-import { inventoryApi, type UpdateStockRequestInput } from '@/lib/api/inventoryApi';
+import { inventoryApi, type InventoryMasterProduct, type UpdateStockRequestInput } from '@/lib/api/inventoryApi';
 import { devLog, devError } from '@/lib/logger';
 import { 
   AlertTriangle,
@@ -65,14 +66,14 @@ export default function StockRequestsPage() {
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
-  const [masterProducts, setMasterProducts] = useState<any[]>([]);
+  const [masterProducts, setMasterProducts] = useState<InventoryMasterProduct[]>([]);
 
   const fetchRequests = useCallback(async () => {
     if (!accessToken) return;
     
     try {
       setLoading(true);
-      const params: any = {};
+      const params: NonNullable<Parameters<typeof inventoryApi.getStockRequests>[0]> = {};
       if (filter !== 'ALL') params.status = filter;
 
       const response = await inventoryApi.getStockRequests(params);
@@ -88,7 +89,8 @@ export default function StockRequestsPage() {
       }
       
       setRequests(requestsData);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch requests:', error);
       showToast.error('Gagal memuat data request stok');
       setRequests([]);
@@ -104,17 +106,16 @@ export default function StockRequestsPage() {
       const response = await inventoryApi.getMasterProducts();
       const responseBody = response.data;
       
-      let productsData: any[] = [];
+      let productsData: InventoryMasterProduct[] = [];
       if (responseBody?.data) {
-        if (responseBody.data.products && Array.isArray(responseBody.data.products)) {
+        if (Array.isArray(responseBody.data.products)) {
           productsData = responseBody.data.products;
-        } else if (Array.isArray(responseBody.data)) {
-          productsData = responseBody.data;
         }
       }
       
       setMasterProducts(productsData);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch master products:', error);
       setMasterProducts([]);
     }
@@ -173,7 +174,8 @@ export default function StockRequestsPage() {
       showToast.success('Request stok berhasil dibuat!');
       setShowCreateModal(false);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('=== CREATE REQUEST ERROR ===');
       devError('Error:', error);
       devError('Response status:', error.response?.status);
@@ -218,7 +220,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal approve request stok');
     } finally {
       setActionLoading(false);
@@ -252,7 +255,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal membuat invoice');
     } finally {
       setActionLoading(false);
@@ -268,7 +272,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal menjadikan pembayaran sebagai utang');
     } finally {
       setActionLoading(false);
@@ -285,7 +290,8 @@ export default function StockRequestsPage() {
       setShowPaymentModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(
         error.response?.data?.error?.message ||
         error.response?.data?.message ||
@@ -305,7 +311,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal konfirmasi pembayaran');
     } finally {
       setActionLoading(false);
@@ -320,7 +327,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal menolak pembayaran');
     } finally {
       setActionLoading(false);
@@ -335,7 +343,8 @@ export default function StockRequestsPage() {
       setShowModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal reject request stok');
     } finally {
       setActionLoading(false);
@@ -349,6 +358,7 @@ export default function StockRequestsPage() {
       setSelectedRequest(fullRequest);
       setShowModal(true);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch request details:', error);
       setSelectedRequest(request);
       setShowModal(true);
@@ -379,6 +389,7 @@ export default function StockRequestsPage() {
       setSelectedRequest(fullRequest);
       setShowEditModal(true);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch request details for edit:', error);
       setSelectedRequest(request);
       setShowEditModal(true);
@@ -395,7 +406,8 @@ export default function StockRequestsPage() {
       setShowEditModal(false);
       setSelectedRequest(null);
       fetchRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(
         error.response?.data?.error?.message ||
         error.response?.data?.message ||

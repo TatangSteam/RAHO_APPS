@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Invoice } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
@@ -19,9 +21,12 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
   const [loadingImages, setLoadingImages] = useState<Set<string>>(new Set());
   const imageUrlsRef = useRef<Map<string, string>>(new Map());
 
-  const paymentsWithProof = invoice.payments.filter(payment => payment.proofFileUrl);
+  const paymentsWithProof = useMemo(
+    () => invoice.payments.filter((payment) => payment.proofFileUrl),
+    [invoice.payments],
+  );
 
-  const loadImage = async (paymentId: string, proofFileUrl: string) => {
+  const loadImage = useCallback(async (paymentId: string, proofFileUrl: string) => {
     if (imageUrls.has(paymentId) || loadingImages.has(paymentId)) {
       return;
     }
@@ -32,6 +37,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
       const blobUrl = await createAuthenticatedObjectUrl(proofFileUrl);
       setImageUrls(prev => new Map(prev).set(paymentId, blobUrl));
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load payment proof image:', error);
     } finally {
       setLoadingImages(prev => {
@@ -40,7 +46,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
         return newSet;
       });
     }
-  };
+  }, [imageUrls, loadingImages]);
 
   useEffect(() => {
     setMounted(true);
@@ -65,7 +71,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
         loadImage(payment.id, payment.proofFileUrl);
       }
     });
-  }, [invoice.payments]);
+  }, [loadImage, paymentsWithProof]);
 
   if (!mounted) return null;
   if (paymentsWithProof.length === 0) return null;
@@ -169,7 +175,7 @@ export default function PaymentProofModal({ invoice, onClose }: Props) {
                         Memuat gambar...
                       </div>
                     ) : imageUrls.has(payment.id) ? (
-                      <img
+                      <AppImage
                         src={imageUrls.get(payment.id)}
                         alt={`Bukti Pembayaran ${index + 1}`}
                         className={styles.proofImage}

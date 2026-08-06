@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { infusionApi, InfusionExecution } from '@/lib/infusionApi';
 import { showToast } from '@/lib/toast';
 import { useRouter } from 'next/navigation';
@@ -18,21 +19,22 @@ export default function MemberInfusionsTab({ memberId }: MemberInfusionsTabProps
   const isMemberViewOnlyAdminManager =
     user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
 
-  useEffect(() => {
-    loadInfusions();
-  }, [memberId]);
-
-  const loadInfusions = async () => {
+  const loadInfusions = useCallback(async () => {
     try {
       setLoading(true);
       const data = await infusionApi.getMemberInfusions(memberId);
       setInfusions(data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat infus aktual');
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
+
+  useEffect(() => {
+    void loadInfusions();
+  }, [loadInfusions]);
 
   if (loading) {
     return (

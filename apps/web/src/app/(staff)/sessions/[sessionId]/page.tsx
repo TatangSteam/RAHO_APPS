@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
-import { memberApi } from '@/lib/memberApi';
+import { memberApi, type MemberPackage } from '@/lib/memberApi';
 import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
@@ -37,9 +38,9 @@ type BoosterPackageOption = {
   disabledReason?: string;
 };
 
-const getPackageId = (pkg: any) => pkg.packageId || pkg.id || '';
+const getPackageId = (pkg: { packageId?: string; id?: string }) => pkg.packageId || pkg.id || '';
 
-const flattenMemberPackages = (packages: any[]): BoosterPackageOption[] => {
+const flattenMemberPackages = (packages: MemberPackage[]): BoosterPackageOption[] => {
   const flattened: BoosterPackageOption[] = [];
 
   packages.forEach((pkg) => {
@@ -130,11 +131,7 @@ export default function SessionDetailPage() {
   const [boosterEditPackageId, setBoosterEditPackageId] = useState('');
   const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadSessionDetail();
-  }, [sessionId]);
-
-  const loadSessionDetail = async () => {
+  const loadSessionDetail = useCallback(async () => {
     try {
       setLoading(true);
       const data = await sessionApi.getSessionById(sessionId);
@@ -142,17 +139,20 @@ export default function SessionDetailPage() {
       
       // Auto-select first incomplete step only on initial load (when activeStep is default)
       // Don't change activeStep if user is already working on a specific step
-      if (data.steps && activeStep === 1 && data.steps.step1_diagnosis) {
-        if (!data.steps.step1_diagnosis) setActiveStep(1);
-        else if (!data.steps.step2_therapyPlan) setActiveStep(2);
-        else if (!data.steps.step3_vitalBefore) setActiveStep(3);
-        else if (!data.steps.step4_infusion) setActiveStep(4);
-        else if (!data.steps.step5_materials) setActiveStep(5);
-        // Foto bersifat opsional, jadi jangan menghalangi pengguna menuju vital sesudah.
-        else if (!data.steps.step7_vitalAfter) setActiveStep(7);
-        else if (!data.steps.step8_evaluation) setActiveStep(9); // Step 8 is optional, Step 9 is required
+      if (data.steps && data.steps.step1_diagnosis) {
+        setActiveStep((currentStep) => {
+          if (currentStep !== 1) return currentStep;
+          if (!data.steps?.step2_therapyPlan) return 2;
+          if (!data.steps?.step3_vitalBefore) return 3;
+          if (!data.steps?.step4_infusion) return 4;
+          if (!data.steps?.step5_materials) return 5;
+          if (!data.steps?.step7_vitalAfter) return 7;
+          if (!data.steps?.step8_evaluation) return 9;
+          return currentStep;
+        });
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading session detail:', error);
       const errorMessage = error.response?.data?.error?.message || 'Gagal memuat detail sesi';
       showToast.error(errorMessage);
@@ -160,7 +160,11 @@ export default function SessionDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [router, sessionId]);
+
+  useEffect(() => {
+    void loadSessionDetail();
+  }, [loadSessionDetail]);
 
   const handleStepComplete = async () => {
     await loadSessionDetail();
@@ -184,7 +188,8 @@ export default function SessionDetailPage() {
 
       setTherapyPlanSetForEdit(therapyPlanSet);
       setShowTherapyPlanEditModal(true);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading therapy plan set for edit:', error);
       const errorMessage = error.response?.data?.error?.message || 'Gagal memuat set therapy plan';
       showToast.error(errorMessage);
@@ -254,7 +259,7 @@ export default function SessionDetailPage() {
       const currentBasicPackageId = session.session.memberPackage?.packageId;
       const currentPackageId = session.session.boosterPackage?.packageId;
       const sessionBranchId = session.session.branchId;
-      const availableBasics = flatPackages.filter((pkg: any) => {
+      const availableBasics = flatPackages.filter((pkg) => {
         const packageId = getPackageId(pkg);
         const isCurrentPackage = packageId === currentBasicPackageId;
         const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
@@ -267,8 +272,8 @@ export default function SessionDetailPage() {
         );
       });
       const boosterOptions = flatPackages
-        .filter((pkg: any) => pkg.packageType === 'BOOSTER')
-        .map((pkg: any) => {
+        .filter((pkg) => pkg.packageType === 'BOOSTER')
+        .map((pkg) => {
         const packageId = getPackageId(pkg);
         const isCurrentPackage = packageId === currentPackageId;
         const isSameBranch = !pkg.branchId || !sessionBranchId || pkg.branchId === sessionBranchId;
@@ -296,7 +301,8 @@ export default function SessionDetailPage() {
       setAdminLayananOptions(mergeStaffOptions(admins, session.session.adminLayanan));
       setDoctorOptions(mergeStaffOptions(doctors, session.session.doctor));
       setNurseOptions(mergeStaffOptions(nurses, session.session.nurse));
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading session edit data:', error);
       setBoosterEditError(error.response?.data?.error?.message || 'Gagal memuat data edit sesi');
     } finally {
@@ -363,7 +369,8 @@ export default function SessionDetailPage() {
       showToast.success('Data sesi berhasil diperbarui');
       setShowBoosterEditModal(false);
       await loadSessionDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error updating session details:', error);
       setBoosterEditError(error.response?.data?.error?.message || 'Gagal memperbarui data sesi');
     } finally {
@@ -412,7 +419,8 @@ export default function SessionDetailPage() {
       const result = await sessionApi.completeSession(sessionId);
       showToast.success(result.message);
       router.push(`/members/${session.session.member.memberId}`);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error completing session:', error);
       const errorMessage = error.response?.data?.error?.message || 'Gagal menyelesaikan sesi';
       showToast.error(errorMessage);
@@ -445,7 +453,8 @@ export default function SessionDetailPage() {
       setCancellationReason('');
       setCancellationKey('');
       await loadSessionDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error cancelling treatment completion:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal membatalkan completion sesi');
     } finally {

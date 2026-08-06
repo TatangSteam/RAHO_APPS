@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -98,7 +99,8 @@ export default function StaffManagementPage() {
 
       const data = await response.json();
       setStaff(data.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching staff:', error);
       showToast.error(error.message || 'Gagal memuat data user');
     } finally {
@@ -127,7 +129,8 @@ export default function StaffManagementPage() {
       const data = await response.json();
       const payload = data.data;
       setActivities(Array.isArray(payload) ? payload : payload?.logs || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching activities:', error);
       showToast.error(error.message || 'Gagal memuat aktivitas');
     }
@@ -150,7 +153,8 @@ export default function StaffManagementPage() {
 
       showToast.success(`User berhasil ${!currentStatus ? 'diaktifkan' : 'dinonaktifkan'}`);
       fetchStaff();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error toggling staff status:', error);
       showToast.error(error.message || 'Gagal mengubah status user');
     }

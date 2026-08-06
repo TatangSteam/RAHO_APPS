@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useCallback } from 'react';
 import { compressImageWithPreset, isImageFile, formatFileSize } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
@@ -57,6 +59,7 @@ export default function DocumentUploadSection({
         } as React.ChangeEvent<HTMLInputElement>;
         onPspChange(fakeEvent);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing PSP image:', error);
         // Fallback to original file
         const reader = new FileReader();
@@ -94,6 +97,7 @@ export default function DocumentUploadSection({
       } as React.ChangeEvent<HTMLInputElement>;
       onPhotoChange(fakeEvent);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error compressing photo:', error);
       // Fallback to original file
       onPhotoChange(e);
@@ -182,7 +186,9 @@ export default function DocumentUploadSection({
             e.currentTarget.style.background = 'rgba(148,163,184,0.03)';
             const file = e.dataTransfer.files[0];
             if (file) {
-              const fakeEvent = { target: { files: [file] } } as any;
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(file);
+              const fakeEvent = { target: { files: dataTransfer.files } } as React.ChangeEvent<HTMLInputElement>;
               handlePspChangeWithPreview(fakeEvent);
             }
           }}>
@@ -206,7 +212,7 @@ export default function DocumentUploadSection({
                   {isPdf ? (
                     <div style={{ fontSize: '48px', marginBottom: '12px' }}>📄</div>
                   ) : pspPreview ? (
-                    <img
+                    <AppImage
                       src={pspPreview}
                       alt="PSP Preview"
                       style={{
@@ -266,7 +272,7 @@ export default function DocumentUploadSection({
                   setPspPreview(null);
                   const input = document.getElementById('psp-upload') as HTMLInputElement;
                   if (input) input.value = '';
-                  onPspChange({ target: { files: null } } as any);
+                  onPspChange({ target: { files: null } } as unknown as React.ChangeEvent<HTMLInputElement>);
                 }}
                 className="btn btn-danger btn-sm"
                 style={{ minWidth: '80px' }}
@@ -308,7 +314,9 @@ export default function DocumentUploadSection({
             e.currentTarget.style.background = 'rgba(148,163,184,0.03)';
             const file = e.dataTransfer.files[0];
             if (file) {
-              const fakeEvent = { target: { files: [file] } } as any;
+              const dataTransfer = new DataTransfer();
+              dataTransfer.items.add(file);
+              const fakeEvent = { target: { files: dataTransfer.files } } as React.ChangeEvent<HTMLInputElement>;
               handlePhotoChangeWithCompression(fakeEvent);
             }
           }}>
@@ -329,7 +337,7 @@ export default function DocumentUploadSection({
                 </div>
               ) : photoPreview ? (
                 <div>
-                  <img
+                  <AppImage
                     src={photoPreview}
                     alt="Preview"
                     style={{
@@ -405,7 +413,7 @@ export default function DocumentUploadSection({
                 ✕
               </button>
             </div>
-            <img
+            <AppImage
               src={pspPreview}
               alt="PSP Document"
               style={{

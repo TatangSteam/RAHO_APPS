@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react';
 import {
   getUserBranches,
   assignUserToBranch,
@@ -36,11 +37,7 @@ export function StaffBranchModal({
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadBranches();
-  }, [userId]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       setLoading(true);
       const [userBranchesData, availableBranchesData] = await Promise.all([
@@ -49,12 +46,17 @@ export function StaffBranchModal({
       ]);
       setAssigned(userBranchesData.assignedBranches);
       setAvailable(availableBranchesData);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       toast.error(err.response?.data?.error?.message || 'Gagal memuat data cabang');
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
+
+  useEffect(() => {
+    void loadBranches();
+  }, [loadBranches]);
 
   const handleAssign = async (branchId: string) => {
     try {
@@ -63,7 +65,8 @@ export function StaffBranchModal({
       toast.success('Cabang berhasil ditambahkan');
       await loadBranches();
       onSuccess?.();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       toast.error(err.response?.data?.error?.message || 'Gagal menambahkan cabang');
     } finally {
       setActionLoading(null);
@@ -86,7 +89,8 @@ export function StaffBranchModal({
       toast.success('Assignment cabang berhasil dihapus');
       await loadBranches();
       onSuccess?.();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       toast.error(err.response?.data?.error?.message || 'Gagal menghapus assignment cabang');
     } finally {
       setActionLoading(null);

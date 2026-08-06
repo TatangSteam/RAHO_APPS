@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Eye, EyeOff, LogIn, AlertCircle, Loader2, Sparkles } from 'lucide-react';
+import axios from 'axios';
+import { Eye, EyeOff, LogIn, AlertCircle } from 'lucide-react';
 
 import { useAuthStore } from '@/stores/authStore';
 import { loginApi } from '@/lib/authApi';
@@ -76,11 +77,13 @@ export default function LoginPage() {
       // Calling router.push() followed by router.refresh() can refresh /login first,
       // causing middleware to send ADMIN_LOGISTIK through the generic /dashboard route.
       window.location.replace(getDefaultRoute(result.user.role, result.user.adminManagerAccessScope));
-    } catch (err: any) {
+    } catch (err: unknown) {
       const code = getApiErrorCode(err);
       if (code === 'RATE_LIMIT_EXCEEDED') {
         // Get retry-after time from response headers
-        const retryAfter = err.response?.headers['retry-after'];
+        const retryAfter = axios.isAxiosError(err)
+          ? err.response?.headers['retry-after']
+          : undefined;
         const retrySeconds = retryAfter ? parseInt(retryAfter, 10) : 900; // Default 15 minutes
         const retryMinutes = Math.ceil(retrySeconds / 60);
         

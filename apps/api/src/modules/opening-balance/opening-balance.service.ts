@@ -33,12 +33,14 @@ function payloadHash(input: CreateOpeningBalanceInput) {
   return createHash('sha256').update(JSON.stringify(input, (_key, value) => value instanceof Date ? value.toISOString() : value)).digest('hex');
 }
 
-function formatOpening(row: any) {
+type OpeningBalanceWithDetails = Prisma.OpeningBalanceGetPayload<{ include: typeof includeOpening }>;
+
+function formatOpening(row: OpeningBalanceWithDetails) {
   return {
     ...row,
     totalDebit: row.totalDebit.toFixed(2),
     totalCredit: row.totalCredit.toFixed(2),
-    lines: row.lines.map((line: any) => ({
+    lines: row.lines.map((line) => ({
       ...line,
       accountCode: line.account.code,
       debit: line.debit.toFixed(2),
@@ -80,7 +82,7 @@ export async function createOpeningBalance(userId: string, input: CreateOpeningB
   const inventoryScope = input.lines.some((line) => line.type === 'INVENTORY')
     ? await prisma.$transaction((tx) => resolveBranchInventoryScope(tx, input.branchId, userId))
     : null;
-  const normalized = [] as Array<any>;
+  const normalized: Prisma.OpeningBalanceLineUncheckedCreateWithoutOpeningBalanceInput[] = [];
   for (const [index, line] of input.lines.entries()) {
     const debit = new Prisma.Decimal(line.debit);
     const credit = new Prisma.Decimal(line.credit);
@@ -185,7 +187,7 @@ export async function updateOpeningBalance(userId: string, id: string, input: Up
   const inventoryScope = input.lines.some((line) => line.type === 'INVENTORY')
     ? await prisma.$transaction((tx) => resolveBranchInventoryScope(tx, opening.branchId, userId))
     : null;
-  const normalized = [] as Array<any>;
+  const normalized: Prisma.OpeningBalanceLineUncheckedCreateWithoutOpeningBalanceInput[] = [];
   for (const [index, line] of input.lines.entries()) {
     const debit = new Prisma.Decimal(line.debit);
     const credit = new Prisma.Decimal(line.credit);

@@ -1,6 +1,23 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { getAggregatePackageStatus } from './package-retrieval.helpers';
+import { Prisma } from '@prisma/client';
+
+type PackageWithDetails = Prisma.MemberPackageGetPayload<{
+  include: {
+    branch: true;
+    packagePricing: true;
+    incentiveRecords: {
+      include: {
+        referralCode: {
+          select: { code: true; referrerName: true; referrerType: true };
+        };
+      };
+    };
+  };
+}>;
+
+type AddOnWithBranch = Prisma.MemberAddOnGetPayload<{ include: { branch: true } }>;
+type UserWithProfile = Prisma.UserGetPayload<{ include: { profile: true } }>;
 
 /**
  * Service for retrieving package data
@@ -82,8 +99,11 @@ export class PackageRetrievalService {
       const userMap = new Map(users.map(u => [u.id, u]));
 
       // Group packages by purchaseGroupId
-      const grouped = new Map<string, any[]>();
-      const standalone: any[] = [];
+      type FormattedItem =
+        | ReturnType<PackageRetrievalService['formatPackageData']>
+        | ReturnType<PackageRetrievalService['formatAddOnData']>;
+      const grouped = new Map<string, FormattedItem[]>();
+      const standalone: FormattedItem[] = [];
 
       packages.forEach((pkg) => {
         const pkgData = this.formatPackageData(pkg, userMap);
@@ -159,7 +179,7 @@ export class PackageRetrievalService {
   /**
    * Format package data for response
    */
-  private formatPackageData(pkg: any, userMap: Map<string, any>) {
+  private formatPackageData(pkg: PackageWithDetails, userMap: Map<string, UserWithProfile>) {
     // Get incentive record if exists
     const incentiveRecord = pkg.incentiveRecords && pkg.incentiveRecords.length > 0 
       ? pkg.incentiveRecords[0] 
@@ -175,6 +195,8 @@ export class PackageRetrievalService {
 
     return {
       id: pkg.id,
+      isAddOn: false as const,
+      totalPrice: undefined,
       packageId: pkg.id,
       packageCode: pkg.packageCode,
       packagePricingId: pkg.packagePricingId || undefined, // Include pricing ID for editing
@@ -238,9 +260,12 @@ export class PackageRetrievalService {
   /**
    * Format add-on data for response
    */
-  private formatAddOnData(addon: any, userMap: Map<string, any>) {
+  private formatAddOnData(addon: AddOnWithBranch, userMap: Map<string, UserWithProfile>) {
     return {
       id: addon.id,
+      finalPrice: undefined,
+      packageType: undefined,
+      purchaseGroupId: undefined,
       addOnId: addon.id,
       addOnCode: addon.addOnCode,
       addOnType: addon.addOnType,

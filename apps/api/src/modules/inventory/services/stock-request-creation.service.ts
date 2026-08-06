@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Role, BranchType } from '@prisma/client';
+import { AuditAction, Prisma, Role } from '@prisma/client';
 import { OverstockService } from './overstock.service';
 import {
   formatStockRequestQuantity,
@@ -20,6 +19,26 @@ export interface CreateStockRequestInput {
 }
 
 const overstockService = new OverstockService();
+
+type StockRequestForCreation = Prisma.StockRequestGetPayload<{
+  include: {
+    items: {
+      include: {
+        masterProduct: true;
+        overstockUsages: {
+          include: {
+            overstock: {
+              include: {
+                sourceShipment: { select: { shipmentCode: true } };
+              };
+            };
+          };
+        };
+      };
+    };
+    branch: true;
+  };
+}>;
 
 /**
  * Service for creating stock requests
@@ -363,7 +382,7 @@ export class StockRequestCreationService {
   /**
    * Format stock request for response
    */
-  private formatStockRequest(request: any) {
+  private formatStockRequest(request: StockRequestForCreation) {
     return {
       id: request.id,
       requestCode: request.requestCode,
@@ -373,7 +392,7 @@ export class StockRequestCreationService {
       status: request.status,
       notes: request.notes,
       itemCount: request.items.length,
-      items: request.items.map((item: any) => ({
+      items: request.items.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
@@ -390,7 +409,7 @@ export class StockRequestCreationService {
           : formatStockRequestQuantity(item.masterProduct, item.finalQty),
         unit: getStockRequestUnit(item.masterProduct),
         notes: item.notes,
-        overstockUsages: item.overstockUsages?.map((u: any) => ({
+        overstockUsages: item.overstockUsages?.map((u) => ({
           id: u.id,
           quantityUsed: formatStockRequestQuantity(item.masterProduct, u.quantityUsed),
           reason: u.overstock?.reason,

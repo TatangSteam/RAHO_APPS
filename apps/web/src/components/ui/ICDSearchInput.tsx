@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useRef } from 'react';
 import { icdApi, type ICDCode } from '@/lib/icdApi';
 import { devError } from '@/lib/logger';
@@ -21,7 +22,7 @@ export default function ICDSearchInput({
   placeholder = 'Cari kode ICD...',
   label,
   disabled = false,
-  category,
+  category: _category,
 }: ICDSearchInputProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<ICDCode[]>([]);
@@ -94,6 +95,7 @@ export default function ICDSearchInput({
         setResults(results);
         setResultTotal(total);
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to search ICD codes:', error);
         setResults([]);
         setResultTotal(0);
@@ -113,6 +115,7 @@ export default function ICDSearchInput({
       setResults(codes.slice(0, ICD_DISPLAY_LIMIT));
       setResultTotal(codes.length);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load common ICD codes:', error);
       setResults([]);
       setResultTotal(0);

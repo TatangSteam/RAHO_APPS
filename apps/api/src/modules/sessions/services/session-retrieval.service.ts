@@ -1,11 +1,55 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import {
+  type Branch,
+  type Diagnosis,
+  DiagnosisCategory,
+  type DoctorEvaluation,
+  Prisma,
+  SessionType,
+} from '@prisma/client';
+
+const sessionRetrievalInclude = {
+  encounter: {
+    include: {
+      member: { include: { user: { include: { profile: true } } } },
+      diagnoses: true,
+      memberPackage: true,
+    },
+  },
+  adminLayanan: { include: { profile: true } },
+  doctor: { include: { profile: true } },
+  nurse: { include: { profile: true } },
+  boosterPackage: true,
+  therapyPlan: true,
+  vitalSigns: true,
+  infusion: true,
+  materials: { include: { inventoryItem: { include: { masterProduct: true } } } },
+  photo: true,
+  evaluation: true,
+  sessionDoctors: {
+    include: { doctor: { include: { profile: true } } },
+    orderBy: { isPrimary: 'desc' as const },
+  },
+  sessionNurses: {
+    include: { nurse: { include: { profile: true } } },
+    orderBy: { isPrimary: 'desc' as const },
+  },
+} satisfies Prisma.TreatmentSessionInclude;
+
+type RetrievedSession = Prisma.TreatmentSessionGetPayload<{
+  include: typeof sessionRetrievalInclude;
+}>;
 
 /**
  * Service for session retrieval
  */
 export class SessionRetrievalService {
-  private hasDoctorEvaluation(evaluation: any): boolean {
+  private hasDoctorEvaluation(
+    evaluation: Pick<
+      DoctorEvaluation,
+      'subjective' | 'objective' | 'assessment' | 'plan' | 'generalNotes'
+    > | null,
+  ): boolean {
     if (!evaluation) return false;
 
     return [
@@ -145,7 +189,7 @@ export class SessionRetrievalService {
     } = params;
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.TreatmentSessionWhereInput = {
       encounter: {
         memberPackage: {
           packageType: 'BASIC', // Only show BASIC packages, not BOOSTER
@@ -153,13 +197,13 @@ export class SessionRetrievalService {
       },
     };
 
-    const addAndFilter = (condition: any) => {
+    const addAndFilter = (condition: Prisma.TreatmentSessionWhereInput) => {
       where.AND = Array.isArray(where.AND) ? [...where.AND, condition] : [condition];
     };
     
     // Filter by memberId if provided
     if (memberId) {
-      where.encounter.memberId = memberId;
+      addAndFilter({ encounter: { memberId } });
     }
 
     // Filter by doctor(s), including additional doctors assigned to the session
@@ -196,16 +240,16 @@ export class SessionRetrievalService {
 
     // Filter by date range
     if (dateFrom || dateTo) {
-      where.treatmentDate = {};
-      if (dateFrom) {
-        where.treatmentDate.gte = new Date(dateFrom);
-      }
+      let endDate: Date | undefined;
       if (dateTo) {
         // Add 1 day to include the end date
-        const endDate = new Date(dateTo);
+        endDate = new Date(dateTo);
         endDate.setDate(endDate.getDate() + 1);
-        where.treatmentDate.lt = endDate;
       }
+      where.treatmentDate = {
+        ...(dateFrom ? { gte: new Date(dateFrom) } : {}),
+        ...(endDate ? { lt: endDate } : {}),
+      };
     }
 
     // Filter by status
@@ -215,14 +259,14 @@ export class SessionRetrievalService {
 
     // Filter by pelaksanaan
     if (pelaksanaan && pelaksanaan !== 'all') {
-      where.pelaksanaan = pelaksanaan;
+      where.pelaksanaan = pelaksanaan as SessionType;
     }
 
     // Filter by diagnosis categories
     if (diagnosisCategories && diagnosisCategories.length > 0) {
       where.encounter.diagnoses = {
         some: {
-          kategoriDiagnosa: { in: diagnosisCategories }
+          kategoriDiagnosa: { in: diagnosisCategories as DiagnosisCategory[] }
         }
       };
     }
@@ -431,7 +475,7 @@ export class SessionRetrievalService {
               userId: session.nurse.id,
               fullName: session.nurse.profile?.fullName || '',
             },
-            sessionDoctors: session.sessionDoctors?.map((sd: any) => ({
+            sessionDoctors: session.sessionDoctors?.map((sd) => ({
               id: sd.id,
               isPrimary: sd.isPrimary,
               doctor: {
@@ -440,7 +484,7 @@ export class SessionRetrievalService {
                 staffCode: sd.doctor.staffCode,
               },
             })) || [],
-            sessionNurses: session.sessionNurses?.map((sn: any) => ({
+            sessionNurses: session.sessionNurses?.map((sn) => ({
               id: sn.id,
               isPrimary: sn.isPrimary,
               nurse: {
@@ -474,15 +518,15 @@ export class SessionRetrievalService {
   /**
    * Calculate step completion status
    */
-  private calculateStepCompletion(session: any, diagnosis: any) {
+  private calculateStepCompletion(session: RetrievedSession, diagnosis: Diagnosis | undefined) {
     return {
       step1_diagnosis: !!diagnosis,
       step2_therapyPlan: !!session.therapyPlan,
-      step3_vitalBefore: session.vitalSigns.some((v: any) => v.waktuCatat === 'SEBELUM'),
+      step3_vitalBefore: session.vitalSigns.some((v) => v.waktuCatat === 'SEBELUM'),
       step4_infusion: !!session.infusion,
       step5_materials: session.materials.length > 0,
       step6_photo: !!session.photo,
-      step7_vitalAfter: session.vitalSigns.some((v: any) => v.waktuCatat === 'SESUDAH'),
+      step7_vitalAfter: session.vitalSigns.some((v) => v.waktuCatat === 'SESUDAH'),
       step8_evaluation: this.hasDoctorEvaluation(session.evaluation),
     };
   }
@@ -490,7 +534,11 @@ export class SessionRetrievalService {
   /**
    * Format session data for response
    */
-  private formatSessionData(session: any, branchInfusKe: number, branch: any) {
+  private formatSessionData(
+    session: RetrievedSession,
+    branchInfusKe: number,
+    branch: Branch | null,
+  ) {
     return {
       sessionId: session.id,
       sessionCode: session.sessionCode,
@@ -548,7 +596,7 @@ export class SessionRetrievalService {
           }
         : null,
       // Include multiple doctors and nurses
-      sessionDoctors: session.sessionDoctors?.map((sd: any) => ({
+      sessionDoctors: session.sessionDoctors?.map((sd) => ({
         id: sd.id,
         isPrimary: sd.isPrimary,
         doctor: {
@@ -557,7 +605,7 @@ export class SessionRetrievalService {
           staffCode: sd.doctor.staffCode,
         },
       })) || [],
-      sessionNurses: session.sessionNurses?.map((sn: any) => ({
+      sessionNurses: session.sessionNurses?.map((sn) => ({
         id: sn.id,
         isPrimary: sn.isPrimary,
         nurse: {

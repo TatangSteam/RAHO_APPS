@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type {
   CreateSessionInput,
   CreateDiagnosisInput,
@@ -27,6 +26,7 @@ import { BoosterService } from './services/booster.service';
 import { PhotoService } from './services/photo.service';
 import { SessionDeletionService } from './services/session-deletion.service';
 import { SessionDetailsService } from './services/session-details.service';
+import type { BulkEditSetInput } from '../members/services/member-therapy-plan-set-edit.service';
 
 /**
  * Main Sessions Service - Orchestrates all session-related operations
@@ -167,7 +167,14 @@ export class SessionsService {
     return this.therapyPlanService.getTherapyPlanSetForSession(sessionId);
   }
 
-  async updateTherapyPlanSetForSession(sessionId: string, data: any, userId: string) {
+  async updateTherapyPlanSetForSession(
+    sessionId: string,
+    data: Omit<BulkEditSetInput, 'plans'> & {
+      sessionPlanNumber?: number;
+      plans?: BulkEditSetInput['plans'];
+    },
+    userId: string,
+  ) {
     return this.therapyPlanService.updateTherapyPlanSetForSession(sessionId, data, userId);
   }
 

@@ -1,41 +1,15 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { inventoryApi } from '@/lib/api/inventoryApi';
+import { inventoryApi, type Shipment } from '@/lib/api/inventoryApi';
 import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
 import { useAuthStore } from '@/stores/authStore';
 import { Package, ArrowRight, Calendar, Building2, TrendingUp, Filter as FilterIcon, AlertTriangle } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 
-type ShipmentStatus = 'PREPARING' | 'SHIPPED' | 'RECEIVED' | 'RECEIVED_WITH_ISSUE' | 'APPROVED';
 
-interface TransferShipment {
-  id: string;
-  shipmentCode: string;
-  fromBranchId: string;
-  fromBranchName: string;
-  fromBranchCode?: string;
-  toBranchId: string;
-  toBranchName: string;
-  toBranchCode?: string;
-  status: ShipmentStatus | string;
-  shippedAt?: string | null;
-  receivedAt?: string | null;
-  createdAt: string;
-  items: Array<{
-    id: string;
-    productName: string;
-    productCategory?: string;
-    sentQty: number;
-    receivedQty?: number | null;
-    stockBefore?: number | null;
-    stockAfter?: number | null;
-    unit: string;
-  }>;
-  stockRequest?: {
-    requestCode?: string;
-  } | null;
-}
+type TransferShipment = Shipment;
 
 interface ManagedBranch {
   branchId: string;
@@ -80,16 +54,10 @@ export default function BranchTransfersPage() {
     }
 
     try {
-      const response = await doctorBranchApi.getManagedBranches(false);
-      const payload = response as any;
-      const data = Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload)
-          ? payload
-          : [];
-
+      const data = await doctorBranchApi.getManagedBranches(false);
       setBranches(data);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error fetching managed branches:', error);
       setBranches([]);
     }
@@ -116,18 +84,9 @@ export default function BranchTransfersPage() {
       if (endDate) params.endDate = endDate;
 
       const response = await inventoryApi.getShipments(params);
-      const body = response.data as any;
-      const payload = body?.data ?? body;
-      const data = Array.isArray(payload?.shipments)
-        ? payload.shipments
-        : Array.isArray(payload?.data)
-          ? payload.data
-          : Array.isArray(payload)
-            ? payload
-            : [];
-
-      setShipments(data);
+      setShipments(response.data.data);
     } catch (err) {
+      assertCaughtError(err);
       console.error('Failed to load stock transfers:', err);
       setShipments([]);
     } finally {

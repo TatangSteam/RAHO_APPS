@@ -114,7 +114,7 @@ export interface GroupedPackage {
   booster?: MemberPackage;
   basics?: MemberPackage[];
   boosters?: MemberPackage[];
-  addOns?: any[]; // Add-ons in the group
+  addOns?: StandaloneAddOn[];
   status: PackageStatus;
   createdAt: string;
 }

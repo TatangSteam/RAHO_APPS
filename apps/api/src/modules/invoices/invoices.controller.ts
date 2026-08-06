@@ -34,7 +34,7 @@ export const invoiceController = {
       });
 
       return sendSuccess(res, invoices);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get invoices error:', error);
       return sendError(res, error.status || 400, error.code || 'GET_INVOICES_ERROR', error.message);
     }
@@ -53,7 +53,7 @@ export const invoiceController = {
 
       logger.info(`Invoice created: ${invoice.invoiceNumber} by user ${userId}`);
       return sendCreated(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Create invoice error:', error);
       return sendError(res, 400, 'CREATE_INVOICE_ERROR', error.message);
     }
@@ -69,7 +69,7 @@ export const invoiceController = {
       const invoice = await invoiceService.getInvoiceById(invoiceId, req.user);
 
       return sendSuccess(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get invoice error:', error);
       return sendError(res, 404, 'INVOICE_NOT_FOUND', error.message);
     }
@@ -90,7 +90,7 @@ export const invoiceController = {
       res.setHeader('ETag', result.etag);
 
       return result.stream.pipe(res);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get payment proof image error:', error);
       if (error?.status) {
         return sendError(res, error.status, error.code, error.message);
@@ -109,7 +109,7 @@ export const invoiceController = {
       const invoice = await invoiceService.getInvoiceByPackageId(packageId, req.user);
 
       return sendSuccess(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get invoice by package error:', error);
       return sendError(res, 404, 'INVOICE_NOT_FOUND', error.message);
     }
@@ -125,7 +125,7 @@ export const invoiceController = {
       const invoices = await invoiceService.getMemberInvoices(memberId, req.user);
 
       return sendSuccess(res, invoices);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Get member invoices error:', error);
       return sendError(res, 400, 'GET_INVOICES_ERROR', error.message);
     }
@@ -144,7 +144,7 @@ export const invoiceController = {
 
       logger.info(`Invoice updated: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Update invoice error:', error);
       return sendError(res, 400, 'UPDATE_INVOICE_ERROR', error.message);
     }
@@ -163,7 +163,7 @@ export const invoiceController = {
 
       logger.info(`Invoice finalized: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Finalize invoice error:', error);
       return sendError(res, 400, 'FINALIZE_INVOICE_ERROR', error.message);
     }
@@ -214,7 +214,7 @@ export const invoiceController = {
 
       logger.info(`Payment submitted for invoice: ${invoiceId} by ${userId}`);
       return sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
-    } catch (error: any) {
+    } catch (error) {
       if (uploadedKey) await safeDeleteFile(uploadedKey);
       logger.error('Record payment error:', error);
       return sendError(res, error.status || 400, error.code || 'RECORD_PAYMENT_ERROR', error.message);
@@ -229,7 +229,7 @@ export const invoiceController = {
         req.user.userId,
       );
       return sendSuccess(res, result);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Verify payment error:', error);
       return sendError(res, error.status || 400, error.code || 'VERIFY_PAYMENT_ERROR', error.message);
     }
@@ -243,7 +243,7 @@ export const invoiceController = {
         req.user.userId,
       );
       return sendSuccess(res, result);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Reject payment error:', error);
       return sendError(res, error.status || 400, error.code || 'REJECT_PAYMENT_ERROR', error.message);
     }
@@ -265,7 +265,7 @@ export const invoiceController = {
         req.user.userId,
       );
       return sendSuccess(res, result, result.idempotentReplay ? 200 : 201);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Refund payment error:', error);
       return sendError(res, error.status || 400, error.code || 'REFUND_PAYMENT_ERROR', error.message);
     }
@@ -284,7 +284,7 @@ export const invoiceController = {
 
       logger.info(`Invoice cancelled: ${invoice.invoiceNumber}`);
       return sendSuccess(res, invoice);
-    } catch (error: any) {
+    } catch (error) {
       logger.error('Cancel invoice error:', error);
       return sendError(res, 400, 'CANCEL_INVOICE_ERROR', error.message);
     }

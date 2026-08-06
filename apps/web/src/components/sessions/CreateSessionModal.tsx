@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, User, Package, Stethoscope, Calendar, MapPin, AlertTriangle, CheckCircle2, RefreshCw, FileText, Info, Users, ChevronDown, ChevronUp } from 'lucide-react';
 import { sessionApi } from '@/lib/sessionApi';
@@ -101,14 +102,6 @@ export default function CreateSessionModal({
   }, [isOpen]);
 
   useEffect(() => {
-    if (memberId) {
-      loadMemberData(memberId);
-      loadTherapyPlans(memberId);
-      loadDiagnoses(memberId);
-    }
-  }, [memberId, user?.branchId]);
-
-  useEffect(() => {
     const targetBranchId = sessionBranchId || user?.branchId;
     if (memberId && targetBranchId) {
       loadSuggestedSessionNumbers(memberId, targetBranchId);
@@ -154,28 +147,6 @@ export default function CreateSessionModal({
       setTreatmentDate(localDateTime);
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const targetBranchId = sessionBranchId || user?.branchId || undefined;
-    const globalRoleNeedsBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-
-    if (!targetBranchId && globalRoleNeedsBranch) {
-      setAdminLayananList([]);
-      setDoctors([]);
-      setNurses([]);
-      setInfusSetStock(null);
-      return;
-    }
-
-    loadStaff(targetBranchId);
-    if (targetBranchId) {
-      loadInfusSetStock(targetBranchId);
-    } else {
-      setInfusSetStock(null);
-    }
-  }, [isOpen, sessionBranchId, user?.branchId, user?.role]);
 
   // Helper to get set key (matching MemberTherapyPlansTab logic)
   const getPlanSetKey = (plan: TherapyPlan): string => {
@@ -250,9 +221,9 @@ export default function CreateSessionModal({
         setExpandedSets(new Set([setKeys[0]]));
       }
     }
-  }, [therapyPlans, groupedTherapyPlans]);
+  }, [therapyPlans, groupedTherapyPlans, expandedSets.size]);
 
-  const loadInfusSetStock = async (targetBranchId?: string) => {
+  const loadInfusSetStock = useCallback(async (targetBranchId?: string) => {
     // Use targetBranchId if provided, otherwise use user's branchId
     const branchId = targetBranchId || user?.branchId;
     
@@ -274,21 +245,14 @@ export default function CreateSessionModal({
       
       // API returns axios response: { data: { success: true, data: items } }
       // So we need response.data.data to get the items array
-      let items: any[] = [];
-      if (response.data?.data && Array.isArray(response.data.data)) {
-        items = response.data.data;
-      } else if (Array.isArray(response.data)) {
-        items = response.data;
-      } else if (response.data?.success && response.data?.data) {
-        items = response.data.data;
-      }
+      const items = response.data.data;
       
       devLog('Inventory items received:', items?.length || 0);
-      devLog('All items SKUs:', items.map((item: any) => item.masterProduct?.sku || item.sku));
+      devLog('All items SKUs:', items.map((item) => item.masterProduct?.sku || item.sku));
       
       // Find Infus Set + Pelengkap (PRD-INF-SET-002) - this is the required product for therapy sessions
       // The API returns items with masterProduct nested object
-      let infusSetItem = items.find((item: any) => {
+      let infusSetItem = items.find((item) => {
         const sku = item.masterProduct?.sku || item.sku;
         devLog('Checking item:', item.masterProduct?.name, 'SKU:', sku);
         return sku === 'PRD-INF-SET-002'; // Only check for "Infus Set + Pelengkap"
@@ -297,7 +261,7 @@ export default function CreateSessionModal({
       // Fallback: search by name if SKU not found
       if (!infusSetItem) {
         devLog('SKU not found, searching by name...');
-        infusSetItem = items.find((item: any) => {
+        infusSetItem = items.find((item) => {
           const name = (item.masterProduct?.name || item.name || '').toLowerCase();
           return name.includes('infus set') && name.includes('pelengkap');
         });
@@ -332,6 +296,7 @@ export default function CreateSessionModal({
         setInfusSetStock(null); // null means "unknown" - don't show warning
       }
     } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load infus set stock:', err);
       // On error, set to null (unknown) instead of 0 (out of stock)
       // This prevents false "out of stock" warnings
@@ -339,9 +304,9 @@ export default function CreateSessionModal({
     } finally {
       setLoadingInfusSetStock(false);
     }
-  };
+  }, [user?.branchId]);
 
-  const loadMemberData = async (id: string) => {
+  const loadMemberData = useCallback(async (id: string) => {
     try {
       const memberDetail = await memberApi.getMemberById(id);
       setMemberNo(memberDetail.memberNo);
@@ -370,10 +335,10 @@ export default function CreateSessionModal({
 
       const pkgs = await memberApi.getMemberPackages(id);
       const flatPackages: MemberPackage[] = [];
-      pkgs.forEach((pkg: any) => {
+      pkgs.forEach((pkg) => {
         if (pkg.isGroup) {
           if (pkg.basics && Array.isArray(pkg.basics)) {
-            pkg.basics.forEach((basic: any) => {
+            pkg.basics.forEach((basic) => {
               flatPackages.push({
                 ...basic,
                 packageType: basic.packageType as 'BASIC' | 'BOOSTER',
@@ -382,7 +347,7 @@ export default function CreateSessionModal({
             });
           }
           if (pkg.boosters && Array.isArray(pkg.boosters)) {
-            pkg.boosters.forEach((booster: any) => {
+            pkg.boosters.forEach((booster) => {
               flatPackages.push({
                 ...booster,
                 packageType: booster.packageType as 'BASIC' | 'BOOSTER',
@@ -429,11 +394,12 @@ export default function CreateSessionModal({
       } else {
         setSelectedPackageId('');
       }
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load member data:', err);
       setError(err.response?.data?.error?.message || 'Gagal memuat data member');
     }
-  };
+  }, [loadInfusSetStock, user?.branchId]);
 
   const getPackageDisplayName = (pkg: MemberPackage) => {
     const debtLabel = isDebtEligiblePackage(pkg, outstandingDebtSessions)
@@ -483,7 +449,8 @@ export default function CreateSessionModal({
       if (availablePlans.length > 0) {
         setSelectedTherapyPlanId(availablePlans[0].id);
       }
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load therapy plans:', err);
       showToast.error('Gagal memuat therapy plans');
     } finally {
@@ -497,7 +464,8 @@ export default function CreateSessionModal({
       const memberDiagnoses = await diagnosisApi.getMemberDiagnoses(id);
       setDiagnoses(memberDiagnoses);
       setHasDiagnosis(memberDiagnoses.length > 0);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load diagnoses:', err);
       setDiagnoses([]);
       setHasDiagnosis(false);
@@ -511,7 +479,8 @@ export default function CreateSessionModal({
       const suggested = await sessionApi.getSuggestedSessionNumbers(id, targetBranchId);
       setCalculatedGlobalInfusKe(suggested.globalInfusKe);
       setCalculatedBranchInfusKe(suggested.branchInfusKe);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load suggested session numbers:', err);
       try {
         // Fallback for older API responses: member sessions are SessionDetail objects.
@@ -539,7 +508,8 @@ export default function CreateSessionModal({
           setCalculatedGlobalInfusKe(1);
           setCalculatedBranchInfusKe(1);
         }
-      } catch (fallbackErr: any) {
+      } catch (fallbackErr) {
+      assertCaughtError(fallbackErr);
         devError('Failed to load fallback suggested session numbers:', fallbackErr);
         setCalculatedGlobalInfusKe(1);
         setCalculatedBranchInfusKe(1);
@@ -547,7 +517,7 @@ export default function CreateSessionModal({
     }
   };
 
-  const loadStaff = async (targetBranchId?: string) => {
+  const loadStaff = useCallback(async (targetBranchId?: string) => {
     try {
       const userRole = user?.role;
       const branchFilter = targetBranchId || user?.branchId || undefined;
@@ -585,10 +555,41 @@ export default function CreateSessionModal({
         setNurses(nursesList);
       }
     } catch (err) {
+      assertCaughtError(err);
       devError('Failed to load staff:', err);
       setError('Gagal memuat data staff');
     }
-  };
+  }, [user?.branchId, user?.role]);
+
+  useEffect(() => {
+    if (memberId) {
+      void loadMemberData(memberId);
+      void loadTherapyPlans(memberId);
+      void loadDiagnoses(memberId);
+    }
+  }, [loadMemberData, memberId, user?.branchId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const targetBranchId = sessionBranchId || user?.branchId || undefined;
+    const globalRoleNeedsBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+
+    if (!targetBranchId && globalRoleNeedsBranch) {
+      setAdminLayananList([]);
+      setDoctors([]);
+      setNurses([]);
+      setInfusSetStock(null);
+      return;
+    }
+
+    void loadStaff(targetBranchId);
+    if (targetBranchId) {
+      void loadInfusSetStock(targetBranchId);
+    } else {
+      setInfusSetStock(null);
+    }
+  }, [isOpen, loadInfusSetStock, loadStaff, sessionBranchId, user?.branchId, user?.role]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -700,7 +701,8 @@ export default function CreateSessionModal({
       const result = await sessionApi.createSession(data);
       showToast.success(result.message || 'Sesi terapi berhasil dibuat');
       onSuccess(result.sessionId);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       const errorMessage = err.response?.data?.error?.message || err.message || 'Gagal membuat sesi';
       setError(errorMessage);
       showToast.error(errorMessage);
@@ -1155,7 +1157,7 @@ export default function CreateSessionModal({
                                 <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
                                 <div>
                                   <p className="text-xs text-blue-700 dark:text-blue-400">
-                                    Klik tab "Detail Therapy Plan" untuk melihat detail lengkap
+                          Klik tab &quot;Detail Therapy Plan&quot; untuk melihat detail lengkap
                                   </p>
                                   <p className="text-xs text-blue-600 dark:text-blue-400/80 mt-1">
                                     IFA 250: {selectedPlan.ifa250 || 0} Botol - IFA 500: {selectedPlan.ifa500 || 0} Botol - HHO: {selectedPlan.hho || '-'} - HHO Kons.: {selectedPlan.hhoKonsentrat || '-'} - NO: {selectedPlan.no || '-'} ...

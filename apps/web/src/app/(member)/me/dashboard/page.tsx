@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { 
@@ -23,7 +24,8 @@ export default function MemberDashboardPage() {
     try {
       const result = await dashboardApi.getMemberDashboard();
       setData(result);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       setError(err.response?.data?.message || 'Gagal memuat dashboard');
     } finally {
       setLoading(false);

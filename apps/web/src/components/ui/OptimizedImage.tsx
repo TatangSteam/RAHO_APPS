@@ -20,7 +20,7 @@ interface OptimizedImageProps extends Omit<ImageProps, 'src'> {
 export function OptimizedImage({
   src,
   alt,
-  fallbackSrc = '/images/placeholder.png',
+  fallbackSrc: _fallbackSrc = '/images/placeholder.png',
   showPlaceholder = true,
   placeholderText = 'No Image',
   className = '',

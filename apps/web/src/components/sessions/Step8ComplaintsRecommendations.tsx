@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -63,7 +64,8 @@ export default function Step8ComplaintsRecommendations({
       showToast.success('Keluhan dan rekomendasi berhasil disimpan');
       setIsEditing(false);
       onComplete();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error saving complaints & recommendations:', error);
       showToast.error(error.message || 'Gagal menyimpan keluhan dan rekomendasi');
     } finally {

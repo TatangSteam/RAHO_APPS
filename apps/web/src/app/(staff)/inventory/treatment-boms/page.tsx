@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Copy, ListTree, Loader2, Plus, Power, Trash2, X } from 'lucide-react';
 import { inventoryApi } from '@/lib/api/inventoryApi';
@@ -63,11 +64,12 @@ export default function TreatmentBomsPage() {
         packagesApi.getPackagePricings(user?.branchId || undefined),
         inventoryApi.getMasterProducts(),
       ]);
-      const productPayload = productResponse.data?.data || productResponse.data || [];
+      const productPayload = productResponse.data.data.products;
       setBoms(bomResponse.data);
       setPricings(pricingResponse);
-      setProducts((Array.isArray(productPayload) ? productPayload : productPayload.data || []).filter((product: ProductOption) => product.isActive !== false));
+      setProducts(productPayload.filter((product: ProductOption) => product.isActive !== false));
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load Treatment BOM:', error);
       showToast.error('Gagal memuat Treatment BOM');
     } finally {
@@ -130,7 +132,8 @@ export default function TreatmentBomsPage() {
       setShowForm(false);
       setForm(emptyForm());
       await loadData();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to create Treatment BOM:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal membuat Treatment BOM');
     } finally {
@@ -145,7 +148,8 @@ export default function TreatmentBomsPage() {
       await treatmentBomApi.activate(bom.id);
       showToast.success('Treatment BOM berhasil diaktifkan');
       await loadData();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to activate Treatment BOM:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengaktifkan Treatment BOM');
     } finally {

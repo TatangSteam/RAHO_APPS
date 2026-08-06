@@ -1,4 +1,5 @@
 'use client'
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react'
 import { meApi, MemberPackage } from '@/lib/api/meApi'
 import { Package, Ticket } from 'lucide-react'
@@ -11,10 +12,6 @@ const STATUS_STYLE: Record<string, { bg: string; color: string; label: string }>
   WAITING_VERIFICATION:  { bg: 'rgba(59,130,246,0.15)', color: '#60a5fa', label: 'Menunggu Verifikasi' },
   EXPIRED:               { bg: 'rgba(100,116,139,0.15)', color: '#94a3b8', label: 'Expired' },
   CANCELLED:             { bg: 'rgba(239,68,68,0.15)',  color: '#f87171', label: 'Dibatalkan' },
-}
-
-function formatRupiah(n: number) {
-  return 'Rp ' + n.toLocaleString('id-ID')
 }
 
 export default function MemberVouchersPage() {
@@ -43,7 +40,8 @@ export default function MemberVouchersPage() {
       showToast.success('Bukti pembayaran berhasil diupload. Menunggu verifikasi admin.')
       setUploadModal({ show: false, pkg: null })
       fetchPackages() // Refresh package list
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.message || 'Gagal mengupload bukti pembayaran')
     } finally {
       setUploading(false)

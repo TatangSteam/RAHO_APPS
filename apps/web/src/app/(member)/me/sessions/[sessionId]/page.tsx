@@ -1,5 +1,7 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { meApi, MemberSessionDetail } from '@/lib/api/meApi'
 import { api } from '@/lib/api'
@@ -68,14 +70,14 @@ const IFA_LABELS: Record<string, string> = {
   h2s: 'H₂S', kcl: 'KCl', jmlNb: 'Jml NB'
 }
 
-function IFAGrid({ data, title }: { 
-  data: Record<string, any> | null; title: string 
+function IFAGrid<T extends object>({ data, title }: {
+  data: T | null; title: string
 }) {
   if (!data) return <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Tidak ada data {title.toLowerCase()}</p>
   
   const ifaKeys = Object.keys(IFA_LABELS)
   const hasAnyValue = ifaKeys.some(k => {
-    const val = data[k]
+    const val = (data as unknown as Record<string, unknown>)[k]
     return val != null && val !== 0
   })
   
@@ -88,7 +90,7 @@ function IFAGrid({ data, title }: {
       display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: 8 
     }}>
       {ifaKeys.map(key => {
-        const val = data[key]
+        const val = (data as unknown as Record<string, unknown>)[key]
         if (val == null || val === 0) return null
         return (
           <div key={key} style={{
@@ -99,7 +101,7 @@ function IFAGrid({ data, title }: {
               {IFA_LABELS[key]}
             </p>
             <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-primary-400)', margin: 0 }}>
-              {val}
+              {String(val)}
             </p>
           </div>
         )
@@ -121,24 +123,26 @@ export default function MemberSessionDetailPage() {
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({})
   const [photoLoading, setPhotoLoading] = useState<Record<string, boolean>>({})
   const [photoErrors, setPhotoErrors] = useState<Record<string, boolean>>({})
+  const photoUrlsRef = useRef<Record<string, string>>({})
 
-  useEffect(() => {
-    loadSessionDetail()
-  }, [sessionId])
-
-  const loadSessionDetail = async () => {
+  const loadSessionDetail = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
       const data = await meApi.getSessionDetail(sessionId)
       setDetail(data)
-    } catch (e: any) {
+    } catch (e) {
+      assertCaughtError(e);
       devError(e)
       setError(e.response?.data?.message || 'Gagal memuat detail sesi')
     } finally {
       setLoading(false)
     }
-  }
+  }, [sessionId])
+
+  useEffect(() => {
+    void loadSessionDetail()
+  }, [loadSessionDetail])
 
   // Load photo with authentication
   const loadPhoto = useCallback(async (photoId: string, url: string) => {
@@ -168,8 +172,13 @@ export default function MemberSessionDetailPage() {
       })
       
       const blobUrl = URL.createObjectURL(response.data)
-      setPhotoUrls(prev => ({ ...prev, [photoId]: blobUrl }))
-    } catch (e: any) {
+      setPhotoUrls(prev => {
+        const previousUrl = prev[photoId]
+        if (previousUrl) URL.revokeObjectURL(previousUrl)
+        return { ...prev, [photoId]: blobUrl }
+      })
+    } catch (e) {
+      assertCaughtError(e);
       devError('Failed to load photo:', e)
       setPhotoErrors(prev => ({ ...prev, [photoId]: true }))
     } finally {
@@ -177,16 +186,21 @@ export default function MemberSessionDetailPage() {
     }
   }, [])
 
-  // Load photo when detail is available
+  useEffect(() => {
+    photoUrlsRef.current = photoUrls
+  }, [photoUrls])
+
   useEffect(() => {
     if (detail?.photo?.photoUrl) {
-      loadPhoto('main', detail.photo.photoUrl)
+      void loadPhoto('main', detail.photo.photoUrl)
     }
+  }, [detail?.photo?.photoUrl, loadPhoto])
+
+  useEffect(() => {
     return () => {
-      // Cleanup blob URLs
-      Object.values(photoUrls).forEach(url => URL.revokeObjectURL(url))
+      Object.values(photoUrlsRef.current).forEach(url => URL.revokeObjectURL(url))
     }
-  }, [detail?.photo?.photoUrl])
+  }, [])
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString('id-ID', {
@@ -573,7 +587,7 @@ export default function MemberSessionDetailPage() {
                   </button>
                 </div>
               ) : photoUrls['main'] ? (
-                <img
+                <AppImage
                   src={photoUrls['main']}
                   alt={photo.fileName}
                   style={{

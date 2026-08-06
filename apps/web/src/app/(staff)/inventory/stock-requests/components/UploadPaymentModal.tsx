@@ -1,11 +1,12 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Upload, FileText, Info, ImageIcon, Trash2, RefreshCw, Building2, CreditCard, Download, CheckCircle2 } from 'lucide-react';
 import { StockRequest } from '../types';
 import { showToast } from '@/lib/toast';
-import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { devError } from '@/lib/logger';
 
@@ -74,6 +75,7 @@ export default function UploadPaymentModal({
           compressed: result.compressedSize
         });
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         // Fallback to original file
         setFile(selectedFile);
@@ -168,10 +170,12 @@ export default function UploadPaymentModal({
         ...request,
         invoice: { ...request.invoice, items: invoiceItems },
       };
-      
+
+      const { generateStockRequestInvoicePDF } = await import('@/lib/stockRequestInvoicePdf');
       await generateStockRequestInvoicePDF(invoiceWithItems);
       showToast.success('Invoice PDF berhasil didownload');
     } catch (error) {
+      assertCaughtError(error);
       devError('Error generating invoice PDF:', error);
       showToast.error('Gagal membuat PDF invoice');
     } finally {
@@ -371,7 +375,7 @@ export default function UploadPaymentModal({
                 <div className="space-y-3">
                   {/* Preview Image */}
                   <div className="relative rounded-xl overflow-hidden bg-neutral-900 border border-neutral-700">
-                    <img 
+                    <AppImage
                       src={preview} 
                       alt="Preview"
                       className="w-full max-h-48 object-contain"

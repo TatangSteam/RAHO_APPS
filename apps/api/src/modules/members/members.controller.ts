@@ -22,6 +22,14 @@ const labResultsService = new MemberLabResultsService();
 const accountImportService = new MemberAccountImportService();
 const supportingPhotosService = new SupportingPhotosService();
 
+function getErrorCode(error: unknown): string {
+  if (error && typeof error === 'object' && 'code' in error) {
+    const code = (error as { code?: unknown }).code;
+    if (typeof code === 'string') return code;
+  }
+  return 'UNKNOWN_ERROR';
+}
+
 export class MembersController {
   async getMembers(req: Request, res: Response, next: NextFunction) {
     try {
@@ -174,7 +182,7 @@ export class MembersController {
       });
 
       const result = await membersService.createMember(
-        validated as any, // Type assertion since schema validation ensures correct types
+        validated as Parameters<MembersService['createMember']>[0],
         files, 
         targetBranchId, 
         userId
@@ -509,7 +517,7 @@ export class MembersController {
         meta: {
           action: 'view_consent_documents_list',
           error: error instanceof Error ? error.message : String(error),
-          errorCode: (error as any)?.code || 'UNKNOWN_ERROR',
+          errorCode: getErrorCode(error),
         },
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
@@ -552,7 +560,7 @@ export class MembersController {
         meta: {
           action: 'view_referral_incentives',
           error: error instanceof Error ? error.message : String(error),
-          errorCode: (error as any)?.code || 'UNKNOWN_ERROR',
+          errorCode: getErrorCode(error),
         },
         ipAddress: req.ip,
         userAgent: req.get('user-agent'),
@@ -814,7 +822,7 @@ export class MembersController {
       );
 
       sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }

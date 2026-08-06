@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { AlertCircle, CheckCircle, FileSpreadsheet, Upload } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -120,7 +121,8 @@ export default function MemberAccountImportPanel({
       const response = await api.post('/members/import/accounts/dry-run', formData);
       setPreview(response.data.data);
       showToast.success('File Excel berhasil dicek');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to validate member account import:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengecek file Excel');
     } finally {
@@ -145,7 +147,8 @@ export default function MemberAccountImportPanel({
       setSkippedRows(skipped);
       showToast.success(data.message || 'Import akun member berhasil');
       onImported();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to import member accounts:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal import akun member');
     } finally {

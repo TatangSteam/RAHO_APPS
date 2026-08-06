@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '@lib/prisma';
 import { Prisma, IncentiveType } from '@prisma/client';
 import { logger } from '@lib/logger';

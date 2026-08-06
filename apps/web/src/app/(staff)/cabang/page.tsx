@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { api } from '@/lib/api';
 import { showToast } from '@/lib/toast';
@@ -75,11 +76,7 @@ export default function CabangPage() {
   const [importedAccounts, setImportedAccounts] = useState<ImportedAccount[]>([]);
   const canImportMemberAccounts = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
 
-  useEffect(() => {
-    loadBranchData();
-  }, []);
-
-  const loadBranchData = async () => {
+  const loadBranchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -97,13 +94,18 @@ export default function CabangPage() {
         activePackages: 11,
         totalStaff: 4
       });
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load branch data:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.branchId]);
+
+  useEffect(() => {
+    void loadBranchData();
+  }, [loadBranchData]);
 
   const buildImportFormData = () => {
     if (!importFile) return null;
@@ -128,7 +130,8 @@ export default function CabangPage() {
       const response = await api.post('/members/import/accounts/dry-run', formData);
       setImportPreview(response.data.data);
       showToast.success('File Excel berhasil dicek');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to validate member import:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengecek file Excel');
     } finally {
@@ -150,7 +153,8 @@ export default function CabangPage() {
       setImportedAccounts(created);
       showToast.success(response.data.data.message || 'Import member berhasil');
       await loadBranchData();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to import member accounts:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal import akun member');
     } finally {

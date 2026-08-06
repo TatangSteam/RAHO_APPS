@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { adminManagersApi, AdminManager } from '@/lib/api/adminManagersApi';
 import { CreateAdminManagerModal } from './CreateAdminManagerModal';
@@ -21,16 +22,11 @@ export const AdminManagersTab: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const limit = 10;
 
-  // Load managers
-  useEffect(() => {
-    loadManagers();
-  }, [page, search, statusFilter]);
-
-  const loadManagers = async () => {
+  const loadManagers = useCallback(async () => {
     try {
       setLoading(true);
       
-      const params: any = { page, limit };
+      const params: NonNullable<Parameters<typeof adminManagersApi.getAdminManagers>[0]> = { page, limit };
       if (search) params.search = search;
       if (statusFilter !== 'all') params.isActive = statusFilter === 'active';
 
@@ -47,7 +43,8 @@ export const AdminManagersTab: React.FC = () => {
         setManagers([]);
         setTotal(0);
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ Error loading admin managers:', error);
       devError('Error details:', error.response?.data);
       showToast.error(error.response?.data?.message || 'Gagal memuat data Admin Manager');
@@ -56,7 +53,11 @@ export const AdminManagersTab: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, search, statusFilter]);
+
+  useEffect(() => {
+    void loadManagers();
+  }, [loadManagers]);
 
   const handleCreateSuccess = () => {
     loadManagers();

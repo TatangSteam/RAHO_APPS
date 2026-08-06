@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { Package } from 'lucide-react';
 import { PackagePricing } from '@/types/package';
 import { formatCurrency } from '@/lib/formatNumber';
+import type { PackageSelection } from './usePackageSelection';
 
 interface BasicPackageSectionProps {
   pricingsList: PackagePricing[];
   isBasicSelected: (pricingId: string) => boolean;
-  getBasicSelection: (pricingId: string) => any;
+  getBasicSelection: (pricingId: string) => PackageSelection | undefined;
   toggleBasic: (pricingId: string) => void;
   updateBasicQty: (pricingId: string, quantity: number) => void;
 }

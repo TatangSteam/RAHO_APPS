@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { Prisma, Role } from '@prisma/client';
+import { type MemberDocument, Prisma, Role } from '@prisma/client';
 import {
   buildMemberRankMap,
   EMPTY_MEMBER_RANK,
@@ -21,8 +20,42 @@ function calculateAge(dateOfBirth?: Date | null): number | null {
   return age >= 0 ? age : null;
 }
 
-function isProfileImageDocument(doc: any): boolean {
+function isProfileImageDocument(
+  doc: Pick<MemberDocument, 'documentType' | 'mimeType'>,
+): boolean {
   return doc?.documentType === 'FOTO_PROFIL' && String(doc?.mimeType || '').startsWith('image/');
+}
+
+type MemberDetailSource = Prisma.MemberGetPayload<{
+  include: {
+    user: { include: { profile: true } };
+    registrationBranch: true;
+    branchAccesses: { include: { branch: true } };
+    referralCode: true;
+    documents: true;
+    memberPackages: { select: { totalSessions: true; usedSessions: true } };
+  };
+}>;
+
+interface MemberListSource {
+  id: string;
+  memberNo: string;
+  registrationBranchId: string;
+  nik: string | null;
+  dateOfBirth: Date | null;
+  voucherCount: number;
+  isActive: boolean;
+  isDeceased: boolean;
+  createdAt: Date;
+  user: {
+    email: string;
+    profile: { fullName: string; phone: string | null; avatarUrl: string | null } | null;
+  };
+  registrationBranch: { name: string; branchCode: string };
+  branchAccesses: Array<{ branchId: string }>;
+  memberPackages: Array<{ totalSessions: number; usedSessions: number }>;
+  documents: Array<Pick<MemberDocument, 'fileUrl' | 'documentType' | 'mimeType'>>;
+  diagnoses?: Array<{ diagnosa: string; icdPrimer: string | null }>;
 }
 
 export interface MemberFilters {
@@ -75,7 +108,7 @@ export class MemberRetrievalService {
     const { search, status, branchCode, userId, page = 1, limit = 20 } = filters;
 
     // Build where clause - start with isActive filter
-    const where: any = {
+    const where: Prisma.MemberWhereInput = {
       isActive: true  // Only show active members
     };
 
@@ -195,7 +228,7 @@ export class MemberRetrievalService {
 
     // Search filter
     if (search) {
-      const searchConditions = [
+      const searchConditions: Prisma.MemberWhereInput[] = [
         { memberNo: { contains: search, mode: 'insensitive' } },
         { nik: { contains: search, mode: 'insensitive' } },
         { 
@@ -220,9 +253,13 @@ export class MemberRetrievalService {
       ];
 
       // Merge with existing OR conditions (branch access)
-      if (where.OR && where.OR.length > 0) {
+      const branchConditions = Array.isArray(where.OR)
+        ? where.OR
+        : where.OR
+          ? [where.OR]
+          : [];
+      if (branchConditions.length > 0) {
         // Combine branch conditions with search conditions using AND
-        const branchConditions = where.OR;
         where.AND = [
           { OR: branchConditions },
           { OR: searchConditions },
@@ -333,22 +370,21 @@ export class MemberRetrievalService {
   async getMembersByBranch(targetBranchId: string, filters: MemberFilters) {
     const { search, status, page = 1, limit = 20 } = filters;
 
-    const where: any = {
-      AND: [
+    const andConditions: Prisma.MemberWhereInput[] = [
         // Only show active members
-        { isActive: true },
+        { isActive: status === 'inactive' ? false : true },
         // Branch access conditions
         {
           OR: [
             { registrationBranchId: targetBranchId },
             { branchAccesses: { some: { branchId: targetBranchId } } },
           ],
-        }
-      ]
-    };
+        },
+      ];
+    const where: Prisma.MemberWhereInput = { AND: andConditions };
 
     if (search) {
-      const searchConditions = [
+      const searchConditions: Prisma.MemberWhereInput[] = [
         { memberNo: { contains: search, mode: 'insensitive' } },
         { nik: { contains: search, mode: 'insensitive' } },
         { 
@@ -373,11 +409,7 @@ export class MemberRetrievalService {
       ];
 
       // Add search conditions to existing AND clause
-      where.AND.push({ OR: searchConditions });
-    }
-
-    if (status) {
-      where.AND.push({ status: status });
+      andConditions.push({ OR: searchConditions });
     }
 
     const [total, members] = await Promise.all([
@@ -495,7 +527,7 @@ export class MemberRetrievalService {
     return {
       memberNo: member.memberNo,
       fullName: member.user.profile?.fullName || '-',
-      phone: member.user.profile?.phoneNumber || '-',
+      phone: member.user.profile?.phone || '-',
       isActive: member.user.isActive,
       registrationBranch: member.registrationBranch?.name || '-',
       isRegistrationBranch: branchId === member.registrationBranchId,
@@ -722,7 +754,7 @@ export class MemberRetrievalService {
   /**
    * Format member detail data for response
    */
-  private formatMemberDetailData(member: any) {
+  private formatMemberDetailData(member: MemberDetailSource) {
     // Get profile photo - check both memberDocuments and user.profile.avatarUrl
     // Priority: memberDocuments FOTO_PROFIL > user.profile.avatarUrl
     const profilePhoto = member.documents?.find(isProfileImageDocument);
@@ -746,12 +778,12 @@ export class MemberRetrievalService {
         name: member.registrationBranch.name,
         branchCode: member.registrationBranch.branchCode,
       },
-      branchAccess: member.branchAccesses?.map((access: any) => ({
+      branchAccess: member.branchAccesses?.map((access) => ({
         branchId: access.branchId,
         branchName: access.branch.name,
         grantedAt: access.createdAt.toISOString(),
       })) || [],
-      documents: member.documents?.map((doc: any) => ({
+      documents: member.documents?.map((doc) => ({
         id: doc.id,
         documentType: doc.documentType,
         fileUrl: doc.fileUrl,
@@ -796,7 +828,7 @@ export class MemberRetrievalService {
    * Format member data for response
    */
   private formatMemberData(
-    member: any,
+    member: MemberListSource,
     sessionStats: { sessionCount: number; lastInfusionDate: Date | null } = {
       sessionCount: 0,
       lastInfusionDate: null,
@@ -804,7 +836,7 @@ export class MemberRetrievalService {
   ) {
     // Calculate basic voucher count from packages
     const basicVoucherCount = member.memberPackages?.reduce(
-      (sum: number, pkg: any) => sum + (pkg.totalSessions - pkg.usedSessions),
+      (sum, pkg) => sum + (pkg.totalSessions - pkg.usedSessions),
       0
     ) || 0;
 
@@ -813,12 +845,12 @@ export class MemberRetrievalService {
     const profilePhoto = member.documents?.find(isProfileImageDocument);
     const photoUrl = profilePhoto?.fileUrl || member.user?.profile?.avatarUrl || null;
     const hasInformedConsent = member.documents?.some(
-      (doc: any) => doc?.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN',
+      (doc) => doc?.documentType === 'PERSETUJUAN_SETELAH_PENJELASAN',
     ) || false;
 
     // Cross-branch only means access to a branch other than the registration branch.
     const isLintas = member.branchAccesses?.some(
-      (access: any) => access.branchId !== member.registrationBranchId,
+      (access) => access.branchId !== member.registrationBranchId,
     ) || false;
 
     // Get primary diagnosis

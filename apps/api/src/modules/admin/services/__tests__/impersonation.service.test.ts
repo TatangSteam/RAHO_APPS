@@ -683,7 +683,7 @@ describe('ImpersonationService', () => {
           where: expect.objectContaining({
             role: 'ADMIN_MANAGER',
             OR: expect.arrayContaining([
-              { fullName: { contains: 'manager1', mode: 'insensitive' } },
+                { profile: { fullName: { contains: 'manager1', mode: 'insensitive' } } },
               { email: { contains: 'manager1', mode: 'insensitive' } },
             ]),
           }),
@@ -846,7 +846,7 @@ describe('ImpersonationService', () => {
           where: expect.objectContaining({
             role: 'ADMIN_CABANG',
             OR: expect.arrayContaining([
-              { fullName: { contains: 'admin1', mode: 'insensitive' } },
+                { profile: { fullName: { contains: 'admin1', mode: 'insensitive' } } },
               { email: { contains: 'admin1', mode: 'insensitive' } },
             ]),
           }),

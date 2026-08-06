@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Key, Mail, Shield, Copy, Check, RefreshCw } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
@@ -105,12 +106,6 @@ export default function StaffCredentialsModal({
   const [copiedPassword, setCopiedPassword] = useState(false);
 
   useEffect(() => {
-    if (isOpen && staffId) {
-      loadCredentials();
-    }
-  }, [isOpen, staffId]);
-
-  useEffect(() => {
     if (!isOpen) {
       // Reset states when modal closes
       setEditingEmail(false);
@@ -120,20 +115,27 @@ export default function StaffCredentialsModal({
     }
   }, [isOpen]);
 
-  const loadCredentials = async () => {
+  const loadCredentials = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`/users/${staffId}/credentials`);
       setCredentials(response.data.data);
       setNewEmail(response.data.data.email);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading credentials:', error);
       showToast.error('Gagal memuat data kredensial');
       onClose();
     } finally {
       setLoading(false);
     }
-  };
+  }, [onClose, staffId]);
+
+  useEffect(() => {
+    if (isOpen && staffId) {
+      void loadCredentials();
+    }
+  }, [isOpen, loadCredentials, staffId]);
 
   const handleSaveEmail = async () => {
     if (!newEmail.trim()) {
@@ -154,7 +156,8 @@ export default function StaffCredentialsModal({
       setEditingEmail(false);
       await loadCredentials();
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error updating email:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah email');
     } finally {
@@ -179,7 +182,8 @@ export default function StaffCredentialsModal({
       showToast.success('Password berhasil di-reset');
       setShowPasswordReset(false);
       setNewPassword('');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error resetting password:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal reset password');
     } finally {
@@ -205,6 +209,7 @@ export default function StaffCredentialsModal({
       }
       showToast.success(`${type === 'email' ? 'Email' : 'Password'} disalin ke clipboard`);
     } catch (error) {
+      assertCaughtError(error);
       showToast.error('Gagal menyalin ke clipboard');
     }
   };

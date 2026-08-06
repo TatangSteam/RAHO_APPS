@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -16,7 +17,7 @@ interface ServiceStats {
 
 export default function ServiceDashboardPage() {
   const router = useRouter();
-  const { user, accessToken } = useAuthStore();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ServiceStats>({
     todaySessions: 0,
@@ -39,7 +40,7 @@ export default function ServiceDashboardPage() {
     }
 
     loadServiceStats();
-  }, [user]);
+  }, [router, user]);
 
   const loadServiceStats = async () => {
     try {
@@ -54,7 +55,8 @@ export default function ServiceDashboardPage() {
       };
       
       setStats(mockStats);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load service stats:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {

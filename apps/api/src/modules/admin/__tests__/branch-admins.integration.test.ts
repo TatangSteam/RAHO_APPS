@@ -236,7 +236,7 @@ describe('GET /admin/branch-admins - Integration Tests', () => {
       
       const result = mockSendSuccess.mock.calls[0][1] as any;
       expect(result.admins).toHaveLength(2);
-      expect(result.admins.every((admin: any) => 
+      expect(result.admins.every((admin) =>
         ['branch-1', 'branch-2'].includes(admin.branch.id)
       )).toBe(true);
     });

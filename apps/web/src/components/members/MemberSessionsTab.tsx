@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
 import CreateSessionModal from '@/components/sessions/CreateSessionModal';
@@ -16,28 +17,21 @@ interface MemberSessionsTabProps {
   canCreate?: boolean;
 }
 
-export default function MemberSessionsTab({ memberId, memberNo, memberName, canCreate = true }: MemberSessionsTabProps) {
+export default function MemberSessionsTab({ memberId, memberNo: _memberNo, memberName: _memberName, canCreate = true }: MemberSessionsTabProps) {
   const router = useRouter();
   const { user } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionDetail[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSessions();
-  }, [memberId]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
-      setLoading(true);
       const data = await sessionApi.getMemberSessions(memberId);
       setSessions(data || []);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load sessions:', error);
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [memberId]);
 
   const handleSessionCreated = (sessionId: string) => {
     setIsCreateModalOpen(false);
@@ -89,6 +83,10 @@ export default function MemberSessionsTab({ memberId, memberNo, memberName, canC
       router.push(`/sessions/${sessionId}`);
     }
   };
+
+  useEffect(() => {
+    void loadSessions();
+  }, [loadSessions]);
 
   return (
     <div>

@@ -1,5 +1,6 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { meApi, MemberSession } from '@/lib/api/meApi'
 import { Syringe, ChevronLeft, ChevronRight, CheckCircle, Clock, Eye, MapPin, Package, Calendar } from 'lucide-react'
@@ -13,25 +14,23 @@ export default function MemberSessionsPage() {
   const [totalPages, setTotalPages] = useState(1)
   const limit = 10
 
-  useEffect(() => {
-    loadSessions()
-  }, [page])
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     try {
       setLoading(true)
       const { data, meta } = await meApi.getSessions(page, limit)
       setSessions(data)
       setTotalPages(meta.totalPages)
     } catch (e) {
+      assertCaughtError(e);
       devError(e)
     } finally {
       setLoading(false)
     }
-  }
+  }, [page])
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })
+  useEffect(() => {
+    void loadSessions()
+  }, [loadSessions])
 
   return (
     <div>

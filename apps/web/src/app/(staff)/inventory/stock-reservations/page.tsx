@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, RefreshCw, Unlock } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -9,7 +10,7 @@ import { useAuthStore } from '@/stores/authStore';
 import styles from '../operations.module.css';
 import { extractCollectionRows } from './stockReservationPresentation';
 
-type Row = Record<string, any>;
+import type { InventoryLegacyRow as Row } from '@/types/inventoryLegacy';
 type DraftLine = { approvedQty: string };
 
 function idempotencyKey(prefix: string) {
@@ -62,7 +63,7 @@ export default function StockReservationsPage() {
       requestRows.forEach((request: Row) => {
         nextDrafts[request.id] = {};
         extractCollectionRows<Row>(request.items).forEach((item: Row) => {
-          const available = availableForProduct(balanceRows, item.masterProductId);
+          const available = availableForProduct(balanceRows, item.masterProductId || '');
           const requested = Number(item.finalQty ?? item.requestedQty ?? 0);
           nextDrafts[request.id][item.id] = {
             approvedQty: String(Math.min(requested, available)),
@@ -70,7 +71,8 @@ export default function StockReservationsPage() {
         });
       });
       setDrafts(nextDrafts);
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       setError(requestError.response?.data?.error?.message || 'Gagal memuat stock request dan reservation.');
     } finally {
       setLoading(false);
@@ -94,7 +96,7 @@ export default function StockReservationsPage() {
       stockRequestItemId: item.id,
       approvedQty: drafts[request.id]?.[item.id]?.approvedQty || '0',
     }));
-    if (!lines.some((line: Row) => Number(line.approvedQty) > 0)) {
+    if (!lines.some((line) => Number(line.approvedQty) > 0)) {
       showToast.error('Minimal satu item harus memiliki approved quantity.');
       return;
     }
@@ -108,7 +110,8 @@ export default function StockReservationsPage() {
       const status = response.data?.data?.status;
       showToast.success(status === 'PARTIALLY_APPROVED' ? 'Request disetujui parsial dan stok direservasi.' : 'Request disetujui penuh dan stok direservasi.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Approval dan reservation gagal.');
     } finally { setSaving(false); }
   };
@@ -124,7 +127,8 @@ export default function StockReservationsPage() {
       });
       showToast.success('Reservation berhasil dilepas.');
       await load();
-    } catch (requestError: any) {
+    } catch (requestError) {
+      assertCaughtError(requestError);
       showToast.error(requestError.response?.data?.error?.message || 'Release reservation gagal.');
     } finally { setSaving(false); }
   };
@@ -132,8 +136,8 @@ export default function StockReservationsPage() {
   const reservationGroups = useMemo(() => {
     const grouped = new Map<string, Row[]>();
     reservations.forEach((reservation) => grouped.set(
-      reservation.stockRequestId,
-      [...(grouped.get(reservation.stockRequestId) || []), reservation],
+      reservation.stockRequestId || '',
+      [...(grouped.get(reservation.stockRequestId || '') || []), reservation],
     ));
     return Array.from(grouped.entries());
   }, [reservations]);
@@ -153,7 +157,7 @@ export default function StockReservationsPage() {
         <div className={styles.requestList}>{requests.length === 0 ? <div className={styles.empty}>Tidak ada request pending.</div> : requests.map((request) => <article className={styles.requestCard} key={request.id}>
           <div className={styles.requestHeader}><div><strong>{request.requestCode}</strong><span>{request.branchName}</span></div><span className={styles.warningBadge}>PENDING</span></div>
           <div className={styles.lineGrid}>{extractCollectionRows<Row>(request.items).map((item: Row) => {
-            const available = availableForProduct(balances, item.masterProductId);
+            const available = availableForProduct(balances, item.masterProductId || '');
             const draft = drafts[request.id]?.[item.id] || { approvedQty: '0' };
             return <div className={styles.lineRow} key={item.id}>
               <div><strong>{item.productName}</strong><span>Diminta {item.finalQty ?? item.requestedQty} {item.unit}</span></div>

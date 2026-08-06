@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { getConsentDocumentsApi } from '@/lib/membersApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
@@ -58,7 +59,8 @@ export default function ConsentDocumentsSection({
       const data = await getConsentDocumentsApi(memberId);
       devLog('✅ [ConsentDocumentsSection] Documents count:', data.documents?.length || 0);
       setInternalDocuments(data.documents);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('❌ [ConsentDocumentsSection] Error loading documents:', err);
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
@@ -103,7 +105,8 @@ export default function ConsentDocumentsSection({
     try {
       const blobUrl = await createAuthenticatedObjectUrl(fileUrl);
       window.open(blobUrl, '_blank', 'noopener,noreferrer');
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
       
@@ -134,7 +137,8 @@ export default function ConsentDocumentsSection({
       link.href = blobUrl;
       link.download = fileName;
       link.click();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
       

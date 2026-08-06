@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { clsx } from 'clsx';
@@ -436,6 +437,7 @@ export default function AuditLogsPage() {
       const response = await branchesApi.getAllBranches();
       setBranches(parseBranchList(response.data?.data));
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches for audit filter:', error);
     }
   }, []);
@@ -450,7 +452,8 @@ export default function AuditLogsPage() {
       });
       setLogs(response.data.data.logs);
       setPagination(response.data.data.pagination);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading audit logs:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat audit log');
     } finally {
@@ -482,7 +485,7 @@ export default function AuditLogsPage() {
         return;
       }
       void loadBranches();
-    }).catch((error: any) => {
+    }).catch((error) => {
       if (cancelled) return;
       setAccessChecked(true);
       showToast.error(error.response?.data?.error?.message || 'Gagal memeriksa akses audit log');
@@ -523,7 +526,8 @@ export default function AuditLogsPage() {
     try {
       const response = await api.get<AuditLogDetailResponse>(`/audit-logs/${log.id}`);
       setSelectedLog(response.data.data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading audit detail:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat detail audit');
     } finally {
@@ -548,7 +552,8 @@ export default function AuditLogsPage() {
       link.remove();
       window.URL.revokeObjectURL(url);
       showToast.success('Audit log berhasil diexport');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error exporting audit logs:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal export audit log');
     } finally {

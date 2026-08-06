@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { X, Building2, Loader2, Plus, Trash2, Stethoscope, Heart, Star, ArrowUpCircle } from 'lucide-react';
 import { showToast, confirm } from '@/lib/toast';
 import { branchesApi } from '@/lib/api/branchesApi';
@@ -63,13 +64,7 @@ export default function ManageStaffBranchesModal({
   const [removing, setRemoving] = useState<string | null>(null);
   const [settingPrimary, setSettingPrimary] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadData();
-    }
-  }, [isOpen, userId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [branchesRes, availableRes] = await Promise.all([
@@ -78,13 +73,14 @@ export default function ManageStaffBranchesModal({
       ]);
       setStaffData(branchesRes.data.data);
       setAvailableBranches(availableRes.data.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading staff branches:', error);
       showToast.error('Gagal memuat data cabang staff');
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   const handleAssignBranch = async () => {
     if (!selectedBranchId) {
@@ -99,7 +95,8 @@ export default function ManageStaffBranchesModal({
       setShowAddBranch(false);
       await loadData();
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error assigning branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menambahkan cabang');
     } finally {
@@ -120,7 +117,8 @@ export default function ManageStaffBranchesModal({
       showToast.success(`Berhasil menghapus dari cabang ${branchName}`);
       await loadData();
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error removing branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menghapus dari cabang');
     } finally {
@@ -142,7 +140,8 @@ export default function ManageStaffBranchesModal({
       showToast.success(`Cabang utama berhasil diubah ke ${branchName}`);
       await loadData();
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error setting primary branch:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah cabang utama');
     } finally {
@@ -161,6 +160,12 @@ export default function ManageStaffBranchesModal({
       default: return 'bg-neutral-100 text-neutral-700 dark:bg-neutral-700/50 dark:text-neutral-400';
     }
   };
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadData();
+    }
+  }, [isOpen, loadData]);
 
   const getBranchTypeLabel = (type: string) => {
     if (type === 'PUSAT') return 'Pusat';

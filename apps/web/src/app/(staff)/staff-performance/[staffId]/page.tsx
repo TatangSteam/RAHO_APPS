@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { usersApi, StaffSessionHistoryResponse, StaffSessionHistoryItem } from '@/lib/usersApi';
-import { useAuthStore } from '@/stores/authStore';
+import { usersApi, StaffSessionHistoryResponse } from '@/lib/usersApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import {
@@ -113,11 +114,7 @@ export default function StaffPerformanceDetailPage() {
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
 
-  useEffect(() => {
-    fetchHistory();
-  }, [staffId, branchId, page, positionFilter, startDate, endDate]);
-
-  const fetchHistory = async () => {
+  const fetchHistory = useCallback(async () => {
     try {
       setLoading(true);
       const result = await usersApi.getStaffSessionHistory(staffId, {
@@ -129,13 +126,18 @@ export default function StaffPerformanceDetailPage() {
         limit,
       });
       setData(result);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching history:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat data riwayat');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId, endDate, limit, page, positionFilter, staffId, startDate]);
+
+  useEffect(() => {
+    void fetchHistory();
+  }, [fetchHistory]);
 
   const handleViewSession = (sessionId: string) => {
     router.push(`/sessions/${sessionId}`);
@@ -161,7 +163,7 @@ export default function StaffPerformanceDetailPage() {
             {/* Avatar */}
             <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 text-black font-bold text-2xl flex-shrink-0 overflow-hidden shadow-lg shadow-amber-500/30">
               {data.staff.avatarUrl ? (
-                <img src={data.staff.avatarUrl} alt={data.staff.fullName} className="w-full h-full object-cover" />
+                <AppImage src={data.staff.avatarUrl} alt={data.staff.fullName} className="w-full h-full object-cover" />
               ) : (
                 data.staff.fullName.charAt(0).toUpperCase()
               )}
@@ -239,7 +241,7 @@ export default function StaffPerformanceDetailPage() {
       <div className="mb-6 flex flex-col md:flex-row gap-4">
         <select
           value={positionFilter}
-          onChange={(e) => { setPositionFilter(e.target.value as any); setPage(1); }}
+          onChange={(e) => { setPositionFilter(e.target.value as typeof positionFilter); setPage(1); }}
           className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all min-w-[180px]"
         >
           <option value="all">Semua Posisi</option>

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, UserCog, Mail, Phone, User, Shield, Save, Loader2, Info, Eye, EyeOff, Building2 } from 'lucide-react';
@@ -13,9 +14,27 @@ interface StaffCrudModalProps {
   onSuccess: () => void;
   action: 'create' | 'edit' | 'delete';
   branchId: string;
-  staffData?: any;
+  staffData?: StaffCrudData | null;
   callerRole?: string; // Role of the user opening the modal
   allowBranchChange?: boolean;
+}
+
+export interface StaffCrudData {
+  id: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  branchId?: string;
+  profile?: { fullName?: string; phone?: string };
+  branch?: { id?: string; name?: string; branchCode?: string } | null;
+}
+
+const STAFF_FORM_ROLES: StaffFormData['role'][] = ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'];
+
+function toStaffFormRole(role: string): StaffFormData['role'] {
+  return STAFF_FORM_ROLES.includes(role as StaffFormData['role'])
+    ? role as StaffFormData['role']
+    : 'ADMIN_LAYANAN';
 }
 
 interface StaffFormData {
@@ -107,7 +126,8 @@ export default function StaffCrudModal({
         setLoadingBranches(true);
         const response = await api.get('/branches/all');
         setBranches(response.data.data || []);
-      } catch (error: any) {
+      } catch (error) {
+      assertCaughtError(error);
         devError('Error loading branches:', error);
         showToast.error('Gagal memuat data cabang');
       } finally {
@@ -125,7 +145,7 @@ export default function StaffCrudModal({
         email: staffData.email || '',
         password: '',
         confirmPassword: '',
-        role: staffData.role || 'ADMIN_LAYANAN',
+        role: toStaffFormRole(staffData.role),
         fullName: staffData.profile?.fullName || '',
         phone: staffData.profile?.phone || '',
         isActive: staffData.isActive ?? true,
@@ -233,7 +253,7 @@ export default function StaffCrudModal({
         });
         await api.post('/users', createData);
         showToast.success('Staff berhasil ditambahkan');
-      } else if (action === 'edit') {
+      } else if (action === 'edit' && staffData) {
         const updateData: Record<string, string | boolean> = {
           role: formData.role,
           fullName: formData.fullName,
@@ -261,7 +281,8 @@ export default function StaffCrudModal({
       }
       
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ [StaffCrudModal] Error saving staff:', error);
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} staff`;
       setError(errorMessage);

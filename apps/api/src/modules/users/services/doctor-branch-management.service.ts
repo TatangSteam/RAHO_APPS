@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { AppError } from '@/middleware/errorHandler';
 import { logAudit } from '@/utils/auditLog';
+import { Prisma } from '@prisma/client';
 
 export class DoctorBranchManagementService {
   /**
@@ -65,14 +66,13 @@ export class DoctorBranchManagementService {
     }
 
     // Build where clause
-    const whereClause: any = {
+    const whereClause: Prisma.UserWhereInput = {
       role: 'DOCTOR',
       ...(status !== undefined ? { isActive: status } : {}),
     };
 
     // Get doctors with their branch assignments
-    const [doctors, total] = await Promise.all([
-      prisma.user.findMany({
+    const doctors = await prisma.user.findMany({
         where: whereClause,
         skip,
         take: limit,
@@ -102,9 +102,7 @@ export class DoctorBranchManagementService {
           },
         },
         orderBy: [{ isActive: 'desc' }, { profile: { fullName: 'asc' } }],
-      }),
-      prisma.user.count({ where: whereClause }),
-    ]);
+      });
 
     // Filter doctors who have at least one branch assignment in the allowed branches
     const filteredDoctors = doctors.filter((doc) => doc.staffBranches.length > 0);

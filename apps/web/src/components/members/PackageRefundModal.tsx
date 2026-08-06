@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useCallback } from 'react';
 import { PackageActionModal } from './PackageActionModal';
 import { Button } from '@/components/ui/Button';
@@ -67,6 +69,7 @@ export default function PackageRefundModal({
         });
         onProofChange({ file: result.file, preview: URL.createObjectURL(result.blob) });
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
@@ -180,7 +183,7 @@ export default function PackageRefundModal({
               )}
               {refundProof?.preview && (
                 <div className={styles.imagePreview}>
-                  <img src={refundProof.preview} alt="Preview" style={{ maxWidth: '200px', marginTop: '8px', borderRadius: '4px' }} />
+                  <AppImage src={refundProof.preview} alt="Preview" style={{ maxWidth: '200px', marginTop: '8px', borderRadius: '4px' }} />
                   {compressionInfo && (
                     <p style={{ fontSize: '12px', color: '#22c55e', marginTop: '4px' }}>
                       ✓ Dikompresi: {formatFileSize(compressionInfo.original)} → {formatFileSize(compressionInfo.compressed)}

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { X, Eye, EyeOff, Key, UserRound, Building2, Copy, Check, RefreshCw } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { api } from '@/lib/api';
@@ -92,12 +93,6 @@ export default function MemberCredentialsModal({
   const [copiedPassword, setCopiedPassword] = useState(false);
 
   useEffect(() => {
-    if (isOpen && memberId) {
-      loadCredentials();
-    }
-  }, [isOpen, memberId]);
-
-  useEffect(() => {
     if (!isOpen) {
       // Reset states when modal closes
       setEditingUsername(false);
@@ -107,20 +102,27 @@ export default function MemberCredentialsModal({
     }
   }, [isOpen]);
 
-  const loadCredentials = async () => {
+  const loadCredentials = useCallback(async () => {
     try {
       setLoading(true);
       const response = await api.get(`/members/${memberId}/credentials`);
       setCredentials(response.data.data);
       setNewUsername(response.data.data.username || response.data.data.email);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading credentials:', error);
       showToast.error('Gagal memuat data kredensial');
       onClose();
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId, onClose]);
+
+  useEffect(() => {
+    if (isOpen && memberId) {
+      void loadCredentials();
+    }
+  }, [isOpen, loadCredentials, memberId]);
 
   const handleSaveUsername = async () => {
     const normalizedUsername = newUsername.trim().toLowerCase();
@@ -141,7 +143,8 @@ export default function MemberCredentialsModal({
       setEditingUsername(false);
       await loadCredentials();
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error updating username:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal mengubah username');
     } finally {
@@ -166,7 +169,8 @@ export default function MemberCredentialsModal({
       showToast.success('Password berhasil di-reset');
       setShowPasswordReset(false);
       setNewPassword('');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error resetting password:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal reset password');
     } finally {
@@ -192,6 +196,7 @@ export default function MemberCredentialsModal({
       }
       showToast.success(`${type === 'username' ? 'Username' : 'Password'} disalin ke clipboard`);
     } catch (error) {
+      assertCaughtError(error);
       showToast.error('Gagal menyalin ke clipboard');
     }
   };

@@ -118,11 +118,15 @@ export interface InventoryItemWithStock {
   masterProductId: string;
   branchId: string;
   stock: number;
+  sku?: string;
+  name?: string;
+  quantity?: number;
   minThreshold: number;
   storageLocation: string | null;
   masterProduct: {
     id: string;
     name: string;
+    sku?: string;
     category: string;
     baseUnit: string;
     usageUnit: string;
@@ -279,6 +283,8 @@ export interface Shipment {
     originalRequestedQty?: number; // Original request amount before overstock deduction
     overstockDeducted?: number; // Amount already deducted from overstock
     receivedQty?: number;
+    stockBefore?: number | null;
+    stockAfter?: number | null;
     quarantineQty?: number;
     overstockQty?: number;
     overstockReason?: string;
@@ -376,6 +382,24 @@ export interface Shipment {
   approvedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InventoryMasterProduct {
+  id: string;
+  name: string;
+  sku?: string;
+  category: string;
+  baseUnit: string;
+  usageUnit: string;
+  conversionFactor: number;
+  description?: string;
+  isActive: boolean;
+  baseUomId?: string;
+  usageUomId?: string;
+  tracksBatch?: boolean;
+  tracksExpiry?: boolean;
+  baseUom?: { id: string; code: string; name: string };
+  usageUom?: { id: string; code: string; name: string };
 }
 
 export interface HomecareProduct {
@@ -700,7 +724,7 @@ export const inventoryApi = {
    */
   getAvailableItems: (branchId: string) => {
     // Add timestamp to prevent caching issues
-    return api.get(`/inventory/available/${branchId}`, {
+    return api.get<{ success: boolean; data: InventoryItemWithStock[] }>(`/inventory/available/${branchId}`, {
       params: { _t: Date.now() }
     });
   },
@@ -745,7 +769,7 @@ export const inventoryApi = {
    * Get master products for inventory modal
    */
   getMasterProducts: () => {
-    return api.get('/inventory/master-products');
+    return api.get<{ data: { products: InventoryMasterProduct[] } }>('/inventory/master-products');
   },
 
   createMasterProduct: (data: Record<string, unknown>) => {
@@ -989,7 +1013,7 @@ export const inventoryApi = {
    * Get shipments
    */
   getShipments: (params?: { branchId?: string; status?: string; startDate?: string; endDate?: string }) => {
-    return api.get('/inventory/shipments', { params });
+    return api.get<{ data: Shipment[] }>('/inventory/shipments', { params });
   },
 
   /**

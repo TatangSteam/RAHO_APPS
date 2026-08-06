@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Copy, CopyPlus, Trash2 } from 'lucide-react';
 import { TherapyPlan, therapyPlanApi, BulkEditTherapyPlanSetInput } from '@/lib/therapyPlanApi';
@@ -53,6 +54,9 @@ const toDosePayload = (value: DoseInputValue): number | null => {
   return parsed === 0 ? null : parsed;
 };
 
+const hasDoseValueChanged = (oldValue: DoseInputValue, newValue: DoseInputValue) =>
+  toDosePayload(oldValue) !== toDosePayload(newValue);
+
 const copyEditableValues = (source: EditableRow, target: EditableRow): EditableRow => ({
   ...target,
   keterangan: source.keterangan,
@@ -100,20 +104,8 @@ export default function EditTherapyPlanSetModal({
   // Draft storage key - use therapyPlanSetId from first plan if available
   const draftKey = `therapy-plan-edit-draft-${therapyPlans[0]?.therapyPlanSetId || memberId}${editableSessionId ? `-${editableSessionId}` : ''}`;
 
-  // Helper function to normalize values: treat 0 as null (no meaningful dose)
-  const normalizeValue = (value: DoseInputValue): number | null => {
-    const parsed = parseDoseInput(value);
-    if (parsed === 0 || parsed === null) return null;
-    return parsed;
-  };
-
-  // Helper function to check if two values are meaningfully different
-  const hasValueChanged = (oldValue: DoseInputValue, newValue: DoseInputValue): boolean => {
-    return normalizeValue(oldValue) !== normalizeValue(newValue);
-  };
-
   // Save draft to localStorage
-  const saveDraft = (data: EditableRow[]) => {
+  const saveDraft = useCallback((data: EditableRow[]) => {
     try {
       localStorage.setItem(draftKey, JSON.stringify({
         rows: data,
@@ -121,12 +113,13 @@ export default function EditTherapyPlanSetModal({
       }));
       setHasDraft(true);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to save draft:', error);
     }
-  };
+  }, [draftKey]);
 
   // Load draft from localStorage
-  const loadDraft = (): EditableRow[] | null => {
+  const loadDraft = useCallback((): EditableRow[] | null => {
     try {
       const stored = localStorage.getItem(draftKey);
       if (stored) {
@@ -142,10 +135,11 @@ export default function EditTherapyPlanSetModal({
         }
       }
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to load draft:', error);
     }
     return null;
-  };
+  }, [draftKey]);
 
   // Clear draft from localStorage
   const clearDraft = () => {
@@ -153,6 +147,7 @@ export default function EditTherapyPlanSetModal({
       localStorage.removeItem(draftKey);
       setHasDraft(false);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to clear draft:', error);
     }
   };
@@ -168,20 +163,6 @@ export default function EditTherapyPlanSetModal({
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  // Auto-save draft when rows change (with debounce)
-  useEffect(() => {
-    if (!isOpen || rows.length === 0 || !initialRows.length) return;
-
-    const timeoutId = setTimeout(() => {
-      // Only save if there are changes
-      if (hasChanges()) {
-        saveDraft(rows);
-      }
-    }, 2000); // 2 second debounce
-
-    return () => clearTimeout(timeoutId);
-  }, [rows, isOpen]);
 
   // Initialize rows and set name from therapy plans
   useEffect(() => {
@@ -261,10 +242,10 @@ export default function EditTherapyPlanSetModal({
       setEditableSetName(currentSetName);
       setInitialSetName(currentSetName);
     }
-  }, [editableSessionId, isOpen, therapyPlans]);
+  }, [editableSessionId, isOpen, loadDraft, therapyPlans]);
 
   // Check if there are any meaningful changes (treating 0 as null)
-  const hasChanges = () => {
+  const hasChanges = useCallback(() => {
     // Check if set name changed (only if user has permission)
     if (canEditSetNameAndAddPlans && editableSetName.trim() !== initialSetName.trim()) {
       return true;
@@ -284,23 +265,32 @@ export default function EditTherapyPlanSetModal({
       const initialRow = initialRows[index];
       return (
         row.keterangan !== initialRow.keterangan ||
-        hasValueChanged(initialRow.ifa250, row.ifa250) ||
-        hasValueChanged(initialRow.ifa500, row.ifa500) ||
-        hasValueChanged(initialRow.hho, row.hho) ||
-        hasValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
-        hasValueChanged(initialRow.h2, row.h2) ||
-        hasValueChanged(initialRow.no, row.no) ||
-        hasValueChanged(initialRow.gaso, row.gaso) ||
-        hasValueChanged(initialRow.o2, row.o2) ||
-        hasValueChanged(initialRow.o3, row.o3) ||
-        hasValueChanged(initialRow.edta, row.edta) ||
-        hasValueChanged(initialRow.mb, row.mb) ||
-        hasValueChanged(initialRow.h2s, row.h2s) ||
-        hasValueChanged(initialRow.kcl, row.kcl) ||
-        hasValueChanged(initialRow.jmlNb, row.jmlNb)
+        hasDoseValueChanged(initialRow.ifa250, row.ifa250) ||
+        hasDoseValueChanged(initialRow.ifa500, row.ifa500) ||
+        hasDoseValueChanged(initialRow.hho, row.hho) ||
+        hasDoseValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
+        hasDoseValueChanged(initialRow.h2, row.h2) ||
+        hasDoseValueChanged(initialRow.no, row.no) ||
+        hasDoseValueChanged(initialRow.gaso, row.gaso) ||
+        hasDoseValueChanged(initialRow.o2, row.o2) ||
+        hasDoseValueChanged(initialRow.o3, row.o3) ||
+        hasDoseValueChanged(initialRow.edta, row.edta) ||
+        hasDoseValueChanged(initialRow.mb, row.mb) ||
+        hasDoseValueChanged(initialRow.h2s, row.h2s) ||
+        hasDoseValueChanged(initialRow.kcl, row.kcl) ||
+        hasDoseValueChanged(initialRow.jmlNb, row.jmlNb)
       );
     });
-  };
+  }, [
+    canEditSetNameAndAddPlans,
+    editableSessionId,
+    editableSetName,
+    initialRows,
+    initialSessionPlanNumber,
+    initialSetName,
+    rows,
+    sessionPlanNumber,
+  ]);
 
   const createEmptyRow = (planNumber: number): EditableRow => ({
     planNumber,
@@ -367,6 +357,16 @@ export default function EditTherapyPlanSetModal({
         : `${count} terapi ditambahkan (#${firstPlanNumber}-#${lastPlanNumber})`
     );
   };
+
+  useEffect(() => {
+    if (!isOpen || rows.length === 0 || !initialRows.length) return;
+
+    const timeoutId = setTimeout(() => {
+      if (hasChanges()) saveDraft(rows);
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
+  }, [hasChanges, initialRows.length, isOpen, rows, saveDraft]);
 
   const getRemovableRowsFromEnd = (sourceRows = rows) => {
     const lastLockedIndex = sourceRows.reduce(
@@ -564,20 +564,20 @@ export default function EditTherapyPlanSetModal({
         
         return (
           row.keterangan !== initialRow.keterangan ||
-          hasValueChanged(initialRow.ifa250, row.ifa250) ||
-          hasValueChanged(initialRow.ifa500, row.ifa500) ||
-          hasValueChanged(initialRow.hho, row.hho) ||
-          hasValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
-          hasValueChanged(initialRow.h2, row.h2) ||
-          hasValueChanged(initialRow.no, row.no) ||
-          hasValueChanged(initialRow.gaso, row.gaso) ||
-          hasValueChanged(initialRow.o2, row.o2) ||
-          hasValueChanged(initialRow.o3, row.o3) ||
-          hasValueChanged(initialRow.edta, row.edta) ||
-          hasValueChanged(initialRow.mb, row.mb) ||
-          hasValueChanged(initialRow.h2s, row.h2s) ||
-          hasValueChanged(initialRow.kcl, row.kcl) ||
-          hasValueChanged(initialRow.jmlNb, row.jmlNb)
+          hasDoseValueChanged(initialRow.ifa250, row.ifa250) ||
+          hasDoseValueChanged(initialRow.ifa500, row.ifa500) ||
+          hasDoseValueChanged(initialRow.hho, row.hho) ||
+          hasDoseValueChanged(initialRow.hhoKonsentrat, row.hhoKonsentrat) ||
+          hasDoseValueChanged(initialRow.h2, row.h2) ||
+          hasDoseValueChanged(initialRow.no, row.no) ||
+          hasDoseValueChanged(initialRow.gaso, row.gaso) ||
+          hasDoseValueChanged(initialRow.o2, row.o2) ||
+          hasDoseValueChanged(initialRow.o3, row.o3) ||
+          hasDoseValueChanged(initialRow.edta, row.edta) ||
+          hasDoseValueChanged(initialRow.mb, row.mb) ||
+          hasDoseValueChanged(initialRow.h2s, row.h2s) ||
+          hasDoseValueChanged(initialRow.kcl, row.kcl) ||
+          hasDoseValueChanged(initialRow.jmlNb, row.jmlNb)
         );
       });
 
@@ -657,7 +657,8 @@ export default function EditTherapyPlanSetModal({
       
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       const errorMessage =
         error?.response?.data?.error?.message ||
         error?.response?.data?.message ||

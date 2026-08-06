@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import React, { useState, useEffect } from 'react';
 import { adminManagersApi, Branch, CreateAdminManagerData } from '@/lib/api/adminManagersApi';
 import { showToast } from '@/lib/toast';
@@ -48,7 +49,8 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
       setLoadingBranches(true);
       const response = await adminManagersApi.getBranches();
       setBranches(response.data.filter(b => b.isActive));
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches:', error);
       showToast.error('Gagal memuat data cabang');
     } finally {
@@ -157,7 +159,8 @@ export const CreateAdminManagerModal: React.FC<CreateAdminManagerModalProps> = (
       showToast.success('Admin Manager berhasil dibuat');
       onSuccess();
       handleClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error creating admin manager:', error);
       const message = error.response?.data?.message || 'Gagal membuat Admin Manager';
       showToast.error(message);

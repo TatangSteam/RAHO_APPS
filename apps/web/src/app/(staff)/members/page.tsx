@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getMembersApi } from '@/lib/membersApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
@@ -62,15 +63,7 @@ export default function MembersPage() {
     user?.role || ''
   );
   const canLookupCrossBranch = !['DOCTOR', 'NURSE', 'ADMIN_MANAGER'].includes(user?.role || '');
-  // Load branches list for filter
-  useEffect(() => {
-    if (isSuperAdmin || isAdminManager) {
-      loadBranches();
-    }
-    // Don't auto-set filter for ADMIN_MANAGER anymore - let them choose
-  }, [isSuperAdmin, isAdminManager]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       devLog('🔄 Loading branches for role:', user?.role);
       const { branchesApi } = await import('@/lib/api/branchesApi');
@@ -87,18 +80,19 @@ export default function MembersPage() {
         devLog('⚠️ No branches returned from API');
       }
       
-      const mappedBranches = branchesData.map((b: any) => {
+      const mappedBranches = branchesData.map((b) => {
         devLog('  - Branch:', b.branchCode, b.name);
         return { branchCode: b.branchCode, name: b.name };
       });
       
       setBranches(mappedBranches);
       devLog('✅ Branches state updated:', mappedBranches.length, 'branches');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ Failed to load branches:', error);
       devError('❌ Error details:', error.response?.data || error.message);
     }
-  };
+  }, [user?.role]);
 
   // Debounce search
   useEffect(() => {
@@ -109,10 +103,6 @@ export default function MembersPage() {
 
     return () => clearTimeout(timer);
   }, [search]);
-
-  useEffect(() => {
-    loadMembers();
-  }, [page, status, debouncedSearch, branchFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -126,6 +116,7 @@ export default function MembersPage() {
               const blobUrl = await createAuthenticatedObjectUrl(member.photoUrl!);
               return [member.memberId, blobUrl] as const;
             } catch (error) {
+      assertCaughtError(error);
               devError('Failed to load member photo:', member.memberId, error);
               return [member.memberId, ''] as const;
             }
@@ -162,7 +153,7 @@ export default function MembersPage() {
     };
   }, [photoUrls]);
 
-  const loadMembers = async () => {
+  const loadMembers = useCallback(async () => {
     try {
       setLoading(true);
       const result = await getMembersApi({
@@ -178,11 +169,16 @@ export default function MembersPage() {
       setTotalPages(result.pagination.totalPages);
       setTotal(result.pagination.total);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load members:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchFilter, debouncedSearch, page, status]);
+
+  useEffect(() => {
+    void loadMembers();
+  }, [loadMembers]);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,6 +201,12 @@ export default function MembersPage() {
     setBranchFilter('');
     setPage(1);
   };
+
+  useEffect(() => {
+    if (isSuperAdmin || isAdminManager) {
+      void loadBranches();
+    }
+  }, [isAdminManager, isSuperAdmin, loadBranches]);
 
   return (
     <main className={styles.page}>

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { branchAdminsApi, BranchAdmin } from '@/lib/api/branchAdminsApi';
+import { assertCaughtError } from '@/lib/caughtError';
+import React, { useCallback, useState, useEffect } from 'react';
+import { branchAdminsApi, BranchAdmin, type BranchAdminsListParams } from '@/lib/api/branchAdminsApi';
 import { ImpersonateButton } from './ImpersonateButton';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
@@ -24,16 +25,11 @@ export const BranchAdminsTab: React.FC = () => {
     ? Array.from(new Map(branchAdmins.map(admin => [admin.branch.id, admin.branch])).values())
     : [];
 
-  // Load branch admins
-  useEffect(() => {
-    loadBranchAdmins();
-  }, [page, search, branchFilter, statusFilter]);
-
-  const loadBranchAdmins = async () => {
+  const loadBranchAdmins = useCallback(async () => {
     try {
       setLoading(true);
       
-      const params: any = { page, limit };
+      const params: BranchAdminsListParams = { page, limit };
       if (search) params.search = search;
       if (branchFilter !== 'all') params.branchId = branchFilter;
       if (statusFilter !== 'all') params.status = statusFilter;
@@ -42,14 +38,19 @@ export const BranchAdminsTab: React.FC = () => {
       
       setBranchAdmins(response.data || []);
       setTotal(response.meta?.total || 0);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch admins:', error);
       showToast.error(error.response?.data?.message || 'Gagal memuat data Admin Cabang');
       setBranchAdmins([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchFilter, page, search, statusFilter]);
+
+  useEffect(() => {
+    void loadBranchAdmins();
+  }, [loadBranchAdmins]);
 
   // Handlers
   const handleSearchChange = (value: string) => {

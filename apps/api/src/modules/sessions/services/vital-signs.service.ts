@@ -1,6 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import type { CreateVitalSignInput } from '../sessions.schema';
+import { Prisma } from '@prisma/client';
 
 export class VitalSignsService {
   async upsertVitalSign(sessionId: string, data: CreateVitalSignInput, _userId: string) {
@@ -25,7 +25,7 @@ export class VitalSignsService {
       create: {
         treatmentSessionId: sessionId,
         ...data,
-      },
+      } as Prisma.VitalSignUncheckedCreateInput,
       update: {
         value: data.value,
         unit: data.unit,

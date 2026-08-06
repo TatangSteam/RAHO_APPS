@@ -1,5 +1,6 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
 import {
   AlertTriangle,
   Building2,
@@ -62,7 +63,7 @@ export function MemberTableCell({ columnId, member, photoUrl, onNavigate }: Memb
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-sm font-bold text-white ring-2 ring-neutral-100 dark:ring-neutral-800">
             <span>{memberInitial}</span>
             {photoUrl && (
-              <img
+              <AppImage
                 src={photoUrl}
                 alt={member.fullName || 'Member'}
                 onError={(event) => {

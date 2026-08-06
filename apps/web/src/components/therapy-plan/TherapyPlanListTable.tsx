@@ -197,9 +197,9 @@ function isExtraColumnAllZeros(plans: TherapyPlan[], column: ExtraSubstanceColum
 
 export default function TherapyPlanListTable({
   plans,
-  memberId,
+  memberId: _memberId,
   onOpenSession,
-  onEdit,
+  onEdit: _onEdit,
   hideInfusKe = false,
   hideStatus = false,
   hideAksi = false,

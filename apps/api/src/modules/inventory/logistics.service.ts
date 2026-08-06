@@ -1,13 +1,13 @@
-// @ts-nocheck
 import {
   AuditAction,
   BranchType,
-  DiscrepancyType,
   HomecareBagRequestStatus,
+  HomecareTeamMemberRole,
   LogisticLocationType,
   LogisticTransactionType,
   Role,
   Prisma,
+  ProductCategory,
   ShipmentStatus,
   StockMutationType,
   StockRequestStatus,
@@ -25,6 +25,23 @@ import {
   stockShipmentRoles,
 } from './logistics.access';
 import { dispatchInternalTransfer, receiveInternalTransfer } from './services/internal-transfer-posting.service';
+import type {
+  AddHomecareTeamMemberInput,
+  ApproveBagStockRequestInput,
+  ApproveStockRequestInput,
+  AssignHomecareBagInput,
+  CreateBagOpnameInput,
+  CreateBagStockRequestInput,
+  CreateBranchStockRequestInput,
+  CreateHomecareBagInput,
+  CreateHomecareTeamInput,
+  ReceiveShipmentInput,
+  RejectStockRequestInput,
+  RemoveHomecareTeamMemberInput,
+  ReturnBagStockInput,
+  ShipStockInput,
+  UseBagStockInput,
+} from './logistics.schema';
 
 type LogisticsActor = {
   userId: string;
@@ -41,6 +58,35 @@ type MovementChange = {
   destinationStockAfter?: number;
   notes?: string | null;
 };
+
+type BranchStockRequestResponse = Prisma.StockRequestGetPayload<{
+  include: { branch: true; items: { include: { masterProduct: true } } };
+}>;
+type BranchShipmentResponse = Prisma.ShipmentGetPayload<{
+  include: {
+    fromBranch: true;
+    toBranch: true;
+    items: { include: { masterProduct: true } };
+  };
+}> & {
+  discrepancies?: Prisma.ShipmentDiscrepancyGetPayload<object>[];
+  internalTransfer?: Prisma.InternalTransferLedgerGetPayload<object> | null;
+};
+type BagRequestResponse = Prisma.HomecareBagStockRequestGetPayload<{
+  include: { team: true; bag: true; items: true };
+}>;
+type BagShipmentResponse = Prisma.HomecareBagShipmentGetPayload<{
+  include: { bag: true; items: true };
+}>;
+type BagUsageResponse = Prisma.HomecareBagUsageGetPayload<{
+  include: { bag: { include: { team: true } }; items: true };
+}>;
+type BagReturnResponse = Prisma.HomecareBagReturnGetPayload<{
+  include: { bag: { include: { team: true } }; items: true };
+}>;
+type BagOpnameResponse = Prisma.HomecareBagOpnameGetPayload<{
+  include: { bag: { include: { team: true } }; items: true };
+}>;
 
 export class LogisticsService {
   // ============================================================
@@ -94,16 +140,15 @@ export class LogisticsService {
     return `${prefix}-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${uuidv4().slice(0, 8).toUpperCase()}`;
   }
 
-  private async nextRequestCode(prefix: string, model: any, field: string, scope?: string) {
+  private async nextRequestCode(
+    prefix: string,
+    findLastCode: (codePrefix: string) => Promise<string | null | undefined>,
+    scope?: string,
+  ) {
     const day = new Date().toISOString().slice(2, 10).replace(/-/g, '');
     const codePrefix = scope ? `${prefix}-${scope}-${day}` : `${prefix}-${day}`;
-    const last = await model.findFirst({
-      where: { [field]: { startsWith: codePrefix } },
-      orderBy: { [field]: 'desc' },
-      select: { [field]: true },
-    });
-
-    const lastSeq = last?.[field] ? Number(String(last[field]).split('-').pop()) : 0;
+    const lastCode = await findLastCode(codePrefix);
+    const lastSeq = lastCode ? Number(lastCode.split('-').pop()) : 0;
     return `${codePrefix}-${String(lastSeq + 1).padStart(3, '0')}`;
   }
 
@@ -162,7 +207,7 @@ export class LogisticsService {
     await this.assertManagerBranchAccess(actor, branchId);
   }
 
-  private async assertBagTeamMember(userId: string, teamId: string, roles?: string[]) {
+  private async assertBagTeamMember(userId: string, teamId: string, roles?: HomecareTeamMemberRole[]) {
     const member = await prisma.homecareTeamMember.findFirst({
       where: {
         userId,
@@ -183,7 +228,7 @@ export class LogisticsService {
   }
 
   private async assertBagAccess(actor: LogisticsActor, bagId: string, options: { requireAdminLayanan?: boolean } = {}) {
-    if ([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(actor.role)) {
+    if (centralStockManagerRoles.has(actor.role)) {
       return;
     }
 
@@ -200,7 +245,7 @@ export class LogisticsService {
       };
     }
 
-    const roles = options.requireAdminLayanan ? ['ADMIN_LAYANAN'] : undefined;
+    const roles = options.requireAdminLayanan ? [HomecareTeamMemberRole.ADMIN_LAYANAN] : undefined;
     await this.assertBagTeamMember(actor.userId, bag.teamId, roles);
   }
 
@@ -221,7 +266,7 @@ export class LogisticsService {
   }
 
   private async decrementInventoryStock(
-    tx: any,
+    tx: Prisma.TransactionClient,
     params: {
       branchId: string;
       masterProductId: string;
@@ -308,7 +353,7 @@ export class LogisticsService {
   }
 
   private async incrementBranchInventoryStock(
-    tx: any,
+    tx: Prisma.TransactionClient,
     params: {
       branchId: string;
       masterProductId: string;
@@ -388,7 +433,7 @@ export class LogisticsService {
   }
 
   private async changeBagStock(
-    tx: any,
+    tx: Prisma.TransactionClient,
     params: {
       bagId: string;
       masterProductId: string;
@@ -477,7 +522,7 @@ export class LogisticsService {
   }
 
   private async createLogisticTransaction(
-    tx: any,
+    tx: Prisma.TransactionClient,
     params: {
       type: LogisticTransactionType;
       sourceType?: LogisticLocationType;
@@ -547,7 +592,7 @@ export class LogisticsService {
     const products = await prisma.masterProduct.findMany({
       where: {
         ...(query.includeInactive ? {} : { isActive: true }),
-        ...(query.category ? { category: query.category as any } : {}),
+        ...(query.category ? { category: query.category as ProductCategory } : {}),
         ...(query.search
           ? {
               OR: [
@@ -694,7 +739,7 @@ export class LogisticsService {
       await this.assertManagerBranchAccess(actor, query.branchId);
     }
 
-    const where: any = {
+    const where = {
       ...(query.includeInactive ? {} : { isActive: true }),
       ...(query.branchId ? { branchId: query.branchId } : {}),
       ...(query.search
@@ -705,7 +750,7 @@ export class LogisticsService {
             ],
           }
         : {}),
-    };
+    } as Prisma.HomecareTeamWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.members = { some: { userId: actor.userId, isActive: true } };
@@ -781,7 +826,7 @@ export class LogisticsService {
       await this.assertManagerBranchAccess(actor, query.branchId);
     }
 
-    const where: any = {
+    const where = {
       isActive: true,
       ...(query.teamId ? { teamId: query.teamId } : {}),
       ...(query.branchId ? { branchId: query.branchId } : {}),
@@ -794,7 +839,7 @@ export class LogisticsService {
             ],
           }
         : {}),
-    };
+    } as Prisma.HomecareBagWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.team = { members: { some: { userId: actor.userId, isActive: true } } };
@@ -852,11 +897,11 @@ export class LogisticsService {
   async listHomecareBagRequests(actor: LogisticsActor, query: { status?: string; teamId?: string; bagId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat request stok tas');
 
-    const where: any = {
+    const where = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.teamId ? { teamId: query.teamId } : {}),
       ...(query.bagId ? { bagId: query.bagId } : {}),
-    };
+    } as Prisma.HomecareBagStockRequestWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
@@ -880,10 +925,10 @@ export class LogisticsService {
   async listHomecareBagShipments(actor: LogisticsActor, query: { status?: string; bagId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat shipment tas');
 
-    const where: any = {
+    const where = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.bagId ? { toBagId: query.bagId } : {}),
-    };
+    } as Prisma.HomecareBagShipmentWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
@@ -902,11 +947,11 @@ export class LogisticsService {
   async listHomecareBagUsages(actor: LogisticsActor, query: { status?: string; bagId?: string; teamId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat pemakaian tas');
 
-    const where: any = {
+    const where = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.bagId ? { bagId: query.bagId } : {}),
       ...(query.teamId ? { teamId: query.teamId } : {}),
-    };
+    } as Prisma.HomecareBagUsageWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
@@ -925,10 +970,10 @@ export class LogisticsService {
   async listHomecareBagReturns(actor: LogisticsActor, query: { bagId?: string; teamId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat pengembalian tas');
 
-    const where: any = {
+    const where = {
       ...(query.bagId ? { bagId: query.bagId } : {}),
       ...(query.teamId ? { teamId: query.teamId } : {}),
-    };
+    } as Prisma.HomecareBagReturnWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
@@ -947,11 +992,11 @@ export class LogisticsService {
   async listHomecareBagOpnames(actor: LogisticsActor, query: { status?: string; bagId?: string; teamId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat inspeksi tas');
 
-    const where: any = {
+    const where = {
       ...(query.status ? { status: query.status } : {}),
       ...(query.bagId ? { bagId: query.bagId } : {}),
       ...(query.teamId ? { teamId: query.teamId } : {}),
-    };
+    } as Prisma.HomecareBagOpnameWhereInput;
 
     if (!centralStockManagerRoles.has(actor.role)) {
       where.bag = { team: { members: { some: { userId: actor.userId, isActive: true } } } };
@@ -971,7 +1016,7 @@ export class LogisticsService {
   // Branch stock requests using legacy tables
   // ============================================================
 
-  async createBranchStockRequest(actor: LogisticsActor, input: any) {
+  async createBranchStockRequest(actor: LogisticsActor, input: CreateBranchStockRequestInput) {
     this.assertRole(actor, [Role.ADMIN_CABANG], 'Hanya Admin Cabang yang dapat membuat request stok cabang');
     const notes = this.requireNotes(input.notes);
     if (!actor.branchId) {
@@ -994,7 +1039,13 @@ export class LogisticsService {
       throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
     }
 
-    const requestCode = await this.nextRequestCode('REQ', prisma.stockRequest, 'requestCode', branch.branchCode);
+    const requestCode = await this.nextRequestCode('REQ', async (codePrefix) => (
+      await prisma.stockRequest.findFirst({
+        where: { requestCode: { startsWith: codePrefix } },
+        orderBy: { requestCode: 'desc' },
+        select: { requestCode: true },
+      })
+    )?.requestCode, branch.branchCode);
     const request = await prisma.$transaction(async (tx) => {
       return tx.stockRequest.create({
         data: {
@@ -1035,7 +1086,7 @@ export class LogisticsService {
     return this.formatBranchStockRequest(request);
   }
 
-  async approveBranchStockRequest(actor: LogisticsActor, requestId: string, input: any) {
+  async approveBranchStockRequest(actor: LogisticsActor, requestId: string, input: ApproveStockRequestInput) {
     this.assertRole(
       actor,
       Array.from(centralStockManagerRoles),
@@ -1150,7 +1201,13 @@ export class LogisticsService {
         },
       });
 
-      const shipmentCode = await this.nextRequestCode('SHP', tx.shipment, 'shipmentCode', `${central.branchCode}-${request.branch.branchCode}`);
+      const shipmentCode = await this.nextRequestCode('SHP', async (codePrefix) => (
+        await tx.shipment.findFirst({
+          where: { shipmentCode: { startsWith: codePrefix } },
+          orderBy: { shipmentCode: 'desc' },
+          select: { shipmentCode: true },
+        })
+      )?.shipmentCode, `${central.branchCode}-${request.branch.branchCode}`);
       const shipment = await tx.shipment.create({
         data: {
           shipmentCode,
@@ -1199,7 +1256,7 @@ export class LogisticsService {
     };
   }
 
-  async rejectBranchStockRequest(actor: LogisticsActor, requestId: string, input: any) {
+  async rejectBranchStockRequest(actor: LogisticsActor, requestId: string, input: RejectStockRequestInput) {
     this.assertRole(
       actor,
       Array.from(centralStockManagerRoles),
@@ -1240,7 +1297,7 @@ export class LogisticsService {
     return this.formatBranchStockRequest(updatedRequest);
   }
 
-  async shipBranchShipment(actor: LogisticsActor, shipmentId: string, input: any) {
+  async shipBranchShipment(actor: LogisticsActor, shipmentId: string, input: ShipStockInput) {
     this.assertRole(actor, Array.from(stockShipmentRoles), 'Anda tidak memiliki akses untuk mengirim barang');
     const notes = this.requireNotes(input.notes);
 
@@ -1270,7 +1327,7 @@ export class LogisticsService {
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      const [locked] = await tx.$queryRaw<Array<{ id: string; status: ShipmentStatus }>>(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
       if (!locked) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
       if (locked.status !== ShipmentStatus.PREPARING) {
         if (locked.status === ShipmentStatus.SHIPPED) {
@@ -1348,7 +1405,7 @@ export class LogisticsService {
     return this.formatBranchShipment(result);
   }
 
-  async receiveBranchShipment(actor: LogisticsActor, shipmentId: string, input: any) {
+  async receiveBranchShipment(actor: LogisticsActor, shipmentId: string, input: ReceiveShipmentInput) {
     const notes = this.requireNotes(input.notes);
     const shipment = await prisma.shipment.findUnique({
       where: { id: shipmentId },
@@ -1362,13 +1419,14 @@ export class LogisticsService {
     });
 
     if (!shipment) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
-    if (shipment.status !== ShipmentStatus.SHIPPED && !([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId)) {
+    const completedStatuses: ShipmentStatus[] = [ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE];
+    if (shipment.status !== ShipmentStatus.SHIPPED && !(completedStatuses.includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId)) {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat diterima saat SHIPPED' };
     }
 
     await this.assertBranchReceiverAccess(actor, shipment.toBranchId);
 
-    if ([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId) {
+    if (completedStatuses.includes(shipment.status) && shipment.internalTransfer?.receiptInventoryPostingId) {
       return this.formatBranchShipment(shipment);
     }
 
@@ -1381,10 +1439,10 @@ export class LogisticsService {
     const hasQuantityDifference = shipment.items.some((item) => Number(receivedMap.get(item.masterProductId)) !== Number(item.sentQty));
     const hasDiscrepancy = Boolean(input.discrepancies?.length) || hasQuantityDifference;
     const result = await prisma.$transaction(async (tx) => {
-      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      const [locked] = await tx.$queryRaw<Array<{ id: string; status: ShipmentStatus }>>(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
       if (!locked) throw { status: 404, code: 'SHIPMENT_NOT_FOUND', message: 'Shipment tidak ditemukan' };
       if (locked.status !== ShipmentStatus.SHIPPED) {
-        if ([ShipmentStatus.RECEIVED, ShipmentStatus.RECEIVED_WITH_ISSUE].includes(locked.status)) {
+        if (completedStatuses.includes(locked.status)) {
           return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { fromBranch: true, toBranch: true, items: { include: { masterProduct: true } }, discrepancies: true, internalTransfer: true } });
         }
         throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat diterima saat SHIPPED' };
@@ -1495,7 +1553,7 @@ export class LogisticsService {
   // Homecare team and bag setup
   // ============================================================
 
-  async createHomecareTeam(actor: LogisticsActor, input: any) {
+  async createHomecareTeam(actor: LogisticsActor, input: CreateHomecareTeamInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses membuat tim homecare');
     const branch = await prisma.branch.findUnique({ where: { id: input.branchId } });
     if (!branch) throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
@@ -1524,7 +1582,7 @@ export class LogisticsService {
     return team;
   }
 
-  async addHomecareTeamMember(actor: LogisticsActor, teamId: string, input: any) {
+  async addHomecareTeamMember(actor: LogisticsActor, teamId: string, input: AddHomecareTeamMemberInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses mengelola anggota tim homecare');
     const team = await prisma.homecareTeam.findUnique({ where: { id: teamId } });
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
@@ -1557,7 +1615,7 @@ export class LogisticsService {
     return member;
   }
 
-  async removeHomecareTeamMember(actor: LogisticsActor, teamId: string, userId: string, input: any = {}) {
+  async removeHomecareTeamMember(actor: LogisticsActor, teamId: string, userId: string, input: RemoveHomecareTeamMemberInput = {}) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses mengelola anggota tim homecare');
     const member = await prisma.homecareTeamMember.findUnique({
       where: { teamId_userId: { teamId, userId } },
@@ -1620,7 +1678,7 @@ export class LogisticsService {
     return { id: teamId };
   }
 
-  async createHomecareBag(actor: LogisticsActor, input: any) {
+  async createHomecareBag(actor: LogisticsActor, input: CreateHomecareBagInput) {
     this.assertRole(actor, [Role.SUPER_ADMIN], 'Hanya super admin yang dapat membuat tas homecare');
     const team = await prisma.homecareTeam.findUnique({ where: { id: input.teamId } });
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
@@ -1653,7 +1711,7 @@ export class LogisticsService {
     return bag;
   }
 
-  async assignHomecareBag(actor: LogisticsActor, bagId: string, input: any) {
+  async assignHomecareBag(actor: LogisticsActor, bagId: string, input: AssignHomecareBagInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses assign tas homecare');
 
     const [bag, team] = await Promise.all([
@@ -1805,7 +1863,7 @@ export class LogisticsService {
   // Homecare bag request and shipment
   // ============================================================
 
-  async createBagStockRequest(actor: LogisticsActor, input: any) {
+  async createBagStockRequest(actor: LogisticsActor, input: CreateBagStockRequestInput) {
     this.assertRole(actor, canRequestBagStock, 'Anda tidak memiliki akses membuat request stok tas');
     const notes = this.requireNotes(input.requestNotes);
     await this.assertBagAccess(actor, input.bagId, { requireAdminLayanan: true });
@@ -1820,7 +1878,13 @@ export class LogisticsService {
       throw { status: 400, code: 'BAG_TEAM_MISMATCH', message: 'Tas tidak berada pada tim yang dipilih' };
     }
 
-    const requestCode = await this.nextRequestCode('HBR', prisma.homecareBagStockRequest, 'requestCode', bag.bagCode);
+    const requestCode = await this.nextRequestCode('HBR', async (codePrefix) => (
+      await prisma.homecareBagStockRequest.findFirst({
+        where: { requestCode: { startsWith: codePrefix } },
+        orderBy: { requestCode: 'desc' },
+        select: { requestCode: true },
+      })
+    )?.requestCode, bag.bagCode);
     const request = await prisma.homecareBagStockRequest.create({
       data: {
         requestCode,
@@ -1862,7 +1926,7 @@ export class LogisticsService {
     return this.formatBagRequest(request);
   }
 
-  async approveBagStockRequest(actor: LogisticsActor, requestId: string, input: any) {
+  async approveBagStockRequest(actor: LogisticsActor, requestId: string, input: ApproveBagStockRequestInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses approve request stok tas');
     const request = await prisma.homecareBagStockRequest.findUnique({
       where: { id: requestId },
@@ -1942,7 +2006,13 @@ export class LogisticsService {
         include: { team: true, bag: true, items: true },
       });
 
-      const shipmentCode = await this.nextRequestCode('HBS', tx.homecareBagShipment, 'shipmentCode', `${sourceBranch.branchCode}-${request.bag.bagCode}`);
+      const shipmentCode = await this.nextRequestCode('HBS', async (codePrefix) => (
+        await tx.homecareBagShipment.findFirst({
+          where: { shipmentCode: { startsWith: codePrefix } },
+          orderBy: { shipmentCode: 'desc' },
+          select: { shipmentCode: true },
+        })
+      )?.shipmentCode, `${sourceBranch.branchCode}-${request.bag.bagCode}`);
       const shipment = await tx.homecareBagShipment.create({
         data: {
           shipmentCode,
@@ -1986,7 +2056,7 @@ export class LogisticsService {
     };
   }
 
-  async rejectBagStockRequest(actor: LogisticsActor, requestId: string, input: any) {
+  async rejectBagStockRequest(actor: LogisticsActor, requestId: string, input: RejectStockRequestInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses reject request stok tas');
     const reviewNotes = this.requireNotes(input.reviewNotes, 'Catatan penolakan wajib diisi');
 
@@ -2014,7 +2084,7 @@ export class LogisticsService {
     return this.formatBagRequest(request);
   }
 
-  async shipBagShipment(actor: LogisticsActor, shipmentId: string, input: any) {
+  async shipBagShipment(actor: LogisticsActor, shipmentId: string, input: ShipStockInput) {
     this.assertRole(actor, Array.from(stockShipmentRoles), 'Anda tidak memiliki akses untuk mengirim stok tas');
     const notes = this.requireNotes(input.notes);
 
@@ -2109,7 +2179,7 @@ export class LogisticsService {
     return this.formatBagShipment(result);
   }
 
-  async receiveBagShipment(actor: LogisticsActor, shipmentId: string, input: any) {
+  async receiveBagShipment(actor: LogisticsActor, shipmentId: string, input: ReceiveShipmentInput) {
     const notes = this.requireNotes(input.notes);
     const shipment = await prisma.homecareBagShipment.findUnique({
       where: { id: shipmentId },
@@ -2225,7 +2295,7 @@ export class LogisticsService {
   // Homecare bag usage, return, and opname
   // ============================================================
 
-  async useBagStock(actor: LogisticsActor, input: any) {
+  async useBagStock(actor: LogisticsActor, input: UseBagStockInput) {
     const notes = this.requireNotes(input.notes);
     await this.assertBagAccess(actor, input.bagId);
     if (input.allowNegativeStock && actor.role !== Role.SUPER_ADMIN) {
@@ -2236,7 +2306,13 @@ export class LogisticsService {
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
     const teamId = input.teamId || bag.teamId;
 
-    const usageCode = await this.nextRequestCode('HBU', prisma.homecareBagUsage, 'usageCode', bag.bagCode);
+    const usageCode = await this.nextRequestCode('HBU', async (codePrefix) => (
+      await prisma.homecareBagUsage.findFirst({
+        where: { usageCode: { startsWith: codePrefix } },
+        orderBy: { usageCode: 'desc' },
+        select: { usageCode: true },
+      })
+    )?.usageCode, bag.bagCode);
     const result = await prisma.$transaction(async (tx) => {
       const usage = await tx.homecareBagUsage.create({
         data: {
@@ -2312,7 +2388,7 @@ export class LogisticsService {
     return this.formatBagUsage(result);
   }
 
-  async returnBagStock(actor: LogisticsActor, input: any) {
+  async returnBagStock(actor: LogisticsActor, input: ReturnBagStockInput) {
     const notes = this.requireNotes(input.notes);
     await this.assertBagAccess(actor, input.bagId);
     if (input.allowNegativeStock && actor.role !== Role.SUPER_ADMIN) {
@@ -2322,7 +2398,13 @@ export class LogisticsService {
     const bag = await prisma.homecareBag.findUnique({ where: { id: input.bagId } });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
     const teamId = input.teamId || bag.teamId;
-    const returnCode = await this.nextRequestCode('HBRN', prisma.homecareBagReturn, 'returnCode', bag.bagCode);
+    const returnCode = await this.nextRequestCode('HBRN', async (codePrefix) => (
+      await prisma.homecareBagReturn.findFirst({
+        where: { returnCode: { startsWith: codePrefix } },
+        orderBy: { returnCode: 'desc' },
+        select: { returnCode: true },
+      })
+    )?.returnCode, bag.bagCode);
 
     const result = await prisma.$transaction(async (tx) => {
       const bagReturn = await tx.homecareBagReturn.create({
@@ -2422,13 +2504,19 @@ export class LogisticsService {
     return this.formatBagReturn(result);
   }
 
-  async createBagOpname(actor: LogisticsActor, input: any) {
+  async createBagOpname(actor: LogisticsActor, input: CreateBagOpnameInput) {
     const notes = this.requireNotes(input.notes);
     await this.assertBagAccess(actor, input.bagId);
     const bag = await prisma.homecareBag.findUnique({ where: { id: input.bagId } });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
     const teamId = input.teamId || bag.teamId;
-    const opnameCode = await this.nextRequestCode('HBO', prisma.homecareBagOpname, 'opnameCode', bag.bagCode);
+    const opnameCode = await this.nextRequestCode('HBO', async (codePrefix) => (
+      await prisma.homecareBagOpname.findFirst({
+        where: { opnameCode: { startsWith: codePrefix } },
+        orderBy: { opnameCode: 'desc' },
+        select: { opnameCode: true },
+      })
+    )?.opnameCode, bag.bagCode);
     const createAdjustments = input.createAdjustments !== false;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -2524,7 +2612,7 @@ export class LogisticsService {
   // Response formatters
   // ============================================================
 
-  private formatBranchStockRequest(request: any) {
+  private formatBranchStockRequest(request: BranchStockRequestResponse) {
     return {
       id: request.id,
       requestCode: request.requestCode,
@@ -2540,7 +2628,7 @@ export class LogisticsService {
       shippedAt: request.shippedAt?.toISOString?.(),
       receivedBy: request.receivedBy,
       receivedAt: request.receivedAt?.toISOString?.(),
-      items: request.items?.map((item: any) => ({
+      items: request.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct?.name,
@@ -2554,7 +2642,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBranchShipment(shipment: any) {
+  private formatBranchShipment(shipment: BranchShipmentResponse) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -2568,14 +2656,14 @@ export class LogisticsService {
       shippedAt: shipment.shippedAt?.toISOString?.(),
       receivedBy: shipment.receivedBy,
       receivedAt: shipment.receivedAt?.toISOString?.(),
-      items: shipment.items?.map((item: any) => ({
+      items: shipment.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct?.name,
         sentQty: Number(item.sentQty),
         receivedQty: item.receivedQty === null || item.receivedQty === undefined ? null : Number(item.receivedQty),
       })) || [],
-      discrepancies: shipment.discrepancies?.map((item: any) => ({
+      discrepancies: shipment.discrepancies?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.productName,
@@ -2594,7 +2682,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBagRequest(request: any) {
+  private formatBagRequest(request: BagRequestResponse) {
     return {
       id: request.id,
       requestCode: request.requestCode,
@@ -2618,7 +2706,7 @@ export class LogisticsService {
       receivedAt: request.receivedAt?.toISOString?.(),
       supportFileUrl: request.supportFileUrl,
       supportFileName: request.supportFileName,
-      items: request.items?.map((item: any) => ({
+      items: request.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         requestedQty: Number(item.requestedQty),
@@ -2631,7 +2719,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBagShipment(shipment: any) {
+  private formatBagShipment(shipment: BagShipmentResponse) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -2650,7 +2738,7 @@ export class LogisticsService {
       shipmentPhotoName: shipment.shipmentPhotoName,
       receiptFileUrl: shipment.receiptFileUrl,
       receiptFileName: shipment.receiptFileName,
-      items: shipment.items?.map((item: any) => ({
+      items: shipment.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         sentQty: Number(item.sentQty),
@@ -2663,7 +2751,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBagUsage(usage: any) {
+  private formatBagUsage(usage: BagUsageResponse) {
     return {
       id: usage.id,
       usageCode: usage.usageCode,
@@ -2680,7 +2768,7 @@ export class LogisticsService {
       notes: usage.notes,
       supportFileUrl: usage.supportFileUrl,
       supportFileName: usage.supportFileName,
-      items: usage.items?.map((item: any) => ({
+      items: usage.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         quantity: Number(item.quantity),
@@ -2692,7 +2780,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBagReturn(bagReturn: any) {
+  private formatBagReturn(bagReturn: BagReturnResponse) {
     return {
       id: bagReturn.id,
       returnCode: bagReturn.returnCode,
@@ -2708,7 +2796,7 @@ export class LogisticsService {
       receivedBy: bagReturn.receivedBy,
       receivedAt: bagReturn.receivedAt?.toISOString?.(),
       notes: bagReturn.notes,
-      items: bagReturn.items?.map((item: any) => ({
+      items: bagReturn.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         quantity: Number(item.quantity),
@@ -2721,7 +2809,7 @@ export class LogisticsService {
     };
   }
 
-  private formatBagOpname(opname: any) {
+  private formatBagOpname(opname: BagOpnameResponse) {
     return {
       id: opname.id,
       opnameCode: opname.opnameCode,
@@ -2735,7 +2823,7 @@ export class LogisticsService {
       checkedBy: opname.checkedBy,
       checkedAt: opname.checkedAt?.toISOString?.(),
       notes: opname.notes,
-      items: opname.items?.map((item: any) => ({
+      items: opname.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         systemQty: Number(item.systemQty),

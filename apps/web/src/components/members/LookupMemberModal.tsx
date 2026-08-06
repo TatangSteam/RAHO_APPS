@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { lookupMemberApi, grantAccessApi } from '@/lib/membersApi';
@@ -47,7 +48,8 @@ export function LookupMemberModal({ isOpen, onClose, onSuccess }: LookupMemberMo
       setError('');
       const result = await lookupMemberApi(lookupMemberNo);
       setLookupResult(result);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       setError(error.response?.data?.error?.message || 'Member tidak ditemukan');
       setLookupResult(null);
     } finally {
@@ -73,7 +75,8 @@ export function LookupMemberModal({ isOpen, onClose, onSuccess }: LookupMemberMo
       alert('Akses berhasil diberikan!');
       handleClose();
       onSuccess?.();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       setError(error.response?.data?.error?.message || 'Gagal memberikan akses');
     } finally {
       setGrantingAccess(false);

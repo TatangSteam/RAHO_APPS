@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
 import type {
@@ -7,7 +6,7 @@ import type {
   AssignNonTherapyToMemberInput,
   VerifyNonTherapyPurchaseInput,
 } from './non-therapy.schema';
-import { PackageStatus, AuditAction } from '@prisma/client';
+import { PackageStatus, AuditAction, Prisma, ProductType } from '@prisma/client';
 
 export class NonTherapyService {
   // Generate purchase code
@@ -24,8 +23,8 @@ export class NonTherapyService {
   // PRODUCT MANAGEMENT
   // ============================================================
 
-  async getAllProducts(filters?: { productType?: string; isActive?: boolean }) {
-    const where: any = {};
+  async getAllProducts(filters?: { productType?: ProductType; isActive?: boolean }) {
+    const where: Prisma.NonTherapyProductWhereInput = {};
 
     if (filters?.productType) {
       where.productType = filters.productType;
@@ -97,7 +96,14 @@ export class NonTherapyService {
 
     const product = await prisma.nonTherapyProduct.create({
       data: {
-        ...data,
+        productCode: data.productCode!,
+        productType: data.productType!,
+        name: data.name!,
+        description: data.description,
+        airNanoColor: data.airNanoColor,
+        airNanoVolume: data.airNanoVolume,
+        airNanoUnit: data.airNanoUnit,
+        pricePerUnit: data.pricePerUnit!,
         isActive: true,
       },
     });

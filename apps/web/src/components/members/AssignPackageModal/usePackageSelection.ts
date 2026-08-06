@@ -9,7 +9,7 @@ const SERVICE_TYPE_NAMES: Record<string, string> = {
   PHC: 'Partnership Homecare',
 };
 
-interface PackageSelection {
+export interface PackageSelection {
   pricingId: string;
   quantity: number;
   boosterType?: ExtendedBoosterType;

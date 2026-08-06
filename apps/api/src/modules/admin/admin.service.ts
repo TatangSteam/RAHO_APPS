@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { AuditAction, PackageType, ProductCategory, Role } from '@prisma/client';
 import { SystemStatsService } from './services/system-stats.service';
 import { BranchPerformanceService } from './services/branch-performance.service';
@@ -119,6 +118,7 @@ export class AdminService {
    */
   async createPackagePricing(data: {
     packageType: PackageType;
+    name: string;
     totalSessions: number;
     price: number;
     isActive?: boolean;

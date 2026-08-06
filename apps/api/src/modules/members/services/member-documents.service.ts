@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction, DocumentType } from '@prisma/client';
@@ -145,7 +144,7 @@ export class MemberDocumentsService {
    * Delete all documents for a member and their files from MinIO
    * Used when hard-deleting a member
    */
-  async deleteAllMemberDocuments(memberId: string, userId: string) {
+  async deleteAllMemberDocuments(memberId: string, _userId: string) {
     const documents = await prisma.memberDocument.findMany({
       where: { memberId },
     });
@@ -191,7 +190,7 @@ export class MemberDocumentsService {
       fileUrl: doc.fileUrl,
       uploadedBy: doc.uploadedBy,
       createdAt: doc.createdAt.toISOString(),
-      updatedAt: doc.updatedAt.toISOString(),
+      updatedAt: doc.createdAt.toISOString(),
     }));
   }
 }

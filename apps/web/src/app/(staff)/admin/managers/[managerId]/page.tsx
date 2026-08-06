@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
@@ -85,47 +86,7 @@ export default function AdminManagerDetailPage() {
   // Activate State
   const [activating, setActivating] = useState(false);
 
-  useEffect(() => {
-    if (!user || user.role !== 'SUPER_ADMIN') {
-      showToast.error('Akses ditolak');
-      router.push('/dashboard');
-      return;
-    }
-
-    loadManagerDetail();
-  }, [managerId]);
-
-  const loadManagerDetail = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/admin/managers/${managerId}`,
-        {
-          headers: { 'Authorization': `Bearer ${accessToken}` },
-        }
-      );
-
-      if (!response.ok) throw new Error('Failed to load manager');
-
-      const result = await response.json();
-      setManager(result.data);
-
-      // Load staff and members for each branch
-      if (result.data.branches) {
-        for (const branch of result.data.branches) {
-          await loadBranchStaff(branch.id);
-          await loadBranchMembers(branch.id);
-        }
-      }
-    } catch (error: any) {
-      devError('Error loading manager detail:', error);
-      showToast.error('Gagal memuat detail Admin Manager');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadBranchStaff = async (branchId: string) => {
+  const loadBranchStaff = useCallback(async (branchId: string) => {
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/branches/${branchId}/staff`,
@@ -139,7 +100,7 @@ export default function AdminManagerDetailPage() {
         // API returns { users: [...], total, page, limit } inside data
         const staffData = result.data?.users || result.data || [];
         // Transform to match Staff interface
-        const transformedStaff = Array.isArray(staffData) ? staffData.map((s: any) => ({
+        const transformedStaff = Array.isArray(staffData) ? staffData.map((s) => ({
           id: s.id,
           email: s.email,
           fullName: s.profile?.fullName || s.fullName || '-',
@@ -149,11 +110,12 @@ export default function AdminManagerDetailPage() {
         setBranchStaff(prev => ({ ...prev, [branchId]: transformedStaff }));
       }
     } catch (error) {
+      assertCaughtError(error);
       devError(`Error loading staff for branch ${branchId}:`, error);
     }
-  };
+  }, [accessToken]);
 
-  const loadBranchMembers = async (branchId: string) => {
+  const loadBranchMembers = useCallback(async (branchId: string) => {
     try {
       const response = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/branches/${branchId}/members?limit=100`,
@@ -167,22 +129,62 @@ export default function AdminManagerDetailPage() {
         setBranchMembers(prev => ({ ...prev, [branchId]: result.data?.members || [] }));
       }
     } catch (error) {
+      assertCaughtError(error);
       devError(`Error loading members for branch ${branchId}:`, error);
     }
-  };
+  }, [accessToken]);
 
   const loadAvailableBranches = async () => {
     try {
       setLoadingAvailableBranches(true);
       const response = await adminManagersApi.getAvailableBranchesForManager(managerId);
       setAvailableBranches(response.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading available branches:', error);
       showToast.error('Gagal memuat daftar cabang');
     } finally {
       setLoadingAvailableBranches(false);
     }
   };
+
+  const loadManagerDetail = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/managers/${managerId}`,
+        { headers: { 'Authorization': `Bearer ${accessToken}` } }
+      );
+
+      if (!response.ok) throw new Error('Failed to load manager');
+
+      const result = await response.json();
+      setManager(result.data);
+
+      if (result.data.branches) {
+        for (const branch of result.data.branches) {
+          await loadBranchStaff(branch.id);
+          await loadBranchMembers(branch.id);
+        }
+      }
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error loading manager detail:', error);
+      showToast.error('Gagal memuat detail Admin Manager');
+    } finally {
+      setLoading(false);
+    }
+  }, [accessToken, loadBranchMembers, loadBranchStaff, managerId]);
+
+  useEffect(() => {
+    if (!user || user.role !== 'SUPER_ADMIN') {
+      showToast.error('Akses ditolak');
+      router.push('/dashboard');
+      return;
+    }
+
+    void loadManagerDetail();
+  }, [loadManagerDetail, router, user]);
 
   const handleOpenAddBranchModal = () => {
     setSelectedAccessScope('FULL');
@@ -197,7 +199,8 @@ export default function AdminManagerDetailPage() {
       showToast.success('Cabang berhasil ditambahkan');
       setShowAddBranchModal(false);
       await loadManagerDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error assigning branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menambahkan cabang');
     } finally {
@@ -228,7 +231,8 @@ export default function AdminManagerDetailPage() {
         setActiveTab((previous) => ({ ...previous, [branchId]: 'members' }));
       }
       showToast.success('Scope cabang berhasil diperbarui');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error updating branch scope:', error);
       showToast.error(error.response?.data?.message || 'Gagal memperbarui scope cabang');
     } finally {
@@ -246,7 +250,8 @@ export default function AdminManagerDetailPage() {
       await adminManagersApi.unassignBranchFromManager(managerId, branchId);
       showToast.success('Cabang berhasil dihapus');
       await loadManagerDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error removing branch:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus cabang');
     } finally {
@@ -306,7 +311,8 @@ export default function AdminManagerDetailPage() {
       showToast.success('Admin Manager berhasil diperbarui');
       setShowEditModal(false);
       await loadManagerDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error updating manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal memperbarui Admin Manager');
     } finally {
@@ -328,7 +334,8 @@ export default function AdminManagerDetailPage() {
       await adminManagersApi.deleteAdminManager(managerId);
       showToast.success('Admin Manager berhasil dihapus');
       router.push('/admin/managers');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal menghapus Admin Manager');
     } finally {
@@ -348,7 +355,8 @@ export default function AdminManagerDetailPage() {
       await adminManagersApi.updateAdminManager(managerId, { isActive: true });
       showToast.success('Admin Manager berhasil diaktifkan');
       await loadManagerDetail();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error activating manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal mengaktifkan Admin Manager');
     } finally {

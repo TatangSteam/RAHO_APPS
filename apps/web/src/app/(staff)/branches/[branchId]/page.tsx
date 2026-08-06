@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { inventoryApi } from '@/lib/api/inventoryApi';
@@ -15,8 +16,9 @@ import {
 
 // Import CRUD Modals
 import MemberCrudModal from '@/components/branches/MemberCrudModal';
-import StaffCrudModal from '@/components/branches/StaffCrudModal';
-import InventoryCrudModal from '@/components/branches/InventoryCrudModal';
+import type { CrudMemberData } from '@/components/branches/MemberCrudModal';
+import StaffCrudModal, { type StaffCrudData } from '@/components/branches/StaffCrudModal';
+import InventoryCrudModal, { type InventoryCrudData } from '@/components/branches/InventoryCrudModal';
 import InventoryBatchAddModal from '@/components/branches/InventoryBatchAddModal';
 import AssignManagerModal from '@/components/branches/AssignManagerModal';
 import AssignMedicalStaffModal from '@/components/branches/AssignMedicalStaffModal';
@@ -149,6 +151,16 @@ interface Session {
 type TabType = 'overview' | 'members' | 'inventory' | 'staff' | 'managers' | 'pricing' | 'sessions';
 type CrudModalType = 'member' | 'staff' | 'inventory' | null;
 type CrudAction = 'create' | 'edit' | 'delete';
+type CrudDataMap = {
+  member: CrudMemberData;
+  staff: StaffCrudData;
+  inventory: InventoryCrudData;
+};
+type CrudModalState =
+  | { type: null; action: CrudAction; data?: undefined }
+  | { type: 'member'; action: CrudAction; data?: CrudMemberData }
+  | { type: 'staff'; action: CrudAction; data?: StaffCrudData }
+  | { type: 'inventory'; action: CrudAction; data?: InventoryCrudData };
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -271,7 +283,7 @@ export default function BranchDetailPage() {
       member.username,
       member.memberNo,
       member.nik,
-      String((member as any).age ?? ''),
+      String(member.age ?? ''),
       new Date(member.createdAt).toLocaleDateString('id-ID'),
       new Date(member.createdAt).toISOString().slice(0, 10),
     ]
@@ -285,11 +297,7 @@ export default function BranchDetailPage() {
   });
 
   // CRUD Modal states
-  const [crudModal, setCrudModal] = useState<{
-    type: CrudModalType;
-    action: CrudAction;
-    data?: any;
-  }>({ type: null, action: 'create' });
+  const [crudModal, setCrudModal] = useState<CrudModalState>({ type: null, action: 'create' });
 
   const [showAssignManagerModal, setShowAssignManagerModal] = useState(false);
   const [showBatchAddModal, setShowBatchAddModal] = useState(false);
@@ -333,23 +341,6 @@ export default function BranchDetailPage() {
   }, [canAccessBranch, router]);
 
   useEffect(() => {
-    if (canAccessBranch) {
-      if (isAdminCabang && user?.branchId && user.branchId !== branchId) {
-        showToast.error('Anda hanya dapat membuka cabang sendiri');
-        router.push(`/branches/${user.branchId}`);
-        return;
-      }
-      loadBranch();
-    }
-  }, [branchId, canAccessBranch, isAdminCabang, user?.branchId]);
-
-  useEffect(() => {
-    if (branch) {
-      loadTabData();
-    }
-  }, [activeTab, branch, debouncedMemberSearch]);
-
-  useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedMemberSearch(memberSearch.trim());
     }, 350);
@@ -357,21 +348,22 @@ export default function BranchDetailPage() {
     return () => clearTimeout(timer);
   }, [memberSearch]);
 
-  const loadBranch = async () => {
+  const loadBranch = useCallback(async () => {
     try {
       setLoading(true);
       const response = await branchesApi.getBranch(branchId);
       setBranch(response.data.data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branch:', error);
       showToast.error('Gagal memuat data cabang');
       router.push('/branches');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId, router]);
 
-  const loadTabData = async () => {
+  const loadTabData = useCallback(async () => {
     if (activeTab === 'overview') return;
 
     try {
@@ -415,7 +407,8 @@ export default function BranchDetailPage() {
         const sessionsData = response.data.data?.sessions || [];
         setSessions(Array.isArray(sessionsData) ? sessionsData : []);
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError(`Error loading ${activeTab} data:`, error);
       showToast.error(`Gagal memuat data ${activeTab}`);
       if (activeTab === 'members') setMembers([]);
@@ -426,7 +419,24 @@ export default function BranchDetailPage() {
     } finally {
       setTabLoading(false);
     }
-  };
+  }, [activeTab, branchId, debouncedMemberSearch]);
+
+  useEffect(() => {
+    if (canAccessBranch) {
+      if (isAdminCabang && user?.branchId && user.branchId !== branchId) {
+        showToast.error('Anda hanya dapat membuka cabang sendiri');
+        router.push(`/branches/${user.branchId}`);
+        return;
+      }
+      void loadBranch();
+    }
+  }, [branchId, canAccessBranch, isAdminCabang, loadBranch, router, user?.branchId]);
+
+  useEffect(() => {
+    if (branch) {
+      void loadTabData();
+    }
+  }, [branch, loadTabData]);
 
 
   const handleDelete = async () => {
@@ -438,7 +448,8 @@ export default function BranchDetailPage() {
       await branchesApi.deleteBranch(branchId);
       showToast.success('Cabang berhasil dihapus permanen');
       router.push('/branches');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting branch:', error);
       showToast.error(
         error.response?.data?.error?.message ||
@@ -457,8 +468,8 @@ export default function BranchDetailPage() {
     return styles[type] || { bg: 'bg-neutral-500/15', text: 'text-neutral-400', border: 'border-neutral-500/30' };
   };
 
-  const openCrudModal = (type: CrudModalType, action: CrudAction, data?: any) => {
-    setCrudModal({ type, action, data });
+  const openCrudModal = <T extends Exclude<CrudModalType, null>>(type: T, action: CrudAction, data?: CrudDataMap[T]) => {
+    setCrudModal({ type, action, data } as CrudModalState);
   };
 
   const closeCrudModal = () => {
@@ -492,7 +503,8 @@ export default function BranchDetailPage() {
         showToast.success('Item inventori berhasil dihapus');
       }
       handleCrudSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError(`Error deleting ${type}:`, error);
       showToast.error(error.response?.data?.message || `Gagal menghapus ${type}`);
     }
@@ -522,7 +534,8 @@ export default function BranchDetailPage() {
       // Reload staff list
       loadTabData();
       if (branch) loadBranch();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error unassigning staff from branch:', error);
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal unassign staff dari cabang';
       showToast.error(errorMessage);
@@ -559,7 +572,8 @@ export default function BranchDetailPage() {
       setDeleteStaffModal({ isOpen: false, staff: null });
       loadTabData();
       if (branch) loadBranch();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting staff:', error);
       const errorMessage = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal menghapus staff';
       showToast.error(errorMessage);
@@ -971,7 +985,8 @@ export default function BranchDetailPage() {
                       await branchesApi.unassignManager(branchId, manager.id);
                       showToast.success('Admin Manager berhasil di-unassign');
                       loadTabData();
-                    } catch (error: any) {
+                    } catch (error) {
+      assertCaughtError(error);
                       showToast.error(error.response?.data?.message || 'Gagal unassign Admin Manager');
                     }
                   }}

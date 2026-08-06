@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { branchesApi, type Branch, type UpdateBranchData } from '@/lib/api/branchesApi';
 import { wilayahApi, type WilayahItem } from '@/lib/api/wilayahApi';
@@ -87,6 +88,7 @@ export default function EditBranchModal({
       setLoadingProvinces(true);
       setProvinces(await wilayahApi.getProvinces());
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading provinces:', error);
       showToast.error('Gagal memuat data provinsi');
     } finally {
@@ -99,6 +101,7 @@ export default function EditBranchModal({
       setLoadingRegencies(true);
       setRegencies(await wilayahApi.getRegencies(selectedProvinceCode));
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading regencies:', error);
       setRegencies([]);
       showToast.error('Gagal memuat data kota/kabupaten');
@@ -165,6 +168,7 @@ export default function EditBranchModal({
       showToast.success(`Cabang ${formData.name} berhasil diupdate`);
       onSuccess();
     } catch (error) {
+      assertCaughtError(error);
       devError('Error updating branch:', error);
       showToast.error(getApiErrorMessage(error));
     } finally {
@@ -207,7 +211,7 @@ export default function EditBranchModal({
               <label className={styles.label}>Tipe Cabang</label>
               <select
                 value={formData.type}
-                onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  onChange={(e) => setFormData({ ...formData, type: e.target.value as UpdateBranchData['type'] })}
                 className={styles.input}
                 disabled={loading}
               >

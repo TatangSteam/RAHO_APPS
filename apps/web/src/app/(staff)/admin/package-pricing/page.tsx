@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useSearchParams } from 'next/navigation';
@@ -258,6 +259,7 @@ export default function PackagePricingPage() {
       });
       setPricings(data.data?.pricings || []);
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     } finally {
       setLoading(false);
@@ -417,6 +419,7 @@ export default function PackagePricingPage() {
       resetForm();
       await loadPricings();
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     } finally {
       setSaving(false);
@@ -429,6 +432,7 @@ export default function PackagePricingPage() {
       showToast.success(pricing.isActive ? 'Harga paket dinonaktifkan' : 'Harga paket diaktifkan');
       await loadPricings();
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     }
   };
@@ -442,6 +446,7 @@ export default function PackagePricingPage() {
       showToast.success('Harga paket berhasil dihapus');
       await loadPricings();
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(getApiErrorMessage(error));
     }
   };

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import type {
   CreateInvoiceInput,
   UpdateInvoiceInput,
@@ -132,7 +131,7 @@ export const invoiceService = {
    * Format invoice for API response
    * (Exposed for backward compatibility)
    */
-  formatInvoice(invoice: any) {
+  formatInvoice(invoice: unknown) {
     return this.retrievalService.formatInvoice(invoice);
   },
 };

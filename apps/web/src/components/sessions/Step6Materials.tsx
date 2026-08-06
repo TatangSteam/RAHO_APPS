@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { inventoryApi, type InventoryItemWithStock } from '@/lib/api/inventoryApi';
@@ -12,34 +13,12 @@ import {
 import { devError } from '@/lib/logger';
 import { getApiErrorMessage } from '@/lib/api';
 import { AlertTriangle, ClipboardCheck, Trash2 } from 'lucide-react';
-
-interface MaterialUsage {
-  id: string;
-  inventoryItemId: string;
-  quantity: number;
-  unit: string;
-  recordedBy: string;
-  createdAt: string;
-  recommendedQuantity?: number | null;
-  deviationReason?: MaterialDeviationReason | null;
-  deviationNotes?: string | null;
-  status?: 'DRAFT' | 'CONSUMED' | 'REVERSED';
-  actualUnitCost?: number | null;
-  totalActualCost?: number | null;
-  inventoryItem: {
-    id: string;
-    masterProduct: {
-      id: string;
-      name: string;
-      code: string;
-    };
-  };
-}
+import type { SessionMaterial } from '@/types/session';
 
 interface Step6MaterialsProps {
   sessionId: string;
   branchId: string;
-  materials: MaterialUsage[];
+  materials: SessionMaterial[];
   isLocked: boolean;
   onComplete: () => void;
 }
@@ -142,6 +121,7 @@ export default function Step6Materials({
       // API returns { success: true, data: items }, so we need response.data.data
       setInventoryItems(response.data?.data || response.data || []);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading inventory:', error);
       showToast.error('Gagal memuat data inventory');
     } finally {
@@ -158,6 +138,7 @@ export default function Step6Materials({
       setLoadingRecommendations(true);
       setRecommendations(await materialsApi.getRecommendations(sessionId));
     } catch (error) {
+      assertCaughtError(error);
       devError('Error loading treatment BOM recommendations:', error);
       setRecommendations(null);
     } finally {

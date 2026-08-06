@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart3, CheckCircle2, RefreshCw, Scale, XCircle } from 'lucide-react';
 import { api } from '@/lib/api';
-import { financeReportApi, type FinanceDashboard, type LedgerEntry, type ReportAccount } from '@/lib/financeReportApi';
+import { financeReportApi, type CashBankReport, type CashBankReportRow, type DeferredRevenueReport, type DeferredRevenueReportRow, type FinanceDashboard, type FinanceReport, type GeneralLedgerReport, type ProfitLossReport, type ReportAccount, type TrialBalanceReport } from '@/lib/financeReportApi';
 import { showToast } from '@/lib/toast';
 
 type Tab = 'profit-loss' | 'trial-balance' | 'general-ledger' | 'cash-bank' | 'deferred-revenue';
@@ -16,13 +17,19 @@ const monthStart = `${today.slice(0, 8)}01`;
 export default function FinanceReportsPage() {
   const [tab, setTab] = useState<Tab>('profit-loss');
   const [dashboard, setDashboard] = useState<FinanceDashboard | null>(null);
-  const [report, setReport] = useState<any>(null);
+  const [report, setReport] = useState<FinanceReport | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [filters, setFilters] = useState({ branchId: '', startDate: monthStart, endDate: today, accountCode: '' });
+  const filtersRef = useRef(filters);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  useEffect(() => {
+    filtersRef.current = filters;
+  }, [filters]);
+
+  const load = useCallback(async () => {
     setLoading(true);
+    const filters = filtersRef.current;
     const params = { branchId: filters.branchId || undefined, startDate: filters.startDate, endDate: filters.endDate };
     try {
       const [summary, detail] = await Promise.all([
@@ -34,12 +41,13 @@ export default function FinanceReportsPage() {
           : financeReportApi.deferredRevenue(params),
       ]);
       setDashboard(summary); setReport(detail);
-    } catch (error: any) { showToast.error(error.response?.data?.error?.message || 'Gagal memuat laporan finance.'); }
+    } catch (error) {
+      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal memuat laporan finance.'); }
     finally { setLoading(false); }
-  };
+  }, [tab]);
 
   useEffect(() => { api.get('/branches/all').then((response) => setBranches(response.data.data || [])).catch(() => undefined); }, []);
-  useEffect(() => { void load(); }, [tab]);
+  useEffect(() => { void load(); }, [load]);
 
   return <div className="mx-auto max-w-7xl space-y-5">
     <header className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="flex items-center gap-2 text-2xl font-semibold"><BarChart3 /> Finance Dashboard & Ledger Reports</h1><p className="mt-1 text-sm text-neutral-500">P&L, General Ledger, Trial Balance, kas/bank, dan deferred revenue dari satu sumber: posted journal lines.</p></div><button onClick={load} disabled={loading} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm text-white"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Rekonsiliasi</button></header>
@@ -57,14 +65,14 @@ export default function FinanceReportsPage() {
   </div>;
 }
 
-function ReportTable({ tab, report }: { tab: Tab; report: any }) {
+function ReportTable({ tab, report }: { tab: Tab; report: FinanceReport | null }) {
   if (!report) return null;
-  if (tab === 'general-ledger') return <Table headers={['Tanggal','Jurnal / Source','Account','Debit','Kredit','Saldo']} rows={(report.data as LedgerEntry[]).map((row) => [new Date(row.date).toLocaleDateString('id-ID'), <span key={row.id}>{row.journalNumber}<small className="block text-neutral-500">{row.sources.map((s) => s.sourceNumber || s.sourceType).join(', ')}</small></span>, `${row.account.code} — ${row.account.name}`, rupiah(row.debit), rupiah(row.credit), rupiah(row.runningBalance)])} />;
-  if (tab === 'cash-bank') return <Table headers={['Rekening','COA','Saldo Ledger','Saldo Subledger','Selisih','Status']} rows={report.accounts.map((row: any) => [`${row.code} — ${row.name}`, row.coaAccountCode, rupiah(row.ledgerBalance), rupiah(row.subledgerBalance), rupiah(row.difference), row.reconciled ? 'Cocok' : 'Selisih'])} />;
-  if (tab === 'deferred-revenue') return <Table headers={['Account','Movement','Saldo Ledger','Saldo Subledger','Selisih','Status']} rows={report.accounts.map((row: any) => [row.accountCode, row.movementCount, rupiah(row.ledgerBalance), rupiah(row.subledgerBalance), rupiah(row.difference), row.reconciled ? 'Cocok' : 'Selisih'])} />;
-  const accounts = report.accounts as ReportAccount[];
-  if (tab === 'profit-loss') return <><Table headers={['Kode','Account','Tipe','Nominal']} rows={accounts.map((row) => [row.code, row.name, row.type, rupiah(row.amount || '0')])} /><p className="mt-3 text-right font-semibold">Omzet {rupiah(report.totalRevenue)} · Beban {rupiah(report.totalExpense)} · Laba Bersih {rupiah(report.netProfit)}</p></>;
-  return <><Table headers={['Kode','Account','Opening','Debit','Kredit','Ending']} rows={accounts.map((row) => [row.code, row.name, rupiah(row.openingBalance || '0'), rupiah(row.debit || '0'), rupiah(row.credit || '0'), rupiah(row.endingBalance || '0')])} /><p className="mt-3 flex items-center justify-end gap-2 font-semibold"><Scale size={16} /> Debit {rupiah(report.totalDebit)} · Kredit {rupiah(report.totalCredit)} · {report.balanced ? 'Balanced' : `Selisih ${rupiah(report.difference)}`}</p></>;
+  if (tab === 'general-ledger') return <Table headers={['Tanggal','Jurnal / Source','Account','Debit','Kredit','Saldo']} rows={(report as GeneralLedgerReport).data.map((row) => [new Date(row.date).toLocaleDateString('id-ID'), <span key={row.id}>{row.journalNumber}<small className="block text-neutral-500">{row.sources.map((s) => s.sourceNumber || s.sourceType).join(', ')}</small></span>, `${row.account.code} — ${row.account.name}`, rupiah(row.debit), rupiah(row.credit), rupiah(row.runningBalance)])} />;
+  if (tab === 'cash-bank') return <Table headers={['Rekening','COA','Saldo Ledger','Saldo Subledger','Selisih','Status']} rows={(report as CashBankReport).accounts.map((row: CashBankReportRow) => [`${row.code} — ${row.name}`, row.coaAccountCode, rupiah(row.ledgerBalance), rupiah(row.subledgerBalance), rupiah(row.difference), row.reconciled ? 'Cocok' : 'Selisih'])} />;
+  if (tab === 'deferred-revenue') return <Table headers={['Account','Movement','Saldo Ledger','Saldo Subledger','Selisih','Status']} rows={(report as DeferredRevenueReport).accounts.map((row: DeferredRevenueReportRow) => [row.accountCode, row.movementCount, rupiah(row.ledgerBalance), rupiah(row.subledgerBalance), rupiah(row.difference), row.reconciled ? 'Cocok' : 'Selisih'])} />;
+  const accounts = (report as ProfitLossReport | TrialBalanceReport).accounts as ReportAccount[];
+  if (tab === 'profit-loss') return <><Table headers={['Kode','Account','Tipe','Nominal']} rows={accounts.map((row) => [row.code, row.name, row.type, rupiah(row.amount || '0')])} /><p className="mt-3 text-right font-semibold">Omzet {rupiah((report as ProfitLossReport).totalRevenue)} · Beban {rupiah((report as ProfitLossReport).totalExpense)} · Laba Bersih {rupiah((report as ProfitLossReport).netProfit)}</p></>;
+  return <><Table headers={['Kode','Account','Opening','Debit','Kredit','Ending']} rows={accounts.map((row) => [row.code, row.name, rupiah(row.openingBalance || '0'), rupiah(row.debit || '0'), rupiah(row.credit || '0'), rupiah(row.endingBalance || '0')])} /><p className="mt-3 flex items-center justify-end gap-2 font-semibold"><Scale size={16} /> Debit {rupiah((report as TrialBalanceReport).totalDebit)} · Kredit {rupiah((report as TrialBalanceReport).totalCredit)} · {(report as TrialBalanceReport).balanced ? 'Balanced' : `Selisih ${rupiah((report as TrialBalanceReport).difference)}`}</p></>;
 }
 
 function Table({ headers, rows }: { headers: string[]; rows: React.ReactNode[][] }) { return <div className="overflow-x-auto rounded-xl border bg-white dark:border-neutral-800 dark:bg-neutral-900"><table className="w-full text-sm"><thead><tr className="bg-neutral-50 text-left dark:bg-neutral-950">{headers.map((header) => <th key={header} className="p-3">{header}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={index} className="border-t dark:border-neutral-800">{row.map((cell, cellIndex) => <td key={cellIndex} className={`p-3 ${cellIndex >= row.length - 3 ? 'font-mono' : ''}`}>{cell}</td>)}</tr>)}</tbody></table>{rows.length === 0 && <p className="p-6 text-center text-neutral-500">Tidak ada posting pada filter ini.</p>}</div>; }

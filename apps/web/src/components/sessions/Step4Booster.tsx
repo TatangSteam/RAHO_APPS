@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useState, useEffect, useCallback } from 'react';
 import { showToast } from '@/lib/toast';
 import { sessionApi } from '@/lib/sessionApi';
 import { devError } from '@/lib/logger';
+import type { BoosterType } from '@/types/session';
 
 interface StockAvailability {
   HHO: { available: boolean; stock: number; minThreshold: number; isLowStock: boolean; unit: string };
@@ -21,7 +23,7 @@ export default function Step4Booster({
   currentBoosterType,
   onBoosterTypeSelected 
 }: Step4BoosterProps) {
-  const [boosterType, setBoosterType] = useState<string>(currentBoosterType || '');
+  const [boosterType, setBoosterType] = useState<BoosterType | ''>((currentBoosterType as BoosterType) || '');
   const [saving, setSaving] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(!!currentBoosterType);
   const [stockAvailability, setStockAvailability] = useState<StockAvailability | null>(null);
@@ -30,27 +32,28 @@ export default function Step4Booster({
 
   useEffect(() => {
     if (currentBoosterType) {
-      setBoosterType(currentBoosterType);
+      setBoosterType(currentBoosterType as BoosterType);
       setIsReadOnly(true);
     }
   }, [currentBoosterType]);
 
-  useEffect(() => {
-    fetchStockAvailability();
-  }, [sessionId]);
-
-  const fetchStockAvailability = async () => {
+  const fetchStockAvailability = useCallback(async () => {
     try {
       setLoadingStock(true);
       const stock = await sessionApi.getBoosterStockAvailability(sessionId);
       setStockAvailability(stock);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching stock availability:', error);
       showToast.error('Gagal memuat ketersediaan stok');
     } finally {
       setLoadingStock(false);
     }
-  };
+  }, [sessionId]);
+
+  useEffect(() => {
+    void fetchStockAvailability();
+  }, [fetchStockAvailability]);
 
   const handleSave = async () => {
     if (!boosterType) {
@@ -76,13 +79,14 @@ export default function Step4Booster({
     try {
       setSaving(true);
       setShowConfirmDialog(false);
-      await sessionApi.updateBoosterType(sessionId, { boosterType: boosterType as any });
+      await sessionApi.updateBoosterType(sessionId, { boosterType: boosterType as BoosterType });
       showToast.success('Jenis booster berhasil disimpan dan stok telah dikurangi');
       setIsReadOnly(true);
       onBoosterTypeSelected();
       // Refresh stock after save
       await fetchStockAvailability();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error saving booster type:', error);
       showToast.error(error.message || 'Gagal menyimpan jenis booster');
     } finally {
@@ -94,7 +98,6 @@ export default function Step4Booster({
     if (!stockAvailability) return null;
     
     const stock = stockAvailability[type];
-    const displayName = type === 'HHO' ? 'Gassotraus (HHO)' : 'Nitric Oxide (NO₂)';
     
     return (
       <div style={{ marginTop: '8px', fontSize: '12px' }}>
@@ -179,7 +182,7 @@ export default function Step4Booster({
                   name="boosterType"
                   value="NO2"
                   checked={boosterType === 'NO2'}
-                  onChange={(e) => setBoosterType(e.target.value)}
+                  onChange={(e) => setBoosterType(e.target.value as BoosterType)}
                   disabled={stockAvailability?.NO2?.available === false}
                   style={{ marginRight: '8px' }}
                 />
@@ -204,7 +207,7 @@ export default function Step4Booster({
                   name="boosterType"
                   value="HHO"
                   checked={boosterType === 'HHO'}
-                  onChange={(e) => setBoosterType(e.target.value)}
+                  onChange={(e) => setBoosterType(e.target.value as BoosterType)}
                   disabled={stockAvailability?.HHO?.available === false}
                   style={{ marginRight: '8px' }}
                 />

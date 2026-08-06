@@ -17,7 +17,7 @@ export class StockRequestController {
    */
   async createRequest(req: Request, res: Response, next: NextFunction) {
     try {
-      const { items, notes, paymentMode } = req.body;
+      const { items, notes } = req.body;
       const branchId = req.user?.branchId;
       const userId = req.user?.userId;
 
@@ -36,7 +36,7 @@ export class StockRequestController {
 
       console.log('SUCCESS: Stock request created');
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       console.log('ERROR:', err.code || err.message || err);
       next(err);
     }
@@ -58,7 +58,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -122,7 +122,7 @@ export class StockRequestController {
         paymentAccountHolder,
       });
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -143,7 +143,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.markPaymentAsDebt(requestId, userId, notes);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -186,7 +186,7 @@ export class StockRequestController {
       const key = `uploads/stock-requests/${requestId}/payment-proof-${uniqueId}.${fileExt}`;
 
       // Upload to MinIO
-      const uploadResult = await uploadFile(file.buffer, key, file.mimetype);
+      await uploadFile(file.buffer, key, file.mimetype);
       
       // Use API endpoint URL for consistent access
       const apiUrl = `${env.API_PREFIX}/files/${key}`;
@@ -203,7 +203,7 @@ export class StockRequestController {
         notes,
       });
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -224,7 +224,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.confirmPayment(requestId, userId, verificationNotes);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -249,7 +249,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.rejectPayment(requestId, userId, rejectionReason);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -274,7 +274,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.rejectRequest(requestId, userId, reviewNotes);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -349,7 +349,7 @@ export class StockRequestController {
       }
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -373,7 +373,7 @@ export class StockRequestController {
 
       const result = await stockRequestService.getPendingReviewRequests(userId, userRole);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -417,7 +417,7 @@ export class StockRequestController {
       }
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -459,7 +459,7 @@ export class StockRequestController {
       });
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -505,7 +505,7 @@ export class StockRequestController {
         const result = await stockRequestService.approvePremierRequest(requestId, userId, reviewNotes);
         return sendSuccess(res, result);
       }
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }

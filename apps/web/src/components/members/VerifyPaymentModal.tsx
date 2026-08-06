@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import styles from './VerifyPaymentModal.module.css';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
@@ -50,6 +52,13 @@ export default function VerifyPaymentModal({
   existingProofFileName,
   packageStatus = 'PENDING_PAYMENT'
 }: VerifyPaymentModalProps) {
+  const onProofChangeRef = useRef(onProofChange);
+  const paidAmountRef = useRef(paidAmount);
+
+  useEffect(() => {
+    onProofChangeRef.current = onProofChange;
+    paidAmountRef.current = paidAmount;
+  }, [onProofChange, paidAmount]);
   const [paymentProof, setPaymentProof] = useState<PaymentProof>({ file: null, preview: null });
   const [error, setError] = useState<string>('');
   const [compressing, setCompressing] = useState(false);
@@ -88,9 +97,9 @@ export default function VerifyPaymentModal({
       setShowRejectModal(false);
       setRejectReason('');
       setRejecting(false);
-      onProofChange({ file: null, preview: null });
+      onProofChangeRef.current({ file: null, preview: null });
       document.body.style.overflow = 'hidden';
-      setPaidAmountInput(formatRupiahInput(paidAmount));
+      setPaidAmountInput(formatRupiahInput(paidAmountRef.current));
     } else {
       document.body.style.overflow = '';
     }
@@ -148,6 +157,7 @@ export default function VerifyPaymentModal({
         });
         onProofChange(proof);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
@@ -264,7 +274,7 @@ export default function VerifyPaymentModal({
               </label>
               <div className={styles.filePreview}>
                 <div className={styles.imagePreview}>
-                  <img src={existingProofUrl!} alt="Payment proof from member" />
+                  <AppImage src={existingProofUrl!} alt="Payment proof from member" />
                 </div>
                 <div className={styles.fileInfo}>
                   <div className={styles.fileName}>{existingProofFileName || 'payment-proof.jpg'}</div>
@@ -312,7 +322,7 @@ export default function VerifyPaymentModal({
               ) : paymentProof.file ? (
                 <div className={styles.filePreview}>
                   <div className={styles.imagePreview}>
-                    <img src={paymentProof.preview!} alt="Payment proof" />
+                    <AppImage src={paymentProof.preview!} alt="Payment proof" />
                   </div>
                   <div className={styles.fileInfo}>
                     <div className={styles.fileName}>{paymentProof.file.name}</div>
@@ -464,7 +474,7 @@ export default function VerifyPaymentModal({
               <div className={styles.warningBox} style={{ background: 'rgba(239,68,68,0.1)', borderColor: 'rgba(239,68,68,0.3)' }}>
                 <span className={styles.warningIcon}>⚠️</span>
                 <div className={styles.warningText} style={{ color: '#ef4444' }}>
-                  Pembayaran akan ditolak dan status paket akan kembali ke "Pending Payment". 
+                    Pembayaran akan ditolak dan status paket akan kembali ke &quot;Pending Payment&quot;.
                   Member harus mengupload ulang bukti pembayaran yang benar.
                 </div>
               </div>

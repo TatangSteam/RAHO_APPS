@@ -23,6 +23,11 @@ import { logAudit } from '@utils/auditLog';
 import { generateMemberNo, generateStaffCode } from '@utils/codeGenerator';
 
 type DbClient = typeof prisma | Prisma.TransactionClient;
+type ImportMemberMatch = Prisma.MemberGetPayload<{
+  include: { user: { include: { profile: true } } };
+}>;
+type ImportStaffUser = Prisma.UserGetPayload<{ include: { profile: true } }>;
+type StaffCache = Map<StaffRole, Map<string, ImportStaffUser>>;
 
 interface ImportActor {
   id: string;
@@ -794,7 +799,9 @@ export class MemberHistoricalImportService {
 
   private async parseWorkbook(buffer: Buffer): Promise<ParsedWorkbook> {
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(
+      buffer as unknown as Parameters<typeof workbook.xlsx.load>[0],
+    );
 
     const warnings: string[] = [];
     const members = this.getSheetRecords(workbook, '01 Member').map((row) => this.mapMember(row));
@@ -1181,7 +1188,10 @@ export class MemberHistoricalImportService {
     return matches;
   }
 
-  private async findExistingMemberForImport(db: DbClient, member: ParsedMember): Promise<any | null> {
+  private async findExistingMemberForImport(
+    db: DbClient,
+    member: ParsedMember,
+  ): Promise<ImportMemberMatch | null> {
     if (member.nik) {
       const existingByNik = await db.member.findUnique({
         where: { nik: member.nik },
@@ -1235,7 +1245,7 @@ export class MemberHistoricalImportService {
     };
   }
 
-  private presentStaffPreview(name: string, role: StaffRole, byRole: Map<StaffRole, Map<string, any>>) {
+  private presentStaffPreview(name: string, role: StaffRole, byRole: StaffCache) {
     const match = byRole.get(role)?.get(this.normalizeStaffName(name));
     return {
       name,
@@ -1309,18 +1319,19 @@ export class MemberHistoricalImportService {
     };
   }
 
-  private buildStaffCache(staffUsers: any[]) {
-    const cache = new Map<StaffRole, Map<string, any>>([
+  private buildStaffCache(staffUsers: ImportStaffUser[]): StaffCache {
+    const cache: StaffCache = new Map([
       [Role.DOCTOR, new Map()],
       [Role.NURSE, new Map()],
       [Role.ADMIN_LAYANAN, new Map()],
     ]);
 
     for (const user of staffUsers) {
-      if (!cache.has(user.role)) continue;
+      const staffRole = user.role as StaffRole;
+      if (!cache.has(staffRole)) continue;
       const names = [user.profile?.fullName, user.email].filter(Boolean) as string[];
       for (const name of names) {
-        cache.get(user.role)?.set(this.normalizeStaffName(name), user);
+        cache.get(staffRole)?.set(this.normalizeStaffName(name), user);
       }
     }
 
@@ -1585,7 +1596,7 @@ export class MemberHistoricalImportService {
     return normalized.includes('completed') || normalized.includes('selesai') || normalized.includes('complete');
   }
 
-  private cellValue(value: any): unknown {
+  private cellValue(value: ExcelJS.CellValue): unknown {
     if (value === undefined || value === null) return null;
     if (value instanceof Date) return value;
     if (typeof value !== 'object') return value;

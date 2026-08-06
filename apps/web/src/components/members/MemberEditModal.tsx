@@ -1,10 +1,12 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useRef } from 'react';
-import { X, User, Mail, Phone, MapPin, Calendar, Save, Loader2, Tag, Heart, DollarSign } from 'lucide-react';
+import { X, User, Mail, Phone, Save, Loader2, Tag, Heart, DollarSign } from 'lucide-react';
 import { showToast } from '@/lib/toast';
-import { createMemberApi, updateMemberApi } from '@/lib/membersApi';
-import { getActiveReferrals } from '@/lib/api/referralsApi';
+import { createMemberApi, updateMemberApi, type UpdateMemberData } from '@/lib/membersApi';
+import { getActiveReferrals, type ReferralCode } from '@/lib/api/referralsApi';
+import type { CreateMemberData } from '@/types/member';
 import { devLog, devError } from '@/lib/logger';
 
 interface MemberEditModalProps {
@@ -14,8 +16,39 @@ interface MemberEditModalProps {
   action: 'create' | 'edit';
   branchId: string;
   memberId?: string;
-  memberData?: any;
+  memberData?: EditableMemberData;
   userRole?: string;
+}
+
+interface EditableMemberData {
+  fullName?: string;
+  username?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  tempatLahir?: string;
+  dateOfBirth?: string;
+  jenisKelamin?: 'L' | 'P';
+  emergencyContact?: string;
+  emergencyContactPhone?: string;
+  referralCodeId?: string;
+  isConsentToPhoto?: boolean;
+  firstIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  firstIncentiveValue?: number;
+  nextIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  nextIncentiveValue?: number;
+  user?: { username?: string; email?: string; phone?: string };
+  profile?: {
+    fullName?: string;
+    phone?: string;
+    address?: string;
+    birthPlace?: string;
+    birthDate?: string;
+    gender?: 'L' | 'P';
+    emergencyContact?: string;
+    emergencyContactPhone?: string;
+    isConsentToPhoto?: boolean;
+  };
 }
 
 interface MemberFormData {
@@ -49,8 +82,8 @@ export default function MemberEditModal({
   userRole
 }: MemberEditModalProps) {
   const [loading, setLoading] = useState(false);
-  const [referralCodes, setReferralCodes] = useState<any[]>([]);
-  const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
+  const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [filteredReferralCodes, setFilteredReferralCodes] = useState<ReferralCode[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -83,6 +116,7 @@ export default function MemberEditModal({
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error fetching referral codes:', error);
       }
     };
@@ -227,11 +261,12 @@ export default function MemberEditModal({
 
     try {
       if (action === 'create') {
-        const createData: any = {
+        const createData: CreateMemberData = {
           branchId: branchId,
           fullName: formData.fullName,
           memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
+          birthDate: formData.birthDate || '',
           isConsentToPhoto: formData.isConsentToPhoto,
         };
 
@@ -256,7 +291,7 @@ export default function MemberEditModal({
         await createMemberApi(createData, {});
         showToast.success('Member berhasil ditambahkan');
       } else if (action === 'edit' && memberData) {
-        const updateData: any = {
+        const updateData: UpdateMemberData = {
           fullName: formData.fullName,
           isConsentToPhoto: formData.isConsentToPhoto,
         };
@@ -286,7 +321,8 @@ export default function MemberEditModal({
 
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Submit error:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menyimpan data member');
     } finally {

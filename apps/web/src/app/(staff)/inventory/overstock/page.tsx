@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -10,7 +11,6 @@ import { branchesApi } from '@/lib/api/branchesApi';
 import { 
   Package, 
   RefreshCw, 
-  Truck, 
   Calendar, 
   ChevronDown,
   Building2,
@@ -50,6 +50,7 @@ export default function OverstockPage() {
         }
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch branches:', error);
     }
   }, [isManager, selectedBranchId]);
@@ -64,7 +65,8 @@ export default function OverstockPage() {
       if (response.data?.data) {
         setOverstockSummary(response.data.data);
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Overstock fetch error:', error);
       showToast.error('Gagal memuat data overstock');
       setOverstockSummary([]);

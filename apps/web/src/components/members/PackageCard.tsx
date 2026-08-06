@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import type { PackageDisplay, MemberPackage } from '@/types/package';
+import type { PackageDisplay, MemberPackage, StandaloneAddOn } from '@/types/package';
 import ViewInvoiceButton from '../invoices/ViewInvoiceButton';
 import ViewPaymentProofButton from './ViewPaymentProofButton';
-import { formatNumberWithDots, formatCurrency } from '@/lib/formatNumber';
+import { formatCurrency } from '@/lib/formatNumber';
 import { getAggregatePackageStatus } from './memberStatusPresentation';
 import styles from './MemberPackagesTab.module.css';
 
@@ -13,7 +13,7 @@ interface PackageCardProps {
   onVerifyPayment?: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
-  onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
+  onEditPackage?: (purchaseGroupId: string, packages: MemberPackage[], addOns: StandaloneAddOn[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
   canEditWaitingVerification?: boolean;
   canEditVerified?: boolean;
   onViewRefundDetail?: (refundData: {
@@ -25,6 +25,10 @@ interface PackageCardProps {
     refundProofUrl?: string;
     refundProofFileName?: string;
   }) => void;
+}
+
+function isStandaloneAddOn(item: MemberPackage | StandaloneAddOn): item is StandaloneAddOn {
+  return 'addOnId' in item;
 }
 
 // Helper function to get therapy name from product code
@@ -175,7 +179,7 @@ export default function PackageCard({
     return null;
   };
 
-  const getPaymentPlanInfo = (item: any, totalPrice: number) => {
+  const getPaymentPlanInfo = (item: MemberPackage | StandaloneAddOn, totalPrice: number) => {
     if (item?.paymentPlanType !== 'INSTALLMENT') return null;
 
     const paid = Number(item.totalVerifiedPaid || 0);
@@ -206,7 +210,7 @@ export default function PackageCard({
 
   // Standalone Add-On
   if (isAddOn && !isGroup) {
-    const addon = pkg as any;
+    const addon = pkg as StandaloneAddOn;
     return (
       <div className={styles.packageCard}>
         {/* Compact Header - Always Visible */}
@@ -332,7 +336,7 @@ export default function PackageCard({
     const addOnStatus = getAggregatePackageStatus(groupAddOns);
     const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
-    const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item: any) => (
+    const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item) => (
       item?.paymentPlanType === 'INSTALLMENT' && item?.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
     ));
     const editablePackages = [...basics, ...boosters].filter(Boolean) as MemberPackage[];
@@ -341,7 +345,7 @@ export default function PackageCard({
     // Calculate total prices for all packages and add-ons
     const totalBasicPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
     const totalBoosterPrice = boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
-    const totalAddOnPrice = groupAddOns.reduce((sum: number, a: any) => sum + (a?.totalPrice || 0), 0);
+    const totalAddOnPrice = groupAddOns.reduce((sum, addOn) => sum + (addOn.totalPrice || 0), 0);
     const totalFinalPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + totalAddOnPrice;
     const totalBasicSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
     const totalBoosterSessions = boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
@@ -452,14 +456,14 @@ export default function PackageCard({
                       {groupAddOns.length > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{groupAddOns.length}</span>}
                     </div>
                     <div className={styles.packageCode}>
-                      {groupAddOns.map((a: any) => a.addOnCode).join(', ')}
+                      {groupAddOns.map((a) => a.addOnCode).join(', ')}
                     </div>
                   </div>
                   {getStatusBadge(addOnStatus || groupAddOns[0].status)}
                 </div>
                 
                 <div className={styles.sessionInfo}>
-                  {groupAddOns.map((addon: any, idx: number) => (
+                  {groupAddOns.map((addon, idx) => (
                     <span key={idx}>
                       {idx > 0 && <span className={styles.sessionDivider}>•</span>}
                       <span className={styles.sessionBadge}>
@@ -573,9 +577,9 @@ export default function PackageCard({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    const firstItem: any = basics[0] || boosters[0] || groupAddOns[0];
+                    const firstItem: MemberPackage | StandaloneAddOn | undefined = basics[0] || boosters[0] || groupAddOns[0];
                     onVerifyPayment(
-                      firstItem?.packageId || firstItem?.addOnId || '',
+                      firstItem && isStandaloneAddOn(firstItem) ? firstItem.addOnId : firstItem?.packageId || '',
                       firstItem?.status || 'PENDING_PAYMENT',
                       firstItem?.paymentProofUrl,
                       firstItem?.paymentProofFileName
@@ -639,9 +643,9 @@ export default function PackageCard({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const firstItem: any = basics[0] || boosters[0] || groupAddOns[0];
+                      const firstItem: MemberPackage | StandaloneAddOn | undefined = basics[0] || boosters[0] || groupAddOns[0];
                       onVerifyPayment(
-                        firstItem?.packageId || firstItem?.addOnId || '',
+                        firstItem && isStandaloneAddOn(firstItem) ? firstItem.addOnId : firstItem?.packageId || '',
                         firstItem?.status || 'ACTIVE',
                         firstItem?.paymentProofUrl,
                         firstItem?.paymentProofFileName
@@ -699,7 +703,6 @@ export default function PackageCard({
   }
   
   const memberPkg = pkg as MemberPackage;
-  const standaloneOriginalPrice = getOriginalPrice(memberPkg);
   const standaloneFinalPrice = memberPkg.finalPrice;
   const canEditStandalonePackage = canEditPackageStatus(memberPkg.status);
   

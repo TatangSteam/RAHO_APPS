@@ -1,5 +1,4 @@
 import {
-  InventoryPostingType,
   InventoryValuationStatus,
   Prisma,
   ShipmentDiscrepancyStatus,

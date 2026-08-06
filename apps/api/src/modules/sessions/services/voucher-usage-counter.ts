@@ -1,4 +1,6 @@
-export async function syncMemberVoucherUsageCount(tx: any, memberId: string) {
+import { Prisma } from '@prisma/client';
+
+export async function syncMemberVoucherUsageCount(tx: Prisma.TransactionClient, memberId: string) {
   const basicUsageCount = await tx.treatmentSession.count({
     where: {
       encounter: { memberId },

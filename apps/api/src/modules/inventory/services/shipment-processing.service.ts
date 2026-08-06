@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Role, StockMutationType, DiscrepancyType, Prisma } from '@prisma/client';
+import { AuditAction, Role, StockMutationType, DiscrepancyType, Prisma, ShipmentStatus } from '@prisma/client';
 import { uploadFile } from '../../../config/minio';
 import { env } from '../../../config/env';
 import { v4 as uuidv4 } from 'uuid';
@@ -44,6 +43,61 @@ interface ReviewShipmentIssueInput {
   }>;
 }
 
+interface ShipmentForResponse {
+  id: string;
+  shipmentCode: string;
+  fromBranchId: string;
+  toBranchId: string;
+  status: ShipmentStatus;
+  notes: string | null;
+  shipmentPhotoUrl: string | null;
+  shipmentPhotoName: string | null;
+  shippedBy: string | null;
+  shippedAt: Date | null;
+  receivedBy: string | null;
+  receivedAt: Date | null;
+  approvedBy: string | null;
+  approvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  fromBranch: { name: string };
+  toBranch: { name: string };
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    sentQty: unknown;
+    requestedQty: unknown;
+    receivedQty: unknown;
+    overstockQty: unknown;
+    overstockReason: string | null;
+    masterProduct: Parameters<typeof formatStockRequestQuantity>[0] & {
+      name: string;
+      category: string;
+    };
+  }>;
+  discrepancies?: Array<{
+    id: string;
+    masterProductId: string;
+    productName: string;
+    expectedQty: unknown;
+    receivedQty: unknown;
+    discrepancyType: DiscrepancyType;
+    notes: string | null;
+    photoUrl: string | null;
+    photoFileName: string | null;
+    createdAt: Date;
+    masterProduct: Parameters<typeof formatStockRequestQuantity>[0] & {
+      name: string;
+      category: string;
+    };
+  }>;
+  internalTransfer?: {
+    status: string;
+    totalValue: Prisma.Decimal;
+    receivedValue: Prisma.Decimal | null;
+  } | null;
+}
+
 /**
  * Service for processing shipments (ship, receive with discrepancy support, overstock handling)
  */
@@ -73,12 +127,13 @@ export class ShipmentProcessingService {
       select: { role: true },
     });
 
-    if (!user || ![
+    const shippingRoles: Role[] = [
       Role.SUPER_ADMIN,
       Role.ADMIN_MANAGER,
       Role.ADMIN_LOGISTIK,
       Role.FINANCE_LOGISTICS_CONTROLLER,
-    ].includes(user.role)) {
+    ];
+    if (!user || !shippingRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -123,7 +178,8 @@ export class ShipmentProcessingService {
     }
 
     // For ADMIN_MANAGER, validate they manage the destination branch
-    if ([Role.ADMIN_MANAGER, Role.FINANCE_LOGISTICS_CONTROLLER].includes(user.role)) {
+    const branchScopedRoles: Role[] = [Role.ADMIN_MANAGER, Role.FINANCE_LOGISTICS_CONTROLLER];
+    if (branchScopedRoles.includes(user.role)) {
       const managerBranch = user.role === Role.ADMIN_MANAGER
         ? await prisma.managerBranch.findFirst({ where: { userId, branchId: shipment.toBranchId } })
         : await prisma.staffBranch.findFirst({ where: { userId, branchId: shipment.toBranchId } });
@@ -183,7 +239,7 @@ export class ShipmentProcessingService {
 
     // Update shipment and stock request status
     const result = await prisma.$transaction(async (tx) => {
-      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      const [locked] = await tx.$queryRaw<Array<{ id: string; status: ShipmentStatus }>>(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
       if (locked?.status !== 'PREPARING') {
         if (locked?.status === 'SHIPPED') return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { items: { include: { masterProduct: true } }, fromBranch: true, toBranch: true, internalTransfer: true } });
         throw { status: 422, code: 'INVALID_STATUS', message: 'Pengiriman sudah diproses atau belum siap' };
@@ -411,7 +467,7 @@ export class ShipmentProcessingService {
 
     // Process receiving
     const result = await prisma.$transaction(async (tx) => {
-      const [locked] = await tx.$queryRaw(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
+      const [locked] = await tx.$queryRaw<Array<{ id: string; status: ShipmentStatus }>>(Prisma.sql`SELECT "id", "status" FROM "shipments" WHERE "id" = ${shipmentId} FOR UPDATE`);
       if (locked?.status !== 'SHIPPED') {
         if (['RECEIVED', 'RECEIVED_WITH_ISSUE'].includes(locked?.status)) return tx.shipment.findUniqueOrThrow({ where: { id: shipmentId }, include: { items: { include: { masterProduct: true } }, fromBranch: true, toBranch: true, discrepancies: { include: { masterProduct: true } }, internalTransfer: true } });
         throw { status: 422, code: 'INVALID_STATUS', message: 'Pengiriman belum dikirim atau sudah diproses' };
@@ -612,13 +668,9 @@ export class ShipmentProcessingService {
     });
 
     const formattedResult = this.formatShipment(result);
-    
-    // Add overstock info to response
-    if (createdOverstocks.length > 0) {
-      (formattedResult as any).overstocksCreated = createdOverstocks;
-    }
-
-    return formattedResult;
+    return createdOverstocks.length > 0
+      ? { ...formattedResult, overstocksCreated: createdOverstocks }
+      : formattedResult;
   }
 
   /**
@@ -634,7 +686,8 @@ export class ShipmentProcessingService {
       select: { role: true },
     });
 
-    if (!user || ![Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK].includes(user.role)) {
+    const reviewRoles: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_LOGISTIK];
+    if (!user || !reviewRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -743,7 +796,10 @@ export class ShipmentProcessingService {
           });
 
           if (shortageMap.size === 0) {
-            const latestShortageByProduct = new Map<string, any>();
+            const latestShortageByProduct = new Map<
+              string,
+              (typeof shipment.discrepancies)[number]
+            >();
 
             shipment.discrepancies.forEach(discrepancy => {
               if (discrepancy.discrepancyType !== 'SHORTAGE') {
@@ -894,7 +950,7 @@ export class ShipmentProcessingService {
   /**
    * Format shipment for response
    */
-  private formatShipment(shipment: any) {
+  private formatShipment(shipment: ShipmentForResponse) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -906,7 +962,7 @@ export class ShipmentProcessingService {
       notes: shipment.notes,
       shipmentPhotoUrl: shipment.shipmentPhotoUrl,
       shipmentPhotoName: shipment.shipmentPhotoName,
-      items: shipment.items.map((item: any) => ({
+      items: shipment.items.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
@@ -924,7 +980,7 @@ export class ShipmentProcessingService {
         overstockReason: item.overstockReason,
         unit: getStockRequestUnit(item.masterProduct),
       })),
-      discrepancies: shipment.discrepancies?.map((d: any) => ({
+      discrepancies: shipment.discrepancies?.map((d) => ({
         id: d.id,
         masterProductId: d.masterProductId,
         productName: d.productName,

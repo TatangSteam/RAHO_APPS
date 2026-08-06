@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import React, { useEffect } from 'react';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { showToast } from '@/lib/toast';
@@ -61,6 +62,7 @@ export const ImpersonationBanner: React.FC = () => {
     try {
       await stopImpersonation();
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to stop impersonation:', error);
       // Error is handled in context, just log here
     }

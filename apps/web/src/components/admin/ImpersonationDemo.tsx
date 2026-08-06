@@ -100,7 +100,7 @@ export const ImpersonationDemo: React.FC = () => {
       <div className={styles.section}>
         <h3>👥 Admin Managers</h3>
         <p className={styles.sectionDesc}>
-          Click "Masuk Sebagai" to impersonate an Admin Manager
+                Click &quot;Masuk Sebagai&quot; to impersonate an Admin Manager
         </p>
         <div className={styles.userList}>
           {mockManagers.map((manager) => (
@@ -123,7 +123,7 @@ export const ImpersonationDemo: React.FC = () => {
       <div className={styles.section}>
         <h3>🏢 Branch Admins</h3>
         <p className={styles.sectionDesc}>
-          Click "Masuk Sebagai" to impersonate a Branch Admin
+                Click &quot;Masuk Sebagai&quot; to impersonate a Branch Admin
         </p>
         <div className={styles.userList}>
           {mockBranchAdmins.map((admin) => (

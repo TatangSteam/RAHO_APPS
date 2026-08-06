@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { doctorBranchApi, DoctorWithBranches, ManagedBranch } from '@/lib/api/doctorBranchApi';
 import styles from './page.module.css';
 
@@ -11,27 +12,18 @@ export default function AdminManagerDoctorsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load managed branches
-  useEffect(() => {
-    loadBranches();
-  }, []);
-
-  // Load doctors when branch changes
-  useEffect(() => {
-    loadDoctors();
-  }, [selectedBranchId]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     try {
       const data = await doctorBranchApi.getManagedBranches(false);
       setBranches(data);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       console.error('Failed to load branches:', err);
       setError('Gagal memuat cabang');
     }
-  };
+  }, []);
 
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -40,13 +32,22 @@ export default function AdminManagerDoctorsPage() {
         status: true,
       });
       setDoctors(data.doctors);
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       console.error('Failed to load doctors:', err);
       setError(err.response?.data?.error?.message || 'Gagal memuat data dokter');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedBranchId]);
+
+  useEffect(() => {
+    void loadBranches();
+  }, [loadBranches]);
+
+  useEffect(() => {
+    void loadDoctors();
+  }, [loadDoctors]);
 
   const handleRemoveDoctor = async (doctorId: string, branchId: string) => {
     if (!confirm('Yakin ingin remove dokter dari cabang ini?')) return;
@@ -55,7 +56,8 @@ export default function AdminManagerDoctorsPage() {
       await doctorBranchApi.removeDoctorFromBranch(doctorId, branchId);
       alert('Dokter berhasil di-remove dari cabang');
       loadDoctors();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       alert(err.response?.data?.error?.message || 'Gagal remove dokter');
     }
   };

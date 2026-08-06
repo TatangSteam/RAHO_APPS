@@ -1,10 +1,9 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { adminManagersApi } from '@/lib/api/adminManagersApi';
 import { useAuthStore } from '@/stores/authStore';
-import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { getDefaultRoute, type Role } from '@/types/auth';
@@ -26,8 +25,6 @@ export const ImpersonateButton: React.FC<ImpersonateButtonProps> = ({
   disabled = false,
   className = '',
 }) => {
-  const router = useRouter();
-  const { startImpersonation } = useImpersonation();
   const [loading, setLoading] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
 
@@ -59,7 +56,8 @@ export const ImpersonateButton: React.FC<ImpersonateButtonProps> = ({
       );
       window.location.replace(targetUrl);
       
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error impersonating user:', error);
       const message = error.response?.data?.message || 'Gagal melakukan impersonation';
       showToast.error(message);

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { X, Shield, Search, UserPlus, Loader2, Check } from 'lucide-react';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { showToast } from '@/lib/toast';
@@ -34,26 +35,27 @@ export default function AssignManagerModal({
   const [selectedManagerId, setSelectedManagerId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    if (isOpen) {
-      loadAvailableManagers();
-      setSelectedManagerId(null);
-      setSearchTerm('');
-    }
-  }, [isOpen, branchId]);
-
-  const loadAvailableManagers = async () => {
+  const loadAvailableManagers = useCallback(async () => {
     try {
       setLoading(true);
       const response = await branchesApi.getAvailableManagers(branchId);
       setManagers(response.data.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading available managers:', error);
       showToast.error('Gagal memuat daftar Admin Manager');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadAvailableManagers();
+      setSelectedManagerId(null);
+      setSearchTerm('');
+    }
+  }, [isOpen, loadAvailableManagers]);
 
   const handleSubmit = async () => {
     if (!selectedManagerId) {
@@ -66,7 +68,8 @@ export default function AssignManagerModal({
       showToast.success('Admin Manager berhasil di-assign ke cabang');
       onSuccess();
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error assigning manager:', error);
       showToast.error(error.response?.data?.message || 'Gagal assign Admin Manager');
     } finally {

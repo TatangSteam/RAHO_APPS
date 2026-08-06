@@ -3,7 +3,6 @@
 import { Package, Edit, Trash2, Plus, AlertTriangle } from 'lucide-react';
 import DataTable, { 
   Column, 
-  StatusBadge, 
   ActionButtons, 
   ActionButton 
 } from '@/components/ui/DataTable';

@@ -4,19 +4,29 @@ export type TreatmentRevenueSource = {
   revenuePackageIds: string[];
 };
 
+export function selectTreatmentPackageUsageIds(
+  basicPackageId: string,
+  boosterPackageId: string | null,
+): string[] {
+  return boosterPackageId && boosterPackageId !== basicPackageId
+    ? [basicPackageId, boosterPackageId]
+    : [basicPackageId];
+}
+
 export function selectTreatmentRevenueSource(
   basicPackageId: string,
   boosterPackageId: string | null,
 ): TreatmentRevenueSource {
+  const revenuePackageIds = selectTreatmentPackageUsageIds(basicPackageId, boosterPackageId);
   return boosterPackageId
     ? {
         revenueSourceType: 'BASIC_WITH_BOOSTER',
         revenuePackageId: basicPackageId,
-        revenuePackageIds: [basicPackageId, boosterPackageId],
+        revenuePackageIds,
       }
     : {
         revenueSourceType: 'BASIC',
         revenuePackageId: basicPackageId,
-        revenuePackageIds: [basicPackageId],
+        revenuePackageIds,
       };
 }

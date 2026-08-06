@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
@@ -91,6 +93,7 @@ export default function UploadPaymentProofModal({
           compressed: result.compressedSize
         });
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         // Fallback to original file
         const reader = new FileReader();
@@ -198,7 +201,7 @@ export default function UploadPaymentProofModal({
             ) : paymentProof.file ? (
               <div className={styles.filePreview}>
                 <div className={styles.imagePreview}>
-                  <img src={paymentProof.preview!} alt="Payment proof" />
+                  <AppImage src={paymentProof.preview!} alt="Payment proof" />
                 </div>
                 <div className={styles.fileInfo}>
                   <div className={styles.fileName}>{paymentProof.file.name}</div>

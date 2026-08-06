@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { ProductCategory } from '@prisma/client';
+import { Prisma, ProductCategory } from '@prisma/client';
 
 export interface MaterialUsageHistoryFilters {
   branchId?: string;
@@ -49,7 +49,7 @@ export class MaterialUsageHistoryService {
     } = filters;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.MaterialUsageWhereInput = {};
 
     // Filter by branch through session
     if (branchIds) {
@@ -231,7 +231,7 @@ export class MaterialUsageHistoryService {
    * Get list of staff members for filter dropdown
    */
   async getStaffList(branchId?: string, allowedBranchIds?: string[]) {
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       isActive: true,
       role: {
         in: ['ADMIN_CABANG', 'ADMIN_LAYANAN', 'DOCTOR', 'NURSE'],

@@ -3,8 +3,9 @@ import { logAudit } from '../../../utils/auditLog';
 import { generateTherapyPlanCode } from '../../../utils/codeGenerator';
 import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
 import type { CreateTherapyPlanInput } from '../sessions.schema';
-import { AuditAction } from '@prisma/client';
+import { AuditAction, Prisma } from '@prisma/client';
 import { MemberTherapyPlanSetEditService } from '../../members/services/member-therapy-plan-set-edit.service';
+import type { BulkEditSetInput } from '../../members/services/member-therapy-plan-set-edit.service';
 import { syncSessionInfusionToTherapyPlan } from './infusion-material-sync.service';
 
 export class TherapyPlanService {
@@ -62,7 +63,7 @@ export class TherapyPlanService {
     
     const planCode = generateTherapyPlanCode(branchCode, sequence);
 
-    const { ifaSubstances, ifaSubstanceTotalMl, ...therapyPlanData } = data as any;
+    const { ifaSubstances, ifaSubstanceTotalMl: _ifaSubstanceTotalMl, ...therapyPlanData } = data;
     const normalizedIfaSubstances = normalizeIfaSubstances(
       ifaSubstances,
       Boolean(data.ifa250 && data.ifa250 > 0)
@@ -73,7 +74,11 @@ export class TherapyPlanService {
         planCode,
         treatmentSessionId: sessionId,
         ...therapyPlanData,
-        ...normalizedIfaSubstances,
+        ifaSubstances: normalizedIfaSubstances.ifaSubstances
+          ? normalizedIfaSubstances.ifaSubstances as unknown as Prisma.InputJsonValue
+          : Prisma.JsonNull,
+        ifaSubstanceTotalMl: normalizedIfaSubstances.ifaSubstanceTotalMl,
+        noInIfa: normalizedIfaSubstances.noInIfa,
       },
     });
 
@@ -199,7 +204,7 @@ export class TherapyPlanService {
     data: {
       newSetName?: string;
       sessionPlanNumber?: number;
-      plans?: Array<Record<string, unknown>>;
+      plans?: BulkEditSetInput['plans'];
     },
     userId: string
   ) {
@@ -420,7 +425,7 @@ export class TherapyPlanService {
 
     const result = await this.therapyPlanSetEditService.bulkEditTherapyPlanSet(
       editablePlan.therapyPlanSetId,
-      { ...data, plans } as any,
+      { ...data, plans },
       { editableTreatmentSessionId: sessionId, updatedBy: userId }
     );
 

@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { InventoryItem } from '../types';
@@ -43,7 +44,8 @@ export function useInventoryItems(accessToken: string | null) {
       }
       
       setInventoryItems(data.data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ Inventory items fetch error:', error);
       showToast.error(error.message || 'Gagal memuat data inventori');
     }

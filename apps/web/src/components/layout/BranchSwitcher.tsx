@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { getUserBranches, type StaffBranchAssignment } from '@/lib/api/staffBranchApi';
 import styles from './BranchSwitcher.module.css';
@@ -19,14 +20,7 @@ export function BranchSwitcher() {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  // Load user's assigned branches on mount
-  useEffect(() => {
-    if (user?.userId && (user.role === 'DOCTOR' || user.role === 'NURSE')) {
-      loadUserBranches();
-    }
-  }, [user?.userId]);
-
-  const loadUserBranches = async () => {
+  const loadUserBranches = useCallback(async () => {
     if (!user?.userId) return;
 
     try {
@@ -43,11 +37,18 @@ export function BranchSwitcher() {
         setActiveBranch(data.primaryBranch.id);
       }
     } catch (err) {
+      assertCaughtError(err);
       console.error('Failed to load user branches:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeBranchId, setActiveBranch, setAssignedBranches, user?.userId]);
+
+  useEffect(() => {
+    if (user?.userId && (user.role === 'DOCTOR' || user.role === 'NURSE')) {
+      void loadUserBranches();
+    }
+  }, [loadUserBranches, user?.role, user?.userId]);
 
   const handleSwitchBranch = (branchId: string) => {
     setActiveBranch(branchId);

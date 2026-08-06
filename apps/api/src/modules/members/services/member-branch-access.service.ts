@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { AuditAction } from '@prisma/client';
@@ -16,6 +15,7 @@ export class MemberBranchAccessService {
       where: { memberNo },
       include: {
         branchAccesses: true,
+        user: { include: { profile: true } },
       },
     });
 
@@ -80,7 +80,7 @@ export class MemberBranchAccessService {
       member: {
         id: member.id,
         memberNo: member.memberNo,
-        fullName: member.fullName,
+        fullName: member.user.profile?.fullName || '-',
       },
       branch: {
         id: branch.id,

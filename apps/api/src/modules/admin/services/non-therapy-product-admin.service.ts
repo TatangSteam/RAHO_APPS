@@ -1,6 +1,11 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { ProductType } from '@prisma/client';
+import {
+  AirNanoColor,
+  AirNanoUnit,
+  AirNanoVolume,
+  Prisma,
+  ProductType,
+} from '@prisma/client';
 
 /**
  * Service for admin non-therapy product (add-on) management
@@ -22,7 +27,7 @@ export class NonTherapyProductAdminService {
       limit = 50,
     } = filters;
 
-    const where: any = {};
+    const where: Prisma.NonTherapyProductWhereInput = {};
 
     if (productType) {
       where.productType = productType;
@@ -134,9 +139,9 @@ export class NonTherapyProductAdminService {
         name: data.name,
         description: data.description,
         pricePerUnit: data.pricePerUnit,
-        airNanoColor: data.airNanoColor as any,
-        airNanoVolume: data.airNanoVolume as any,
-        airNanoUnit: data.airNanoUnit as any,
+        airNanoColor: data.airNanoColor as AirNanoColor | undefined,
+        airNanoVolume: data.airNanoVolume as AirNanoVolume | undefined,
+        airNanoUnit: data.airNanoUnit as AirNanoUnit | undefined,
         isActive: data.isActive ?? true,
       },
     });

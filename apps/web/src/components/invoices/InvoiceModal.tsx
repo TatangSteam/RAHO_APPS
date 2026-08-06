@@ -1,9 +1,9 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import InvoiceDocument from './InvoiceDocument';
-import { generateInvoicePDF } from '@/lib/pdfGenerator';
 import type { Invoice } from '@/types/invoice';
 import styles from './InvoiceModal.module.css';
 import { devError } from '@/lib/logger';
@@ -41,8 +41,10 @@ export default function InvoiceModal({ show, invoice, onClose }: Props) {
   const handleExportPDF = async () => {
     try {
       setExporting(true);
+      const { generateInvoicePDF } = await import('@/lib/pdfGenerator');
       await generateInvoicePDF(invoice);
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to export PDF:', error);
       alert('Gagal export PDF. Silakan coba lagi.');
     } finally {

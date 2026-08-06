@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -488,6 +489,7 @@ export function Sidebar({
         await logoutApi(refreshToken);
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Logout API error:', error);
     } finally {
       clearAuth();

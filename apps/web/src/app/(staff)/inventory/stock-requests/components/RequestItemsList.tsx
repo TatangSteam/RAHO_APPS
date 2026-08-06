@@ -6,7 +6,7 @@ import styles from '../page.module.css';
 interface RequestItemsListProps {
   requestItems: RequestItem[];
   inventoryItems: InventoryItem[] | MasterProduct[];
-  onUpdateItem: (itemId: string, field: keyof RequestItem, value: any) => void;
+  onUpdateItem: (itemId: string, field: keyof RequestItem, value: RequestItem[keyof RequestItem]) => void;
   onRemoveItem: (itemId: string) => void;
 }
 

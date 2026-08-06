@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { MemberDetail } from '@/types/member';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { getReferralIncentivesApi } from '@/lib/membersApi';
@@ -61,24 +62,25 @@ export default function MemberProfileTab({
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
-  useEffect(() => {
-    if (member.referralCodeId) {
-      loadIncentives();
-    }
-  }, [member.referralCodeId]);
-
-  const loadIncentives = async () => {
+  const loadIncentives = useCallback(async () => {
     try {
       setLoadingIncentives(true);
       const data = await getReferralIncentivesApi(member.memberId);
       setIncentiveData(data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load incentives:', error);
       showToast.error('Gagal memuat data insentif');
     } finally {
       setLoadingIncentives(false);
     }
-  };
+  }, [member.memberId]);
+
+  useEffect(() => {
+    if (member.referralCodeId) {
+      void loadIncentives();
+    }
+  }, [loadIncentives, member.referralCodeId]);
 
   // Pagination logic
   const getPaginatedRecords = () => {
@@ -91,12 +93,13 @@ export default function MemberProfileTab({
   const totalPages = incentiveData ? Math.ceil(incentiveData.records.length / itemsPerPage) : 0;
   const memberAge = member.age ?? calculateAge(member.dateOfBirth);
 
-  const handleViewDocument = async (fileUrl: string, fileName: string) => {
+  const handleViewDocument = async (fileUrl: string, _fileName: string) => {
     try {
       setLoadingDocUrl(fileUrl);
       const blobUrl = await createAuthenticatedObjectUrl(fileUrl);
       window.open(blobUrl, '_blank', 'noopener,noreferrer');
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       const errorCode = err.response?.data?.error?.code;
       const errorMessage = err.response?.data?.error?.message;
       

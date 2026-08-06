@@ -40,7 +40,12 @@ export class MemberLabResultsService {
     }));
   }
 
-  async uploadLabResult(memberId: string, file: Express.Multer.File, data: any, userId: string) {
+  async uploadLabResult(
+    memberId: string,
+    file: Express.Multer.File,
+    data: { description?: string; labDate?: string },
+    userId: string,
+  ) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
     });

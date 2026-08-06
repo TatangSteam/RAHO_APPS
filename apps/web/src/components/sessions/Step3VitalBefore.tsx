@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
@@ -150,7 +151,8 @@ export default function Step3VitalBefore({
 
       setSaved((prev) => ({ ...prev, [type]: true }));
       setErrors((prev) => ({ ...prev, [type]: '' }));
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to save vital sign:', err);
       // Show backend error message
       const errorMessage = err?.response?.data?.error?.message || 'Gagal menyimpan';
@@ -210,7 +212,8 @@ export default function Step3VitalBefore({
 
       // Call onComplete after all saved
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to save vital signs:', err);
       // Show general error if any field fails
       const errorMessage = err?.response?.data?.error?.message || 'Gagal menyimpan beberapa data';

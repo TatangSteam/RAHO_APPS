@@ -1,5 +1,6 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
 import { useEffect, useState } from 'react';
 import { BranchMember } from './types';
 import MemberAccountImportPanel from './MemberAccountImportPanel';
@@ -214,7 +215,7 @@ function MemberAvatar({ member }: { member: BranchMember }) {
     <div className={styles.memberAvatar}>
       <div className={styles.avatarPlaceholder}>{initial}</div>
       {photoUrl && !imageFailed && (
-        <img
+        <AppImage
           src={photoUrl}
           alt={member.fullName || 'Member'}
           onError={() => setImageFailed(true)}

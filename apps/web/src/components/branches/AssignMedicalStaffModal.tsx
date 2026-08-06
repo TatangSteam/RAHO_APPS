@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { X, UserPlus, Search, Loader2, Stethoscope, Heart, Building2, Check } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { branchesApi } from '@/lib/api/branchesApi';
@@ -46,13 +47,7 @@ export default function AssignMedicalStaffModal({
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'DOCTOR' | 'NURSE'>('ALL');
 
-  useEffect(() => {
-    if (isOpen) {
-      loadStaff();
-    }
-  }, [isOpen, branchId]);
-
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     try {
       setLoading(true);
       // Load ALL medical staff (doctors and nurses), not just those not in branch
@@ -78,13 +73,20 @@ export default function AssignMedicalStaffModal({
       });
       
       setStaff(staffData);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading medical staff:', error);
       showToast.error('Gagal memuat data staff medis');
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId, branchName]);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadStaff();
+    }
+  }, [isOpen, loadStaff]);
 
   const getRoleIcon = (role: string) => {
     return role === 'DOCTOR' ? <Stethoscope size={16} /> : <Heart size={16} />;
@@ -131,7 +133,8 @@ export default function AssignMedicalStaffModal({
       // Reload staff list to update assignment status
       loadStaff();
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error assigning staff:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal assign staff');
     } finally {

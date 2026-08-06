@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { showToast, confirm } from '@/lib/toast';
@@ -61,26 +62,7 @@ export default function StaffManagementPage() {
   const [modalAction, setModalAction] = useState<'create' | 'edit'>('create');
   const [selectedStaff, setSelectedStaff] = useState<Staff | null>(null);
 
-  // Check authorization - only ADMIN_CABANG can access
-  useEffect(() => {
-    if (!user) return;
-    
-    if (user.role !== 'ADMIN_CABANG') {
-      showToast.error('Anda tidak memiliki akses ke halaman ini');
-      router.push('/dashboard');
-      return;
-    }
-
-    if (!user.branchId) {
-      showToast.error('Anda tidak terdaftar di cabang manapun');
-      router.push('/dashboard');
-      return;
-    }
-
-    loadStaff();
-  }, [user, router]);
-
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     if (!user?.branchId) return;
 
     try {
@@ -100,13 +82,30 @@ export default function StaffManagementPage() {
       devLog('🔍 [StaffPage] Staff data:', staffData);
       
       setStaff(Array.isArray(staffData) ? staffData : []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading staff:', error);
       showToast.error('Gagal memuat data staff');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.branchId]);
+
+  // Check authorization - only ADMIN_CABANG can access
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== 'ADMIN_CABANG') {
+      showToast.error('Anda tidak memiliki akses ke halaman ini');
+      router.push('/dashboard');
+      return;
+    }
+    if (!user.branchId) {
+      showToast.error('Anda tidak terdaftar di cabang manapun');
+      router.push('/dashboard');
+      return;
+    }
+    void loadStaff();
+  }, [loadStaff, router, user]);
 
   const handleOpenCreateModal = () => {
     setSelectedStaff(null);
@@ -141,7 +140,8 @@ export default function StaffManagementPage() {
       await api.delete(`/users/${staffMember.id}`);
       showToast.success('Staff berhasil dinonaktifkan');
       loadStaff();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting staff:', error);
       showToast.error(error.response?.data?.message || 'Gagal menonaktifkan staff');
     }

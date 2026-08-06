@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { Role, Prisma } from '@prisma/client';
+import { PackageType, Role, Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
 
 // ============================================================
@@ -33,6 +33,34 @@ export interface ExportPayload {
   format: 'csv' | 'xlsx';
 }
 
+type ExportCell = string | number | boolean | Date | null | undefined;
+type ExportRow = Record<string, ExportCell>;
+
+interface MemberExportSource {
+  memberNo: string;
+  nik: string | null;
+  tempatLahir: string | null;
+  dateOfBirth: Date | null;
+  jenisKelamin: string | null;
+  statusNikah: string | null;
+  pekerjaan: string | null;
+  isActive: boolean;
+  isDeceased: boolean;
+  createdAt: Date;
+  address: string | null;
+  postalCode: string | null;
+  emergencyContact: string | null;
+  sumberInfoRaho: string | null;
+  isConsentToPhoto: boolean;
+  user: { email: string; profile: { fullName: string; phone: string | null } | null };
+  registrationBranch: { name: string };
+  memberPackages?: Array<{ packageType: PackageType }>;
+  referralCode?: { code: string; referrerName: string; referrerType: string } | null;
+  _packageStats?: { activeCount: number; remainingSessions: number; details: string };
+  _diagnosisStats?: { count: number; latest: string };
+  _therapyStats?: { totalSessions: number; completedSessions: number; lastDate: string };
+}
+
 function calculateAge(dateOfBirth?: Date | string | null): number | '' {
   if (!dateOfBirth) return '';
   const birthDate = new Date(dateOfBirth);
@@ -50,7 +78,7 @@ function calculateAge(dateOfBirth?: Date | string | null): number | '' {
 }
 
 // Column definitions for mapping
-const COLUMN_MAPPINGS: Record<string, (member: any) => any> = {
+const COLUMN_MAPPINGS: Record<string, (member: MemberExportSource) => ExportCell> = {
   memberNo: (m) => m.memberNo,
   fullName: (m) => m.user?.profile?.fullName || '',
   nik: (m) => m.nik || '',
@@ -246,7 +274,7 @@ export class MemberExportService {
       andConditions.push({
         memberPackages: {
           some: {
-            packageType: { in: filters.packageTypes as any },
+            packageType: { in: filters.packageTypes as PackageType[] },
             status: 'ACTIVE',
           },
         },
@@ -381,51 +409,51 @@ export class MemberExportService {
     }
 
     // Transform data
-    const exportData = members.map((member: any) => {
-      // Add computed stats
-      if (needsPackages) {
-        const activePackages = member.memberPackages || [];
-        member._packageStats = {
+    const exportData = members.map((member) => {
+      const activePackages = member.memberPackages || [];
+      const therapyStats = sessionStats.get(member.id);
+      const diagnoses = member.diagnoses || [];
+      const enrichedMember = {
+        ...member,
+        ...(needsPackages ? {
+          _packageStats: {
           activeCount: activePackages.length,
           remainingSessions: activePackages.reduce(
-            (sum: number, p: any) => sum + (p.totalSessions - p.usedSessions),
+            (sum: number, p) => sum + (p.totalSessions - p.usedSessions),
             0
           ),
           details: activePackages
-            .map((p: any) => `${p.packageCode} (${p.packageType}, ${p.totalSessions - p.usedSessions}/${p.totalSessions})`)
+            .map((p) => `${p.packageCode} (${p.packageType}, ${p.totalSessions - p.usedSessions}/${p.totalSessions})`)
             .join('; '),
-        };
-      }
-
-      if (needsSessions) {
-        const stats = sessionStats.get(member.id);
-        member._therapyStats = {
-          totalSessions: stats?.total || 0,
-          completedSessions: stats?.completed || 0,
-          lastDate: stats?.lastDate || '',
-        };
-      }
-
-      if (needsDiagnosis) {
-        const diagnoses = member.diagnoses || [];
-        member._diagnosisStats = {
+          },
+        } : {}),
+        ...(needsSessions ? {
+          _therapyStats: {
+            totalSessions: therapyStats?.total || 0,
+            completedSessions: therapyStats?.completed || 0,
+            lastDate: therapyStats?.lastDate || '',
+          },
+        } : {}),
+        ...(needsDiagnosis ? {
+          _diagnosisStats: {
           count: diagnoses.length,
           latest: diagnoses.length > 0 ? diagnoses[0].diagnosa : '',
-        };
-      }
+          },
+        } : {}),
+      };
 
       // Build row data based on selected columns
-      const row: Record<string, any> = {};
+      const row: ExportRow = {};
       options.columns.forEach(col => {
         const mapper = COLUMN_MAPPINGS[col];
         if (mapper) {
-          row[COLUMN_LABELS[col] || col] = mapper(member);
+          row[COLUMN_LABELS[col] || col] = mapper(enrichedMember);
         }
       });
 
       // Add grouping key if needed
       if (options.groupBy && options.groupBy !== 'none') {
-        row._groupKey = this.getGroupKey(member, options.groupBy);
+        row._groupKey = this.getGroupKey(enrichedMember, options.groupBy);
       }
 
       return row;
@@ -437,14 +465,14 @@ export class MemberExportService {
   /**
    * Get group key for a member
    */
-  private getGroupKey(member: any, groupBy: string): string {
+  private getGroupKey(member: MemberExportSource, groupBy: string): string {
     switch (groupBy) {
       case 'branch':
         return member.registrationBranch?.name || 'Tidak Ada Cabang';
       case 'packageType': {
         const packages = member.memberPackages || [];
         if (packages.length === 0) return 'Tidak Ada Paket';
-        const types = [...new Set(packages.map((p: any) => p.packageType))];
+        const types = [...new Set(packages.map((p) => p.packageType))];
         return types.join(', ');
       }
       case 'registrationMonth': {
@@ -464,7 +492,7 @@ export class MemberExportService {
   /**
    * Generate CSV from data
    */
-  generateCSV(data: any[], options: ExportOptions): string {
+  generateCSV(data: Array<Record<string, unknown>>, _options: ExportOptions): string {
     if (data.length === 0) return '';
 
     // Remove internal keys
@@ -494,7 +522,7 @@ export class MemberExportService {
   /**
    * Generate XLSX with grouping and totals
    */
-  async generateXLSX(data: any[], options: ExportOptions): Promise<Buffer> {
+  async generateXLSX(data: ExportRow[], options: ExportOptions): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Data Member');
 
@@ -546,9 +574,9 @@ export class MemberExportService {
 
     // Group data if needed
     if (options.groupBy && options.groupBy !== 'none') {
-      const grouped = new Map<string, any[]>();
+      const grouped = new Map<string, ExportRow[]>();
       data.forEach(row => {
-        const key = row._groupKey || 'Lainnya';
+        const key = String(row._groupKey || 'Lainnya');
         if (!grouped.has(key)) {
           grouped.set(key, []);
         }

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect } from 'react';
 import { useLoading } from '@/contexts/LoadingContext';
 import { setLoadingCallbacks } from '@/lib/apiLoadingTracking';
@@ -33,6 +34,7 @@ export function useApiLoadingSafe() {
   try {
     useApiLoading();
   } catch (error) {
+      assertCaughtError(error);
     // Silently fail if not within LoadingProvider
     // This allows the hook to be used optionally
   }

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, Mail, Phone, Save, UserPen, X } from 'lucide-react';
@@ -54,6 +55,7 @@ export default function EditReferralModal({
       });
       onSuccess();
     } catch (error) {
+      assertCaughtError(error);
       setError(getApiErrorMessage(error) || 'Gagal mengupdate kode referral');
     } finally {
       setLoading(false);

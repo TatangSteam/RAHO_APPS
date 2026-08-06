@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { doctorBranchApi, ManagedBranch } from '@/lib/api/doctorBranchApi';
 import { branchesApi, type Branch } from '@/lib/api/branchesApi';
@@ -23,10 +24,11 @@ export default function AdminManagerBranchesPage() {
         doctorBranchApi.getManagedBranches(true),
         branchesApi.getAllBranches(),
       ]);
-      const branchPayload = allData.data?.data || allData.data;
+      const branchPayload = allData.data.data;
       setBranches(managedData);
-      setAllBranches(Array.isArray(branchPayload) ? branchPayload : branchPayload?.branches || []);
-    } catch (err: any) {
+      setAllBranches(branchPayload);
+    } catch (err) {
+      assertCaughtError(err);
       console.error('Failed to load branches:', err);
       alert('Gagal memuat data cabang');
     } finally {
@@ -46,7 +48,8 @@ export default function AdminManagerBranchesPage() {
       setShowAddModal(false);
       setSelectedBranchId('');
       loadData();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       alert(err.response?.data?.error?.message || 'Gagal menambahkan cabang');
     }
   };
@@ -63,7 +66,8 @@ export default function AdminManagerBranchesPage() {
       await doctorBranchApi.removeManagedBranch(branchId);
       alert('Cabang berhasil dihapus dari daftar kelola');
       loadData();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       alert(err.response?.data?.error?.message || 'Gagal menghapus cabang');
     }
   };

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -1060,6 +1061,7 @@ export default function ZohoIntegrationPage() {
           setDiscovery(response.data.data.discovery);
           toast.success('Prasyarat Contact dan Item Zoho berhasil disiapkan.');
         } catch (error) {
+      assertCaughtError(error);
           toast.error(apiErrorMessage(error, 'Zoho terhubung, tetapi konfigurasi otomatis belum selesai. Klik “Siapkan otomatis”.'));
         }
       } else {
@@ -1077,6 +1079,7 @@ export default function ZohoIntegrationPage() {
       const response = await api.get<{ data: { authorizationUrl: string } }>('/integrations/zoho/connect');
       window.location.assign(response.data.data.authorizationUrl);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Tidak dapat memulai otorisasi Zoho.'));
       setAction(null);
     }
@@ -1089,6 +1092,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Koneksi Zoho aktif.');
       await loadStatus();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Pemeriksaan koneksi Zoho gagal.'));
       await loadStatus().catch(() => undefined);
     } finally { setAction(null); }
@@ -1101,6 +1105,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Organisasi aktif diperbarui.');
       await loadStatus();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Gagal memilih organisasi.'));
     } finally { setAction(null); }
   }
@@ -1113,6 +1118,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Koneksi Zoho diputus.');
       await loadStatus();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Gagal memutus koneksi Zoho.'));
     } finally { setAction(null); }
   }
@@ -1125,6 +1131,7 @@ export default function ZohoIntegrationPage() {
       setSelectedEvent(null);
       await loadQueue();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Event tidak dapat diulang.'));
     } finally { setAction(null); }
   }
@@ -1139,6 +1146,7 @@ export default function ZohoIntegrationPage() {
       setSelectedEvent(null);
       await loadQueue();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Event tidak dapat diabaikan.'));
     } finally { setAction(null); }
   }
@@ -1151,6 +1159,7 @@ export default function ZohoIntegrationPage() {
       await loadStatus();
       toast.success('Master Zoho berhasil diperbarui.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Discovery Zoho gagal.'));
     } finally { setAction(null); }
   }
@@ -1163,6 +1172,7 @@ export default function ZohoIntegrationPage() {
       await loadStatus();
       toast.success('Custom field Contact dan account Item berhasil disiapkan.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Prasyarat Zoho tidak dapat disiapkan otomatis.'));
     } finally { setAction(null); }
   }
@@ -1175,6 +1185,7 @@ export default function ZohoIntegrationPage() {
       );
       setContactPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview contact gagal.'));
     } finally { setAction(null); }
   }
@@ -1192,6 +1203,7 @@ export default function ZohoIntegrationPage() {
           : 'Tidak ada kandidat; contact baru dapat dibuat.');
       await loadContacts();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Pencarian contact Zoho gagal.'));
     } finally { setAction(null); }
   }
@@ -1203,6 +1215,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Contact masuk antrean dry-run.' : 'Contact masuk antrean sinkronisasi.');
       await loadContacts();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Contact gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1215,6 +1228,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping disetujui dan update contact masuk antrean.');
       await loadContacts();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping tidak dapat disetujui.'));
     } finally { setAction(null); }
   }
@@ -1227,6 +1241,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Kandidat ditolak. Contact dapat dibuat baru melalui antrean.');
       await loadContacts();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Review tidak dapat ditolak.'));
     } finally { setAction(null); }
   }
@@ -1239,6 +1254,7 @@ export default function ZohoIntegrationPage() {
       );
       setMasterPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview master gagal.'));
     } finally { setAction(null); }
   }
@@ -1256,6 +1272,7 @@ export default function ZohoIntegrationPage() {
           : 'Tidak ada kandidat; master baru dapat dibuat.');
       await loadMasters();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Pencarian master Zoho gagal.'));
     } finally { setAction(null); }
   }
@@ -1267,6 +1284,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Master masuk antrean dry-run.' : 'Master masuk antrean sinkronisasi.');
       await loadMasters();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Master gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1281,6 +1299,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping master disetujui dan dimasukkan ke antrean update.');
       await loadMasters();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping master tidak dapat disetujui.'));
     } finally { setAction(null); }
   }
@@ -1293,6 +1312,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Semua kandidat ditolak.');
       await loadMasters();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Review master tidak dapat ditolak.'));
     } finally { setAction(null); }
   }
@@ -1305,6 +1325,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping account Item disimpan.');
       await Promise.all([loadMasters(), loadStatus()]);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping account tidak dapat disimpan.'));
     } finally { setAction(null); }
   }
@@ -1318,6 +1339,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping UOM disimpan.');
       await loadMasters();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping UOM tidak dapat disimpan.'));
     } finally { setAction(null); }
   }
@@ -1328,6 +1350,7 @@ export default function ZohoIntegrationPage() {
       const response = await api.get<{ data: InvoicePreview }>(`/integrations/zoho/invoices/${row.id}/preview`);
       setInvoicePreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview invoice gagal.'));
     } finally { setAction(null); }
   }
@@ -1339,6 +1362,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Invoice masuk antrean dry-run.' : 'Invoice masuk antrean sinkronisasi.');
       await loadInvoices();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Invoice gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1355,6 +1379,7 @@ export default function ZohoIntegrationPage() {
       toast.success(`Pajak ERP ${percent}% berhasil dipetakan.`);
       await loadInvoices();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping pajak gagal disimpan.'));
     } finally { setAction(null); }
   }
@@ -1367,6 +1392,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping rekening pembayaran disimpan.');
       await loadPayments();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping rekening pembayaran gagal.'));
     } finally { setAction(null); }
   }
@@ -1379,6 +1405,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Mapping metode pembayaran disimpan.');
       await loadPayments();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping metode pembayaran gagal.'));
     } finally { setAction(null); }
   }
@@ -1389,6 +1416,7 @@ export default function ZohoIntegrationPage() {
       const response = await api.get<{ data: PaymentPreview }>(`/integrations/zoho/payments/${row.id}/preview`);
       setPaymentPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview pembayaran gagal.'));
     } finally { setAction(null); }
   }
@@ -1400,6 +1428,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Pembayaran masuk antrean dry-run.' : 'Pembayaran masuk antrean sinkronisasi.');
       await loadPayments();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Pembayaran gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1411,6 +1440,7 @@ export default function ZohoIntegrationPage() {
       setReconciliation(response.data.data);
       toast.success('Rekonsiliasi piutang selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi piutang gagal.'));
     } finally { setAction(null); }
   }
@@ -1423,6 +1453,7 @@ export default function ZohoIntegrationPage() {
       toast.success(`Akun ${accountCode} berhasil dipetakan.`);
       await loadRetainers();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping akun Retainer gagal.'));
     } finally { setAction(null); }
   }
@@ -1434,6 +1465,7 @@ export default function ZohoIntegrationPage() {
       setRetainerReconciliation(response.data.data);
       toast.success('Rekonsiliasi Retainer selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi Retainer gagal.'));
     } finally { setAction(null); }
   }
@@ -1446,6 +1478,7 @@ export default function ZohoIntegrationPage() {
       toast.success(`Akun beban ${accountCode} berhasil dipetakan.`);
       await loadExpenses();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping akun beban gagal.'));
     } finally { setAction(null); }
   }
@@ -1458,6 +1491,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Akun paid-through berhasil dipetakan.');
       await loadExpenses();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Mapping paid-through gagal.'));
     } finally { setAction(null); }
   }
@@ -1468,6 +1502,7 @@ export default function ZohoIntegrationPage() {
       const response = await api.get<{ data: ExpensePreview }>(`/integrations/zoho/expenses/${row.id}/preview`);
       setExpensePreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview expense gagal.'));
     } finally { setAction(null); }
   }
@@ -1479,6 +1514,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Expense masuk antrean dry-run.' : 'Expense masuk antrean sinkronisasi.');
       await loadExpenses();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Expense gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1490,6 +1526,7 @@ export default function ZohoIntegrationPage() {
       setExpenseReconciliation(response.data.data);
       toast.success('Rekonsiliasi expense selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi expense gagal.'));
     } finally { setAction(null); }
   }
@@ -1502,6 +1539,7 @@ export default function ZohoIntegrationPage() {
       );
       setPartnershipPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview shipment Partnership gagal.'));
     } finally { setAction(null); }
   }
@@ -1515,6 +1553,7 @@ export default function ZohoIntegrationPage() {
         : 'Shipment Partnership masuk antrean Zoho.');
       await loadPartnershipSales();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Shipment Partnership gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1528,6 +1567,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Customer Partnership masuk antrean mapping Zoho.');
       await loadPartnershipSales();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Customer Partnership gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1541,6 +1581,7 @@ export default function ZohoIntegrationPage() {
       setPartnershipReconciliation(response.data.data);
       toast.success('Rekonsiliasi penjualan Partnership selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi Partnership gagal.'));
     } finally { setAction(null); }
   }
@@ -1553,6 +1594,7 @@ export default function ZohoIntegrationPage() {
       );
       setPurchaseOrderPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview Purchase Order gagal.'));
     } finally { setAction(null); }
   }
@@ -1568,6 +1610,7 @@ export default function ZohoIntegrationPage() {
           : 'Purchase Order masuk antrean Zoho.');
       await loadPurchaseOrders();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Purchase Order gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1578,6 +1621,7 @@ export default function ZohoIntegrationPage() {
       await api.post(`/integrations/zoho/purchase-orders/${row.id}/dependencies/enqueue`);
       toast.success('Vendor, Item, dan Location masuk antrean mapping.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Dependency Purchase Order gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1591,6 +1635,7 @@ export default function ZohoIntegrationPage() {
       setPurchaseOrderReconciliation(response.data.data);
       toast.success('Rekonsiliasi Purchase Order selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi Purchase Order gagal.'));
     } finally { setAction(null); }
   }
@@ -1603,6 +1648,7 @@ export default function ZohoIntegrationPage() {
       );
       setBillPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview Zoho Bill gagal.'));
     } finally { setAction(null); }
   }
@@ -1614,6 +1660,7 @@ export default function ZohoIntegrationPage() {
       toast.success(status?.dryRun ? 'Bill masuk antrean dry-run.' : 'Bill masuk antrean Zoho.');
       await loadBills();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Bill gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1624,6 +1671,7 @@ export default function ZohoIntegrationPage() {
       await api.post(`/integrations/zoho/bills/${row.id}/dependencies/enqueue`);
       toast.success('Vendor, PO, Item, dan Location masuk antrean mapping.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Dependency Bill gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1637,6 +1685,7 @@ export default function ZohoIntegrationPage() {
       setBillReconciliation(response.data.data);
       toast.success('Rekonsiliasi Bill dan AP selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi Bill gagal.'));
     } finally { setAction(null); }
   }
@@ -1649,6 +1698,7 @@ export default function ZohoIntegrationPage() {
       );
       setVendorPaymentPreview(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Preview Vendor Payment gagal.'));
     } finally { setAction(null); }
   }
@@ -1662,6 +1712,7 @@ export default function ZohoIntegrationPage() {
         : 'Vendor Payment masuk antrean Zoho.');
       await loadVendorPayments();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Vendor Payment gagal dimasukkan ke antrean.'));
     } finally { setAction(null); }
   }
@@ -1675,6 +1726,7 @@ export default function ZohoIntegrationPage() {
       setVendorPaymentReconciliation(response.data.data);
       toast.success('Rekonsiliasi Vendor Payment dan AP selesai.');
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rekonsiliasi Vendor Payment gagal.'));
     } finally { setAction(null); }
   }
@@ -1692,6 +1744,7 @@ export default function ZohoIntegrationPage() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Ekspor adjustment gagal.'));
     } finally { setAction(null); }
   }
@@ -1703,6 +1756,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Reconciliation penuh selesai atau dijadwalkan untuk dilanjutkan.');
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Reconciliation penuh gagal.'));
     } finally { setAction(null); }
   }
@@ -1713,6 +1767,7 @@ export default function ZohoIntegrationPage() {
       await api.post(`/integrations/zoho/webhooks/${id}/correlate`);
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Korelasi webhook gagal.'));
     } finally { setAction(null); }
   }
@@ -1726,6 +1781,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Exception ditandai selesai.');
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Exception gagal diselesaikan.'));
     } finally { setAction(null); }
   }
@@ -1741,6 +1797,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Konfigurasi cutover disimpan dalam mode aman.');
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Konfigurasi cutover gagal.'));
     } finally { setAction(null); }
   }
@@ -1752,6 +1809,7 @@ export default function ZohoIntegrationPage() {
       toast.success(`Mode Zoho berubah menjadi ${mode}.`);
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, `Mode ${mode} belum dapat diaktifkan.`));
     } finally { setAction(null); }
   }
@@ -1763,6 +1821,7 @@ export default function ZohoIntegrationPage() {
       toast.success(`Approval ${area} tersimpan.`);
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Approval gagal.'));
     } finally { setAction(null); }
   }
@@ -1776,6 +1835,7 @@ export default function ZohoIntegrationPage() {
       toast.success('Sinkronisasi Zoho dihentikan. ERP lokal tetap berjalan.');
       await loadOperations();
     } catch (error) {
+      assertCaughtError(error);
       toast.error(apiErrorMessage(error, 'Rollback gagal.'));
     } finally { setAction(null); }
   }

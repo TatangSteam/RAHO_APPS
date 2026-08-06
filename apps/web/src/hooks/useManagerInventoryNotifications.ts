@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   emptyManagerNotificationCounts,
   fetchManagerInventoryNotifications,
@@ -25,27 +26,43 @@ export function useManagerInventoryNotifications(
   const [data, setData] = useState<ManagerInventoryNotifications>(emptyNotifications);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
+  const inFlightRef = useRef<Promise<void> | null>(null);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback((): Promise<void> => {
     if (!enabled) {
       setData(emptyNotifications);
       setLoading(false);
       setError(null);
-      return;
+      return Promise.resolve();
     }
 
-    try {
-      setLoading(true);
-      const notifications = await fetchManagerInventoryNotifications();
-      setData(notifications);
-      setError(null);
-    } catch (err) {
-      devError('Failed to fetch manager inventory notifications:', err);
-      setError('Gagal memuat notifikasi inventori');
-      setData(emptyNotifications);
-    } finally {
-      setLoading(false);
+    if (inFlightRef.current) {
+      return inFlightRef.current;
     }
+
+    const request = (async () => {
+      try {
+        setLoading(true);
+        const notifications = await fetchManagerInventoryNotifications();
+        if (!enabledRef.current) return;
+        setData(notifications);
+        setError(null);
+      } catch (err) {
+      assertCaughtError(err);
+        if (!enabledRef.current) return;
+        devError('Failed to fetch manager inventory notifications:', err);
+        setError('Gagal memuat notifikasi inventori');
+        setData(emptyNotifications);
+      } finally {
+        setLoading(false);
+      }
+    })();
+    inFlightRef.current = request.finally(() => {
+      inFlightRef.current = null;
+    });
+    return inFlightRef.current;
   }, [enabled]);
 
   useEffect(() => {
@@ -55,8 +72,17 @@ export function useManagerInventoryNotifications(
   useEffect(() => {
     if (!enabled || !pollMs) return undefined;
 
-    const intervalId = window.setInterval(refresh, pollMs);
-    return () => window.clearInterval(intervalId);
+    const pollWhenVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void refresh();
+      }
+    };
+    const intervalId = window.setInterval(pollWhenVisible, pollMs);
+    document.addEventListener('visibilitychange', pollWhenVisible);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', pollWhenVisible);
+    };
   }, [enabled, pollMs, refresh]);
 
   return {

@@ -30,8 +30,7 @@ import {
   getStaffPerformanceSummaryService,
   getStaffSessionHistoryService,
 } from './services/staff-performance.service';
-import { StaffBranchAssignmentService } from './services/staff-branch-assignment.service';
-import { sendSuccess, sendCreated, sendNoContent, buildPaginationMeta } from '@utils/response';
+import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
 import { AuditAction, Role } from '@prisma/client';
@@ -42,7 +41,6 @@ import {
   assertTargetInActorScope,
 } from '@modules/iam/authorization.service';
 
-const staffBranchService = new StaffBranchAssignmentService();
 
 export async function listUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
@@ -793,7 +791,7 @@ export async function removeManagedBranch(req: Request, res: Response, next: Nex
  */
 export async function getAllDoctors(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { branchId, managerId, status, page, limit } = req.query;
+    const { branchId, status, page, limit } = req.query;
 
     const options = {
       branchId: branchId as string | undefined,

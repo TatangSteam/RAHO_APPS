@@ -1,4 +1,7 @@
-import { selectTreatmentRevenueSource } from '../treatment-revenue-source';
+import {
+  selectTreatmentPackageUsageIds,
+  selectTreatmentRevenueSource,
+} from '../treatment-revenue-source';
 
 describe('additive treatment revenue source', () => {
   it('always recognizes Basic when no Booster is selected', () => {
@@ -15,5 +18,16 @@ describe('additive treatment revenue source', () => {
       revenuePackageId: 'basic-1',
       revenuePackageIds: ['basic-1', 'booster-1'],
     });
+  });
+
+  it('returns both reserved package ids for a Basic plus Booster usage reversal', () => {
+    expect(selectTreatmentPackageUsageIds('basic-1', 'booster-1')).toEqual([
+      'basic-1',
+      'booster-1',
+    ]);
+  });
+
+  it('does not return a duplicate package id for corrupt same-package input', () => {
+    expect(selectTreatmentPackageUsageIds('basic-1', 'basic-1')).toEqual(['basic-1']);
   });
 });

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import type { PackageDisplay } from '@/types/package';
+import { useEffect, useState, useMemo } from 'react';
+import type { MemberPackage, PackageDisplay, StandaloneAddOn } from '@/types/package';
 import PackageCard from './PackageCard';
 import styles from './MemberPackagesTab.module.css';
 
@@ -11,7 +11,7 @@ interface Props {
   onVerifyPayment?: (packageId: string, packageStatus: string, proofUrl?: string, proofFileName?: string) => void;
   onRefundPackage?: (packageId: string, packageCode: string, finalPrice: number) => void;
   onCancelPackage?: (packageId: string, packageCode: string) => void;
-  onEditPackage?: (purchaseGroupId: string, packages: any[], addOns: any[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
+  onEditPackage?: (purchaseGroupId: string, packages: MemberPackage[], addOns: StandaloneAddOn[], discount: number, discountPercent: number, discountNote: string, notes: string) => void;
   canEditWaitingVerification?: boolean;
   canEditVerified?: boolean;
   onViewRefundDetail?: (refundData: {
@@ -50,11 +50,11 @@ export default function MemberPackagesTab({
   );
 
   // Reset to page 1 when packages change
-  useMemo(() => {
+  useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
       setCurrentPage(1);
     }
-  }, [packages.length, currentPage, totalPages]);
+  }, [currentPage, totalPages]);
 
   if (loading) {
     return (

@@ -1,4 +1,25 @@
 import { api } from './api';
+import type { AddOnType, ExtendedBoosterType, ServiceType } from '@/types/package';
+
+export interface EditPackageData {
+  packages: Array<{
+    pricingId: string;
+    quantity: number;
+    boosterType?: ExtendedBoosterType;
+    serviceType?: ServiceType;
+  }>;
+  addOns?: Array<{
+    type: AddOnType;
+    code: string;
+    name: string;
+    price: number;
+    quantity: number;
+  }>;
+  discountPercent?: number;
+  discountAmount?: number;
+  discountNote?: string;
+  notes?: string;
+}
 
 export interface PackageSelection {
   pricingId: string;
@@ -146,12 +167,7 @@ export const packagesApi = {
   },
 
   // Edit package (PENDING_PAYMENT only)
-  editPackage: async (packageId: string, data: { 
-    quantity?: number; 
-    discount?: number; 
-    discountNote?: string; 
-    notes?: string;
-  }) => {
+  editPackage: async (packageId: string, data: EditPackageData) => {
     const response = await api.put(`/packages/${packageId}`, data);
     return response.data.data || response.data;
   },

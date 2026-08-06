@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -29,21 +30,7 @@ export default function AdminManagerDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DashboardDateRange>('month');
 
-  useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-
-    if (user.role !== 'ADMIN_MANAGER') {
-      router.push('/dashboard');
-      return;
-    }
-
-    loadDashboard();
-  }, [user, dateRange]);
-
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     try {
       setLoading(true);
       const { startDate, endDate } = getDashboardDateRange(dateRange);
@@ -54,12 +41,25 @@ export default function AdminManagerDashboardPage() {
       );
       setData(result);
     } catch (error) {
+      assertCaughtError(error);
       devError('Dashboard error:', error);
       showToast.error('Gagal memuat data dashboard');
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange]);
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (user.role !== 'ADMIN_MANAGER') {
+      router.push('/dashboard');
+      return;
+    }
+    void loadDashboard();
+  }, [loadDashboard, router, user]);
 
   if (loading) {
     return <DashboardLoadingState text="Memuat dashboard..." color="violet" />;
@@ -74,11 +74,6 @@ export default function AdminManagerDashboardPage() {
       />
     );
   }
-
-  // Find top performing branch
-  const topBranch = data.branches.reduce((top, branch) => 
-    branch.stats.monthlyRevenue > (top?.stats.monthlyRevenue || 0) ? branch : top
-  , data.branches[0]);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-4 md:p-6">

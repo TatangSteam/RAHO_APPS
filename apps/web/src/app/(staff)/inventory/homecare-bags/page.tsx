@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError, type CaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -90,14 +91,18 @@ const teamMemberRoles = [
   { value: 'DRIVER', label: 'Driver' },
   { value: 'OTHER', label: 'Lainnya' },
 ] as const;
+type TeamMemberRole = (typeof teamMemberRoles)[number]['value'];
+type HomecareBagStatus = 'ACTIVE' | 'INACTIVE' | 'IN_CHECKING' | 'DAMAGED' | 'LOST';
 
-function unwrapData<T>(response: any, fallback: T): T {
-  const payload = response?.data?.data;
+function unwrapData<T>(response: { data?: unknown }, fallback: T): T {
+  const payload = typeof response.data === 'object' && response.data !== null
+    ? (response.data as { data?: unknown }).data
+    : undefined;
   if (payload === undefined || payload === null) return fallback;
   return payload as T;
 }
 
-function getErrorMessage(error: any, fallback: string) {
+function getErrorMessage(error: CaughtError, fallback: string) {
   return error?.response?.data?.message || error?.response?.data?.error?.message || fallback;
 }
 
@@ -140,7 +145,12 @@ export default function HomecareBagsPage() {
   const [stockLoading, setStockLoading] = useState(false);
 
   const [teamForm, setTeamForm] = useState({ name: '', teamCode: '', branchId: '', description: '' });
-  const [manageMemberState, setManageMemberState] = useState({
+  const [manageMemberState, setManageMemberState] = useState<{
+    teamId: string;
+    userId: string;
+    role: TeamMemberRole;
+    notes: string;
+  }>({
     teamId: '',
     userId: '',
     role: 'ADMIN_LAYANAN',
@@ -153,7 +163,7 @@ export default function HomecareBagsPage() {
     assignNotes: string;
     createName: string;
     createBagCode: string;
-    createStatus: string;
+    createStatus: HomecareBagStatus;
     createNotes: string;
   }>({
     teamId: '',
@@ -246,6 +256,7 @@ export default function HomecareBagsPage() {
       const response = await inventoryApi.getHomecareBagStock(bagId);
       setBagStock(unwrapData<HomecareBagStockDetail | null>(response, null));
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load homecare bag stock:', error);
       setBagStock(null);
       showToast.error('Gagal memuat stok tas');
@@ -297,6 +308,7 @@ export default function HomecareBagsPage() {
         setStaffOptions(unwrapData<HomecareStaffOption[]>(staffResponse, []));
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load homecare logistics data:', error);
       showToast.error('Gagal memuat data tas homecare');
     } finally {
@@ -329,7 +341,7 @@ export default function HomecareBagsPage() {
     if (selectedBagId) await loadBagStock(selectedBagId);
   };
 
-  const updateRow = <T extends Record<string, any>>(
+  const updateRow = <T extends object>(
     rows: T[],
     setRows: (rows: T[]) => void,
     index: number,
@@ -338,7 +350,7 @@ export default function HomecareBagsPage() {
     setRows(rows.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)));
   };
 
-  const removeRow = <T extends Record<string, any>>(rows: T[], setRows: (rows: T[]) => void, index: number) => {
+  const removeRow = <T extends object>(rows: T[], setRows: (rows: T[]) => void, index: number) => {
     setRows(rows.length === 1 ? rows : rows.filter((_, rowIndex) => rowIndex !== index));
   };
 
@@ -374,7 +386,8 @@ export default function HomecareBagsPage() {
       });
       setTeamForm((current) => ({ ...current, name: '', teamCode: '', description: '' }));
       await resetAfterAction('Tim homecare berhasil dibuat');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal membuat tim homecare'));
     } finally {
       setActionLoading(false);
@@ -391,12 +404,13 @@ export default function HomecareBagsPage() {
       setActionLoading(true);
       await inventoryApi.addHomecareTeamMember(manageMemberState.teamId, {
         userId: manageMemberState.userId,
-        role: manageMemberState.role as any,
+        role: manageMemberState.role,
         notes: manageMemberState.notes.trim() || undefined,
       });
       setManageMemberState((current) => ({ ...current, userId: '', notes: '' }));
       await resetAfterAction('Anggota tim berhasil ditambahkan');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menambahkan anggota tim'));
     } finally {
       setActionLoading(false);
@@ -410,7 +424,8 @@ export default function HomecareBagsPage() {
       setActionLoading(true);
       await inventoryApi.removeHomecareTeamMember(teamId, userId, 'Dinonaktifkan dari halaman operasional tas');
       await resetAfterAction('Anggota tim berhasil dinonaktifkan');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menonaktifkan anggota tim'));
     } finally {
       setActionLoading(false);
@@ -426,7 +441,8 @@ export default function HomecareBagsPage() {
       if (manageBagState.teamId === teamId) closeManageBag();
       if (manageMemberState.teamId === teamId) closeManageMembers();
       await resetAfterAction('Tim homecare berhasil dihapus');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menghapus tim homecare'));
     } finally {
       setActionLoading(false);
@@ -496,12 +512,13 @@ export default function HomecareBagsPage() {
         teamId: team.id,
         branchId: team.branchId,
         bagCode: manageBagState.createBagCode.trim() || undefined,
-        status: manageBagState.createStatus as any,
+        status: manageBagState.createStatus,
         notes: manageBagState.createNotes.trim() || undefined,
       });
       closeManageBag();
       await resetAfterAction('Tas homecare berhasil dibuat untuk tim');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal membuat tas homecare'));
     } finally {
       setActionLoading(false);
@@ -522,7 +539,8 @@ export default function HomecareBagsPage() {
       });
       closeManageBag();
       await resetAfterAction('Tas berhasil dipindahkan ke tim');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal assign tas ke tim'));
     } finally {
       setActionLoading(false);
@@ -540,7 +558,8 @@ export default function HomecareBagsPage() {
         setBagStock(null);
       }
       await resetAfterAction('Tas homecare berhasil dihapus');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menghapus tas homecare'));
     } finally {
       setActionLoading(false);
@@ -571,7 +590,8 @@ export default function HomecareBagsPage() {
       setRequestForm((current) => ({ ...current, requestNotes: '' }));
       setRequestRows([{ masterProductId: '', quantity: '', notes: '' }]);
       await resetAfterAction('Request stok tas berhasil dibuat');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || getErrorMessage(error, 'Gagal membuat request stok tas'));
     } finally {
       setActionLoading(false);
@@ -630,7 +650,8 @@ export default function HomecareBagsPage() {
       setSelectedRequest(null);
       setRequestAction(null);
       await resetAfterAction('Request stok tas berhasil disetujui');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menyetujui request'));
     } finally {
       setActionLoading(false);
@@ -649,7 +670,8 @@ export default function HomecareBagsPage() {
       setSelectedRequest(null);
       setRequestAction(null);
       await resetAfterAction('Request stok tas ditolak');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menolak request'));
     } finally {
       setActionLoading(false);
@@ -686,7 +708,8 @@ export default function HomecareBagsPage() {
       setSelectedShipment(null);
       setShipmentAction(null);
       await resetAfterAction('Shipment tas berhasil dikirim');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal mengirim shipment tas'));
     } finally {
       setActionLoading(false);
@@ -723,7 +746,8 @@ export default function HomecareBagsPage() {
       setSelectedShipment(null);
       setShipmentAction(null);
       await resetAfterAction(discrepancies.length ? 'Shipment diterima dengan catatan' : 'Shipment tas berhasil diterima');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal menerima shipment tas'));
     } finally {
       setActionLoading(false);
@@ -753,7 +777,8 @@ export default function HomecareBagsPage() {
       setUsageNotes('');
       setUsageRows([{ masterProductId: '', quantity: '', notes: '' }]);
       await resetAfterAction('Pemakaian stok tas berhasil dicatat');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || getErrorMessage(error, 'Gagal mencatat pemakaian stok tas'));
     } finally {
       setActionLoading(false);
@@ -785,7 +810,8 @@ export default function HomecareBagsPage() {
       setReturnNotes('');
       setReturnRows([{ masterProductId: '', quantity: '', notes: '', isReusable: true, condition: 'BAIK' }]);
       await resetAfterAction('Retur stok tas berhasil dicatat');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || getErrorMessage(error, 'Gagal mencatat retur stok tas'));
     } finally {
       setActionLoading(false);
@@ -836,7 +862,8 @@ export default function HomecareBagsPage() {
       setOpnameNotes('');
       setOpnameRows([{ masterProductId: '', physicalQty: '', notes: '' }]);
       await resetAfterAction('Opname tas berhasil dicatat');
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(getErrorMessage(error, 'Gagal mencatat opname tas'));
     } finally {
       setActionLoading(false);
@@ -1505,7 +1532,7 @@ export default function HomecareBagsPage() {
                           </div>
                           <InputField label="Nama Tas" value={manageBagState.createName} onChange={(value) => setManageBagState((current) => ({ ...current, createName: value, teamId: team.id }))} />
                           <InputField label="Kode Tas" value={manageBagState.createBagCode} onChange={(value) => setManageBagState((current) => ({ ...current, createBagCode: value, teamId: team.id }))} placeholder="Auto jika kosong" />
-                          <SelectField label="Status" value={manageBagState.createStatus} onChange={(value) => setManageBagState((current) => ({ ...current, createStatus: value, teamId: team.id }))}>
+                          <SelectField label="Status" value={manageBagState.createStatus} onChange={(value) => setManageBagState((current) => ({ ...current, createStatus: value as HomecareBagStatus, teamId: team.id }))}>
                             <option value="ACTIVE">Aktif</option>
                             <option value="IN_CHECKING">Dalam Pengecekan</option>
                             <option value="DAMAGED">Rusak</option>
@@ -1545,7 +1572,7 @@ export default function HomecareBagsPage() {
                         <option value="">Pilih staff</option>
                         {staffOptions.map((staff) => <option key={staff.userId} value={staff.userId}>{staff.fullName} · {staff.role}</option>)}
                       </SelectField>
-                      <SelectField label="Role Tim" value={manageMemberState.role} onChange={(value) => setManageMemberState((current) => ({ ...current, role: value, teamId: team.id }))}>
+                      <SelectField label="Role Tim" value={manageMemberState.role} onChange={(value) => setManageMemberState((current) => ({ ...current, role: value as TeamMemberRole, teamId: team.id }))}>
                         {teamMemberRoles.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                       </SelectField>
                       <InputField label="Catatan" value={manageMemberState.notes} onChange={(value) => setManageMemberState((current) => ({ ...current, notes: value, teamId: team.id }))} />

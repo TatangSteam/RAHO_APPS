@@ -86,12 +86,6 @@ describe('Impersonation Error Cases - Integration Tests', () => {
       
       // This would be caught by authenticate middleware in real scenario
       // Here we simulate the error
-      const mockError = {
-        status: 401,
-        code: 'UNAUTHORIZED',
-        message: 'Token autentikasi diperlukan'
-      };
-
       await getAdminManagers(mockRequest as Request, mockResponse as Response, mockNext);
 
       // In real scenario, authenticate middleware would catch this

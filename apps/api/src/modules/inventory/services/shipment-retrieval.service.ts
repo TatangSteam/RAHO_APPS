@@ -1,10 +1,98 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { ShipmentStatus, StockMutationType } from '@prisma/client';
+import { Prisma, ShipmentStatus, StockMutationType } from '@prisma/client';
 import {
   formatStockRequestQuantity,
   getStockRequestUnit,
 } from './stock-request-units';
+
+const shipmentListInclude = {
+  items: { include: { masterProduct: true } },
+  fromBranch: true,
+  toBranch: true,
+  discrepancies: { include: { masterProduct: true } },
+  receipts: {
+    select: {
+      id: true,
+      receiptNumber: true,
+      isFinal: true,
+      totalQuantity: true,
+      quarantinedQuantity: true,
+      receivedAt: true,
+    },
+    orderBy: { receivedAt: 'asc' as const },
+  },
+  stockRequest: {
+    select: {
+      id: true,
+      requestCode: true,
+      status: true,
+      branch: { select: { id: true, name: true, type: true } },
+      items: {
+        select: {
+          masterProductId: true,
+          requestedQty: true,
+          overstockDeducted: true,
+          finalQty: true,
+        },
+      },
+      invoice: {
+        select: {
+          id: true,
+          invoiceNumber: true,
+          totalAmount: true,
+          status: true,
+          paymentVerificationStatus: true,
+          paymentProofUrl: true,
+          paymentProofFileName: true,
+          paidAt: true,
+        },
+      },
+    },
+  },
+  internalTransfer: {
+    include: {
+      dispatchInventoryPosting: { select: { postingNumber: true } },
+      receiptInventoryPosting: { select: { postingNumber: true } },
+      dispatchJournalEntry: { select: { journalNumber: true } },
+      receiptJournalEntry: { select: { journalNumber: true } },
+    },
+  },
+} satisfies Prisma.ShipmentInclude;
+
+const shipmentDetailInclude = {
+  items: { include: { masterProduct: true } },
+  fromBranch: true,
+  toBranch: true,
+  discrepancies: { include: { masterProduct: true } },
+  receipts: {
+    include: {
+      items: { include: { shipmentItem: { include: { masterProduct: true } } } },
+      discrepancies: true,
+    },
+    orderBy: { receivedAt: 'asc' as const },
+  },
+  stockRequest: {
+    include: {
+      branch: true,
+      items: { include: { masterProduct: true } },
+      invoice: { include: { items: { include: { masterProduct: true } } } },
+    },
+  },
+  internalTransfer: shipmentListInclude.internalTransfer,
+} satisfies Prisma.ShipmentInclude;
+
+type ShipmentForList = Prisma.ShipmentGetPayload<{ include: typeof shipmentListInclude }>;
+type ShipmentForDetail = Prisma.ShipmentGetPayload<{ include: typeof shipmentDetailInclude }>;
+type ShipmentStockMutation = Prisma.StockMutationGetPayload<{
+  select: {
+    id: true;
+    referenceId: true;
+    stockBefore: true;
+    stockAfter: true;
+    quantity: true;
+    inventoryItem: { select: { masterProductId: true } };
+  };
+}>;
 
 /**
  * Service for retrieving shipments
@@ -22,7 +110,7 @@ export class ShipmentRetrievalService {
       return [];
     }
 
-    const where: any = {};
+    const where: Prisma.ShipmentWhereInput = {};
 
     if (branchIds && branchIds.length > 0) {
       where.OR = [
@@ -36,19 +124,17 @@ export class ShipmentRetrievalService {
     }
 
     if (dateRange?.startDate || dateRange?.endDate) {
-      where.createdAt = {};
-
+      let start: Date | undefined;
+      let end: Date | undefined;
       if (dateRange.startDate) {
-        const start = new Date(dateRange.startDate);
+        start = new Date(dateRange.startDate);
         start.setHours(0, 0, 0, 0);
-        where.createdAt.gte = start;
       }
-
       if (dateRange.endDate) {
-        const end = new Date(dateRange.endDate);
+        end = new Date(dateRange.endDate);
         end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
       }
+      where.createdAt = { ...(start ? { gte: start } : {}), ...(end ? { lte: end } : {}) };
     }
 
     const shipments = await prisma.shipment.findMany({
@@ -125,7 +211,7 @@ export class ShipmentRetrievalService {
 
     // Query stock mutations separately for all shipments
     const shipmentIds = shipments.map(s => s.id);
-    const stockMutationsMap: Map<string, any> = new Map();
+    const stockMutationsMap = new Map<string, ShipmentStockMutation>();
 
     if (shipmentIds.length > 0) {
       const stockMutations = await prisma.stockMutation.findMany({
@@ -233,7 +319,10 @@ export class ShipmentRetrievalService {
   /**
    * Format shipment for list response
    */
-  private formatShipment(shipment: any, stockMutationsMap?: Map<string, any>) {
+  private formatShipment(
+    shipment: ShipmentForList | ShipmentForDetail,
+    stockMutationsMap?: Map<string, ShipmentStockMutation>,
+  ) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -257,13 +346,13 @@ export class ShipmentRetrievalService {
       receiptFileSize: shipment.receiptFileSize,
       receiptMimeType: shipment.receiptMimeType,
       itemCount: shipment.items.length,
-      totalItems: shipment.items.reduce((sum: number, item: any) => (
+      totalItems: shipment.items.reduce((sum, item) => (
         sum + formatStockRequestQuantity(item.masterProduct, item.sentQty)
       ), 0),
       hasDiscrepancies: shipment.discrepancies?.length > 0,
       discrepancyCount: shipment.discrepancies?.length || 0,
       receiptCount: shipment.receipts?.length || 0,
-      items: shipment.items.map((item: any) => {
+      items: shipment.items.map((item) => {
         // Get original requestedQty and overstock info from StockRequestItem
         let originalRequestedQty = Number(item.sentQty); // Default to sentQty
         let overstockDeducted = 0;
@@ -271,7 +360,7 @@ export class ShipmentRetrievalService {
         // Try to get from StockRequestItem for accurate original request info
         if (shipment.stockRequest?.items) {
           const stockRequestItem = shipment.stockRequest.items.find(
-            (sri: any) => sri.masterProductId === item.masterProductId
+            (sri) => sri.masterProductId === item.masterProductId
           );
           if (stockRequestItem) {
             originalRequestedQty = Number(stockRequestItem.requestedQty);
@@ -364,14 +453,14 @@ export class ShipmentRetrievalService {
   /**
    * Format shipment for detail response
    */
-  private formatShipmentDetail(shipment: any) {
+  private formatShipmentDetail(shipment: ShipmentForDetail) {
     const base = this.formatShipment(shipment);
 
     return {
       ...base,
       shipmentPhotoName: shipment.shipmentPhotoName,
       // Full discrepancies
-      discrepancies: shipment.discrepancies?.map((d: any) => ({
+      discrepancies: shipment.discrepancies?.map((d) => ({
         id: d.id,
         masterProductId: d.masterProductId,
         productName: d.productName,
@@ -386,7 +475,7 @@ export class ShipmentRetrievalService {
         reportedBy: d.reportedBy,
         createdAt: d.createdAt?.toISOString(),
       })) || [],
-      receipts: shipment.receipts?.map((receipt: any) => ({
+      receipts: shipment.receipts?.map((receipt) => ({
         id: receipt.id,
         receiptNumber: receipt.receiptNumber,
         isFinal: receipt.isFinal,
@@ -397,7 +486,7 @@ export class ShipmentRetrievalService {
         evidenceFileName: receipt.evidenceFileName,
         receivedBy: receipt.receivedBy,
         receivedAt: receipt.receivedAt?.toISOString(),
-        items: receipt.items?.map((item: any) => ({
+        items: receipt.items?.map((item) => ({
           masterProductId: item.shipmentItem.masterProductId,
           productName: item.shipmentItem.masterProduct.name,
           receivedQty: Number(item.receivedQty),
@@ -414,7 +503,7 @@ export class ShipmentRetrievalService {
         branchId: shipment.stockRequest.branch?.id,
         branchName: shipment.stockRequest.branch?.name,
         branchType: shipment.stockRequest.branch?.type,
-        items: shipment.stockRequest.items?.map((item: any) => ({
+        items: shipment.stockRequest.items?.map((item) => ({
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.masterProduct.name,
@@ -432,7 +521,7 @@ export class ShipmentRetrievalService {
           paymentProofUrl: shipment.stockRequest.invoice.paymentProofUrl,
           paymentProofFileName: shipment.stockRequest.invoice.paymentProofFileName,
           paidAt: shipment.stockRequest.invoice.paidAt?.toISOString(),
-          items: shipment.stockRequest.invoice.items?.map((item: any) => ({
+          items: shipment.stockRequest.invoice.items?.map((item) => ({
             id: item.id,
             masterProductId: item.masterProductId,
             sku: item.sku,

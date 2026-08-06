@@ -1,62 +1,58 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { extractKeyFromUrl, s3Client } from '../../../config/minio';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '../../../config/env';
 import { Readable } from 'stream';
-import { InvoiceStatus, Role } from '@prisma/client';
+import { InvoiceStatus, Prisma, Role } from '@prisma/client';
 import { createReadStream, existsSync, statSync } from 'fs';
 import path from 'path';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '../../iam/authorization.service';
 import { PERMISSIONS } from '../../iam/permission-catalog';
+
+const invoiceInclude = {
+  member: {
+    include: {
+      referralCode: true,
+      user: { include: { profile: true } },
+    },
+  },
+  branch: true,
+  createdByUser: { include: { profile: true } },
+  verifiedByUser: { include: { profile: true } },
+  items: true,
+  payments: {
+    include: {
+      receivedByUser: { include: { profile: true } },
+      verifiedByUser: { include: { profile: true } },
+      cashBankAccount: { select: { id: true, code: true, name: true, type: true } },
+    },
+  },
+} satisfies Prisma.InvoiceInclude;
+
+type InvoiceWithDetails = Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
 
 /**
  * Service for invoice retrieval
  */
 export class InvoiceRetrievalService {
   private getInvoiceInclude() {
-    return {
-      member: {
-        include: {
-          referralCode: true,
-          user: {
-            include: {
-              profile: true,
-            },
-          },
-        },
-      },
-      branch: true,
-      createdByUser: {
-        include: {
-          profile: true,
-        },
-      },
-      verifiedByUser: {
-        include: {
-          profile: true,
-        },
-      },
-      items: true,
-      payments: {
-        include: {
-          receivedByUser: {
-            include: {
-              profile: true,
-            },
-          },
-          verifiedByUser: {
-            include: { profile: true },
-          },
-          cashBankAccount: {
-            select: { id: true, code: true, name: true, type: true },
-          },
-        },
-      },
-    };
+    return invoiceInclude;
   }
 
-  private async assertInvoiceAccess(invoice: any, user: { userId: string; role: string }) {
+  private async assertInvoiceAccess(
+    invoice: Pick<InvoiceWithDetails, 'branchId' | 'member'>,
+    user: { userId: string; role: string },
+  ) {
     await assertPermission(user.userId, PERMISSIONS.INVOICE_READ, invoice.branchId);
     if (user.role === Role.MEMBER) {
       if (invoice.member?.userId !== user.userId) {
@@ -102,7 +98,7 @@ export class InvoiceRetrievalService {
       };
     }
 
-    const where: any = user.role === Role.MEMBER
+    const where: Prisma.InvoiceWhereInput = user.role === Role.MEMBER
       ? { member: { is: { userId: user.userId } } }
       : {};
     if (user.role !== Role.MEMBER) {
@@ -110,7 +106,7 @@ export class InvoiceRetrievalService {
     }
 
     if (options.status && Object.values(InvoiceStatus).includes(options.status as InvoiceStatus)) {
-      where.status = options.status;
+      where.status = options.status as InvoiceStatus;
     }
 
     const search = options.search?.trim();
@@ -161,18 +157,18 @@ export class InvoiceRetrievalService {
     }
 
     const [invoices, total] = await Promise.all([
-      (prisma as any).invoice.findMany({
+      prisma.invoice.findMany({
         where,
         include: this.getInvoiceInclude(),
         orderBy: { createdAt: 'desc' },
         skip,
         take: limit,
       }),
-      (prisma as any).invoice.count({ where }),
+      prisma.invoice.count({ where }),
     ]);
 
     return {
-      data: await Promise.all(invoices.map((invoice: any) => this.formatInvoice(invoice))),
+      data: await Promise.all(invoices.map((invoice) => this.formatInvoice(invoice))),
       pagination: {
         page,
         limit,
@@ -186,7 +182,7 @@ export class InvoiceRetrievalService {
    * Get invoice by ID
    */
   async getInvoiceById(invoiceId: string, user: { userId: string; role: string }) {
-    const invoice = await (prisma as any).invoice.findUnique({
+    const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
       include: this.getInvoiceInclude(),
     });
@@ -204,7 +200,7 @@ export class InvoiceRetrievalService {
    * Get invoice by package/add-on ID
    */
   async getInvoiceByPackageId(packageId: string, user: { userId: string; role: string }) {
-    const invoice = await (prisma as any).invoice.findFirst({
+    const invoice = await prisma.invoice.findFirst({
       where: {
         items: {
           some: {
@@ -244,20 +240,20 @@ export class InvoiceRetrievalService {
       await assertPermission(user.userId, PERMISSIONS.INVOICE_READ, member.registrationBranchId);
       await assertBranchAccess(user.userId, member.registrationBranchId);
     }
-    const invoices = await (prisma as any).invoice.findMany({
+    const invoices = await prisma.invoice.findMany({
       where: { memberId },
       include: this.getInvoiceInclude(),
       orderBy: { createdAt: 'desc' },
     });
 
-    return Promise.all(invoices.map((inv: any) => this.formatInvoice(inv)));
+    return Promise.all(invoices.map((inv) => this.formatInvoice(inv)));
   }
 
   /**
    * Get payment proof image (returns private stream)
    */
   async getPaymentProofImage(paymentId: string, user: { userId: string; role: string; branchId: string | null }) {
-    const payment = await (prisma as any).invoicePayment.findUnique({
+    const payment = await prisma.invoicePayment.findUnique({
       where: { id: paymentId },
       select: {
         proofFileUrl: true,
@@ -319,7 +315,7 @@ export class InvoiceRetrievalService {
         fileName: payment.proofFileName,
         mimeType: payment.proofMimeType,
       };
-    } catch (error: any) {
+    } catch (error) {
       const localFile = this.getLocalPaymentProofFile(key, payment);
       if (localFile) {
         return localFile;
@@ -329,7 +325,10 @@ export class InvoiceRetrievalService {
     }
   }
 
-  private getLocalPaymentProofFile(key: string, payment: any) {
+  private getLocalPaymentProofFile(
+    key: string,
+    payment: { proofFileName: string | null; proofMimeType: string | null },
+  ) {
     const cleanKey = key.split('?')[0];
     const cwd = path.resolve(process.cwd());
     const localPath = path.resolve(cwd, cleanKey);
@@ -363,7 +362,7 @@ export class InvoiceRetrievalService {
   /**
    * Format invoice for API response
    */
-  async formatInvoice(invoice: any) {
+  async formatInvoice(invoice: InvoiceWithDetails) {
     const groupPayments = invoice.paymentGroupId
       ? await prisma.invoicePayment.findMany({
           where: {
@@ -391,8 +390,8 @@ export class InvoiceRetrievalService {
     
     // Get package IDs from invoice items
     const packageIds = invoice.items
-      .filter((item: any) => item.itemType === 'PACKAGE')
-      .map((item: any) => item.itemId);
+      .filter((item) => item.itemType === 'PACKAGE')
+      .map((item) => item.itemId);
     
     if (packageIds.length > 0 && invoice.member.referralCode) {
       // Get incentive records for these packages
@@ -434,7 +433,7 @@ export class InvoiceRetrievalService {
     }
 
     const items = await this.formatInvoiceItems(invoice);
-    const displaySubtotal = items.reduce((sum: number, item: any) => sum + Number(item.subtotal || 0), 0);
+    const displaySubtotal = items.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
     const shouldUseDisplaySubtotal =
       invoice.paymentPlanType === 'INSTALLMENT' &&
       invoice.status === 'PENDING_PAYMENT' &&
@@ -442,10 +441,10 @@ export class InvoiceRetrievalService {
       Number(invoice.subtotal || 0) === 0 &&
       displaySubtotal > 0;
 
-    const customerSnapshot = invoice.customerSnapshot as any;
-    const branchSnapshot = invoice.branchSnapshot as any;
+    const customerSnapshot = asRecord(invoice.customerSnapshot);
+    const branchSnapshot = asRecord(invoice.branchSnapshot);
     const memberName =
-      customerSnapshot?.name ||
+      optionalString(customerSnapshot.name) ||
       invoice.member?.user?.profile?.fullName ||
       invoice.member?.user?.email ||
       invoice.member?.memberNo ||
@@ -464,9 +463,9 @@ export class InvoiceRetrievalService {
       invoiceNumber: invoice.invoiceNumber,
       memberId: invoice.memberId,
       memberName,
-      memberNo: customerSnapshot?.memberNo || invoice.member?.memberNo,
+      memberNo: optionalString(customerSnapshot.memberNo) || invoice.member?.memberNo,
       branchId: invoice.branchId,
-      branchName: branchSnapshot?.name || invoice.branch?.name,
+      branchName: optionalString(branchSnapshot.name) || invoice.branch?.name,
       currency: invoice.currency || 'IDR',
       finalizedAt: invoice.finalizedAt?.toISOString(),
       snapshotVersion: invoice.snapshotVersion,
@@ -513,7 +512,7 @@ export class InvoiceRetrievalService {
       
       // Relations
       items,
-      payments: groupPayments.map((payment: any) => ({
+      payments: groupPayments.map((payment) => ({
         id: payment.id,
         amount: Number(payment.amount),
         paymentMethod: payment.paymentMethod,
@@ -542,8 +541,8 @@ export class InvoiceRetrievalService {
     };
   }
 
-  private async formatInvoiceItems(invoice: any) {
-    const formattedItems = invoice.items.map((item: any) => ({
+  private async formatInvoiceItems(invoice: InvoiceWithDetails) {
+    const formattedItems = invoice.items.map((item) => ({
       id: item.id,
       itemType: item.itemType,
       itemId: item.itemId,
@@ -561,18 +560,18 @@ export class InvoiceRetrievalService {
       invoice.status === 'PENDING_PAYMENT' &&
       Number(invoice.totalAmount || 0) === 0 &&
       formattedItems.length > 0 &&
-      formattedItems.every((item: any) => Number(item.totalAmount || 0) === 0);
+      formattedItems.every((item) => Number(item.totalAmount || 0) === 0);
 
     if (!shouldHydrateOpenInstallmentPrices) {
       return formattedItems;
     }
 
     const packageIds = formattedItems
-      .filter((item: any) => item.itemType === 'PACKAGE')
-      .map((item: any) => item.itemId);
+      .filter((item) => item.itemType === 'PACKAGE')
+      .map((item) => item.itemId);
     const addOnIds = formattedItems
-      .filter((item: any) => item.itemType === 'ADDON')
-      .map((item: any) => item.itemId);
+      .filter((item) => item.itemType === 'ADDON')
+      .map((item) => item.itemId);
 
     const [packages, addOns] = await Promise.all([
       packageIds.length > 0
@@ -589,23 +588,23 @@ export class InvoiceRetrievalService {
         : [],
     ]);
 
-    const packagePriceById = new Map(
-      packages.map((pkg: any) => [
+    const packagePriceById = new Map<string, number>(
+      packages.map((pkg) => [
         pkg.id,
         Number(pkg.finalPrice || 0) + Number(pkg.discountAmount || 0),
-      ])
+      ] as const)
     );
-    const addOnPriceById = new Map(
-      addOns.map((addon: any) => [
+    const addOnPriceById = new Map<string, { totalPrice: number; pricePerUnit: number }>(
+      addOns.map((addon) => [
         addon.id,
         {
           totalPrice: Number(addon.totalPrice || 0),
           pricePerUnit: Number(addon.pricePerUnit || 0),
         },
-      ])
+      ] as const)
     );
 
-    return formattedItems.map((item: any) => {
+    return formattedItems.map((item) => {
       if (item.itemType === 'PACKAGE') {
         const price = packagePriceById.get(item.itemId) || 0;
         return {

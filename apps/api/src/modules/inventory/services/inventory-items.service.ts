@@ -1,6 +1,33 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { Prisma, ProductCategory, StockMutationType } from '@prisma/client';
 import { UnitConversionService } from './unit-conversion.service';
+
+interface InventoryItemWithProduct {
+  id: string;
+  masterProductId: string;
+  branchId: string;
+  stock: unknown;
+  minThreshold: unknown;
+  storageLocation: string | null;
+  masterProduct: {
+    id: string;
+    name: string;
+    category: ProductCategory;
+    unit: string;
+    baseUnit: string;
+    usageUnit: string;
+    conversionFactor: unknown;
+    description: string | null;
+  };
+}
+
+export interface CreatedInventoryItemSummary {
+  id: string;
+  name: string;
+  category: ProductCategory;
+  stock: number;
+  minThreshold: number;
+}
 
 /**
  * Service for inventory items management with unit conversion support
@@ -80,7 +107,7 @@ export class InventoryItemsService {
    * Get low stock items with unit conversion info
    */
   async getLowStockItems(branchId?: string) {
-    const where: any = {};
+    const where: Prisma.InventoryItemWhereInput = {};
     
     if (branchId) {
       where.branchId = branchId;
@@ -126,7 +153,7 @@ export class InventoryItemsService {
   /**
    * Format inventory item with unit conversion information
    */
-  private formatInventoryItemWithConversion(item: any) {
+  private formatInventoryItemWithConversion(item: InventoryItemWithProduct) {
     const baseStock = Number(item.stock);
     const conversionFactor = Number(item.masterProduct.conversionFactor);
     const usageStock = UnitConversionService.baseToUsage(baseStock, conversionFactor);
@@ -310,7 +337,11 @@ export class InventoryItemsService {
     }
     // If masterProductId is provided, use existing master product
     if (data.masterProductId) {
-      return await this.createInventoryItemFromMasterProduct(data, branchId, userId);
+      return await this.createInventoryItemFromMasterProduct(
+        { ...data, masterProductId: data.masterProductId },
+        branchId,
+        userId,
+      );
     }
 
     // Otherwise, create new master product (legacy behavior)
@@ -320,7 +351,7 @@ export class InventoryItemsService {
       const masterProduct = await tx.masterProduct.create({
         data: {
           name: data.name!,
-          category: data.category!,
+          category: data.category as ProductCategory,
           baseUnit: data.baseUnit!,
           usageUnit: data.usageUnit!,
           conversionFactor: data.conversionFactor!,
@@ -348,7 +379,7 @@ export class InventoryItemsService {
         await tx.stockMutation.create({
           data: {
             inventoryItemId: inventoryItem.id,
-            type: 'INITIAL_STOCK',
+            type: StockMutationType.ADJUSTMENT,
             quantity: data.stock,
             stockBefore: 0,
             stockAfter: data.stock,
@@ -437,7 +468,7 @@ export class InventoryItemsService {
         await tx.stockMutation.create({
           data: {
             inventoryItemId: inventoryItem.id,
-            type: 'INITIAL_STOCK',
+            type: StockMutationType.ADJUSTMENT,
             quantity: stock,
             stockBefore: 0,
             stockAfter: stock,
@@ -516,9 +547,11 @@ export class InventoryItemsService {
 
     const result = await prisma.$transaction(async (tx) => {
       // Update master product if needed
-      const masterProductUpdates: any = {};
+      const masterProductUpdates: Prisma.MasterProductUpdateInput = {};
       if (data.name !== undefined) masterProductUpdates.name = data.name;
-      if (data.category !== undefined) masterProductUpdates.category = data.category;
+      if (data.category !== undefined) {
+        masterProductUpdates.category = data.category as ProductCategory;
+      }
       if (data.baseUnit !== undefined) {
         masterProductUpdates.baseUnit = data.baseUnit;
         masterProductUpdates.unit = data.baseUnit; // Legacy field
@@ -534,7 +567,7 @@ export class InventoryItemsService {
       }
 
       // Update inventory item
-      const inventoryUpdates: any = {};
+      const inventoryUpdates: Prisma.InventoryItemUpdateInput = {};
       if (data.minThreshold !== undefined) inventoryUpdates.minThreshold = data.minThreshold;
       if (data.storageLocation !== undefined) inventoryUpdates.storageLocation = data.storageLocation;
 
@@ -585,14 +618,14 @@ export class InventoryItemsService {
     return {
       success: true,
       message: 'Item inventori berhasil diperbarui',
-      item: this.formatInventoryItemWithConversion(result),
+      item: this.formatInventoryItemWithConversion(result!),
     };
   }
 
   /**
    * Delete inventory item (soft delete by setting stock to 0 and marking as inactive)
    */
-  async deleteInventoryItem(itemId: string, userId: string) {
+  async deleteInventoryItem(itemId: string, _userId: string) {
     const item = await prisma.inventoryItem.findUnique({
       where: { id: itemId },
       include: { masterProduct: true },
@@ -667,7 +700,7 @@ export class InventoryItemsService {
   }>, branchId: string, userId: string) {
     let created = 0;
     let skipped = 0;
-    const createdItems: any[] = [];
+    const createdItems: CreatedInventoryItemSummary[] = [];
     const errors: string[] = [];
 
     // Process each item in a transaction
@@ -727,7 +760,7 @@ export class InventoryItemsService {
             await tx.stockMutation.create({
               data: {
                 inventoryItemId: inventoryItem.id,
-                type: 'INITIAL_STOCK',
+                type: StockMutationType.ADJUSTMENT,
                 quantity: stock,
                 stockBefore: 0,
                 stockAfter: stock,
@@ -747,7 +780,7 @@ export class InventoryItemsService {
             minThreshold: minThreshold,
           });
           created++;
-        } catch (err: any) {
+        } catch (err) {
           errors.push(`Error creating item: ${err.message}`);
           skipped++;
         }

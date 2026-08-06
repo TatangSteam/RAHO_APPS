@@ -1,4 +1,4 @@
-import { AccountType, CashBankTransactionType, Prisma } from '@prisma/client';
+import { CashBankTransactionType, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
@@ -30,16 +30,26 @@ function branchWhere(branchIds: string[] | null): Prisma.JournalLineWhereInput {
   return branchIds === null ? {} : { branchId: { in: branchIds } };
 }
 
-async function ledgerLines(branchIds: string[] | null, from: Date | undefined, to: Date, accountCode?: string) {
+async function ledgerLines(
+  branchIds: string[] | null,
+  from: Date | undefined,
+  to: Date,
+  accountCode?: string | string[],
+) {
+  const accountWhere: Prisma.JournalLineWhereInput = accountCode === undefined
+    ? {}
+    : Array.isArray(accountCode)
+      ? { account: { code: { in: accountCode } } }
+      : { account: { code: accountCode } };
   const rows = await prisma.journalLine.findMany({
     where: {
       ...branchWhere(branchIds),
-      ...(accountCode ? { account: { code: accountCode } } : {}),
+      ...accountWhere,
       journalEntry: { status: 'POSTED', transactionDate: { ...(from ? { gte: from } : {}), lte: to } },
     },
-    select: { accountId: true, debit: true, credit: true, account: { select: { code: true, name: true, type: true, normalBalance: true } } },
+    select: { branchId: true, accountId: true, debit: true, credit: true, account: { select: { code: true, name: true, type: true, normalBalance: true } } },
   });
-  return rows.map((row) => ({ accountId: row.accountId, ...row.account, debit: row.debit, credit: row.credit }));
+  return rows.map((row) => ({ branchId: row.branchId, accountId: row.accountId, ...row.account, debit: row.debit, credit: row.credit }));
 }
 
 export async function profitLoss(actorUserId: string, query: FinanceReportQuery) {
@@ -92,16 +102,46 @@ export async function cashBankReport(actorUserId: string, query: FinanceReportQu
   await assertPermission(actorUserId, PERMISSIONS.CASH_BANK_READ, query.branchId);
   const { end } = range(query);
   const accounts = await prisma.cashBankAccount.findMany({ where: branches === null ? {} : { branchId: { in: branches } }, include: { coaAccount: true, branch: { select: { id: true, branchCode: true, name: true } } }, orderBy: { code: 'asc' } });
-  const results = [];
-  for (const account of accounts) {
-    const [gl, transactions] = await Promise.all([
-      ledgerLines([account.branchId], undefined, end, account.coaAccount.code),
-      prisma.cashBankTransaction.findMany({ where: { cashBankAccountId: account.id, status: 'POSTED', transactionDate: { lte: end } }, select: { type: true, amount: true } }),
-    ]);
-    const ledgerBalance = aggregateLedger(gl).reduce((sum, row) => sum.add(naturalBalance(row)), D(0));
-    const subledgerBalance = transactions.reduce((sum, tx) => sum.add(tx.type === CashBankTransactionType.PAYMENT ? tx.amount.negated() : tx.amount), D(0));
-    results.push({ id: account.id, code: account.code, name: account.name, type: account.type, branch: account.branch, coaAccountCode: account.coaAccount.code, ...reconciliationResult(ledgerBalance, subledgerBalance) });
+  if (!accounts.length) return { asOf: end, source: 'POSTED_JOURNAL_LINES', accounts: [], reconciled: true };
+
+  const [gl, transactions] = await Promise.all([
+    ledgerLines(branches, undefined, end, [...new Set(accounts.map((account) => account.coaAccount.code))]),
+    prisma.cashBankTransaction.findMany({
+      where: {
+        cashBankAccountId: { in: accounts.map((account) => account.id) },
+        status: 'POSTED',
+        transactionDate: { lte: end },
+      },
+      select: { cashBankAccountId: true, type: true, amount: true },
+    }),
+  ]);
+  const ledgerByBranchAccount = new Map<string, Prisma.Decimal>();
+  for (const row of gl) {
+    const key = `${row.branchId}:${row.accountId}`;
+    ledgerByBranchAccount.set(key, (ledgerByBranchAccount.get(key) || D(0)).add(naturalBalance(row)));
   }
+  const subledgerByCashAccount = new Map<string, Prisma.Decimal>();
+  for (const transaction of transactions) {
+    const movement = transaction.type === CashBankTransactionType.PAYMENT
+      ? transaction.amount.negated()
+      : transaction.amount;
+    subledgerByCashAccount.set(
+      transaction.cashBankAccountId,
+      (subledgerByCashAccount.get(transaction.cashBankAccountId) || D(0)).add(movement),
+    );
+  }
+  const results = accounts.map((account) => ({
+    id: account.id,
+    code: account.code,
+    name: account.name,
+    type: account.type,
+    branch: account.branch,
+    coaAccountCode: account.coaAccount.code,
+    ...reconciliationResult(
+      ledgerByBranchAccount.get(`${account.branchId}:${account.coaAccountId}`) || D(0),
+      subledgerByCashAccount.get(account.id) || D(0),
+    ),
+  }));
   return { asOf: end, source: 'POSTED_JOURNAL_LINES', accounts: results, reconciled: results.every((row) => row.reconciled) };
 }
 
@@ -119,14 +159,26 @@ export async function deferredRevenueReport(actorUserId: string, query: FinanceR
     ...policies.map((row) => row.deferredRevenueAccount.code),
     ...valuations.map((row) => row.deferredRevenueAccountCode),
   ])];
-  const byCode = [];
-  for (const code of codes) {
-    const related = movements.filter((row) => row.contract.valuation.deferredRevenueAccountCode === code);
-    // Recognition releases the liability; a cancellation reversal restores it.
-    const subledger = related.reduce((sum, row) => sum.add(row.type === 'RECOGNITION' ? row.amount.negated() : row.amount), D(0));
-    const gl = aggregateLedger(await ledgerLines(branches, undefined, end, code)).reduce((sum, row) => sum.add(naturalBalance(row)), D(0));
-    byCode.push({ accountCode: code, movementCount: related.length, ...reconciliationResult(gl, subledger) });
+  if (!codes.length) return { asOf: end, source: 'POSTED_JOURNAL_LINES', accounts: [], totalDeferredRevenue: money(0), reconciled: true };
+  const gl = await ledgerLines(branches, undefined, end, codes);
+  const ledgerByCode = new Map<string, Prisma.Decimal>();
+  for (const row of gl) {
+    ledgerByCode.set(row.code, (ledgerByCode.get(row.code) || D(0)).add(naturalBalance(row)));
   }
+  const subledgerByCode = new Map<string, Prisma.Decimal>();
+  const movementCountByCode = new Map<string, number>();
+  for (const movement of movements) {
+    const code = movement.contract.valuation.deferredRevenueAccountCode;
+    // Recognition releases the liability; a cancellation reversal restores it.
+    const amount = movement.type === 'RECOGNITION' ? movement.amount.negated() : movement.amount;
+    subledgerByCode.set(code, (subledgerByCode.get(code) || D(0)).add(amount));
+    movementCountByCode.set(code, (movementCountByCode.get(code) || 0) + 1);
+  }
+  const byCode = codes.map((code) => ({
+    accountCode: code,
+    movementCount: movementCountByCode.get(code) || 0,
+    ...reconciliationResult(ledgerByCode.get(code) || D(0), subledgerByCode.get(code) || D(0)),
+  }));
   return { asOf: end, source: 'POSTED_JOURNAL_LINES', accounts: byCode, totalDeferredRevenue: money(byCode.reduce((sum, row) => sum.add(row.ledgerBalance), D(0))), reconciled: byCode.every((row) => row.reconciled) };
 }
 

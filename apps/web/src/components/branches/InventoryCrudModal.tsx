@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo } from 'react';
 import { Package, Hash, MapPin, AlertTriangle, Save, Loader2, Search, ChevronDown, Check } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -16,8 +17,23 @@ interface InventoryCrudModalProps {
   onSuccess: () => void;
   action: 'create' | 'edit' | 'delete';
   branchId: string;
-  inventoryData?: any;
+  inventoryData?: InventoryCrudData;
   existingProductIds?: string[]; // IDs of products already in inventory
+}
+
+export interface InventoryCrudData {
+  id: string;
+  name: string;
+  category: string;
+  baseUnit: string;
+  usageUnit: string;
+  stock: number;
+  usageStock: number;
+  minThreshold: number;
+  minThresholdUsage: number;
+  storageLocation?: string;
+  conversionFactor?: number;
+  masterProductId?: string;
 }
 
 interface MasterProduct {
@@ -166,7 +182,8 @@ export default function InventoryCrudModal({
       devLog('🔍 [InventoryModal] Products loaded:', products.length);
       
       setMasterProducts(Array.isArray(products) ? products : []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading master products:', error);
       showToast.error('Gagal memuat daftar produk');
     } finally {
@@ -304,7 +321,7 @@ export default function InventoryCrudModal({
         
         await api.post('/inventory/items', createData);
         showToast.success('Item inventori berhasil ditambahkan');
-      } else if (action === 'edit') {
+      } else if (action === 'edit' && inventoryData) {
         if (stockChanged && !canDirectAdjustStock) {
           showToast.error('Perubahan stok langsung hanya dapat dilakukan oleh Super Admin');
           setLoading(false);
@@ -335,7 +352,8 @@ export default function InventoryCrudModal({
       }
       
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error saving inventory item:', error);
       const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} item inventori`;
       showToast.error(errorMsg);

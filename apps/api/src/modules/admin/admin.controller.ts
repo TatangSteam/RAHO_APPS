@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import { AdminService } from './admin.service';
 import { sendSuccess } from '@utils/response';
-import { AdminManagerAccessScope, Role, PackageType, AuditAction } from '@prisma/client';
+import {
+  AdminManagerAccessScope,
+  Role,
+  PackageType,
+  AuditAction,
+  ProductCategory,
+  ProductType,
+} from '@prisma/client';
 import { prisma } from '@lib/prisma';
 
 const adminService = new AdminService();
@@ -25,7 +32,7 @@ function parseAdminManagerAccessScope(value: unknown): AdminManagerAccessScope {
 // ── Get Branches for Admin Manager ────────────────────────────
 export async function getBranches(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     
     console.log('🔍 [getBranches] User:', { id: user.id, email: user.email, role: user.role });
     
@@ -80,7 +87,7 @@ export async function getBranches(req: Request, res: Response, next: NextFunctio
     }
     
     console.log('🔍 [getBranches] Returning branches:', branches.length);
-    console.log('🔍 [getBranches] Branch names:', branches.map((b: any) => b.name));
+    console.log('🔍 [getBranches] Branch names:', branches.map((b) => b.name));
     
     sendSuccess(res, branches);
   } catch (err) {
@@ -158,7 +165,7 @@ export async function getAuditLogs(req: Request, res: Response, next: NextFuncti
 // ── Get All Package Pricing ────────────────────────────────────
 export async function getAllPackagePricing(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     
     const filters = {
       branchId: req.query.branchId as string | undefined,
@@ -195,7 +202,7 @@ export async function getPackagePricing(req: Request, res: Response, next: NextF
 // ── Create Package Pricing ─────────────────────────────────────
 export async function createPackagePricing(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const data = req.body;
     
     // ADMIN_CABANG can only create pricing for their branch
@@ -213,7 +220,7 @@ export async function createPackagePricing(req: Request, res: Response, next: Ne
 // ── Update Package Pricing ─────────────────────────────────────
 export async function updatePackagePricing(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { pricingId } = req.params;
     
     // ADMIN_CABANG can only update pricing for their branch
@@ -238,7 +245,7 @@ export async function updatePackagePricing(req: Request, res: Response, next: Ne
 // ── Delete Package Pricing ─────────────────────────────────────
 export async function deletePackagePricing(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { pricingId } = req.params;
     
     // ADMIN_CABANG can only delete pricing for their branch
@@ -312,7 +319,7 @@ export async function getAllNonTherapyProducts(req: Request, res: Response, next
     const { productType, isActive, page, limit } = req.query;
     
     const filters = {
-      productType: productType as any,
+      productType: productType as ProductType | undefined,
       isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
       page: page ? parseInt(page as string) : 1,
       limit: limit ? parseInt(limit as string) : 50,
@@ -479,7 +486,7 @@ export async function getAllMasterProducts(req: Request, res: Response, next: Ne
     const { category, isActive, search, page, limit } = req.query;
 
     const result = await adminService.getAllMasterProducts({
-      category: category as any,
+      category: category as ProductCategory | undefined,
       isActive: isActive === 'true' ? true : isActive === 'false' ? false : undefined,
       search: search as string,
       page: page ? parseInt(page as string) : undefined,
@@ -513,7 +520,7 @@ export async function getMasterProduct(req: Request, res: Response, next: NextFu
 export async function createMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { sku, name, category, baseUnit, usageUnit, conversionFactor, description } = req.body;
-    const userId = (req as any).user.userId;
+    const userId = req.user.userId;
 
     const result = await adminService.createMasterProduct(
       {
@@ -542,7 +549,7 @@ export async function updateMasterProduct(req: Request, res: Response, next: Nex
   try {
     const { id } = req.params;
     const { sku, name, category, baseUnit, usageUnit, conversionFactor, description, isActive } = req.body;
-    const userId = (req as any).user.userId;
+    const userId = req.user.userId;
 
     const result = await adminService.updateMasterProduct(
       id,
@@ -572,7 +579,7 @@ export async function updateMasterProduct(req: Request, res: Response, next: Nex
 export async function deleteMasterProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { id } = req.params;
-    const userId = (req as any).user.userId;
+    const userId = req.user.userId;
 
     const result = await adminService.deleteMasterProduct(id, userId);
     sendSuccess(res, result);
@@ -687,7 +694,7 @@ export async function updateAdminManager(req: Request, res: Response, next: Next
   try {
     const { managerId } = req.params;
     const { email, password, fullName, phoneNumber, adminManagerAccessScope, isActive } = req.body;
-    const currentUserId = (req as any).user.userId;
+    const currentUserId = req.user.userId;
 
     const result = await adminService.updateAdminManager(managerId, {
       email,
@@ -711,7 +718,7 @@ export async function updateAdminManager(req: Request, res: Response, next: Next
 export async function deleteAdminManager(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { managerId } = req.params;
-    const currentUserId = (req as any).user.userId;
+    const currentUserId = req.user.userId;
 
     const result = await adminService.deleteAdminManager(managerId, currentUserId);
 
@@ -787,7 +794,7 @@ export async function assignBranchToManager(req: Request, res: Response, next: N
     const { managerId } = req.params;
     const { branchId } = req.body;
     const accessScope = parseAdminManagerAccessScope(req.body.accessScope);
-    const currentUserId = (req as any).user.userId;
+    const currentUserId = req.user.userId;
 
     if (!branchId) {
       throw {
@@ -908,7 +915,7 @@ export async function updateManagerBranchAccessScope(req: Request, res: Response
   try {
     const { managerId, branchId } = req.params;
     const accessScope = parseAdminManagerAccessScope(req.body.accessScope);
-    const currentUserId = (req as any).user.userId;
+    const currentUserId = req.user.userId;
 
     const manager = await prisma.user.findUnique({
       where: { id: managerId },
@@ -1011,7 +1018,7 @@ export async function updateManagerBranchAccessScope(req: Request, res: Response
 export async function unassignBranchFromManager(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { managerId, branchId } = req.params;
-    const currentUserId = (req as any).user.userId;
+    const currentUserId = req.user.userId;
 
     // Verify manager exists
     const manager = await prisma.user.findUnique({
@@ -1092,7 +1099,7 @@ export async function unassignBranchFromManager(req: Request, res: Response, nex
  */
 export async function getBranchAdmins(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { branchId, search, isActive, page, limit } = req.query;
 
     // Get manager's branch IDs
@@ -1136,7 +1143,7 @@ export async function getBranchAdmins(req: Request, res: Response, next: NextFun
  */
 export async function startImpersonation(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
     const { userId } = req.params;
 
     console.log('🎭 [startImpersonation] Request received:', {
@@ -1197,7 +1204,7 @@ export async function startImpersonation(req: Request, res: Response, next: Next
 
     console.log('🎭 [startImpersonation] Audit log created, sending response');
     sendSuccess(res, result);
-  } catch (err: any) {
+  } catch (err) {
     console.error('❌ [startImpersonation] Error occurred:', {
       message: err.message,
       code: err.code,
@@ -1214,7 +1221,7 @@ export async function startImpersonation(req: Request, res: Response, next: Next
  */
 export async function stopImpersonation(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const user = (req as any).user;
+    const user = req.user;
 
     // Get current token payload
     const authHeader = req.headers.authorization;
@@ -1229,7 +1236,7 @@ export async function stopImpersonation(req: Request, res: Response, next: NextF
     }
 
     const { verifyAccessToken } = await import('@lib/jwt');
-    const currentToken = verifyAccessToken(token) as any; // Cast to any to avoid type issues
+    const currentToken = verifyAccessToken(token);
 
     const result = await impersonationService.stopImpersonation(currentToken);
 

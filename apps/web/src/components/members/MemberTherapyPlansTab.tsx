@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, ChevronRight, Trash2 } from 'lucide-react';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
@@ -154,7 +155,7 @@ function buildSetFamilies(plans: TherapyPlan[]): Map<string, string[]> {
   });
 
   // Sort each family by creation date (oldest first)
-  families.forEach((setIds, familyHead) => {
+  families.forEach((setIds) => {
     setIds.sort((a, b) => {
       const infoA = setInfoMap.get(a);
       const infoB = setInfoMap.get(b);
@@ -197,21 +198,22 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
     }
   };
 
-  useEffect(() => {
-    loadTherapyPlans();
-  }, [memberId]);
-
-  const loadTherapyPlans = async () => {
+  const loadTherapyPlans = useCallback(async () => {
     try {
       setLoading(true);
       const data = await therapyPlanApi.getMemberTherapyPlans(memberId);
       setTherapyPlans(data);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat set therapy plan');
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
+
+  useEffect(() => {
+    void loadTherapyPlans();
+  }, [loadTherapyPlans]);
 
   const filteredTherapyPlans = useMemo(() => {
     return therapyPlans.filter((plan) => planMatchesFilters(plan, filters));
@@ -371,7 +373,8 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
       const result = await therapyPlanApi.deleteTherapyPlanSet(memberId, actualSetId);
       showToast.success(result.message || 'Set therapy plan berhasil dihapus');
       await loadTherapyPlans();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menghapus set therapy plan');
     }
   };
@@ -424,7 +427,7 @@ export default function MemberTherapyPlansTab({ memberId, canEdit = true }: Memb
     });
     
     // Sort plans within each set by planNumber (ascending: 1, 2, 3, ...)
-    grouped.forEach((plans, key) => {
+    grouped.forEach((plans) => {
       plans.sort((a, b) => (a.planNumber || 0) - (b.planNumber || 0));
     });
     

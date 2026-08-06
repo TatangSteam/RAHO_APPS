@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -127,6 +128,7 @@ export default function InventoryPage() {
         setSelectedBranchId(branchesData[0].id);
       }
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to fetch branches:', error);
     } finally {
       setLoadingBranches(false);
@@ -169,6 +171,7 @@ export default function InventoryPage() {
       const inventoryItems = (response.data.data || []) as InventoryItem[];
       setItems(inventoryItems.map(normalizeInventoryItem));
     } catch (error) {
+      assertCaughtError(error);
       showToast.error('Gagal memuat data inventori');
       devError('Inventory fetch error:', error);
     } finally {
@@ -222,6 +225,7 @@ export default function InventoryPage() {
       showToast.dismiss(loadingToast);
       showToast.success(`File ${format.toUpperCase()} berhasil diunduh!`);
     } catch (error) {
+      assertCaughtError(error);
       showToast.error(`Gagal mengunduh file ${format.toUpperCase()}`);
       devError('Export error:', error);
     }

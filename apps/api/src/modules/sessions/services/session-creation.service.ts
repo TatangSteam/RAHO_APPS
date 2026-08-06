@@ -1,9 +1,15 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateEncounterCode, generateSessionCode } from '../../../utils/codeGenerator';
 import type { CreateSessionInput } from '../sessions.schema';
-import { Role, AuditAction, PackageStatus, EncounterStatus } from '@prisma/client';
+import {
+  Role,
+  AuditAction,
+  type Branch,
+  EncounterStatus,
+  type MemberPackage,
+  PackageStatus,
+} from '@prisma/client';
 import {
   DEBT_PACKAGE_STATUSES,
   getDebtSessionAllowance,
@@ -292,9 +298,9 @@ export class SessionCreationService {
     });
 
     // Allow both DOCTOR and ADMIN_CABANG to be assigned as doctor
-    const allowedRoles = [Role.DOCTOR, Role.ADMIN_CABANG];
+    const allowedRoles: Role[] = [Role.DOCTOR, Role.ADMIN_CABANG];
     
-    if (!doctor || !allowedRoles.includes(doctor.role as Role) || !doctor.isActive) {
+    if (!doctor || !allowedRoles.includes(doctor.role) || !doctor.isActive) {
       throw {
         status: 403,
         code: 'INVALID_DOCTOR',
@@ -315,9 +321,9 @@ export class SessionCreationService {
     });
 
     // Allow both NURSE and ADMIN_CABANG to be assigned as nurse
-    const allowedRoles = [Role.NURSE, Role.ADMIN_CABANG];
+    const allowedRoles: Role[] = [Role.NURSE, Role.ADMIN_CABANG];
     
-    if (!nurse || !allowedRoles.includes(nurse.role as Role) || !nurse.isActive) {
+    if (!nurse || !allowedRoles.includes(nurse.role) || !nurse.isActive) {
       throw {
         status: 403,
         code: 'INVALID_NURSE',
@@ -338,9 +344,9 @@ export class SessionCreationService {
     });
 
     // Allow both ADMIN_LAYANAN and ADMIN_CABANG to create sessions
-    const allowedRoles = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG];
+    const allowedRoles: Role[] = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG];
     
-    if (!admin || !allowedRoles.includes(admin.role as Role) || !admin.isActive) {
+    if (!admin || !allowedRoles.includes(admin.role) || !admin.isActive) {
       throw {
         status: 403,
         code: 'INVALID_ADMIN',
@@ -690,10 +696,10 @@ export class SessionCreationService {
   private async createSessionTransaction(
     data: CreateSessionInput,
     branchId: string,
-    branch: any,
+    branch: Branch,
     globalInfusKe: number,
     branchInfusKe: number,
-    memberPackage: any
+    memberPackage: MemberPackage
   ) {
     return await prisma.$transaction(async (tx) => {
       // Find or create encounter

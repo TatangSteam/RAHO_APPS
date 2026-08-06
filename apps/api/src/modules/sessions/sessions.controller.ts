@@ -232,7 +232,7 @@ export class SessionsController {
         req.user!.role // Pass user role for auto-fill logic
       );
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -247,7 +247,7 @@ export class SessionsController {
 
       const result = await sessionsService.getSuggestedSessionNumbers(memberId, branchId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -265,7 +265,7 @@ export class SessionsController {
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.getSessionById(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -352,7 +352,7 @@ export class SessionsController {
       });
       
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -366,7 +366,7 @@ export class SessionsController {
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.deleteSession(sessionId, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -392,7 +392,7 @@ export class SessionsController {
       );
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -414,7 +414,7 @@ export class SessionsController {
 
       const result = await sessionsService.createDiagnosis(encounterId, validation.data, req.user!.userId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -431,7 +431,7 @@ export class SessionsController {
       const { encounterId } = req.params;
       const diagnosis = await sessionsService.getDiagnosisByEncounter(encounterId);
       return sendSuccess(res, diagnosis);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -454,7 +454,7 @@ export class SessionsController {
 
       const result = await sessionsService.updateDiagnosis(encounterId, validation.data, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -469,7 +469,7 @@ export class SessionsController {
 
       const result = await sessionsService.deleteDiagnosis(encounterId, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -499,7 +499,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getTherapyPlan(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -513,7 +513,7 @@ export class SessionsController {
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.getTherapyPlanSetForSession(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -531,7 +531,7 @@ export class SessionsController {
         req.user!.userId
       );
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -556,7 +556,7 @@ export class SessionsController {
 
       const result = await sessionsService.updateBoosterType(sessionId, boosterType, req.user!.userId, branchId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -582,7 +582,7 @@ export class SessionsController {
         branchId,
       );
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -603,7 +603,7 @@ export class SessionsController {
 
       const availability = await sessionsService.getBoosterStockAvailability(branchId);
       return sendSuccess(res, availability);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -625,7 +625,7 @@ export class SessionsController {
 
       const result = await sessionsService.upsertVitalSign(sessionId, validation.data, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -642,7 +642,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getVitalSigns(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -666,7 +666,7 @@ export class SessionsController {
 
       const result = await sessionsService.createInfusion(sessionId, validation.data, req.user!.userId, branchId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -683,7 +683,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getInfusion(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -707,7 +707,7 @@ export class SessionsController {
 
       const result = await sessionsService.createMaterialUsage(sessionId, validation.data, req.user!.userId, branchId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -721,7 +721,7 @@ export class SessionsController {
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       const result = await sessionsService.getMaterialUsages(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -737,7 +737,7 @@ export class SessionsController {
         res,
         await sessionsService.deleteMaterialUsage(sessionId, usageId, req.user!.userId, branchId),
       );
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) return sendError(res, err.status, err.code, err.message);
       next(err);
     }
@@ -748,7 +748,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       await this.getAuthorizedSessionBranchId(sessionId, req.user!);
       return sendSuccess(res, await getSessionMaterialRecommendations(req.user!.userId, sessionId));
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) return sendError(res, err.status, err.code, err.message);
       next(err);
     }
@@ -768,7 +768,7 @@ export class SessionsController {
 
       const result = await sessionsService.createEvaluation(sessionId, validation.data, req.user!.userId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -790,7 +790,7 @@ export class SessionsController {
 
       const result = await sessionsService.updateEvaluation(sessionId, validation.data, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -803,7 +803,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getEvaluation(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -820,7 +820,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.completeSession(sessionId, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message, err.errors);
       }
@@ -834,7 +834,7 @@ export class SessionsController {
       const input = cancelSessionCompletionSchema.parse(req.body);
       const result = await sessionsService.cancelCompletion(sessionId, req.user!.userId, input);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message, err.errors);
       }
@@ -851,7 +851,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.saveProgress(sessionId, req.user!.userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -868,7 +868,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getSessionProgress(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -891,7 +891,7 @@ export class SessionsController {
       const uploadedBy = req.user!.userId;
       const result = await sessionsService.uploadPhoto(sessionId, req.file, uploadedBy);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -904,7 +904,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.deletePhoto(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -917,7 +917,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await sessionsService.getPhoto(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -997,7 +997,7 @@ export class SessionsController {
       });
 
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -1010,7 +1010,7 @@ export class SessionsController {
       const { sessionId } = req.params;
       const result = await supportingPhotosService.getSupportingPhotosBySession(sessionId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -1023,7 +1023,7 @@ export class SessionsController {
       const { photoId } = req.params;
       await supportingPhotosService.deleteSupportingPhoto(photoId, req.user!.userId);
       return sendSuccess(res, { message: 'Foto penunjang berhasil dihapus' });
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }
@@ -1045,7 +1045,7 @@ export class SessionsController {
         description
       );
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message);
       }

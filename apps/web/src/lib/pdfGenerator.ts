@@ -1,6 +1,7 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { Invoice } from '@/types/invoice';
+import type { Invoice, InvoiceItem } from '@/types/invoice';
 import { formatNumberWithDots } from './formatNumber';
 import { devLog, devError } from '@/lib/logger';
 import { getDefaultInvoicePaymentAccount } from '@/lib/paymentAccounts';
@@ -15,6 +16,10 @@ const COMPANY_LOGO_PATH = '/asset/LogoInInvoiceAndKuitansi.png';
 const BRAND_RED: [number, number, number] = [185, 28, 28];
 const LIGHT_RED: [number, number, number] = [254, 226, 226];
 const NOTE_YELLOW: [number, number, number] = [255, 251, 234];
+
+type JsPdfWithAutoTable = jsPDF & {
+  lastAutoTable: { finalY: number };
+};
 
 async function loadImageDataUrl(path: string): Promise<string | null> {
   try {
@@ -220,14 +225,14 @@ export async function generateInvoicePDF(invoice: Invoice) {
     currentY += 10;
     
     // Group items by code + description + pricePerUnit (same as frontend)
-    const itemsMap = new Map<string, any>();
+    const itemsMap = new Map<string, InvoiceItem & { code: string }>();
     
     invoice.items.forEach((item) => {
       const productCode = item.code || `ITEM-${item.id}`;
       const key = `${productCode}|${item.description}|${item.pricePerUnit}`;
       
-      if (itemsMap.has(key)) {
-        const existing = itemsMap.get(key);
+      const existing = itemsMap.get(key);
+      if (existing) {
         existing.quantity += item.quantity;
         existing.totalAmount += item.totalAmount;
       } else {
@@ -292,7 +297,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
       },
       didDrawPage: (data) => {
         // Footer on each page
-        const pageCount = (doc as any).internal.pages.length - 1;
+        const pageCount = doc.internal.getNumberOfPages();
         if (pageCount > 1) {
           doc.setFontSize(8);
           doc.setTextColor(150, 150, 150);
@@ -304,7 +309,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     // ============================================================
     // SUMMARY SECTION
     // ============================================================
-    currentY = (doc as any).lastAutoTable.finalY + 8;
+    currentY = (doc as unknown as JsPdfWithAutoTable).lastAutoTable.finalY + 8;
     const sectionTopY = currentY;
     const leftColumnWidth = contentWidth - 98;
     let postTableLeftY = sectionTopY;
@@ -510,6 +515,7 @@ export async function generateInvoicePDF(invoice: Invoice) {
     devLog('✅ PDF generated successfully');
     return true;
   } catch (error) {
+      assertCaughtError(error);
     devError('❌ Error generating PDF:', error);
     throw new Error('Gagal membuat PDF. Silakan coba lagi.');
   }

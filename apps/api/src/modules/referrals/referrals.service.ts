@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
@@ -237,7 +236,7 @@ export async function createReferralService(input: CreateReferralInput) {
     data: {
       code,
       ...input,
-    },
+    } as Prisma.ReferralCodeUncheckedCreateInput,
     select: referralSelect,
   });
 

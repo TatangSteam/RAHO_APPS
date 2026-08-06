@@ -1,13 +1,12 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
-import { normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
+import { getDiagnosisCategoryList, normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
 import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
-import { Role, AuditAction } from '@prisma/client';
+import { Role, AuditAction, Prisma } from '@prisma/client';
 
-const DIAGNOSIS_EDITORS = [Role.DOCTOR, Role.NURSE];
+const DIAGNOSIS_EDITORS: Role[] = [Role.DOCTOR, Role.NURSE];
 
 export class DiagnosisService {
   /**
@@ -181,7 +180,7 @@ export class DiagnosisService {
     }
 
     // Build update data - only include fields that are provided
-    const updateData: any = {};
+    const updateData: Prisma.DiagnosisUpdateInput = {};
     if (data.diagnosa !== undefined) updateData.diagnosa = data.diagnosa;
     if (data.kategoriDiagnosa !== undefined || data.kategoriDiagnosaList !== undefined) {
       const diagnosisCategories = normalizeDiagnosisCategories({
@@ -190,7 +189,7 @@ export class DiagnosisService {
         kategoriDiagnosaList:
           data.kategoriDiagnosaList !== undefined
             ? data.kategoriDiagnosaList
-            : (existingDiagnosis.kategoriDiagnosaList as any),
+            : getDiagnosisCategoryList(existingDiagnosis),
       });
 
       updateData.kategoriDiagnosa = diagnosisCategories.primaryCategory;

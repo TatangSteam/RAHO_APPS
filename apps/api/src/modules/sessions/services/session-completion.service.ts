@@ -34,7 +34,10 @@ import {
   TREATMENT_INVENTORY_CONSUMED_EVENT,
   TREATMENT_INVENTORY_REVERSED_EVENT,
 } from '@modules/zoho/zoho.inventory-adjustment.policy';
-import { selectTreatmentRevenueSource } from './treatment-revenue-source';
+import {
+  selectTreatmentPackageUsageIds,
+  selectTreatmentRevenueSource,
+} from './treatment-revenue-source';
 import {
   calculatePhysicalAvailableBaseQuantity,
   requiresMaterialDeviationReason,
@@ -71,6 +74,14 @@ type EvaluationSnapshot = {
   plan?: string | null;
   generalNotes?: string | null;
 } | null;
+
+type ReversiblePackageUsage = {
+  id: string;
+  usedSessions: number;
+  totalSessions: number;
+  status: PackageStatus;
+  expiredAt: Date | null;
+};
 
 export class SessionCompletionService {
   private hasDoctorEvaluation(evaluation: EvaluationSnapshot): boolean {
@@ -592,33 +603,32 @@ export class SessionCompletionService {
           }, tx)
         : null;
 
-      const packageIds = [
-        session.revenuePackageId
-        || session.boosterPackageId
-        || session.encounter.memberPackageId,
-      ];
-      if (packageIds.length > 0) {
-        await tx.$queryRaw(Prisma.sql`
-          SELECT "id" FROM "member_packages"
-          WHERE "id" IN (${Prisma.join(packageIds)}) ORDER BY "id" FOR UPDATE
-        `);
-        const packages = await tx.memberPackage.findMany({
-          where: { id: { in: packageIds } },
-          orderBy: { id: 'asc' },
+      // Usage counters follow the Basic and optional Booster reserved when the
+      // session was created. revenuePackageId is intentionally only the Basic
+      // accounting source, so it must not hide the Booster during reversal.
+      const packageIds = selectTreatmentPackageUsageIds(
+        session.encounter.memberPackageId,
+        session.boosterPackageId,
+      );
+      const packages = await tx.$queryRaw<ReversiblePackageUsage[]>(Prisma.sql`
+        SELECT "id", "usedSessions", "totalSessions", "status", "expiredAt"
+        FROM "member_packages"
+        WHERE "id" IN (${Prisma.join(packageIds)})
+        ORDER BY "id"
+        FOR UPDATE
+      `);
+      for (const memberPackage of packages) {
+        const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
+        const reactivate = memberPackage.status === PackageStatus.EXPIRED
+          && usedSessions < memberPackage.totalSessions;
+        await tx.memberPackage.update({
+          where: { id: memberPackage.id },
+          data: {
+            usedSessions,
+            status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
+            expiredAt: reactivate ? null : memberPackage.expiredAt,
+          },
         });
-        for (const memberPackage of packages) {
-          const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
-          const reactivate = memberPackage.status === PackageStatus.EXPIRED
-            && usedSessions < memberPackage.totalSessions;
-          await tx.memberPackage.update({
-            where: { id: memberPackage.id },
-            data: {
-              usedSessions,
-              status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
-              expiredAt: reactivate ? null : memberPackage.expiredAt,
-            },
-          });
-        }
       }
 
       const cancellationEvent = await tx.integrationEvent.create({

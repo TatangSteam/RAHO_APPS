@@ -7,7 +7,6 @@ import { logAudit } from '../../../utils/auditLog';
 import { generateMemberNo } from '../../../utils/codeGenerator';
 import {
   cleanMemberName,
-  hasMatchingMemberName,
   MemberIdentityType,
   parseMemberBirthDate,
   resolveMemberIdentityNumber,
@@ -227,7 +226,7 @@ export class MemberAccountImportService {
         password?: string;
       }> = [];
 
-      for (const [index, plan] of validPlans.entries()) {
+      for (const plan of validPlans) {
         const { row } = plan;
 
         if (plan.action === 'update' && plan.existingMember) {
@@ -431,7 +430,9 @@ export class MemberAccountImportService {
 
     const workbook = new ExcelJS.Workbook();
     try {
-      await workbook.xlsx.load(buffer as any);
+      await workbook.xlsx.load(
+        buffer as unknown as Parameters<typeof workbook.xlsx.load>[0],
+      );
     } catch (error) {
       throw {
         status: 400,
@@ -861,7 +862,7 @@ export class MemberAccountImportService {
     return parsed || null;
   }
 
-  private cellValue(value: any): unknown {
+  private cellValue(value: ExcelJS.CellValue): unknown {
     if (value === undefined || value === null) return null;
     if (value instanceof Date) return value;
     if (typeof value !== 'object') return value;

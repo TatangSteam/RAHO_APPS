@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo } from 'react';
 import { sessionApi } from '@/lib/sessionApi';
 import { useAuthStore } from '@/stores/authStore';
@@ -119,7 +120,8 @@ export default function Step8VitalAfter({
       });
 
       setSaved((prev) => ({ ...prev, [type]: true }));
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to save vital sign:', err);
     } finally {
       setSaving((prev) => ({ ...prev, [type]: false }));
@@ -159,7 +161,8 @@ export default function Step8VitalAfter({
 
       // Call onComplete after all saved
       onComplete();
-    } catch (err: any) {
+    } catch (err) {
+      assertCaughtError(err);
       devError('Failed to save vital signs:', err);
     } finally {
       setSavingAll(false);

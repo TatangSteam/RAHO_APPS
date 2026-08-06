@@ -42,7 +42,7 @@ export class FilesService {
         contentLength: response.ContentLength || 0,
         etag: response.ETag || '',
       };
-    } catch (error: any) {
+    } catch (error) {
       // Re-throw errors that already have a status code (from authorization)
       if (error.status) {
         throw error;

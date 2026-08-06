@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import axios, {
   AxiosInstance,
   AxiosError,
@@ -16,15 +17,49 @@ export const api: AxiosInstance = axios.create({
   timeout: 30_000,
 });
 
-async function refreshTokens(refreshToken: string): Promise<{
+type RefreshedTokens = {
   accessToken: string;
   refreshToken: string;
-}> {
+};
+
+type ApiRequestConfig = InternalAxiosRequestConfig & {
+  skipLoading?: boolean;
+  _retry?: boolean;
+};
+
+function shouldSkipLoading(config?: InternalAxiosRequestConfig): boolean {
+  return (config as ApiRequestConfig | undefined)?.skipLoading === true;
+}
+
+let tokenRefreshState: {
+  sourceToken: string;
+  promise: Promise<RefreshedTokens>;
+} | null = null;
+
+async function requestFreshTokens(refreshToken: string): Promise<RefreshedTokens> {
   const { data } = await axios.post<{
     data: { accessToken: string; refreshToken: string };
   }>(`${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`, { refreshToken });
 
   return data.data;
+}
+
+/**
+ * Reuse one in-flight refresh across the timer, request interceptor, and
+ * response interceptor. Without this guard, several API calls made as a token
+ * expires can all rotate the same refresh token at once.
+ */
+async function refreshTokens(refreshToken: string): Promise<RefreshedTokens> {
+  if (!tokenRefreshState || tokenRefreshState.sourceToken !== refreshToken) {
+    const trackedPromise = requestFreshTokens(refreshToken).finally(() => {
+      if (tokenRefreshState?.promise === trackedPromise) {
+        tokenRefreshState = null;
+      }
+    });
+    tokenRefreshState = { sourceToken: refreshToken, promise: trackedPromise };
+  }
+
+  return tokenRefreshState.promise;
 }
 
 // ── Token Expiry Checker ──────────────────────────────────────
@@ -34,6 +69,12 @@ let tokenCheckInterval: NodeJS.Timeout | null = null;
 let lastActivityTime: number = Date.now();
 let activityListenersAttached: boolean = false;
 let throttleTimeout: NodeJS.Timeout | null = null;
+const ACTIVITY_EVENTS: Array<keyof WindowEventMap> = [
+  'pointerdown',
+  'keydown',
+  'scroll',
+  'touchstart',
+];
 
 // Activity detection
 function updateLastActivity(): void {
@@ -54,10 +95,7 @@ function throttledActivityUpdate(): void {
 function attachActivityListeners(): void {
   if (activityListenersAttached || typeof window === 'undefined') return;
   
-  // Listen to user activities
-  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-  
-  events.forEach(event => {
+  ACTIVITY_EVENTS.forEach(event => {
     window.addEventListener(event, throttledActivityUpdate, { passive: true });
   });
   
@@ -68,8 +106,7 @@ function attachActivityListeners(): void {
 function detachActivityListeners(): void {
   if (!activityListenersAttached || typeof window === 'undefined') return;
   
-  const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
-  events.forEach(event => {
+  ACTIVITY_EVENTS.forEach(event => {
     window.removeEventListener(event, throttledActivityUpdate);
   });
   
@@ -84,6 +121,10 @@ function detachActivityListeners(): void {
 }
 
 export function startTokenExpiryCheck(): void {
+  // A successful login/rehydration starts a fresh session, so future expiry
+  // must be allowed to show one logout notification again.
+  hasShownLogoutNotification = false;
+
   // Clear existing interval if any
   if (tokenCheckInterval) {
     clearInterval(tokenCheckInterval);
@@ -120,7 +161,7 @@ export function startTokenExpiryCheck(): void {
             setAccessToken(newAccess, newRefresh);
             
             return; // Skip expiry check since we just refreshed
-          } catch (refreshError) {
+          } catch {
             // Continue to expiry check below
           }
         }
@@ -134,29 +175,14 @@ export function startTokenExpiryCheck(): void {
             setAccessToken(newAccess, newRefresh);
             lastActivityTime = Date.now();
             return;
-          } catch (refreshError) {
+          } catch {
             // Refresh token is also no longer valid, continue to logout below.
           }
         }
 
-        stopTokenExpiryCheck();
-        
-        // Clear auth and force redirect
-        const { clearAuth } = useAuthStore.getState();
-        clearAuth();
-        
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('logoutMessage', 'Sesi Anda telah berakhir. Silakan login kembali.');
-          
-          // Clear auth cookie for middleware
-          document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          
-          setTimeout(() => {
-            window.location.replace('/login');
-          }, 100);
-        }
+        handleUnauthorizedLogout();
       }
-    } catch (e) {
+    } catch {
       // Error checking token expiry
     }
   }, 30000);
@@ -176,7 +202,7 @@ export function stopTokenExpiryCheck(): void {
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   // Start loading tracking (unless explicitly disabled)
-  const skipLoading = (config as any).skipLoading;
+  const skipLoading = shouldSkipLoading(config);
   if (!skipLoading) {
     startApiLoading();
   }
@@ -213,44 +239,16 @@ api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
             setAccessToken(newAccess, newRefresh);
             config.headers.Authorization = `Bearer ${newAccess}`;
             return config;
-          } catch (refreshError) {
+          } catch {
             // Fall through to logout below if refresh also fails.
           }
         }
 
-        // Token expired and cannot be refreshed, logout immediately
-        const { clearAuth } = useAuthStore.getState();
-        clearAuth();
-        
-        if (typeof window !== 'undefined') {
-          sessionStorage.setItem('logoutMessage', 'Sesi Anda telah berakhir. Silakan login kembali.');
-          
-          // Clear auth cookie for middleware
-          document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-          
-          setTimeout(() => {
-            window.location.replace('/login');
-          }, 100);
-        }
-        
+        handleUnauthorizedLogout();
         return rejectRequest(new Error('Token expired'));
       }
-    } catch (e) {
-      // Invalid token format, logout
-      const { clearAuth } = useAuthStore.getState();
-      clearAuth();
-      
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('logoutMessage', 'Token tidak valid. Silakan login kembali.');
-        
-        // Clear auth cookie for middleware
-        document.cookie = 'raho-auth-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
-        
-        setTimeout(() => {
-          window.location.replace('/login');
-        }, 100);
-      }
-      
+    } catch {
+      handleUnauthorizedLogout('Token tidak valid. Silakan login kembali.');
       return rejectRequest(new Error('Invalid token'));
     }
     
@@ -314,7 +312,7 @@ function handleUnauthorizedLogout(message: string = 'Sesi Anda telah berakhir. S
 api.interceptors.response.use(
   (response) => {
     // End loading on success
-    const skipLoading = (response.config as any).skipLoading;
+    const skipLoading = shouldSkipLoading(response.config);
     if (!skipLoading) {
       endApiLoading();
     }
@@ -322,14 +320,12 @@ api.interceptors.response.use(
   },
   async (error: AxiosError) => {
     // End loading on error (will be called in finally block or here)
-    const skipLoading = (error.config as any)?.skipLoading;
+    const skipLoading = shouldSkipLoading(error.config);
     if (!skipLoading) {
       endApiLoading();
     }
     
-    const originalRequest = error.config as InternalAxiosRequestConfig & {
-      _retry?: boolean;
-    };
+    const originalRequest = error.config as ApiRequestConfig;
 
     const errCode = (error.response?.data as { error?: { code?: string } })?.error?.code;
     const is401 = error.response?.status === 401;
@@ -376,6 +372,7 @@ api.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newAccess}`;
           return api(originalRequest);
         } catch (refreshError) {
+      assertCaughtError(refreshError);
           // Refresh token failed or expired → force logout
           processQueue(null, refreshError);
           handleUnauthorizedLogout('Sesi Anda telah berakhir. Silakan login kembali.');

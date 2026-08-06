@@ -1,5 +1,6 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
 import { useState } from 'react';
 import { formatCurrency } from '@/lib/formatNumber';
 import styles from './RefundDetailModal.module.css';
@@ -88,7 +89,7 @@ export default function RefundDetailModal({ isOpen, onClose, refundData }: Refun
               </div>
               {!imageError ? (
                 <div className={styles.imageWrapper}>
-                  <img
+                  <AppImage
                     src={refundData.refundProofUrl}
                     alt="Bukti Refund"
                     className={styles.proofImage}

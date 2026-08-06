@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -116,7 +117,8 @@ export default function SuperAdminPage() {
         console.error('Invalid data format:', result);
         throw new Error('Format data tidak valid');
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       console.error('❌ Error loading system stats:', error);
       devError('Error loading system stats:', error);
       const errorMessage = error.message || 'Gagal memuat statistik sistem';
@@ -146,6 +148,7 @@ export default function SuperAdminPage() {
         minute: '2-digit',
       });
     } catch (error) {
+      assertCaughtError(error);
       return dateString;
     }
   };

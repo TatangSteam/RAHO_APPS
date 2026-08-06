@@ -6,6 +6,10 @@ import { LogisticsService } from './logistics.service';
 const logisticsService = new LogisticsService();
 
 export class LogisticsController {
+  private query<T>(req: Request): T {
+    return req.query as unknown as T;
+  }
+
   private actor(req: Request) {
     return {
       userId: req.user!.userId,
@@ -16,7 +20,7 @@ export class LogisticsController {
 
   async getCentralStock(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.getCentralStock(this.actor(req), req.query as any);
+      const result = await logisticsService.getCentralStock(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -34,7 +38,7 @@ export class LogisticsController {
 
   async listHomecareStaff(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareStaff(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareStaff(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -97,7 +101,7 @@ export class LogisticsController {
 
   async listHomecareTeams(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareTeams(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareTeams(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -165,7 +169,7 @@ export class LogisticsController {
 
   async listHomecareBags(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBags(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBags(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -192,7 +196,7 @@ export class LogisticsController {
 
   async listBagStockRequests(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBagRequests(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBagRequests(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -228,7 +232,7 @@ export class LogisticsController {
 
   async listBagShipments(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBagShipments(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBagShipments(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -255,7 +259,7 @@ export class LogisticsController {
 
   async listBagUsages(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBagUsages(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBagUsages(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -273,7 +277,7 @@ export class LogisticsController {
 
   async listBagReturns(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBagReturns(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBagReturns(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);
@@ -291,7 +295,7 @@ export class LogisticsController {
 
   async listBagOpnames(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await logisticsService.listHomecareBagOpnames(this.actor(req), req.query as any);
+      const result = await logisticsService.listHomecareBagOpnames(this.actor(req), this.query(req));
       return sendSuccess(res, result);
     } catch (err) {
       next(err);

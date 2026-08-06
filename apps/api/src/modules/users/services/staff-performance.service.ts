@@ -254,7 +254,7 @@ export async function getStaffPerformanceSummaryService(
       phone: s.profile?.phone || '',
       avatarUrl: s.profile?.avatarUrl || null,
       // Include branch info when showing all branches
-      ...(isAllBranches && (s as any).branch ? { branch: (s as any).branch } : {}),
+      ...(isAllBranches && 'branch' in s && s.branch ? { branch: s.branch } : {}),
       performance: {
         asDoctor,
         asNurse,

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -51,6 +52,7 @@ export default function Step2TherapyPlan({
       const sameSetPlans = await therapyPlanApi.getSessionTherapyPlanSet(sessionId);
       setTherapyPlanSet(sortTherapyPlanSet(sameSetPlans));
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error loading therapy plan set:', error);
       setTherapyPlanSet([toSessionTherapyPlanTablePlan(therapyPlan, sessionId)]);
     } finally {

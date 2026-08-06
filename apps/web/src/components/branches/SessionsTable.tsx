@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { Calendar, User, Stethoscope, Eye, FileText, Pencil, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { sessionApi } from '@/lib/sessionApi';
@@ -64,7 +65,8 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
       await sessionApi.deleteSession(session.id);
       showToast.success('Sesi terapi berhasil dihapus');
       onDeleted?.();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting session:', error);
       showToast.error(
         error.response?.data?.error?.message ||

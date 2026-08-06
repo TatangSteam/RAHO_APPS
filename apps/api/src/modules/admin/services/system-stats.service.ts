@@ -1,42 +1,59 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { Prisma } from '@prisma/client';
 
-function getAuditMeta(activity: any) {
-  return activity?.meta && typeof activity.meta === 'object' ? activity.meta : {};
+type RecentActivity = Prisma.AuditLogGetPayload<{
+  include: {
+    user: { include: { profile: true } };
+    branch: { select: { name: true } };
+  };
+}>;
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
 }
 
-function resolveActivityUserName(activity: any): string {
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function getAuditMeta(activity: RecentActivity) {
+  return asRecord(activity.meta);
+}
+
+function resolveActivityUserName(activity: RecentActivity): string {
   const meta = getAuditMeta(activity);
-  const actorSnapshot = meta.actorSnapshot || {};
+  const actorSnapshot = asRecord(meta.actorSnapshot);
 
   return (
     activity.userName ||
     activity.user?.profile?.fullName ||
     activity.user?.email ||
-    actorSnapshot.userName ||
-    actorSnapshot.fullName ||
-    actorSnapshot.email ||
+    optionalString(actorSnapshot.userName) ||
+    optionalString(actorSnapshot.fullName) ||
+    optionalString(actorSnapshot.email) ||
     'System'
   );
 }
 
-function resolveActivityUserEmail(activity: any): string {
+function resolveActivityUserEmail(activity: RecentActivity): string {
   const meta = getAuditMeta(activity);
-  const actorSnapshot = meta.actorSnapshot || {};
+  const actorSnapshot = asRecord(meta.actorSnapshot);
 
   return (
     activity.user?.email ||
-    actorSnapshot.email ||
+    optionalString(actorSnapshot.email) ||
     activity.userName ||
     'system'
   );
 }
 
-function resolveActivityBranchName(activity: any): string | null {
+function resolveActivityBranchName(activity: RecentActivity): string | null {
   const meta = getAuditMeta(activity);
-  const branchSnapshot = meta.branchSnapshot || {};
+  const branchSnapshot = asRecord(meta.branchSnapshot);
 
-  return activity.branchName || activity.branch?.name || branchSnapshot.branchName || null;
+  return activity.branchName || activity.branch?.name || optionalString(branchSnapshot.branchName) || null;
 }
 
 /**

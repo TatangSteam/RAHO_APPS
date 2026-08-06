@@ -5,8 +5,12 @@ import * as service from './purchasing.service';
 
 const run = (handler: (req: Request) => Promise<unknown>, created = false) => async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result: any = await handler(req);
-    sendSuccess(res, result, created && !result?.idempotentReplay ? 201 : 200);
+    const result = await handler(req);
+    const idempotentReplay = typeof result === 'object'
+      && result !== null
+      && 'idempotentReplay' in result
+      && result.idempotentReplay === true;
+    sendSuccess(res, result, created && !idempotentReplay ? 201 : 200);
   } catch (error) { next(error); }
 };
 

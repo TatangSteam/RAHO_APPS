@@ -1,11 +1,13 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { User, Mail, Phone, MapPin, Calendar, Save, Loader2, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { showToast } from '@/lib/toast';
-import { createMemberApi, updateMemberApi } from '@/lib/membersApi';
-import { getActiveReferrals } from '@/lib/api/referralsApi';
+import { createMemberApi, updateMemberApi, type UpdateMemberData } from '@/lib/membersApi';
+import { getActiveReferrals, type ReferralCode } from '@/lib/api/referralsApi';
+import type { CreateMemberData } from '@/types/member';
 import { devLog, devError } from '@/lib/logger';
 import { CrudModal } from './CrudModal';
 import styles from '@/styles/crud-modal.module.css';
@@ -16,8 +18,29 @@ interface MemberCrudModalProps {
   onSuccess: () => void;
   action: 'create' | 'edit' | 'delete';
   branchId: string;
-  memberData?: any;
+  memberData?: CrudMemberData;
   userRole?: string;
+}
+
+export interface CrudMemberData {
+  memberId: string;
+  fullName?: string;
+  username?: string;
+  email?: string;
+  phone?: string;
+  contactEmail?: string;
+  address?: string;
+  tempatLahir?: string;
+  dateOfBirth?: string;
+  jenisKelamin?: 'L' | 'P';
+  emergencyContact?: string;
+  emergencyContactPhone?: string;
+  referralCodeId?: string;
+  isConsentToPhoto?: boolean;
+  firstIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  firstIncentiveValue?: number;
+  nextIncentiveType?: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  nextIncentiveValue?: number;
 }
 
 interface MemberFormData {
@@ -51,8 +74,8 @@ export default function MemberCrudModal({
   userRole
 }: MemberCrudModalProps) {
   const [loading, setLoading] = useState(false);
-  const [referralCodes, setReferralCodes] = useState<any[]>([]);
-  const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
+  const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [filteredReferralCodes, setFilteredReferralCodes] = useState<ReferralCode[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [formData, setFormData] = useState<MemberFormData>({
@@ -84,6 +107,7 @@ export default function MemberCrudModal({
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error fetching referral codes:', error);
       }
     };
@@ -202,10 +226,11 @@ export default function MemberCrudModal({
         devLog('🔍 [MemberCrudModal] Creating member with data:', formData);
         
         // Prepare data - explicitly build the object to avoid spreading unwanted fields
-        const createData: any = {
+        const createData: CreateMemberData = {
           fullName: formData.fullName,
           memberUsername: formData.memberUsername,
           memberPassword: formData.memberPassword,
+          birthDate: formData.birthDate || '',
           isConsentToPhoto: formData.isConsentToPhoto,
           branchId: branchId, // Include branchId for ADMIN_MANAGER
         };
@@ -235,8 +260,8 @@ export default function MemberCrudModal({
         
         await createMemberApi(createData, {});
         showToast.success('Member berhasil ditambahkan');
-      } else if (action === 'edit') {
-        const updateData: any = {
+      } else if (action === 'edit' && memberData) {
+        const updateData: UpdateMemberData = {
           fullName: formData.fullName,
           phone: formData.phone,
           address: formData.address,
@@ -264,7 +289,8 @@ export default function MemberCrudModal({
       }
       
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('❌ [MemberCrudModal] Error saving member:', error);
       devError('❌ [MemberCrudModal] Error response:', error.response?.data);
       devError('❌ [MemberCrudModal] Error status:', error.response?.status);

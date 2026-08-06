@@ -1,5 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
+import { Prisma } from '@prisma/client';
 
 /**
  * Service for managing master booster types and service types
@@ -10,7 +10,7 @@ export class MasterTypesAdminService {
   // ══════════════════════════════════════════════════════════════
 
   async getAllBoosterTypes(filters: { isActive?: boolean } = {}) {
-    const where: any = {};
+    const where: Prisma.MasterBoosterTypeWhereInput = {};
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
     }
@@ -163,7 +163,7 @@ export class MasterTypesAdminService {
 
     // Check if being used
     const usageCount = await prisma.packagePricing.count({
-      where: { boosterType: type.code as any },
+      where: { boosterType: type.code },
     });
 
     if (usageCount > 0) {
@@ -186,7 +186,7 @@ export class MasterTypesAdminService {
   // ══════════════════════════════════════════════════════════════
 
   async getAllServiceTypes(filters: { isActive?: boolean } = {}) {
-    const where: any = {};
+    const where: Prisma.MasterServiceTypeWhereInput = {};
     if (filters.isActive !== undefined) {
       where.isActive = filters.isActive;
     }

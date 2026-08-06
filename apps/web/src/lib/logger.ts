@@ -11,22 +11,19 @@
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const devLog = (...args: any[]) => {
+export const devLog = (...args: unknown[]) => {
   if (isDev) {
     console.log(...args);
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const devWarn = (...args: any[]) => {
+export const devWarn = (...args: unknown[]) => {
   if (isDev) {
     console.warn(...args);
   }
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const devError = (...args: any[]) => {
+export const devError = (...args: unknown[]) => {
   if (isDev) {
     console.error(...args);
   }
@@ -46,8 +43,7 @@ export const devTimeEnd = (label: string) => {
 };
 
 // Group logging (only in dev)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const devGroup = (label: string, ...args: any[]) => {
+export const devGroup = (label: string, ...args: unknown[]) => {
   if (isDev) {
     console.group(label);
     if (args.length > 0) {
@@ -63,14 +59,13 @@ export const devGroupEnd = () => {
 };
 
 // Table logging (only in dev)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const devTable = (data: any) => {
+export const devTable = (data: unknown[] | Record<string, unknown>) => {
   if (isDev) {
     console.table(data);
   }
 };
 
-export default {
+const logger = {
   log: devLog,
   warn: devWarn,
   error: devError,
@@ -80,3 +75,5 @@ export default {
   groupEnd: devGroupEnd,
   table: devTable,
 };
+
+export default logger;

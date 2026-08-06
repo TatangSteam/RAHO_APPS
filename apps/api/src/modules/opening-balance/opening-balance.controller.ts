@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { sendCreated, sendSuccess } from '@utils/response';
+import { sendSuccess } from '@utils/response';
 import { createOpeningBalanceSchema, listOpeningBalancesQuerySchema, rejectOpeningBalanceSchema, updateOpeningBalanceSchema } from './opening-balance.schema';
 import { createOpeningBalance, listOpeningBalances, postOpeningBalance, rejectOpeningBalance, submitOpeningBalance, updateOpeningBalance } from './opening-balance.service';
 

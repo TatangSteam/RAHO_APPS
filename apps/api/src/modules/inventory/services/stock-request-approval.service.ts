@@ -1,7 +1,15 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Role, BranchType, StockRequestStatus, StockMutationType } from '@prisma/client';
+import {
+  AuditAction,
+  Role,
+  BranchType,
+  type MasterProduct,
+  Prisma,
+  type StockRequestItem,
+  StockRequestStatus,
+  StockMutationType,
+} from '@prisma/client';
 import { deleteFileByUrl } from '../../../config/minio';
 import {
   buildStockRequestInvoiceDraft,
@@ -35,6 +43,30 @@ interface CreateInvoiceInput {
   paymentAccountNumber?: string;
   paymentAccountHolder?: string;
 }
+
+type ApprovalInvoiceBase = Prisma.StockRequestInvoiceGetPayload<{
+  include: {
+    items: { include: { masterProduct: true } };
+  };
+}>;
+type ApprovalInvoice = ApprovalInvoiceBase & {
+  payments?: Prisma.StockRequestInvoicePaymentGetPayload<object>[];
+};
+
+type ApprovalStockRequest = Prisma.StockRequestGetPayload<{
+  include: {
+    items: { include: { masterProduct: true } };
+    branch: true;
+  };
+}> & { invoice?: ApprovalInvoice | null };
+
+type ApprovalShipment = Prisma.ShipmentGetPayload<{
+  include: {
+    fromBranch: true;
+    toBranch: true;
+    items: { include: { masterProduct: true } };
+  };
+}>;
 
 /**
  * Service for approving/rejecting stock requests
@@ -85,12 +117,13 @@ export class StockRequestApprovalService {
       select: { role: true },
     });
 
-    if (!user || ![
+    const managerRoles: Role[] = [
       Role.SUPER_ADMIN,
       Role.ADMIN_MANAGER,
       Role.ADMIN_LOGISTIK,
       Role.FINANCE_LOGISTICS_CONTROLLER,
-    ].includes(user.role)) {
+    ];
+    if (!user || !managerRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -175,9 +208,13 @@ export class StockRequestApprovalService {
    * Called after payment confirmation (for both Premier and Partnership branches)
    */
   private async addStockToBranch(
-    tx: any,
+    tx: Prisma.TransactionClient,
     branchId: string,
-    items: Array<{ masterProductId: string; requestedQty: any; masterProduct: any }>,
+    items: Array<
+      Pick<StockRequestItem, 'masterProductId' | 'requestedQty'> & {
+        masterProduct: MasterProduct;
+      }
+    >,
     userId: string,
     referenceId: string,
     referenceCode: string
@@ -298,7 +335,7 @@ export class StockRequestApprovalService {
     }
 
     const normalizedInvoiceItems = invoiceData.items.map((item) => {
-      const requestItem = request.items.find((requestItem: any) => requestItem.masterProductId === item.masterProductId);
+      const requestItem = request.items.find((requestItem) => requestItem.masterProductId === item.masterProductId);
       return {
         ...item,
         quantity: parseStockRequestQuantity(requestItem?.masterProduct, item.quantity, item.unit),
@@ -338,7 +375,6 @@ export class StockRequestApprovalService {
         message: 'Langkah approval tersimpan dan masih menunggu approver berikutnya.',
       };
     }
-    const now = new Date();
     const senderBranch = (isFreeRequest || isDebtRequest) ? await this.getOrCreateExternalBranch() : null;
     const shipmentCode = (isFreeRequest || isDebtRequest)
       ? await this.generateShipmentCode(senderBranch.id, request.branchId)
@@ -346,6 +382,7 @@ export class StockRequestApprovalService {
 
     // Generate invoice number
     const invoiceNumber = await this.generateInvoiceNumber(request.branchId);
+    const now = new Date();
 
     // Create invoice and update request in transaction
     const result = await prisma.$transaction(async (tx) => {
@@ -465,17 +502,14 @@ export class StockRequestApprovalService {
       },
     });
 
-    const response: any = {
+    return {
       request: this.formatStockRequest(result.updatedRequest),
       invoice: this.formatInvoice(result.invoice),
       message: approvalPlan.responseMessage,
+      ...(result.shipment
+        ? { shipment: this.formatShipment(result.shipment) }
+        : {}),
     };
-
-    if (result.shipment) {
-      response.shipment = this.formatShipment(result.shipment);
-    }
-
-    return response;
   }
 
   /**
@@ -528,7 +562,6 @@ export class StockRequestApprovalService {
       };
     }
 
-    const now = new Date();
     const senderBranch = await this.getOrCreateExternalBranch();
     const shipmentCode = await this.generateShipmentCode(senderBranch.id, request.branchId);
     const debtNote = notes?.trim();
@@ -708,12 +741,13 @@ export class StockRequestApprovalService {
       select: { role: true, branchId: true },
     });
 
-    if (!user || ![
+    const paymentRoles: Role[] = [
       Role.SUPER_ADMIN,
       Role.ADMIN_MANAGER,
       Role.ADMIN_LOGISTIK,
       Role.FINANCE_LOGISTICS_CONTROLLER,
-    ].includes(user.role)) {
+    ];
+    if (!user || !paymentRoles.includes(user.role)) {
       throw {
         status: 403,
         code: 'INSUFFICIENT_PERMISSIONS',
@@ -1219,7 +1253,7 @@ export class StockRequestApprovalService {
       'COMPLETED',
       'COMPLETED_WITH_ISSUE',
     ]);
-    const user = await this.validateManagerPermission(userId, request.branchId);
+    await this.validateManagerPermission(userId, request.branchId);
     const isDebtRequest = request.invoice?.status === 'DEBT';
 
     if (request.status !== 'PAYMENT_UPLOADED' && !isDebtRequest) {
@@ -1328,7 +1362,7 @@ export class StockRequestApprovalService {
     }
 
     const request = await this.getRequestWithValidation(requestId, ['PENDING', 'WAITING_PAYMENT', 'PAYMENT_UPLOADED']);
-    const user = await this.validateManagerPermission(userId, request.branchId);
+    await this.validateManagerPermission(userId, request.branchId);
 
     const updatedRequest = await prisma.$transaction(async (tx) => {
       await submitApprovalInTransaction(tx, {
@@ -1441,7 +1475,7 @@ export class StockRequestApprovalService {
   /**
    * Format stock request
    */
-  private formatStockRequest(request: any) {
+  private formatStockRequest(request: ApprovalStockRequest) {
     return {
       id: request.id,
       requestCode: request.requestCode,
@@ -1451,7 +1485,7 @@ export class StockRequestApprovalService {
       status: request.status,
       notes: request.notes,
       itemCount: request.items.length,
-      items: request.items.map((item: any) => ({
+      items: request.items.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
@@ -1488,7 +1522,7 @@ export class StockRequestApprovalService {
   /**
    * Format invoice
    */
-  private formatInvoice(invoice: any) {
+  private formatInvoice(invoice: ApprovalInvoice) {
     return {
       id: invoice.id,
       invoiceNumber: invoice.invoiceNumber,
@@ -1508,7 +1542,7 @@ export class StockRequestApprovalService {
       paidAt: invoice.paidAt?.toISOString(),
       rejectionReason: invoice.rejectionReason,
       notes: invoice.notes,
-      items: invoice.items?.map((item: any) => ({
+      items: invoice.items?.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.productName,
@@ -1517,7 +1551,7 @@ export class StockRequestApprovalService {
         pricePerUnit: Number(item.pricePerUnit),
         subtotal: Number(item.subtotal),
       })),
-      payments: invoice.payments?.map((payment: any) => ({
+      payments: invoice.payments?.map((payment) => ({
         id: payment.id,
         amount: Number(payment.amount),
         proofFileUrl: payment.proofFileUrl,
@@ -1539,7 +1573,7 @@ export class StockRequestApprovalService {
   /**
    * Format shipment
    */
-  private formatShipment(shipment: any) {
+  private formatShipment(shipment: ApprovalShipment) {
     return {
       id: shipment.id,
       shipmentCode: shipment.shipmentCode,
@@ -1549,7 +1583,7 @@ export class StockRequestApprovalService {
       toBranchName: shipment.toBranch.name,
       status: shipment.status,
       notes: shipment.notes,
-      items: shipment.items.map((item: any) => ({
+      items: shipment.items.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,

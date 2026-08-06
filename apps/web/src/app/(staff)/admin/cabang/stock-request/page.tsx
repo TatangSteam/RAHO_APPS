@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
@@ -52,7 +53,8 @@ export default function StockRequestPage() {
       setLoading(true);
       const res = await getBranchStockRequests();
       setRequests(res.data || []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal memuat data');
     } finally {
       setLoading(false);
@@ -67,7 +69,7 @@ export default function StockRequestPage() {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const handleItemChange = (index: number, field: string, value: any) => {
+  const handleItemChange = (index: number, field: keyof StockRequestItem, value: StockRequestItem[keyof StockRequestItem]) => {
     const newItems = [...items];
     newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
@@ -98,7 +100,8 @@ export default function StockRequestPage() {
       setNotes('');
       setShowForm(false);
       loadRequests();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.message || 'Gagal membuat permintaan');
     } finally {
       setSubmitting(false);

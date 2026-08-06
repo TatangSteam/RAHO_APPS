@@ -258,7 +258,7 @@ export class InventoryPage {
   /**
    * Verify stock was updated after receiving
    */
-  async verifyStockIncreased(productName: string, expectedIncrease: number) {
+  async verifyStockIncreased(productName: string, _expectedIncrease: number) {
     await this.goto();
     await this.searchProduct(productName);
     

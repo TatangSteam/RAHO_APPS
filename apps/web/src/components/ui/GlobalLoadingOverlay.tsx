@@ -1,7 +1,6 @@
 'use client';
 
 import { useLoading } from '@/contexts/LoadingContext';
-import { LoadingSpinner } from './LoadingSpinner';
 
 export function GlobalLoadingOverlay() {
   const { isGlobalLoading, loadingMessage, apiLoadingCount } = useLoading();

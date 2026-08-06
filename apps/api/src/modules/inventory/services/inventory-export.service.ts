@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import ExcelJS from 'exceljs';
 
 export class InventoryExportService {
@@ -8,7 +8,7 @@ export class InventoryExportService {
    * Get inventory data for export
    */
   async getInventoryDataForExport(branchId?: string) {
-    const where: any = {};
+    const where: Prisma.InventoryItemWhereInput = {};
     
     if (branchId) {
       where.branchId = branchId;
@@ -139,7 +139,7 @@ export class InventoryExportService {
     });
 
     // Add borders to all cells
-    worksheet.eachRow((row, rowNumber) => {
+    worksheet.eachRow((row, _rowNumber) => {
       row.eachCell((cell) => {
         cell.border = {
           top: { style: 'thin' },

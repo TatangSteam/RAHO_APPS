@@ -44,6 +44,9 @@ export interface MemberPackage {
   activatedAt: string | null;
   branchId?: string;
   branchName: string;
+  isGroup?: boolean;
+  basics?: MemberPackage[];
+  boosters?: MemberPackage[];
 }
 
 export interface MemberDetail {

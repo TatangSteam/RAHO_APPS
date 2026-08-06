@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { Role } from '@prisma/client';
+import { Prisma, Role, SessionType, type VitalSign } from '@prisma/client';
 import ExcelJS from 'exceljs';
 
 export interface SessionExportOptions {
@@ -22,10 +21,45 @@ export interface SessionExportOptions {
   groupBy?: 'date' | 'member' | 'doctor' | 'none';
 }
 
+const sessionExportInclude = {
+  encounter: {
+    include: {
+      member: { include: { user: { include: { profile: true } } } },
+      memberPackage: true,
+    },
+  },
+  branch: true,
+  adminLayanan: { include: { profile: true } },
+  doctor: { include: { profile: true } },
+  nurse: { include: { profile: true } },
+  sessionDoctors: {
+    include: { doctor: { include: { profile: true } } },
+    orderBy: { isPrimary: 'desc' as const },
+  },
+  sessionNurses: {
+    include: { nurse: { include: { profile: true } } },
+    orderBy: { isPrimary: 'desc' as const },
+  },
+  boosterPackage: true,
+  therapyPlan: true,
+  vitalSigns: true,
+  infusion: true,
+  materials: { include: { inventoryItem: { include: { masterProduct: true } } } },
+  evaluation: true,
+} satisfies Prisma.TreatmentSessionInclude;
+
+type ExportSession = Prisma.TreatmentSessionGetPayload<{
+  include: typeof sessionExportInclude;
+}>;
+
 // Helper function to get vital sign value
-function getVitalValue(vitalSigns: any[], pencatatan: string, waktuCatat: string): string {
+function getVitalValue(
+  vitalSigns: Array<Pick<VitalSign, 'pencatatan' | 'waktuCatat' | 'value' | 'unit'>>,
+  pencatatan: string,
+  waktuCatat: string,
+): string {
   if (!vitalSigns) return '-';
-  const vital = vitalSigns.find((v: any) => v.pencatatan === pencatatan && v.waktuCatat === waktuCatat);
+  const vital = vitalSigns.find((v) => v.pencatatan === pencatatan && v.waktuCatat === waktuCatat);
   return vital ? `${vital.value} ${vital.unit || ''}`.trim() : '-';
 }
 
@@ -133,7 +167,10 @@ export class SessionExportService {
   }
 
   // Field mapping for export
-  private getFieldMapping(): Record<string, { label: string; getter: (session: any) => any }> {
+  private getFieldMapping(): Record<string, {
+    label: string;
+    getter: (session: ExportSession) => unknown;
+  }> {
     return {
       sessionCode: { label: 'Kode Sesi', getter: (s) => s.sessionCode },
       treatmentDate: { label: 'Tanggal Terapi', getter: (s) => new Date(s.treatmentDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }) },
@@ -154,8 +191,8 @@ export class SessionExportService {
       doctorCode: { label: 'Kode Dokter', getter: (s) => s.doctor?.staffCode || '-' },
       nurseName: { label: 'Nama Nakes Utama', getter: (s) => s.nurse?.profile?.fullName || '-' },
       nurseCode: { label: 'Kode Nakes', getter: (s) => s.nurse?.staffCode || '-' },
-      allDoctors: { label: 'Semua Dokter', getter: (s) => s.sessionDoctors?.map((sd: any) => sd.doctor?.profile?.fullName || '').join(', ') || '-' },
-      allNurses: { label: 'Semua Nakes', getter: (s) => s.sessionNurses?.map((sn: any) => sn.nurse?.profile?.fullName || '').join(', ') || '-' },
+      allDoctors: { label: 'Semua Dokter', getter: (s) => s.sessionDoctors?.map((sd) => sd.doctor?.profile?.fullName || '').join(', ') || '-' },
+      allNurses: { label: 'Semua Nakes', getter: (s) => s.sessionNurses?.map((sn) => sn.nurse?.profile?.fullName || '').join(', ') || '-' },
       sistolBefore: { label: 'Sistol (Sebelum)', getter: (s) => getVitalValue(s.vitalSigns, 'SISTOL', 'SEBELUM') },
       diastolBefore: { label: 'Diastol (Sebelum)', getter: (s) => getVitalValue(s.vitalSigns, 'DIASTOL', 'SEBELUM') },
       hrBefore: { label: 'Heart Rate (Sebelum)', getter: (s) => getVitalValue(s.vitalSigns, 'HR', 'SEBELUM') },
@@ -200,7 +237,7 @@ export class SessionExportService {
       volumeCarrier: { label: 'Volume Carrier', getter: (s) => s.infusion?.volumeCarrier ?? '-' },
       jumlahJarum: { label: 'Jumlah Jarum', getter: (s) => s.infusion?.jumlahJarum ?? '-' },
       deviationNotes: { label: 'Catatan Deviasi', getter: (s) => s.infusion?.deviationNotes ?? '-' },
-      materialsSummary: { label: 'Ringkasan Material', getter: (s) => s.materials?.map((m: any) => `${m.inventoryItem?.masterProduct?.name || 'Unknown'}: ${m.quantity} ${m.unit}`).join('; ') || '-' },
+      materialsSummary: { label: 'Ringkasan Material', getter: (s) => s.materials?.map((m) => `${m.inventoryItem?.masterProduct?.name || 'Unknown'}: ${m.quantity} ${m.unit}`).join('; ') || '-' },
       keluhan: { label: 'Keluhan', getter: (s) => s.evaluation?.keluhan ?? '-' },
       rekomendasi: { label: 'Rekomendasi', getter: (s) => s.evaluation?.rekomendasi ?? '-' },
       subjective: { label: 'Subjective', getter: (s) => s.evaluation?.subjective ?? '-' },
@@ -218,8 +255,8 @@ export class SessionExportService {
     options: SessionExportOptions
   ) {
     // Build where clause based on role
-    const where: any = {};
-    const addAndFilter = (condition: any) => {
+    const where: Prisma.TreatmentSessionWhereInput = {};
+    const addAndFilter = (condition: Prisma.TreatmentSessionWhereInput) => {
       where.AND = Array.isArray(where.AND) ? [...where.AND, condition] : [condition];
     };
 
@@ -240,13 +277,14 @@ export class SessionExportService {
     // Apply filters
     if (options.filters) {
       if (options.filters.dateFrom || options.filters.dateTo) {
-        where.treatmentDate = {};
-        if (options.filters.dateFrom) {
-          where.treatmentDate.gte = new Date(options.filters.dateFrom);
-        }
-        if (options.filters.dateTo) {
-          where.treatmentDate.lte = new Date(options.filters.dateTo);
-        }
+        where.treatmentDate = {
+          ...(options.filters.dateFrom
+            ? { gte: new Date(options.filters.dateFrom) }
+            : {}),
+          ...(options.filters.dateTo
+            ? { lte: new Date(options.filters.dateTo) }
+            : {}),
+        };
       }
 
       if (options.filters.status) {
@@ -254,7 +292,7 @@ export class SessionExportService {
       }
 
       if (options.filters.pelaksanaan) {
-        where.pelaksanaan = options.filters.pelaksanaan;
+        where.pelaksanaan = options.filters.pelaksanaan as SessionType;
       }
 
       const selectedDoctorIds = options.filters.doctorIds?.length
@@ -323,73 +361,7 @@ export class SessionExportService {
     // Fetch sessions with selected data
     const sessions = await prisma.treatmentSession.findMany({
       where,
-      include: {
-        encounter: {
-          include: {
-            member: {
-              include: {
-                user: {
-                  include: {
-                    profile: true,
-                  },
-                },
-              },
-            },
-            memberPackage: true,
-          },
-        },
-        branch: true,
-        adminLayanan: {
-          include: {
-            profile: true,
-          },
-        },
-        doctor: {
-          include: {
-            profile: true,
-          },
-        },
-        nurse: {
-          include: {
-            profile: true,
-          },
-        },
-        // Include multiple doctors and nurses
-        sessionDoctors: {
-          include: {
-            doctor: {
-              include: {
-                profile: true,
-              },
-            },
-          },
-          orderBy: { isPrimary: 'desc' },
-        },
-        sessionNurses: {
-          include: {
-            nurse: {
-              include: {
-                profile: true,
-              },
-            },
-          },
-          orderBy: { isPrimary: 'desc' },
-        },
-        boosterPackage: true,
-        therapyPlan: true,
-        vitalSigns: true,
-        infusion: true,
-        materials: {
-          include: {
-            inventoryItem: {
-              include: {
-                masterProduct: true,
-              },
-            },
-          },
-        },
-        evaluation: true,
-      },
+      include: sessionExportInclude,
       orderBy: { treatmentDate: 'desc' },
     });
 
@@ -414,7 +386,7 @@ export class SessionExportService {
 
     // Transform data based on selected fields
     const exportData = sessions.map((session) => {
-      const data: any = {};
+      const data: Record<string, unknown> = {};
       
       selectedFields.forEach(fieldKey => {
         const mapping = fieldMapping[fieldKey];
@@ -429,11 +401,11 @@ export class SessionExportService {
     return exportData;
   }
 
-  private groupData(exportData: any[], sessions: any[], groupBy: string) {
+  private groupData(exportData: unknown[], _sessions: unknown[], _groupBy: string) {
     return exportData;
   }
 
-  generateCSV(data: any[]): string {
+  generateCSV(data: Array<Record<string, unknown>>): string {
     if (data.length === 0) {
       return '';
     }
@@ -455,7 +427,7 @@ export class SessionExportService {
     return csvRows.join('\n');
   }
 
-  async generateXLSX(data: any[], groupBy?: string): Promise<Buffer> {
+  async generateXLSX(data: unknown[], _groupBy?: string): Promise<Buffer> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Data Sesi Terapi');
 

@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { ProductCategory } from '@prisma/client';
+import { Prisma, ProductCategory } from '@prisma/client';
 import { AppError } from '@middleware/errorHandler';
 import { enqueueMasterSafely } from '@modules/zoho/zoho.master.service';
 
@@ -27,7 +26,7 @@ export class MasterProductAdminService {
     } = filters;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.MasterProductWhereInput = {};
 
     if (category) {
       where.category = category;

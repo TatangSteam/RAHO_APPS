@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { generateInvoiceNumber } from '../../../utils/invoiceGenerator';
-import type { CreateInvoiceInput } from '../invoices.schema';
+import type { CreateInvoiceInput, UpdateInvoiceInput } from '../invoices.schema';
 import { assertBranchAccess, assertPermission } from '../../iam/authorization.service';
 import { PERMISSIONS } from '../../iam/permission-catalog';
 import { logAudit } from '../../../utils/auditLog';
@@ -30,7 +29,7 @@ export class InvoiceCreationService {
 
     // Calculate invoice totals
     let subtotal = new Prisma.Decimal(0);
-    const invoiceItems: any[] = [];
+    const invoiceItems: Prisma.InvoiceItemCreateWithoutInvoiceInput[] = [];
 
     for (const item of items) {
       let description = '';
@@ -90,7 +89,7 @@ export class InvoiceCreationService {
         pricePerUnit = new Prisma.Decimal(addon.pricePerUnit);
         quantity = addon.quantity || item.quantity || 1;
       } else if (item.itemType === 'NON_THERAPY') {
-        const purchase = await (prisma as any).memberNonTherapyPurchase.findUnique({
+        const purchase = await prisma.memberNonTherapyPurchase.findUnique({
           where: { id: item.itemId },
           include: { product: true }
         });
@@ -148,7 +147,7 @@ export class InvoiceCreationService {
     const invoiceNumber = await this.generateInvoiceNumber(branch.branchCode);
 
     // Create invoice
-    const invoice = await (prisma as any).invoice.create({
+    const invoice = await prisma.invoice.create({
       data: {
         invoiceNumber,
         memberId,
@@ -197,8 +196,8 @@ export class InvoiceCreationService {
   /**
    * Update invoice (only DRAFT invoices can be updated)
    */
-  async updateInvoice(invoiceId: string, data: any, userId: string) {
-    const invoice = await (prisma as any).invoice.findUnique({
+  async updateInvoice(invoiceId: string, data: UpdateInvoiceInput, userId: string) {
+    const invoice = await prisma.invoice.findUnique({
       where: { id: invoiceId },
     });
 
@@ -227,7 +226,7 @@ export class InvoiceCreationService {
     const taxAmount = taxable.mul(taxPercent).div(100);
     const totalAmount = taxable.plus(taxAmount);
 
-    const updated = await (prisma as any).invoice.update({
+    const updated = await prisma.invoice.update({
       where: { id: invoiceId },
       data: {
         discountPercent,

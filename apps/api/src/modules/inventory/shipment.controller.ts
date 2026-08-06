@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ShipmentService } from './shipment.service';
+import { ShipmentService, type ReceiveShipmentInput } from './shipment.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { ShipmentStatus, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
@@ -58,7 +58,7 @@ export class ShipmentController {
         idempotencyKey,
       });
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -76,8 +76,8 @@ export class ShipmentController {
   async receiveShipment(req: Request, res: Response, next: NextFunction) {
     try {
       const { shipmentId } = req.params;
-      const receivedItems = parseJsonField<any[]>(req.body.receivedItems, 'receivedItems');
-      const discrepancies = parseJsonField<any[]>(req.body.discrepancies, 'discrepancies');
+      const receivedItems = parseJsonField<NonNullable<ReceiveShipmentInput['receivedItems']>>(req.body.receivedItems, 'receivedItems');
+      const discrepancies = parseJsonField<NonNullable<ReceiveShipmentInput['discrepancies']>>(req.body.discrepancies, 'discrepancies');
       const { notes, isFinal, occurredAt } = req.body;
       const idempotencyKey = req.body.idempotencyKey || req.header('Idempotency-Key');
       const userId = req.user?.userId;
@@ -100,7 +100,7 @@ export class ShipmentController {
         receiptFile: req.file,
       });
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -140,7 +140,7 @@ export class ShipmentController {
       });
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -173,7 +173,7 @@ export class ShipmentController {
 
       const result = await shipmentService.approveShipment(shipmentId, userId, branchId || '', notes);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -247,7 +247,7 @@ export class ShipmentController {
       );
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -291,7 +291,7 @@ export class ShipmentController {
       }
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -320,7 +320,7 @@ export class ShipmentController {
       });
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }

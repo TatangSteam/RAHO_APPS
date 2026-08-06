@@ -1,7 +1,6 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Role } from '@prisma/client';
+import { AuditAction, Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateStaffCode } from '../../../utils/codeGenerator';
 
@@ -174,8 +173,8 @@ export class UserManagementService {
     }
 
     // Prepare update data
-    const updateData: any = {};
-    const profileUpdateData: any = {};
+    const updateData: Prisma.UserUpdateInput = {};
+    const profileUpdateData: Prisma.UserProfileUpdateWithoutUserInput = {};
 
     if (data.email) {
       updateData.email = data.email;
@@ -352,7 +351,7 @@ export class UserManagementService {
     } = filters;
 
     // Build where clause
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
     if (role) {
       where.role = role;

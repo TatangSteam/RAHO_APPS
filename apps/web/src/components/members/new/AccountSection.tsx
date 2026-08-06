@@ -1,8 +1,9 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, type CSSProperties } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import { getActiveReferrals } from '@/lib/api/referralsApi';
+import { getActiveReferrals, type ReferralCode } from '@/lib/api/referralsApi';
 import type { CreateMemberData } from '@/types/member';
 import { devError } from '@/lib/logger';
 
@@ -35,8 +36,8 @@ const fieldErrorStyle: CSSProperties = {
 };
 
 export default function AccountSection({ formData, onChange, referralError, onReferralErrorChange, errors, branchId }: AccountSectionProps) {
-  const [referralCodes, setReferralCodes] = useState<any[]>([]);
-  const [filteredReferralCodes, setFilteredReferralCodes] = useState<any[]>([]);
+  const [referralCodes, setReferralCodes] = useState<ReferralCode[]>([]);
+  const [filteredReferralCodes, setFilteredReferralCodes] = useState<ReferralCode[]>([]);
   const [referralSearch, setReferralSearch] = useState('');
   const [showReferralDropdown, setShowReferralDropdown] = useState(false);
   const [selectedReferralId, setSelectedReferralId] = useState('');
@@ -52,6 +53,7 @@ export default function AccountSection({ formData, onChange, referralError, onRe
         setReferralCodes(response.data.data);
         setFilteredReferralCodes(response.data.data);
       } catch (error) {
+      assertCaughtError(error);
         devError('Error fetching referral codes:', error);
       }
     };

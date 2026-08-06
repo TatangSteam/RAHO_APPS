@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { formatNumberWithDots } from './formatNumber';
@@ -76,8 +77,6 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 15;
-    const contentWidth = pageWidth - (margin * 2);
-
     let currentY = margin;
 
     // ============================================================
@@ -350,6 +349,7 @@ export async function generateStockRequestInvoicePDF(request: StockRequest) {
     devLog('✅ PDF generated successfully');
     return true;
   } catch (error) {
+      assertCaughtError(error);
     devError('❌ Error generating PDF:', error);
     throw new Error('Gagal membuat PDF. Silakan coba lagi.');
   }

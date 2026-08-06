@@ -27,10 +27,6 @@ import {
   getDoctorsByBranch,
   assignDoctorToBranch,
   removeDoctorFromBranch,
-  getManagedBranches,
-  addManagedBranch,
-  removeManagedBranch,
-  getAllDoctors,
 } from './users.controller';
 
 export const usersRouter = Router();

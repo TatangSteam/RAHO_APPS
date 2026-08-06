@@ -1,10 +1,26 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { generateDiagnosisCode } from '../../../utils/codeGenerator';
 import { normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
 import { normalizeIfaSubstances } from '../../../utils/therapyPlanSubstances';
-import { AuditAction, Role } from '@prisma/client';
+import { AuditAction, DiagnosisCategory, Prisma, Role } from '@prisma/client';
+import type { BulkTherapyPlanInput } from './member-therapy-plan-bulk.service';
+
+export interface MemberDiagnosisInput {
+  doktorPemeriksa: string;
+  diagnosa: string;
+  kategoriDiagnosa?: DiagnosisCategory | null;
+  kategoriDiagnosaList?: DiagnosisCategory[] | null;
+  icdPrimer?: string | null;
+  icdSekunder?: string | null;
+  icdTersier?: string | null;
+  keluhanRiwayatSekarang?: string | null;
+  riwayatPenyakitTerdahulu?: string | null;
+  riwayatSosialKebiasaan?: string | null;
+  riwayatPengobatan?: string | null;
+  pemeriksaanFisik?: string | null;
+  pemeriksaanTambahan?: string | null;
+}
 
 /**
  * Service for managing member medical records (diagnoses, therapy plans, infusions)
@@ -72,7 +88,7 @@ export class MemberMedicalRecordsService {
    * A member can have multiple diagnoses. Diagnoses are NOT tied to encounters
    * to allow flexibility - member can have diagnoses before having any active package.
    */
-  async createMemberDiagnosis(memberId: string, data: any, userId: string) {
+  async createMemberDiagnosis(memberId: string, data: MemberDiagnosisInput, userId: string) {
     // Verify member exists
     const member = await prisma.member.findUnique({
       where: { id: memberId },
@@ -150,7 +166,12 @@ export class MemberMedicalRecordsService {
   /**
    * Update member diagnosis
    */
-  async updateMemberDiagnosis(memberId: string, diagnosisId: string, data: any, userId: string) {
+  async updateMemberDiagnosis(
+    memberId: string,
+    diagnosisId: string,
+    data: MemberDiagnosisInput,
+    userId: string,
+  ) {
     // Verify diagnosis exists and belongs to this member
     const existingDiagnosis = await prisma.diagnosis.findFirst({
       where: {
@@ -412,7 +433,7 @@ export class MemberMedicalRecordsService {
    * - 00002: Therapy #2 at this branch
    * - 00003: Therapy #3 total (global)
    */
-  async createMemberTherapyPlan(memberId: string, data: any, userId: string) {
+  async createMemberTherapyPlan(memberId: string, data: BulkTherapyPlanInput, userId: string) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
       include: {
@@ -498,7 +519,11 @@ export class MemberMedicalRecordsService {
         h2s: data.h2s || null,
         kcl: data.kcl || null,
         jmlNb: data.jmlNb || null,
-        ...normalizedIfaSubstances,
+        ifaSubstances: normalizedIfaSubstances.ifaSubstances
+          ? normalizedIfaSubstances.ifaSubstances as unknown as Prisma.InputJsonValue
+          : Prisma.JsonNull,
+        ifaSubstanceTotalMl: normalizedIfaSubstances.ifaSubstanceTotalMl,
+        noInIfa: normalizedIfaSubstances.noInIfa,
       },
     });
 

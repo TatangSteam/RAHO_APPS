@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { branchesApi } from '@/lib/api/branchesApi';
+import { branchesApi, type BranchListParams } from '@/lib/api/branchesApi';
 import { showToast, confirm } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { ADMIN_ABOVE_ROLES, hasRole, MANAGER_ABOVE_ROLES } from '@/types/auth';
@@ -68,13 +69,7 @@ export default function BranchesPage() {
     }
   }, [user, router]);
 
-  useEffect(() => {
-    if (user && hasRole(user.role, ADMIN_ABOVE_ROLES)) {
-      loadBranches();
-    }
-  }, [page, search, typeFilter, statusFilter, user]);
-
-  const loadBranches = async () => {
+  const loadBranches = useCallback(async () => {
     if (!user || !hasRole(user.role, ADMIN_ABOVE_ROLES)) return;
 
     try {
@@ -100,7 +95,7 @@ export default function BranchesPage() {
         return;
       }
 
-      const params: any = { page, limit };
+      const params: BranchListParams = { page, limit };
       
       if (search) params.search = search;
       if (typeFilter !== 'all') params.type = typeFilter;
@@ -120,7 +115,8 @@ export default function BranchesPage() {
           inactive: branchesData.filter((branch: Branch) => !branch.isActive).length,
         });
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading branches:', error);
       if (error.response?.status === 401) {
         showToast.error('Sesi Anda telah berakhir, silakan login kembali');
@@ -136,7 +132,13 @@ export default function BranchesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isAdminCabang, page, router, search, statusFilter, typeFilter, user]);
+
+  useEffect(() => {
+    if (user && hasRole(user.role, ADMIN_ABOVE_ROLES)) {
+      void loadBranches();
+    }
+  }, [loadBranches, user]);
 
   const handleDelete = async (branchId: string, branchName: string) => {
     const confirmed = await confirm.delete(branchName);
@@ -150,7 +152,8 @@ export default function BranchesPage() {
       } else {
         loadBranches();
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting branch:', error);
       showToast.error(
         error.response?.data?.error?.message ||
@@ -172,7 +175,8 @@ export default function BranchesPage() {
       } else {
         loadBranches();
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error force deleting branch:', error);
       showToast.error(
         error.response?.data?.error?.message ||

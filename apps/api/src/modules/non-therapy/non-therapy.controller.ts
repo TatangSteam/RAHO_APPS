@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ProductType } from '@prisma/client';
 import { NonTherapyService } from './non-therapy.service';
 import {
   createNonTherapyProductSchema,
@@ -19,8 +20,8 @@ export class NonTherapyController {
     try {
       const { productType, isActive } = req.query;
 
-      const filters: any = {};
-      if (productType) filters.productType = productType;
+      const filters: { productType?: ProductType; isActive?: boolean } = {};
+      if (productType) filters.productType = productType as ProductType;
       if (isActive !== undefined) filters.isActive = isActive === 'true';
 
       const products = await service.getAllProducts(filters);

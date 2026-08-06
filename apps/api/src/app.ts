@@ -88,7 +88,17 @@ export function createApp(): Application {
   app.use(express.json({
     limit: '10mb',
     verify: (req, _res, buffer) => {
-      (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+      // Only Zoho webhook signature verification needs the unparsed body.
+      // Retaining a second copy for every JSON request needlessly increases
+      // peak memory usage, especially for larger payloads.
+      const webhookPrefix = `${env.API_PREFIX}/integrations/zoho/webhooks/`;
+      const expressRequest = req as Request & { rawBody?: Buffer };
+      if (
+        expressRequest.method === 'POST'
+        && expressRequest.originalUrl.startsWith(webhookPrefix)
+      ) {
+        expressRequest.rawBody = buffer;
+      }
     },
   }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -168,9 +178,6 @@ export function createApp(): Application {
   // Non-therapy products module
   app.use(`${prefix}/non-therapy`, nonTherapyRouter);
 
-  // Diagnosis module
-  app.use(`${prefix}/diagnosis`, diagnosisRouter);
-
   // Invoices module
   app.use(`${prefix}/invoices`, invoicesRouter);
 
@@ -189,17 +196,6 @@ export function createApp(): Application {
 
   // Files module (serve files from MinIO through API)
   app.use(`${prefix}/files`, filesRouter);
-
-  // Future module routes registered here:
-  // app.use(`${prefix}/treatment-sessions`, sessionsRouter);
-  // app.use(`${prefix}/inventory`, inventoryRouter);
-  // app.use(`${prefix}/stock-requests`, stockRequestsRouter);
-  // app.use(`${prefix}/shipments`, shipmentsRouter);
-  // app.use(`${prefix}/notifications`, notificationsRouter);
-  // app.use(`${prefix}/chat`, chatRouter);
-  // app.use(`${prefix}/dashboard`, dashboardRouter);
-  // app.use(`${prefix}/admin`, adminRouter);
-  // app.use(`${prefix}/me`, memberPortalRouter);
 
   // ── 404 Handler ───────────────────────────────────────────
   app.use((_req: Request, res: Response) => {

@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FileText, Upload, Download, Trash2, Calendar, User, Loader2, AlertCircle, X } from 'lucide-react';
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
+import { FileText, Upload, Download, Trash2, Calendar, User, Loader2, X } from 'lucide-react';
 import { labResultsApi } from '@/lib/labResultsApi';
 import { createAuthenticatedObjectUrl } from '@/lib/fileApi';
 import { getSupportingPhotosByMember, type SupportingPhoto } from '@/lib/api/supportingPhotoApi';
@@ -50,34 +52,37 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
   const canDelete = canEdit && user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
-    loadLabResults();
-  }, [memberId]);
-
-  useEffect(() => {
+    const createdUrls: string[] = [];
+    let cancelled = false;
     const loadPreviews = async () => {
       const entries = await Promise.all(
         supportingPhotos.map(async (photo) => {
           try {
             const blobUrl = await createAuthenticatedObjectUrl(photo.fileUrl);
+            createdUrls.push(blobUrl);
             return [photo.id, blobUrl] as const;
           } catch (error) {
+      assertCaughtError(error);
             console.error('Failed to load supporting photo preview:', error);
             return null;
           }
         })
       );
 
-      setSupportingPhotoPreviews(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, string]>));
+      if (!cancelled) {
+        setSupportingPhotoPreviews(Object.fromEntries(entries.filter(Boolean) as Array<readonly [string, string]>));
+      }
     };
 
-    loadPreviews();
+    void loadPreviews();
 
     return () => {
-      Object.values(supportingPhotoPreviews).forEach((url) => URL.revokeObjectURL(url));
+      cancelled = true;
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, [supportingPhotos]);
 
-  const loadLabResults = async () => {
+  const loadLabResults = useCallback(async () => {
     try {
       setLoading(true);
       const [data, photos] = await Promise.all([
@@ -87,12 +92,17 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
       setLabResults(data);
       setSupportingPhotos(photos);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Failed to load lab results:', error);
       showToast.error('Gagal memuat hasil lab');
     } finally {
       setLoading(false);
     }
-  };
+  }, [memberId]);
+
+  useEffect(() => {
+    void loadLabResults();
+  }, [loadLabResults]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -134,7 +144,8 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
       setShowUploadModal(false);
       resetForm();
       loadLabResults();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       console.error('Upload failed:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal upload file');
     } finally {
@@ -149,7 +160,8 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
       await labResultsApi.deleteLabResult(memberId, labResultId);
       showToast.success('Hasil lab berhasil dihapus');
       loadLabResults();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       console.error('Delete failed:', error);
       showToast.error(error.response?.data?.error?.message || 'Gagal menghapus file');
     }
@@ -169,6 +181,7 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
 
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch (error) {
+      assertCaughtError(error);
       console.error('Download failed:', error);
       showToast.error('Gagal mengunduh file');
     } finally {
@@ -192,6 +205,7 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
       }
     } catch (error) {
+      assertCaughtError(error);
       console.error('Download supporting photo failed:', error);
       showToast.error('Gagal mengunduh foto penunjang');
     } finally {
@@ -341,7 +355,7 @@ export default function MemberLabResultsTab({ memberId, canEdit = true }: Member
                     >
                       <div className="aspect-video bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center">
                         {previewUrl ? (
-                          <img
+                          <AppImage
                             src={previewUrl}
                             alt={photo.description || photo.fileName}
                             className="h-full w-full object-cover"

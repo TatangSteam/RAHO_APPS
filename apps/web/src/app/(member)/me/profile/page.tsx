@@ -1,4 +1,5 @@
 'use client'
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { meApi, MemberProfile } from '@/lib/api/meApi'
 import { api } from '@/lib/api'
@@ -49,6 +50,7 @@ export default function MemberProfilePage() {
       const blobUrl = URL.createObjectURL(response.data)
       setAvatarBlobUrl(blobUrl)
     } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load avatar:', error)
       setAvatarBlobUrl(null)
     } finally {
@@ -107,6 +109,7 @@ export default function MemberProfilePage() {
           fileToUpload = result.file
           devLog(`[MemberProfile] Avatar compressed: ${formatFileSize(result.originalSize)} → ${formatFileSize(result.compressedSize)}`)
         } catch (error) {
+      assertCaughtError(error);
           devError('Error compressing avatar:', error)
           // Continue with original file
         } finally {
@@ -130,6 +133,7 @@ export default function MemberProfilePage() {
       setUploadSuccess(true)
       setTimeout(() => setUploadSuccess(false), 2000)
     } catch (error) {
+      assertCaughtError(error);
       devError('Error uploading avatar:', error)
       alert('Gagal mengupload foto profil')
     } finally {

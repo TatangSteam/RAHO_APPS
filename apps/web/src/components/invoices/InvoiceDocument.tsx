@@ -1,7 +1,8 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
 import React from 'react';
-import type { Invoice } from '@/types/invoice';
+import type { Invoice, InvoiceItem } from '@/types/invoice';
 import { formatNumberWithDots } from '@/lib/formatNumber';
 import { devLog } from '@/lib/logger';
 import { getDefaultInvoicePaymentAccount } from '@/lib/paymentAccounts';
@@ -74,14 +75,14 @@ export default function InvoiceDocument({ invoice }: Props) {
   const groupedItems = React.useMemo(() => {
     if (!invoice.items || invoice.items.length === 0) return [];
 
-    const itemsMap = new Map<string, any>();
+    const itemsMap = new Map<string, InvoiceItem & { code: string }>();
 
     invoice.items.forEach((item) => {
-      const productCode = (item as any).code || `ITEM-${item.id}`;
+      const productCode = item.code || `ITEM-${item.id}`;
       const key = `${productCode}|${item.description}|${item.pricePerUnit}`;
 
-      if (itemsMap.has(key)) {
-        const existing = itemsMap.get(key);
+      const existing = itemsMap.get(key);
+      if (existing) {
         existing.quantity += item.quantity;
         existing.totalAmount += item.totalAmount;
       } else {
@@ -101,7 +102,7 @@ export default function InvoiceDocument({ invoice }: Props) {
     <div id="invoice-document" className={styles.invoiceDocument}>
       {/* Header */}
       <div className={styles.header}>
-        <img
+        <AppImage
           src="/asset/LogoInInvoiceAndKuitansi.png"
           alt="RAHO Premier"
           className={styles.companyLogo}
@@ -198,8 +199,8 @@ export default function InvoiceDocument({ invoice }: Props) {
                   </td>
                   <td className={styles.colName}>
                     <div className={styles.itemName}>{item.description}</div>
-                    {(item as any).subDescription && (
-                      <div className={styles.itemSubDescription}>{(item as any).subDescription}</div>
+                    {item.subDescription && (
+                      <div className={styles.itemSubDescription}>{item.subDescription}</div>
                     )}
                   </td>
                   <td className={styles.colQty}>{item.quantity}</td>

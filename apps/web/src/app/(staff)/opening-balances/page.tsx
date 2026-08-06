@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useEffect, useState } from 'react';
 import { Plus, Scale, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -52,7 +53,8 @@ export default function OpeningBalancesPage() {
       setRows(opening);
       setBranches(branchResponse.data.data || []);
       setPermissions(new Set(access.data.data?.permissions || []));
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Gagal memuat opening balance.');
     } finally {
       setLoading(false);
@@ -66,7 +68,8 @@ export default function OpeningBalancesPage() {
       await operation();
       showToast.success(message);
       await reload();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(error.response?.data?.error?.message || 'Aksi gagal.');
     }
   };
@@ -266,7 +269,8 @@ function OpeningForm({ branches, existing, onSaved, onCancel }: {
       }
       showToast.success(existing ? 'Opening balance dikoreksi.' : 'Draft opening balance dibuat.');
       onSaved();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       setFormError(error.response?.data?.error?.message || 'Gagal menyimpan opening balance.');
     }
   };

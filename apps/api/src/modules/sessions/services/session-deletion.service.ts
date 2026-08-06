@@ -1,4 +1,11 @@
-import { AuditAction, PackageStatus, StockMutationType, TreatmentCompletionStatus } from '@prisma/client';
+import {
+  AuditAction,
+  type MemberPackage,
+  PackageStatus,
+  Prisma,
+  StockMutationType,
+  TreatmentCompletionStatus,
+} from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
@@ -22,7 +29,10 @@ export class SessionDeletionService {
     }, new Map<string, number>());
   }
 
-  private async releasePackageUsage(tx: any, memberPackage: any) {
+  private async releasePackageUsage(
+    tx: Prisma.TransactionClient,
+    memberPackage: Pick<MemberPackage, 'id' | 'usedSessions' | 'status' | 'totalSessions' | 'expiredAt'>,
+  ) {
     const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
     await tx.memberPackage.update({
       where: { id: memberPackage.id },

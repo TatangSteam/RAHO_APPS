@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import * as referralsApi from '@/lib/api/referralsApi';
@@ -66,6 +67,7 @@ export default function ReferralsPage() {
       setReferrals(response.data.data.referrals);
       setTotal(response.data.data.total);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching referrals:', error);
     } finally {
       setLoading(false);
@@ -77,6 +79,7 @@ export default function ReferralsPage() {
       const response = await branchesApi.getAllBranches();
       setBranches(response.data.data);
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching branches:', error);
     }
   }, []);
@@ -97,6 +100,7 @@ export default function ReferralsPage() {
       showToast.success('Kode referral berhasil dihapus');
       fetchReferrals();
     } catch (error) {
+      assertCaughtError(error);
       devError('Error deleting referral:', error);
       showToast.error('Gagal menghapus kode referral');
     }
@@ -116,6 +120,7 @@ export default function ReferralsPage() {
       const response = await request();
       downloadBlob(response.data, filename);
     } catch (error) {
+      assertCaughtError(error);
       devError(errorMessage, error);
       showToast.error(errorMessage);
     }
@@ -276,7 +281,7 @@ export default function ReferralsPage() {
                       </div>
                       <div>
                         <p className="text-neutral-900 dark:text-white font-medium">Tidak ada data referral</p>
-                        <p className="text-sm text-neutral-500 dark:text-neutral-400">Klik tombol "Tambah Referral" untuk membuat baru</p>
+                  <p className="text-sm text-neutral-500 dark:text-neutral-400">Klik tombol &quot;Tambah Referral&quot; untuk membuat baru</p>
                       </div>
                     </div>
                   </td>

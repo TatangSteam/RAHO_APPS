@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { assertCaughtError } from '@/lib/caughtError';
+import { useCallback, useState, useEffect } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
-import { usersApi } from '@/lib/usersApi';
+import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { devError } from '@/lib/logger';
 
 interface ExportSessionsModalProps {
@@ -44,11 +45,21 @@ export default function ExportSessionsModal({
   const [status, setStatus] = useState('');
   const [pelaksanaan, setPelaksanaan] = useState('');
   const [doctorId, setDoctorId] = useState('');
-  const [doctors, setDoctors] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<StaffMember[]>([]);
+
+  const loadDoctors = useCallback(async () => {
+    try {
+      const doctorsList = await usersApi.getDoctors(user?.branchId || undefined);
+      setDoctors(doctorsList);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Failed to load doctors:', error);
+    }
+  }, [user?.branchId]);
 
   useEffect(() => {
     if (isOpen) {
-      loadDoctors();
+      void loadDoctors();
       // Set current filters if provided
       if (currentFilters) {
         setDateFrom(currentFilters.dateFrom || '');
@@ -58,16 +69,7 @@ export default function ExportSessionsModal({
         setDoctorId(currentFilters.doctorId || '');
       }
     }
-  }, [isOpen, currentFilters]);
-
-  const loadDoctors = async () => {
-    try {
-      const doctorsList = await usersApi.getDoctors(user?.branchId || undefined);
-      setDoctors(doctorsList);
-    } catch (error) {
-      devError('Failed to load doctors:', error);
-    }
-  };
+  }, [currentFilters, isOpen, loadDoctors]);
 
   const handleToggleField = (field: keyof typeof fields) => {
     setFields((prev) => ({ ...prev, [field]: !prev[field] }));
@@ -85,7 +87,13 @@ export default function ExportSessionsModal({
       queryParams.append('format', format);
       queryParams.append('groupBy', groupBy);
 
-      const filters: any = {};
+      const filters: {
+        dateFrom?: string;
+        dateTo?: string;
+        status?: string;
+        pelaksanaan?: string;
+        doctorId?: string;
+      } = {};
       if (dateFrom) filters.dateFrom = dateFrom;
       if (dateTo) filters.dateTo = dateTo;
       if (status) filters.status = status;
@@ -122,7 +130,8 @@ export default function ExportSessionsModal({
 
       showToast.success('Data berhasil di-export');
       onClose();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Export error:', error);
       showToast.error(error.message || 'Gagal export data');
     } finally {
@@ -207,7 +216,7 @@ export default function ExportSessionsModal({
                 <label className="form-label mb-3">Grouping</label>
                 <select
                   value={groupBy}
-                  onChange={(e) => setGroupBy(e.target.value as any)}
+                  onChange={(e) => setGroupBy(e.target.value as typeof groupBy)}
                   className="form-input"
                   disabled={loading}
                 >

@@ -55,7 +55,7 @@ test.describe.fixme('Inventory - Approval Flow', () => {
   let inventoryPage: InventoryPage;
   let requestCode: string;
 
-  test.beforeEach(async ({ loginAs, page: adminPage }) => {
+test.beforeEach(async ({ loginAs, page: _adminPage }) => {
     // Create request as ADMIN_CABANG
     const branchPage = await loginAs('ADMIN_CABANG');
     const branchInventory = new InventoryPage(branchPage);
@@ -121,7 +121,7 @@ test.describe.fixme('Inventory - Shipment Flow', () => {
   let requestCode: string;
   let shipmentCode: string;
 
-  test.beforeEach(async ({ loginAs, page: tempPage }) => {
+test.beforeEach(async ({ loginAs, page: _tempPage }) => {
     // Setup: Create and approve a request
     const managerPage = await loginAs('ADMIN_MANAGER');
     const managerInventory = new InventoryPage(managerPage);
@@ -212,7 +212,7 @@ test.describe.fixme('Inventory - Shipment Flow', () => {
 
     // Get initial stock
     await inventoryPage.goto();
-    const initialStock = await inventoryPage.getProductStock('Test Product');
+    const _initialStock = await inventoryPage.getProductStock('Test Product');
 
     // Create, ship, and receive
     await inventoryPage.createShipment(requestCode);

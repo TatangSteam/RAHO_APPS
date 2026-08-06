@@ -3,7 +3,7 @@ import { InventoryService } from './inventory.service';
 import { InventoryExportService } from './services/inventory-export.service';
 import { sendSuccess, sendError } from '../../utils/response';
 import { prisma } from '../../lib/prisma';
-import { BranchType, ProductCategory, Role, StockMutationType } from '@prisma/client';
+import { BranchType, Prisma, ProductCategory, Role, StockMutationType } from '@prisma/client';
 import { centralStockVisibleRoles } from './logistics.access';
 
 const inventoryService = new InventoryService();
@@ -105,7 +105,7 @@ export class InventoryController {
 
       const result = await materialUsageHistoryService.getMaterialUsageHistory(filters);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -134,7 +134,7 @@ export class InventoryController {
         requestedBranchId ? undefined : accessibleBranchIds
       );
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -153,7 +153,7 @@ export class InventoryController {
 
       const result = await materialUsageHistoryService.getBranchGroups(accessibleBranchIds);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -167,10 +167,10 @@ export class InventoryController {
       const { category, isActive, search, limit } = req.query;
 
       // Build where clause
-      const where: any = {};
+      const where: Prisma.MasterProductWhereInput = {};
 
       if (category) {
-        where.category = category;
+        where.category = category as ProductCategory;
       }
 
       if (isActive === 'true') {
@@ -220,7 +220,7 @@ export class InventoryController {
         })),
         total: products.length,
       });
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -243,7 +243,7 @@ export class InventoryController {
 
       const items = await materialUsageService.getAvailableInventoryItems(branchId);
       return sendSuccess(res, items);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -266,7 +266,7 @@ export class InventoryController {
 
       const items = await inventoryService.getInventoryItems(targetBranchId);
       return sendSuccess(res, items);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -285,7 +285,7 @@ export class InventoryController {
       }
 
       return sendSuccess(res, item);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -338,7 +338,7 @@ export class InventoryController {
       });
 
       return sendSuccess(res, lowStockItems);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -411,7 +411,7 @@ export class InventoryController {
       const result = await inventoryService.adjustStock(itemId, adjustment, notes, userId);
 
       return sendSuccess(res, result, 200);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -447,7 +447,7 @@ export class InventoryController {
       });
 
       return sendSuccess(res, updatedProduct, 200);
-    } catch (err: any) {
+    } catch (err) {
       if (err.code === 'P2025') {
         return sendError(res, 404, 'PRODUCT_NOT_FOUND', 'Produk tidak ditemukan');
       }
@@ -510,7 +510,7 @@ export class InventoryController {
       res.write('\uFEFF');
       res.write(csvContent);
       res.end();
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -566,7 +566,7 @@ export class InventoryController {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       
       res.send(excelBuffer);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -590,7 +590,7 @@ export class InventoryController {
 
       const result = await inventoryService.createInventoryItem(req.body, targetBranchId, userId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -612,7 +612,7 @@ export class InventoryController {
         allowDirectStockUpdate,
       );
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -628,7 +628,7 @@ export class InventoryController {
 
       const result = await inventoryService.deleteInventoryItem(itemId, userId);
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -663,7 +663,7 @@ export class InventoryController {
 
       const result = await inventoryService.batchCreateInventoryItems(items, targetBranchId, userId);
       return sendSuccess(res, result, 201);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -757,7 +757,7 @@ export class InventoryController {
       });
 
       return sendSuccess(res, result);
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }
@@ -782,7 +782,7 @@ export class InventoryController {
 
       await workbook.xlsx.write(res);
       res.end();
-    } catch (err: any) {
+    } catch (err) {
       next(err);
     }
   }

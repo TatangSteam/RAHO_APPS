@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useMemo } from 'react';
 import { Package, Search, Loader2, Check, CheckSquare, Square, Layers, Save } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -93,7 +94,8 @@ export default function InventoryBatchAddModal({
       const products = data?.products || data || [];
       
       setMasterProducts(Array.isArray(products) ? products : []);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error loading master products:', error);
       showToast.error('Gagal memuat daftar produk');
     } finally {
@@ -247,7 +249,8 @@ export default function InventoryBatchAddModal({
       }
       
       onSuccess();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error batch adding inventory items:', error);
       const errorMsg = error.response?.data?.error?.message || error.response?.data?.message || 'Gagal menambahkan item inventori';
       showToast.error(errorMsg);

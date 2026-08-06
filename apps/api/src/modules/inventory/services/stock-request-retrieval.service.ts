@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
-import { StockRequestStatus, Role } from '@prisma/client';
+import { Prisma, StockRequestStatus, Role, type StockRequest } from '@prisma/client';
 import {
   formatStockRequestQuantity,
   getStockRequestUnit,
@@ -16,6 +15,70 @@ interface GetRequestsOptions {
   page?: number;
   limit?: number;
 }
+
+interface StockRequestForList extends Pick<
+  StockRequest,
+  | 'id' | 'requestCode' | 'branchId' | 'status' | 'notes'
+  | 'paymentProofUrl' | 'paymentUploadedAt' | 'createdAt' | 'updatedAt'
+> {
+  branch: { name: string; type: string };
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    requestedQty: unknown;
+    approvedQty: unknown;
+    overstockDeducted: unknown;
+    finalQty: unknown;
+    notes: string | null;
+    masterProduct: Parameters<typeof formatStockRequestQuantity>[0] & {
+      name: string;
+      category: string;
+    };
+  }>;
+  invoice?: {
+    id: string;
+    invoiceNumber: string;
+    totalAmount: unknown;
+    paidAmount: unknown;
+    remainingAmount: unknown;
+    status: string;
+    paymentVerificationStatus: string | null;
+    notes?: string | null;
+    paymentAccountLabel?: string | null;
+    paymentBankName?: string | null;
+    paymentAccountNumber?: string | null;
+    paymentAccountHolder?: string | null;
+  } | null;
+  shipment?: { id: string; shipmentCode: string; status: string } | null;
+}
+
+type InvoiceForStockRequestDetail = Prisma.StockRequestInvoiceGetPayload<{
+  include: {
+    items: { include: { masterProduct: true } };
+    payments: true;
+  };
+}>;
+
+type ShipmentForStockRequestDetail = Prisma.ShipmentGetPayload<{
+  include: {
+    fromBranch: true;
+    toBranch: true;
+    items: { include: { masterProduct: true } };
+    discrepancies: { include: { masterProduct: true } };
+  };
+}>;
+
+type StockRequestForDetail = Omit<StockRequestForList, 'invoice' | 'shipment'> & Pick<
+  StockRequest,
+  | 'paymentProofFileName' | 'paymentProofFileSize' | 'paymentProofMimeType'
+  | 'paymentUploadedBy' | 'paymentVerifiedBy' | 'paymentVerifiedAt'
+  | 'paymentVerificationNotes' | 'paymentRejectionReason' | 'reviewedBy'
+  | 'reviewedAt' | 'reviewNotes' | 'shippedBy' | 'shippedAt'
+  | 'receivedBy' | 'receivedAt' | 'receivingNotes'
+> & {
+  invoice?: InvoiceForStockRequestDetail | null;
+  shipment?: ShipmentForStockRequestDetail | null;
+};
 
 /**
  * Service for retrieving stock requests
@@ -42,7 +105,7 @@ export class StockRequestRetrievalService {
       limit = 50 
     } = options;
 
-    const where: any = {};
+    const where: Prisma.StockRequestWhereInput = {};
 
     // Branch filtering
     if (branchId) {
@@ -159,7 +222,7 @@ export class StockRequestRetrievalService {
       }
     }
 
-    const where: any = {
+    const where: Prisma.StockRequestWhereInput = {
       status: {
         in: ['PENDING', 'PAYMENT_UPLOADED'],
       },
@@ -296,7 +359,7 @@ export class StockRequestRetrievalService {
   /**
    * Format stock request for list response
    */
-  private formatStockRequest(request: any) {
+  private formatStockRequest(request: StockRequestForList) {
     return {
       id: request.id,
       requestCode: request.requestCode,
@@ -306,10 +369,10 @@ export class StockRequestRetrievalService {
       status: request.status,
       notes: request.notes,
       itemCount: request.items.length,
-      totalItems: request.items.reduce((sum: number, item: any) => (
+      totalItems: request.items.reduce((sum, item) => (
         sum + formatStockRequestQuantity(item.masterProduct, item.requestedQty)
       ), 0),
-      items: request.items.map((item: any) => ({
+      items: request.items.map((item) => ({
         id: item.id,
         masterProductId: item.masterProductId,
         productName: item.masterProduct.name,
@@ -360,7 +423,7 @@ export class StockRequestRetrievalService {
   /**
    * Format stock request for detail response
    */
-  private formatStockRequestDetail(request: any) {
+  private formatStockRequestDetail(request: StockRequestForDetail) {
     const base = this.formatStockRequest(request);
 
     return {
@@ -405,7 +468,7 @@ export class StockRequestRetrievalService {
         paidAt: request.invoice.paidAt?.toISOString(),
         rejectionReason: request.invoice.rejectionReason,
         notes: request.invoice.notes,
-        items: request.invoice.items?.map((item: any) => ({
+        items: request.invoice.items?.map((item) => ({
           id: item.id,
           masterProductId: item.masterProductId,
           sku: item.sku,
@@ -416,7 +479,7 @@ export class StockRequestRetrievalService {
           pricePerUnit: Number(item.pricePerUnit),
           subtotal: Number(item.subtotal),
         })),
-        payments: request.invoice.payments?.map((payment: any) => ({
+        payments: request.invoice.payments?.map((payment) => ({
           id: payment.id,
           amount: Number(payment.amount),
           proofFileUrl: payment.proofFileUrl,
@@ -447,7 +510,7 @@ export class StockRequestRetrievalService {
         receiptFileName: request.shipment.receiptFileName,
         receiptFileSize: request.shipment.receiptFileSize,
         receiptMimeType: request.shipment.receiptMimeType,
-        items: request.shipment.items?.map((item: any) => ({
+        items: request.shipment.items?.map((item) => ({
           id: item.id,
           masterProductId: item.masterProductId,
           productName: item.masterProduct.name,
@@ -457,7 +520,7 @@ export class StockRequestRetrievalService {
             : formatStockRequestQuantity(item.masterProduct, item.receivedQty),
           unit: getStockRequestUnit(item.masterProduct),
         })),
-        discrepancies: request.shipment.discrepancies?.map((d: any) => ({
+        discrepancies: request.shipment.discrepancies?.map((d) => ({
           id: d.id,
           masterProductId: d.masterProductId,
           productName: d.productName,

@@ -101,7 +101,7 @@ export async function getAllBranches() {
   return data;
 }
 
-export async function updateBranch(branchId: string, updateData: any) {
+export async function updateBranch(branchId: string, updateData: Record<string, unknown>) {
   const { data } = await api.patch(`/admin/manager/branches/${branchId}`, updateData);
   return data;
 }
@@ -115,7 +115,7 @@ export async function getAllPackagePricing() {
   return data;
 }
 
-export async function updatePackagePricing(pricingId: string, updateData: any) {
+export async function updatePackagePricing(pricingId: string, updateData: Record<string, unknown>) {
   const { data } = await api.patch(`/admin/manager/package-pricing/${pricingId}`, updateData);
   return data;
 }

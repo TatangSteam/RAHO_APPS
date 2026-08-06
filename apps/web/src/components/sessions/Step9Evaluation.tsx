@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
@@ -85,7 +86,8 @@ export default function Step9Evaluation({
       showToast.success('Evaluasi dokter berhasil disimpan');
       setIsEditing(false);
       onComplete();
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Error saving evaluation:', error);
       showToast.error(error.message || 'Gagal menyimpan evaluasi');
     } finally {

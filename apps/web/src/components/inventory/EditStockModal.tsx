@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect } from 'react';
 import { devLog, devError } from '@/lib/logger';
 
@@ -71,6 +72,7 @@ export default function EditStockModal({ isOpen, item, onClose, onSave }: EditSt
       setReason('');
       onClose();
     } catch (error) {
+      assertCaughtError(error);
       devError('Save error:', error);
     } finally {
       setSaving(false);

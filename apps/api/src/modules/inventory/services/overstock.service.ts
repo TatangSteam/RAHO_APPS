@@ -1,11 +1,30 @@
-// @ts-nocheck
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, OverstockStatus } from '@prisma/client';
+import { AuditAction, OverstockStatus, Prisma } from '@prisma/client';
 import {
   formatStockRequestQuantity,
   parseStockRequestQuantity,
 } from './stock-request-units';
+
+interface OverstockForResponse {
+  id: string;
+  branchId: string;
+  masterProductId: string;
+  quantity: unknown;
+  originalQty: unknown;
+  reason: string;
+  status: OverstockStatus;
+  createdAt: Date;
+  updatedAt: Date;
+  masterProduct?: { name: string; category: string; baseUnit: string } | null;
+  sourceShipment?: { id: string; shipmentCode: string; createdAt?: Date } | null;
+  usages?: Array<{
+    id: string;
+    quantityUsed: unknown;
+    createdAt: Date;
+    stockRequest?: { requestCode: string } | null;
+  }>;
+}
 
 /**
  * Service for managing branch overstock
@@ -21,7 +40,7 @@ export class OverstockService {
     masterProductId?: string;
     status?: OverstockStatus;
   }) {
-    const where: any = {
+    const where: Prisma.BranchOverstockWhereInput = {
       branchId,
       status: options?.status || { in: ['AVAILABLE', 'PARTIALLY_USED'] },
     };
@@ -176,7 +195,7 @@ export class OverstockService {
     stockRequestId: string,
     stockRequestItemId: string,
     userId: string,
-    tx?: any // Prisma transaction client
+    tx?: Prisma.TransactionClient
   ): Promise<{
     deductedQty: number;
     finalQty: number;
@@ -230,7 +249,7 @@ export class OverstockService {
     }> = [];
 
     // Helper function to apply deductions
-    const applyDeductions = async (dbClient: any) => {
+    const applyDeductions = async (dbClient: Prisma.TransactionClient) => {
       for (const overstock of availableOverstocks) {
         if (remainingToDeduct <= 0) break;
 
@@ -390,7 +409,7 @@ export class OverstockService {
   /**
    * Format overstock for response
    */
-  private formatOverstock(overstock: any) {
+  private formatOverstock(overstock: OverstockForResponse) {
     return {
       id: overstock.id,
       branchId: overstock.branchId,
@@ -407,7 +426,7 @@ export class OverstockService {
         shipmentCode: overstock.sourceShipment.shipmentCode,
         createdAt: overstock.sourceShipment.createdAt?.toISOString(),
       } : null,
-      usages: overstock.usages?.map((u: any) => ({
+      usages: overstock.usages?.map((u) => ({
         id: u.id,
         quantityUsed: Number(u.quantityUsed),
         stockRequestCode: u.stockRequest?.requestCode,

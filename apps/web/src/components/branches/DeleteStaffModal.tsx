@@ -1,7 +1,8 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { AlertTriangle, X, Trash2, Users, Activity } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 
 interface DeleteStaffModalProps {
@@ -28,13 +29,7 @@ export default function DeleteStaffModal({
     completed: number;
   } | null>(null);
 
-  useEffect(() => {
-    if (isOpen && staff.id) {
-      loadSessionStats();
-    }
-  }, [isOpen, staff.id]);
-
-  const loadSessionStats = async () => {
+  const loadSessionStats = useCallback(async () => {
     try {
       // Check for active and completed sessions
       const response = await api.get(`/users/performance/${staff.id}/history`, {
@@ -47,10 +42,17 @@ export default function DeleteStaffModal({
         completed: data.total || 0,
       });
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error loading session stats:', error);
       setSessionStats({ active: 0, completed: 0 });
     }
-  };
+  }, [staff.id]);
+
+  useEffect(() => {
+    if (isOpen && staff.id) {
+      void loadSessionStats();
+    }
+  }, [isOpen, loadSessionStats, staff.id]);
 
   const handleConfirm = async () => {
     setLoading(true);
@@ -58,6 +60,7 @@ export default function DeleteStaffModal({
       await onConfirm();
       onClose();
     } catch (error) {
+      assertCaughtError(error);
       console.error('Error deleting staff:', error);
     } finally {
       setLoading(false);

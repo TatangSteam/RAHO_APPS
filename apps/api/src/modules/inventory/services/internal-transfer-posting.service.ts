@@ -124,7 +124,6 @@ export async function dispatchInternalTransfer(
   if (layerIds.length) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "inventory_cost_layers" WHERE "id" IN (${Prisma.join(layerIds)}) ORDER BY "id" FOR UPDATE`);
 
   const itemByProduct = new Map(sourceItems.map((item) => [item.masterProductId, item]));
-  const balanceById = new Map(balances.map((balance) => [balance.id, balance]));
   const layerContext = new Map<string, { balanceId: string; itemId: string; productId: string }>();
   const planned: Array<{ productId: string; allocation: ReturnType<typeof allocateFifo>[number] }> = [];
 
@@ -165,7 +164,6 @@ export async function dispatchInternalTransfer(
   const movementsByProduct = new Map<string, TransferMovement>();
   for (const [balanceId, rows] of grouped) {
     const context = layerContext.get(rows[0].allocation.layerId)!;
-    const balance = balanceById.get(balanceId)!;
     const quantity = rows.reduce((sum, row) => sum.add(row.allocation.quantity), new Prisma.Decimal(0));
     const actualCost = rows.reduce((sum, row) => sum.add(row.allocation.totalCost), new Prisma.Decimal(0));
     const sourceItem = await tx.inventoryItem.findUniqueOrThrow({ where: { id: context.itemId } });

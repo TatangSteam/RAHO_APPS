@@ -6,6 +6,7 @@
 import { prisma } from '../../../lib/prisma';
 import { normalizeIfaSubstances, type TherapyPlanSubstance } from '../../../utils/therapyPlanSubstances';
 import { syncSessionInfusionToTherapyPlan } from '../../sessions/services/infusion-material-sync.service';
+import { Prisma, type TherapyPlan } from '@prisma/client';
 
 interface EditPlanInput {
   planNumber: number;
@@ -28,7 +29,7 @@ interface EditPlanInput {
   ifaSubstanceTotalMl?: number | null;
 }
 
-interface BulkEditSetInput {
+export interface BulkEditSetInput {
   newSetName?: string; // Optional: Custom set name (only for authorized users)
   retainedPlanNumbers?: number[];
   plans: EditPlanInput[];
@@ -396,7 +397,11 @@ export class MemberTherapyPlanSetEditService {
         },
       });
 
-      const copiedPlans = [];
+      const copiedPlans: Array<{
+        oldPlan: TherapyPlan | null;
+        copiedPlan: TherapyPlan;
+        edited: boolean;
+      }> = [];
       const newPlanInputs: EditPlanInput[] = [];
 
       // Identify new plans (plans that don't exist in original set)
@@ -424,6 +429,7 @@ export class MemberTherapyPlanSetEditService {
             : {
                 ifaSubstances: oldPlan.ifaSubstances,
                 ifaSubstanceTotalMl: oldPlan.ifaSubstanceTotalMl,
+                noInIfa: oldPlan.noInIfa,
               };
 
         const copiedPlan = await tx.therapyPlan.create({
@@ -447,9 +453,13 @@ export class MemberTherapyPlanSetEditService {
             h2s: hasEdit && editInput.h2s !== undefined ? editInput.h2s : oldPlan.h2s,
             kcl: hasEdit && editInput.kcl !== undefined ? editInput.kcl : oldPlan.kcl,
             jmlNb: hasEdit && editInput.jmlNb !== undefined ? editInput.jmlNb : oldPlan.jmlNb,
-            ...ifaSubstanceData,
+            ifaSubstances: ifaSubstanceData.ifaSubstances === null
+              ? Prisma.JsonNull
+              : ifaSubstanceData.ifaSubstances as Prisma.InputJsonValue,
+            ifaSubstanceTotalMl: ifaSubstanceData.ifaSubstanceTotalMl,
+            noInIfa: ifaSubstanceData.noInIfa,
             version: newVersion,
-          } as any,
+          },
         });
 
         copiedPlans.push({ oldPlan, copiedPlan, edited: hasEdit });
@@ -462,7 +472,7 @@ export class MemberTherapyPlanSetEditService {
         // Prepare IFA substance data for new plan
         const ifaSubstanceData = newPlanInput.ifaSubstances !== undefined
           ? normalizeIfaSubstances(newPlanInput.ifaSubstances, Boolean(newPlanInput.ifa250 && newPlanInput.ifa250 > 0))
-          : { ifaSubstances: null, ifaSubstanceTotalMl: null };
+          : { ifaSubstances: null, ifaSubstanceTotalMl: null, noInIfa: null };
 
         const newPlan = await tx.therapyPlan.create({
           data: {
@@ -485,13 +495,17 @@ export class MemberTherapyPlanSetEditService {
             h2s: newPlanInput.h2s,
             kcl: newPlanInput.kcl,
             jmlNb: newPlanInput.jmlNb,
-            ...ifaSubstanceData,
+            ifaSubstances: ifaSubstanceData.ifaSubstances
+              ? ifaSubstanceData.ifaSubstances as unknown as Prisma.InputJsonValue
+              : Prisma.JsonNull,
+            ifaSubstanceTotalMl: ifaSubstanceData.ifaSubstanceTotalMl,
+            noInIfa: ifaSubstanceData.noInIfa,
             version: newVersion,
-          } as any,
+          },
         });
 
         // Add to copiedPlans as edited (new plans are always "edited")
-        copiedPlans.push({ oldPlan: null as any, copiedPlan: newPlan, edited: true });
+        copiedPlans.push({ oldPlan: null, copiedPlan: newPlan, edited: true });
       }
 
       // Mark old set as SUPERSEDED

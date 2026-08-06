@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -79,15 +80,21 @@ const STATUS_LABELS: Record<ShipmentStatusFilter, string> = {
   RECEIVED_WITH_ISSUE: 'Ada Masalah',
 };
 
-function unwrapApiData<T>(response: any, fallback: T): T {
-  const body = response?.data;
+function unwrapApiData<T>(response: { data?: unknown }, fallback: T): T {
+  const body = response.data;
 
-  if (Array.isArray(body?.data)) {
-    return body.data as T;
+  if (typeof body !== 'object' || body === null) {
+    return fallback;
   }
 
-  if (Array.isArray(body?.data?.data)) {
-    return body.data.data as T;
+  const firstLevel = (body as { data?: unknown }).data;
+  if (Array.isArray(firstLevel)) {
+    return firstLevel as T;
+  }
+
+  if (typeof firstLevel === 'object' && firstLevel !== null) {
+    const secondLevel = (firstLevel as { data?: unknown }).data;
+    if (Array.isArray(secondLevel)) return secondLevel as T;
   }
 
   return fallback;
@@ -218,6 +225,7 @@ export default function ShipmentReportPage() {
       });
       setShipments(unwrapApiData<Shipment[]>(response, []));
     } catch (error) {
+      assertCaughtError(error);
       devError('Shipment report fetch error:', error);
       showToast.error('Gagal memuat laporan pengiriman');
       setShipments([]);
@@ -435,6 +443,7 @@ export default function ShipmentReportPage() {
       window.open(objectUrl, '_blank', 'noopener,noreferrer');
       setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
     } catch (error) {
+      assertCaughtError(error);
       devError('Open payment proof error:', error);
       showToast.error(`Gagal membuka ${label}`);
     } finally {

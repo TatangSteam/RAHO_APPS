@@ -178,11 +178,13 @@ export const createBagOpnameSchema = z.object({
 
 export type CreateBranchStockRequestInput = z.infer<typeof createBranchStockRequestSchema>;
 export type ApproveStockRequestInput = z.infer<typeof approveStockRequestSchema>;
+export type ApproveBagStockRequestInput = z.infer<typeof approveBagStockRequestSchema>;
 export type RejectStockRequestInput = z.infer<typeof rejectStockRequestSchema>;
 export type ShipStockInput = z.infer<typeof shipStockSchema>;
 export type ReceiveShipmentInput = z.infer<typeof receiveShipmentSchema>;
 export type CreateHomecareTeamInput = z.infer<typeof createHomecareTeamSchema>;
 export type AddHomecareTeamMemberInput = z.infer<typeof addHomecareTeamMemberSchema>;
+export type RemoveHomecareTeamMemberInput = z.infer<typeof removeHomecareTeamMemberSchema>;
 export type CreateHomecareBagInput = z.infer<typeof createHomecareBagSchema>;
 export type AssignHomecareBagInput = z.infer<typeof assignHomecareBagSchema>;
 export type CreateBagStockRequestInput = z.infer<typeof createBagStockRequestSchema>;

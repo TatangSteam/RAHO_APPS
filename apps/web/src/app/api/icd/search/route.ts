@@ -1,3 +1,4 @@
+import { assertCaughtError } from '@/lib/caughtError';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { NextResponse } from 'next/server';
@@ -228,6 +229,7 @@ export async function GET(request: Request) {
         source = 'who-api';
       }
     } catch (error) {
+      assertCaughtError(error);
       if (error instanceof Error && error.message !== 'ICD_API_CREDENTIALS_MISSING') {
         console.error('Failed to fetch ICD entity from WHO API:', error);
       }

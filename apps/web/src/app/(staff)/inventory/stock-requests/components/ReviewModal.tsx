@@ -1,12 +1,13 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Package, FileText, CreditCard, Check, AlertCircle, Download, RefreshCw, Clock, Building2, MessageSquare, Upload, ImageIcon, Trash2, CheckCircle2 } from 'lucide-react';
 import { StockRequest, InvoiceItemInput, STATUS_LABELS, STATUS_ICONS } from '../types';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
-import { generateStockRequestInvoicePDF } from '@/lib/stockRequestInvoicePdf';
 import { useAuthStore } from '@/stores/authStore';
 import { compressImageWithPreset, formatFileSize, isImageFile } from '@/lib/imageCompressor';
 import { inventoryApi } from '@/lib/api/inventoryApi';
@@ -180,6 +181,7 @@ export default function ReviewModal({
         return { ...current, [paymentId]: blobUrl };
       });
     } catch (error) {
+      assertCaughtError(error);
       devError('Error fetching payment proof:', error);
       setFailedPaymentProofIds((current) => (
         current.includes(paymentId) ? current : [...current, paymentId]
@@ -320,10 +322,12 @@ export default function ReviewModal({
         ...request,
         invoice: { ...request.invoice, items: invoiceItems },
       };
-      
+
+      const { generateStockRequestInvoicePDF } = await import('@/lib/stockRequestInvoicePdf');
       await generateStockRequestInvoicePDF(invoiceWithItems);
       showToast.success('Invoice PDF berhasil didownload');
     } catch (error) {
+      assertCaughtError(error);
       devError('Error generating invoice PDF:', error);
       showToast.error('Gagal membuat PDF invoice');
     } finally {
@@ -354,6 +358,7 @@ export default function ReviewModal({
           compressed: result.compressedSize
         });
       } catch (error) {
+      assertCaughtError(error);
         devError('Error compressing image:', error);
         setUploadFile(selectedFile);
         const reader = new FileReader();
@@ -446,7 +451,8 @@ export default function ReviewModal({
       if (onRefresh) {
         onRefresh();
       }
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       showToast.error(
         error.response?.data?.error?.message ||
         error.response?.data?.message ||
@@ -867,7 +873,7 @@ export default function ReviewModal({
                               <p className="text-neutral-400">Memuat gambar...</p>
                             </div>
                           ) : blobUrl ? (
-                            <img
+                            <AppImage
                               src={blobUrl}
                               alt={`Bukti pembayaran ${paymentHistory.length - index}`}
                               className="max-h-[400px] w-full object-contain"
@@ -1075,7 +1081,7 @@ export default function ReviewModal({
                     ) : (
                       <div className="space-y-3">
                         <div className="relative rounded-xl overflow-hidden bg-neutral-900 border border-blue-500/20">
-                          <img 
+                          <AppImage
                             src={uploadPreview} 
                             alt="Preview"
                             className="w-full max-h-48 object-contain"

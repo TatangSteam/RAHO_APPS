@@ -1,5 +1,5 @@
 import { prisma } from '@lib/prisma';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { signAccessToken } from '@lib/jwt';
 import { logger } from '@lib/logger';
 
@@ -16,7 +16,7 @@ interface ImpersonationData {
 interface ImpersonationTokenPayload {
   userId: string;
   email: string;
-  role: Role;
+  role: string;
   branchId: string | null;
   branchCode: string | null;
   adminManagerAccessScope?: string | null;
@@ -24,6 +24,16 @@ interface ImpersonationTokenPayload {
   staffCode: string | null;
   impersonating?: ImpersonationData;
 }
+
+const impersonationUserInclude = {
+  branch: true,
+  profile: true,
+  managedBranches: { include: { branch: true } },
+} satisfies Prisma.UserInclude;
+
+type ImpersonationUser = Prisma.UserGetPayload<{
+  include: typeof impersonationUserInclude;
+}>;
 
 export class ImpersonationService {
   /**
@@ -34,7 +44,7 @@ export class ImpersonationService {
     currentUserId: string,
     targetUserId: string,
     currentToken?: ImpersonationTokenPayload
-  ): Promise<{ token: string; targetUser: any }> {
+  ) {
     console.log('🔐 [ImpersonationService] createImpersonationToken called:', {
       currentUserId,
       targetUserId,
@@ -44,13 +54,7 @@ export class ImpersonationService {
     // Get current user
     const currentUser = await prisma.user.findUnique({
       where: { id: currentUserId },
-      include: {
-        branch: true,
-        profile: true,
-        managedBranches: {
-          include: { branch: true }
-        }
-      }
+      include: impersonationUserInclude,
     });
 
     if (!currentUser) {
@@ -72,13 +76,7 @@ export class ImpersonationService {
     // Get target user
     const targetUser = await prisma.user.findUnique({
       where: { id: targetUserId },
-      include: {
-        branch: true,
-        profile: true,
-        managedBranches: {
-          include: { branch: true }
-        }
-      }
+      include: impersonationUserInclude,
     });
 
     if (!targetUser) {
@@ -211,7 +209,7 @@ export class ImpersonationService {
   /**
    * Stop impersonation - go back one level
    */
-  async stopImpersonation(currentToken: ImpersonationTokenPayload): Promise<{ token: string; user: any }> {
+  async stopImpersonation(currentToken: ImpersonationTokenPayload) {
     if (!currentToken.impersonating) {
       throw {
         status: 400,
@@ -338,8 +336,8 @@ export class ImpersonationService {
    * Validate if current user can impersonate target user
    */
   private async validateImpersonation(
-    currentUser: any,
-    targetUser: any,
+    currentUser: ImpersonationUser,
+    targetUser: ImpersonationUser,
     currentToken?: ImpersonationTokenPayload
   ): Promise<void> {
     console.log('🔍 [validateImpersonation] Starting validation:', {
@@ -385,7 +383,7 @@ export class ImpersonationService {
 
       // Check if target Admin Cabang is in one of the manager's branches
       const managerBranchIds = currentToken?.impersonating?.branches 
-        || currentUser.managedBranches.map((mb: any) => mb.branchId);
+        || currentUser.managedBranches.map((mb) => mb.branchId);
 
       console.log('🔍 [validateImpersonation] Manager branch IDs:', managerBranchIds);
       console.log('🔍 [validateImpersonation] Target branch ID:', targetUser.branchId);
@@ -419,18 +417,18 @@ export class ImpersonationService {
     isActive?: boolean;
     page?: number;
     limit?: number;
-  }): Promise<{ managers: any[]; pagination: any }> {
+  }) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 10;
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       role: 'ADMIN_MANAGER'
     };
 
     if (filters?.search) {
       where.OR = [
-        { fullName: { contains: filters.search, mode: 'insensitive' } },
+        { profile: { fullName: { contains: filters.search, mode: 'insensitive' } } },
         { email: { contains: filters.search, mode: 'insensitive' } }
       ];
     }
@@ -500,12 +498,12 @@ export class ImpersonationService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ admins: any[]; pagination: any }> {
+  ) {
     const page = filters?.page || 1;
     const limit = filters?.limit || 10;
     const skip = (page - 1) * limit;
 
-    const where: any = {
+    const where: Prisma.UserWhereInput = {
       role: 'ADMIN_CABANG',
       branchId: {
         in: managerBranchIds
@@ -518,7 +516,7 @@ export class ImpersonationService {
 
     if (filters?.search) {
       where.OR = [
-        { fullName: { contains: filters.search, mode: 'insensitive' } },
+        { profile: { fullName: { contains: filters.search, mode: 'insensitive' } } },
         { email: { contains: filters.search, mode: 'insensitive' } }
       ];
     }

@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Info, Loader2, Mail, Phone, Plus, UserPlus, X } from 'lucide-react';
@@ -68,6 +69,7 @@ export default function CreateReferralModal({
       });
       onSuccess();
     } catch (error) {
+      assertCaughtError(error);
       setError(getApiErrorMessage(error) || 'Gagal membuat kode referral');
     } finally {
       setLoading(false);

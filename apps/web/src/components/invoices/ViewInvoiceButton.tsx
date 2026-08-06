@@ -1,5 +1,6 @@
 'use client';
 
+import { assertCaughtError } from '@/lib/caughtError';
 import { useState } from 'react';
 import InvoiceModal from './InvoiceModal';
 import { invoiceApi } from '@/lib/invoiceApi';
@@ -13,7 +14,7 @@ interface Props {
   documentLabel?: string;
 }
 
-export default function ViewInvoiceButton({ packageId, packageCode, status, documentLabel }: Props) {
+export default function ViewInvoiceButton({ packageId, packageCode: _packageCode, status, documentLabel }: Props) {
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [invoice, setInvoice] = useState<Invoice | null>(null);
@@ -33,7 +34,8 @@ export default function ViewInvoiceButton({ packageId, packageCode, status, docu
       const data = await invoiceApi.getInvoiceByPackageId(packageId);
       setInvoice(data);
       setShowModal(true);
-    } catch (error: any) {
+    } catch (error) {
+      assertCaughtError(error);
       devError('Failed to load invoice:', error);
       
       // Check if it's a 404 error (invoice not found)

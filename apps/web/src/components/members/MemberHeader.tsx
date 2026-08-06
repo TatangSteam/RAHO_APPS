@@ -1,5 +1,7 @@
 'use client';
 
+import AppImage from '@/components/ui/AppImage';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   ArrowLeft,
@@ -111,6 +113,7 @@ export default function MemberHeader({
         const url = await createAuthenticatedObjectUrl(profilePhoto.fileUrl);
         if (!cancelled) setProfilePhotoUrl(url);
       } catch (error) {
+      assertCaughtError(error);
         devError('Failed to load member profile photo:', error);
         if (!cancelled) setProfilePhotoUrl(null);
       }
@@ -147,7 +150,7 @@ export default function MemberHeader({
           <div className="flex min-w-0 items-start gap-4">
             <div className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-2xl font-black text-white ring-4 ring-blue-50 dark:ring-blue-500/10 md:h-20 md:w-20 md:text-3xl">
               {profilePhotoUrl ? (
-                <img src={profilePhotoUrl} alt={memberName} className="h-full w-full object-cover" />
+                <AppImage src={profilePhotoUrl} alt={memberName} className="h-full w-full object-cover" />
               ) : (
                 memberName.charAt(0).toUpperCase()
               )}

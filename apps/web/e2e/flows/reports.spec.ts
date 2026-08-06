@@ -333,7 +333,7 @@ test.describe('Report Views', () => {
 
   test('should refresh report', async () => {
     // Get initial row count
-    const initialCount = await reportPage.getReportRowCount();
+      const _initialCount = await reportPage.getReportRowCount();
 
     // Refresh report
     await reportPage.refreshReport();

@@ -268,7 +268,7 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
             </div>
 
             {/* Overstock Info Banner - Show if any item has overstock */}
-            {shipment.items.some(item => (item.overstockQty && item.overstockQty > 0) || ((item as any).originalRequestedQty && item.sentQty > ((item as any).originalRequestedQty - ((item as any).overstockDeducted || 0)))) && (
+            {shipment.items.some(item => (item.overstockQty && item.overstockQty > 0) || (item.originalRequestedQty && item.sentQty > (item.originalRequestedQty - (item.overstockDeducted || 0)))) && (
               <div className="p-4 rounded-xl bg-purple-500/10 border border-purple-500/30">
                 <div className="flex items-start gap-3">
                   <TrendingUp className="h-5 w-5 text-purple-400 flex-shrink-0 mt-0.5" />
@@ -281,15 +281,15 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                     <div className="mt-3 space-y-2">
                       {shipment.items.filter(item => {
                         const overstockQty = item.overstockQty || 0;
-                        const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
-                        const overstockDeducted = (item as any).overstockDeducted || 0;
+                        const originalRequestedQty = item.originalRequestedQty || item.requestedQty || item.sentQty;
+                        const overstockDeducted = item.overstockDeducted || 0;
                         const expectedSentQty = originalRequestedQty - overstockDeducted;
                         const newOverstock = item.sentQty - expectedSentQty;
                         return overstockQty > 0 || newOverstock > 0;
                       }).map(item => {
                         const overstockQty = item.overstockQty || 0;
-                        const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
-                        const overstockDeducted = (item as any).overstockDeducted || 0;
+                        const originalRequestedQty = item.originalRequestedQty || item.requestedQty || item.sentQty;
+                        const overstockDeducted = item.overstockDeducted || 0;
                         const expectedSentQty = originalRequestedQty - overstockDeducted;
                         const newOverstock = overstockQty > 0 ? overstockQty : (item.sentQty - expectedSentQty);
                         
@@ -342,8 +342,8 @@ export default function ReceiveModal({ shipment, onClose, onReceive, loading }: 
                   
                   // Calculate overstock info
                   const overstockQty = item.overstockQty || 0;
-                  const originalRequestedQty = (item as any).originalRequestedQty || (item as any).requestedQty || item.sentQty;
-                  const overstockDeducted = (item as any).overstockDeducted || 0;
+                  const originalRequestedQty = item.originalRequestedQty || item.requestedQty || item.sentQty;
+                  const overstockDeducted = item.overstockDeducted || 0;
                   const expectedSentQty = originalRequestedQty - overstockDeducted;
                   const hasOverstock = overstockQty > 0 || item.sentQty > expectedSentQty;
                   const newOverstockQty = overstockQty > 0 ? overstockQty : (item.sentQty - expectedSentQty);
