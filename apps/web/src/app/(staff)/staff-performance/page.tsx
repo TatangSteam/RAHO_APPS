@@ -13,7 +13,7 @@ import { devError } from '@/lib/logger';
 import {
   Activity, Search, Eye, Building2, ChevronLeft, ChevronRight,
   Users, Calendar, Stethoscope, Heart, UserCog,
-  TrendingUp, Filter, BarChart3, Download, Loader2, Hash
+  TrendingUp, Filter, BarChart3, Download, Loader2
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 
@@ -74,13 +74,13 @@ export default function StaffPerformancePage() {
   const [branchFilter, setBranchFilter] = useState(searchParams.get('branchId') || '');
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
-  const [infusKe, setInfusKe] = useState(searchParams.get('infusKe') || '');
   const [exporting, setExporting] = useState(false);
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
   const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canExportPerformance = isSuperAdmin || isAdminManager;
 
   useEffect(() => {
     // For ADMIN_CABANG, use their branch automatically
@@ -143,7 +143,6 @@ export default function StaffPerformancePage() {
         branchId: branchFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        infusKe: infusKe ? Number(infusKe) : undefined,
         page,
         limit,
       });
@@ -157,14 +156,13 @@ export default function StaffPerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, endDate, infusKe, limit, page, startDate]);
+  }, [branchFilter, endDate, limit, page, startDate]);
 
   const handleViewDetail = (staffId: string) => {
     const params = new URLSearchParams();
     if (branchFilter) params.set('branchId', branchFilter);
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
-    if (infusKe) params.set('infusKe', infusKe);
 
     const queryString = params.toString();
     router.push(`/staff-performance/${staffId}${queryString ? `?${queryString}` : ''}`);
@@ -177,7 +175,6 @@ export default function StaffPerformancePage() {
         branchId: branchFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
-        infusKe: infusKe ? Number(infusKe) : undefined,
         search: search || undefined,
       });
       const url = window.URL.createObjectURL(blob);
@@ -239,7 +236,7 @@ export default function StaffPerformancePage() {
               </p>
             </div>
           </div>
-          {isSuperAdmin && (
+          {canExportPerformance && (
             <button
               type="button"
               onClick={() => void handleExport()}
@@ -305,7 +302,7 @@ export default function StaffPerformancePage() {
 
       {/* Filters */}
       <div className="mb-6 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
-        <div className="flex flex-col lg:flex-row gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
           {/* Search */}
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400" />
@@ -339,41 +336,33 @@ export default function StaffPerformancePage() {
             </div>
           )}
 
-          {/* Date Range */}
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+          {/* Treatment Session Date Range */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">
+              Tanggal sesi terapi
+            </span>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
+                  aria-label="Tanggal sesi terapi mulai"
+                  className="pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
+                />
+              </div>
+              <span className="text-neutral-400 text-sm">—</span>
               <input
                 type="date"
-                value={startDate}
-                onChange={(e) => { setStartDate(e.target.value); setPage(1); }}
-                className="pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
+                value={endDate}
+                onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
+                aria-label="Tanggal sesi terapi akhir"
+                className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
               />
             </div>
-            <span className="text-neutral-400 text-sm">—</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
-              className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
-            />
           </div>
 
-          {/* Infusion Number */}
-          <div className="relative min-w-[145px]">
-            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
-            <input
-              type="number"
-              min="1"
-              step="1"
-              inputMode="numeric"
-              value={infusKe}
-              onChange={(e) => { setInfusKe(e.target.value); setPage(1); }}
-              placeholder="Infus ke"
-              aria-label="Filter infus ke"
-              className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
-            />
-          </div>
         </div>
       </div>
 

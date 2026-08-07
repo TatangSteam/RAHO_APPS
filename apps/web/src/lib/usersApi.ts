@@ -47,7 +47,6 @@ export interface StaffPerformanceSummaryResponse {
     startDate: string | null;
     endDate: string | null;
   };
-  infusKe: number | null;
 }
 
 export interface StaffSessionHistoryItem {
@@ -102,14 +101,12 @@ export interface StaffSessionHistoryResponse {
     startDate: string | null;
     endDate: string | null;
   };
-  infusKe: number | null;
 }
 
 export interface StaffPerformanceQuery {
   branchId?: string;
   startDate?: string;
   endDate?: string;
-  infusKe?: number;
   page?: number;
   limit?: number;
 }
@@ -119,7 +116,6 @@ export interface StaffSessionHistoryQuery {
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
   startDate?: string;
   endDate?: string;
-  infusKe?: number;
   page?: number;
   limit?: number;
 }

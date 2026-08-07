@@ -6,7 +6,6 @@ interface StaffPerformanceExportQuery {
   branchId?: string;
   startDate?: string;
   endDate?: string;
-  infusKe?: number;
   search?: string;
 }
 
@@ -53,7 +52,6 @@ export async function exportStaffPerformanceService(
       branchId: query.branchId,
       startDate: query.startDate,
       endDate: query.endDate,
-      infusKe: query.infusKe,
       page: 1,
       limit: Number.MAX_SAFE_INTEGER,
     },
@@ -76,7 +74,7 @@ export async function exportStaffPerformanceService(
 
   const worksheet = workbook.addWorksheet('Kinerja Staff', {
     properties: { tabColor: { argb: 'FFF59E0B' } },
-    views: [{ state: 'frozen', xSplit: 3, ySplit: 8 }],
+    views: [{ state: 'frozen', xSplit: 3, ySplit: 7 }],
     pageSetup: {
       orientation: 'landscape',
       paperSize: 9,
@@ -84,7 +82,7 @@ export async function exportStaffPerformanceService(
       fitToWidth: 1,
       fitToHeight: 0,
       margins: { left: 0.3, right: 0.3, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 },
-      printTitlesRow: '8:8',
+      printTitlesRow: '7:7',
     },
   });
 
@@ -111,8 +109,7 @@ export async function exportStaffPerformanceService(
 
   const metadata = [
     ['Cabang', report.branch?.name || 'Semua Cabang'],
-    ['Periode', buildPeriodLabel(query.startDate, query.endDate)],
-    ['Infus ke', query.infusKe ? `Infus ke-${query.infusKe}` : 'Semua nomor infus'],
+    ['Tanggal sesi terapi', buildPeriodLabel(query.startDate, query.endDate)],
     ['Pencarian', query.search?.trim() || 'Semua staff'],
     ['Diekspor', new Intl.DateTimeFormat('id-ID', {
       dateStyle: 'long',
@@ -140,7 +137,7 @@ export async function exportStaffPerformanceService(
     worksheet.getRow(rowNumber).height = 22;
   });
 
-  const headerRowNumber = 8;
+  const headerRowNumber = 7;
   const headers = ['Peringkat', 'Kode Staff', 'Nama Staff', 'Email', 'Role', 'Cabang', 'Sebagai Dokter', 'Sebagai Nakes', 'Sebagai Admin', 'Total'];
   const headerRow = worksheet.getRow(headerRowNumber);
   headerRow.values = headers;

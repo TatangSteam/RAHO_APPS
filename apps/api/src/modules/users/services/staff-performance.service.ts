@@ -12,7 +12,6 @@ interface StaffPerformanceQuery {
   branchId?: string;
   startDate?: string;
   endDate?: string;
-  infusKe?: number;
   page?: number;
   limit?: number;
 }
@@ -22,7 +21,6 @@ interface StaffSessionHistoryQuery {
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
   startDate?: string;
   endDate?: string;
-  infusKe?: number;
   page?: number;
   limit?: number;
 }
@@ -36,7 +34,9 @@ const STAFF_PERFORMANCE_ROLES: Role[] = [
 
 function parseDateBoundary(value: string, boundary: 'start' | 'end') {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    return new Date(`${value}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}`);
+    // The performance screen is operated in Indonesia; use an explicit Jakarta
+    // offset so deployments running in UTC do not shift the selected session day.
+    return new Date(`${value}T${boundary === 'start' ? '00:00:00.000' : '23:59:59.999'}+07:00`);
   }
 
   return new Date(value);
@@ -54,16 +54,6 @@ function buildDateFilter(startDate?: string, endDate?: string): Prisma.Treatment
   }
 
   return { treatmentDate: treatmentDateFilter };
-}
-
-function buildInfusKeFilter(infusKe?: number): Prisma.TreatmentSessionWhereInput {
-  if (infusKe === undefined) return {};
-
-  if (!Number.isInteger(infusKe) || infusKe < 1) {
-    throw errors.badRequest('INVALID_INFUS_KE', 'Infus ke harus berupa angka bulat minimal 1');
-  }
-
-  return { infusKe };
 }
 
 function buildBranchFilter(branchIds?: string[]): Prisma.TreatmentSessionWhereInput {
@@ -160,7 +150,7 @@ export async function getStaffPerformanceSummaryService(
   callerBranchId: string | null,
   callerUserId?: string,
 ) {
-  const { branchId, startDate, endDate, infusKe, page = 1, limit = 50 } = query;
+  const { branchId, startDate, endDate, page = 1, limit = 50 } = query;
   const skip = (page - 1) * limit;
 
   // Determine which branch to query
@@ -248,7 +238,6 @@ export async function getStaffPerformanceSummaryService(
   const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(staffIds, {
     ...sessionBranchFilter,
     ...dateFilter,
-    ...buildInfusKeFilter(infusKe),
   });
 
   // Build result with performance data
@@ -306,7 +295,6 @@ export async function getStaffPerformanceSummaryService(
       startDate: startDate || null,
       endDate: endDate || null,
     },
-    infusKe: infusKe || null,
     isAllBranches,
   };
 }
@@ -322,7 +310,7 @@ export async function getStaffSessionHistoryService(
   callerBranchId: string | null,
   callerUserId?: string,
 ) {
-  const { branchId, position = 'all', startDate, endDate, infusKe, page = 1, limit = 20 } = query;
+  const { branchId, position = 'all', startDate, endDate, page = 1, limit = 20 } = query;
   const skip = (page - 1) * limit;
   let allowedBranchIds: string[] | undefined;
 
@@ -395,7 +383,6 @@ export async function getStaffSessionHistoryService(
 
   const dateFilter = buildDateFilter(startDate, endDate);
   const sessionBranchFilter = buildBranchFilter(allowedBranchIds);
-  const infusKeFilter = buildInfusKeFilter(infusKe);
 
   // Build position filter
   const positionFilter: Prisma.TreatmentSessionWhereInput = {};
@@ -429,7 +416,6 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
-        ...infusKeFilter,
       },
       select: {
         id: true,
@@ -492,7 +478,6 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
-        ...infusKeFilter,
       },
     }),
   ]);
@@ -544,7 +529,6 @@ export async function getStaffSessionHistoryService(
         ],
         ...sessionBranchFilter,
         ...dateFilter,
-        ...infusKeFilter,
       },
     }),
     prisma.treatmentSession.count({
@@ -555,7 +539,6 @@ export async function getStaffSessionHistoryService(
         ],
         ...sessionBranchFilter,
         ...dateFilter,
-        ...infusKeFilter,
       },
     }),
     prisma.treatmentSession.count({
@@ -563,7 +546,6 @@ export async function getStaffSessionHistoryService(
         adminLayananId: staffId,
         ...sessionBranchFilter,
         ...dateFilter,
-        ...infusKeFilter,
       },
     }),
   ]);
@@ -593,6 +575,5 @@ export async function getStaffSessionHistoryService(
       startDate: startDate || null,
       endDate: endDate || null,
     },
-    infusKe: infusKe || null,
   };
 }

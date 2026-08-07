@@ -92,12 +92,12 @@ describe('staff performance service', () => {
     );
   });
 
-  it('filters performance counts by infusion number', async () => {
+  it('filters performance using the treatment session date in Jakarta time', async () => {
     mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
     mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
 
     await getStaffPerformanceSummaryService(
-      { branchId: 'branch-1', infusKe: 4 },
+      { branchId: 'branch-1', startDate: '2026-08-01', endDate: '2026-08-07' },
       Role.SUPER_ADMIN,
       null,
     );
@@ -105,8 +105,10 @@ describe('staff performance service', () => {
     expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          branchId: 'branch-1',
-          infusKe: 4,
+          treatmentDate: {
+            gte: new Date('2026-08-01T00:00:00.000+07:00'),
+            lte: new Date('2026-08-07T23:59:59.999+07:00'),
+          },
         }),
       }),
     );
@@ -179,42 +181,12 @@ describe('staff performance service', () => {
     );
   });
 
-  it('applies the infusion number filter to history and summary counts', async () => {
-    mockPrisma.user.findUnique.mockResolvedValue({
-      ...staff('doctor-1', 'Doctor One'),
-      branch: {
-        id: 'branch-1',
-        branchCode: 'BR1',
-        name: 'Branch 1',
-      },
-      staffBranches: [],
-    } as any);
-    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
-    mockPrisma.treatmentSession.count.mockResolvedValue(0 as any);
-
-    await getStaffSessionHistoryService(
-      'doctor-1',
-      { branchId: 'branch-1', infusKe: 2 },
-      Role.SUPER_ADMIN,
-      null,
-    );
-
-    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ infusKe: 2 }),
-      }),
-    );
-    mockPrisma.treatmentSession.count.mock.calls.forEach(([input]: [{ where: Record<string, unknown> }]) => {
-      expect(input.where).toEqual(expect.objectContaining({ infusKe: 2 }));
-    });
-  });
-
   it('exports a formatted workbook with active filters and totals', async () => {
     mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
     mockPrisma.treatmentSession.findMany.mockResolvedValue([sessionForDoctor('doctor-1')] as any);
 
     const result = await exportStaffPerformanceService(
-      { branchId: 'branch-1', startDate: '2026-08-01', endDate: '2026-08-07', infusKe: 3 },
+      { branchId: 'branch-1', startDate: '2026-08-01', endDate: '2026-08-07' },
       Role.SUPER_ADMIN,
       null,
     );
@@ -226,12 +198,36 @@ describe('staff performance service', () => {
     expect(result.filename).toMatch(/^kinerja-staff-\d{8}T\d{4}\.xlsx$/);
     expect(worksheet).toBeDefined();
     expect(worksheet?.getCell('A1').value).toBe('LAPORAN KINERJA STAFF');
-    expect(worksheet?.getCell('C4').value).toBe('Infus ke-3');
-    expect(worksheet?.getCell('A8').value).toBe('Peringkat');
-    expect(worksheet?.getCell('C9').value).toBe('Doctor One');
-    expect(worksheet?.getCell('J9').value).toBe(1);
-    expect(worksheet?.getCell('J10').value).toEqual(expect.objectContaining({ result: 1 }));
-    expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 8 }));
+    expect(worksheet?.getCell('C3').value).toBe('01/08/2026 - 07/08/2026');
+    expect(worksheet?.getCell('A7').value).toBe('Peringkat');
+    expect(worksheet?.getCell('C8').value).toBe('Doctor One');
+    expect(worksheet?.getCell('J8').value).toBe(1);
+    expect(worksheet?.getCell('J9').value).toEqual(expect.objectContaining({ result: 1 }));
+    expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 7 }));
     expect(worksheet?.autoFilter).toBeDefined();
+  });
+
+  it('allows Admin Manager export only for a managed branch', async () => {
+    mockPrisma.managerBranch.findMany.mockResolvedValue([{ branchId: 'branch-1' }] as any);
+    mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+
+    const result = await exportStaffPerformanceService(
+      { branchId: 'branch-1', startDate: '2026-08-01', endDate: '2026-08-07' },
+      Role.ADMIN_MANAGER,
+      null,
+      'manager-1',
+    );
+
+    expect(result.buffer.length).toBeGreaterThan(0);
+    expect(mockPrisma.managerBranch.findMany).toHaveBeenCalledWith({
+      where: { userId: 'manager-1' },
+      select: { branchId: true },
+    });
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 'branch-1' }),
+      }),
+    );
   });
 });
