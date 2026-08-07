@@ -752,6 +752,21 @@ type GoLiveData = {
     lastRollbackAt: string | null;
     rollbackReason: string | null;
   };
+  syncSummary?: {
+    canaryEventStatuses: Partial<Record<EventStatus, number>>;
+    activeMemberMappings: number;
+    pendingMemberReviews: number;
+    nonCanaryPendingHeld: number;
+    latestReconciliation: null | {
+      id: string;
+      status: string;
+      totalChecked: number;
+      matchedCount: number;
+      exceptionCount: number;
+      errorCount: number;
+      finishedAt: string | null;
+    };
+  };
 };
 
 const eventStatuses: Array<EventStatus | ''> = [
@@ -1803,6 +1818,18 @@ export default function ZohoIntegrationPage() {
   }
 
   async function changeGoLiveMode(mode: 'OFF' | 'DRY_RUN' | 'CANARY' | 'LIVE') {
+    if (mode === 'CANARY') {
+      const statuses = goLive?.syncSummary?.canaryEventStatuses || {};
+      const readyToSend = (statuses.PENDING || 0) + (statuses.DRY_RUN || 0) + (statuses.FAILED || 0);
+      const confirmed = window.confirm(
+        `CANARY adalah pengiriman NYATA ke Zoho Books ${goLive?.organizationName || ''}.\n\n`
+        + `${readyToSend} event cabang CANARY dapat diproses. Contact member hanya mengirim nama, email valid, telepon, alamat, dan ID ERP; tanpa data terapi/medis. Dugaan duplikat ditahan untuk review.\n\nLanjutkan?`,
+      );
+      if (!confirmed) return;
+    }
+    if (mode === 'LIVE' && !window.confirm(
+      'LIVE mengirim data seluruh scope yang disetujui. Pastikan CANARY telah bebas mismatch selama 5 hari kerja. Lanjutkan?',
+    )) return;
     setAction(`go-live-${mode}`);
     try {
       await api.post('/integrations/zoho/go-live/mode', { mode });
@@ -3375,6 +3402,52 @@ export default function ZohoIntegrationPage() {
                   </div>
                 </div>
 
+                {goLive.syncSummary && (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 dark:border-blue-900 dark:bg-blue-950/30">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="font-semibold text-blue-950 dark:text-blue-100">Hasil Sinkronisasi CANARY</p>
+                        <p className="mt-1 text-xs text-blue-800 dark:text-blue-300">
+                          Angka di bawah adalah status saat ini, bukan batas maksimum data.
+                        </p>
+                      </div>
+                      {goLive.syncSummary.latestReconciliation && (
+                        <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                          goLive.syncSummary.latestReconciliation.status === 'COMPLETED'
+                          && goLive.syncSummary.latestReconciliation.exceptionCount === 0
+                          && goLive.syncSummary.latestReconciliation.errorCount === 0
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          Rekonsiliasi {goLive.syncSummary.latestReconciliation.status}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        ['Berhasil dikirim', goLive.syncSummary.canaryEventStatuses.PROCESSED || 0],
+                        ['Masih menunggu', goLive.syncSummary.canaryEventStatuses.PENDING || 0],
+                        ['Gagal / dead-letter', (goLive.syncSummary.canaryEventStatuses.FAILED || 0) + (goLive.syncSummary.canaryEventStatuses.DEAD_LETTER || 0)],
+                        ['Mapping member aktif', goLive.syncSummary.activeMemberMappings],
+                        ['Review duplikat', goLive.syncSummary.pendingMemberReviews],
+                        ['Non-CANARY ditahan', goLive.syncSummary.nonCanaryPendingHeld],
+                        ['Diperiksa', goLive.syncSummary.latestReconciliation?.totalChecked || 0],
+                        ['Cocok', goLive.syncSummary.latestReconciliation?.matchedCount || 0],
+                      ].map(([label, count]) => (
+                        <div key={String(label)} className="rounded-lg bg-white p-3 text-sm shadow-sm dark:bg-neutral-900">
+                          <p className="text-xs text-neutral-500">{label}</p>
+                          <p className="mt-1 text-xl font-bold">{count}</p>
+                        </div>
+                      ))}
+                    </div>
+                    {(goLive.syncSummary.latestReconciliation?.exceptionCount || 0) > 0 && (
+                      <p className="mt-3 text-sm font-semibold text-red-700 dark:text-red-300">
+                        Ada {goLive.syncSummary.latestReconciliation?.exceptionCount} exception. Jangan lanjut ke LIVE.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {canManageConnection && (
                   <div className="mt-4 space-y-3 rounded-xl border p-4 dark:border-neutral-700">
                     <label className="block text-sm">
@@ -3392,7 +3465,7 @@ export default function ZohoIntegrationPage() {
                       <button onClick={() => void approveGoLive('FINANCE')} disabled={!!action || !goLive.control} className="rounded-lg border px-3 py-2 text-xs font-semibold dark:border-neutral-700">Approval Finance</button>
                       <button onClick={() => void approveGoLive('LOGISTICS')} disabled={!!action || !goLive.control} className="rounded-lg border px-3 py-2 text-xs font-semibold dark:border-neutral-700">Approval Logistik</button>
                       <button onClick={() => void changeGoLiveMode('DRY_RUN')} disabled={!!action || !goLive.control} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Dry-run</button>
-                      <button onClick={() => void changeGoLiveMode('CANARY')} disabled={!!action || !goLive.control} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Canary</button>
+                      <button onClick={() => void changeGoLiveMode('CANARY')} disabled={!!action || !goLive.control} className="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Canary (kirim nyata)</button>
                       <button onClick={() => void changeGoLiveMode('LIVE')} disabled={!!action || !goLive.control} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Live</button>
                       <button onClick={() => void rollbackGoLive()} disabled={!!action || !goLive.control} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Rollback OFF</button>
                     </div>

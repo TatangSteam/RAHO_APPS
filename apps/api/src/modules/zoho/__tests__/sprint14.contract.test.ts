@@ -37,6 +37,7 @@ describe('Sprint 14 additive and local-independence contract', () => {
     ]) expect(schema).toContain(model);
     expect(reconciliation).toContain("status: paused ? 'PAUSED' : 'FAILED'");
     expect(reconciliation).toContain('resourceIndex');
+    expect(reconciliation).toContain("mappingEntityTypes: ['CONTACT_CUSTOMER', 'CONTACT_VENDOR', 'PARTNERSHIP_BRANCH_CUSTOMER']");
     expect(goLive).toContain("mode: 'OFF'");
     expect(goLive).toContain('mismatchFreeBusinessDays < 5');
     expect(goLive).toContain('rollbackGoLive');
@@ -72,15 +73,19 @@ describe('Sprint 14 additive and local-independence contract', () => {
 
   it('fail-closed saat runtime tidak siap dan tidak kehilangan event hasil dry-run', () => {
     const goLive = read('src/modules/zoho/zoho.go-live.service.ts');
+    const contact = read('src/modules/zoho/zoho.contact.service.ts');
     const env = read('src/config/env.ts');
     expect(goLive).toContain("'ZOHO_WORKER_DISABLED'");
     expect(goLive).toContain("'ZOHO_RUNTIME_CONFIG_INCOMPLETE'");
     expect(goLive).toContain("source: 'CONFIGURATION_INVALID'");
     expect(goLive).toContain("mode: 'DRY_RUN'");
     expect(goLive).not.toContain("mode: env.ZOHO_SYNC_DRY_RUN ? 'DRY_RUN' : 'LIVE'");
-    expect(goLive).toContain("where: { status: 'DRY_RUN' }");
+    expect(goLive).toContain("status: { in: ['DRY_RUN', 'FAILED'] }");
+    expect(goLive).toContain("syncAttempts: { some: { status: 'DRY_RUN' } }");
     expect(goLive).toContain("status: 'PENDING'");
     expect(goLive).toContain('attempts: 0');
+    expect(contact).toContain("method: 'PUT'");
+    expect(contact).toContain("'X-Upsert': 'true'");
     expect(env).toContain('ZOHO_TOKEN_ENCRYPTION_KEY: z.preprocess(emptyStringToUndefined');
     expect(env).toContain('ZOHO_CLIENT_ID: z.preprocess(emptyStringToUndefined');
   });

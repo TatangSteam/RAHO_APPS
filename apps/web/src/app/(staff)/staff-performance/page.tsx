@@ -3,7 +3,7 @@
 import AppImage from '@/components/ui/AppImage';
 import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { usersApi, StaffPerformanceSummaryResponse } from '@/lib/usersApi';
 import { branchesApi } from '@/lib/api/branchesApi';
 import { doctorBranchApi, ManagedBranch } from '@/lib/api/doctorBranchApi';
@@ -13,7 +13,7 @@ import { devError } from '@/lib/logger';
 import {
   Activity, Search, Eye, Building2, ChevronLeft, ChevronRight,
   Users, Calendar, Stethoscope, Heart, UserCog,
-  TrendingUp, Filter, BarChart3
+  TrendingUp, Filter, BarChart3, Download, Loader2, Hash
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 
@@ -63,6 +63,7 @@ const getRoleColor = (role: string) => {
 
 export default function StaffPerformancePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const user = useAuthStore((state) => state.user);
   const [data, setData] = useState<StaffPerformanceSummaryResponse | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -70,9 +71,11 @@ export default function StaffPerformancePage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [search, setSearch] = useState('');
-  const [branchFilter, setBranchFilter] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [branchFilter, setBranchFilter] = useState(searchParams.get('branchId') || '');
+  const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
+  const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
+  const [infusKe, setInfusKe] = useState(searchParams.get('infusKe') || '');
+  const [exporting, setExporting] = useState(false);
 
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
@@ -140,6 +143,7 @@ export default function StaffPerformancePage() {
         branchId: branchFilter || undefined,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
         page,
         limit,
       });
@@ -153,16 +157,45 @@ export default function StaffPerformancePage() {
     } finally {
       setLoading(false);
     }
-  }, [branchFilter, endDate, limit, page, startDate]);
+  }, [branchFilter, endDate, infusKe, limit, page, startDate]);
 
   const handleViewDetail = (staffId: string) => {
     const params = new URLSearchParams();
     if (branchFilter) params.set('branchId', branchFilter);
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
+    if (infusKe) params.set('infusKe', infusKe);
 
     const queryString = params.toString();
     router.push(`/staff-performance/${staffId}${queryString ? `?${queryString}` : ''}`);
+  };
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const blob = await usersApi.exportStaffPerformance({
+        branchId: branchFilter || undefined,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
+        search: search || undefined,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `kinerja-staff-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast.success('Laporan kinerja berhasil diekspor');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error exporting staff performance:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal mengekspor laporan kinerja');
+    } finally {
+      setExporting(false);
+    }
   };
 
   useEffect(() => {
@@ -206,6 +239,17 @@ export default function StaffPerformancePage() {
               </p>
             </div>
           </div>
+          {isSuperAdmin && (
+            <button
+              type="button"
+              onClick={() => void handleExport()}
+              disabled={exporting || loading || !data}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black shadow-lg shadow-amber-500/20 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              {exporting ? 'Mengekspor...' : 'Export Excel'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,6 +356,22 @@ export default function StaffPerformancePage() {
               value={endDate}
               onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
               className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
+            />
+          </div>
+
+          {/* Infusion Number */}
+          <div className="relative min-w-[145px]">
+            <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+            <input
+              type="number"
+              min="1"
+              step="1"
+              inputMode="numeric"
+              value={infusKe}
+              onChange={(e) => { setInfusKe(e.target.value); setPage(1); }}
+              placeholder="Infus ke"
+              aria-label="Filter infus ke"
+              className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
             />
           </div>
         </div>

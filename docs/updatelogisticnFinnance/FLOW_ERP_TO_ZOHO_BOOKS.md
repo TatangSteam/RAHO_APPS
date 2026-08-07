@@ -86,3 +86,14 @@ sama dipakai dua mapping dengan tipe entity yang sama pada koneksi yang sama.
 - Webhook/reconciliation hanya menjadi evidence dan peringatan; tidak pernah
   mengubah transaksi final ERP.
 - Go-live tetap `OFF` sampai setup dependency dan pemeriksaan overlap selesai.
+
+## Status CANARY PST — 6 Agustus 2026
+
+- Organisasi tujuan: Zoho Books **Ether**.
+- Cabang: **PST — RAHO Premier Jakarta**.
+- 162 contact member berhasil dikirim dan mempunyai mapping aktif.
+- Rekonsiliasi memeriksa 162 mapping: 162 cocok, 0 exception, 0 error.
+- Tidak ada review duplikasi tertunda.
+- 23 event di luar scope PST tetap ditahan.
+- Sistem tetap berada pada tahap CANARY; LIVE baru boleh dilakukan setelah lima
+  hari kerja bebas mismatch dan seluruh gate operasional terpenuhi.

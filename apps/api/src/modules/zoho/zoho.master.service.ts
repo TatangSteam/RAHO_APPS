@@ -1,10 +1,10 @@
 import { IntegrationEventStatus, Prisma } from '@prisma/client';
-import { logger } from '@lib/logger';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
 import { assertErpManaged } from './zoho.origin';
+import { logZohoErrorThrottled } from './zoho.logging';
 import {
   buildZohoItemPayload,
   buildZohoLocationPayload,
@@ -466,16 +466,23 @@ export async function enqueueMasterSafely(entityType: ZohoMasterEntityType, id: 
   try {
     await enqueueMaster(entityType, id);
   } catch (error) {
-    logger.error('[Zoho Master] Gagal membuat/memperbarui event sinkronisasi', {
-      entityType,
-      localEntityId: id,
+    logZohoErrorThrottled(
+      `master-enqueue:${entityType}`,
+      '[Zoho Master] Gagal membuat/memperbarui event sinkronisasi',
       error,
-    });
+      { entityType, localEntityId: id },
+    );
   }
 }
 
 export async function enqueueBranchMasterChildrenSafely(branchId: string): Promise<void> {
   try {
+    const connection = await prisma.zohoConnection.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    if (!connection) return;
+
     const [locations, pricings] = await Promise.all([
       prisma.stockLocation.findMany({
         where: { warehouse: { branchId } },
@@ -491,19 +498,35 @@ export async function enqueueBranchMasterChildrenSafely(branchId: string): Promi
       ...pricings.map((pricing) => enqueueMasterSafely('PACKAGE_PRICING', pricing.id)),
     ]);
   } catch (error) {
-    logger.error('[Zoho Master] Gagal membuat event turunan cabang', { branchId, error });
+    logZohoErrorThrottled(
+      'branch-master-children',
+      '[Zoho Master] Gagal membuat event turunan cabang',
+      error,
+      { branchId },
+    );
   }
 }
 
 export async function enqueueWarehouseLocationsSafely(warehouseId: string): Promise<void> {
   try {
+    const connection = await prisma.zohoConnection.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    if (!connection) return;
+
     const locations = await prisma.stockLocation.findMany({
       where: { warehouseId },
       select: { id: true },
     });
     await Promise.all(locations.map((location) => enqueueMasterSafely('STOCK_LOCATION', location.id)));
   } catch (error) {
-    logger.error('[Zoho Master] Gagal membuat event stock location', { warehouseId, error });
+    logZohoErrorThrottled(
+      'warehouse-stock-locations',
+      '[Zoho Master] Gagal membuat event stock location',
+      error,
+      { warehouseId },
+    );
   }
 }
 

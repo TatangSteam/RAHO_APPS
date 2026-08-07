@@ -21,6 +21,7 @@ export type ZohoContactCandidate = {
   contact_type: string;
   email?: string;
   phone?: string;
+  mobile?: string;
   tax_id?: string;
   status?: string;
   custom_fields?: Array<{
@@ -38,6 +39,21 @@ export type ContactMatchDecision =
 
 function normalized(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLocaleLowerCase('id-ID') : '';
+}
+
+export function validZohoEmail(value: string | null | undefined): string | null {
+  const email = value?.trim() || '';
+  if (!email || email.length > 254) return null;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : null;
+}
+
+function normalizedPhone(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+  if (digits.startsWith('8')) return `62${digits}`;
+  return digits;
 }
 
 function customExternalId(candidate: ZohoContactCandidate): string | null {
@@ -63,9 +79,10 @@ export function buildZohoContactPayload(
   customFieldId?: string,
 ): Record<string, unknown> {
   const contactType = expectedZohoContactType(snapshot.entityType);
+  const email = validZohoEmail(snapshot.email);
   const person = {
     ...splitContactName(snapshot.displayName),
-    ...(snapshot.email ? { email: snapshot.email } : {}),
+    ...(email ? { email } : {}),
     ...(snapshot.phone ? { phone: snapshot.phone, mobile: snapshot.phone } : {}),
     is_primary_contact: true,
   };
@@ -105,10 +122,14 @@ export function decideContactMatch(
   }
 
   const identityMatches = validType.filter((candidate) => {
-    const emailMatches = snapshot.email && normalized(candidate.email) === normalized(snapshot.email);
+    const email = validZohoEmail(snapshot.email);
+    const emailMatches = email && normalized(candidate.email) === normalized(email);
     const taxMatches = snapshot.taxId && normalized(candidate.tax_id) === normalized(snapshot.taxId);
     const nameMatches = normalized(candidate.contact_name) === normalized(snapshot.displayName);
-    return Boolean(emailMatches || taxMatches || nameMatches);
+    const localPhone = normalizedPhone(snapshot.phone);
+    const phoneMatches = localPhone && [candidate.phone, candidate.mobile]
+      .some((value) => normalizedPhone(value) === localPhone);
+    return Boolean(emailMatches || taxMatches || nameMatches || phoneMatches);
   });
   if (identityMatches.length) {
     return {

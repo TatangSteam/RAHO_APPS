@@ -15,6 +15,7 @@ export const envSchema = z.object({
   API_URL: z.string().url().optional().default('http://localhost:4000'),
 
   DATABASE_URL: z.string().url(),
+  PRISMA_QUERY_LOG: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
 
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),

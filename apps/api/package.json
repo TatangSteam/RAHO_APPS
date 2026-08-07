@@ -38,7 +38,15 @@
         "minio:init": "tsx scripts/initMinio.ts",
         "minio:public": "node scripts/setMinioPublicPolicy.js",
         "fix:document-urls": "tsx scripts/fixDocumentUrls.ts",
-        "zoho:check": "tsx scripts/check-zoho-readiness.ts"
+        "zoho:check": "tsx scripts/check-zoho-readiness.ts",
+        "zoho:map-uom": "tsx scripts/map-zoho-uom.ts",
+        "zoho:deactivate-unused-uom": "tsx scripts/deactivate-unused-uom.ts",
+        "zoho:discover": "tsx scripts/refresh-zoho-discovery.ts",
+        "zoho:cutover-status": "tsx scripts/check-zoho-cutover.ts",
+        "zoho:reconcile": "tsx scripts/run-zoho-reconciliation.ts",
+        "zoho:activate-canary": "tsx scripts/activate-zoho-canary.ts",
+        "zoho:drain-canary": "tsx scripts/drain-zoho-canary.ts",
+        "zoho:hold": "tsx scripts/hold-zoho-sync.ts"
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.600.0",

@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { env } from '@config/env';
 
 declare global {
@@ -7,10 +7,16 @@ declare global {
   var __prisma: PrismaClient | undefined;
 }
 
+const prismaLogLevels: Prisma.LogLevel[] = env.NODE_ENV === 'development'
+  ? env.PRISMA_QUERY_LOG
+    ? ['query', 'warn', 'error']
+    : ['warn', 'error']
+  : ['error'];
+
 const prisma =
   global.__prisma ??
   new PrismaClient({
-    log: env.NODE_ENV === 'development' ? ['query', 'warn', 'error'] : ['error'],
+    log: prismaLogLevels,
   });
 
 if (env.NODE_ENV !== 'production') {

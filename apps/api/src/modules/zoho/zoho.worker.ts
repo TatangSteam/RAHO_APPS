@@ -6,6 +6,7 @@ import { logger } from '@lib/logger';
 import { ZohoApiError, normalizeZohoError } from './zoho.error';
 import { sanitizeForAudit, stablePayloadHash } from './zoho.sanitizer';
 import { getZohoRuntimeGate, ZohoRuntimeGate } from './zoho.go-live.service';
+import { logZohoErrorThrottled } from './zoho.logging';
 
 export type ZohoEventHandler = (event: IntegrationEvent) => Promise<unknown>;
 
@@ -243,17 +244,19 @@ export async function processClaimedZohoEvent(
   }
 }
 
-export async function runZohoWorkerOnce(): Promise<number> {
+export async function runZohoWorkerOnce(limit = env.ZOHO_SYNC_BATCH_SIZE): Promise<number> {
   if (running) return 0;
   running = true;
   try {
     const gate = await getZohoRuntimeGate();
     if (gate.mode === 'OFF') return 0;
-    const events = await claimZohoEvents(env.ZOHO_SYNC_BATCH_SIZE, gate);
-    await Promise.all(events.map((event) => processClaimedZohoEvent(
-      event,
-      gate.mode === 'DRY_RUN',
-    )));
+    const events = await claimZohoEvents(limit, gate);
+    // Zoho membatasi request yang sedang diproses. Tiap event dapat melakukan
+    // beberapa pencarian sebelum create/update, jadi proses event berurutan
+    // mencegah lonjakan request dan retry 429 massal.
+    for (const event of events) {
+      await processClaimedZohoEvent(event, gate.mode === 'DRY_RUN');
+    }
     return events.length;
   } finally {
     running = false;
@@ -267,9 +270,13 @@ export function startZohoWorker(): void {
     dryRun: env.ZOHO_SYNC_DRY_RUN,
     intervalMs: env.ZOHO_SYNC_WORKER_INTERVAL_MS,
   });
-  void runZohoWorkerOnce().catch((error) => logger.error('Zoho worker cycle failed', error));
+  void runZohoWorkerOnce().catch((error) => {
+    logZohoErrorThrottled('worker-cycle', 'Zoho worker cycle failed', error);
+  });
   timer = setInterval(() => {
-    void runZohoWorkerOnce().catch((error) => logger.error('Zoho worker cycle failed', error));
+    void runZohoWorkerOnce().catch((error) => {
+      logZohoErrorThrottled('worker-cycle', 'Zoho worker cycle failed', error);
+    });
   }, env.ZOHO_SYNC_WORKER_INTERVAL_MS);
   timer.unref();
 }

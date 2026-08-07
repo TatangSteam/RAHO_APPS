@@ -1,14 +1,15 @@
 import { Prisma } from '@prisma/client';
 import { env } from '@config/env';
 import { prisma } from '@lib/prisma';
-import { logger } from '@lib/logger';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { normalizeZohoError } from './zoho.error';
+import { logZohoErrorThrottled } from './zoho.logging';
 
 type RemoteRow = Record<string, unknown>;
 type ResourceConfig = {
   zohoEntityType: string;
+  mappingEntityTypes?: string[];
   path: string;
   collectionKey: string;
   idKeys: string[];
@@ -17,7 +18,15 @@ type ResourceConfig = {
 };
 
 const RESOURCES: ResourceConfig[] = [
-  { zohoEntityType: 'CONTACT', path: '/books/v3/contacts', collectionKey: 'contacts', idKeys: ['contact_id'], referenceKeys: [], amountKeys: [] },
+  {
+    zohoEntityType: 'CONTACT',
+    mappingEntityTypes: ['CONTACT_CUSTOMER', 'CONTACT_VENDOR', 'PARTNERSHIP_BRANCH_CUSTOMER'],
+    path: '/books/v3/contacts',
+    collectionKey: 'contacts',
+    idKeys: ['contact_id'],
+    referenceKeys: [],
+    amountKeys: [],
+  },
   { zohoEntityType: 'ITEM', path: '/books/v3/items', collectionKey: 'items', idKeys: ['item_id'], referenceKeys: [], amountKeys: ['rate'] },
   { zohoEntityType: 'LOCATION', path: '/books/v3/locations', collectionKey: 'locations', idKeys: ['location_id'], referenceKeys: [], amountKeys: [] },
   { zohoEntityType: 'INVOICE', path: '/books/v3/invoices', collectionKey: 'invoices', idKeys: ['invoice_id'], referenceKeys: ['reference_number', 'invoice_number'], amountKeys: ['total'] },
@@ -139,7 +148,9 @@ async function reconcileResource(
     prisma.zohoEntityMapping.findMany({
       where: {
         zohoConnectionId: client.connection.id,
-        zohoEntityType: config.zohoEntityType,
+        zohoEntityType: config.mappingEntityTypes
+          ? { in: config.mappingEntityTypes }
+          : config.zohoEntityType,
       },
     }),
   ]);
@@ -458,7 +469,11 @@ export function startZohoReconciliationScheduler(): void {
         scheduledKey: `ZOHO-FULL:${bucket}`,
       });
     } catch (error) {
-      logger.error('Zoho scheduled reconciliation failed', error);
+      logZohoErrorThrottled(
+        'reconciliation-scheduler',
+        'Zoho scheduled reconciliation failed',
+        error,
+      );
     } finally {
       scheduledRunning = false;
     }

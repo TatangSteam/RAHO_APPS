@@ -30,6 +30,7 @@ import {
   getStaffPerformanceSummaryService,
   getStaffSessionHistoryService,
 } from './services/staff-performance.service';
+import { exportStaffPerformanceService } from './services/staff-performance-export.service';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
@@ -517,13 +518,14 @@ export async function setPrimaryBranch(req: Request, res: Response, next: NextFu
  */
 export async function getStaffPerformanceSummary(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { branchId, startDate, endDate, page, limit } = req.query;
+    const { branchId, startDate, endDate, infusKe, page, limit } = req.query;
     
     const result = await getStaffPerformanceSummaryService(
       {
         branchId: branchId as string | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
         page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
       },
@@ -543,7 +545,7 @@ export async function getStaffPerformanceSummary(req: Request, res: Response, ne
 export async function getStaffSessionHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { staffId } = req.params;
-    const { branchId, position, startDate, endDate, page, limit } = req.query;
+    const { branchId, position, startDate, endDate, infusKe, page, limit } = req.query;
     
     const result = await getStaffSessionHistoryService(
       staffId,
@@ -552,6 +554,7 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
         position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
         startDate: startDate as string | undefined,
         endDate: endDate as string | undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
         page: page ? parseInt(page as string, 10) : undefined,
         limit: limit ? parseInt(limit as string, 10) : undefined,
       },
@@ -561,6 +564,33 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
     );
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export staff performance summary to a formatted Excel workbook
+ * GET /users/performance/export
+ */
+export async function exportStaffPerformance(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { branchId, startDate, endDate, infusKe, search } = req.query;
+    const result = await exportStaffPerformanceService(
+      {
+        branchId: branchId as string | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
+        search: search as string | undefined,
+      },
+      req.user.role as Role,
+      req.user.branchId,
+      req.user.userId,
+    );
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('Content-Length', result.buffer.length);
+    res.send(result.buffer);
   } catch (err) { next(err); }
 }
 

@@ -276,3 +276,12 @@ apps/api/scripts/*
 !apps/api/scripts/backup-object-storage.sh
 !apps/api/scripts/verify-object-storage-restore.sh
 !apps/api/scripts/rehearse-object-storage-backup.cjs
+!apps/api/scripts/check-zoho-readiness.ts
+!apps/api/scripts/map-zoho-uom.ts
+!apps/api/scripts/deactivate-unused-uom.ts
+!apps/api/scripts/refresh-zoho-discovery.ts
+!apps/api/scripts/check-zoho-cutover.ts
+!apps/api/scripts/run-zoho-reconciliation.ts
+!apps/api/scripts/activate-zoho-canary.ts
+!apps/api/scripts/drain-zoho-canary.ts
+!apps/api/scripts/hold-zoho-sync.ts

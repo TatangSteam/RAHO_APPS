@@ -64,6 +64,36 @@ export function jakartaBusinessDayWindow(now: Date): {
   };
 }
 
+export function canBootstrapCanaryFromDryRun(
+  mode: 'CANARY' | 'LIVE',
+  reconciliationTotalChecked: number,
+  canaryDryRunEventCount: number,
+): boolean {
+  return mode === 'CANARY'
+    && reconciliationTotalChecked === 0
+    && canaryDryRunEventCount > 0;
+}
+
+/**
+ * Counts canary events that have already passed a DRY_RUN rehearsal.
+ *
+ * A rehearsed event becomes PENDING when CANARY is first activated. If the
+ * operator subsequently puts synchronization on hold, reactivation must use
+ * the immutable attempt history rather than relying only on the current event
+ * status. This keeps the rehearsal gate effective without trapping a safe
+ * rollback in OFF mode.
+ */
+export async function countValidatedCanaryEvents(canaryBranchIds: string[]): Promise<number> {
+  if (!canaryBranchIds.length) return 0;
+  return prisma.integrationEvent.count({
+    where: {
+      branchId: { in: canaryBranchIds },
+      status: { in: ['DRY_RUN', 'PENDING', 'FAILED'] },
+      syncAttempts: { some: { status: 'DRY_RUN' } },
+    },
+  });
+}
+
 export async function getZohoRuntimeGate(): Promise<ZohoRuntimeGate> {
   const connection = await prisma.zohoConnection.findFirst({ where: { isActive: true } });
   if (!connection) {
@@ -157,6 +187,57 @@ export async function getGoLiveControl() {
   const control = await prisma.zohoGoLiveControl.findUnique({
     where: { zohoConnectionId: connection.id },
   });
+  const canaryBranchIds = stringArray(control?.canaryBranchIds);
+  const canaryMemberIds = canaryBranchIds.length
+    ? (await prisma.member.findMany({
+      where: { registrationBranchId: { in: canaryBranchIds } },
+      select: { id: true },
+    })).map((member) => member.id)
+    : [];
+  const [eventStatuses, activeMemberMappings, pendingMemberReviews, nonCanaryPendingHeld, latestReconciliation] = await Promise.all([
+    prisma.integrationEvent.groupBy({
+      by: ['status'],
+      where: { branchId: { in: canaryBranchIds } },
+      _count: { _all: true },
+    }),
+    prisma.zohoEntityMapping.count({
+      where: {
+        zohoConnectionId: connection.id,
+        entityType: 'MEMBER',
+        localEntityId: { in: canaryMemberIds },
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.zohoMappingReview.count({
+      where: {
+        zohoConnectionId: connection.id,
+        entityType: 'MEMBER',
+        localEntityId: { in: canaryMemberIds },
+        status: 'PENDING',
+      },
+    }),
+    prisma.integrationEvent.count({
+      where: {
+        status: 'PENDING',
+        OR: canaryBranchIds.length
+          ? [{ branchId: null }, { branchId: { notIn: canaryBranchIds } }]
+          : undefined,
+      },
+    }),
+    prisma.zohoReconciliationRun.findFirst({
+      where: { zohoConnectionId: connection.id, runType: 'FULL' },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        totalChecked: true,
+        matchedCount: true,
+        exceptionCount: true,
+        errorCount: true,
+        finishedAt: true,
+      },
+    }),
+  ]);
   return {
     connected: true,
     organizationId: connection.organizationId,
@@ -164,6 +245,15 @@ export async function getGoLiveControl() {
     control,
     runtime: await getZohoRuntimeGate(),
     localErpIndependent: true,
+    syncSummary: {
+      canaryEventStatuses: Object.fromEntries(
+        eventStatuses.map((entry) => [entry.status, entry._count._all]),
+      ),
+      activeMemberMappings,
+      pendingMemberReviews,
+      nonCanaryPendingHeld,
+      latestReconciliation,
+    },
   };
 }
 
@@ -254,11 +344,20 @@ async function assertPromotionReady(mode: 'CANARY' | 'LIVE', control: {
     orderBy: { finishedAt: 'desc' },
   });
   if (!latest) throw new AppError(409, 'ZOHO_RECONCILIATION_REQUIRED', 'Reconciliation lengkap wajib dijalankan sebelum promosi.');
-  if (latest.totalChecked === 0) {
+  const canaryBranchIds = stringArray(control.canaryBranchIds);
+  const canaryDryRunEventCount = mode === 'CANARY' && latest.totalChecked === 0
+    ? await countValidatedCanaryEvents(canaryBranchIds)
+    : 0;
+  if (
+    latest.totalChecked === 0
+    && !canBootstrapCanaryFromDryRun(mode, latest.totalChecked, canaryDryRunEventCount)
+  ) {
     throw new AppError(
       409,
       'ZOHO_RECONCILIATION_EMPTY',
-      'Reconciliation belum memeriksa data apa pun. Sinkronkan data uji dan jalankan reconciliation ulang.',
+      mode === 'CANARY'
+        ? 'Reconciliation masih kosong dan belum ada event DRY_RUN untuk cabang canary.'
+        : 'Reconciliation pasca-canary belum memeriksa data apa pun.',
     );
   }
   const unresolved = await prisma.zohoReconciliationResult.count({
@@ -296,7 +395,13 @@ export async function setGoLiveMode(actorUserId: string, mode: ZohoRuntimeMode) 
       // DRY_RUN hanya rehearsal. Event harus kembali antre agar tetap dikirim saat
       // CANARY/LIVE, dan rehearsal tidak boleh menghabiskan jatah retry nyata.
       await tx.integrationEvent.updateMany({
-        where: { status: 'DRY_RUN' },
+        where: mode === 'CANARY'
+          ? {
+            branchId: { in: stringArray(control.canaryBranchIds) },
+            status: { in: ['DRY_RUN', 'FAILED'] },
+            syncAttempts: { some: { status: 'DRY_RUN' } },
+          }
+          : { status: 'DRY_RUN' },
         data: {
           status: 'PENDING',
           attempts: 0,
@@ -313,6 +418,7 @@ export async function setGoLiveMode(actorUserId: string, mode: ZohoRuntimeMode) 
       where: { id: control.id },
       data: {
         mode,
+        ...(mode === 'CANARY' ? { masterFrozen: false } : {}),
         lastRehearsalAt: mode === 'DRY_RUN' ? new Date() : control.lastRehearsalAt,
         ...(mode === 'CANARY'
           ? { mismatchFreeBusinessDays: 0, lastMismatchFreeBusinessDayAt: null }

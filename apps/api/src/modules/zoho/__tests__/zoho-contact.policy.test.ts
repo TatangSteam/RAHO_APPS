@@ -96,6 +96,23 @@ describe('Zoho Sprint 3 contact matching', () => {
     expect(decision.kind).toBe('REVIEW');
   });
 
+  it('omits malformed ERP email instead of rejecting the entire Zoho contact', () => {
+    const payload = buildZohoContactPayload({ ...member, email: 'invalid-email' }, 'custom-raho-id');
+    expect(payload).toMatchObject({ contact_name: member.displayName });
+    expect(JSON.stringify(payload)).not.toContain('invalid-email');
+  });
+
+  it('requires human review for the same normalized phone number', () => {
+    const decision = decideContactMatch(member, [{
+      contact_id: 'z-phone',
+      contact_name: 'Nama Berbeda',
+      contact_type: 'customer',
+      email: 'different@example.com',
+      mobile: '+62 812-3456-789',
+    }]);
+    expect(decision.kind).toBe('REVIEW');
+  });
+
   it('requires human review when duplicate external IDs exist', () => {
     const candidate = {
       contact_name: member.displayName,

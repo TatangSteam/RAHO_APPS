@@ -113,6 +113,7 @@ export default function StaffPerformanceDetailPage() {
   const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'nurse' | 'adminLayanan'>('all');
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
+  const [infusKe, setInfusKe] = useState(searchParams.get('infusKe') || '');
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -122,6 +123,7 @@ export default function StaffPerformanceDetailPage() {
         position: positionFilter,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
+        infusKe: infusKe ? Number(infusKe) : undefined,
         page,
         limit,
       });
@@ -133,7 +135,7 @@ export default function StaffPerformanceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, endDate, limit, page, positionFilter, staffId, startDate]);
+  }, [branchId, endDate, infusKe, limit, page, positionFilter, staffId, startDate]);
 
   useEffect(() => {
     void fetchHistory();
@@ -149,7 +151,15 @@ export default function StaffPerformanceDetailPage() {
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-6">
       {/* Back Button */}
       <button
-        onClick={() => router.push('/staff-performance')}
+        onClick={() => {
+          const returnParams = new URLSearchParams();
+          if (branchId) returnParams.set('branchId', branchId);
+          if (startDate) returnParams.set('startDate', startDate);
+          if (endDate) returnParams.set('endDate', endDate);
+          if (infusKe) returnParams.set('infusKe', infusKe);
+          const queryString = returnParams.toString();
+          router.push(`/staff-performance${queryString ? `?${queryString}` : ''}`);
+        }}
         className="flex items-center gap-2 text-sm font-medium text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white mb-6 transition-colors"
       >
         <ArrowLeft size={18} />
@@ -266,6 +276,21 @@ export default function StaffPerformanceDetailPage() {
             value={endDate}
             onChange={(e) => { setEndDate(e.target.value); setPage(1); }}
             className="px-3 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
+          />
+        </div>
+
+        <div className="relative min-w-[160px]">
+          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-neutral-400 pointer-events-none" />
+          <input
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={infusKe}
+            onChange={(e) => { setInfusKe(e.target.value); setPage(1); }}
+            placeholder="Infus ke"
+            aria-label="Filter infus ke"
+            className="w-full pl-10 pr-3 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
           />
         </div>
       </div>

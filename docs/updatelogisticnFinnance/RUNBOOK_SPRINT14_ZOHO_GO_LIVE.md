@@ -81,6 +81,12 @@ yang dikonfigurasi pengguna. Receiver juga menerima HMAC SHA-256 hex/base64 pada
 14. Rekonsiliasi setiap hari dan catat lima hari kerja bebas mismatch.
 15. Aktifkan `LIVE`.
 
+Pada CANARY pertama, reconciliation dapat bernilai `totalChecked=0` karena
+DRY_RUN tidak membuat objek Zoho. Bootstrap CANARY hanya diizinkan bila cabang
+canary sudah memiliki event DRY_RUN, tidak ada exception material, dan tidak
+ada dead-letter. Promosi ke LIVE tetap wajib memiliki reconciliation
+pasca-canary yang benar-benar memeriksa data (`totalChecked > 0`).
+
 Event yang telah diperiksa saat `DRY_RUN` dikembalikan ke status `PENDING`
 ketika promosi ke `CANARY/LIVE`; rehearsal tidak menghilangkan transaksi yang
 masih wajib dikirim. Satu hari observasi hanya dapat dicatat sekali pada hari

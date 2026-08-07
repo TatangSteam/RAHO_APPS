@@ -1,6 +1,5 @@
 import { IntegrationEventStatus, Prisma } from '@prisma/client';
 import { env } from '@config/env';
-import { logger } from '@lib/logger';
 import { prisma } from '@lib/prisma';
 import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
@@ -11,9 +10,11 @@ import {
   expectedZohoContactType,
   LocalContactSnapshot,
   ZohoContactCandidate,
+  validZohoEmail,
 } from './zoho.contact.policy';
 import { ZohoApiError } from './zoho.error';
 import { assertErpManaged } from './zoho.origin';
+import { logZohoErrorThrottled } from './zoho.logging';
 
 export const MEMBER_CONTACT_EVENT = 'MEMBER_CONTACT_UPSERTED';
 export const SUPPLIER_CONTACT_EVENT = 'SUPPLIER_CONTACT_UPSERTED';
@@ -154,12 +155,29 @@ async function searchCandidates(client: ZohoClient, snapshot: LocalContactSnapsh
     { contact_type: expectedZohoContactType(snapshot.entityType), contact_name: snapshot.displayName },
     { contact_type: expectedZohoContactType(snapshot.entityType), search_text: snapshot.externalKey },
   ];
-  if (snapshot.email) {
-    queries.push({ contact_type: expectedZohoContactType(snapshot.entityType), email: snapshot.email });
+  const email = validZohoEmail(snapshot.email);
+  if (email) {
+    queries.push({ contact_type: expectedZohoContactType(snapshot.entityType), email });
   }
-  const batches = await Promise.all(
-    queries.map((query) => client.listAll<ZohoContactCandidate>('/books/v3/contacts', 'contacts', query)),
-  );
+  if (snapshot.phone) {
+    queries.push({ contact_type: expectedZohoContactType(snapshot.entityType), search_text: snapshot.phone });
+  }
+  // Jalankan pencarian satu per satu. Satu contact dapat memiliki empat kunci
+  // pencarian; Promise.all pada satu batch worker mudah melampaui batas
+  // concurrent request Zoho. Zoho kadang mengembalikan code 1002/404 untuk
+  // hasil pencarian kosong, yang harus diperlakukan sebagai tidak ada kandidat.
+  const batches: ZohoContactCandidate[][] = [];
+  for (const query of queries) {
+    try {
+      batches.push(await client.listAll<ZohoContactCandidate>('/books/v3/contacts', 'contacts', query));
+    } catch (error) {
+      if (error instanceof ZohoApiError && error.code === '1002' && error.httpStatus === 404) {
+        batches.push([]);
+        continue;
+      }
+      throw error;
+    }
+  }
   return Array.from(
     new Map(batches.flat().map((candidate) => [String(candidate.contact_id), candidate])).values(),
   );
@@ -274,11 +292,12 @@ export async function enqueueContactSafely(entityTypeValue: ContactEntityType, i
   try {
     await enqueueContact(entityTypeValue, id);
   } catch (error) {
-    logger.error('[Zoho Contact] Gagal membuat/memperbarui event sinkronisasi', {
-      entityType: entityTypeValue,
-      localEntityId: id,
+    logZohoErrorThrottled(
+      `contact-enqueue:${entityTypeValue}`,
+      '[Zoho Contact] Gagal membuat/memperbarui event sinkronisasi',
       error,
-    });
+      { entityType: entityTypeValue, localEntityId: id },
+    );
   }
 }
 
@@ -416,7 +435,10 @@ export async function handleContactEvent(event: { aggregateId: string; aggregate
     );
   }
   const response = await client.request<{ contact?: { contact_id?: string } }>('/books/v3/contacts', {
-    method: 'POST',
+    // Zoho Books unique-field upsert is PUT on the collection endpoint.
+    // POST with these headers attempts a lookup and returns code 1002 instead
+    // of creating the missing contact.
+    method: 'PUT',
     data: payload,
     headers: {
       'X-Unique-Identifier-Key': field.apiName!,

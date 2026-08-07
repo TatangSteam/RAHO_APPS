@@ -22,6 +22,7 @@ import {
   setPrimaryBranch,
   getStaffPerformanceSummary,
   getStaffSessionHistory,
+  exportStaffPerformance,
   getUserCredentials,
   updateUserEmail,
   getDoctorsByBranch,
@@ -60,6 +61,13 @@ usersRouter.get(
 // ══════════════════════════════════════════════════════════════
 
 // ── Get Staff Performance Summary ─────────────────────────────
+usersRouter.get(
+  '/performance/export',
+  authenticate,
+  requirePermission(PERMISSIONS.IAM_USER_READ),
+  exportStaffPerformance,
+);
+
 usersRouter.get(
   '/performance/summary',
   authenticate,

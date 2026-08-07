@@ -47,6 +47,7 @@ export interface StaffPerformanceSummaryResponse {
     startDate: string | null;
     endDate: string | null;
   };
+  infusKe: number | null;
 }
 
 export interface StaffSessionHistoryItem {
@@ -101,12 +102,14 @@ export interface StaffSessionHistoryResponse {
     startDate: string | null;
     endDate: string | null;
   };
+  infusKe: number | null;
 }
 
 export interface StaffPerformanceQuery {
   branchId?: string;
   startDate?: string;
   endDate?: string;
+  infusKe?: number;
   page?: number;
   limit?: number;
 }
@@ -116,6 +119,7 @@ export interface StaffSessionHistoryQuery {
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
   startDate?: string;
   endDate?: string;
+  infusKe?: number;
   page?: number;
   limit?: number;
 }
@@ -150,6 +154,14 @@ export const usersApi = {
   getStaffPerformanceSummary: async (query: StaffPerformanceQuery = {}): Promise<StaffPerformanceSummaryResponse> => {
     const response = await api.get('/users/performance/summary', { params: query });
     return response.data.data;
+  },
+
+  exportStaffPerformance: async (query: StaffPerformanceQuery & { search?: string } = {}): Promise<Blob> => {
+    const response = await api.get('/users/performance/export', {
+      params: query,
+      responseType: 'blob',
+    });
+    return response.data;
   },
 
   // Get detailed session history for a specific staff member
