@@ -69,6 +69,7 @@ const FOCUSED_ROLE_MENU: Partial<Record<Role, Set<string>>> = {
     '/dashboard',
     '/members',
     '/sessions',
+    '/staff-performance',
     '/notifications',
     '/chat',
   ]),
@@ -252,7 +253,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Kinerja Staff',
         href: '/staff-performance',
         icon: <BarChart3 size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'DOCTOR'],
       },
       {
         label: 'Laporan',

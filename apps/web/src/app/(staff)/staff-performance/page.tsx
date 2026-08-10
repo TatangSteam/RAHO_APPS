@@ -79,7 +79,8 @@ export default function StaffPerformancePage() {
   const isAdminCabang = user?.role === 'ADMIN_CABANG';
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
-  const canSelectBranch = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const isDoctor = user?.role === 'DOCTOR';
+  const canSelectBranch = isSuperAdmin || isAdminManager || isDoctor;
   const canExportPerformance = isSuperAdmin || isAdminManager;
 
   useEffect(() => {
@@ -95,7 +96,13 @@ export default function StaffPerformancePage() {
     if (isAdminManager && branches.length > 0 && !branchFilter) {
       setBranchFilter(branches[0].id);
     }
-  }, [branchFilter, branches, isAdminCabang, isAdminManager, isSuperAdmin, user?.branchId]);
+    // Doctors may work at multiple branches; prefer their current branch and
+    // fall back to the first assigned branch returned by the scoped API.
+    if (isDoctor && branches.length > 0 && !branchFilter) {
+      const currentBranch = branches.find((branch) => branch.id === user?.branchId);
+      setBranchFilter(currentBranch?.id || branches[0].id);
+    }
+  }, [branchFilter, branches, isAdminCabang, isAdminManager, isDoctor, isSuperAdmin, user?.branchId]);
 
   const fetchBranches = useCallback(async () => {
     try {
@@ -386,6 +393,22 @@ export default function StaffPerformancePage() {
               <p className="text-lg font-semibold text-neutral-900 dark:text-white">Tidak Ada Cabang yang Dikelola</p>
               <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
                 Anda belum mengelola cabang manapun. Silakan tambahkan cabang melalui halaman <span className="font-semibold">Kelola Cabang</span>.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isDoctor && branches.length === 0 && !loading && (
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-12 text-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-500/20">
+              <Building2 className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <p className="text-lg font-semibold text-neutral-900 dark:text-white">Belum Ada Cabang Penugasan</p>
+              <p className="text-sm text-neutral-500 dark:text-neutral-400 mt-1">
+                Hubungi administrator untuk menambahkan cabang penugasan dokter.
               </p>
             </div>
           </div>

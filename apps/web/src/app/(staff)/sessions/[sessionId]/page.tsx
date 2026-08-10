@@ -10,6 +10,7 @@ import { usersApi, type StaffMember } from '@/lib/usersApi';
 import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
+import { getApiErrorMessage } from '@/lib/api';
 import { useAuthStore } from '@/stores/authStore';
 import type { SessionDetail } from '@/types/session';
 import Step1Diagnosis from '@/components/sessions/Step1Diagnosis';
@@ -422,8 +423,7 @@ export default function SessionDetailPage() {
     } catch (error) {
       assertCaughtError(error);
       devError('Error completing session:', error);
-      const errorMessage = error.response?.data?.error?.message || 'Gagal menyelesaikan sesi';
-      showToast.error(errorMessage);
+      showToast.error(getApiErrorMessage(error) || 'Gagal menyelesaikan sesi');
     } finally {
       completionInFlightRef.current = false;
       setCompleting(false);

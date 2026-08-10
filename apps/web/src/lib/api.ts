@@ -403,14 +403,18 @@ export interface ApiErrorBody {
   error: {
     code: string;
     message: string;
-    details?: Array<{ field: string; message: string }>;
+    details?: Array<{ field?: string; message?: string } | string>;
   };
 }
 
 export function getApiErrorMessage(err: unknown): string {
   if (axios.isAxiosError(err)) {
     const data = err.response?.data as ApiErrorBody | undefined;
-    return data?.error?.message ?? 'Terjadi kesalahan. Silakan coba lagi.';
+    const message = data?.error?.message ?? 'Terjadi kesalahan. Silakan coba lagi.';
+    const detailMessages = data?.error?.details
+      ?.map((detail) => typeof detail === 'string' ? detail : detail.message)
+      .filter((detail): detail is string => Boolean(detail));
+    return detailMessages?.length ? `${message}: ${detailMessages.join('; ')}` : message;
   }
   return 'Terjadi kesalahan yang tidak diketahui.';
 }

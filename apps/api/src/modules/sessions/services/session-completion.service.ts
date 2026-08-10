@@ -42,6 +42,7 @@ import {
   calculatePhysicalAvailableBaseQuantity,
   requiresMaterialDeviationReason,
 } from './material-usage.helpers';
+import { ensureAutomaticInfusionKitMaterialDrafts } from './automatic-infusion-kit.service';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
@@ -176,17 +177,39 @@ export class SessionCompletionService {
         };
       }
 
+      if (!isLegacySession) {
+        await ensureAutomaticInfusionKitMaterialDrafts(tx, {
+          sessionId: session.id,
+          branchId: session.branchId,
+          materialPolicyVersion: session.materialPolicyVersion,
+          recordedBy: userId,
+        });
+      }
+      const sessionMaterials = !isLegacySession && session.materialPolicyVersion >= 2
+        ? await tx.materialUsage.findMany({
+            where: { treatmentSessionId: session.id },
+            include: {
+              inventoryItem: {
+                include: {
+                  masterProduct: true,
+                  balances: true,
+                },
+              },
+            },
+          })
+        : session.materials;
+
       const errorsList: string[] = [];
       const hasVitalBefore = session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM');
       const hasVitalAfter = session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
       if (!session.therapyPlan) errorsList.push('Therapy plan belum dibuat');
       if (!hasVitalBefore) errorsList.push('Tanda vital SEBELUM belum diisi');
       if (!session.infusion) errorsList.push('Infus aktual belum dibuat');
-      if (session.materials.length === 0) errorsList.push('Pemakaian bahan belum diisi (WAJIB)');
+      if (sessionMaterials.length === 0) errorsList.push('Pemakaian bahan belum diisi (WAJIB)');
       if (!hasVitalAfter) errorsList.push('Tanda vital SESUDAH belum diisi');
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
 
-      for (const material of session.materials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
+      for (const material of sessionMaterials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
         const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
         if (physicalAvailable.lessThan(material.baseQuantity)) {
           throw errors.unprocessable(
@@ -199,7 +222,7 @@ export class SessionCompletionService {
       const recommendations = await resolveSessionMaterialRecommendations(session.id, tx);
       if (!isLegacySession && recommendations.hasActiveBom) {
         for (const recommendation of recommendations.items.filter((item) => item.isRequired)) {
-          const usage = session.materials.find(
+          const usage = sessionMaterials.find(
             (material) => material.inventoryItem.masterProductId === recommendation.masterProductId,
           );
           if (!usage) {
@@ -227,7 +250,7 @@ export class SessionCompletionService {
       }
 
       const completedAt = new Date();
-      const draftMaterials = session.materials.filter((material) => material.status === MaterialUsageStatus.DRAFT);
+      const draftMaterials = sessionMaterials.filter((material) => material.status === MaterialUsageStatus.DRAFT);
       const legacyConsumedMaterials = draftMaterials.filter(
         (material) => material.baseQuantity.lessThanOrEqualTo(0),
       );

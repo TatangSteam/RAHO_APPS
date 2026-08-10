@@ -71,7 +71,7 @@ usersRouter.get(
 usersRouter.get(
   '/performance/summary',
   authenticate,
-  requirePermission(PERMISSIONS.IAM_USER_READ),
+  requirePermission(PERMISSIONS.STAFF_PERFORMANCE_READ),
   getStaffPerformanceSummary,
 );
 
@@ -79,7 +79,7 @@ usersRouter.get(
 usersRouter.get(
   '/performance/:staffId/history',
   authenticate,
-  requirePermission(PERMISSIONS.IAM_USER_READ),
+  requirePermission(PERMISSIONS.STAFF_PERFORMANCE_READ),
   getStaffSessionHistory,
 );
 

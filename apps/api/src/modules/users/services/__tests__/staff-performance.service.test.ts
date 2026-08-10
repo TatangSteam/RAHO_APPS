@@ -6,6 +6,7 @@ import {
   getStaffSessionHistoryService,
 } from '../staff-performance.service';
 import { exportStaffPerformanceService } from '../staff-performance-export.service';
+import { getAccessibleBranchIds } from '../../../iam/authorization.service';
 
 jest.mock('../../../../lib/prisma', () => ({
   prisma: {
@@ -24,6 +25,10 @@ jest.mock('../../../../lib/prisma', () => ({
       findUnique: jest.fn(),
     },
   },
+}));
+
+jest.mock('../../../iam/authorization.service', () => ({
+  getAccessibleBranchIds: jest.fn(),
 }));
 
 const mockPrisma = prisma as any;
@@ -141,6 +146,75 @@ describe('staff performance service', () => {
         where: expect.objectContaining({
           branchId: 'branch-1',
         }),
+      }),
+    );
+  });
+
+  it('allows a doctor to view staff performance in an assigned branch', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(['branch-1']);
+    mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+
+    await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.DOCTOR,
+      'branch-1',
+      'viewer-doctor',
+    );
+
+    expect(mockPrisma.user.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: expect.arrayContaining([
+            { branchId: 'branch-1' },
+            { staffBranches: { some: { branchId: 'branch-1' } } },
+          ]),
+        }),
+      }),
+    );
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 'branch-1' }),
+      }),
+    );
+  });
+
+  it('rejects a doctor performance request outside assigned branches', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(['branch-1']);
+
+    await expect(getStaffPerformanceSummaryService(
+      { branchId: 'branch-2' },
+      Role.DOCTOR,
+      'branch-1',
+      'viewer-doctor',
+    )).rejects.toMatchObject({ status: 403 });
+  });
+
+  it('limits doctor staff history to an assigned branch', async () => {
+    (getAccessibleBranchIds as jest.Mock).mockResolvedValue(['branch-1']);
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('doctor-1', 'Doctor One'),
+      branch: {
+        id: 'branch-1',
+        branchCode: 'BR1',
+        name: 'Branch 1',
+      },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(0 as any);
+
+    await getStaffSessionHistoryService(
+      'doctor-1',
+      { branchId: 'branch-1' },
+      Role.DOCTOR,
+      'branch-1',
+      'viewer-doctor',
+    );
+
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: 'branch-1' }),
       }),
     );
   });

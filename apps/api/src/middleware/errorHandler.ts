@@ -73,7 +73,12 @@ export function errorHandler(
 
   // ── Application-level errors (thrown with code+status) ──
   if (isAppError(err)) {
-    sendError(res, err.status, err.code, err.message);
+    const details = Array.isArray(err.details)
+      ? err.details
+      : Array.isArray(err.errors)
+        ? err.errors.map((item) => typeof item === 'string' ? { message: item } : item)
+        : undefined;
+    sendError(res, err.status, err.code, err.message, details);
     return;
   }
 
@@ -110,7 +115,12 @@ export class AppError extends Error {
   }
 }
 
-function isAppError(err: unknown): err is AppError {
+type AppErrorWithDetails = AppError & {
+  details?: unknown[];
+  errors?: unknown[];
+};
+
+function isAppError(err: unknown): err is AppErrorWithDetails {
   return (
     err instanceof AppError ||
     (typeof err === 'object' &&

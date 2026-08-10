@@ -1,11 +1,12 @@
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../../lib/prisma';
 import { errors } from '../../../middleware/errorHandler';
+import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
 
 // ═══════════════════════════════════════════════════════════════
 // STAFF PERFORMANCE SERVICE
 // Provides performance metrics and session history for staff
-// Access: ADMIN_CABANG and above
+// Access: administrators and doctors, restricted to their branch scope
 // ═══════════════════════════════════════════════════════════════
 
 interface StaffPerformanceQuery {
@@ -182,6 +183,23 @@ export async function getStaffPerformanceSummaryService(
     
     targetBranchId = branchId;
     allowedBranchIds = [branchId];
+  } else if (callerRole === Role.DOCTOR && callerUserId) {
+    if (branchId === 'all') {
+      throw errors.forbidden('Dokter hanya dapat melihat kinerja staff pada cabang yang ditugaskan');
+    }
+
+    const accessibleBranchIds = await getAccessibleBranchIds(callerUserId);
+    const selectedBranchId = branchId || callerBranchId || undefined;
+
+    if (!selectedBranchId) {
+      throw errors.badRequest('BRANCH_REQUIRED', 'Silakan pilih cabang terlebih dahulu');
+    }
+    if (accessibleBranchIds !== null && !accessibleBranchIds.includes(selectedBranchId)) {
+      throw errors.forbidden('Anda tidak memiliki akses ke cabang ini');
+    }
+
+    targetBranchId = selectedBranchId;
+    allowedBranchIds = [selectedBranchId];
   } else if (callerRole === Role.SUPER_ADMIN && branchId === 'all') {
     // SUPER_ADMIN can see all branches
     isAllBranches = true;
@@ -332,6 +350,22 @@ export async function getStaffSessionHistoryService(
       }
 
       allowedBranchIds = [branchId];
+    }
+  } else if (callerRole === Role.DOCTOR && callerUserId) {
+    if (branchId === 'all') {
+      throw errors.forbidden('Dokter hanya dapat melihat riwayat staff pada cabang yang ditugaskan');
+    }
+
+    const accessibleBranchIds = await getAccessibleBranchIds(callerUserId);
+    const selectedBranchId = branchId || callerBranchId || undefined;
+
+    if (selectedBranchId) {
+      if (accessibleBranchIds !== null && !accessibleBranchIds.includes(selectedBranchId)) {
+        throw errors.forbidden('Anda tidak memiliki akses ke cabang ini');
+      }
+      allowedBranchIds = [selectedBranchId];
+    } else {
+      allowedBranchIds = accessibleBranchIds ?? undefined;
     }
   } else if (callerRole === Role.SUPER_ADMIN && branchId && branchId !== 'all') {
     allowedBranchIds = [branchId];
