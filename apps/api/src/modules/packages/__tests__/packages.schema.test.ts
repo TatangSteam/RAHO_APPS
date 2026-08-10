@@ -22,4 +22,22 @@ describe('editPackageSchema', () => {
       },
     ]);
   });
+
+  it('accepts legacy and custom catalog codes during edit', () => {
+    const result = editPackageSchema.parse({
+      packages: [
+        {
+          pricingId: 'pricing-legacy',
+          quantity: 1,
+          boosterType: 'CUSTOM_BOOSTER',
+          serviceType: 'HC',
+        },
+      ],
+    });
+
+    expect(result.packages[0]).toMatchObject({
+      boosterType: 'CUSTOM_BOOSTER',
+      serviceType: 'HC',
+    });
+  });
 });

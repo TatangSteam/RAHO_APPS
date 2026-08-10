@@ -691,8 +691,6 @@ export default function MemberDetailPage() {
         packages: editData.selectedPackages.map((selection) => ({
           pricingId: selection.pricingId,
           quantity: selection.quantity,
-          ...(selection.boosterType ? { boosterType: selection.boosterType } : {}),
-          ...(selection.serviceType ? { serviceType: selection.serviceType } : {}),
         })),
         discountPercent: editData.discountPercent || undefined,
         discountAmount: editData.discountAmount || undefined,

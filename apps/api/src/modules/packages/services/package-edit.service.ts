@@ -171,6 +171,7 @@ export class PackageEditService {
           purchaseGroupId,
           memberId,
           replacementStatus,
+          allowRemovingUsedPackages: hasPrivilegedEditAccess && replacementStatus === PackageStatus.ACTIVE,
         }),
       );
     } catch (error) {
@@ -214,6 +215,7 @@ export class PackageEditService {
     purchaseGroupId: string | null;
     memberId: string;
     replacementStatus: PackageStatus;
+    allowRemovingUsedPackages: boolean;
   }) {
     const {
       db,
@@ -225,6 +227,7 @@ export class PackageEditService {
       purchaseGroupId,
       memberId,
       replacementStatus,
+      allowRemovingUsedPackages,
     } = params;
 
     const packageIdsToKeepOrReplace = packagesInEditScope.map(pkg => pkg.id);
@@ -282,8 +285,8 @@ export class PackageEditService {
 
         return (
           pricing.packageType === currentPackage.packageType &&
-          (selection.boosterType || pricing.boosterType || null) === (currentPackage.boosterType || null) &&
-          (selection.serviceType || pricing.serviceType || null) === (currentPackage.serviceType || null)
+          (pricing.boosterType || null) === (currentPackage.boosterType || null) &&
+          (pricing.serviceType || null) === (currentPackage.serviceType || null)
         );
       });
 
@@ -301,7 +304,7 @@ export class PackageEditService {
           : legacyMatchIndex;
 
       if (resolvedMatchIndex === -1) {
-        if (currentPackage.usedSessions > 0) {
+        if (currentPackage.usedSessions > 0 && !allowRemovingUsedPackages) {
           throw {
             status: 422,
             code: 'USED_PACKAGE_CANNOT_BE_REMOVED',
@@ -335,8 +338,8 @@ export class PackageEditService {
           discountPercent: null,
           discountAmount: null,
           discountNote: null,
-          boosterType: selection.boosterType || pricing.boosterType,
-          serviceType: selection.serviceType || pricing.serviceType,
+          boosterType: pricing.boosterType,
+          serviceType: pricing.serviceType,
           revenueFlowVersion: memberPackage.revenueFlowVersion,
           purchaseGroupId: targetPurchaseGroupId,
           notes: data.notes,
@@ -378,8 +381,8 @@ export class PackageEditService {
           installmentSchedule,
           totalVerifiedPaid: sourcePaymentData.totalVerifiedPaid || 0,
           paymentPlanStatus: sourcePaymentData.paymentPlanStatus || null,
-          boosterType: selection.boosterType || pricing.boosterType,
-          serviceType: selection.serviceType || pricing.serviceType,
+          boosterType: pricing.boosterType,
+          serviceType: pricing.serviceType,
           purchaseGroupId: targetPurchaseGroupId,
           assignedBy: userId,
           paidAt: sourcePaymentData.paidAt || null,

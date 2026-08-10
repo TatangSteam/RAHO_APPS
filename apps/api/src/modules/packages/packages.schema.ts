@@ -174,15 +174,15 @@ export const cancelPackageSchema = z.object({
 
 export const editPackageSchema = z.object({
   packages: z.array(z.object({
-    pricingId: z.string(),
+    pricingId: z.string().trim().min(1, 'Pilihan harga paket wajib diisi'),
     quantity: z.number().int().min(1),
     boosterType: z.preprocess(
       (value) => value === null || value === '' ? undefined : value,
-      ExtendedBoosterTypeEnum.optional(),
+      z.string().trim().min(1).optional(),
     ),
     serviceType: z.preprocess(
       (value) => value === null || value === '' ? undefined : value,
-      ServiceTypeEnum.optional(),
+      z.string().trim().min(1).optional(),
     ),
   })).default([]),
   

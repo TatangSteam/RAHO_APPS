@@ -301,6 +301,114 @@ describe('PackageEditService', () => {
     expect(result.packages).toEqual([updatedUsedPackage]);
   });
 
+  it('soft-cancels a used package removed by a manager from a paid active bundle', async () => {
+    const service = new PackageEditService();
+    const activeBasic = {
+      id: 'pkg-basic-used',
+      packageCode: 'PKG-PUS-BSC-USED',
+      memberId: 'member-1',
+      branchId: 'branch-1',
+      purchaseGroupId: 'group-paid',
+      packagePricingId: 'pricing-basic',
+      packageType: PackageType.BASIC,
+      productCode: 'TNB-P15-HC',
+      boosterType: null,
+      serviceType: 'HC',
+      totalSessions: 15,
+      usedSessions: 1,
+      finalPrice: 22500000,
+      status: PackageStatus.ACTIVE,
+      paymentPlanType: 'FULL_PAYMENT',
+      installmentTotal: null,
+      installmentSchedule: null,
+      totalVerifiedPaid: 39500000,
+      paymentPlanStatus: null,
+      paidAt: new Date('2026-08-01T00:00:00.000Z'),
+      verifiedBy: 'manager-1',
+      verifiedAt: new Date('2026-08-01T01:00:00.000Z'),
+      activatedAt: new Date('2026-08-01T01:00:00.000Z'),
+      paymentProofUrl: 'proof.jpg',
+      paymentProofFileName: 'proof.jpg',
+      paymentProofFileSize: 100,
+      paymentProofMimeType: 'image/jpeg',
+      revenueFlowVersion: 1,
+      member: { memberNo: 'MBR-001', user: { profile: { fullName: 'Member Bundle' } } },
+      branch: { id: 'branch-1', branchCode: 'PUS' },
+    };
+    const activeBooster = {
+      ...activeBasic,
+      id: 'pkg-booster-used',
+      packageCode: 'PKG-PUS-BST-USED',
+      packagePricingId: 'pricing-booster',
+      packageType: PackageType.BOOSTER,
+      productCode: 'BST-GT-P1-HC',
+      boosterType: 'GT',
+      totalSessions: 17,
+      finalPrice: 17000000,
+    };
+    const boosterPricing = {
+      id: 'pricing-booster',
+      branchId: 'branch-1',
+      packageType: PackageType.BOOSTER,
+      productCode: 'BST-GT-P1-HC',
+      boosterType: 'GT',
+      serviceType: 'HC',
+      totalSessions: 1,
+      price: 1000000,
+    };
+    const updatedBooster = {
+      ...activeBooster,
+      purchaseGroupId: null,
+    };
+
+    mockPrisma.memberPackage.findUnique.mockResolvedValue(null);
+    mockPrisma.memberPackage.findMany
+      .mockResolvedValueOnce([activeBasic, activeBooster])
+      .mockResolvedValueOnce([
+        { id: activeBasic.id, packageCode: activeBasic.packageCode, usedSessions: 1 },
+        { id: activeBooster.id, packageCode: activeBooster.packageCode, usedSessions: 1 },
+      ])
+      .mockResolvedValueOnce([activeBasic, activeBooster]);
+    mockPrisma.packagePricing.findMany.mockResolvedValue([boosterPricing]);
+    mockPrisma.memberPackage.update.mockResolvedValue(updatedBooster);
+    mockPrisma.memberPackage.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.memberAddOn.findMany.mockResolvedValue([]);
+    mockPrisma.invoice.findFirst.mockResolvedValue(null);
+    (logAudit as jest.Mock).mockResolvedValue(undefined);
+
+    const result = await service.editPackage(
+      'group-paid',
+      {
+        packages: [{
+          pricingId: boosterPricing.id,
+          quantity: 17,
+          boosterType: 'LEGACY_CLIENT_VALUE',
+          serviceType: 'PREMIER',
+        }],
+      },
+      'manager-1',
+      null,
+      'ADMIN_MANAGER',
+    );
+
+    expect(mockPrisma.memberPackage.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [activeBasic.id] } },
+      data: { status: PackageStatus.CANCELLED },
+    });
+    expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: activeBooster.id },
+        data: expect.objectContaining({
+          boosterType: boosterPricing.boosterType,
+          serviceType: boosterPricing.serviceType,
+          totalSessions: 17,
+          purchaseGroupId: null,
+        }),
+      }),
+    );
+    expect(result.packages).toEqual([updatedBooster]);
+  });
+
   it('blocks an admin layanan from editing a package in another branch', async () => {
     const service = new PackageEditService();
     mockPrisma.memberPackage.findUnique.mockResolvedValue({
