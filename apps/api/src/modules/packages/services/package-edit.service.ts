@@ -228,10 +228,10 @@ export class PackageEditService {
     } = params;
 
     const packageIdsToKeepOrReplace = packagesInEditScope.map(pkg => pkg.id);
-    const currentPackages = await db.memberPackage.findMany({
+    const currentPackages = (await db.memberPackage.findMany({
       where: { id: { in: packageIdsToKeepOrReplace } },
       orderBy: { createdAt: 'asc' },
-    });
+    })).sort((left, right) => right.usedSessions - left.usedSessions);
 
     const pricingIds = Array.from(new Set(data.packages.map(pkg => pkg.pricingId).filter(Boolean)));
     const pricings = pricingIds.length > 0
@@ -566,9 +566,15 @@ export class PackageEditService {
       where: { invoiceId: invoice.id },
     });
 
+    let invoiceSubtotal = 0;
+    let invoiceDiscountAmount = 0;
+    let invoiceDiscountPercent = 0;
+    let invoiceDiscountNote: string | null = null;
     let invoiceTotal = 0;
 
     for (const pkg of packages) {
+      const packageDiscount = Number(pkg.discountAmount || 0);
+      const packageSubtotal = Number(pkg.finalPrice) + packageDiscount;
       await db.invoiceItem.create({
         data: {
           invoiceId: invoice.id,
@@ -577,11 +583,16 @@ export class PackageEditService {
           code: pkg.packageCode,
           description: `${pkg.packageType} Package - ${pkg.totalSessions} sessions`,
           quantity: 1,
-          pricePerUnit: pkg.finalPrice,
-          subtotal: pkg.finalPrice,
+          pricePerUnit: packageSubtotal,
+          subtotal: packageSubtotal,
+          discountAmount: packageDiscount,
           totalAmount: pkg.finalPrice,
         },
       });
+      invoiceSubtotal += packageSubtotal;
+      invoiceDiscountAmount += packageDiscount;
+      invoiceDiscountPercent = Math.max(invoiceDiscountPercent, Number(pkg.discountPercent || 0));
+      invoiceDiscountNote ||= pkg.discountNote || null;
       invoiceTotal += Number(pkg.finalPrice);
     }
 
@@ -599,15 +610,21 @@ export class PackageEditService {
           totalAmount: addOn.totalPrice,
         },
       });
+      invoiceSubtotal += Number(addOn.totalPrice);
       invoiceTotal += Number(addOn.totalPrice);
     }
+
+    const invoiceTotalWithTax = invoiceTotal + Number(invoice.taxAmount || 0);
 
     await db.invoice.update({
       where: { id: invoice.id },
       data: {
-        subtotal: invoiceTotal,
-        totalAmount: invoiceTotal,
-        actualPaidAmount: invoice.status === InvoiceStatus.PAID ? invoiceTotal : invoice.actualPaidAmount,
+        subtotal: invoiceSubtotal,
+        discountPercent: invoiceDiscountAmount > 0 ? invoiceDiscountPercent : null,
+        discountAmount: invoiceDiscountAmount,
+        discountNote: invoiceDiscountAmount > 0 ? invoiceDiscountNote : null,
+        totalAmount: invoiceTotalWithTax,
+        actualPaidAmount: invoice.status === InvoiceStatus.PAID ? invoiceTotalWithTax : invoice.actualPaidAmount,
       },
     });
   }

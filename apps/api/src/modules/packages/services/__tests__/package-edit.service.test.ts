@@ -203,6 +203,104 @@ describe('PackageEditService', () => {
     },
   );
 
+  it('keeps the used row when consolidating a paid bundle quantity', async () => {
+    const service = new PackageEditService();
+    const usedPackage = {
+      id: 'pkg-booster-used',
+      packageCode: 'PKG-PUS-BST-USED',
+      memberId: 'member-1',
+      branchId: 'branch-1',
+      purchaseGroupId: 'group-active',
+      packagePricingId: 'pricing-booster',
+      packageType: PackageType.BOOSTER,
+      productCode: 'BST-GT-P1-PM',
+      boosterType: 'GT',
+      serviceType: 'PM',
+      totalSessions: 1,
+      usedSessions: 1,
+      finalPrice: 1000000,
+      status: PackageStatus.ACTIVE,
+      paymentPlanType: 'FULL_PAYMENT',
+      installmentTotal: null,
+      installmentSchedule: null,
+      totalVerifiedPaid: 1000000,
+      paymentPlanStatus: null,
+      paidAt: new Date('2026-08-01T00:00:00.000Z'),
+      verifiedBy: 'manager-1',
+      verifiedAt: new Date('2026-08-01T01:00:00.000Z'),
+      activatedAt: new Date('2026-08-01T01:00:00.000Z'),
+      paymentProofUrl: 'proof.jpg',
+      paymentProofFileName: 'proof.jpg',
+      paymentProofFileSize: 100,
+      paymentProofMimeType: 'image/jpeg',
+      revenueFlowVersion: 1,
+      member: { memberNo: 'MBR-001', user: { profile: { fullName: 'Member Bundle' } } },
+      branch: { id: 'branch-1', branchCode: 'PUS' },
+    };
+    const unusedPackage = {
+      ...usedPackage,
+      id: 'pkg-booster-unused',
+      packageCode: 'PKG-PUS-BST-UNUSED',
+      usedSessions: 0,
+    };
+    const updatedUsedPackage = {
+      ...usedPackage,
+      totalSessions: 2,
+      finalPrice: 2000000,
+    };
+
+    mockPrisma.memberPackage.findUnique.mockResolvedValue(null);
+    mockPrisma.memberPackage.findMany
+      .mockResolvedValueOnce([usedPackage])
+      .mockResolvedValueOnce([
+        { id: unusedPackage.id, packageCode: unusedPackage.packageCode, usedSessions: 0 },
+        { id: usedPackage.id, packageCode: usedPackage.packageCode, usedSessions: 1 },
+      ])
+      .mockResolvedValueOnce([unusedPackage, usedPackage]);
+    mockPrisma.packagePricing.findMany.mockResolvedValue([{
+      id: 'pricing-booster',
+      branchId: 'branch-1',
+      packageType: PackageType.BOOSTER,
+      productCode: 'BST-GT-P1-PM',
+      boosterType: 'GT',
+      serviceType: 'PM',
+      totalSessions: 1,
+      price: 1000000,
+    }]);
+    mockPrisma.memberPackage.update.mockResolvedValue(updatedUsedPackage);
+    mockPrisma.memberPackage.updateMany.mockResolvedValue({ count: 1 });
+    mockPrisma.memberAddOn.findMany.mockResolvedValue([]);
+    mockPrisma.invoice.findFirst.mockResolvedValue(null);
+    (logAudit as jest.Mock).mockResolvedValue(undefined);
+
+    const result = await service.editPackage(
+      'group-active',
+      {
+        packages: [{
+          pricingId: 'pricing-booster',
+          quantity: 2,
+          boosterType: 'GT',
+          serviceType: 'PM',
+        }],
+      },
+      'manager-1',
+      null,
+      'ADMIN_MANAGER',
+    );
+
+    expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: usedPackage.id },
+        data: expect.objectContaining({ totalSessions: 2, finalPrice: 2000000 }),
+      }),
+    );
+    expect(mockPrisma.memberPackage.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [unusedPackage.id] } },
+      data: { status: PackageStatus.CANCELLED },
+    });
+    expect(result.packages).toEqual([updatedUsedPackage]);
+  });
+
   it('blocks an admin layanan from editing a package in another branch', async () => {
     const service = new PackageEditService();
     mockPrisma.memberPackage.findUnique.mockResolvedValue({
@@ -588,5 +686,58 @@ describe('PackageEditService', () => {
       'admin-layanan-1',
       mockPrisma,
     );
+  });
+
+  it('rebuilds a paid invoice with consistent gross, discount, and net totals', async () => {
+    const service = new PackageEditService() as unknown as {
+      rebuildInvoiceItems: (
+        db: MockPrismaClient,
+        invoice: Record<string, unknown>,
+        packages: Array<Record<string, unknown>>,
+        addOns: Array<Record<string, unknown>>,
+      ) => Promise<void>;
+    };
+    const invoice = {
+      id: 'invoice-paid',
+      status: InvoiceStatus.PAID,
+      actualPaidAmount: 10000000,
+      taxAmount: 0,
+    };
+    const discountedPackage = {
+      id: 'pkg-discounted',
+      packageCode: 'PKG-DISCOUNTED',
+      packageType: PackageType.BASIC,
+      totalSessions: 7,
+      finalPrice: 8000000,
+      discountAmount: 2000000,
+      discountPercent: 20,
+      discountNote: 'Diskon loyalitas',
+    };
+
+    mockPrisma.invoiceItem.deleteMany.mockResolvedValue({ count: 1 });
+    mockPrisma.invoiceItem.create.mockResolvedValue({});
+    mockPrisma.invoice.update.mockResolvedValue({});
+
+    await service.rebuildInvoiceItems(mockPrisma, invoice, [discountedPackage], []);
+
+    expect(mockPrisma.invoiceItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        pricePerUnit: 10000000,
+        subtotal: 10000000,
+        discountAmount: 2000000,
+        totalAmount: 8000000,
+      }),
+    });
+    expect(mockPrisma.invoice.update).toHaveBeenCalledWith({
+      where: { id: invoice.id },
+      data: {
+        subtotal: 10000000,
+        discountPercent: 20,
+        discountAmount: 2000000,
+        discountNote: 'Diskon loyalitas',
+        totalAmount: 8000000,
+        actualPaidAmount: 8000000,
+      },
+    });
   });
 });

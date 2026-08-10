@@ -116,8 +116,8 @@ function buildEditPackageSelections(packages: MemberPackage[], pricings: Package
     const pricingId = pricing?.id || pkg.packagePricingId || '';
     if (!pricingId) return;
 
-    const boosterType = (getBoosterTypeFromProductCode(pkg.productCode) || pricing?.boosterType || pkg.boosterType) as ExtendedBoosterType | undefined;
-    const serviceType = (getServiceTypeFromProductCode(pkg.productCode) || pricing?.serviceType || pkg.serviceType) as ServiceType | undefined;
+    const boosterType = (getBoosterTypeFromProductCode(pkg.productCode) || pricing?.boosterType || pkg.boosterType || undefined) as ExtendedBoosterType | undefined;
+    const serviceType = (getServiceTypeFromProductCode(pkg.productCode) || pricing?.serviceType || pkg.serviceType || undefined) as ServiceType | undefined;
     const quantity = Number(pkg.purchaseQuantity || 1);
     const key = [pricingId, boosterType || '', serviceType || ''].join('|');
     const existing = selections.get(key);
@@ -688,7 +688,12 @@ export default function MemberDetailPage() {
       
       // Prepare payload similar to assign package
       const payload: EditPackageData = {
-        packages: editData.selectedPackages,
+        packages: editData.selectedPackages.map((selection) => ({
+          pricingId: selection.pricingId,
+          quantity: selection.quantity,
+          ...(selection.boosterType ? { boosterType: selection.boosterType } : {}),
+          ...(selection.serviceType ? { serviceType: selection.serviceType } : {}),
+        })),
         discountPercent: editData.discountPercent || undefined,
         discountAmount: editData.discountAmount || undefined,
         discountNote: editData.discountNote || undefined,

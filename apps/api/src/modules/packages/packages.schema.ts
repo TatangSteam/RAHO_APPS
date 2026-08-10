@@ -176,8 +176,14 @@ export const editPackageSchema = z.object({
   packages: z.array(z.object({
     pricingId: z.string(),
     quantity: z.number().int().min(1),
-    boosterType: ExtendedBoosterTypeEnum.optional(),
-    serviceType: ServiceTypeEnum.optional(),
+    boosterType: z.preprocess(
+      (value) => value === null || value === '' ? undefined : value,
+      ExtendedBoosterTypeEnum.optional(),
+    ),
+    serviceType: z.preprocess(
+      (value) => value === null || value === '' ? undefined : value,
+      ServiceTypeEnum.optional(),
+    ),
   })).default([]),
   
   addOns: z.array(z.object({
