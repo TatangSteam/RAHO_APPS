@@ -33,13 +33,6 @@ export class SessionDetailsService {
     if (!session) {
       throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
     }
-    if (session.isCompleted) {
-      throw {
-        status: 409,
-        code: 'POSTED_SESSION_IMMUTABLE',
-        message: 'Data sesi yang sudah diposting tidak dapat diubah.',
-      };
-    }
 
     if (session.branchId !== branchId) {
       throw {
@@ -47,6 +40,49 @@ export class SessionDetailsService {
         code: 'SESSION_BRANCH_ACCESS_DENIED',
         message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
       };
+    }
+
+    const postedUpdateKeys = Object.keys(input).filter(
+      (key) => key !== 'shiftFollowingSessions',
+    );
+    const isPostedDateCorrection =
+      session.isCompleted &&
+      postedUpdateKeys.length === 1 &&
+      postedUpdateKeys[0] === 'treatmentDate' &&
+      typeof input.treatmentDate === 'string' &&
+      input.shiftFollowingSessions !== true;
+
+    if (session.isCompleted && !isPostedDateCorrection) {
+      throw {
+        status: 409,
+        code: 'POSTED_SESSION_IMMUTABLE',
+        message: 'Sesi sudah diposting. Hanya tanggal dan jam terapi yang dapat dikoreksi.',
+      };
+    }
+
+    if (isPostedDateCorrection) {
+      const nextTreatmentDate = new Date(input.treatmentDate!);
+      const updatedSession = await prisma.treatmentSession.update({
+        where: { id: sessionId },
+        data: { treatmentDate: nextTreatmentDate },
+      });
+
+      await logAudit({
+        userId,
+        branchId: session.branchId,
+        action: AuditAction.UPDATE,
+        resource: 'TreatmentSession',
+        resourceId: sessionId,
+        meta: {
+          action: 'CORRECT_POSTED_SESSION_TREATMENT_DATE',
+          previousTreatmentDate: session.treatmentDate,
+          nextTreatmentDate,
+          completionStatus: session.completionStatus,
+          completedAt: session.completedAt,
+        },
+      });
+
+      return updatedSession;
     }
 
     const encounterSessionCount = await prisma.treatmentSession.count({
