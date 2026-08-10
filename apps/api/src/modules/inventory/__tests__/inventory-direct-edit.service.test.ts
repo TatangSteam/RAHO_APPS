@@ -21,6 +21,8 @@ describe('InventoryItemsService direct stock edit', () => {
     stock: 0,
     minThreshold: 10,
     storageLocation: null,
+    warehouseId: 'warehouse-1',
+    stockLocationId: 'location-1',
     masterProduct: {
       name: 'IFA + NO 2,5ml',
       category: 'MEDICINE',
@@ -53,8 +55,9 @@ describe('InventoryItemsService direct stock edit', () => {
     expect(prismaMock.inventoryItem.findUnique).not.toHaveBeenCalled();
   });
 
-  it('updates operational stock and mutation without writing an inventory ledger entry', async () => {
+  it('updates operational stock and reconciles the authoritative inventory ledger', async () => {
     const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
       masterProduct: {
         update: jest.fn(),
       },
@@ -63,11 +66,28 @@ describe('InventoryItemsService direct stock edit', () => {
       },
       inventoryItem: {
         update: jest.fn().mockResolvedValue({}),
-        findUnique: jest.fn().mockResolvedValue({
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({
+            id: currentItem.id,
+            branchId: currentItem.branchId,
+            masterProductId: currentItem.masterProductId,
+            stock: currentItem.stock,
+            warehouseId: currentItem.warehouseId,
+            stockLocationId: currentItem.stockLocationId,
+            balances: [],
+          })
+          .mockResolvedValueOnce({
           ...currentItem,
           stock: 200,
           branch: { id: 'branch-1', name: 'Cabang HQ' },
-        }),
+          }),
+      },
+      inventoryBalance: {
+        upsert: jest.fn().mockResolvedValue({ id: 'balance-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      inventoryCostLayer: {
+        create: jest.fn().mockResolvedValue({ id: 'layer-1' }),
       },
     };
 
@@ -101,7 +121,63 @@ describe('InventoryItemsService direct stock edit', () => {
         createdBy: 'super-admin-1',
       }),
     });
-    expect((tx as any).inventoryLedger).toBeUndefined();
+    expect(tx.inventoryBalance.update).toHaveBeenCalledWith({
+      where: { id: 'balance-1' },
+      data: { onHandQty: { increment: expect.objectContaining({}) }, version: { increment: 1 } },
+    });
+    expect(tx.inventoryCostLayer.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        inventoryBalanceId: 'balance-1',
+        originalQty: expect.objectContaining({}),
+        remainingQty: expect.objectContaining({}),
+        unitCost: null,
+        valuationStatus: 'PENDING_VALUATION',
+      }),
+    });
     expect(result.item.stock).toBe(200);
+  });
+
+  it('repairs a missing ledger balance when the visible stock value is saved unchanged', async () => {
+    const itemWithVisibleStock = { ...currentItem, stock: 200 };
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      masterProduct: { update: jest.fn() },
+      stockMutation: { create: jest.fn() },
+      inventoryItem: {
+        update: jest.fn().mockResolvedValue({}),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({
+            id: itemWithVisibleStock.id,
+            branchId: itemWithVisibleStock.branchId,
+            masterProductId: itemWithVisibleStock.masterProductId,
+            stock: itemWithVisibleStock.stock,
+            warehouseId: itemWithVisibleStock.warehouseId,
+            stockLocationId: itemWithVisibleStock.stockLocationId,
+            balances: [],
+          })
+          .mockResolvedValueOnce({
+            ...itemWithVisibleStock,
+            branch: { id: 'branch-1', name: 'Cabang HQ' },
+          }),
+      },
+      inventoryBalance: {
+        upsert: jest.fn().mockResolvedValue({ id: 'balance-1' }),
+        update: jest.fn().mockResolvedValue({}),
+      },
+      inventoryCostLayer: { create: jest.fn().mockResolvedValue({ id: 'layer-1' }) },
+    };
+    prismaMock.inventoryItem.findUnique.mockResolvedValue(itemWithVisibleStock);
+    prismaMock.$transaction.mockImplementation((callback: (client: typeof tx) => unknown) => callback(tx));
+
+    await service.updateInventoryItem(
+      itemWithVisibleStock.id,
+      { stock: 200, stockAdjustmentNotes: 'Sinkronisasi saldo ledger' },
+      'super-admin-1',
+      true,
+    );
+
+    expect(tx.inventoryBalance.update).toHaveBeenCalled();
+    expect(tx.stockMutation.create).not.toHaveBeenCalled();
+    expect(tx.inventoryItem.update).not.toHaveBeenCalled();
   });
 });

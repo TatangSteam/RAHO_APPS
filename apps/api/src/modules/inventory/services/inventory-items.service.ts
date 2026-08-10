@@ -1,6 +1,7 @@
 import { prisma } from '../../../lib/prisma';
 import { Prisma, ProductCategory, StockMutationType } from '@prisma/client';
 import { UnitConversionService } from './unit-conversion.service';
+import { reconcileCompatibilityStockInTransaction } from './compatibility-stock-reconciliation.service';
 
 interface InventoryItemWithProduct {
   id: string;
@@ -577,11 +578,20 @@ export class InventoryItemsService {
         const stockAfter = data.stock;
         const adjustment = stockAfter - stockBefore;
 
+        // Direct-edit stock used to update only the compatibility column. That
+        // made the UI show stock while treatment completion saw zero in the
+        // authoritative location ledger. Keep both quantities aligned.
+        await reconcileCompatibilityStockInTransaction(tx, {
+          inventoryItemId: itemId,
+          targetStock: stockAfter,
+          actorUserId: userId,
+          sourceType: 'SUPER_ADMIN_DIRECT_EDIT_RECONCILIATION',
+          sourceId: `${itemId}:${userId}`,
+          rejectDecrease: true,
+        });
+
         if (stockAfter !== stockBefore) {
           inventoryUpdates.stock = stockAfter;
-
-          // This temporary Super Admin flow updates operational stock only.
-          // The authoritative inventory ledger is intentionally not synchronized here.
           await tx.stockMutation.create({
             data: {
               inventoryItemId: itemId,

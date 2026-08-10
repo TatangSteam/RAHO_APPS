@@ -43,10 +43,15 @@ import {
   requiresMaterialDeviationReason,
 } from './material-usage.helpers';
 import { ensureAutomaticInfusionKitMaterialDrafts } from './automatic-infusion-kit.service';
+import { reconcileCompatibilityStockInTransaction } from '@modules/inventory/services/compatibility-stock-reconciliation.service';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
 const LEGACY_COMPLETION_FLOW_VERSION = 1;
+
+function formatStockQuantity(value: Prisma.Decimal): string {
+  return Number(value.toString()).toLocaleString('id-ID', { maximumFractionDigits: 4 });
+}
 
 function isRetryableTransactionError(error: unknown): boolean {
   const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
@@ -185,7 +190,7 @@ export class SessionCompletionService {
           recordedBy: userId,
         });
       }
-      const sessionMaterials = !isLegacySession && session.materialPolicyVersion >= 2
+      let sessionMaterials = !isLegacySession && session.materialPolicyVersion >= 2
         ? await tx.materialUsage.findMany({
             where: { treatmentSessionId: session.id },
             include: {
@@ -198,6 +203,46 @@ export class SessionCompletionService {
             },
           })
         : session.materials;
+
+      // Repair stock entered through the legacy/direct-edit compatibility
+      // column before validating the authoritative balance ledger. This is
+      // limited to an actual shortage and never overrides reservations or
+      // quarantined quantities already represented in the ledger.
+      let reconciledCompatibilityStock = false;
+      for (const material of [...sessionMaterials]
+        .filter((row) => row.status === MaterialUsageStatus.DRAFT && row.baseQuantity.greaterThan(0))
+        .sort((a, b) => a.inventoryItemId.localeCompare(b.inventoryItemId))) {
+        const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
+        const ledgerOnHand = material.inventoryItem.balances.reduce(
+          (sum, balance) => sum.add(balance.onHandQty),
+          new Prisma.Decimal(0),
+        );
+        if (
+          physicalAvailable.lessThan(material.baseQuantity)
+          && material.inventoryItem.stock.greaterThan(ledgerOnHand)
+        ) {
+          const reconciliation = await reconcileCompatibilityStockInTransaction(tx, {
+            inventoryItemId: material.inventoryItemId,
+            actorUserId: userId,
+            sourceType: 'TREATMENT_COMPATIBILITY_RECONCILIATION',
+            sourceId: `${session.id}:${material.inventoryItemId}`,
+          });
+          reconciledCompatibilityStock ||= reconciliation.reconciledQuantity.greaterThan(0);
+        }
+      }
+      if (reconciledCompatibilityStock) {
+        sessionMaterials = await tx.materialUsage.findMany({
+          where: { treatmentSessionId: session.id },
+          include: {
+            inventoryItem: {
+              include: {
+                masterProduct: true,
+                balances: true,
+              },
+            },
+          },
+        });
+      }
 
       const errorsList: string[] = [];
       const hasVitalBefore = session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM');
@@ -212,9 +257,11 @@ export class SessionCompletionService {
       for (const material of sessionMaterials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
         const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
         if (physicalAvailable.lessThan(material.baseQuantity)) {
+          const shortage = material.baseQuantity.sub(physicalAvailable);
+          const unit = material.inventoryItem.masterProduct.baseUnit;
           throw errors.unprocessable(
             'INSUFFICIENT_AVAILABLE_STOCK',
-            `Stok ${material.inventoryItem.masterProduct.name} kurang ${material.baseQuantity.sub(physicalAvailable).toFixed(4)} ${material.inventoryItem.masterProduct.baseUnit}. Lakukan penerimaan stok terlebih dahulu.`,
+            `Stok ${material.inventoryItem.masterProduct.name} tidak cukup. Dibutuhkan ${formatStockQuantity(material.baseQuantity)} ${unit}, tersedia ${formatStockQuantity(physicalAvailable)} ${unit}, kekurangan ${formatStockQuantity(shortage)} ${unit}. Lakukan penerimaan stok terlebih dahulu.`,
           );
         }
       }

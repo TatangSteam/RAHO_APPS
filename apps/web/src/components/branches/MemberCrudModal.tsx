@@ -52,7 +52,7 @@ interface MemberFormData {
   address?: string;
   birthPlace?: string;
   birthDate?: string;
-  gender?: 'L' | 'P';
+  gender?: 'L' | 'P' | '';
   emergencyContact?: string;
   emergencyContactPhone?: string;
   referralCodeId?: string;
@@ -87,7 +87,7 @@ export default function MemberCrudModal({
     address: '',
     birthPlace: '',
     birthDate: '',
-    gender: 'L',
+    gender: '',
     emergencyContact: '',
     emergencyContactPhone: '',
     referralCodeId: '',
@@ -98,6 +98,12 @@ export default function MemberCrudModal({
     nextIncentiveType: '',
     nextIncentiveValue: 0
   });
+
+  const isAdminManagerEmptyOnly = action === 'edit' && userRole === 'ADMIN_MANAGER';
+  const hasStoredValue = (value: unknown) =>
+    value !== null && value !== undefined && (typeof value !== 'string' || value.trim().length > 0);
+  const managerFieldLocked = (value: unknown) => isAdminManagerEmptyOnly && hasStoredValue(value);
+  const existingEmergencyContact = memberData?.emergencyContact;
 
   // Fetch referral codes on mount
   useEffect(() => {
@@ -162,7 +168,7 @@ export default function MemberCrudModal({
         address: memberData.address || '',
         birthPlace: memberData.tempatLahir || '',
         birthDate: memberData.dateOfBirth ? memberData.dateOfBirth.split('T')[0] : '',
-        gender: memberData.jenisKelamin || 'L',
+        gender: memberData.jenisKelamin || '',
         emergencyContact: memberData.emergencyContact || '',
         emergencyContactPhone: memberData.emergencyContactPhone || '',
         referralCodeId: memberData.referralCodeId || '',
@@ -266,9 +272,11 @@ export default function MemberCrudModal({
           phone: formData.phone,
           address: formData.address,
           birthDate: formData.birthDate,
-          gender: formData.gender,
+          gender: formData.gender || undefined,
           emergencyContactName: formData.emergencyContact,
         };
+        updateData.birthPlace = formData.birthPlace;
+        updateData.emergencyContactPhone = formData.emergencyContactPhone;
         
         // Member login identifiers are stored in the existing User.email column.
         updateData.username = formData.memberUsername;
@@ -294,7 +302,11 @@ export default function MemberCrudModal({
       devError('❌ [MemberCrudModal] Error saving member:', error);
       devError('❌ [MemberCrudModal] Error response:', error.response?.data);
       devError('❌ [MemberCrudModal] Error status:', error.response?.status);
-      showToast.error(error.response?.data?.message || `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} member`);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        `Gagal ${action === 'create' ? 'menambahkan' : 'memperbarui'} member`,
+      );
     } finally {
       setLoading(false);
     }
@@ -310,6 +322,11 @@ export default function MemberCrudModal({
       onClose={onClose}
     >
       <form onSubmit={handleSubmit} className={styles.modalForm}>
+          {isAdminManagerEmptyOnly && (
+            <div className={styles.infoBox}>
+              <strong>Admin Manager:</strong> hanya field yang masih kosong yang dapat dilengkapi. Field terisi dikunci.
+            </div>
+          )}
           <div className={styles.formGrid}>
             <div className={styles.formGroup}>
               <label htmlFor="fullName">
@@ -322,6 +339,7 @@ export default function MemberCrudModal({
                 name="fullName"
                 value={formData.fullName}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.fullName)}
                 required
                 placeholder="Masukkan nama lengkap"
               />
@@ -338,6 +356,7 @@ export default function MemberCrudModal({
                 name="phone"
                 value={formData.phone}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.phone)}
                 placeholder="Opsional"
               />
             </div>
@@ -407,6 +426,7 @@ export default function MemberCrudModal({
                 name="email"
                 value={formData.email}
                 onChange={handleInputChange}
+                disabled={isAdminManagerEmptyOnly}
                 placeholder="email@example.com"
               />
             </div>
@@ -422,6 +442,7 @@ export default function MemberCrudModal({
                 name="birthDate"
                 value={formData.birthDate}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.dateOfBirth)}
               />
             </div>
 
@@ -436,6 +457,7 @@ export default function MemberCrudModal({
                 name="birthPlace"
                 value={formData.birthPlace}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.tempatLahir)}
                 placeholder="Kota tempat lahir"
               />
             </div>
@@ -449,7 +471,9 @@ export default function MemberCrudModal({
                 name="gender"
                 value={formData.gender}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.jenisKelamin)}
               >
+                <option value="">Pilih gender</option>
                 <option value="L">Laki-laki</option>
                 <option value="P">Perempuan</option>
               </select>
@@ -519,6 +543,7 @@ export default function MemberCrudModal({
                 name="address"
                 value={formData.address}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(memberData?.address)}
                 rows={3}
                 placeholder="Alamat lengkap member"
               />
@@ -534,6 +559,7 @@ export default function MemberCrudModal({
                 name="emergencyContact"
                 value={formData.emergencyContact}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(existingEmergencyContact)}
                 placeholder="Nama kontak darurat"
               />
             </div>
@@ -548,6 +574,7 @@ export default function MemberCrudModal({
                 name="emergencyContactPhone"
                 value={formData.emergencyContactPhone}
                 onChange={handleInputChange}
+                disabled={managerFieldLocked(existingEmergencyContact)}
                 placeholder="08xxxxxxxxxx"
               />
             </div>
@@ -643,6 +670,7 @@ export default function MemberCrudModal({
                   name="isConsentToPhoto"
                   checked={formData.isConsentToPhoto}
                   onChange={handleInputChange}
+                  disabled={isAdminManagerEmptyOnly}
                 />
                 <label htmlFor="isConsentToPhoto">Setuju untuk difoto</label>
               </div>

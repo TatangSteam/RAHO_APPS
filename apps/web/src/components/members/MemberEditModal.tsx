@@ -60,7 +60,7 @@ interface MemberFormData {
   address?: string;
   birthPlace?: string;
   birthDate?: string;
-  gender?: 'L' | 'P';
+  gender?: 'L' | 'P' | '';
   emergencyContact?: string;
   emergencyContactPhone?: string;
   referralCodeId?: string;
@@ -97,7 +97,7 @@ export default function MemberEditModal({
     address: '',
     birthPlace: '',
     birthDate: '',
-    gender: 'L',
+    gender: '',
     emergencyContact: '',
     emergencyContactPhone: '',
     referralCodeId: '',
@@ -107,6 +107,19 @@ export default function MemberEditModal({
     nextIncentiveType: '',
     nextIncentiveValue: 0
   });
+
+  const isAdminManagerEmptyOnly = action === 'edit' && userRole === 'ADMIN_MANAGER';
+  const hasStoredValue = (value: unknown) =>
+    value !== null && value !== undefined && (typeof value !== 'string' || value.trim().length > 0);
+  const managerFieldLocked = (value: unknown) => isAdminManagerEmptyOnly && hasStoredValue(value);
+  const existingFullName = memberData?.profile?.fullName || memberData?.fullName;
+  const existingUsername = memberData?.user?.username || memberData?.username || memberData?.user?.email || memberData?.email;
+  const existingPhone = memberData?.user?.phone || memberData?.phone || memberData?.profile?.phone;
+  const existingGender = memberData?.profile?.gender || memberData?.jenisKelamin;
+  const existingBirthPlace = memberData?.profile?.birthPlace || memberData?.tempatLahir;
+  const existingBirthDate = memberData?.profile?.birthDate || memberData?.dateOfBirth;
+  const existingAddress = memberData?.profile?.address || memberData?.address;
+  const existingEmergencyContact = memberData?.profile?.emergencyContact || memberData?.emergencyContact;
 
   // Fetch referral codes
   useEffect(() => {
@@ -177,7 +190,7 @@ export default function MemberEditModal({
         birthPlace: memberData.profile?.birthPlace || memberData.tempatLahir || '',
         birthDate: memberData.profile?.birthDate ? memberData.profile.birthDate.split('T')[0] : 
                    memberData.dateOfBirth ? memberData.dateOfBirth.split('T')[0] : '',
-        gender: memberData.profile?.gender || memberData.jenisKelamin || 'L',
+        gender: memberData.profile?.gender || memberData.jenisKelamin || '',
         emergencyContact: memberData.profile?.emergencyContact || memberData.emergencyContact || '',
         emergencyContactPhone: memberData.profile?.emergencyContactPhone || memberData.emergencyContactPhone || '',
         referralCodeId: memberData.referralCodeId || '',
@@ -199,7 +212,7 @@ export default function MemberEditModal({
         address: '',
         birthPlace: '',
         birthDate: '',
-        gender: 'L',
+        gender: '',
         emergencyContact: '',
         emergencyContactPhone: '',
         referralCodeId: '',
@@ -371,6 +384,11 @@ export default function MemberEditModal({
         {/* Form Content - Scrollable */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
           <div className="space-y-6">
+            {isAdminManagerEmptyOnly && (
+              <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300">
+                Admin Manager hanya dapat melengkapi field yang masih kosong. Field yang sudah terisi dikunci.
+              </div>
+            )}
             
             {/* Basic Information */}
             <div className="space-y-4">
@@ -388,6 +406,7 @@ export default function MemberEditModal({
                     name="fullName"
                     value={formData.fullName}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingFullName)}
                     required
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="Masukkan nama lengkap"
@@ -409,6 +428,7 @@ export default function MemberEditModal({
                     name="memberUsername"
                     value={formData.memberUsername}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingUsername)}
                     required={action === 'create'}
                     className={`w-full px-4 py-3 text-sm rounded-xl border ${
                       userRole === 'SUPER_ADMIN' && action === 'edit'
@@ -454,6 +474,7 @@ export default function MemberEditModal({
                       name="memberPassword"
                       value={formData.memberPassword}
                       onChange={handleInputChange}
+                      disabled={isAdminManagerEmptyOnly}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                       placeholder="Kosongkan jika tidak ingin mengubah"
                     />
@@ -469,6 +490,7 @@ export default function MemberEditModal({
                     name="phone"
                     value={formData.phone}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingPhone)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="Opsional"
                   />
@@ -482,8 +504,10 @@ export default function MemberEditModal({
                     name="gender"
                     value={formData.gender}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingGender)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                   >
+                    <option value="">Pilih jenis kelamin</option>
                     <option value="L">Laki-laki</option>
                     <option value="P">Perempuan</option>
                   </select>
@@ -498,6 +522,7 @@ export default function MemberEditModal({
                     name="birthPlace"
                     value={formData.birthPlace}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingBirthPlace)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="Kota kelahiran"
                   />
@@ -512,6 +537,7 @@ export default function MemberEditModal({
                     name="birthDate"
                     value={formData.birthDate}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingBirthDate)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                   />
                 </div>
@@ -524,6 +550,7 @@ export default function MemberEditModal({
                     name="address"
                     value={formData.address}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingAddress)}
                     rows={3}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all resize-none"
                     placeholder="Alamat lengkap"
@@ -548,6 +575,7 @@ export default function MemberEditModal({
                     name="emergencyContact"
                     value={formData.emergencyContact}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingEmergencyContact)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="Nama keluarga/kerabat"
                   />
@@ -562,6 +590,7 @@ export default function MemberEditModal({
                     name="emergencyContactPhone"
                     value={formData.emergencyContactPhone}
                     onChange={handleInputChange}
+                    disabled={managerFieldLocked(existingEmergencyContact)}
                     className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     placeholder="08xxxxxxxxxx"
                   />
@@ -584,6 +613,7 @@ export default function MemberEditModal({
                   value={referralSearch}
                   onChange={handleReferralSearchChange}
                   onFocus={() => setShowReferralDropdown(true)}
+                  disabled={isAdminManagerEmptyOnly}
                   className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                   placeholder="Ketik untuk mencari kode referral..."
                 />
@@ -624,6 +654,7 @@ export default function MemberEditModal({
                       name="firstIncentiveType"
                       value={formData.firstIncentiveType}
                       onChange={handleInputChange}
+                      disabled={managerFieldLocked(memberData?.firstIncentiveType)}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     >
                       <option value="">Tidak ada insentif</option>
@@ -640,7 +671,7 @@ export default function MemberEditModal({
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
-                      disabled={!formData.firstIncentiveType}
+                      disabled={!formData.firstIncentiveType || managerFieldLocked(memberData?.firstIncentiveValue)}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all disabled:opacity-50 disabled:bg-neutral-100 dark:disabled:bg-neutral-700"
                       placeholder={formData.firstIncentiveType === 'PERCENTAGE' ? 'Contoh: 10 untuk 10%' : 'Nominal dalam rupiah'}
                     />
@@ -657,6 +688,7 @@ export default function MemberEditModal({
                       name="nextIncentiveType"
                       value={formData.nextIncentiveType}
                       onChange={handleInputChange}
+                      disabled={managerFieldLocked(memberData?.nextIncentiveType)}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all"
                     >
                       <option value="">Tidak ada insentif</option>
@@ -673,7 +705,7 @@ export default function MemberEditModal({
                       onChange={handleInputChange}
                       min="0"
                       step="0.01"
-                      disabled={!formData.nextIncentiveType}
+                      disabled={!formData.nextIncentiveType || managerFieldLocked(memberData?.nextIncentiveValue)}
                       className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all disabled:opacity-50 disabled:bg-neutral-100 dark:disabled:bg-neutral-700"
                       placeholder={formData.nextIncentiveType === 'PERCENTAGE' ? 'Contoh: 5 untuk 5%' : 'Nominal dalam rupiah'}
                     />
@@ -695,6 +727,7 @@ export default function MemberEditModal({
                     name="isConsentToPhoto"
                     checked={formData.isConsentToPhoto}
                     onChange={handleInputChange}
+                    disabled={isAdminManagerEmptyOnly}
                     className="w-5 h-5 text-amber-500 border-neutral-300 dark:border-neutral-600 rounded focus:ring-2 focus:ring-amber-500"
                   />
                   <span className="text-sm text-neutral-700 dark:text-neutral-300">

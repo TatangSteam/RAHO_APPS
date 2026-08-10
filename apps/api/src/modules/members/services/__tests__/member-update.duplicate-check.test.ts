@@ -1,5 +1,6 @@
 import { prisma } from '../../../../lib/prisma';
 import { MemberUpdateService } from '../member-update.service';
+import { Role } from '@prisma/client';
 
 jest.mock('../../../../lib/prisma', () => ({
   prisma: {
@@ -7,6 +8,7 @@ jest.mock('../../../../lib/prisma', () => ({
       findUnique: jest.fn(),
       findMany: jest.fn(),
     },
+    $transaction: jest.fn(),
   },
 }));
 
@@ -26,7 +28,23 @@ describe('MemberUpdateService duplicate checks', () => {
     prismaMock.member.findUnique.mockResolvedValue({
       id: 'member-1',
       userId: 'user-1',
+      nik: '3173000000000001',
+      tempatLahir: null,
       dateOfBirth: new Date('1990-01-15T00:00:00.000Z'),
+      jenisKelamin: 'L',
+      agama: null,
+      address: null,
+      pekerjaan: null,
+      statusNikah: null,
+      emergencyContact: null,
+      sumberInfoRaho: null,
+      postalCode: null,
+      isActive: true,
+      isDeceased: false,
+      firstIncentiveType: null,
+      firstIncentiveValue: null,
+      nextIncentiveType: null,
+      nextIncentiveValue: null,
       user: {
         email: 'member.satu',
         profile: {
@@ -54,6 +72,7 @@ describe('MemberUpdateService duplicate checks', () => {
           birthDate: '1990-01-15',
         },
         'admin-1',
+        Role.SUPER_ADMIN,
       ),
     ).rejects.toMatchObject({
       status: 409,
@@ -68,5 +87,41 @@ describe('MemberUpdateService duplicate checks', () => {
         },
       }),
     );
+  });
+
+  it('rejects an Admin Manager attempt to overwrite a populated member field', async () => {
+    await expect(
+      new MemberUpdateService().updateMember(
+        'member-1',
+        { phone: '089999999999' },
+        'manager-1',
+        Role.ADMIN_MANAGER,
+      ),
+    ).rejects.toMatchObject({
+      status: 403,
+      code: 'ADMIN_MANAGER_MEMBER_FIELD_LOCKED',
+      message: expect.stringContaining('Nomor telepon'),
+    });
+
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('allows an Admin Manager request that only fills an empty field', async () => {
+    const transactionReached = new Error('TRANSACTION_REACHED');
+    prismaMock.$transaction.mockRejectedValue(transactionReached);
+
+    await expect(
+      new MemberUpdateService().updateMember(
+        'member-1',
+        {
+          fullName: 'Member Satu',
+          address: 'Jl. Melati 10',
+        },
+        'manager-1',
+        Role.ADMIN_MANAGER,
+      ),
+    ).rejects.toBe(transactionReached);
+
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
   });
 });

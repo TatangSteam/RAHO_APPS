@@ -27,6 +27,7 @@ interface MemberHeaderProps {
   onManageCredentials?: () => void;
   onUploadDocuments?: () => void;
   isSuperAdmin: boolean;
+  canEdit?: boolean;
   canSendNotification?: boolean;
   canDelete?: boolean;
   isDeleting?: boolean;
@@ -84,6 +85,7 @@ export default function MemberHeader({
   onManageCredentials,
   onUploadDocuments,
   isSuperAdmin,
+  canEdit = false,
   canSendNotification = true,
   canDelete = false,
   isDeleting = false,
@@ -223,7 +225,7 @@ export default function MemberHeader({
                 Kredensial
               </HeaderAction>
             )}
-            {isSuperAdmin && (
+            {canEdit && (
               <HeaderAction onClick={onEdit} tone="primary" icon={<Pencil size={15} />}>
                 Edit
               </HeaderAction>

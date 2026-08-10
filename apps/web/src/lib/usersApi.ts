@@ -165,4 +165,12 @@ export const usersApi = {
     const response = await api.get(`/users/performance/${staffId}/history`, { params: query });
     return response.data.data;
   },
+
+  exportStaffPerformanceDetail: async (staffId: string, query: StaffSessionHistoryQuery = {}): Promise<Blob> => {
+    const response = await api.get(`/users/performance/${staffId}/history/export`, {
+      params: query,
+      responseType: 'blob',
+    });
+    return response.data;
+  },
 };

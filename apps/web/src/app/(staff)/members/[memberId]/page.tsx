@@ -267,6 +267,9 @@ export default function MemberDetailPage() {
 
   const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdminManager = user?.role === 'ADMIN_MANAGER';
+  const canEditMember =
+    isSuperAdmin ||
+    (isAdminManager && user?.adminManagerAccessScope !== 'MEMBER_VIEW_ONLY');
   const canMutateMember = !isAdminManager;
   const canSendNotification = Boolean(user && canMutateMember);
   const canDeleteMember = isSuperAdmin;
@@ -758,6 +761,7 @@ export default function MemberDetailPage() {
         onManageCredentials={() => setShowCredentialsModal(true)}
         onUploadDocuments={() => setShowUploadModal(true)}
         isSuperAdmin={isSuperAdmin}
+        canEdit={canEditMember}
         canDelete={canDeleteMember}
         isDeleting={deletingMember}
         canSendNotification={canSendNotification}
@@ -1088,6 +1092,7 @@ export default function MemberDetailPage() {
           branchId={member.registrationBranch?.id || ''}
           memberId={memberId}
           memberData={member}
+          userRole={user?.role}
           onSuccess={() => {
             setShowEditMemberModal(false);
             loadMemberDetail();

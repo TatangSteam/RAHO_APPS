@@ -145,9 +145,10 @@ export class MembersService {
       photoUrl?: string;
       status?: string;
     },
-    userId: string
+    userId: string,
+    actorRole: Role,
   ) {
-    return await this.updateService.updateMember(memberId, data, userId);
+    return await this.updateService.updateMember(memberId, data, userId, actorRole);
   }
 
   /**

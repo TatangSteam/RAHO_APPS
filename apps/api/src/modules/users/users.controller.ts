@@ -31,6 +31,7 @@ import {
   getStaffSessionHistoryService,
 } from './services/staff-performance.service';
 import { exportStaffPerformanceService } from './services/staff-performance-export.service';
+import { exportStaffPerformanceDetailService } from './services/staff-performance-detail-export.service';
 import { sendSuccess, sendCreated, buildPaginationMeta } from '@utils/response';
 import { logAudit } from '@utils/auditLog';
 import { uploadFile, deleteFileByUrl } from '@config/minio';
@@ -562,6 +563,34 @@ export async function getStaffSessionHistory(req: Request, res: Response, next: 
     );
 
     sendSuccess(res, result, 200, buildPaginationMeta(result.total, result.page, result.limit));
+  } catch (err) { next(err); }
+}
+
+/**
+ * Export all therapy-session details for a staff member.
+ * GET /users/performance/:staffId/history/export
+ */
+export async function exportStaffPerformanceDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { staffId } = req.params;
+    const { branchId, position, startDate, endDate } = req.query;
+    const result = await exportStaffPerformanceDetailService(
+      staffId,
+      {
+        branchId: branchId as string | undefined,
+        position: position as 'doctor' | 'nurse' | 'adminLayanan' | 'all' | undefined,
+        startDate: startDate as string | undefined,
+        endDate: endDate as string | undefined,
+      },
+      req.user.role as Role,
+      req.user.branchId,
+      req.user.userId,
+    );
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+    res.setHeader('Content-Length', result.buffer.length);
+    res.send(result.buffer);
   } catch (err) { next(err); }
 }
 

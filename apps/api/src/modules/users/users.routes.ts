@@ -22,6 +22,7 @@ import {
   setPrimaryBranch,
   getStaffPerformanceSummary,
   getStaffSessionHistory,
+  exportStaffPerformanceDetail,
   exportStaffPerformance,
   getUserCredentials,
   updateUserEmail,
@@ -76,6 +77,13 @@ usersRouter.get(
 );
 
 // ── Get Staff Session History ─────────────────────────────────
+usersRouter.get(
+  '/performance/:staffId/history/export',
+  authenticate,
+  requirePermission(PERMISSIONS.STAFF_PERFORMANCE_READ),
+  exportStaffPerformanceDetail,
+);
+
 usersRouter.get(
   '/performance/:staffId/history',
   authenticate,

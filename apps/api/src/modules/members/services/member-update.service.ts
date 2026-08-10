@@ -1,6 +1,6 @@
 import { prisma } from '../../../lib/prisma';
 import { logAudit } from '../../../utils/auditLog';
-import { AuditAction, Gender, IncentiveType, Prisma } from '@prisma/client';
+import { AuditAction, Gender, IncentiveType, Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { deleteFileByUrl } from '../../../config/minio';
 import {
@@ -11,6 +11,32 @@ import {
 import { enqueueContactSafely } from '../../zoho/zoho.contact.service';
 
 const HASH_ROUNDS = 12;
+
+type MemberUpdateInput = {
+  nik?: string;
+  fullName?: string;
+  birthPlace?: string;
+  birthDate?: string;
+  gender?: string;
+  religion?: string;
+  phone?: string;
+  username?: string;
+  email?: string;
+  address?: string;
+  occupation?: string;
+  maritalStatus?: string;
+  emergencyContact?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  infoSource?: string;
+  postalCode?: string;
+  isActive?: boolean;
+  isDeceased?: boolean;
+  firstIncentiveType?: string;
+  firstIncentiveValue?: number;
+  nextIncentiveType?: string;
+  nextIncentiveValue?: number;
+};
 
 type UpdatedMember = Prisma.MemberGetPayload<{
   include: {
@@ -29,32 +55,9 @@ export class MemberUpdateService {
    */
   async updateMember(
     memberId: string,
-    data: {
-      nik?: string;
-      fullName?: string;
-      birthPlace?: string;
-      birthDate?: string;
-      gender?: string;
-      religion?: string;
-      phone?: string;
-      username?: string;
-      email?: string;
-      address?: string;
-      occupation?: string;
-      maritalStatus?: string;
-      emergencyContact?: string;
-      emergencyContactName?: string;
-      emergencyContactPhone?: string;
-      infoSource?: string;
-      postalCode?: string;
-      isActive?: boolean;
-      isDeceased?: boolean;
-      firstIncentiveType?: string;
-      firstIncentiveValue?: number;
-      nextIncentiveType?: string;
-      nextIncentiveValue?: number;
-    },
-    userId: string
+    data: MemberUpdateInput,
+    userId: string,
+    actorRole: Role,
   ) {
     const member = await prisma.member.findUnique({
       where: { id: memberId },
@@ -69,6 +72,10 @@ export class MemberUpdateService {
 
     if (!member) {
       throw { status: 404, code: 'MEMBER_NOT_FOUND', message: 'Member tidak ditemukan' };
+    }
+
+    if (actorRole === Role.ADMIN_MANAGER) {
+      data = this.restrictAdminManagerToEmptyFields(member, data);
     }
 
     const requestedFullName = cleanMemberName(
@@ -264,6 +271,113 @@ export class MemberUpdateService {
     await enqueueContactSafely('MEMBER', memberId);
 
     return this.formatMemberData(updated);
+  }
+
+  private restrictAdminManagerToEmptyFields(
+    member: {
+      nik: string | null;
+      tempatLahir: string | null;
+      dateOfBirth: Date | null;
+      jenisKelamin: Gender | null;
+      agama: string | null;
+      address: string | null;
+      pekerjaan: string | null;
+      statusNikah: string | null;
+      emergencyContact: string | null;
+      sumberInfoRaho: string | null;
+      postalCode: string | null;
+      isActive: boolean;
+      isDeceased: boolean;
+      firstIncentiveType: IncentiveType | null;
+      firstIncentiveValue: Prisma.Decimal | null;
+      nextIncentiveType: IncentiveType | null;
+      nextIncentiveValue: Prisma.Decimal | null;
+      user: {
+        email: string;
+        profile: { fullName: string; phone: string | null } | null;
+      };
+    },
+    input: MemberUpdateInput,
+  ): MemberUpdateInput {
+    const effective = { ...input };
+    const blocked = new Set<string>();
+
+    const valuesEqual = (current: unknown, requested: unknown): boolean => {
+      if (current instanceof Date) {
+        const requestedDate = typeof requested === 'string' ? parseMemberBirthDate(requested) : null;
+        return !!requestedDate && current.getTime() === requestedDate.getTime();
+      }
+      if (current instanceof Prisma.Decimal) {
+        return Number(current.toString()) === Number(requested);
+      }
+      if (typeof current === 'string' || typeof requested === 'string') {
+        return String(current ?? '').trim() === String(requested ?? '').trim();
+      }
+      return current === requested;
+    };
+
+    const isFilled = (value: unknown): boolean => {
+      if (value === null || value === undefined) return false;
+      if (typeof value === 'string') return value.trim().length > 0;
+      return true;
+    };
+
+    const protect = (
+      key: keyof MemberUpdateInput,
+      currentValue: unknown,
+      label: string,
+      requestedValue: unknown = effective[key],
+    ) => {
+      if (effective[key] === undefined) return;
+      if (!isFilled(currentValue)) return;
+      if (!valuesEqual(currentValue, requestedValue)) blocked.add(label);
+      delete effective[key];
+    };
+
+    protect('fullName', member.user.profile?.fullName, 'Nama lengkap', cleanMemberName(effective.fullName ?? ''));
+    protect('nik', member.nik, 'NIK');
+    protect('birthPlace', member.tempatLahir, 'Tempat lahir');
+    protect('birthDate', member.dateOfBirth, 'Tanggal lahir');
+    protect('gender', member.jenisKelamin, 'Jenis kelamin');
+    protect('religion', member.agama, 'Agama');
+    protect('phone', member.user.profile?.phone, 'Nomor telepon');
+    protect('username', member.user.email, 'Username');
+    protect('email', member.user.email, 'Email/login');
+    protect('address', member.address, 'Alamat');
+    protect('occupation', member.pekerjaan, 'Pekerjaan');
+    protect('maritalStatus', member.statusNikah, 'Status pernikahan');
+    protect('infoSource', member.sumberInfoRaho, 'Sumber informasi');
+    protect('postalCode', member.postalCode, 'Kode pos');
+    protect('isActive', member.isActive, 'Status aktif');
+    protect('isDeceased', member.isDeceased, 'Status hidup');
+    protect('firstIncentiveType', member.firstIncentiveType, 'Tipe insentif pertama');
+    protect('firstIncentiveValue', member.firstIncentiveValue, 'Nilai insentif pertama');
+    protect('nextIncentiveType', member.nextIncentiveType, 'Tipe insentif berikutnya');
+    protect('nextIncentiveValue', member.nextIncentiveValue, 'Nilai insentif berikutnya');
+
+    const emergencyKeys: Array<keyof MemberUpdateInput> = [
+      'emergencyContact',
+      'emergencyContactName',
+      'emergencyContactPhone',
+    ];
+    if (emergencyKeys.some((key) => effective[key] !== undefined) && isFilled(member.emergencyContact)) {
+      const emergencyName = effective.emergencyContact ?? effective.emergencyContactName ?? '';
+      const requestedEmergency = emergencyName
+        ? `${emergencyName}${effective.emergencyContactPhone ? ` - ${effective.emergencyContactPhone}` : ''}`
+        : null;
+      if (!valuesEqual(member.emergencyContact, requestedEmergency)) blocked.add('Kontak darurat');
+      for (const key of emergencyKeys) delete effective[key];
+    }
+
+    if (blocked.size > 0) {
+      throw {
+        status: 403,
+        code: 'ADMIN_MANAGER_MEMBER_FIELD_LOCKED',
+        message: `Admin Manager hanya dapat mengisi data member yang masih kosong. Field terkunci: ${Array.from(blocked).join(', ')}.`,
+      };
+    }
+
+    return effective;
   }
 
   /**

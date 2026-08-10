@@ -22,6 +22,7 @@ const ALLSTAFF = [
 
 const ALLSTAFF_EXCEPT_ADMIN_MANAGER = ALLSTAFF.filter((role) => role !== Role.ADMIN_MANAGER);
 const MEMBER_MUTATORS = [Role.ADMIN_LAYANAN, Role.ADMIN_CABANG, Role.SUPER_ADMIN];
+const MEMBER_PROFILE_MUTATORS = [...MEMBER_MUTATORS, Role.ADMIN_MANAGER];
 const MEMBER_DELETERS = [Role.SUPER_ADMIN];
 const ACCOUNT_IMPORTERS = [Role.SUPER_ADMIN];
 
@@ -225,7 +226,7 @@ router.get(
 router.patch(
   '/:memberId',
   authenticate,
-  authorize(MEMBER_MUTATORS),
+  authorize(MEMBER_PROFILE_MUTATORS),
   assertBranchAccess,
   controller.updateMember.bind(controller)
 );

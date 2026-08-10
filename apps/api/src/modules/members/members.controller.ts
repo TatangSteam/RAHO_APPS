@@ -222,9 +222,9 @@ export class MembersController {
     try {
       const { memberId } = req.params;
       const validated = updateMemberSchema.parse(req.body);
-      const { userId } = req.user!;
+      const { userId, role } = req.user!;
 
-      const result = await membersService.updateMember(memberId, validated, userId);
+      const result = await membersService.updateMember(memberId, validated, userId, role as Role);
 
       sendSuccess(res, result);
     } catch (error) {

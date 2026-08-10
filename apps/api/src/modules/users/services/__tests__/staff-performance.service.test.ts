@@ -6,6 +6,7 @@ import {
   getStaffSessionHistoryService,
 } from '../staff-performance.service';
 import { exportStaffPerformanceService } from '../staff-performance-export.service';
+import { exportStaffPerformanceDetailService } from '../staff-performance-detail-export.service';
 import { getAccessibleBranchIds } from '../../../iam/authorization.service';
 
 jest.mock('../../../../lib/prisma', () => ({
@@ -303,5 +304,150 @@ describe('staff performance service', () => {
         where: expect.objectContaining({ branchId: 'branch-1' }),
       }),
     );
+  });
+
+  it('exports complete staff session details including actual fluids and materials', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('doctor-1', 'Doctor One'),
+      branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(1 as any);
+    mockPrisma.treatmentSession.findMany
+      .mockResolvedValueOnce([{
+        id: 'session-1',
+        sessionCode: 'SES-001',
+        infusKe: 2,
+        pelaksanaan: 'ON_SITE',
+        treatmentDate: new Date('2026-08-08T03:00:00.000Z'),
+        isCompleted: true,
+        doctorId: 'doctor-1',
+        nurseId: 'nurse-1',
+        adminLayananId: 'admin-1',
+        sessionDoctors: [],
+        sessionNurses: [],
+        branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+        encounter: {
+          member: { memberNo: 'MEM-001', user: { profile: { fullName: 'Member One' } } },
+          memberPackage: { packageType: 'BASIC', boosterType: null },
+        },
+      }] as any)
+      .mockResolvedValueOnce([{
+        id: 'session-1',
+        sessionCode: 'SES-001',
+        treatmentDate: new Date('2026-08-08T03:00:00.000Z'),
+        isCompleted: true,
+        completionStatus: 'COMPLETED',
+        completedAt: new Date('2026-08-08T05:00:00.000Z'),
+        pelaksanaan: 'ON_SITE',
+        infusKe: 2,
+        branchInfusKe: 2,
+        branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+        encounter: {
+          encounterCode: 'ENC-001',
+          member: {
+            memberNo: 'MEM-001',
+            user: { profile: { fullName: 'Member One' } },
+          },
+          memberPackage: { packageCode: 'PKG-001', packageType: 'BASIC' },
+          diagnoses: [{
+            diagnosisCode: 'DX-001',
+            diagnosa: 'Hipertensi',
+            kategoriDiagnosa: 'CARDIOVASCULAR',
+            kategoriDiagnosaList: ['CARDIOVASCULAR'],
+            icdPrimer: 'I10',
+            icdSekunder: null,
+            icdTersier: null,
+            keluhanRiwayatSekarang: 'Pusing',
+            pemeriksaanFisik: 'Keadaan umum baik',
+          }],
+        },
+        adminLayanan: { profile: { fullName: 'Admin One' } },
+        doctor: { profile: { fullName: 'Doctor One' } },
+        nurse: { profile: { fullName: 'Nurse One' } },
+        sessionDoctors: [],
+        sessionNurses: [],
+        boosterPackage: null,
+        boosterType: null,
+        therapyPlan: { planCode: 'PLAN-001', keterangan: 'Rencana awal', ifa250: 1, hho: 4 },
+        infusion: {
+          ifa250: 1,
+          hho: 5,
+          jenisCairan: 'NaCl 0,9%',
+          volumeCarrier: 100,
+          bottleType: 'BOTTLE_250',
+          jumlahJarum: 1,
+          tanggalProduksi: new Date('2026-08-07T00:00:00.000Z'),
+          deviationNotes: 'HHO dinaikkan 1 ml',
+        },
+        vitalSigns: [{
+          waktuCatat: 'SEBELUM',
+          pencatatan: 'SISTOL',
+          value: 125,
+          unit: 'mmHg',
+          recordedBy: 'nurse-1',
+          createdAt: new Date('2026-08-08T02:55:00.000Z'),
+        }],
+        materials: [{
+          inventoryItem: {
+            masterProduct: {
+              sku: 'MAT-001',
+              name: 'Infus Set',
+              category: 'MEDICAL_SUPPLY',
+              baseUnit: 'Piece',
+            },
+          },
+          quantity: 1,
+          unit: 'Piece',
+          baseQuantity: 1,
+          recommendedQuantity: 1,
+          status: 'POSTED',
+          deviationReason: null,
+          deviationNotes: null,
+          recordedBy: 'nurse-1',
+          consumedAt: new Date('2026-08-08T05:00:00.000Z'),
+        }],
+        photo: { fileUrl: 'https://example.com/main.jpg' },
+        supportingPhotos: [{ fileUrl: 'https://example.com/support.jpg' }],
+        emrNotes: [{ noteType: 'PROGRESS', content: 'Kondisi stabil' }],
+        evaluation: {
+          keluhan: 'Tidak ada',
+          rekomendasi: 'Cukup istirahat',
+          subjective: 'Baik',
+          objective: 'Stabil',
+          assessment: 'Membaik',
+          plan: 'Kontrol berikutnya',
+          generalNotes: 'Selesai tanpa kendala',
+        },
+      }] as any);
+
+    const result = await exportStaffPerformanceDetailService(
+      'doctor-1',
+      { branchId: 'branch-1', position: 'all', startDate: '2026-08-01', endDate: '2026-08-10' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(result.buffer as any);
+
+    expect(result.filename).toMatch(/^detail-kinerja-DOCTOR-1-\d{8}T\d{4}\.xlsx$/);
+    expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual([
+      'Ringkasan',
+      'Detail Sesi',
+      'Cairan & Dosis',
+      'Vital Sign',
+      'Material',
+      'Klinis & Evaluasi',
+    ]);
+    expect(workbook.getWorksheet('Detail Sesi')?.getCell('X8').value).toBe('NaCl 0,9%');
+    expect(workbook.getWorksheet('Cairan & Dosis')?.getCell('F8').value).toBe('IFA + NO 2,5 ml (250 ml)');
+    expect(workbook.getWorksheet('Cairan & Dosis')?.getCell('H9').value).toBe(5);
+    expect(workbook.getWorksheet('Material')?.getCell('G8').value).toBe('Infus Set');
+    expect(workbook.getWorksheet('Klinis & Evaluasi')?.getCell('F8').value).toBe('Hipertensi');
+    expect(workbook.getWorksheet('Cairan & Dosis')?.views[0]).toEqual(
+      expect.objectContaining({ state: 'frozen', ySplit: 7 }),
+    );
+    expect(workbook.getWorksheet('Cairan & Dosis')?.autoFilter).toBeDefined();
   });
 });

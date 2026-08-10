@@ -10,7 +10,7 @@ import { devError } from '@/lib/logger';
 import {
   Activity, ChevronLeft, ChevronRight, Building2, Loader2, Calendar,
   Stethoscope, Heart, UserCog, ArrowLeft, User, Mail, Phone,
-  Package, Hash, Clock, CheckCircle2
+  Package, Hash, Clock, CheckCircle2, Download
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════
@@ -113,6 +113,7 @@ export default function StaffPerformanceDetailPage() {
   const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'nurse' | 'adminLayanan'>('all');
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
+  const [exporting, setExporting] = useState(false);
 
   const fetchHistory = useCallback(async () => {
     try {
@@ -141,6 +142,34 @@ export default function StaffPerformanceDetailPage() {
 
   const handleViewSession = (sessionId: string) => {
     router.push(`/sessions/${sessionId}`);
+  };
+
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const blob = await usersApi.exportStaffPerformanceDetail(staffId, {
+        branchId,
+        position: positionFilter,
+        startDate: startDate || undefined,
+        endDate: endDate || undefined,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const staffCode = data?.staff.staffCode?.replace(/[^a-zA-Z0-9_-]/g, '-') || 'staff';
+      link.download = `detail-kinerja-${staffCode}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      showToast.success('Detail sesi terapi berhasil diekspor');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error exporting staff performance detail:', error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal mengekspor detail kinerja');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const totalPages = data ? Math.ceil(data.total / limit) : 0;
@@ -282,6 +311,16 @@ export default function StaffPerformanceDetailPage() {
             />
           </div>
         </div>
+
+        <button
+          type="button"
+          onClick={() => void handleExport()}
+          disabled={exporting || loading || !data}
+          className="md:ml-auto inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500 text-black text-sm font-semibold hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-amber-500/20"
+        >
+          {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+          {exporting ? 'Mengekspor...' : 'Export Detail Sesi'}
+        </button>
       </div>
 
       {/* Session History */}
