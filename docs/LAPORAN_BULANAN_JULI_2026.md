@@ -1,11 +1,11 @@
 # Laporan Bulanan Development RAHO
 
-**Periode:** 1–30 Juli 2026, sampai pukul 15.51 WIB  
-**Jenis laporan:** Month-to-date  
+**Periode:** 1–31 Juli 2026
+**Jenis laporan:** Monthly report final
 **Project:** RAHO ERP / Clinic Management System  
 **Repository:** `RAHO_APPS`  
 **Baseline awal:** `c0a334e` — 30 Juni 2026  
-**Baseline akhir yang diaudit:** `b9d3285` — 30 Juli 2026  
+**Baseline akhir yang diaudit:** `373fea2` — 31 Juli 2026
 **Audiens:** Tim IT, Product Owner, operasional klinik, Finance, dan Logistik
 
 ---
@@ -22,14 +22,20 @@ Perubahan utama bulan ini:
 - dukungan data lama pada edit pembelian paket agar referensi historis tidak
   rusak;
 - kategori Rank Member berdasarkan diskon pembelian paket terakhir;
+- dukungan paket gratis/complimentary bernilai Rp0 tanpa membuat transaksi
+  pembayaran semu atau mewajibkan bukti pembayaran;
 - tampilan dan navigasi yang lebih sederhana untuk Admin Layanan, Dokter, dan
   Tenaga Kesehatan;
+- penyempurnaan tampilan mobile pada progres terapi dan formulir pemakaian
+  material;
 - halaman **Inventori Tim Layanan** berstatus **Coming Soon**, tanpa mengubah
   flow stok lama;
 - fondasi accounting, kas/bank, opening balance, expense, purchasing/AP,
   deferred revenue, dan laporan keuangan;
 - inventory ledger, FIFO, batch/expiry, reservation, stock request, shipment,
   goods receipt, treatment BOM, opname, dan audit;
+- otomatisasi scope warehouse dan lokasi stok kanonis per cabang agar pengguna
+  tidak perlu memilih detail lokasi internal pada flow operasional;
 - permission granular, branch scope, maker-checker, approval engine, serta
   audit akses ditolak;
 - integrasi Zoho Books berbasis antrean asynchronous, mapping, reconciliation,
@@ -47,13 +53,13 @@ pembelian paket, pembayaran, sesi terapi, maupun pergerakan stok lokal.
 
 | Metrik | Nilai | Catatan |
 |---|---:|---|
-| Commit | 157 | Termasuk merge, dokumentasi, feature, fix, dan test |
-| Kontributor | 4 | 128, 23, 4, dan 2 commit per kontributor |
-| File berubah | 938 | Termasuk source, test, migration, dokumentasi, dan arsip summary |
-| Penambahan baris | 103.715 | Berdasarkan `git diff --shortstat` |
-| Penghapusan baris | 88.441 | Termasuk penghapusan/penyegaran dokumen lama |
+| Commit | 163 | Termasuk merge, dokumentasi, feature, fix, dan test |
+| Kontributor | 4 | 134, 23, 4, dan 2 commit per kontributor |
+| File berubah | 948 | Termasuk source, test, migration, dokumentasi, dan arsip summary |
+| Penambahan baris | 105.208 | Berdasarkan `git diff --shortstat` |
+| Penghapusan baris | 88.492 | Termasuk penghapusan/penyegaran dokumen lama |
 | Migration database baru | 54 | Harus diterapkan berurutan dan diuji di staging |
-| File test berubah | 142 | 107 API, 18 Web E2E, dan 17 Web unit/component |
+| File test berubah | 142 | 107 API, 19 Web E2E, dan 16 Web unit/component |
 | Halaman staff baru | 22 | Terutama Finance, Inventory, Permission, Import, dan Zoho |
 
 Catatan: angka churn tinggi tidak seluruhnya berarti perubahan business logic.
@@ -63,7 +69,7 @@ format, serta penambahan modul besar Finance/Logistik/Zoho.
 Definisi status pada laporan ini:
 
 - **Selesai** berarti implementasi tersedia pada baseline source
-  `b9d3285`.
+  `373fea2`.
 - **Selesai** tidak otomatis berarti sudah dipromosikan ke production.
 - Status deployment production, penerapan migration, dan aktivasi Zoho harus
   dikonfirmasi terpisah oleh IT/DevOps.
@@ -81,6 +87,7 @@ Definisi status pada laporan ini:
 | Import data historis | Import member/account lama, validasi nomor member/telepon, dan ekspor data yang dilewati | Migrasi data lama lebih terkontrol | Selesai, tetap perlu rehearsal dengan salinan production |
 | Edit paket lama | Paket yang tidak mempunyai `packagePricingId` atau `productCode` dapat dicocokkan kembali tanpa mengganti ID historis | Mengatasi error **“Referensi data tidak valid”** dan menjaga foreign key lama | Selesai |
 | Proteksi submit ganda | Request edit paket tidak dikirim dua kali saat tombol diklik berulang | Mengurangi duplikasi transaksi | Selesai |
+| Paket complimentary Rp0 | Invoice bernilai nol dapat diselesaikan tanpa membuat baris pembayaran Rp0 dan tanpa unggah bukti pembayaran | Paket gratis dapat diaktifkan tanpa melanggar validasi nominal pembayaran | Selesai |
 | Rank Member | Rank dihitung dari diskon pembelian paket non-cancelled terakhir | Segmentasi member terlihat langsung di daftar dan detail | Selesai |
 | Kolom Rank wajib | Preferensi kolom browser lama dinormalisasi; Rank tidak dapat disembunyikan | UI konsisten untuk semua admin | Selesai |
 
@@ -108,6 +115,7 @@ Ketentuan teknis:
 | Therapy plan | Perbaikan edit, delete untuk plan yang belum digunakan, dosis minimum, parsing nilai, dan HHO Konsentrat | Dokter lebih aman mengoreksi rencana terapi | Selesai |
 | Edit sesi | Perbaikan edit plan/booster dan konteks cabang | Data sesi lebih konsisten | Selesai |
 | UI sesi | Tahapan dikelompokkan menjadi Persiapan, Pelaksanaan, Setelah Terapi, dan Evaluasi | Dokter/Nakes lebih mudah mengetahui posisi proses | Selesai |
+| Responsivitas mobile | Progres terapi dan formulir material disusun ulang untuk layar kecil | Pelaksanaan sesi lebih nyaman melalui ponsel/tablet | Selesai |
 | Material usage | BOM, rekomendasi material, pencatatan aktual, FIFO, batch, dan alasan deviasi | Pemakaian bahan dapat diaudit | Selesai |
 | Penyelesaian atomic | Completion sesi, konsumsi stok, HPP, dan revenue diproses dengan guard anti-duplikasi | Mengurangi kondisi sesi selesai tetapi stok/finance gagal setengah jalan | Selesai |
 | Data lama deferred flow | Versi flow package revenue dan treatment completion dicatat | Data historis tidak dipaksa mengikuti asumsi transaksi baru | Selesai, perlu monitoring production |
@@ -129,6 +137,7 @@ state lebih konsisten.
 | Kapabilitas | Ringkasan implementasi | Status |
 |---|---|---|
 | Master inventory | Produk, kategori, UOM, konversi, branch type, warehouse, dan stock location | Selesai |
+| Scope stok otomatis | Warehouse dan lokasi stok default dibuat/dipilih otomatis berdasarkan cabang | Flow adjustment, opname, receipt, reservation, purchasing, dan opening balance lebih sederhana | Selesai |
 | Ledger dan valuasi | Inventory balance, mutation ledger, batch, expiry, cost layer, dan FIFO | Selesai |
 | Request stok | Request, full/partial approval, reservation, release, dan rekap requester | Selesai |
 | Internal transfer | Shipment, partial receipt idempotent, in-transit posting, dan quantity guard | Selesai |
@@ -462,7 +471,8 @@ Jika waktu terbatas, tunjukkan lima bagian berikut:
 | 27 Juli | 4 | Hardening Finance dan Opening Balance |
 | 28 Juli | 9 | Connection serta fondasi sinkronisasi Finance/Logistik ke Zoho |
 | 29 Juli | 11 | Deployment/permission stok, material default, payment completion, Finance sprint, Zoho controls, dan versioning flow historis |
-| 30 Juli | 4 | Atomic session flow version, UI role/member/session, build OOM, legacy package edit, dan Rank Member |
+| 30 Juli | 5 | Atomic session flow version, UI role/member/session, build OOM, legacy package edit, dan Rank Member |
+| 31 Juli | 5 | Penyederhanaan scope logistik per cabang, panduan Zoho/data existing, dukungan paket gratis Rp0, UI sesi bertahap, dan optimasi mobile material/progres terapi |
 
 ---
 
@@ -540,7 +550,7 @@ Untuk presentasi, fokuskan narasi pada tiga hal:
 3. Finance/Logistik dan Zoho memiliki audit, approval, reconciliation, dan
    rollout bertahap.
 
-Status akhir month-to-date: perubahan utama sudah tersedia di source code dan
+Status akhir bulan: perubahan utama sudah tersedia di source code dan
 type-check lulus. Production release tetap harus mengikuti backup, staging
 migration rehearsal, full regression, smoke test Docker, serta cutover Zoho
 secara bertahap.
