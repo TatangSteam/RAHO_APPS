@@ -167,10 +167,10 @@ export class PackageEditService {
           normalizedAddOns,
           userId,
           memberPackage,
-          packagesInEditScope,
           purchaseGroupId,
           memberId,
           replacementStatus,
+          editableStatuses,
           allowRemovingUsedPackages: hasPrivilegedEditAccess && replacementStatus === PackageStatus.ACTIVE,
         }),
       );
@@ -211,10 +211,10 @@ export class PackageEditService {
     normalizedAddOns: NormalizedAddOnAssignment[];
     userId: string;
     memberPackage: EditableMemberPackage;
-    packagesInEditScope: Array<{ id: string; packageCode: string; usedSessions: number }>;
     purchaseGroupId: string | null;
     memberId: string;
     replacementStatus: PackageStatus;
+    editableStatuses: PackageStatus[];
     allowRemovingUsedPackages: boolean;
   }) {
     const {
@@ -223,18 +223,38 @@ export class PackageEditService {
       normalizedAddOns,
       userId,
       memberPackage,
-      packagesInEditScope,
       purchaseGroupId,
       memberId,
       replacementStatus,
+      editableStatuses,
       allowRemovingUsedPackages,
     } = params;
 
-    const packageIdsToKeepOrReplace = packagesInEditScope.map(pkg => pkg.id);
+    // Serialize edits for the same purchase. The UI already guards against a
+    // double click, but retries can still reach different API workers.
+    const editScopeKey = purchaseGroupId || memberPackage.id;
+    await db.$queryRaw`
+      SELECT pg_advisory_xact_lock(hashtext(${`PACKAGE_EDIT:${editScopeKey}`}))::text AS "lockResult"
+    `;
+
+    // Re-read after acquiring the lock so a waiting request sees rows that a
+    // previous edit consolidated or soft-cancelled.
     const currentPackages = (await db.memberPackage.findMany({
-      where: { id: { in: packageIdsToKeepOrReplace } },
+      where: purchaseGroupId
+        ? { purchaseGroupId, status: { in: editableStatuses } }
+        : { id: memberPackage.id, status: { in: editableStatuses } },
       orderBy: { createdAt: 'asc' },
     })).sort((left, right) => right.usedSessions - left.usedSessions);
+
+    if (currentPackages.length === 0) {
+      throw {
+        status: 409,
+        code: 'PACKAGE_EDIT_STALE',
+        message: 'Data paket telah berubah. Muat ulang halaman sebelum menyimpan kembali.',
+      };
+    }
+
+    const packageIdsToKeepOrReplace = currentPackages.map(pkg => pkg.id);
 
     const pricingIds = Array.from(new Set(data.packages.map(pkg => pkg.pricingId).filter(Boolean)));
     const pricings = pricingIds.length > 0
@@ -270,19 +290,23 @@ export class PackageEditService {
     }
 
     const willHaveGroup = selectedPackages.length > 1 || normalizedAddOns.length > 0;
-    const targetPurchaseGroupId = willHaveGroup
-      ? purchaseGroupId || `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
-      : null;
+    const targetPurchaseGroupId = purchaseGroupId || (willHaveGroup
+      ? `GRP-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
+      : null);
     const remainingSelections = [...selectedPackages];
     const updatedPackages: MemberPackage[] = [];
     const packageIdsToCancel: string[] = [];
 
     for (const currentPackage of currentPackages) {
       const matchIndex = remainingSelections.findIndex(({ selection, pricing }) => {
-        if (currentPackage.packagePricingId && selection.pricingId === currentPackage.packagePricingId) {
-          return true;
+        if (currentPackage.packagePricingId) {
+          return selection.pricingId === currentPackage.packagePricingId;
         }
 
+        // Only packages imported without a pricing relation may use catalog
+        // attributes as a fallback. Two BASIC prices can share service/type
+        // while representing very different session quantities (for example
+        // FREE 1X versus 15X).
         return (
           pricing.packageType === currentPackage.packageType &&
           (pricing.boosterType || null) === (currentPackage.boosterType || null) &&
@@ -293,15 +317,28 @@ export class PackageEditService {
       // Legacy packages may have no packagePricingId/productCode or an old
       // service type. Pair an unused row with the closest current pricing so
       // its stable ID and all existing references are preserved.
-      const legacyMatchIndex = matchIndex === -1 && currentPackage.usedSessions === 0
+      const isUnmappedLegacyPackage = !currentPackage.packagePricingId;
+      const legacyMatchIndex = matchIndex === -1 && currentPackage.usedSessions === 0 && isUnmappedLegacyPackage
         ? remainingSelections.findIndex(({ pricing }) => pricing.packageType === currentPackage.packageType)
         : matchIndex;
+
+      // A single package of a given type can be replaced in place so its
+      // stable ID remains attached to sessions/finance. Do not use this rule
+      // when multiple BASIC rows exist: that is the case where FREE 1X was
+      // previously confused with 15X because both share the same service.
+      const sameTypeCurrentCount = currentPackages.filter(
+        (pkg) => pkg.packageType === currentPackage.packageType,
+      ).length;
+      const uniqueTypeReplacementIndex = legacyMatchIndex === -1 && sameTypeCurrentCount === 1
+        ? remainingSelections.findIndex(({ pricing }) => pricing.packageType === currentPackage.packageType)
+        : legacyMatchIndex;
       const resolvedMatchIndex =
-        legacyMatchIndex === -1 &&
+        uniqueTypeReplacementIndex === -1 &&
         currentPackage.usedSessions === 0 &&
+        isUnmappedLegacyPackage &&
         currentPackages.length === selectedPackages.length
           ? 0
-          : legacyMatchIndex;
+          : uniqueTypeReplacementIndex;
 
       if (resolvedMatchIndex === -1) {
         if (currentPackage.usedSessions > 0 && !allowRemovingUsedPackages) {

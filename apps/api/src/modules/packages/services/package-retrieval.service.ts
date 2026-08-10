@@ -1,5 +1,5 @@
 import { prisma } from '../../../lib/prisma';
-import { getAggregatePackageStatus } from './package-retrieval.helpers';
+import { getAggregatePackageStatus, getCurrentPackageGroupItems } from './package-retrieval.helpers';
 import { Prisma } from '@prisma/client';
 
 type PackageWithDetails = Prisma.MemberPackageGetPayload<{
@@ -140,21 +140,22 @@ export class PackageRetrievalService {
 
       // Convert grouped packages to array format
       const groupedPackages = Array.from(grouped.values()).map(group => {
-        const basics = group.filter(p => !p.isAddOn && p.packageType === 'BASIC');
-        const boosters = group.filter(p => !p.isAddOn && p.packageType === 'BOOSTER');
-        const groupAddOns = group.filter(p => p.isAddOn);
+        const currentGroup = getCurrentPackageGroupItems(group);
+        const basics = currentGroup.filter(p => !p.isAddOn && p.packageType === 'BASIC');
+        const boosters = currentGroup.filter(p => !p.isAddOn && p.packageType === 'BOOSTER');
+        const groupAddOns = currentGroup.filter(p => p.isAddOn);
         
         return {
           isGroup: true,
-          purchaseGroupId: group[0]?.purchaseGroupId,
+          purchaseGroupId: currentGroup[0]?.purchaseGroupId,
           basics,
           boosters,
           addOns: groupAddOns,
-          totalPrice: group.reduce((sum, item) => {
+          totalPrice: currentGroup.reduce((sum, item) => {
             return sum + (item.finalPrice || item.totalPrice || 0);
           }, 0),
-          status: getAggregatePackageStatus(group) || group[0]?.status,
-          createdAt: group[0]?.createdAt,
+          status: getAggregatePackageStatus(currentGroup) || currentGroup[0]?.status,
+          createdAt: currentGroup[0]?.createdAt,
         };
       });
 

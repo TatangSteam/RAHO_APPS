@@ -350,6 +350,14 @@ export default function PackageCard({
     const totalFinalPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + totalAddOnPrice;
     const totalBasicSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
     const totalBoosterSessions = boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
+    const totalBasicQuantity = basics.reduce(
+      (sum: number, p: MemberPackage | undefined) => sum + (p ? Math.max(1, p.purchaseQuantity || 1) : 0),
+      0,
+    );
+    const totalBoosterQuantity = boosters.reduce(
+      (sum: number, p: MemberPackage | undefined) => sum + (p ? Math.max(1, p.purchaseQuantity || 1) : 0),
+      0,
+    );
     const totalRemainingSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.remainingSessions || 0), 0) + boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.remainingSessions || 0), 0);
     const totalDiscount = [...basics, ...boosters].reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.discountAmount || 0), 0);
 
@@ -366,8 +374,8 @@ export default function PackageCard({
             <div>
               <div className={styles.compactTitle}>
                 Paket Bundling
-                {basics.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {basics.length} BASIC</span>}
-                {boosters.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {boosters.length} BOOSTER</span>}
+                {totalBasicQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBasicQuantity} BASIC</span>}
+                {totalBoosterQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBoosterQuantity} BOOSTER</span>}
                 {groupAddOns.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {groupAddOns.length} ADD-ON</span>}
               </div>
               <div className={styles.compactSubtitle}>
@@ -394,7 +402,7 @@ export default function PackageCard({
                     <div className={styles.packageTitle}>
                       <span className={styles.packageIcon}>📦</span>
                       {getTherapyName(basics[0].productCode, basics[0].packageCode, basics[0].packageType)}
-                      {basics.length > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{basics.length}</span>}
+                      {totalBasicQuantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{totalBasicQuantity}</span>}
                     </div>
                     <div className={styles.packageCode}>{basics[0].packageCode}{basics.length > 1 && ` (+${basics.length - 1} lainnya)`}</div>
                   </div>
@@ -423,7 +431,7 @@ export default function PackageCard({
                     <div className={styles.packageTitle}>
                       <span className={styles.packageIcon}>🚀</span>
                       {getTherapyName(boosters[0].productCode, boosters[0].packageCode, boosters[0].packageType)}
-                      {boosters.length > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{boosters.length}</span>}
+                      {totalBoosterQuantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{totalBoosterQuantity}</span>}
                     </div>
                     <div className={styles.packageCode}>
                       {boosters[0].packageCode}{boosters.length > 1 && ` (+${boosters.length - 1} lainnya)`}
