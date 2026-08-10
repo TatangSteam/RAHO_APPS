@@ -274,9 +274,12 @@ export default function MemberDetailPage() {
   const canSendNotification = Boolean(user && canMutateMember);
   const canDeleteMember = isSuperAdmin;
   const canAssignPackage = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
-  const canEditPackage = canAssignPackage;
-  const canEditWaitingVerificationPackage = isSuperAdmin;
-  const canEditVerifiedPackage = isSuperAdmin;
+  const canPrivilegedEditPackage =
+    isSuperAdmin ||
+    (isAdminManager && user?.adminManagerAccessScope !== 'MEMBER_VIEW_ONLY');
+  const canEditPackage = canAssignPackage || canPrivilegedEditPackage;
+  const canEditWaitingVerificationPackage = canPrivilegedEditPackage;
+  const canEditVerifiedPackage = canPrivilegedEditPackage;
   const canUploadDocuments = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditLifeStatus = ['ADMIN_LAYANAN', 'ADMIN_CABANG', 'SUPER_ADMIN'].includes(user?.role || '');
   const canEditDiagnosis = [
@@ -732,10 +735,10 @@ export default function MemberDetailPage() {
   }, [loadMemberDetail, loadPackages, memberId, user?.email, user?.role]);
 
   useEffect(() => {
-    if (activeTab === 'paket' && canAssignPackage && member) {
+    if (activeTab === 'paket' && canEditPackage && member) {
       void loadPricings();
     }
-  }, [activeTab, canAssignPackage, loadPricings, member]);
+  }, [activeTab, canEditPackage, loadPricings, member]);
 
   if (loading) {
     return (

@@ -73,7 +73,9 @@ describe('PackageEditService', () => {
     mockPrisma.$queryRaw.mockResolvedValue([]);
   });
 
-  it('updates an active used package in place for privileged roles', async () => {
+  it.each(['SUPER_ADMIN', 'ADMIN_MANAGER'])(
+    'updates an active used package in place for privileged role %s',
+    async (privilegedRole) => {
     const service = new PackageEditService();
     const activePackage = {
       id: 'pkg-1',
@@ -171,9 +173,9 @@ describe('PackageEditService', () => {
           },
         ],
       },
-      'super-admin-1',
+      `${privilegedRole.toLowerCase()}-1`,
       null,
-      'SUPER_ADMIN'
+      privilegedRole,
     );
 
     expect(mockPrisma.memberPackage.update).toHaveBeenCalledWith(
@@ -198,7 +200,8 @@ describe('PackageEditService', () => {
       })
     );
     expect(result.packages).toEqual([updatedPackage]);
-  });
+    },
+  );
 
   it('blocks an admin layanan from editing a package in another branch', async () => {
     const service = new PackageEditService();
