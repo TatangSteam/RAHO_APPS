@@ -1,5 +1,6 @@
 import { PackageStatus, PackageType } from '@prisma/client';
 import {
+  buildAutomaticKitMaterialUsageRows,
   DEBT_PACKAGE_STATUSES,
   DEBT_SESSION_LIMIT,
   getDebtSessionAllowance,
@@ -70,5 +71,45 @@ describe('session creation helpers', () => {
     expect(() => getDebtSessionAllowance(10, 2)).toThrow(
       expect.objectContaining({ status: 422, code: 'PACKAGE_DEBT_LIMIT_REACHED' }),
     );
+  });
+
+  it('builds draft material rows for mandatory infusion kit components', () => {
+    const rows = buildAutomaticKitMaterialUsageRows('session-1', 'user-1', [
+      {
+        inventoryItemId: 'inventory-infus-set',
+        quantity: '1',
+        unit: 'Piece',
+        conversionFactor: '1',
+      },
+      {
+        inventoryItemId: 'inventory-oneswab',
+        quantity: '2',
+        unit: 'Piece',
+        conversionFactor: '10',
+      },
+    ]);
+
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      usageKey: 'session-1:inventory-infus-set',
+      treatmentSessionId: 'session-1',
+      inventoryItemId: 'inventory-infus-set',
+      unit: 'Piece',
+      recordedBy: 'user-1',
+    });
+    expect(rows[0].quantity.toString()).toBe('1');
+    expect(rows[0].baseQuantity.toString()).toBe('1');
+    expect(rows[0].recommendedQuantity?.toString()).toBe('1');
+    expect(rows[1].quantity.toString()).toBe('2');
+    expect(rows[1].baseQuantity.toString()).toBe('0.2');
+  });
+
+  it('rejects an invalid infusion kit unit conversion', () => {
+    expect(() => buildAutomaticKitMaterialUsageRows('session-1', 'user-1', [{
+      inventoryItemId: 'inventory-1',
+      quantity: '1',
+      unit: 'Piece',
+      conversionFactor: '0',
+    }])).toThrow('Conversion factor komponen Infus Set + Pelengkap harus lebih besar dari nol.');
   });
 });

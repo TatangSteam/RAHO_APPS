@@ -11,6 +11,7 @@ import {
   PackageStatus,
 } from '@prisma/client';
 import {
+  buildAutomaticKitMaterialUsageRows,
   DEBT_PACKAGE_STATUSES,
   getDebtSessionAllowance,
   getSessionPackageAvailability,
@@ -57,7 +58,7 @@ export class SessionCreationService {
     }
 
     // 8. Validate every component of the current infusion kit.
-    await this.validateInfusKitStock(branchId);
+    const infusionKit = await this.validateInfusKitStock(branchId);
 
     // 9. Get branch for code generation
     const branch = await prisma.branch.findUnique({ where: { id: branchId } });
@@ -107,7 +108,9 @@ export class SessionCreationService {
       branch,
       globalInfusKe,
       branchInfusKe,
-      memberPackage
+      memberPackage,
+      userId,
+      infusionKit.draftMaterials,
     );
 
     // 13. Audit log
@@ -593,7 +596,17 @@ export class SessionCreationService {
       };
     }
 
-    return { infusSetProduct, inventoryItems };
+    const draftMaterials = infusSetProduct.kitComponents.map((component) => {
+      const inventoryItem = inventoryByProduct.get(component.componentProductId)!;
+      return {
+        inventoryItemId: inventoryItem.id,
+        quantity: component.quantity,
+        unit: component.componentProduct.usageUnit,
+        conversionFactor: component.componentProduct.conversionFactor,
+      };
+    });
+
+    return { infusSetProduct, draftMaterials };
   }
 
   /**
@@ -699,7 +712,9 @@ export class SessionCreationService {
     branch: Branch,
     globalInfusKe: number,
     branchInfusKe: number,
-    memberPackage: MemberPackage
+    memberPackage: MemberPackage,
+    userId: string,
+    infusionKitMaterials: Parameters<typeof buildAutomaticKitMaterialUsageRows>[2],
   ) {
     return await prisma.$transaction(async (tx) => {
       // Find or create encounter
@@ -746,6 +761,17 @@ export class SessionCreationService {
           materialPolicyVersion: 2,
           isCompleted: false,
         },
+      });
+
+      // The infusion kit is a mandatory prerequisite for every current-policy
+      // session. Record its physical components immediately as DRAFT material
+      // usage; inventory is posted only when the session is completed.
+      await tx.materialUsage.createMany({
+        data: buildAutomaticKitMaterialUsageRows(
+          session.id,
+          userId,
+          infusionKitMaterials,
+        ),
       });
 
       // Add primary doctor to session_doctors

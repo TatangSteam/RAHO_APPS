@@ -1,4 +1,4 @@
-import { PackageStatus, PackageType } from '@prisma/client';
+import { PackageStatus, PackageType, Prisma } from '@prisma/client';
 
 export const DEBT_SESSION_LIMIT = 2;
 export const DEBT_PACKAGE_STATUSES: PackageStatus[] = [
@@ -16,6 +16,39 @@ interface SessionPackageAvailabilityInput {
 export interface SessionPackageAvailability {
   mode: 'ACTIVE' | 'DEBT';
   remainingSessions: number;
+}
+
+export interface AutomaticKitMaterialDraft {
+  inventoryItemId: string;
+  quantity: Prisma.Decimal.Value;
+  unit: string;
+  conversionFactor: Prisma.Decimal.Value;
+}
+
+export function buildAutomaticKitMaterialUsageRows(
+  sessionId: string,
+  recordedBy: string,
+  materials: AutomaticKitMaterialDraft[],
+): Prisma.MaterialUsageCreateManyInput[] {
+  return materials.map((material) => {
+    const quantity = new Prisma.Decimal(material.quantity);
+    const conversionFactor = new Prisma.Decimal(material.conversionFactor);
+
+    if (conversionFactor.lessThanOrEqualTo(0)) {
+      throw new Error('Conversion factor komponen Infus Set + Pelengkap harus lebih besar dari nol.');
+    }
+
+    return {
+      usageKey: `${sessionId}:${material.inventoryItemId}`,
+      treatmentSessionId: sessionId,
+      inventoryItemId: material.inventoryItemId,
+      quantity,
+      unit: material.unit,
+      baseQuantity: quantity.div(conversionFactor).toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP),
+      recommendedQuantity: quantity,
+      recordedBy,
+    };
+  });
 }
 
 export function isDebtPackageStatus(status: PackageStatus): boolean {
