@@ -339,8 +339,9 @@ export default function PackageCard({
     const anyActiveInstallment = [...basics, ...boosters, ...groupAddOns].some((item) => (
       item?.paymentPlanType === 'INSTALLMENT' && item?.paymentPlanStatus === 'ACTIVE_INSTALLMENT'
     ));
-    const editablePackages = [...basics, ...boosters].filter(Boolean) as MemberPackage[];
-    const canEditGroup = editablePackages.length > 0 && editablePackages.every((item) => canEditPackageStatus(item.status));
+    const editablePackages = ([...basics, ...boosters].filter(Boolean) as MemberPackage[])
+      .filter((item) => canEditPackageStatus(item.status));
+    const canEditGroup = editablePackages.length > 0;
     
     // Calculate total prices for all packages and add-ons
     const totalBasicPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
@@ -595,11 +596,10 @@ export default function PackageCard({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const allPackages = [...basics, ...boosters];
                       const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
                       onEditPackage(
                         pkg.purchaseGroupId || '',
-                        allPackages,
+                        editablePackages,
                         groupAddOns,
                         totalDiscount,
                         discountPercent,
@@ -609,7 +609,7 @@ export default function PackageCard({
                     }}
                     className={styles.editButton}
                   >
-                    ✏️ Edit
+                    Edit Paket
                   </button>
                 )}
                 {onCancelPackage && basics[0] && (
@@ -661,11 +661,10 @@ export default function PackageCard({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      const allPackages = [...basics, ...boosters];
                       const discountPercent = basics[0]?.discountPercent || boosters[0]?.discountPercent || 0;
                       onEditPackage(
                         pkg.purchaseGroupId || '',
-                        allPackages,
+                        editablePackages,
                         groupAddOns,
                         totalDiscount,
                         discountPercent,
@@ -675,7 +674,7 @@ export default function PackageCard({
                     }}
                     className={styles.editButton}
                   >
-                    âœï¸ Edit
+                    Edit Paket
                   </button>
                 )}
                 {onRefundPackage && basics[0] && (
@@ -854,7 +853,7 @@ export default function PackageCard({
                   }}
                   className={styles.editButton}
                 >
-                  ✏️ Edit
+                  Edit Paket
                 </button>
               )}
               {onCancelPackage && (
@@ -912,7 +911,7 @@ export default function PackageCard({
                   }}
                   className={styles.editButton}
                 >
-                  âœï¸ Edit
+                  Edit Paket
                 </button>
               )}
               {onRefundPackage && (
