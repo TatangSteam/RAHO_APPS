@@ -51,6 +51,7 @@ export interface MemberPackage {
   packageId: string;
   packageCode: string;
   packagePricingId?: string; // For editing packages
+  packageName?: string; // Name from the package pricing catalog
   baseSessions?: number; // Base sessions from pricing
   purchaseQuantity?: number; // Calculated quantity (totalSessions / baseSessions)
   productCode?: string;

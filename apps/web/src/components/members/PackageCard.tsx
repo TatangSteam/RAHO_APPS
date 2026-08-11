@@ -6,6 +6,7 @@ import ViewInvoiceButton from '../invoices/ViewInvoiceButton';
 import ViewPaymentProofButton from './ViewPaymentProofButton';
 import { formatCurrency } from '@/lib/formatNumber';
 import { getAggregatePackageStatus } from './memberStatusPresentation';
+import { groupMemberPackagesForDisplay } from './packageCard.helpers';
 import styles from './MemberPackagesTab.module.css';
 
 interface PackageCardProps {
@@ -112,6 +113,15 @@ const getTherapyName = (productCode: string | undefined, packageCode: string, pa
   return packageCode;
 };
 
+const getPackageDisplayName = (pkg: MemberPackage): string => (
+  pkg.packageName?.trim()
+  || getTherapyName(pkg.productCode, pkg.packageCode, pkg.packageType)
+);
+
+const formatPackageCodes = (codes: string[]): string => (
+  `${codes[0]}${codes.length > 1 ? ` (+${codes.length - 1} lainnya)` : ''}`
+);
+
 export default function PackageCard({
   pkg,
   onVerifyPayment,
@@ -202,11 +212,6 @@ export default function PackageCard({
     (canEditWaitingVerification && status === 'WAITING_VERIFICATION') ||
     (canEditVerified && status === 'ACTIVE')
   );
-
-  // Helper to calculate original price (before discount)
-  const getOriginalPrice = (pkg: MemberPackage) => {
-    return pkg.finalPrice + (pkg.discountAmount || 0);
-  };
 
   // Standalone Add-On
   if (isAddOn && !isGroup) {
@@ -329,10 +334,10 @@ export default function PackageCard({
     // Bundle Package
     const basics = pkg.basics || (pkg.basic ? [pkg.basic] : []);
     const boosters = pkg.boosters || (pkg.booster ? [pkg.booster] : []);
+    const basicDisplayGroups = groupMemberPackagesForDisplay(basics);
+    const boosterDisplayGroups = groupMemberPackagesForDisplay(boosters);
     const groupAddOns = pkg.addOns || [];
     const groupStatus = getAggregatePackageStatus([...basics, ...boosters, ...groupAddOns]);
-    const basicStatus = getAggregatePackageStatus(basics);
-    const boosterStatus = getAggregatePackageStatus(boosters);
     const addOnStatus = getAggregatePackageStatus(groupAddOns);
     const anyPending = basics.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || boosters.some(p => p?.status === 'PENDING_PAYMENT' || p?.status === 'WAITING_VERIFICATION') || groupAddOns.some(a => a?.status === 'PENDING_PAYMENT' || a?.status === 'WAITING_VERIFICATION');
     const anyActive = basics.some(p => p?.status === 'ACTIVE') || boosters.some(p => p?.status === 'ACTIVE') || groupAddOns.some(a => a?.status === 'ACTIVE');
@@ -344,8 +349,6 @@ export default function PackageCard({
     const canEditGroup = editablePackages.length > 0;
     
     // Calculate total prices for all packages and add-ons
-    const totalBasicPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
-    const totalBoosterPrice = boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p ? getOriginalPrice(p) : 0), 0);
     const totalAddOnPrice = groupAddOns.reduce((sum, addOn) => sum + (addOn.totalPrice || 0), 0);
     const totalFinalPrice = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + boosters.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.finalPrice || 0), 0) + totalAddOnPrice;
     const totalBasicSessions = basics.reduce((sum: number, p: MemberPackage | undefined) => sum + (p?.totalSessions || 0), 0);
@@ -374,8 +377,8 @@ export default function PackageCard({
             <div>
               <div className={styles.compactTitle}>
                 Paket Bundling
-                {totalBasicQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBasicQuantity} BASIC</span>}
-                {totalBoosterQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBoosterQuantity} BOOSTER</span>}
+                {totalBasicQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBasicQuantity} UNIT BASIC ({totalBasicSessions} SESI)</span>}
+                {totalBoosterQuantity > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {totalBoosterQuantity} UNIT BOOSTER ({totalBoosterSessions} SESI)</span>}
                 {groupAddOns.length > 0 && <span style={{ marginLeft: '8px', fontSize: '12px' }}>• {groupAddOns.length} ADD-ON</span>}
               </div>
               <div className={styles.compactSubtitle}>
@@ -394,65 +397,67 @@ export default function PackageCard({
         {/* Expanded Details */}
         {isExpanded && (
           <div className={styles.expandedContent}>
-            {/* Basic Packages */}
-            {basics.length > 0 && (
-              <div className={`${styles.packageSection} ${styles.basicSection}`}>
-                <div className={styles.packageHeader}>
-                  <div className={styles.packageInfo}>
-                    <div className={styles.packageTitle}>
-                      <span className={styles.packageIcon}>📦</span>
-                      {getTherapyName(basics[0].productCode, basics[0].packageCode, basics[0].packageType)}
-                      {totalBasicQuantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{totalBasicQuantity}</span>}
+            {/* Basic packages are rendered per catalog pricing. */}
+            {basicDisplayGroups.map((basicGroup) => {
+              const basic = basicGroup.representative;
+              const status = getAggregatePackageStatus(basicGroup.items) || basic.status;
+              return (
+                <div key={basicGroup.key} className={`${styles.packageSection} ${styles.basicSection}`}>
+                  <div className={styles.packageHeader}>
+                    <div className={styles.packageInfo}>
+                      <div className={styles.packageTitle}>
+                        <span className={styles.packageIcon}>📦</span>
+                        {getPackageDisplayName(basic)}
+                        {basicGroup.quantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{basicGroup.quantity}</span>}
+                      </div>
+                      <div className={styles.packageCode}>{formatPackageCodes(basicGroup.packageCodes)}</div>
                     </div>
-                    <div className={styles.packageCode}>{basics[0].packageCode}{basics.length > 1 && ` (+${basics.length - 1} lainnya)`}</div>
+                    {getStatusBadge(status)}
                   </div>
-                  {getStatusBadge(basicStatus || basics[0].status)}
-                </div>
-                
-                <div className={styles.sessionInfo}>
-                  <span className={styles.sessionBadge}>{totalBasicSessions} sesi total</span>
-                  <span className={styles.sessionDivider}>•</span>
-                  <span className={styles.sessionUsed}>{basics.reduce((sum: number, p: MemberPackage) => sum + p.usedSessions, 0)} terpakai</span>
-                  <span className={styles.sessionDivider}>•</span>
-                  <span className={styles.sessionRemaining}>{basics.reduce((sum: number, p: MemberPackage) => sum + p.remainingSessions, 0)} tersisa</span>
-                </div>
-                
-                <div className={styles.packagePrice}>
-                  {formatCurrency(totalBasicPrice)}
-                </div>
-              </div>
-            )}
 
-            {/* Booster Packages */}
-            {boosters.length > 0 && (
-              <div className={`${styles.packageSection} ${styles.boosterSection}`}>
-                <div className={styles.packageHeader}>
-                  <div className={styles.packageInfo}>
-                    <div className={styles.packageTitle}>
-                      <span className={styles.packageIcon}>🚀</span>
-                      {getTherapyName(boosters[0].productCode, boosters[0].packageCode, boosters[0].packageType)}
-                      {totalBoosterQuantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{totalBoosterQuantity}</span>}
-                    </div>
-                    <div className={styles.packageCode}>
-                      {boosters[0].packageCode}{boosters.length > 1 && ` (+${boosters.length - 1} lainnya)`}
-                    </div>
+                  <div className={styles.sessionInfo}>
+                    <span className={styles.sessionBadge}>{basicGroup.totalSessions} sesi total</span>
+                    <span className={styles.sessionDivider}>•</span>
+                    <span className={styles.sessionUsed}>{basicGroup.usedSessions} terpakai</span>
+                    <span className={styles.sessionDivider}>•</span>
+                    <span className={styles.sessionRemaining}>{basicGroup.remainingSessions} tersisa</span>
                   </div>
-                  {getStatusBadge(boosterStatus || boosters[0].status)}
+
+                  <div className={styles.packagePrice}>{formatCurrency(basicGroup.originalPrice)}</div>
                 </div>
-                
-                <div className={styles.sessionInfo}>
-                  <span className={styles.sessionBadge}>{totalBoosterSessions} sesi total</span>
-                  <span className={styles.sessionDivider}>•</span>
-                  <span className={styles.sessionUsed}>{boosters.reduce((sum: number, p: MemberPackage) => sum + p.usedSessions, 0)} terpakai</span>
-                  <span className={styles.sessionDivider}>•</span>
-                  <span className={styles.sessionRemaining}>{boosters.reduce((sum: number, p: MemberPackage) => sum + p.remainingSessions, 0)} tersisa</span>
+              );
+            })}
+
+            {/* Booster packages are also separated when their pricing differs. */}
+            {boosterDisplayGroups.map((boosterGroup) => {
+              const booster = boosterGroup.representative;
+              const status = getAggregatePackageStatus(boosterGroup.items) || booster.status;
+              return (
+                <div key={boosterGroup.key} className={`${styles.packageSection} ${styles.boosterSection}`}>
+                  <div className={styles.packageHeader}>
+                    <div className={styles.packageInfo}>
+                      <div className={styles.packageTitle}>
+                        <span className={styles.packageIcon}>🚀</span>
+                        {getPackageDisplayName(booster)}
+                        {boosterGroup.quantity > 1 && <span style={{ marginLeft: '8px', fontSize: '14px', fontWeight: '700', color: 'var(--color-primary-400)' }}>x{boosterGroup.quantity}</span>}
+                      </div>
+                      <div className={styles.packageCode}>{formatPackageCodes(boosterGroup.packageCodes)}</div>
+                    </div>
+                    {getStatusBadge(status)}
+                  </div>
+
+                  <div className={styles.sessionInfo}>
+                    <span className={styles.sessionBadge}>{boosterGroup.totalSessions} sesi total</span>
+                    <span className={styles.sessionDivider}>•</span>
+                    <span className={styles.sessionUsed}>{boosterGroup.usedSessions} terpakai</span>
+                    <span className={styles.sessionDivider}>•</span>
+                    <span className={styles.sessionRemaining}>{boosterGroup.remainingSessions} tersisa</span>
+                  </div>
+
+                  <div className={`${styles.packagePrice} ${styles.boosterPrice}`}>{formatCurrency(boosterGroup.originalPrice)}</div>
                 </div>
-                
-                <div className={`${styles.packagePrice} ${styles.boosterPrice}`}>
-                  {formatCurrency(totalBoosterPrice)}
-                </div>
-              </div>
-            )}
+              );
+            })}
 
             {/* Add-Ons */}
             {groupAddOns.length > 0 && (
@@ -727,7 +732,7 @@ export default function PackageCard({
           </span>
           <div>
             <div className={styles.compactTitle}>
-              {getTherapyName(memberPkg.productCode, memberPkg.packageCode, memberPkg.packageType)}
+              {getPackageDisplayName(memberPkg)}
             </div>
             <div className={styles.compactSubtitle}>
               {memberPkg.packageCode} • {memberPkg.remainingSessions}/{memberPkg.totalSessions} sesi

@@ -201,6 +201,7 @@ export class PackageRetrievalService {
       packageId: pkg.id,
       packageCode: pkg.packageCode,
       packagePricingId: pkg.packagePricingId || undefined, // Include pricing ID for editing
+      packageName: pkg.packagePricing?.name || undefined,
       baseSessions: baseSessions, // Base sessions from pricing
       purchaseQuantity: purchaseQuantity, // Calculated quantity
       productCode: pkg.productCode || undefined,
