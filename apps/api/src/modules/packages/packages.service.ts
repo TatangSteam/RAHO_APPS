@@ -1,4 +1,4 @@
-import type { AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
+import type { AdjustBasicVoucherInput, AssignPackageInput, VerifyPaymentInput, CreatePackagePricingInput, UpdatePackagePricingInput } from './packages.schema';
 import { PackageAssignmentService } from './services/package-assignment.service';
 import { PaymentVerificationService } from './services/payment-verification.service';
 import { PackageRetrievalService } from './services/package-retrieval.service';
@@ -6,6 +6,7 @@ import { PackagePricingService } from './services/package-pricing.service';
 import { PackageRefundService } from './services/package-refund.service';
 import { PackageCancelService } from './services/package-cancel.service';
 import { PackageEditService } from './services/package-edit.service';
+import { VoucherBalanceAdjustmentService } from './services/voucher-balance-adjustment.service';
 
 /**
  * Main Packages Service - Orchestrates all package-related operations
@@ -27,6 +28,7 @@ export class PackagesService {
   private refundService: PackageRefundService;
   private cancelService: PackageCancelService;
   private editService: PackageEditService;
+  private voucherBalanceAdjustmentService: VoucherBalanceAdjustmentService;
 
   constructor() {
     this.assignmentService = new PackageAssignmentService();
@@ -36,6 +38,7 @@ export class PackagesService {
     this.refundService = new PackageRefundService();
     this.cancelService = new PackageCancelService();
     this.editService = new PackageEditService();
+    this.voucherBalanceAdjustmentService = new VoucherBalanceAdjustmentService();
   }
 
   // ============================================================
@@ -170,5 +173,19 @@ export class PackagesService {
     userRole?: string
   ) {
     return await this.editService.editPackage(packageId, data, userId, branchId, userRole);
+  }
+
+  async adjustBasicVoucher(
+    packageId: string,
+    data: AdjustBasicVoucherInput,
+    userId: string,
+    userRole?: string,
+  ) {
+    return await this.voucherBalanceAdjustmentService.adjustBasicVoucher(
+      packageId,
+      data,
+      userId,
+      userRole,
+    );
   }
 }

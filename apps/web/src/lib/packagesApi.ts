@@ -171,4 +171,12 @@ export const packagesApi = {
     const response = await api.put(`/packages/${packageId}`, data);
     return response.data.data || response.data;
   },
+
+  adjustBasicVoucher: async (
+    packageId: string,
+    data: { remainingSessions: number; reason: string },
+  ) => {
+    const response = await api.patch(`/packages/${packageId}/voucher-balance`, data);
+    return response.data.data || response.data;
+  },
 };

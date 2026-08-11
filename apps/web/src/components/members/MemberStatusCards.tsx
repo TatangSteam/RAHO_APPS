@@ -1,4 +1,4 @@
-import { Award, Camera, Package, Rocket, ShieldCheck, UserRoundCheck } from 'lucide-react';
+import { Award, Camera, Package, Pencil, Rocket, ShieldCheck, UserRoundCheck } from 'lucide-react';
 import { MemberDetail } from '@/types/member';
 import { PackageDisplay } from '@/types/package';
 import { getMemberVoucherTotals } from './memberStatusPresentation';
@@ -6,6 +6,8 @@ import { getMemberVoucherTotals } from './memberStatusPresentation';
 interface MemberStatusCardsProps {
   member: MemberDetail;
   packages: PackageDisplay[];
+  canEditBasicVoucher?: boolean;
+  onEditBasicVoucher?: () => void;
 }
 
 const toneClasses = {
@@ -24,28 +26,36 @@ function StatusItem({
   helper,
   icon,
   tone,
+  action,
 }: {
   label: string;
   value: string | number;
   helper: string;
   icon: React.ReactNode;
   tone: keyof typeof toneClasses;
+  action?: React.ReactNode;
 }) {
   return (
     <article className="flex min-w-0 items-center gap-3 rounded-2xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${toneClasses[tone]}`}>
         {icon}
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-500">{label}</p>
         <p className="mt-0.5 truncate text-xl font-extrabold text-neutral-950 dark:text-white">{value}</p>
         <p className="mt-0.5 truncate text-[11px] text-neutral-500">{helper}</p>
       </div>
+      {action}
     </article>
   );
 }
 
-export default function MemberStatusCards({ member, packages }: MemberStatusCardsProps) {
+export default function MemberStatusCards({
+  member,
+  packages,
+  canEditBasicVoucher = false,
+  onEditBasicVoucher,
+}: MemberStatusCardsProps) {
   const voucherTotals = getMemberVoucherTotals(packages);
   const isActive = member.isActive && !member.isDeceased;
   const rankTone =
@@ -64,7 +74,24 @@ export default function MemberStatusCards({ member, packages }: MemberStatusCard
 
   return (
     <section className="mb-5 grid grid-cols-2 gap-2.5 lg:grid-cols-3 xl:grid-cols-6" aria-label="Ringkasan status member">
-      <StatusItem label="Voucher BASIC" value={voucherTotals.basic} helper="Sisa aktif" icon={<Package size={19} />} tone="blue" />
+      <StatusItem
+        label="Voucher BASIC"
+        value={voucherTotals.basic}
+        helper="Sisa aktif"
+        icon={<Package size={19} />}
+        tone="blue"
+        action={canEditBasicVoucher && onEditBasicVoucher ? (
+          <button
+            type="button"
+            onClick={onEditBasicVoucher}
+            aria-label="Edit voucher BASIC"
+            title="Edit voucher BASIC"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-blue-200 text-blue-600 transition hover:bg-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-blue-800 dark:text-blue-300 dark:hover:bg-blue-500/10"
+          >
+            <Pencil size={15} />
+          </button>
+        ) : undefined}
+      />
       <StatusItem label="Voucher BOOSTER" value={voucherTotals.booster} helper="Sisa aktif" icon={<Rocket size={19} />} tone="purple" />
       <StatusItem
         label="Rank member"

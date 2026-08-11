@@ -31,9 +31,11 @@ export function requiresDeferredRevenueContract(pkg: {
  * deferred-revenue contract. Keep those rows on the compatibility path instead
  * of blocking treatment completion.
  *
- * An invoice reference is the boundary for the current finance workflow: once
- * it exists, a paid package must still be verified/funded and may not silently
- * fall back to legacy behavior.
+ * An invoice reference is normally the boundary for the current finance flow.
+ * The exception is a payment verified by the older package endpoint: those
+ * records have no cash/bank account or posting and must remain on the legacy
+ * path. A current invoice without that legacy payment marker must never bypass
+ * deferred-revenue validation.
  */
 export function usesLegacyRevenueCompatibility(pkg: {
   finalPrice: Prisma.Decimal;
@@ -45,6 +47,7 @@ export function usesLegacyRevenueCompatibility(pkg: {
 }, references: {
   hasInvoiceItem: boolean;
   hasDeferredRevenueContract: boolean;
+  hasLegacyVerifiedPayment?: boolean;
 }) {
   if (pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION) return true;
 
@@ -56,8 +59,8 @@ export function usesLegacyRevenueCompatibility(pkg: {
 
   return requiresDeferredRevenueContract(pkg)
     && isAlreadyOperational
-    && !references.hasInvoiceItem
-    && !references.hasDeferredRevenueContract;
+    && !references.hasDeferredRevenueContract
+    && (!references.hasInvoiceItem || Boolean(references.hasLegacyVerifiedPayment));
 }
 
 export function revenueCompatibilityModeForPackages(
@@ -225,16 +228,37 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
     }),
     tx.invoiceItem.findMany({
       where: { itemType: 'PACKAGE', itemId: { in: packageIds } },
-      select: { itemId: true },
+      select: {
+        itemId: true,
+        invoice: {
+          select: {
+            payments: {
+              where: { verificationStatus: 'VERIFIED' },
+              select: {
+                cashBankAccountId: true,
+                cashBankTransaction: { select: { id: true } },
+              },
+            },
+          },
+        },
+      },
     }),
   ]);
   const contractByPackage = new Map(contracts.map((contract) => [contract.memberPackageId, contract]));
   const invoicePackageIds = new Set(invoiceItems.map((item) => item.itemId));
+  const legacyVerifiedPaymentPackageIds = new Set(
+    invoiceItems
+      .filter((item) => item.invoice.payments.some((payment) =>
+        payment.cashBankAccountId === null && payment.cashBankTransaction === null
+      ))
+      .map((item) => item.itemId),
+  );
   const legacyPackageIds = new Set(
     packages
       .filter((pkg) => usesLegacyRevenueCompatibility(pkg, {
         hasInvoiceItem: invoicePackageIds.has(pkg.id),
         hasDeferredRevenueContract: contractByPackage.has(pkg.id),
+        hasLegacyVerifiedPayment: legacyVerifiedPaymentPackageIds.has(pkg.id),
       }))
       .map((pkg) => pkg.id),
   );
@@ -250,7 +274,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
     );
   }
   // A mixed Basic/Booster session may contain one legacy package and one
-  // current package. Ignore only the unreferenced legacy package; the current
+  // current package. Ignore only the legacy-compatible package; the current
   // package must keep its normal revenue/HPP posting.
   const revenueCompatibilityMode = revenueCompatibilityModeForPackages(
     packages.length,

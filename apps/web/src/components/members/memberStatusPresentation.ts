@@ -59,3 +59,37 @@ export function getMemberVoucherTotals(packages: PackageDisplay[]): MemberVouche
     { basic: 0, booster: 0 },
   );
 }
+
+export function getActiveMemberPackagesByType(
+  packages: PackageDisplay[],
+  packageType: PackageType,
+): MemberPackage[] {
+  const result: MemberPackage[] = [];
+  const seen = new Set<string>();
+
+  const append = (memberPackage: MemberPackage | undefined) => {
+    if (
+      memberPackage?.status === 'ACTIVE' &&
+      memberPackage.packageType === packageType &&
+      !seen.has(memberPackage.packageId)
+    ) {
+      result.push(memberPackage);
+      seen.add(memberPackage.packageId);
+    }
+  };
+
+  packages.forEach((item) => {
+    if ('isGroup' in item && item.isGroup) {
+      const groupedPackages = packageType === 'BASIC' ? item.basics : item.boosters;
+      if (groupedPackages?.length) {
+        groupedPackages.forEach(append);
+      } else {
+        append(packageType === 'BASIC' ? item.basic : item.booster);
+      }
+    } else if ('packageType' in item) {
+      append(item);
+    }
+  });
+
+  return result;
+}

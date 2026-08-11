@@ -203,6 +203,18 @@ export const editPackageSchema = z.object({
   { message: 'Minimal 1 paket atau add-on harus dipilih' }
 );
 
+export const adjustBasicVoucherSchema = z.object({
+  remainingSessions: z.coerce
+    .number()
+    .int('Sisa voucher harus berupa bilangan bulat')
+    .min(0, 'Sisa voucher tidak boleh negatif')
+    .max(100000, 'Sisa voucher terlalu besar'),
+  reason: z.string()
+    .trim()
+    .min(5, 'Alasan penyesuaian minimal 5 karakter')
+    .max(500, 'Alasan penyesuaian maksimal 500 karakter'),
+});
+
 export type AssignPackageInput = z.infer<typeof assignPackageSchema>;
 export type VerifyPaymentInput = z.infer<typeof verifyPaymentSchema>;
 export type CreatePackagePricingInput = z.infer<typeof createPackagePricingSchema>;
@@ -210,3 +222,4 @@ export type UpdatePackagePricingInput = z.infer<typeof updatePackagePricingSchem
 export type RefundPackageInput = z.infer<typeof refundPackageSchema>;
 export type CancelPackageInput = z.infer<typeof cancelPackageSchema>;
 export type EditPackageInput = z.infer<typeof editPackageSchema>;
+export type AdjustBasicVoucherInput = z.infer<typeof adjustBasicVoucherSchema>;

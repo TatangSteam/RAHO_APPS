@@ -12,6 +12,7 @@ function reservationTx(input: {
   packageStatus?: PackageStatus;
   usedSessions?: number;
   hasInvoiceItem?: boolean;
+  hasLegacyVerifiedPayment?: boolean;
 }) {
   const packageId = 'package-1';
   return {
@@ -40,7 +41,14 @@ function reservationTx(input: {
     },
     packageRevenueContract: { findMany: jest.fn().mockResolvedValue([]) },
     invoiceItem: {
-      findMany: jest.fn().mockResolvedValue(input.hasInvoiceItem ? [{ itemId: packageId }] : []),
+      findMany: jest.fn().mockResolvedValue(input.hasInvoiceItem ? [{
+        itemId: packageId,
+        invoice: {
+          payments: input.hasLegacyVerifiedPayment
+            ? [{ cashBankAccountId: null, cashBankTransaction: null }]
+            : [],
+        },
+      }] : []),
     },
   } as unknown as Prisma.TransactionClient;
 }
@@ -92,7 +100,23 @@ describe('member package revenue flow compatibility', () => {
     }, {
       hasInvoiceItem: true,
       hasDeferredRevenueContract: false,
+      hasLegacyVerifiedPayment: false,
     })).toBe(false);
+  });
+
+  it('keeps a verified payment from the old package endpoint on the legacy path', () => {
+    expect(usesLegacyRevenueCompatibility({
+      finalPrice: new Prisma.Decimal('1250000'),
+      revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
+      status: PackageStatus.ACTIVE,
+      usedSessions: 1,
+      verifiedAt: new Date('2026-08-01T00:00:00.000Z'),
+      activatedAt: new Date('2026-08-01T00:00:00.000Z'),
+    }, {
+      hasInvoiceItem: true,
+      hasDeferredRevenueContract: false,
+      hasLegacyVerifiedPayment: true,
+    })).toBe(true);
   });
 
   it('does not classify a new unpaid package without references as legacy', () => {
@@ -147,6 +171,16 @@ describe('member package revenue flow compatibility', () => {
     )).rejects.toMatchObject({
       status: 422,
       code: 'TREATMENT_REVENUE_CONTRACT_MISSING',
+    });
+  });
+
+  it('lets an operational package with a legacy verified invoice payment complete', async () => {
+    await expect(reserveTreatmentCompletedRevenue(
+      'event-1',
+      reservationTx({ hasInvoiceItem: true, hasLegacyVerifiedPayment: true }),
+    )).resolves.toEqual({
+      reservations: [],
+      revenueCompatibilityMode: 'LEGACY',
     });
   });
 });

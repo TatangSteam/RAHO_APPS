@@ -7,6 +7,11 @@ import { assertBranchAccess, assertPermission } from '../../iam/authorization.se
 import { PERMISSIONS } from '../../iam/permission-catalog';
 import { consumeAddOnStockInTransaction } from './add-on-inventory.service';
 
+// This endpoint predates finance posting and creates a verified payment without
+// a cash/bank transaction or deferred-revenue contract. Keep packages verified
+// through this compatibility endpoint explicitly on revenue flow version 1.
+const LEGACY_PACKAGE_REVENUE_FLOW_VERSION = 1;
+
 type PackageWithMember = Prisma.MemberPackageGetPayload<{
   include: {
     member: {
@@ -299,6 +304,7 @@ export class PaymentVerificationService {
           paymentProofFileName: data.proofFileName,
           paymentProofFileSize: data.proofFileSize,
           paymentProofMimeType: data.proofMimeType,
+          revenueFlowVersion: LEGACY_PACKAGE_REVENUE_FLOW_VERSION,
         },
       });
       if (groupAddOns.length > 0) {
@@ -408,6 +414,7 @@ export class PaymentVerificationService {
         paymentProofMimeType: data.proofMimeType,
         activatedAt: now,
         notes: data.notes || pkg.notes,
+        revenueFlowVersion: LEGACY_PACKAGE_REVENUE_FLOW_VERSION,
       },
     });
 

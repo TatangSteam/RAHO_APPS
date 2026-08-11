@@ -46,6 +46,15 @@ router.put(
   controller.editPackage.bind(controller)
 );
 
+// Administrative BASIC voucher balance adjustment
+router.patch(
+  '/packages/:packageId/voucher-balance',
+  authenticate,
+  authorize(['ADMIN_MANAGER', 'SUPER_ADMIN']),
+  requirePermission(PERMISSIONS.INVOICE_UPDATE),
+  controller.adjustBasicVoucher.bind(controller)
+);
+
 // Package payment verification
 router.patch(
   '/packages/:packageId/verify',

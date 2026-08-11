@@ -5,6 +5,7 @@ import type {
   StandalonePackage,
 } from '@/types/package';
 import {
+  getActiveMemberPackagesByType,
   getAggregatePackageStatus,
   getMemberVoucherTotals,
 } from './memberStatusPresentation';
@@ -106,5 +107,23 @@ describe('memberStatusPresentation', () => {
     ];
 
     expect(getMemberVoucherTotals(packages)).toEqual({ basic: 5, booster: 0 });
+  });
+
+  it('returns every active BASIC package exactly once for voucher editing', () => {
+    const activeBasic = createMemberPackage('BASIC', { packageId: 'basic-active' });
+    const packages: PackageDisplay[] = [
+      createGroup({
+        basic: activeBasic,
+        basics: [
+          activeBasic,
+          createMemberPackage('BASIC', { packageId: 'basic-second' }),
+          createMemberPackage('BASIC', { packageId: 'basic-expired', status: 'EXPIRED' }),
+        ],
+        boosters: [createMemberPackage('BOOSTER', { packageId: 'booster-active' })],
+      }),
+    ];
+
+    expect(getActiveMemberPackagesByType(packages, 'BASIC').map((item) => item.packageId))
+      .toEqual(['basic-active', 'basic-second']);
   });
 });

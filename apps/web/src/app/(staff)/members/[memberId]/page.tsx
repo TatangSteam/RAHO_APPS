@@ -27,11 +27,13 @@ import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
 import EditPackageModal from '@/components/members/EditPackageModal';
+import BasicVoucherEditModal from '@/components/members/BasicVoucherEditModal';
 import RefundDetailModal from '@/components/members/RefundDetailModal';
 import MemberCredentialsModal from '@/components/members/MemberCredentialsModal';
 import UploadDocumentsModal from '@/components/members/UploadDocumentsModal';
 import MemberLabResultsTab from '@/components/members/MemberLabResultsTab';
 import MemberEditModal from '@/components/members/MemberEditModal';
+import { getActiveMemberPackagesByType } from '@/components/members/memberStatusPresentation';
 import {
   ClipboardList,
   FlaskConical,
@@ -236,6 +238,7 @@ export default function MemberDetailPage() {
     notes: ''
   });
   const [editingPackageId, setEditingPackageId] = useState('');
+  const [showBasicVoucherEditModal, setShowBasicVoucherEditModal] = useState(false);
 
   // Refund detail modal state
   const [showRefundDetailModal, setShowRefundDetailModal] = useState(false);
@@ -670,6 +673,16 @@ export default function MemberDetailPage() {
     setEditData(data);
   };
 
+  const handleAdjustBasicVoucher = async (
+    packageId: string,
+    remainingSessions: number,
+    reason: string,
+  ) => {
+    await packagesApi.adjustBasicVoucher(packageId, { remainingSessions, reason });
+    await loadPackages();
+    showToast.success('Voucher BASIC berhasil diperbarui');
+  };
+
   const editSubmissionInFlightRef = useRef(false);
 
   const handleEditPackage = async () => {
@@ -775,7 +788,12 @@ export default function MemberDetailPage() {
         hasDocuments={hasDocuments}
       />
 
-      <MemberStatusCards member={member} packages={packages} />
+      <MemberStatusCards
+        member={member}
+        packages={packages}
+        canEditBasicVoucher={canPrivilegedEditPackage}
+        onEditBasicVoucher={() => setShowBasicVoucherEditModal(true)}
+      />
 
       {/* Tabs */}
       <div className="member-detail-tabs-card overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm dark:border-neutral-800 dark:bg-neutral-900">
@@ -1057,6 +1075,13 @@ export default function MemberDetailPage() {
         }}
         onEditDataChange={handleEditDataChange}
         onSubmit={handleEditPackage}
+      />
+
+      <BasicVoucherEditModal
+        show={showBasicVoucherEditModal}
+        packages={getActiveMemberPackagesByType(packages, 'BASIC')}
+        onClose={() => setShowBasicVoucherEditModal(false)}
+        onSubmit={handleAdjustBasicVoucher}
       />
 
       {refundDetailData && (
