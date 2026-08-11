@@ -1096,7 +1096,7 @@ export default function SessionsPage() {
   const handleDeleteSession = async (sessionDetail: SessionDetail) => {
     const confirmed = await confirm.show({
       title: 'Hapus Sesi Terapi',
-      message: `Hapus sesi ${sessionDetail.session.sessionCode} milik ${sessionDetail.session.member.fullName}? Stok yang tercatat dipakai oleh sesi ini akan dikembalikan.`,
+      message: `Hapus sesi ${sessionDetail.session.sessionCode} milik ${sessionDetail.session.member.fullName}? Voucher Basic, voucher Booster (jika digunakan), dan seluruh stok sesi akan dikembalikan.`,
       variant: 'danger',
       confirmText: 'Hapus Sesi',
       cancelText: 'Batal',
@@ -1105,8 +1105,11 @@ export default function SessionsPage() {
     if (!confirmed) return;
 
     try {
-      await sessionApi.deleteSession(sessionDetail.session.sessionId);
-      showToast.success('Sesi terapi berhasil dihapus');
+      const result = await sessionApi.deleteSession(sessionDetail.session.sessionId);
+      const voucherLabel = result.restoredVouchers.booster > 0
+        ? 'voucher Basic dan Booster'
+        : 'voucher Basic';
+      showToast.success(`Sesi berhasil dihapus. ${voucherLabel} serta stok telah dikembalikan.`);
       await loadSessions();
     } catch (error) {
       assertCaughtError(error);
@@ -1668,7 +1671,7 @@ export default function SessionsPage() {
                       {getTableFieldValue(sessionDetail, key)}
                     </td>
                   ))}
-                  {canDeleteSessions && (
+                  {canDeleteSessions && !sessionDetail.session.isCompleted && (
                     <td className={styles.actionCell} data-label="Aksi">
                       <button
                         type="button"

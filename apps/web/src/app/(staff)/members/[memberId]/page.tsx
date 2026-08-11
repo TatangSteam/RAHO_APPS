@@ -960,6 +960,9 @@ export default function MemberDetailPage() {
               memberNo={member.memberNo}
               memberName={member.profile.fullName}
               canCreate={!isAdminManager}
+              onDeleted={async () => {
+                await Promise.all([loadPackages(), loadMemberDetail(false)]);
+              }}
             />
           )}
 

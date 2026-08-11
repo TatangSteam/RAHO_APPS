@@ -1,6 +1,5 @@
 import {
   AuditAction,
-  type MemberPackage,
   PackageStatus,
   Prisma,
   StockMutationType,
@@ -12,18 +11,21 @@ import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 type StockRollbackMutation = {
   inventoryItemId: string;
-  quantity: unknown;
+  stockBefore: unknown;
+  stockAfter: unknown;
 };
 
 export class SessionDeletionService {
-  private groupUsedQuantities(mutations: StockRollbackMutation[]) {
+  private groupNetUsedQuantities(mutations: StockRollbackMutation[]) {
     return mutations.reduce<Map<string, number>>((grouped, mutation) => {
-      const quantity = Number(mutation.quantity);
-      if (!Number.isFinite(quantity) || quantity <= 0) return grouped;
+      const stockBefore = Number(mutation.stockBefore);
+      const stockAfter = Number(mutation.stockAfter);
+      const netUsedQuantity = stockBefore - stockAfter;
+      if (!Number.isFinite(netUsedQuantity) || netUsedQuantity === 0) return grouped;
 
       grouped.set(
         mutation.inventoryItemId,
-        (grouped.get(mutation.inventoryItemId) || 0) + quantity
+        (grouped.get(mutation.inventoryItemId) || 0) + netUsedQuantity
       );
       return grouped;
     }, new Map<string, number>());
@@ -31,25 +33,29 @@ export class SessionDeletionService {
 
   private async releasePackageUsage(
     tx: Prisma.TransactionClient,
-    memberPackage: Pick<MemberPackage, 'id' | 'usedSessions' | 'status' | 'totalSessions' | 'expiredAt'>,
+    memberPackageId: string,
   ) {
-    const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
-    await tx.memberPackage.update({
-      where: { id: memberPackage.id },
-      data: {
-        usedSessions,
-        status:
-          memberPackage.status === PackageStatus.EXPIRED &&
-          usedSessions < memberPackage.totalSessions
-            ? PackageStatus.ACTIVE
-            : memberPackage.status,
-        expiredAt:
-          memberPackage.status === PackageStatus.EXPIRED &&
-          usedSessions < memberPackage.totalSessions
-            ? null
-            : memberPackage.expiredAt,
-      },
+    const released = await tx.memberPackage.updateMany({
+      where: { id: memberPackageId, usedSessions: { gt: 0 } },
+      data: { usedSessions: { decrement: 1 } },
     });
+
+    const memberPackage = await tx.memberPackage.findUnique({
+      where: { id: memberPackageId },
+      select: { status: true, usedSessions: true, totalSessions: true },
+    });
+
+    if (
+      memberPackage?.status === PackageStatus.EXPIRED &&
+      memberPackage.usedSessions < memberPackage.totalSessions
+    ) {
+      await tx.memberPackage.update({
+        where: { id: memberPackageId },
+        data: { status: PackageStatus.ACTIVE, expiredAt: null },
+      });
+    }
+
+    return released.count > 0;
   }
 
   async deleteSession(sessionId: string, deletedBy: string) {
@@ -96,37 +102,35 @@ export class SessionDeletionService {
         : []),
     ];
 
-    const usedMutations = await prisma.stockMutation.findMany({
+    const stockMutations = await prisma.stockMutation.findMany({
       where: {
-        type: StockMutationType.USED,
         OR: stockReferenceFilters,
       },
       select: {
         inventoryItemId: true,
-        quantity: true,
+        stockBefore: true,
+        stockAfter: true,
       },
     });
 
-    const rollbackQuantities = this.groupUsedQuantities(usedMutations);
+    // Revert the net stock impact, not merely every USED row. Therapy-plan edits can
+    // create ADJUSTMENT rows that already returned part of the original usage.
+    const rollbackQuantities = this.groupNetUsedQuantities(stockMutations);
 
     const result = await prisma.$transaction(async (tx) => {
       let restoredStockItems = 0;
+      let restoredStockQuantity = 0;
 
       for (const [inventoryItemId, quantity] of rollbackQuantities.entries()) {
-        const inventoryItem = await tx.inventoryItem.findUnique({
+        if (quantity <= 0) continue;
+
+        const inventoryItem = await tx.inventoryItem.update({
           where: { id: inventoryItemId },
-          select: { id: true, stock: true },
+          data: { stock: { increment: quantity } },
+          select: { stock: true },
         });
-
-        if (!inventoryItem) continue;
-
-        const stockBefore = Number(inventoryItem.stock);
-        const stockAfter = stockBefore + quantity;
-
-        await tx.inventoryItem.update({
-          where: { id: inventoryItemId },
-          data: { stock: stockAfter },
-        });
+        const stockAfter = Number(inventoryItem.stock);
+        const stockBefore = stockAfter - quantity;
 
         await tx.stockMutation.create({
           data: {
@@ -143,11 +147,16 @@ export class SessionDeletionService {
         });
 
         restoredStockItems += 1;
+        restoredStockQuantity += quantity;
       }
 
-      await this.releasePackageUsage(tx, session.encounter.memberPackage);
+      const basicVoucherRestored = await this.releasePackageUsage(
+        tx,
+        session.encounter.memberPackage.id,
+      );
+      let boosterVoucherRestored = false;
       if (session.boosterPackage) {
-        await this.releasePackageUsage(tx, session.boosterPackage);
+        boosterVoucherRestored = await this.releasePackageUsage(tx, session.boosterPackage.id);
       }
 
       const evaluations = await tx.doctorEvaluation.findMany({
@@ -179,7 +188,12 @@ export class SessionDeletionService {
       await tx.treatmentSession.delete({ where: { id: sessionId } });
       await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
 
-      return { restoredStockItems };
+      return {
+        restoredStockItems,
+        restoredStockQuantity,
+        basicVoucherRestored,
+        boosterVoucherRestored,
+      };
     });
 
     await logAudit({
@@ -204,7 +218,10 @@ export class SessionDeletionService {
       meta: {
         action: 'DELETE_THERAPY_SESSION',
         restoredStockItems: result.restoredStockItems,
-        rolledBackStockMutations: usedMutations.length,
+        restoredStockQuantity: result.restoredStockQuantity,
+        restoredBasicVoucher: result.basicVoucherRestored,
+        restoredBoosterVoucher: result.boosterVoucherRestored,
+        rolledBackStockMutations: stockMutations.length,
       },
     });
 
@@ -212,7 +229,12 @@ export class SessionDeletionService {
       sessionId,
       sessionCode: session.sessionCode,
       restoredStockItems: result.restoredStockItems,
-      message: 'Sesi terapi berhasil dihapus',
+      restoredStockQuantity: result.restoredStockQuantity,
+      restoredVouchers: {
+        basic: 1,
+        booster: session.boosterPackage ? 1 : 0,
+      },
+      message: 'Sesi terapi berhasil dihapus dan seluruh voucher serta stoknya dikembalikan',
     };
   }
 }

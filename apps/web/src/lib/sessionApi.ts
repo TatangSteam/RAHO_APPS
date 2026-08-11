@@ -45,6 +45,11 @@ export const sessionApi = {
     sessionId: string;
     sessionCode: string;
     restoredStockItems: number;
+    restoredStockQuantity: number;
+    restoredVouchers: {
+      basic: number;
+      booster: number;
+    };
     message: string;
   }> => {
     const response = await api.delete(`/treatment-sessions/${sessionId}`);

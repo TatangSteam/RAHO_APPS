@@ -53,7 +53,7 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
   const deleteSession = async (session: Session) => {
     const confirmed = await confirm.show({
       title: 'Hapus Sesi Terapi',
-      message: `Hapus sesi ${session.sessionCode}${session.member?.fullName ? ` milik ${session.member.fullName}` : ''}? Stok yang tercatat dipakai oleh sesi ini akan dikembalikan.`,
+      message: `Hapus sesi ${session.sessionCode}${session.member?.fullName ? ` milik ${session.member.fullName}` : ''}? Voucher Basic, voucher Booster (jika digunakan), dan seluruh stok sesi akan dikembalikan.`,
       variant: 'danger',
       confirmText: 'Hapus Sesi',
       cancelText: 'Batal',
@@ -62,8 +62,11 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
     if (!confirmed) return;
 
     try {
-      await sessionApi.deleteSession(session.id);
-      showToast.success('Sesi terapi berhasil dihapus');
+      const result = await sessionApi.deleteSession(session.id);
+      const voucherLabel = result.restoredVouchers.booster > 0
+        ? 'voucher Basic dan Booster'
+        : 'voucher Basic';
+      showToast.success(`Sesi berhasil dihapus. ${voucherLabel} serta stok telah dikembalikan.`);
       onDeleted?.();
     } catch (error) {
       assertCaughtError(error);
@@ -212,7 +215,7 @@ export default function SessionsTable({ data, loading, returnTo, canDelete = fal
                     {session.status === 'COMPLETED' ? <Eye size={17} /> : <Pencil size={17} />}
                     <span>{session.status === 'COMPLETED' ? 'Detail' : 'Detail & Edit'}</span>
                   </button>
-                  {canDelete && (
+                  {canDelete && session.status !== 'COMPLETED' && session.status !== 'CANCELLED' && (
                     <button
                       onClick={() => deleteSession(session)}
                       className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg transition-colors"

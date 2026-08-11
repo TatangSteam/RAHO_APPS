@@ -9,19 +9,29 @@ import SessionCountDisplay from '@/components/members/SessionCountDisplay';
 import type { SessionDetail } from '@/types/session';
 import { useAuthStore } from '@/stores/authStore';
 import { devError } from '@/lib/logger';
+import { confirm, showToast } from '@/lib/toast';
+import { Trash2 } from 'lucide-react';
 
 interface MemberSessionsTabProps {
   memberId: string;
   memberNo: string;
   memberName: string;
   canCreate?: boolean;
+  onDeleted?: () => void | Promise<void>;
 }
 
-export default function MemberSessionsTab({ memberId, memberNo: _memberNo, memberName: _memberName, canCreate = true }: MemberSessionsTabProps) {
+export default function MemberSessionsTab({
+  memberId,
+  memberNo: _memberNo,
+  memberName: _memberName,
+  canCreate = true,
+  onDeleted,
+}: MemberSessionsTabProps) {
   const router = useRouter();
   const { user } = useAuthStore();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionDetail[]>([]);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const loadSessions = useCallback(async () => {
     try {
@@ -78,11 +88,89 @@ export default function MemberSessionsTab({ memberId, memberNo: _memberNo, membe
   const isMemberViewOnlyAdminManager =
     user?.role === 'ADMIN_MANAGER' && user.adminManagerAccessScope === 'MEMBER_VIEW_ONLY';
   const canOpenSession = !isMemberViewOnlyAdminManager;
+  const canDeleteSession = Boolean(
+    user &&
+    (user.role === 'SUPER_ADMIN' || user.role === 'ADMIN_MANAGER') &&
+    !isMemberViewOnlyAdminManager
+  );
   const openSession = (sessionId: string) => {
     if (canOpenSession) {
       router.push(`/sessions/${sessionId}`);
     }
   };
+
+  const handleDeleteSession = async (sessionDetail: SessionDetail) => {
+    const { session } = sessionDetail;
+    const confirmed = await confirm.show({
+      title: 'Hapus Sesi Terapi',
+      message: `Hapus sesi ${session.sessionCode}? Voucher Basic, voucher Booster (jika digunakan), dan seluruh stok yang terpakai pada sesi ini akan dikembalikan.`,
+      variant: 'danger',
+      confirmText: 'Hapus & Kembalikan',
+      cancelText: 'Batal',
+    });
+
+    if (!confirmed) return;
+
+    setDeletingSessionId(session.sessionId);
+    try {
+      const result = await sessionApi.deleteSession(session.sessionId);
+      const voucherLabel = result.restoredVouchers.booster > 0
+        ? 'voucher Basic dan Booster'
+        : 'voucher Basic';
+      showToast.success(`Sesi berhasil dihapus. ${voucherLabel} serta stok telah dikembalikan.`);
+      await Promise.all([loadSessions(), onDeleted?.()]);
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Failed to delete session:', error);
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus sesi terapi'
+      );
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
+  const renderSessionActions = (sessionDetail: SessionDetail) => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+      <span
+        className={`badge ${
+          sessionDetail.session.pelaksanaan === 'ON_SITE' ? 'badge-blue' : 'badge-purple'
+        }`}
+      >
+        {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On Site' : '🏠 Home Care'}
+      </span>
+      {canDeleteSession && !sessionDetail.session.isCompleted && (
+        <button
+          type="button"
+          aria-label={`Hapus sesi ${sessionDetail.session.sessionCode}`}
+          disabled={deletingSessionId === sessionDetail.session.sessionId}
+          onClick={(event) => {
+            event.stopPropagation();
+            void handleDeleteSession(sessionDetail);
+          }}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '6px 10px',
+            borderRadius: '8px',
+            border: '1px solid rgba(239,68,68,0.35)',
+            background: 'rgba(239,68,68,0.12)',
+            color: '#f87171',
+            fontSize: '12px',
+            fontWeight: '700',
+            cursor: deletingSessionId ? 'not-allowed' : 'pointer',
+            opacity: deletingSessionId === sessionDetail.session.sessionId ? 0.6 : 1,
+          }}
+        >
+          <Trash2 size={14} />
+          {deletingSessionId === sessionDetail.session.sessionId ? 'Menghapus...' : 'Hapus'}
+        </button>
+      )}
+    </div>
+  );
 
   useEffect(() => {
     void loadSessions();
@@ -226,13 +314,7 @@ export default function MemberSessionsTab({ memberId, memberNo: _memberNo, membe
                             Admin Layanan: <strong style={{ color: 'var(--text-primary)' }}>{sessionDetail.session.adminLayanan?.fullName || '-'}</strong>
                           </p>
                         </div>
-                        <span
-                          className={`badge ${
-                            sessionDetail.session.pelaksanaan === 'ON_SITE' ? 'badge-blue' : 'badge-purple'
-                          }`}
-                        >
-                          {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On Site' : '🏠 Home Care'}
-                        </span>
+                        {renderSessionActions(sessionDetail)}
                       </div>
 
                       <div style={{ marginBottom: '8px' }}>
@@ -354,13 +436,7 @@ export default function MemberSessionsTab({ memberId, memberNo: _memberNo, membe
                             Admin Layanan: <strong style={{ color: 'var(--text-primary)' }}>{sessionDetail.session.adminLayanan?.fullName || '-'}</strong>
                           </p>
                         </div>
-                        <span
-                          className={`badge ${
-                            sessionDetail.session.pelaksanaan === 'ON_SITE' ? 'badge-blue' : 'badge-purple'
-                          }`}
-                        >
-                          {sessionDetail.session.pelaksanaan === 'ON_SITE' ? '🏥 On Site' : '🏠 Home Care'}
-                        </span>
+                        {renderSessionActions(sessionDetail)}
                       </div>
 
                       <div style={{ marginBottom: '8px' }}>
