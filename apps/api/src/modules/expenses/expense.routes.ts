@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate);
 router.get('/', controller.list);
 router.post('/', uploadMemberDocuments.single('evidence'), controller.create);
+router.patch('/:id', controller.update);
 router.get('/:id/evidence', controller.evidence);
 router.post('/:id/submit', controller.submit);
 router.post('/:id/approve', controller.approve);

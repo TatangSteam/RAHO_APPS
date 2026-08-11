@@ -2,8 +2,8 @@ import { createHash } from 'crypto';
 import { NextFunction, Request, Response } from 'express';
 import { safeDeleteFile, uploadFile } from '@config/minio';
 import { sendSuccess } from '@utils/response';
-import { approvalExpenseSchema, createExpenseSchema, listExpensesQuerySchema, rejectExpenseSchema } from './expense.schema';
-import { approveExpense, createExpense, getExpenseEvidence, listExpenses, payExpense, rejectExpense, submitExpense } from './expense.service';
+import { approvalExpenseSchema, createExpenseSchema, listExpensesQuerySchema, rejectExpenseSchema, updateExpenseSchema } from './expense.schema';
+import { approveExpense, createExpense, getExpenseEvidence, listExpenses, payExpense, rejectExpense, submitExpense, updateExpense } from './expense.service';
 
 export async function create(req: Request, res: Response, next: NextFunction) {
   let uploadedKey: string | undefined;
@@ -32,6 +32,9 @@ export async function create(req: Request, res: Response, next: NextFunction) {
 }
 export async function list(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await listExpenses(req.user.userId, listExpensesQuerySchema.parse(req.query))); } catch (error) { next(error); }
+}
+export async function update(req: Request, res: Response, next: NextFunction) {
+  try { sendSuccess(res, await updateExpense(req.user.userId, req.params.id, updateExpenseSchema.parse(req.body))); } catch (error) { next(error); }
 }
 export async function submit(req: Request, res: Response, next: NextFunction) {
   try { sendSuccess(res, await submitExpense(req.user.userId, req.params.id)); } catch (error) { next(error); }

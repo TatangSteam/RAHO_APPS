@@ -1,10 +1,10 @@
 'use client';
 
-import { assertCaughtError } from '@/lib/caughtError';
 import { FormEvent, useEffect, useState } from 'react';
 import { ReceiptText } from 'lucide-react';
 import { api } from '@/lib/api';
 import { accountingApi, type Account } from '@/lib/accountingApi';
+import { assertCaughtError } from '@/lib/caughtError';
 import { cashBankApi, type CashBankAccount } from '@/lib/cashBankApi';
 import { expenseApi, type Expense } from '@/lib/expenseApi';
 import { showToast } from '@/lib/toast';
@@ -15,9 +15,9 @@ type Branch = { id: string; branchCode: string; name: string };
 export default function ExpensesPage() {
   const user = useAuthStore((state) => state.user);
   const isFinance =
-    user?.roleTemplateName === 'Finance' ||
-    user?.staffCode?.startsWith('FN-') === true ||
-    user?.email.toLowerCase() === 'finance@raho.id';
+    user?.roleTemplateName === 'Finance'
+    || user?.staffCode?.startsWith('FN-') === true
+    || user?.email.toLowerCase() === 'finance@raho.id';
   const [rows, setRows] = useState<Expense[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -25,41 +25,261 @@ export default function ExpensesPage() {
   const [permissions, setPermissions] = useState(new Set<string>());
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   const reload = async () => {
     setLoading(true);
     try {
       const [expenses, branchResponse, coa, cash, access] = await Promise.all([
-        expenseApi.list(), api.get('/branches/all'), accountingApi.accounts(), cashBankApi.listAccounts({ isActive: 'true' }), api.get('/iam/me'),
+        expenseApi.list(),
+        api.get('/branches/all'),
+        accountingApi.accounts(),
+        cashBankApi.listAccounts({ isActive: 'true' }),
+        api.get('/iam/me'),
       ]);
-      setRows(expenses); setBranches(branchResponse.data.data || []); setAccounts(coa.filter((row) => row.type === 'EXPENSE' && row.allowPosting)); setCashAccounts(cash);
+      setRows(expenses);
+      setBranches(branchResponse.data.data || []);
+      setAccounts(coa.filter((row) => row.type === 'EXPENSE' && row.allowPosting));
+      setCashAccounts(cash);
       setPermissions(new Set(access.data.data?.permissions || []));
     } catch (error) {
-      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal memuat expense.'); }
-    finally { setLoading(false); }
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal memuat expense.');
+    } finally {
+      setLoading(false);
+    }
   };
+
   useEffect(() => { void reload(); }, []);
 
   const action = async (operation: () => Promise<unknown>, message: string) => {
-    try { await operation(); showToast.success(message); await reload(); }
-    catch (error) {
-      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Aksi gagal.'); }
+    try {
+      await operation();
+      showToast.success(message);
+      await reload();
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.error?.message || 'Aksi gagal.');
+    }
   };
 
-  return <div className="mx-auto max-w-7xl space-y-6">
-    <header className="flex items-start justify-between gap-4"><div><h1 className="flex items-center gap-2 text-2xl font-semibold"><ReceiptText /> Expense</h1><p className="mt-1 text-sm text-neutral-500">{isFinance ? 'Finance memfinalisasi expense secara mandiri, kemudian membayar dan mem-posting jurnal.' : 'Maker-checker, evidence terlindungi, pembayaran kas/bank, dan jurnal otomatis.'}</p></div>{permissions.has('EXPENSE.CREATE') && <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white" onClick={() => setShowForm((value) => !value)}>Buat expense</button>}</header>
-    {showForm && <ExpenseForm branches={branches} accounts={accounts} cashAccounts={cashAccounts} onSaved={async () => { setShowForm(false); await reload(); }} />}
-    {loading ? <p>Memuat…</p> : <div className="overflow-x-auto rounded-xl border bg-white dark:border-neutral-800 dark:bg-neutral-900"><table className="w-full text-sm"><thead><tr className="text-left"><th className="p-3">Dokumen</th><th className="p-3">Tanggal</th><th className="p-3">Keterangan</th><th className="p-3">Status</th><th className="p-3 text-right">Nominal</th><th className="p-3">Aksi</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t align-top dark:border-neutral-800"><td className="p-3"><strong>{row.expenseNumber}</strong><div className="text-xs text-neutral-500">{row.branch.branchCode} · {row.expenseAccount.code}</div></td><td className="p-3">{new Date(row.expenseDate).toLocaleDateString('id-ID')}</td><td className="p-3">{row.description}<div className="text-xs text-neutral-500">{row.category}</div></td><td className="p-3">{row.status}{row.journalEntry && <div className="text-xs">{row.journalEntry.journalNumber}</div>}</td><td className="p-3 text-right font-mono">Rp {row.amount}</td><td className="p-3"><div className="flex flex-wrap gap-2">{row.status === 'DRAFT' && permissions.has('EXPENSE.CREATE') && <Small onClick={() => action(() => expenseApi.submit(row.id), isFinance ? 'Expense langsung disetujui dan siap dibayar.' : 'Expense diajukan.')}>{isFinance ? 'Finalisasi' : 'Ajukan'}</Small>}{row.status === 'SUBMITTED' && permissions.has('EXPENSE.APPROVE') && <><Small onClick={() => action(() => expenseApi.approve(row.id), 'Expense disetujui.')}>Setujui</Small><Small onClick={() => { const reason = window.prompt('Alasan penolakan'); if (reason) void action(() => expenseApi.reject(row.id, reason), 'Expense ditolak.'); }}>Tolak</Small></>}{row.status === 'APPROVED' && permissions.has('EXPENSE.PAY') && <Small onClick={() => action(() => expenseApi.pay(row.id), 'Expense dibayar dan diposting.')}>Bayar</Small>}{row.evidenceFileUrl && <Small onClick={() => action(async () => { const result = await expenseApi.evidence(row.id); window.open(result.url, '_blank', 'noopener,noreferrer'); }, 'Evidence dibuka.')}>Evidence</Small>}</div></td></tr>)}</tbody></table>{rows.length === 0 && <p className="p-6 text-center text-neutral-500">Belum ada expense.</p>}</div>}
-  </div>;
+  const closeForm = () => {
+    setShowForm(false);
+    setEditingExpense(null);
+  };
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-6">
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-semibold"><ReceiptText /> Expense</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            {isFinance
+              ? 'Finance memfinalisasi expense secara mandiri, kemudian membayar dan mem-posting jurnal.'
+              : 'Maker-checker, evidence terlindungi, pembayaran kas/bank, dan jurnal otomatis.'}
+          </p>
+        </div>
+        {permissions.has('EXPENSE.CREATE') && (
+          <button
+            type="button"
+            className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white"
+            onClick={() => {
+              setEditingExpense(null);
+              setShowForm((value) => !value);
+            }}
+          >
+            Buat expense
+          </button>
+        )}
+      </header>
+
+      {(showForm || editingExpense) && (
+        <ExpenseForm
+          key={editingExpense?.id || 'new-expense'}
+          expense={editingExpense}
+          branches={branches}
+          accounts={accounts}
+          cashAccounts={cashAccounts}
+          onCancel={closeForm}
+          onSaved={async () => {
+            closeForm();
+            await reload();
+          }}
+        />
+      )}
+
+      {loading ? <p>Memuat…</p> : (
+        <div className="overflow-x-auto rounded-xl border bg-white dark:border-neutral-800 dark:bg-neutral-900">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left">
+                <th className="p-3">Dokumen</th>
+                <th className="p-3">Tanggal</th>
+                <th className="p-3">Keterangan</th>
+                <th className="p-3">Status</th>
+                <th className="p-3 text-right">Nominal</th>
+                <th className="p-3">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const canEdit = row.status === 'DRAFT' || row.status === 'REJECTED';
+                return (
+                  <tr key={row.id} className="border-t align-top dark:border-neutral-800">
+                    <td className="p-3">
+                      <strong>{row.expenseNumber}</strong>
+                      <div className="text-xs text-neutral-500">{row.branch.branchCode} · {row.expenseAccount.code}</div>
+                    </td>
+                    <td className="p-3">{new Date(row.expenseDate).toLocaleDateString('id-ID')}</td>
+                    <td className="p-3">{row.description}<div className="text-xs text-neutral-500">{row.category}</div></td>
+                    <td className="p-3">
+                      {row.status}
+                      {row.rejectionReason && <div className="text-xs text-red-600">{row.rejectionReason}</div>}
+                      {row.journalEntry && <div className="text-xs">{row.journalEntry.journalNumber}</div>}
+                    </td>
+                    <td className="p-3 text-right font-mono">Rp {row.amount}</td>
+                    <td className="p-3">
+                      <div className="flex flex-wrap gap-2">
+                        {canEdit && permissions.has('EXPENSE.CREATE') && (
+                          <>
+                            <Small onClick={() => { setShowForm(false); setEditingExpense(row); }}>Edit</Small>
+                            <Small onClick={() => action(
+                              () => expenseApi.submit(row.id),
+                              isFinance ? 'Expense langsung disetujui dan siap dibayar.' : 'Expense diajukan.',
+                            )}>
+                              {isFinance ? 'Finalisasi' : 'Ajukan'}
+                            </Small>
+                          </>
+                        )}
+                        {row.status === 'SUBMITTED' && permissions.has('EXPENSE.APPROVE') && (
+                          <>
+                            <Small onClick={() => action(() => expenseApi.approve(row.id), 'Expense disetujui.')}>Setujui</Small>
+                            <Small onClick={() => {
+                              const reason = window.prompt('Alasan penolakan');
+                              if (reason) void action(() => expenseApi.reject(row.id, reason), 'Expense ditolak.');
+                            }}>Tolak</Small>
+                          </>
+                        )}
+                        {row.status === 'APPROVED' && permissions.has('EXPENSE.PAY') && (
+                          <Small onClick={() => action(() => expenseApi.pay(row.id), 'Expense dibayar dan diposting.')}>Bayar</Small>
+                        )}
+                        {row.evidenceFileUrl && (
+                          <Small onClick={() => action(async () => {
+                            const result = await expenseApi.evidence(row.id);
+                            window.open(result.url, '_blank', 'noopener,noreferrer');
+                          }, 'Evidence dibuka.')}>
+                            Evidence
+                          </Small>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {rows.length === 0 && <p className="p-6 text-center text-neutral-500">Belum ada expense.</p>}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function ExpenseForm({ branches, accounts, cashAccounts, onSaved }: { branches: Branch[]; accounts: Account[]; cashAccounts: CashBankAccount[]; onSaved: () => void }) {
-  const [form, setForm] = useState({ branchId: '', expenseDate: new Date().toISOString().slice(0, 10), category: '', description: '', amount: '', expenseAccountCode: '', cashBankAccountId: '' });
+function ExpenseForm({
+  expense,
+  branches,
+  accounts,
+  cashAccounts,
+  onCancel,
+  onSaved,
+}: {
+  expense: Expense | null;
+  branches: Branch[];
+  accounts: Account[];
+  cashAccounts: CashBankAccount[];
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState({
+    branchId: expense?.branch.id || '',
+    expenseDate: expense?.expenseDate.slice(0, 10) || new Date().toISOString().slice(0, 10),
+    category: expense?.category || '',
+    description: expense?.description || '',
+    amount: expense?.amount || '',
+    expenseAccountCode: expense?.expenseAccount.code || '',
+    cashBankAccountId: expense?.cashBankAccount.id || '',
+  });
   const [evidence, setEvidence] = useState<File | null>(null);
-  const submit = async (event: FormEvent) => { event.preventDefault(); try { const data = new FormData(); Object.entries(form).forEach(([key, value]) => data.append(key, value)); data.append('postingKey', crypto.randomUUID()); if (evidence) data.append('evidence', evidence); await expenseApi.create(data); showToast.success('Draft expense dibuat.'); onSaved(); } catch (error) {
-      assertCaughtError(error); showToast.error(error.response?.data?.error?.message || 'Gagal membuat expense.'); } };
-  return <form onSubmit={submit} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-3 dark:border-neutral-800 dark:bg-neutral-900"><Field label="Cabang"><select required value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value, cashBankAccountId: '' })}><option value="">Pilih</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} — {branch.name}</option>)}</select></Field><Field label="Tanggal"><input required type="date" value={form.expenseDate} onChange={(e) => setForm({ ...form, expenseDate: e.target.value })} /></Field><Field label="Kategori"><input required value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} /></Field><Field label="Akun beban"><select required value={form.expenseAccountCode} onChange={(e) => setForm({ ...form, expenseAccountCode: e.target.value })}><option value="">Pilih</option>{accounts.map((account) => <option key={account.id} value={account.code}>{account.code} — {account.name}</option>)}</select></Field><Field label="Kas/bank"><select required value={form.cashBankAccountId} onChange={(e) => setForm({ ...form, cashBankAccountId: e.target.value })}><option value="">Pilih</option>{cashAccounts.filter((account) => account.branchId === form.branchId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}</select></Field><Field label="Nominal"><input required inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></Field><Field label="Keterangan"><input required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field><Field label="Evidence"><input required type="file" accept="image/*,application/pdf" onChange={(e) => setEvidence(e.target.files?.[0] || null)} /></Field><button className="self-end rounded-lg bg-blue-600 px-4 py-2 text-white">Simpan draft</button></form>;
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    try {
+      if (expense) {
+        await expenseApi.update(expense.id, {
+          expenseDate: form.expenseDate,
+          category: form.category,
+          description: form.description,
+          amount: form.amount,
+          expenseAccountCode: form.expenseAccountCode,
+          cashBankAccountId: form.cashBankAccountId,
+        });
+        showToast.success('Expense dikoreksi dan dikembalikan ke DRAFT.');
+      } else {
+        const data = new FormData();
+        Object.entries(form).forEach(([key, value]) => data.append(key, value));
+        data.append('postingKey', crypto.randomUUID());
+        if (evidence) data.append('evidence', evidence);
+        await expenseApi.create(data);
+        showToast.success('Draft expense dibuat.');
+      }
+      await onSaved();
+    } catch (error) {
+      assertCaughtError(error);
+      showToast.error(error.response?.data?.error?.message || 'Gagal menyimpan expense.');
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-3 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="md:col-span-3">
+        <strong>{expense ? `Koreksi ${expense.expenseNumber}` : 'Expense baru'}</strong>
+        {expense?.rejectionReason && <p className="text-sm text-red-600">Ditolak: {expense.rejectionReason}</p>}
+      </div>
+      <Field label="Cabang">
+        <select required disabled={Boolean(expense)} value={form.branchId} onChange={(event) => setForm({ ...form, branchId: event.target.value, cashBankAccountId: '' })}>
+          <option value="">Pilih</option>
+          {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branchCode} — {branch.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Tanggal"><input required type="date" value={form.expenseDate} onChange={(event) => setForm({ ...form, expenseDate: event.target.value })} /></Field>
+      <Field label="Kategori"><input required value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /></Field>
+      <Field label="Akun beban">
+        <select required value={form.expenseAccountCode} onChange={(event) => setForm({ ...form, expenseAccountCode: event.target.value })}>
+          <option value="">Pilih</option>
+          {accounts.map((account) => <option key={account.id} value={account.code}>{account.code} — {account.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Kas/bank">
+        <select required value={form.cashBankAccountId} onChange={(event) => setForm({ ...form, cashBankAccountId: event.target.value })}>
+          <option value="">Pilih</option>
+          {cashAccounts.filter((account) => account.branchId === form.branchId).map((account) => <option key={account.id} value={account.id}>{account.code} — {account.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Nominal"><input required inputMode="decimal" value={form.amount} onChange={(event) => setForm({ ...form, amount: event.target.value })} /></Field>
+      <Field label="Keterangan"><input required value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></Field>
+      {!expense && <Field label="Evidence"><input required type="file" accept="image/*,application/pdf" onChange={(event) => setEvidence(event.target.files?.[0] || null)} /></Field>}
+      <div className="flex items-end justify-end gap-2 md:col-span-3">
+        <button type="button" className="rounded-lg border px-4 py-2" onClick={onCancel}>Batal</button>
+        <button className="rounded-lg bg-blue-600 px-4 py-2 text-white">{expense ? 'Simpan koreksi' : 'Simpan draft'}</button>
+      </div>
+    </form>
+  );
 }
 
-function Small({ children, onClick }: { children: React.ReactNode; onClick: () => void }) { return <button onClick={onClick} className="rounded border px-2 py-1 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800">{children}</button>; }
-function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1 text-sm [&_input]:rounded-lg [&_input]:border [&_input]:bg-transparent [&_input]:px-3 [&_input]:py-2 [&_select]:rounded-lg [&_select]:border [&_select]:bg-transparent [&_select]:px-3 [&_select]:py-2">{label}{children}</label>; }
+function Small({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+  return <button type="button" onClick={onClick} className="rounded border px-2 py-1 text-xs hover:bg-neutral-100 dark:hover:bg-neutral-800">{children}</button>;
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return <label className="grid gap-1 text-sm [&_input]:rounded-lg [&_input]:border [&_input]:bg-transparent [&_input]:px-3 [&_input]:py-2 [&_select]:rounded-lg [&_select]:border [&_select]:bg-transparent [&_select]:px-3 [&_select]:py-2">{label}{children}</label>;
+}

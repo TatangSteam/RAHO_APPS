@@ -7,7 +7,7 @@ import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { postJournal } from '@modules/accounting/accounting.service';
 import { extractKeyFromUrl, getPresignedUrl } from '@config/minio';
 import { logAudit } from '@utils/auditLog';
-import type { CreateExpenseInput, ListExpensesQuery } from './expense.schema';
+import type { CreateExpenseInput, ListExpensesQuery, UpdateExpenseInput } from './expense.schema';
 import { decideApprovalInTransaction, startApprovalInTransaction } from '@modules/workflow/approval.service';
 import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import {
@@ -26,7 +26,7 @@ interface ExpenseEvidence {
 const includeExpense = {
   branch: { select: { id: true, branchCode: true, name: true } },
   expenseAccount: { select: { code: true, name: true } },
-  cashBankAccount: { select: { code: true, name: true, type: true, coaAccount: { select: { code: true, name: true } } } },
+  cashBankAccount: { select: { id: true, code: true, name: true, type: true, coaAccount: { select: { code: true, name: true } } } },
   creator: { select: { id: true, email: true, profile: { select: { fullName: true } } } },
   reviewer: { select: { id: true, email: true, profile: { select: { fullName: true } } } },
   payer: { select: { id: true, email: true, profile: { select: { fullName: true } } } },
@@ -103,6 +103,104 @@ export async function createExpense(userId: string, input: CreateExpenseInput, e
   });
   await logAudit({ userId, branchId: expense.branchId, action: 'CREATE', resource: 'Expense', resourceId: expense.id, entityCode: expense.expenseNumber, afterData: { status: expense.status, amount: expense.amount, category: expense.category } });
   return { expense: formatExpense(expense), idempotentReplay: false };
+}
+
+export async function updateExpense(userId: string, id: string, input: UpdateExpenseInput) {
+  const current = await prisma.expense.findUnique({ where: { id } });
+  if (!current) throw errors.notFound('Expense tidak ditemukan.');
+  await assertBranchAccess(userId, current.branchId);
+  await assertPermission(userId, PERMISSIONS.EXPENSE_CREATE, current.branchId);
+  if (current.createdBy !== userId) throw errors.forbidden('Hanya maker yang dapat mengoreksi expense.');
+  if (current.status !== ExpenseStatus.DRAFT && current.status !== ExpenseStatus.REJECTED) {
+    throw errors.conflict('EXPENSE_EDIT_STATUS_INVALID', 'Hanya expense DRAFT atau REJECTED yang dapat dikoreksi.');
+  }
+
+  const expenseAccount = input.expenseAccountCode
+    ? await prisma.account.findUnique({ where: { code: input.expenseAccountCode.toUpperCase() } })
+    : null;
+  if (input.expenseAccountCode && (
+    !expenseAccount?.isActive
+    || !expenseAccount.allowPosting
+    || expenseAccount.type !== AccountType.EXPENSE
+  )) {
+    throw errors.badRequest('EXPENSE_ACCOUNT_INVALID', 'Expense account harus berupa akun beban aktif yang menerima posting.');
+  }
+  const cashBank = input.cashBankAccountId
+    ? await prisma.cashBankAccount.findUnique({ where: { id: input.cashBankAccountId } })
+    : null;
+  if (input.cashBankAccountId && (!cashBank?.isActive || cashBank.branchId !== current.branchId)) {
+    throw errors.badRequest('EXPENSE_CASH_BANK_INVALID', 'Akun kas/bank tidak aktif atau bukan milik cabang expense.');
+  }
+
+  const merged: CreateExpenseInput = {
+    postingKey: current.postingKey,
+    branchId: current.branchId,
+    expenseDate: input.expenseDate ?? current.expenseDate,
+    category: input.category ?? current.category,
+    description: input.description ?? current.description,
+    amount: input.amount ?? current.amount.toFixed(2),
+    expenseAccountCode: input.expenseAccountCode?.toUpperCase() ?? '',
+    cashBankAccountId: input.cashBankAccountId ?? current.cashBankAccountId,
+  };
+  if (!merged.expenseAccountCode) {
+    const existingAccount = await prisma.account.findUnique({ where: { id: current.expenseAccountId } });
+    if (!existingAccount) throw errors.conflict('EXPENSE_ACCOUNT_MISSING', 'Akun beban expense tidak ditemukan.');
+    merged.expenseAccountCode = existingAccount.code;
+  }
+  const evidence: ExpenseEvidence = {
+    fileUrl: current.evidenceFileUrl ?? undefined,
+    fileName: current.evidenceFileName ?? undefined,
+    fileSize: current.evidenceFileSize ?? undefined,
+    mimeType: current.evidenceMimeType ?? undefined,
+    checksum: current.evidenceChecksum ?? undefined,
+  };
+  const updated = await prisma.expense.update({
+    where: { id },
+    data: {
+      expenseDate: merged.expenseDate,
+      category: merged.category,
+      description: merged.description,
+      amount: new Prisma.Decimal(merged.amount),
+      expenseAccountId: expenseAccount?.id ?? current.expenseAccountId,
+      cashBankAccountId: merged.cashBankAccountId,
+      payloadHash: hashPayload(merged, evidence),
+      status: ExpenseStatus.DRAFT,
+      rejectionReason: null,
+      approvalNote: null,
+      reviewedBy: null,
+      reviewedAt: null,
+      submittedAt: null,
+    },
+    include: includeExpense,
+  });
+  await logAudit({
+    userId,
+    branchId: current.branchId,
+    action: 'UPDATE',
+    resource: 'Expense',
+    resourceId: current.id,
+    entityCode: current.expenseNumber,
+    beforeData: {
+      status: current.status,
+      expenseDate: current.expenseDate,
+      category: current.category,
+      description: current.description,
+      amount: current.amount,
+      expenseAccountId: current.expenseAccountId,
+      cashBankAccountId: current.cashBankAccountId,
+    },
+    afterData: {
+      status: updated.status,
+      expenseDate: updated.expenseDate,
+      category: updated.category,
+      description: updated.description,
+      amount: updated.amount,
+      expenseAccountId: updated.expenseAccountId,
+      cashBankAccountId: updated.cashBankAccountId,
+    },
+    description: `Expense ${current.expenseNumber} dikoreksi dan dikembalikan ke DRAFT.`,
+  });
+  return formatExpense(updated);
 }
 
 export async function submitExpense(userId: string, id: string) {

@@ -11,6 +11,11 @@ export const createExpenseSchema = z.object({
   cashBankAccountId: z.string().cuid(),
 });
 
+export const updateExpenseSchema = createExpenseSchema
+  .omit({ postingKey: true, branchId: true })
+  .partial()
+  .refine((input) => Object.keys(input).length > 0, 'Minimal satu field expense harus diubah.');
+
 export const approvalExpenseSchema = z.object({ note: z.string().trim().max(500).optional() });
 export const rejectExpenseSchema = z.object({ reason: z.string().trim().min(3).max(500) });
 export const listExpensesQuerySchema = z.object({
@@ -19,4 +24,5 @@ export const listExpensesQuerySchema = z.object({
 });
 
 export type CreateExpenseInput = z.infer<typeof createExpenseSchema>;
+export type UpdateExpenseInput = z.infer<typeof updateExpenseSchema>;
 export type ListExpensesQuery = z.infer<typeof listExpensesQuerySchema>;

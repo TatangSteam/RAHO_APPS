@@ -24,7 +24,9 @@ export type PurchaseRequest = {
 };
 export type SupplierInvoiceLine = { id: string; purchaseOrderItemId: string; billedQty: string; unitPrice: string; lineTotal: string };
 export type PurchaseOrder = { id: string; poNumber: string; branchId: string; orderDate: string; status: string; totalAmount: string; supplier: Supplier; items: Array<{ id: string; nameSnapshot: string; orderedQty: string; receivedQty: string; unitPrice: string }>; goodsReceipts: Array<{ id: string; receiptNumber: string; totalValue: string }>; invoices: Array<{ id: string; invoiceNumber: string; lines: SupplierInvoiceLine[] }> };
-export type SupplierInvoice = { id: string; invoiceNumber: string; supplierInvoiceNumber: string; branchId: string; dueDate: string; amount: string; paidAmount: string; balanceAmount: string; status: string; supplier: Supplier; purchaseOrder: { poNumber: string }; journalEntry: { journalNumber: string }; lines: SupplierInvoiceLine[]; payments: Array<{ id: string; paymentNumber: string; amount: string }> };
+export type SupplierPaymentRefund = { id: string; refundNumber: string; amount: string; refundDate: string; reason: string };
+export type SupplierPayment = { id: string; paymentNumber: string; amount: string; paymentDate: string; cashBankAccountId: string; refunds: SupplierPaymentRefund[] };
+export type SupplierInvoice = { id: string; invoiceNumber: string; supplierInvoiceNumber: string; branchId: string; dueDate: string; amount: string; paidAmount: string; balanceAmount: string; status: string; supplier: Supplier; purchaseOrder: { poNumber: string }; journalEntry: { journalNumber: string }; lines: SupplierInvoiceLine[]; payments: SupplierPayment[] };
 const unwrap = <T>(response: { data: { data: T } }) => response.data.data;
 
 export const purchasingApi = {
@@ -65,4 +67,12 @@ export const purchasingApi = {
     }));
   },
   payInvoice: async (id: string, cashBankAccountId: string, amount: string, paymentReference: string) => unwrap(await api.post(`/purchasing/supplier-invoices/${id}/payments`, { postingKey: crypto.randomUUID(), cashBankAccountId, paymentDate: new Date().toISOString(), amount, paymentReference })),
+  refundSupplierPayment: async (id: string, data: { cashBankAccountId: string; amount: string; reason: string; referenceNumber?: string }) => unwrap(await api.post(`/purchasing/supplier-payments/${id}/refunds`, {
+    postingKey: crypto.randomUUID(),
+    cashBankAccountId: data.cashBankAccountId,
+    refundDate: new Date().toISOString(),
+    amount: data.amount,
+    reason: data.reason,
+    ...(data.referenceNumber ? { referenceNumber: data.referenceNumber } : {}),
+  })),
 };
