@@ -24,7 +24,7 @@ export class MaterialUsageService {
   ) {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, sessionCode: true, branchId: true, isCompleted: true },
+      select: { id: true, sessionCode: true, branchId: true, isCompleted: true, materialPolicyVersion: true },
     });
     if (!session) throw errors.notFound('Sesi tidak ditemukan.');
     if (session.branchId !== authorizedBranchId) throw errors.forbidden('Sesi berada di luar cabang yang diizinkan.');
@@ -35,12 +35,38 @@ export class MaterialUsageService {
     const inventoryItem = await prisma.inventoryItem.findUnique({
       where: { id: data.inventoryItemId },
       include: {
-        masterProduct: true,
+        masterProduct: {
+          include: {
+            kitComponents: { select: { id: true } },
+            componentOfKits: {
+              where: {
+                isRequired: true,
+                kitProduct: { sku: 'PRD-INF-SET-002', isActive: true },
+              },
+              select: { quantity: true },
+            },
+          },
+        },
         balances: true,
       },
     });
     if (!inventoryItem || inventoryItem.branchId !== session.branchId || !inventoryItem.masterProduct.isActive) {
       throw errors.notFound('Item inventory aktif tidak ditemukan dalam cabang sesi.');
+    }
+    if (inventoryItem.masterProduct.kitComponents.length > 0) {
+      throw errors.unprocessable(
+        'VIRTUAL_KIT_NOT_STOCKABLE',
+        `"${inventoryItem.masterProduct.name}" adalah kit virtual. Catat pemakaian melalui komponen fisiknya.`,
+      );
+    }
+    const automaticKitComponent = session.materialPolicyVersion >= 2
+      ? inventoryItem.masterProduct.componentOfKits[0]
+      : null;
+    if (automaticKitComponent && !new Prisma.Decimal(data.quantity).equals(automaticKitComponent.quantity)) {
+      throw errors.unprocessable(
+        'INFUS_KIT_QUANTITY_INVALID',
+        `Jumlah ${inventoryItem.masterProduct.name} wajib ${automaticKitComponent.quantity.toFixed(4)} ${inventoryItem.masterProduct.usageUnit} untuk setiap sesi.`,
+      );
     }
     const conversionFactor = inventoryItem.masterProduct.conversionFactor;
     if (conversionFactor.lessThanOrEqualTo(0)) {
@@ -153,7 +179,24 @@ export class MaterialUsageService {
   async deleteMaterialUsage(sessionId: string, usageId: string, userId: string, authorizedBranchId: string) {
     const usage = await prisma.materialUsage.findFirst({
       where: { id: usageId, treatmentSessionId: sessionId },
-      include: { session: { select: { branchId: true, isCompleted: true } } },
+      include: {
+        session: { select: { branchId: true, isCompleted: true, materialPolicyVersion: true } },
+        inventoryItem: {
+          select: {
+            masterProduct: {
+              select: {
+                componentOfKits: {
+                  where: {
+                    isRequired: true,
+                    kitProduct: { sku: 'PRD-INF-SET-002', isActive: true },
+                  },
+                  select: { id: true },
+                },
+              },
+            },
+          },
+        },
+      },
     });
     if (!usage) throw errors.notFound('Material usage tidak ditemukan.');
     if (usage.session.branchId !== authorizedBranchId) throw errors.forbidden('Sesi berada di luar cabang yang diizinkan.');
@@ -161,6 +204,15 @@ export class MaterialUsageService {
     await assertPermission(userId, PERMISSIONS.TREATMENT_MATERIAL_RECORD, usage.session.branchId);
     if (usage.session.isCompleted || usage.status !== MaterialUsageStatus.DRAFT) {
       throw errors.conflict('MATERIAL_USAGE_IMMUTABLE', 'Hanya material usage DRAFT yang dapat dihapus.');
+    }
+    if (
+      usage.session.materialPolicyVersion >= 2
+      && usage.inventoryItem.masterProduct.componentOfKits.length > 0
+    ) {
+      throw errors.conflict(
+        'AUTOMATIC_MATERIAL_REQUIRED',
+        'Komponen wajib Infus Set + Pelengkap dicatat otomatis dan tidak dapat dihapus.',
+      );
     }
     await prisma.materialUsage.delete({ where: { id: usage.id } });
     await logAudit({
@@ -199,7 +251,10 @@ export class MaterialUsageService {
 
   async getAvailableInventoryItems(branchId: string) {
     const items = await prisma.inventoryItem.findMany({
-      where: { branchId, masterProduct: { isActive: true } },
+      where: {
+        branchId,
+        masterProduct: { isActive: true, kitComponents: { none: {} } },
+      },
       include: {
         masterProduct: true,
         balances: true,

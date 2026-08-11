@@ -26,7 +26,10 @@ describe('automatic infusion kit material drafts', () => {
       },
       materialUsage: {
         findMany: jest.fn().mockResolvedValue([
-          { inventoryItem: { masterProductId: 'product-infus' } },
+          {
+            quantity: new Prisma.Decimal(1),
+            inventoryItem: { masterProductId: 'product-infus' },
+          },
         ]),
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
@@ -83,6 +86,37 @@ describe('automatic infusion kit material drafts', () => {
       code: 'INFUS_KIT_NOT_IN_BRANCH_INVENTORY',
       message: expect.stringContaining('Oneswab'),
     });
+    expect(client.materialUsage.createMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects a changed quantity for an existing mandatory component', async () => {
+    const client = {
+      productKitComponent: {
+        findMany: jest.fn().mockResolvedValue([
+          component('swab', 'PRD-MED-SWB-001', 'Oneswab', '2'),
+        ]),
+      },
+      materialUsage: {
+        findMany: jest.fn().mockResolvedValue([{
+          quantity: new Prisma.Decimal(1),
+          inventoryItem: { masterProductId: 'product-swab' },
+        }]),
+        createMany: jest.fn(),
+      },
+      inventoryItem: { findMany: jest.fn() },
+    } as any;
+
+    await expect(ensureAutomaticInfusionKitMaterialDrafts(client, {
+      sessionId: 'session-1',
+      branchId: 'branch-1',
+      materialPolicyVersion: 2,
+      recordedBy: 'user-1',
+    })).rejects.toMatchObject({
+      status: 422,
+      code: 'INFUS_KIT_QUANTITY_INVALID',
+      message: expect.stringContaining('Oneswab'),
+    });
+    expect(client.inventoryItem.findMany).not.toHaveBeenCalled();
     expect(client.materialUsage.createMany).not.toHaveBeenCalled();
   });
 

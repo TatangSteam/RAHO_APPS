@@ -167,7 +167,9 @@ export class InventoryController {
       const { category, isActive, search, limit } = req.query;
 
       // Build where clause
-      const where: Prisma.MasterProductWhereInput = {};
+      const where: Prisma.MasterProductWhereInput = {
+        kitComponents: { none: {} },
+      };
 
       if (category) {
         where.category = category as ProductCategory;
@@ -310,6 +312,7 @@ export class InventoryController {
       const lowStockItems = await prisma.inventoryItem.findMany({
         where: {
           branchId,
+          masterProduct: { kitComponents: { none: {} } },
           stock: {
             lte: prisma.inventoryItem.fields.minThreshold,
           },

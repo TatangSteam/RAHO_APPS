@@ -194,6 +194,7 @@ export class StockRequestCreationService {
       where: { 
         id: { in: masterProductIds },
         isActive: true,
+        kitComponents: { none: {} },
       },
     });
 
@@ -206,7 +207,7 @@ export class StockRequestCreationService {
       throw {
         status: 404,
         code: 'PRODUCT_NOT_FOUND',
-        message: `Beberapa produk tidak ditemukan atau tidak aktif: ${missingIds.join(', ')}`,
+        message: `Beberapa produk tidak ditemukan, tidak aktif, atau merupakan kit virtual yang tidak dapat direstock: ${missingIds.join(', ')}`,
       };
     }
 

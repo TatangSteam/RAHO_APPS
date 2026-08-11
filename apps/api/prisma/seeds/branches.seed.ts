@@ -9,10 +9,10 @@ const INFUS_SET_PELENGKAP = {
   baseUnit: 'Piece',
   usageUnit: 'Piece',
   conversionFactor: 1,
-  description: 'Set infus lengkap dengan pelengkap - WAJIB otomatis digunakan per sesi terapi',
+  description: 'Kit virtual Infus Set + Pelengkap. Stok dan restock dicatat melalui komponen fisiknya.',
   isAutoUsedPerSession: true,
-  isAutoAddedToBranch: true,
-  defaultInitialStock: 100,
+  isAutoAddedToBranch: false,
+  defaultInitialStock: null,
 };
 
 const DEFAULT_INFUS_SET_STOCK = 100;
@@ -27,7 +27,7 @@ async function ensureInfusSetMasterProduct(prisma: PrismaClient) {
   const masterProduct = await prisma.masterProduct.upsert({
     where: { sku: INFUS_SET_PELENGKAP.sku },
     update: {
-      isAutoAddedToBranch: true,
+      isAutoAddedToBranch: false,
       defaultInitialStock: INFUS_SET_PELENGKAP.defaultInitialStock,
       isAutoUsedPerSession: true,
     },
@@ -82,7 +82,7 @@ export async function seedBranches(prisma: PrismaClient) {
   console.log('🏢 Seeding branches...');
 
   // First, ensure Infus Set + Pelengkap master product exists
-  const infusSetProduct = await ensureInfusSetMasterProduct(prisma);
+  await ensureInfusSetMasterProduct(prisma);
 
   const branchPusat = await prisma.branch.upsert({
     where: { branchCode: 'PST' },
@@ -130,9 +130,8 @@ export async function seedBranches(prisma: PrismaClient) {
 
   // Add Infus Set + Pelengkap to all branches
   console.log('\n💉 Adding Infus Set + Pelengkap to all branches...');
-  await addInfusSetToBranch(prisma, branchPusat.id, branchPusat.branchCode, infusSetProduct.id);
-  await addInfusSetToBranch(prisma, branchBandung.id, branchBandung.branchCode, infusSetProduct.id);
-  await addInfusSetToBranch(prisma, branchSurabaya.id, branchSurabaya.branchCode, infusSetProduct.id);
+  // The bundle is a virtual kit. Branch stock is provisioned only for its
+  // physical components by the regular auto-add flow.
 
   return { branchPusat, branchBandung, branchSurabaya };
 }

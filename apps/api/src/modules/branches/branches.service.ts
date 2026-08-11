@@ -204,26 +204,13 @@ async function autoAddProductsToBranchInventory(branchId: string) {
     where: {
       isAutoAddedToBranch: true,
       isActive: true,
+      kitComponents: { none: {} },
     },
   });
 
-  // Also ensure Infus Set + Pelengkap is always added (even if not flagged)
-  const infusSetProduct = await prisma.masterProduct.findFirst({
-    where: {
-      OR: [
-        { sku: 'PRD-INF-SET-002' },
-        { sku: 'PRD-INF-SET-001' },
-      ],
-      isActive: true,
-    },
-    orderBy: { sku: 'desc' }, // PRD-INF-SET-002 first
-  });
-
-  // Combine products, ensuring no duplicates
-  const productsToAdd = [...autoAddProducts];
-  if (infusSetProduct && !productsToAdd.some(p => p.id === infusSetProduct.id)) {
-    productsToAdd.push(infusSetProduct);
-  }
+  // Kit products are virtual definitions. Only their physical components are
+  // linked to branch inventory and replenished.
+  const productsToAdd = autoAddProducts;
 
   if (productsToAdd.length === 0) {
     return { productsAdded: 0 };

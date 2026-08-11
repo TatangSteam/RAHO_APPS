@@ -55,11 +55,18 @@ function bomCode(productCode: string | null, version: number): string {
 async function validateBomProducts(client: DbClient, items: CreateTreatmentBomInput['items']) {
   const productIds = items.map((item) => item.masterProductId);
   const products = await client.masterProduct.findMany({
-    where: { id: { in: productIds }, isActive: true },
+    where: {
+      id: { in: productIds },
+      isActive: true,
+      kitComponents: { none: {} },
+    },
     select: { id: true, usageUnit: true },
   });
   if (products.length !== productIds.length) {
-    throw errors.badRequest('BOM_PRODUCT_INVALID', 'Satu atau lebih product BOM tidak aktif atau tidak ditemukan.');
+    throw errors.badRequest(
+      'BOM_PRODUCT_INVALID',
+      'Satu atau lebih product BOM tidak aktif, tidak ditemukan, atau merupakan kit virtual.',
+    );
   }
   return new Map(products.map((product) => [product.id, product]));
 }

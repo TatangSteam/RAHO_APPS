@@ -43,13 +43,28 @@ export async function ensureAutomaticInfusionKitMaterialDrafts(
 
   const existingMaterials = await client.materialUsage.findMany({
     where: { treatmentSessionId: input.sessionId },
-    select: { inventoryItem: { select: { masterProductId: true } } },
+    select: {
+      quantity: true,
+      inventoryItem: { select: { masterProductId: true } },
+    },
   });
-  const existingProductIds = new Set(
-    existingMaterials.map((material) => material.inventoryItem.masterProductId),
+  const existingByProductId = new Map(
+    existingMaterials.map((material) => [material.inventoryItem.masterProductId, material]),
   );
+  const invalidComponents = kitComponents.filter((component) => {
+    const existing = existingByProductId.get(component.componentProductId);
+    return existing && !existing.quantity.equals(component.quantity);
+  });
+  if (invalidComponents.length > 0) {
+    throw errors.unprocessable(
+      'INFUS_KIT_QUANTITY_INVALID',
+      `Jumlah komponen "Infus Set + Pelengkap" tidak sesuai konfigurasi: ${invalidComponents
+        .map((component) => `${component.componentProduct.name} harus ${component.quantity.toFixed(4)} ${component.componentProduct.usageUnit}`)
+        .join(', ')}.`,
+    );
+  }
   const missingComponents = kitComponents.filter(
-    (component) => !existingProductIds.has(component.componentProductId),
+    (component) => !existingByProductId.has(component.componentProductId),
   );
   if (missingComponents.length === 0) return 0;
 

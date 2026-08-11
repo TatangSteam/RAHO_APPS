@@ -252,7 +252,11 @@ export class LogisticsService {
   private async validateProducts(productIds: string[]) {
     const uniqueIds = Array.from(new Set(productIds));
     const products = await prisma.masterProduct.findMany({
-      where: { id: { in: uniqueIds }, isActive: true },
+      where: {
+        id: { in: uniqueIds },
+        isActive: true,
+        kitComponents: { none: {} },
+      },
       select: { id: true },
     });
 
@@ -260,7 +264,7 @@ export class LogisticsService {
       throw {
         status: 404,
         code: 'PRODUCT_NOT_FOUND',
-        message: 'Beberapa produk tidak ditemukan atau tidak aktif',
+        message: 'Beberapa produk tidak ditemukan, tidak aktif, atau merupakan kit virtual',
       };
     }
   }
@@ -591,6 +595,7 @@ export class LogisticsService {
     const showQty = centralStockVisibleRoles.has(actor.role);
     const products = await prisma.masterProduct.findMany({
       where: {
+        kitComponents: { none: {} },
         ...(query.includeInactive ? {} : { isActive: true }),
         ...(query.category ? { category: query.category as ProductCategory } : {}),
         ...(query.search

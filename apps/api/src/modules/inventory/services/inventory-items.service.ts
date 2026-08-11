@@ -39,7 +39,10 @@ export class InventoryItemsService {
    */
   async getInventoryItems(branchId: string) {
     const items = await prisma.inventoryItem.findMany({
-      where: { branchId },
+      where: {
+        branchId,
+        masterProduct: { kitComponents: { none: {} } },
+      },
       include: {
         masterProduct: {
           select: {
@@ -117,6 +120,7 @@ export class InventoryItemsService {
     const items = await prisma.inventoryItem.findMany({
       where: {
         ...where,
+        masterProduct: { kitComponents: { none: {} } },
         stock: {
           lte: prisma.inventoryItem.fields.minThreshold,
         },

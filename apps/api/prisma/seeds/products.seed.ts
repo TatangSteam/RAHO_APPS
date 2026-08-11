@@ -24,7 +24,7 @@ export async function seedProducts(prisma: PrismaClient) {
     // ==================== INFUS (INF) ====================
     { sku: 'PRD-INF-IFA-001', name: 'IFA 500ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA 500ml' },
     { sku: 'PRD-INF-IFA-002', name: 'IFA + NO 2,5ml', category: ProductCategory.MEDICINE, unit: 'Botol', baseUnit: 'Botol', usageUnit: 'Botol', conversionFactor: 1, description: 'IFA + NO 2,5ml (default per terapi)' },
-    { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus standar' },
+    { sku: 'PRD-INF-SET-001', name: 'Infus Set', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Set infus standar', isAutoAddedToBranch: true },
     { 
       sku: 'PRD-INF-SET-002', 
       name: 'Infus Set + Pelengkap', 
@@ -33,10 +33,10 @@ export async function seedProducts(prisma: PrismaClient) {
       baseUnit: 'Piece', 
       usageUnit: 'Piece', 
       conversionFactor: 1, 
-      description: 'Set infus lengkap dengan pelengkap - WAJIB otomatis digunakan per sesi terapi',
+      description: 'Kit virtual Infus Set + Pelengkap. Stok dan restock dicatat melalui komponen fisiknya.',
       isAutoUsedPerSession: true,
-      isAutoAddedToBranch: true,
-      defaultInitialStock: 100, // Default 100 piece untuk cabang baru
+      isAutoAddedToBranch: false,
+      defaultInitialStock: null,
     },
 
     // ==================== NANOBUBBLE THERAPY (NBT) ====================
@@ -55,11 +55,11 @@ export async function seedProducts(prisma: PrismaClient) {
     { sku: 'PRD-NBT-PRP-001', name: 'Cairan PRP', category: ProductCategory.MEDICINE, unit: 'ml', baseUnit: 'ml', usageUnit: 'ml', conversionFactor: 1, description: 'Platelet Rich Plasma' },
 
     // ==================== MEDICAL SUPPLIES (MED) ====================
-    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'IV Catheter ukuran 24G' },
-    { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Ultrafik' },
+    { sku: 'PRD-MED-IVC-001', name: 'IV Cath 24', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'IV Catheter ukuran 24G', isAutoAddedToBranch: true },
+    { sku: 'PRD-MED-URF-001', name: 'Ultrafik', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Ultrafik', isAutoAddedToBranch: true },
     { sku: 'PRD-MED-TUB-001', name: 'BD TUBE ACB 8.5ml', category: ProductCategory.DEVICE, unit: 'Unit', baseUnit: 'Unit', usageUnit: 'Unit', conversionFactor: 1, description: 'BD Tube ACB 8.5ml' },
-    { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Oneswab' },
-    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Plester' },
+    { sku: 'PRD-MED-SWB-001', name: 'Oneswab', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Oneswab', isAutoAddedToBranch: true },
+    { sku: 'PRD-MED-PTR-001', name: 'Plesterin', category: ProductCategory.CONSUMABLE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Plester', isAutoAddedToBranch: true },
     { sku: 'PRD-MED-SPT-001', name: 'Spuit 20cc', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 20cc' },
     { sku: 'PRD-MED-SPT-002', name: 'Spuit 5cc (3cc)', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/3cc' },
     { sku: 'PRD-MED-SPT-003', name: 'Spuit 5cc (10cc)', category: ProductCategory.DEVICE, unit: 'Piece', baseUnit: 'Piece', usageUnit: 'Piece', conversionFactor: 1, description: 'Syringe 5cc/10cc' },
