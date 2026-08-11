@@ -45,6 +45,7 @@ import {
 import { ensureAutomaticInfusionKitMaterialDrafts } from './automatic-infusion-kit.service';
 import { reconcileCompatibilityStockInTransaction } from '@modules/inventory/services/compatibility-stock-reconciliation.service';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
+import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
 const LEGACY_COMPLETION_FLOW_VERSION = 1;
@@ -617,7 +618,7 @@ export class SessionCompletionService {
       `);
       const session = await tx.treatmentSession.findUnique({
         where: { id: sessionId },
-        include: { encounter: { select: { memberPackageId: true } } },
+        include: { encounter: { select: { memberId: true, memberPackageId: true } } },
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
       const cancellationKey = `TREATMENT-CANCEL:${session.id}:${input.idempotencyKey}`;
@@ -777,6 +778,7 @@ export class SessionCompletionService {
           cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
         },
       });
+      await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
       await tx.auditLog.create({
         data: {
           userId,

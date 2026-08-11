@@ -5,6 +5,7 @@ import {
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { SessionCompletionService } from '../session-completion.service';
+import { syncMemberVoucherUsageCount } from '../voucher-usage-counter';
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
@@ -40,6 +41,10 @@ jest.mock('@modules/zoho/zoho.inventory-outbox', () => ({
 
 jest.mock('@utils/auditLog', () => ({
   logAudit: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../voucher-usage-counter', () => ({
+  syncMemberVoucherUsageCount: jest.fn().mockResolvedValue(undefined),
 }));
 
 const mockPrisma = prisma as unknown as {
@@ -80,7 +85,7 @@ describe('SessionCompletionService.cancelCompletion package usage reversal', () 
       materialCost: new Prisma.Decimal(0),
       revenuePackageId: basicPackage.id,
       boosterPackageId: boosterPackage.id,
-      encounter: { memberPackageId: basicPackage.id },
+      encounter: { memberId: 'member-1', memberPackageId: basicPackage.id },
     };
 
     mockPrisma.treatmentSession.findUnique.mockResolvedValue({ branchId: session.branchId });
@@ -131,5 +136,6 @@ describe('SessionCompletionService.cancelCompletion package usage reversal', () 
         expiredAt: null,
       },
     });
+    expect(syncMemberVoucherUsageCount).toHaveBeenCalledWith(tx, 'member-1');
   });
 });

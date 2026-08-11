@@ -2,6 +2,7 @@ import { PackageStatus, TreatmentCompletionStatus } from '@prisma/client';
 import { prisma } from '../../../../lib/prisma';
 import { logAudit } from '../../../../utils/auditLog';
 import { SessionDeletionService } from '../session-deletion.service';
+import { cleanupDeletedSessionFiles } from '../session-file-cleanup';
 import { syncMemberVoucherUsageCount } from '../voucher-usage-counter';
 
 jest.mock('../../../../lib/prisma', () => ({
@@ -18,6 +19,14 @@ jest.mock('../../../../utils/auditLog', () => ({
 
 jest.mock('../voucher-usage-counter', () => ({
   syncMemberVoucherUsageCount: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock('../session-file-cleanup', () => ({
+  cleanupDeletedSessionFiles: jest.fn().mockResolvedValue({
+    requested: 0,
+    localDeleted: 0,
+    failedUrls: [],
+  }),
 }));
 
 const mockPrisma = prisma as unknown as {
@@ -44,15 +53,21 @@ describe('SessionDeletionService', () => {
     infusion: { id: 'infusion-1' },
     materials: [{ id: 'material-1' }],
     therapyPlan: { id: 'plan-1', planCode: 'PLAN-001' },
+    photo: null,
+    supportingPhotos: [],
   };
 
-  const makeTx = () => ({
+  const makeTx = (sessionResult: Record<string, unknown> = session) => ({
+    $queryRaw: jest.fn().mockResolvedValue([{ id: 'session-1' }]),
     inventoryItem: {
       update: jest.fn()
         .mockResolvedValueOnce({ stock: 10 })
         .mockResolvedValueOnce({ stock: 5 }),
     },
-    stockMutation: { create: jest.fn().mockResolvedValue(undefined) },
+    stockMutation: {
+      findMany: jest.fn().mockResolvedValue([]),
+      create: jest.fn().mockResolvedValue(undefined),
+    },
     memberPackage: {
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       findUnique: jest.fn()
@@ -82,22 +97,24 @@ describe('SessionDeletionService', () => {
     sessionDoctor: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     sessionNurse: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     therapyPlan: { updateMany: jest.fn().mockResolvedValue(undefined) },
-    treatmentSession: { delete: jest.fn().mockResolvedValue(undefined) },
+    treatmentSession: {
+      findUnique: jest.fn().mockResolvedValue(sessionResult),
+      delete: jest.fn().mockResolvedValue(undefined),
+    },
   });
 
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPrisma.treatmentSession.findUnique.mockResolvedValue(session);
   });
 
   it('returns Basic and Booster vouchers and restores only the net stock usage', async () => {
-    mockPrisma.stockMutation.findMany.mockResolvedValue([
+    const tx = makeTx();
+    tx.stockMutation.findMany.mockResolvedValue([
       // Two units used, then one unit already returned by a therapy-plan edit.
       { inventoryItemId: 'item-1', stockBefore: 10, stockAfter: 8 },
       { inventoryItemId: 'item-1', stockBefore: 8, stockAfter: 9 },
       { inventoryItemId: 'item-2', stockBefore: 5, stockAfter: 4 },
     ]);
-    const tx = makeTx();
     mockPrisma.$transaction.mockImplementation(async (callback) => callback(tx));
 
     const result = await new SessionDeletionService().deleteSession('session-1', 'admin-1');
@@ -122,6 +139,11 @@ describe('SessionDeletionService', () => {
       data: { usedSessions: { decrement: 1 } },
     });
     expect(tx.memberPackage.update).toHaveBeenCalledTimes(2);
+    expect(tx.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(mockPrisma.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      { isolationLevel: 'Serializable' },
+    );
     expect(syncMemberVoucherUsageCount).toHaveBeenCalledWith(tx, 'member-1');
     expect(tx.treatmentSession.delete).toHaveBeenCalledWith({ where: { id: 'session-1' } });
     expect(result).toMatchObject({
@@ -137,14 +159,16 @@ describe('SessionDeletionService', () => {
         rolledBackStockMutations: 3,
       }),
     }));
+    expect(cleanupDeletedSessionFiles).toHaveBeenCalledWith([undefined]);
   });
 
   it('rejects deletion after the session has been posted', async () => {
-    mockPrisma.treatmentSession.findUnique.mockResolvedValue({
+    const tx = makeTx({
       ...session,
       isCompleted: true,
       completionStatus: TreatmentCompletionStatus.COMPLETED,
     });
+    mockPrisma.$transaction.mockImplementation(async (callback) => callback(tx));
 
     await expect(
       new SessionDeletionService().deleteSession('session-1', 'admin-1')
@@ -153,6 +177,7 @@ describe('SessionDeletionService', () => {
       code: 'POSTED_SESSION_IMMUTABLE',
     });
 
-    expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.stockMutation.findMany).not.toHaveBeenCalled();
+    expect(tx.treatmentSession.delete).not.toHaveBeenCalled();
   });
 });
