@@ -1,4 +1,4 @@
-import { AccountType, PackageRevenueContractStatus, Prisma } from '@prisma/client';
+import { AccountType, PackageRevenueContractStatus, PackageStatus, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import {
@@ -22,6 +22,51 @@ export function requiresDeferredRevenueContract(pkg: {
 }) {
   return pkg.revenueFlowVersion >= CURRENT_REVENUE_FLOW_VERSION
     && pkg.finalPrice.greaterThan(0);
+}
+
+/**
+ * Some operational packages were created by the pre-finance workflow after the
+ * version columns had already been introduced. They can therefore carry the
+ * current default version even though they have neither an invoice line nor a
+ * deferred-revenue contract. Keep those rows on the compatibility path instead
+ * of blocking treatment completion.
+ *
+ * An invoice reference is the boundary for the current finance workflow: once
+ * it exists, a paid package must still be verified/funded and may not silently
+ * fall back to legacy behavior.
+ */
+export function usesLegacyRevenueCompatibility(pkg: {
+  finalPrice: Prisma.Decimal;
+  revenueFlowVersion: number;
+  status: PackageStatus;
+  usedSessions: number;
+  verifiedAt: Date | null;
+  activatedAt: Date | null;
+}, references: {
+  hasInvoiceItem: boolean;
+  hasDeferredRevenueContract: boolean;
+}) {
+  if (pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION) return true;
+
+  const isAlreadyOperational = pkg.usedSessions > 0
+    || pkg.status === PackageStatus.ACTIVE
+    || pkg.status === PackageStatus.EXPIRED
+    || pkg.verifiedAt !== null
+    || pkg.activatedAt !== null;
+
+  return requiresDeferredRevenueContract(pkg)
+    && isAlreadyOperational
+    && !references.hasInvoiceItem
+    && !references.hasDeferredRevenueContract;
+}
+
+export function revenueCompatibilityModeForPackages(
+  packageCount: number,
+  legacyPackageCount: number,
+) {
+  return packageCount > 0 && legacyPackageCount === packageCount
+    ? 'LEGACY' as const
+    : 'CURRENT' as const;
 }
 
 export async function upsertRevenuePolicy(actorUserId: string, input: UpsertRevenuePolicyInput) {
@@ -160,20 +205,43 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       'Sumber omzet sesi belum lengkap. Paket Basic wajib dan Booster ditambahkan bila dipakai.',
     );
   }
-  const [packages, contracts] = await Promise.all([
+  const [packages, contracts, invoiceItems] = await Promise.all([
     tx.memberPackage.findMany({
       where: { id: { in: packageIds } },
-      select: { id: true, finalPrice: true, revenueFlowVersion: true },
+      select: {
+        id: true,
+        finalPrice: true,
+        revenueFlowVersion: true,
+        status: true,
+        usedSessions: true,
+        verifiedAt: true,
+        activatedAt: true,
+      },
     }),
     tx.packageRevenueContract.findMany({
       where: { memberPackageId: { in: packageIds } },
       include: { valuation: true },
       orderBy: { id: 'asc' },
     }),
+    tx.invoiceItem.findMany({
+      where: { itemType: 'PACKAGE', itemId: { in: packageIds } },
+      select: { itemId: true },
+    }),
   ]);
   const contractByPackage = new Map(contracts.map((contract) => [contract.memberPackageId, contract]));
+  const invoicePackageIds = new Set(invoiceItems.map((item) => item.itemId));
+  const legacyPackageIds = new Set(
+    packages
+      .filter((pkg) => usesLegacyRevenueCompatibility(pkg, {
+        hasInvoiceItem: invoicePackageIds.has(pkg.id),
+        hasDeferredRevenueContract: contractByPackage.has(pkg.id),
+      }))
+      .map((pkg) => pkg.id),
+  );
   const missingFundedContract = packages.find((pkg) =>
-    requiresDeferredRevenueContract(pkg) && !contractByPackage.has(pkg.id)
+    requiresDeferredRevenueContract(pkg)
+      && !legacyPackageIds.has(pkg.id)
+      && !contractByPackage.has(pkg.id)
   );
   if (missingFundedContract) {
     throw errors.unprocessable(
@@ -181,14 +249,13 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       'Paket berbayar belum memiliki kontrak deferred revenue. Verifikasi pembayaran sebelum menyelesaikan treatment.',
     );
   }
-  const legacyPackageIds = new Set(
-    packages
-      .filter((pkg) => pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION)
-      .map((pkg) => pkg.id),
+  // A mixed Basic/Booster session may contain one legacy package and one
+  // current package. Ignore only the unreferenced legacy package; the current
+  // package must keep its normal revenue/HPP posting.
+  const revenueCompatibilityMode = revenueCompatibilityModeForPackages(
+    packages.length,
+    legacyPackageIds.size,
   );
-  const revenueCompatibilityMode = legacyPackageIds.size > 0
-    ? 'LEGACY' as const
-    : 'CURRENT' as const;
   const reservations = [];
   for (const candidate of contracts.filter((contract) =>
     !legacyPackageIds.has(contract.memberPackageId)
