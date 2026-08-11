@@ -12,6 +12,7 @@ import type { Invoice } from '@/types/invoice';
 import { useAuthStore } from '@/stores/authStore';
 import { confirm as confirmDialog, showToast } from '@/lib/toast';
 import { devLog, devError } from '@/lib/logger';
+import { persistActiveTabInUrl, usePersistentTabs } from '@/hooks/usePersistentTabs';
 
 // Components
 import MemberHeader from '@/components/members/MemberHeader';
@@ -146,10 +147,14 @@ export default function MemberDetailPage() {
   const searchParams = useSearchParams();
   const memberId = params.memberId as string;
   const { user } = useAuthStore();
+  const requestedInitialTab = searchParams.get('tab');
+  const initialTab = isMemberDetailTab(requestedInitialTab) ? requestedInitialTab : 'profil';
 
   const [member, setMember] = useState<MemberDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<MemberDetailTab>('profil');
+  const { activeTab, visitedTabs, activateTab } = usePersistentTabs<MemberDetailTab>(initialTab);
+  const loadedPricingBranchIdRef = useRef<string | null>(null);
+  const loadingPricingBranchIdRef = useRef<string | null>(null);
   
   // Notification modal state
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -303,10 +308,16 @@ export default function MemberDetailPage() {
 
   useEffect(() => {
     const requestedTab = searchParams.get('tab');
-    if (isMemberDetailTab(requestedTab)) {
-      setActiveTab(requestedTab);
-    }
-  }, [searchParams]);
+    activateTab(isMemberDetailTab(requestedTab) ? requestedTab : 'profil');
+  }, [activateTab, searchParams]);
+
+  const handleTabChange = (tab: MemberDetailTab) => {
+    activateTab(tab);
+
+    // Persist the active section without invoking Next navigation, so mounted
+    // tab state remains intact and refreshing restores the selected section.
+    persistActiveTabInUrl(tab, 'profil');
+  };
 
   const loadMemberDetail = useCallback(async (showPageLoading = true) => {
     try {
@@ -364,12 +375,14 @@ export default function MemberDetailPage() {
       const data = await packagesApi.getPackagePricings(memberBranchId);
       devLog('Loaded pricings:', data);
       setPricings(Array.isArray(data) ? data : []);
+      return true;
     } catch (error) {
       assertCaughtError(error);
       devError('Failed to load pricings:', error);
       showToast.error('Gagal memuat harga paket');
       // Set empty array as fallback
       setPricings([]);
+      return false;
     }
   }, [member?.registrationBranch?.id]);
 
@@ -752,7 +765,20 @@ export default function MemberDetailPage() {
 
   useEffect(() => {
     if (activeTab === 'paket' && canEditPackage && member) {
-      void loadPricings();
+      const pricingBranchKey = member.registrationBranch?.id || 'NO_BRANCH';
+      if (loadedPricingBranchIdRef.current === pricingBranchKey) return;
+      if (loadingPricingBranchIdRef.current === pricingBranchKey) return;
+
+      loadingPricingBranchIdRef.current = pricingBranchKey;
+      void loadPricings()
+        .then((loaded) => {
+          if (loaded) loadedPricingBranchIdRef.current = pricingBranchKey;
+        })
+        .finally(() => {
+          if (loadingPricingBranchIdRef.current === pricingBranchKey) {
+            loadingPricingBranchIdRef.current = null;
+          }
+        });
     }
   }, [activeTab, canEditPackage, loadPricings, member]);
 
@@ -808,8 +834,10 @@ export default function MemberDetailPage() {
                 key={tab}
                 type="button"
                 role="tab"
+                id={`member-tab-${tab}`}
+                aria-controls={`member-tab-panel-${tab}`}
                 aria-selected={isSelected}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => handleTabChange(tab)}
                 className={`inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-xl px-4 text-sm font-bold transition ${
                   isSelected
                     ? 'bg-white text-sky-700 shadow-sm ring-1 ring-neutral-200 dark:bg-neutral-800 dark:text-sky-300 dark:ring-neutral-700'
@@ -824,20 +852,29 @@ export default function MemberDetailPage() {
         </div>
 
         <div className="member-detail-tab-content">
-          {activeTab === 'profil' && (
-            <>
-  
+          {visitedTabs.has('profil') && (
+            <section
+              id="member-tab-panel-profil"
+              role="tabpanel"
+              aria-labelledby="member-tab-profil"
+              hidden={activeTab !== 'profil'}
+            >
               <MemberProfileTab 
                 member={member}
                 canEditLifeStatus={canEditLifeStatus}
                 updatingLifeStatus={updatingLifeStatus}
                 onToggleLifeStatus={handleToggleLifeStatus}
               />
-            </>
+            </section>
           )}
           
-          {activeTab === 'paket' && (
-            <div>
+          {visitedTabs.has('paket') && (
+            <section
+              id="member-tab-panel-paket"
+              role="tabpanel"
+              aria-labelledby="member-tab-paket"
+              hidden={activeTab !== 'paket'}
+            >
               <div className="member-packages-header">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wide text-sky-600 dark:text-sky-400">Keanggotaan</p>
@@ -951,26 +988,60 @@ export default function MemberDetailPage() {
                   setShowEditModal(true);
                 } : undefined}
               />
-            </div>
+            </section>
           )}
 
-          {activeTab === 'sesi' && (
-            <MemberSessionsTab
-              memberId={memberId}
-              memberNo={member.memberNo}
-              memberName={member.profile.fullName}
-              canCreate={!isAdminManager}
-              onDeleted={async () => {
-                await Promise.all([loadPackages(), loadMemberDetail(false)]);
-              }}
-            />
+          {visitedTabs.has('sesi') && (
+            <section
+              id="member-tab-panel-sesi"
+              role="tabpanel"
+              aria-labelledby="member-tab-sesi"
+              hidden={activeTab !== 'sesi'}
+            >
+              <MemberSessionsTab
+                memberId={memberId}
+                memberNo={member.memberNo}
+                memberName={member.profile.fullName}
+                canCreate={!isAdminManager}
+                onDeleted={async () => {
+                  await Promise.all([loadPackages(), loadMemberDetail(false)]);
+                }}
+              />
+            </section>
           )}
 
-          {activeTab === 'diagnosa' && <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canEditDiagnosis} />}
+          {visitedTabs.has('diagnosa') && (
+            <section
+              id="member-tab-panel-diagnosa"
+              role="tabpanel"
+              aria-labelledby="member-tab-diagnosa"
+              hidden={activeTab !== 'diagnosa'}
+            >
+              <MemberDiagnosesTab memberId={memberId} memberBranchId={member.registrationBranch?.id} canEdit={canEditDiagnosis} />
+            </section>
+          )}
           
-          {activeTab === 'therapy-plan' && <MemberTherapyPlansTab memberId={memberId} canEdit={!isAdminManager} />}
+          {visitedTabs.has('therapy-plan') && (
+            <section
+              id="member-tab-panel-therapy-plan"
+              role="tabpanel"
+              aria-labelledby="member-tab-therapy-plan"
+              hidden={activeTab !== 'therapy-plan'}
+            >
+              <MemberTherapyPlansTab memberId={memberId} canEdit={!isAdminManager} />
+            </section>
+          )}
           
-          {activeTab === 'lab-results' && <MemberLabResultsTab memberId={memberId} canEdit={!isAdminManager} />}
+          {visitedTabs.has('lab-results') && (
+            <section
+              id="member-tab-panel-lab-results"
+              role="tabpanel"
+              aria-labelledby="member-tab-lab-results"
+              hidden={activeTab !== 'lab-results'}
+            >
+              <MemberLabResultsTab memberId={memberId} canEdit={!isAdminManager} />
+            </section>
+          )}
         </div>
       </div>
 
