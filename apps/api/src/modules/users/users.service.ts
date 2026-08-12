@@ -19,6 +19,7 @@ import {
 } from '@modules/iam/authorization.service';
 
 const HASH_ROUNDS = 12;
+const DELETED_USER_EMAIL_DOMAIN = 'users.invalid';
 const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
@@ -53,6 +54,14 @@ function assertCanManageStaffRole(callerRole: Role, targetRole: Role) {
   if (!allowedRoles.includes(targetRole)) {
     throw errors.forbidden(`Role ${callerRole} tidak dapat membuat atau mengubah user menjadi ${targetRole}.`);
   }
+}
+
+/**
+ * Replaces a deleted user's login identifier without removing the user row.
+ * The user id is unique, and `.invalid` is a reserved non-deliverable domain.
+ */
+export function buildDeletedUserEmail(userId: string): string {
+  return `deleted-${userId}@${DELETED_USER_EMAIL_DOMAIN}`;
 }
 
 async function getManagedBranchIds(userId: string): Promise<string[]> {
@@ -262,17 +271,12 @@ export async function createUserService(
   assertCanManageStaffRole(callerRole, input.role);
   await assertCanAssignBaseRole(callerUserId, input.role);
 
-  // Check email uniqueness (only check active users)
-  // Inactive users are soft-deleted and their emails can be reused
-  const existing = await prisma.user.findFirst({ 
-    where: { 
-      email: input.email,
-      isActive: true
-    } 
-  });
+  // Deleted users have already released their original email. Any remaining
+  // owner is therefore a real conflict (including legacy data before backfill).
+  const existing = await prisma.user.findUnique({ where: { email: input.email } });
   if (existing) {
-    console.log('❌ [UserService] Email already exists (active user):', input.email);
-    throw errors.conflict('USER_EMAIL_DUPLICATE', 'Email sudah digunakan oleh user aktif lain.');
+    console.log('❌ [UserService] Email already exists:', input.email);
+    throw errors.conflict('USER_EMAIL_DUPLICATE', 'Email sudah digunakan oleh user lain.');
   }
 
   // If caller is ADMIN_CABANG, enforce branch assignment to their branch
@@ -366,15 +370,9 @@ export async function updateUserService(
   }
 
   if (input.email !== undefined && input.email !== existing.email) {
-    // Only check active users - inactive users' emails can be reused
-    const emailOwner = await prisma.user.findFirst({ 
-      where: { 
-        email: input.email,
-        isActive: true
-      } 
-    });
+    const emailOwner = await prisma.user.findUnique({ where: { email: input.email } });
     if (emailOwner && emailOwner.id !== userId) {
-      throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user aktif lain.');
+      throw errors.conflict('EMAIL_DUPLICATE', 'Email sudah digunakan oleh user lain.');
     }
   }
 
@@ -558,10 +556,10 @@ export async function updateAvatarService(userId: string, avatarUrl: string) {
 // ══════════════════════════════════════════════════════════════
 
 /**
- * Soft delete (deactivate) a staff member
- * - Sets isActive = false (staff cannot login but data is preserved)
+ * Soft delete a staff member
+ * - Sets isActive = false and releases the original login email
  * - Checks for active sessions to prevent deletion
- * - Returns warnings if historical sessions exist
+ * - Preserves the user row and all historical relations
  */
 export async function softDeleteUserService(userId: string) {
   // Validate user exists
@@ -614,15 +612,19 @@ export async function softDeleteUserService(userId: string) {
     },
   });
 
-  // Deactivate user (soft delete)
+  // Deactivate and release the login email in one atomic database update.
+  // The historical user id remains available to sessions, finance, and audit data.
   await prisma.user.update({
     where: { id: userId },
-    data: { isActive: false },
+    data: {
+      isActive: false,
+      email: buildDeletedUserEmail(userId),
+    },
   });
 
   return {
     success: true,
-    message: `${user.profile?.fullName || 'Staff'} berhasil dinonaktifkan.`,
+    message: `${user.profile?.fullName || 'Staff'} berhasil dihapus dan email dapat digunakan kembali.`,
     email: user.email,
     historicalSessions,
     hasHistoricalData: historicalSessions > 0,

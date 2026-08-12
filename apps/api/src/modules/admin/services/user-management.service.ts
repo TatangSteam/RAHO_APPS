@@ -35,20 +35,17 @@ export class UserManagementService {
 
     const branchIds = branchAssignments.map((assignment) => assignment.branchId);
 
-    // Check if email already exists (only check active users)
-    // Inactive users are soft-deleted and their emails can be reused
-    const existingUser = await prisma.user.findFirst({
-      where: { 
-        email: data.email,
-        isActive: true
-      },
+    // A deleted account releases its original email. Any remaining owner is a
+    // conflict, regardless of status, and must not be allowed to hit P2002 later.
+    const existingUser = await prisma.user.findUnique({
+      where: { email: data.email },
     });
 
     if (existingUser) {
       throw {
         status: 409,
         code: 'EMAIL_EXISTS',
-        message: 'Email sudah digunakan oleh user aktif lain',
+        message: 'Email sudah digunakan oleh user lain',
       };
     }
 
@@ -153,21 +150,17 @@ export class UserManagementService {
       };
     }
 
-    // Check if new email already exists (if email is being changed)
-    // Only check active users - inactive users' emails can be reused
+    // Check if new email already exists (if email is being changed).
     if (data.email && data.email !== existingManager.email) {
-      const emailExists = await prisma.user.findFirst({
-        where: { 
-          email: data.email,
-          isActive: true
-        },
+      const emailExists = await prisma.user.findUnique({
+        where: { email: data.email },
       });
 
       if (emailExists) {
         throw {
           status: 409,
           code: 'EMAIL_EXISTS',
-          message: 'Email sudah digunakan oleh user aktif lain',
+          message: 'Email sudah digunakan oleh user lain',
         };
       }
     }

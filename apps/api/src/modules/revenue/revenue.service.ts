@@ -1,4 +1,4 @@
-import { AccountType, PackageRevenueContractStatus, PackageStatus, Prisma } from '@prisma/client';
+import { AccountType, PackageRevenueContractStatus, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import {
@@ -25,42 +25,15 @@ export function requiresDeferredRevenueContract(pkg: {
 }
 
 /**
- * Some operational packages were created by the pre-finance workflow after the
- * version columns had already been introduced. They can therefore carry the
- * current default version even though they have neither an invoice line nor a
- * deferred-revenue contract. Keep those rows on the compatibility path instead
- * of blocking treatment completion.
- *
- * An invoice reference is normally the boundary for the current finance flow.
- * The exception is a payment verified by the older package endpoint: those
- * records have no cash/bank account or posting and must remain on the legacy
- * path. A current invoice without that legacy payment marker must never bypass
- * deferred-revenue validation.
+ * Legacy behavior is explicit and fail-closed. Historical rows are backfilled
+ * to version 1 by migration, while the old payment endpoint also writes version
+ * 1. Never infer legacy mode from ACTIVE/EXPIRED status or missing references:
+ * doing so could let a damaged current-flow package bypass deferred revenue.
  */
 export function usesLegacyRevenueCompatibility(pkg: {
-  finalPrice: Prisma.Decimal;
   revenueFlowVersion: number;
-  status: PackageStatus;
-  usedSessions: number;
-  verifiedAt: Date | null;
-  activatedAt: Date | null;
-}, references: {
-  hasInvoiceItem: boolean;
-  hasDeferredRevenueContract: boolean;
-  hasLegacyVerifiedPayment?: boolean;
 }) {
-  if (pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION) return true;
-
-  const isAlreadyOperational = pkg.usedSessions > 0
-    || pkg.status === PackageStatus.ACTIVE
-    || pkg.status === PackageStatus.EXPIRED
-    || pkg.verifiedAt !== null
-    || pkg.activatedAt !== null;
-
-  return requiresDeferredRevenueContract(pkg)
-    && isAlreadyOperational
-    && !references.hasDeferredRevenueContract
-    && (!references.hasInvoiceItem || Boolean(references.hasLegacyVerifiedPayment));
+  return pkg.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
 }
 
 export function revenueCompatibilityModeForPackages(
@@ -208,7 +181,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       'Sumber omzet sesi belum lengkap. Paket Basic wajib dan Booster ditambahkan bila dipakai.',
     );
   }
-  const [packages, contracts, invoiceItems] = await Promise.all([
+  const [packages, contracts] = await Promise.all([
     tx.memberPackage.findMany({
       where: { id: { in: packageIds } },
       select: {
@@ -226,40 +199,11 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       include: { valuation: true },
       orderBy: { id: 'asc' },
     }),
-    tx.invoiceItem.findMany({
-      where: { itemType: 'PACKAGE', itemId: { in: packageIds } },
-      select: {
-        itemId: true,
-        invoice: {
-          select: {
-            payments: {
-              where: { verificationStatus: 'VERIFIED' },
-              select: {
-                cashBankAccountId: true,
-                cashBankTransaction: { select: { id: true } },
-              },
-            },
-          },
-        },
-      },
-    }),
   ]);
   const contractByPackage = new Map(contracts.map((contract) => [contract.memberPackageId, contract]));
-  const invoicePackageIds = new Set(invoiceItems.map((item) => item.itemId));
-  const legacyVerifiedPaymentPackageIds = new Set(
-    invoiceItems
-      .filter((item) => item.invoice.payments.some((payment) =>
-        payment.cashBankAccountId === null && payment.cashBankTransaction === null
-      ))
-      .map((item) => item.itemId),
-  );
   const legacyPackageIds = new Set(
     packages
-      .filter((pkg) => usesLegacyRevenueCompatibility(pkg, {
-        hasInvoiceItem: invoicePackageIds.has(pkg.id),
-        hasDeferredRevenueContract: contractByPackage.has(pkg.id),
-        hasLegacyVerifiedPayment: legacyVerifiedPaymentPackageIds.has(pkg.id),
-      }))
+      .filter((pkg) => usesLegacyRevenueCompatibility(pkg))
       .map((pkg) => pkg.id),
   );
   const missingFundedContract = packages.find((pkg) =>

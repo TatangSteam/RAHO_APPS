@@ -9,10 +9,9 @@ import {
 } from '../revenue.service';
 
 function reservationTx(input: {
+  revenueFlowVersion?: number;
   packageStatus?: PackageStatus;
   usedSessions?: number;
-  hasInvoiceItem?: boolean;
-  hasLegacyVerifiedPayment?: boolean;
 }) {
   const packageId = 'package-1';
   return {
@@ -32,7 +31,7 @@ function reservationTx(input: {
       findMany: jest.fn().mockResolvedValue([{
         id: packageId,
         finalPrice: new Prisma.Decimal('1250000'),
-        revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
+        revenueFlowVersion: input.revenueFlowVersion ?? CURRENT_REVENUE_FLOW_VERSION,
         status: input.packageStatus ?? PackageStatus.ACTIVE,
         usedSessions: input.usedSessions ?? 1,
         verifiedAt: null,
@@ -40,16 +39,6 @@ function reservationTx(input: {
       }]),
     },
     packageRevenueContract: { findMany: jest.fn().mockResolvedValue([]) },
-    invoiceItem: {
-      findMany: jest.fn().mockResolvedValue(input.hasInvoiceItem ? [{
-        itemId: packageId,
-        invoice: {
-          payments: input.hasLegacyVerifiedPayment
-            ? [{ cashBankAccountId: null, cashBankTransaction: null }]
-            : [],
-        },
-      }] : []),
-    },
   } as unknown as Prisma.TransactionClient;
 }
 
@@ -75,76 +64,16 @@ describe('member package revenue flow compatibility', () => {
     })).toBe(false);
   });
 
-  it('keeps an operational package without any finance reference on the legacy path', () => {
+  it('does not infer legacy mode from operational status or missing references', () => {
     expect(usesLegacyRevenueCompatibility({
-      finalPrice: new Prisma.Decimal('1250000'),
       revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
-      status: PackageStatus.ACTIVE,
-      usedSessions: 1,
-      verifiedAt: null,
-      activatedAt: new Date('2026-06-01T00:00:00.000Z'),
-    }, {
-      hasInvoiceItem: false,
-      hasDeferredRevenueContract: false,
+    })).toBe(false);
+  });
+
+  it('uses compatibility only for an explicitly versioned legacy package', () => {
+    expect(usesLegacyRevenueCompatibility({
+      revenueFlowVersion: LEGACY_REVENUE_FLOW_VERSION,
     })).toBe(true);
-  });
-
-  it('does not bypass payment verification when a current invoice reference exists', () => {
-    expect(usesLegacyRevenueCompatibility({
-      finalPrice: new Prisma.Decimal('1250000'),
-      revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
-      status: PackageStatus.ACTIVE,
-      usedSessions: 1,
-      verifiedAt: new Date('2026-08-01T00:00:00.000Z'),
-      activatedAt: new Date('2026-08-01T00:00:00.000Z'),
-    }, {
-      hasInvoiceItem: true,
-      hasDeferredRevenueContract: false,
-      hasLegacyVerifiedPayment: false,
-    })).toBe(false);
-  });
-
-  it('keeps a verified payment from the old package endpoint on the legacy path', () => {
-    expect(usesLegacyRevenueCompatibility({
-      finalPrice: new Prisma.Decimal('1250000'),
-      revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
-      status: PackageStatus.ACTIVE,
-      usedSessions: 1,
-      verifiedAt: new Date('2026-08-01T00:00:00.000Z'),
-      activatedAt: new Date('2026-08-01T00:00:00.000Z'),
-    }, {
-      hasInvoiceItem: true,
-      hasDeferredRevenueContract: false,
-      hasLegacyVerifiedPayment: true,
-    })).toBe(true);
-  });
-
-  it('does not classify a new unpaid package without references as legacy', () => {
-    expect(usesLegacyRevenueCompatibility({
-      finalPrice: new Prisma.Decimal('1250000'),
-      revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
-      status: PackageStatus.PENDING_PAYMENT,
-      usedSessions: 0,
-      verifiedAt: null,
-      activatedAt: null,
-    }, {
-      hasInvoiceItem: false,
-      hasDeferredRevenueContract: false,
-    })).toBe(false);
-  });
-
-  it('keeps free current packages on the current non-revenue path', () => {
-    expect(usesLegacyRevenueCompatibility({
-      finalPrice: new Prisma.Decimal(0),
-      revenueFlowVersion: CURRENT_REVENUE_FLOW_VERSION,
-      status: PackageStatus.ACTIVE,
-      usedSessions: 1,
-      verifiedAt: null,
-      activatedAt: new Date('2026-06-01T00:00:00.000Z'),
-    }, {
-      hasInvoiceItem: false,
-      hasDeferredRevenueContract: false,
-    })).toBe(false);
   });
 
   it('uses legacy mode only when every selected package is legacy', () => {
@@ -154,30 +83,20 @@ describe('member package revenue flow compatibility', () => {
     expect(revenueCompatibilityModeForPackages(1, 0)).toBe('CURRENT');
   });
 
-  it('lets an unreferenced operational package complete through the reservation compatibility path', async () => {
+  it('blocks an unreferenced current operational package', async () => {
     await expect(reserveTreatmentCompletedRevenue(
       'event-1',
-      reservationTx({ hasInvoiceItem: false }),
-    )).resolves.toEqual({
-      reservations: [],
-      revenueCompatibilityMode: 'LEGACY',
-    });
-  });
-
-  it('still blocks a current invoice that has not funded deferred revenue', async () => {
-    await expect(reserveTreatmentCompletedRevenue(
-      'event-1',
-      reservationTx({ hasInvoiceItem: true }),
+      reservationTx({}),
     )).rejects.toMatchObject({
       status: 422,
       code: 'TREATMENT_REVENUE_CONTRACT_MISSING',
     });
   });
 
-  it('lets an operational package with a legacy verified invoice payment complete', async () => {
+  it('lets an explicitly versioned legacy package complete', async () => {
     await expect(reserveTreatmentCompletedRevenue(
       'event-1',
-      reservationTx({ hasInvoiceItem: true, hasLegacyVerifiedPayment: true }),
+      reservationTx({ revenueFlowVersion: LEGACY_REVENUE_FLOW_VERSION }),
     )).resolves.toEqual({
       reservations: [],
       revenueCompatibilityMode: 'LEGACY',

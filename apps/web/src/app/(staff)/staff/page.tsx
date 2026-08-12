@@ -131,19 +131,23 @@ export default function StaffManagementPage() {
 
   const handleDeleteStaff = async (staffMember: Staff) => {
     const confirmed = await confirm.warning(
-      'Nonaktifkan Staff',
-      `Apakah Anda yakin ingin menonaktifkan ${staffMember.profile.fullName}?`
+      'Hapus Staff',
+      `Hapus akun ${staffMember.profile.fullName}? Email ${staffMember.email} akan dapat digunakan kembali, sedangkan histori terapi tetap tersimpan.`
     );
     if (!confirmed) return;
 
     try {
       await api.delete(`/users/${staffMember.id}`);
-      showToast.success('Staff berhasil dinonaktifkan');
+      showToast.success('Staff berhasil dihapus dan email dapat digunakan kembali');
       loadStaff();
     } catch (error) {
       assertCaughtError(error);
       devError('Error deleting staff:', error);
-      showToast.error(error.response?.data?.message || 'Gagal menonaktifkan staff');
+      showToast.error(
+        error.response?.data?.error?.message ||
+        error.response?.data?.message ||
+        'Gagal menghapus staff'
+      );
     }
   };
 
@@ -341,7 +345,7 @@ export default function StaffManagementPage() {
                         <button
                           className={`${styles.actionBtn} ${styles.deleteBtn}`}
                           onClick={() => handleDeleteStaff(staffMember)}
-                          title="Nonaktifkan Staff"
+                          title="Hapus Staff"
                         >
                           <Trash2 size={14} />
                         </button>

@@ -1,7 +1,9 @@
 # Flow Finance dan Logistik RAHO Terbaru
 
-**Versi:** 1.0  
-**Tanggal:** 31 Juli 2026  
+**Versi:** 1.1
+
+**Tanggal:** 12 Agustus 2026
+
 **Baseline source:** `588193a`  
 **Audiens:** Finance, Admin Logistik, Finance & Logistics Controller, Admin
 Manager, Admin Cabang, Super Admin, IT, dan auditor
@@ -27,6 +29,9 @@ akhir, meliputi:
 
 Dokumen ini menjadi panduan operasional dan acuan IT. Detail field atau API
 tetap mengikuti source code dan permission yang berlaku.
+
+Untuk ringkasan operasional, status penerapan, dan hasil audit kompatibilitas
+data lama, baca [Flow Simple Finance dan Logistik serta Audit Data Lama](./FLOW_SIMPLE_FINANCE_LOGISTIK_DAN_AUDIT_DATA_LAMA.md).
 
 ---
 
