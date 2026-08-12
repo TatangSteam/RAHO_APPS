@@ -16,7 +16,7 @@ export const createInvoiceSchema = z.object({
   discountPercent: z.number().min(0).max(100).optional(),
   discountAmount: z.number().min(0).optional(),
   discountNote: z.string().optional(),
-  taxPercent: z.number().min(0).max(100).default(0),
+  taxPercent: z.number().min(0).max(0, 'Pajak invoice belum dapat digunakan sebelum akun liabilitas pajak dikonfigurasi.').default(0),
   dueDate: z.string().datetime().optional(),
   notes: z.string().optional(),
 });
@@ -25,7 +25,7 @@ export const updateInvoiceSchema = z.object({
   discountPercent: z.number().min(0).max(100).optional(),
   discountAmount: z.number().min(0).optional(),
   discountNote: z.string().optional(),
-  taxPercent: z.number().min(0).max(100).optional(),
+  taxPercent: z.number().min(0).max(0, 'Pajak invoice belum dapat digunakan sebelum akun liabilitas pajak dikonfigurasi.').optional(),
   dueDate: z.string().datetime().optional(),
   notes: z.string().optional(),
 });

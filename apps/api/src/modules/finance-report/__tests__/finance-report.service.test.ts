@@ -1,7 +1,7 @@
 import { CashBankTransactionType, NormalBalance, Prisma } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 import { getAccessibleBranchIds } from '@modules/iam/authorization.service';
-import { cashBankReport, deferredRevenueReport } from '../finance-report.service';
+import { cashBankReport, deferredRevenueReport, financialPosition, payableAging, profitLoss, receivableAging } from '../finance-report.service';
 
 jest.mock('@lib/prisma', () => ({
   prisma: {
@@ -11,6 +11,10 @@ jest.mock('@lib/prisma', () => ({
     deferredRevenueMovement: { findMany: jest.fn() },
     packageRevenuePolicy: { findMany: jest.fn() },
     packageBenefitValuation: { findMany: jest.fn() },
+    invoice: { findMany: jest.fn() },
+    supplierInvoice: { findMany: jest.fn() },
+    openingBalance: { count: jest.fn() },
+    inventoryCostLayer: { count: jest.fn() },
   },
 }));
 
@@ -27,6 +31,39 @@ describe('finance report batched reads', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (getAccessibleBranchIds as jest.Mock).mockResolvedValue(['branch-a', 'branch-b']);
+    (prisma.openingBalance.count as jest.Mock).mockResolvedValue(1);
+    (prisma.inventoryCostLayer.count as jest.Mock).mockResolvedValue(0);
+  });
+
+  it('memasukkan jurnal reversed bersama reversal entry ke immutable ledger', async () => {
+    (prisma.journalLine.findMany as jest.Mock).mockResolvedValue([]);
+
+    await profitLoss('finance-user', {
+      startDate: new Date('2026-08-01T00:00:00.000Z'),
+      endDate,
+    });
+
+    expect(prisma.journalLine.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        journalEntry: expect.objectContaining({ status: { in: ['POSTED', 'REVERSED'] } }),
+      }),
+    }));
+  });
+
+  it('tidak menyamakan persamaan seimbang dengan data opening yang lengkap', async () => {
+    (prisma.journalLine.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.openingBalance.count as jest.Mock).mockResolvedValue(0);
+    (prisma.inventoryCostLayer.count as jest.Mock).mockResolvedValue(268);
+
+    const result = await financialPosition('finance-user', { endDate });
+
+    expect(result.balanced).toBe(true);
+    expect(result.dataQuality).toEqual({
+      complete: false,
+      postedOpeningBalances: 0,
+      pendingInventoryValuations: 268,
+      limitations: ['OPENING_BALANCE_MISSING', 'INVENTORY_VALUATION_INCOMPLETE'],
+    });
   });
 
   it('merekonsiliasi banyak akun kas/bank dengan satu query GL dan satu query subledger', async () => {
@@ -105,5 +142,38 @@ describe('finance report batched reads', () => {
     ]);
     expect(result.totalDeferredRevenue).toBe('80.00');
     expect(result.reconciled).toBe(true);
+  });
+
+  it('menghitung AR aging dari outstanding subledger dan menyatakan snapshot saat ini', async () => {
+    (prisma.invoice.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'invoice-1', invoiceNumber: 'INV-1', totalAmount: decimal(1000), actualPaidAmount: decimal(250),
+        dueDate: new Date('2026-07-01T00:00:00.000+07:00'),
+        branch: { id: 'branch-a', branchCode: 'A', name: 'Cabang A' },
+        member: { memberNo: 'MEM-1', user: { email: 'member@example.test', profile: { fullName: 'Member One' } } },
+      },
+    ]);
+
+    const result = await receivableAging('finance-user', { endDate });
+
+    expect(result.source).toBe('CURRENT_OPERATIONAL_SUBLEDGER');
+    expect(result.rows[0]).toMatchObject({ documentNumber: 'INV-1', counterpartyName: 'Member One', balance: '750.00', bucket: 'DAYS_31_60' });
+    expect(result.totalOutstanding).toBe('750.00');
+  });
+
+  it('menghitung AP aging dari balance supplier invoice', async () => {
+    (prisma.supplierInvoice.findMany as jest.Mock).mockResolvedValue([
+      {
+        id: 'supplier-invoice-1', invoiceNumber: 'AP-1', supplierInvoiceNumber: 'VENDOR-9', balanceAmount: decimal(400),
+        dueDate: new Date('2026-08-01T00:00:00.000+07:00'),
+        branch: { id: 'branch-a', branchCode: 'A', name: 'Cabang A' },
+        supplier: { code: 'SUP-1', name: 'Supplier One' },
+      },
+    ]);
+
+    const result = await payableAging('finance-user', { endDate });
+
+    expect(result.rows[0]).toMatchObject({ documentNumber: 'AP-1', externalDocumentNumber: 'VENDOR-9', balance: '400.00', bucket: 'DAYS_1_30' });
+    expect(result.totalOutstanding).toBe('400.00');
   });
 });

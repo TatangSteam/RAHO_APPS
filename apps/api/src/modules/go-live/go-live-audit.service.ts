@@ -16,7 +16,7 @@ const D = (value: Prisma.Decimal.Value = 0) => new Prisma.Decimal(value);
 export async function runGoLiveAudit(cutoverAt = new Date()) {
   const checks: GateCheck[] = [];
 
-  const journals = await prisma.journalEntry.findMany({ where: { status: 'POSTED' }, select: { id: true, journalNumber: true, totalDebit: true, totalCredit: true, lines: { select: { debit: true, credit: true } } } });
+  const journals = await prisma.journalEntry.findMany({ where: { status: { in: ['POSTED', 'REVERSED'] } }, select: { id: true, journalNumber: true, totalDebit: true, totalCredit: true, lines: { select: { debit: true, credit: true } } } });
   const invalidJournals = journals.filter((journal) => !evaluateJournal(journal)).map((journal) => journal.journalNumber);
   checks.push(gate('FIN-001', 'Posted journal balanced dan cocok dengan journal lines', invalidJournals.length === 0, `${journals.length} jurnal diperiksa; ${invalidJournals.length} mismatch.`, invalidJournals));
 
@@ -28,7 +28,7 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   }
   const cashMismatch = [] as Array<{ accounts: string[]; ledger: string; subledger: string; difference: string }>;
   for (const accounts of cashGroups.values()) {
-    const ledger = await prisma.journalLine.aggregate({ where: { accountId: accounts[0].coaAccountId, branchId: accounts[0].branchId, journalEntry: { status: 'POSTED' } }, _sum: { debit: true, credit: true } });
+    const ledger = await prisma.journalLine.aggregate({ where: { accountId: accounts[0].coaAccountId, branchId: accounts[0].branchId, journalEntry: { status: { in: ['POSTED', 'REVERSED'] } } }, _sum: { debit: true, credit: true } });
     const ledgerBalance = D(ledger._sum.debit || 0).sub(ledger._sum.credit || 0);
     const subledgerBalance = accounts.flatMap((account) => account.transactions).reduce((sum, transaction) => sum.add(transaction.type === 'PAYMENT' ? transaction.amount.negated() : transaction.amount), D(0));
     if (!ledgerBalance.equals(subledgerBalance)) cashMismatch.push({ accounts: accounts.map((account) => account.code), ledger: ledgerBalance.toFixed(2), subledger: subledgerBalance.toFixed(2), difference: ledgerBalance.sub(subledgerBalance).toFixed(2) });
@@ -43,7 +43,7 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   const deferredCodes = [...new Set([...deferredPolicies.map((row) => row.deferredRevenueAccount.code), ...deferredValuations.map((row) => row.deferredRevenueAccountCode)])];
   const deferredMismatch = [] as Array<{ accountCode: string; ledger: string; subledger: string; difference: string }>;
   for (const accountCode of deferredCodes) {
-    const ledger = await prisma.journalLine.aggregate({ where: { account: { code: accountCode }, journalEntry: { status: 'POSTED' } }, _sum: { debit: true, credit: true } });
+    const ledger = await prisma.journalLine.aggregate({ where: { account: { code: accountCode }, journalEntry: { status: { in: ['POSTED', 'REVERSED'] } } }, _sum: { debit: true, credit: true } });
     const ledgerBalance = D(ledger._sum.credit || 0).sub(ledger._sum.debit || 0);
     const subledgerBalance = deferredMovements
       .filter((movement) => movement.contract.valuation.deferredRevenueAccountCode === accountCode)
@@ -57,7 +57,10 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   const invalidOpenings = openingResults.filter((opening) => !opening.ready);
   checks.push(gate('OPEN-001', 'Opening balance rehearsal', openings.length > 0 && invalidOpenings.length === 0, `${openings.length} dokumen diperiksa; ${invalidOpenings.length} belum siap.`, invalidOpenings));
 
-  const branches = await prisma.branch.findMany({ where: { isActive: true }, select: { id: true, branchCode: true, name: true } });
+  const branches = await prisma.branch.findMany({
+    where: { isActive: true, branchCode: { not: 'EXT' } },
+    select: { id: true, branchCode: true, name: true },
+  });
   const periods = await prisma.accountingPeriod.findMany({ where: { startDate: { lte: cutoverAt }, endDate: { gte: cutoverAt } }, select: { branchId: true, scopeKey: true, status: true } });
   const globalOpen = periods.some((period) => period.scopeKey === 'GLOBAL' && period.status === AccountingPeriodStatus.OPEN);
   const branchesWithoutOpenPeriod = branches.filter((branch) => !globalOpen && !periods.some((period) => period.branchId === branch.id && period.status === AccountingPeriodStatus.OPEN));
@@ -67,6 +70,10 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   checks.push(gate('PERIOD-002', 'Period lock memiliki actor dan timestamp', lockedWithoutAudit.length === 0, `${lockedWithoutAudit.length} periode LOCKED kehilangan metadata.`, lockedWithoutAudit));
 
   const inventoryItems = await prisma.inventoryItem.findMany({
+    // EXT is a virtual source used to model external suppliers. It is not an
+    // operational warehouse and its legacy mirror rows must not enter stock,
+    // FIFO, mutation-chain, or inventory-value go-live controls.
+    where: { branch: { isActive: true, branchCode: { not: 'EXT' } } },
     select: {
       id: true,
       stock: true,
@@ -74,7 +81,7 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
       balances: { include: { costLayers: true } },
       stockMutations: {
         orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        select: { id: true, quantity: true, stockBefore: true, stockAfter: true },
+        select: { id: true, quantity: true, stockBefore: true, stockAfter: true, referenceType: true },
       },
     },
   });
@@ -85,10 +92,10 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
   });
   checks.push(gate('INV-001', 'Quantity inventory cocok dengan balance dan cost layer', inventoryMismatch.length === 0, `${inventoryItems.length} item diperiksa; ${inventoryMismatch.length} mismatch.`, inventoryMismatch));
 
-  const negativeBalances = await prisma.inventoryBalance.findMany({ where: { OR: [{ onHandQty: { lt: 0 } }, { reservedQty: { lt: 0 } }, { quarantineQty: { lt: 0 } }, { inTransitQty: { lt: 0 } }] }, select: { id: true, branchId: true, inventoryItemId: true, onHandQty: true, reservedQty: true, quarantineQty: true, inTransitQty: true } });
+  const negativeBalances = await prisma.inventoryBalance.findMany({ where: { branch: { isActive: true, branchCode: { not: 'EXT' } }, OR: [{ onHandQty: { lt: 0 } }, { reservedQty: { lt: 0 } }, { quarantineQty: { lt: 0 } }, { inTransitQty: { lt: 0 } }] }, select: { id: true, branchId: true, inventoryItemId: true, onHandQty: true, reservedQty: true, quarantineQty: true, inTransitQty: true } });
   checks.push(gate('INV-002', 'Tidak ada quantity bucket negatif', negativeBalances.length === 0, `${negativeBalances.length} balance negatif.`, negativeBalances));
 
-  const pendingValuations = await prisma.inventoryCostLayer.findMany({ where: { isVoided: false, remainingQty: { gt: 0 }, OR: [{ valuationStatus: InventoryValuationStatus.PENDING_VALUATION }, { unitCost: null }] }, select: { id: true, sourceType: true, sourceId: true, remainingQty: true } });
+  const pendingValuations = await prisma.inventoryCostLayer.findMany({ where: { inventoryBalance: { branch: { isActive: true, branchCode: { not: 'EXT' } } }, isVoided: false, remainingQty: { gt: 0 }, OR: [{ valuationStatus: InventoryValuationStatus.PENDING_VALUATION }, { unitCost: null }] }, select: { id: true, sourceType: true, sourceId: true, remainingQty: true } });
   checks.push(gate('INV-003', 'Seluruh stok aktif memiliki valuation', pendingValuations.length === 0, `${pendingValuations.length} cost layer masih pending valuation.`, pendingValuations));
 
   const mutationMismatch = inventoryItems.flatMap((item) => {
@@ -99,11 +106,15 @@ export async function runGoLiveAudit(cutoverAt = new Date()) {
 
   const [openTransfers, inventoryLedger] = await Promise.all([
     prisma.internalTransferLedger.findMany({
-      where: { status: { in: ['IN_TRANSIT', 'DISCREPANCY'] } },
+      where: {
+        status: { in: ['IN_TRANSIT', 'DISCREPANCY'] },
+        fromBranch: { isActive: true, branchCode: { not: 'EXT' } },
+        toBranch: { isActive: true, branchCode: { not: 'EXT' } },
+      },
       select: { id: true, shipmentId: true, totalValue: true, receivedValue: true },
     }),
     prisma.journalLine.aggregate({
-      where: { account: { code: { in: ['1300', '1310'] } }, journalEntry: { status: 'POSTED' } },
+      where: { account: { code: { in: ['1300', '1310'] } }, branch: { isActive: true, branchCode: { not: 'EXT' } }, journalEntry: { status: { in: ['POSTED', 'REVERSED'] } } },
       _sum: { debit: true, credit: true },
     }),
   ]);

@@ -101,6 +101,13 @@ describe('Sprint 14 additive and local-independence contract', () => {
     expect(schema).toContain('lastMismatchFreeBusinessDayAt DateTime?');
   });
 
+  it('menolak cabang sistem EXT dari konfigurasi dan daftar canary', () => {
+    const goLive = read('src/modules/zoho/zoho.go-live.service.ts');
+    const cutover = read('scripts/check-zoho-cutover.ts');
+    expect(goLive).toContain("branchCode: { not: 'EXT' }");
+    expect(cutover).toContain("where: { isActive: true, branchCode: { not: 'EXT' } }");
+  });
+
   it('tidak mengubah role atau permission SUPER_ADMIN yang sudah ada', () => {
     const schema = read('prisma/schema.prisma');
     const routes = read('src/modules/zoho/zoho.routes.ts');

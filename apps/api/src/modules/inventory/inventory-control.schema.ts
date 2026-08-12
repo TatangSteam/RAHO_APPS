@@ -43,6 +43,7 @@ export const directStockAdjustmentSchema = z.object({
   adjustment: signedAdjustment,
   unitCost: positiveUnitCost.optional(),
   notes: z.string().trim().min(3).max(500),
+  valuationDocumentReference: z.string().trim().min(3).max(160).optional(),
   stockLocationId: z.string().trim().min(1).optional(),
   batchId: z.string().trim().min(1).optional(),
   reasonCode: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()).default('OTHER'),
@@ -52,6 +53,20 @@ export const directStockAdjustmentSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['unitCost'],
       message: 'Harga pokok wajib diisi untuk penambahan atau valuasi stok.',
+    });
+  }
+  if (Number(input.adjustment) === 0 && !input.valuationDocumentReference) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['valuationDocumentReference'],
+      message: 'Nomor invoice/PO/GR atau dokumen opening stock wajib untuk valuasi stok lama.',
+    });
+  }
+  if (Number(input.adjustment) === 0 && input.reasonCode !== 'LEGACY_OPENING_VALUATION') {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reasonCode'],
+      message: 'Valuasi stok lama wajib memakai reason LEGACY_OPENING_VALUATION.',
     });
   }
 });

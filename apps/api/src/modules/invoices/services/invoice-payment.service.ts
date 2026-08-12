@@ -294,6 +294,12 @@ export class InvoicePaymentService {
       if (!account?.isActive || account.branchId !== payment.invoice.branchId || !account.coaAccount.allowPosting) {
         throw errors.unprocessable('CASH_BANK_ACCOUNT_NOT_POSTABLE', 'Akun kas/bank pembayaran tidak dapat diposting.');
       }
+      if (new Prisma.Decimal(payment.invoice.taxAmount || 0).greaterThan(0)) {
+        throw errors.unprocessable(
+          'INVOICE_TAX_LEDGER_NOT_CONFIGURED',
+          'Pembayaran invoice berpajak diblokir sampai akun dan posting liabilitas pajak dikonfigurasi.',
+        );
+      }
 
       const [verified, refunded] = await Promise.all([
         tx.invoicePayment.aggregate({

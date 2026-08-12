@@ -32,8 +32,19 @@ describe('directStockAdjustmentSchema', () => {
   });
 
   it('menerima adjustment nol hanya untuk valuasi stok lama', () => {
-    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(true);
-    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0, unitCost: undefined }).success).toBe(false);
+    const valuationInput = {
+      ...validInput,
+      adjustment: 0,
+      valuationDocumentReference: 'INV-OPENING-2026-001',
+      reasonCode: 'LEGACY_OPENING_VALUATION',
+    };
+    expect(directStockAdjustmentSchema.safeParse(valuationInput).success).toBe(true);
+    expect(directStockAdjustmentSchema.safeParse({ ...valuationInput, unitCost: undefined }).success).toBe(false);
+    expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(false);
+    expect(directStockAdjustmentSchema.safeParse({
+      ...valuationInput,
+      reasonCode: 'OTHER',
+    }).success).toBe(false);
     expect(directStockAdjustmentSchema.safeParse({ ...validInput, unitCost: 0 }).success).toBe(false);
   });
 
@@ -51,5 +62,16 @@ describe('directStockAdjustmentSchema', () => {
     )?.[0];
 
     expect(directRoute).toContain('authorize(superAdminOnly)');
+  });
+
+  it('memisahkan valuasi legacy dari adjustment stok operasional', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
+      'utf8',
+    );
+
+    expect(service).toContain('adjustment.isZero() ? await valuePendingStockInTransaction');
+    expect(service).toContain("'VALUATION_EVIDENCE_REQUIRED'");
+    expect(service).toContain('sourceDocumentReference: input.valuationDocumentReference!');
   });
 });

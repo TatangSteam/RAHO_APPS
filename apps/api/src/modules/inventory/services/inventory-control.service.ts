@@ -500,6 +500,7 @@ async function valuePendingStockInTransaction(
     idempotencyKey: string;
     payloadHash: string;
     sourceNumber: string;
+    sourceDocumentReference: string;
   },
 ): Promise<PendingValuationResult | null> {
   const postingKey = `INVENTORY_REVALUATION:${input.idempotencyKey}`;
@@ -614,6 +615,7 @@ async function valuePendingStockInTransaction(
       totalValue: totalValue.toFixed(2),
       layersValued,
       reasonCode: input.reasonCode,
+      sourceDocumentReference: input.sourceDocumentReference,
     },
   }, tx);
 
@@ -636,6 +638,7 @@ async function valuePendingStockInTransaction(
       layersValued,
       journalEntryId: journal.journal.id,
       notes: input.notes,
+      sourceDocumentReference: input.sourceDocumentReference,
     },
   } });
 
@@ -759,9 +762,27 @@ export async function directAdjustStock(
       );
     }
 
+    const adjustment = new Prisma.Decimal(input.adjustment);
+    if (!adjustment.isNegative() && !input.unitCost) {
+      throw errors.unprocessable(
+        'DIRECT_UNIT_COST_REQUIRED',
+        'Penambahan atau valuasi stok wajib memakai harga pokok eksplisit; harga tidak boleh ditebak dari transaksi lain.',
+      );
+    }
+    if (adjustment.isZero() && !input.valuationDocumentReference) {
+      throw errors.unprocessable(
+        'VALUATION_EVIDENCE_REQUIRED',
+        'Valuasi stok lama wajib memakai harga pokok eksplisit dan referensi invoice/PO/GR atau dokumen opening stock.',
+      );
+    }
+    if (adjustment.isZero() && input.reasonCode !== 'LEGACY_OPENING_VALUATION') {
+      throw errors.unprocessable(
+        'VALUATION_REASON_INVALID',
+        'Valuasi stok lama wajib memakai reason LEGACY_OPENING_VALUATION agar lawan jurnal masuk ekuitas saldo awal, bukan laba-rugi.',
+      );
+    }
     const valuation = await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
     const directUnitCost = valuation.unitCost;
-    const adjustment = new Prisma.Decimal(input.adjustment);
     let bootstrappedLegacyStock = false;
     if (balances.length === 0 && mirrorQty.greaterThan(0)) {
       const batchKey = input.batchId || 'NO_BATCH';
@@ -793,7 +814,10 @@ export async function directAdjustStock(
       bootstrappedLegacyStock = true;
     }
 
-    const pendingValuation = await valuePendingStockInTransaction(tx, {
+    // Valuasi legacy adalah tindakan finance tersendiri. Adjustment stok masuk
+    // atau keluar tidak boleh diam-diam menilai layer lama menggunakan harga
+    // fallback dari transaksi lain.
+    const pendingValuation = adjustment.isZero() ? await valuePendingStockInTransaction(tx, {
       actorUserId: userId,
       inventoryItemId: item.id,
       branchId: item.branchId,
@@ -805,7 +829,8 @@ export async function directAdjustStock(
       idempotencyKey: input.idempotencyKey,
       payloadHash,
       sourceNumber: item.masterProduct.sku || item.masterProduct.name,
-    });
+      sourceDocumentReference: input.valuationDocumentReference!,
+    }) : null;
 
     if (item.stockLocationId !== location.id || item.warehouseId !== location.warehouseId) {
       await tx.inventoryItem.update({

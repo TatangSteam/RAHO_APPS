@@ -34,6 +34,19 @@ describe('Sprint 11 go-live audit helpers', () => {
     ])).toMatchObject({ valid: false });
   });
 
+  it('memulai mutation chain baru dari checkpoint migration legacy', () => {
+    expect(evaluateInventoryMutationChain('18', [
+      { id: 'old-receipt', quantity: '10', stockBefore: '10', stockAfter: '20', referenceType: 'SHIPMENT' },
+      { id: 'legacy-checkpoint', quantity: '20', stockBefore: '0', stockAfter: '20', referenceType: 'LEGACY_MIGRATION' },
+      { id: 'new-usage', quantity: '2', stockBefore: '20', stockAfter: '18', referenceType: 'TREATMENT_SESSION' },
+    ])).toEqual({ valid: true, issues: [] });
+
+    expect(evaluateInventoryMutationChain('17', [
+      { id: 'legacy-checkpoint', quantity: '20', stockBefore: '0', stockAfter: '20', referenceType: 'LEGACY_MIGRATION' },
+      { id: 'broken-new-usage', quantity: '2', stockBefore: '19', stockAfter: '17', referenceType: 'TREATMENT_SESSION' },
+    ])).toMatchObject({ valid: false });
+  });
+
   it('mencocokkan FIFO layer plus in-transit dengan akun kontrol inventory', () => {
     expect(evaluateInventoryValue('800.004', '200', '1000').matches).toBe(true);
     const mismatch = evaluateInventoryValue('800', '150', '1000');

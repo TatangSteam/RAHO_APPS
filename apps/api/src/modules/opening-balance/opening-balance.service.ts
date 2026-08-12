@@ -4,7 +4,6 @@ import { prisma } from '@lib/prisma';
 import { errors } from '@middleware/errorHandler';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds, hasPermission } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
-import { isAutonomousFinanceUser } from '@modules/iam/finance-policy';
 import { postJournal } from '@modules/accounting/accounting.service';
 import { receiveOpeningInventoryInTransaction } from '@modules/inventory/services/inventory-ledger.service';
 import { resolveBranchInventoryScope } from '@modules/inventory/services/inventory-scope.service';
@@ -270,7 +269,6 @@ export async function postOpeningBalance(userId: string, id: string) {
   await assertBranchAccess(userId, candidate.branchId);
   await assertPermission(userId, PERMISSIONS.OPENING_BALANCE_POST, candidate.branchId);
   await assertPermission(userId, PERMISSIONS.JOURNAL_POST, candidate.branchId);
-  const autonomousFinance = await isAutonomousFinanceUser(userId);
 
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "opening_balances" WHERE "id" = ${id} FOR UPDATE`);
@@ -284,7 +282,7 @@ export async function postOpeningBalance(userId: string, id: string) {
       return { openingBalance: formatOpening(replay), idempotentReplay: true };
     }
     if (opening.status !== OpeningBalanceStatus.SUBMITTED) throw errors.conflict('OPENING_NOT_SUBMITTED', 'Opening balance belum diajukan.');
-    if (opening.createdBy === userId && !autonomousFinance) {
+    if (opening.createdBy === userId) {
       throw errors.forbidden('Maker tidak boleh mem-posting opening balance sendiri.');
     }
 
@@ -378,9 +376,8 @@ export async function rejectOpeningBalance(userId: string, id: string, reason: s
   if (!opening) throw errors.notFound('Opening balance tidak ditemukan.');
   await assertBranchAccess(userId, opening.branchId);
   await assertPermission(userId, PERMISSIONS.OPENING_BALANCE_POST, opening.branchId);
-  const autonomousFinance = await isAutonomousFinanceUser(userId);
-  if (opening.createdBy === userId && !autonomousFinance) {
-    throw errors.forbidden('Maker non-Finance tidak boleh menolak opening balance sendiri.');
+  if (opening.createdBy === userId) {
+    throw errors.forbidden('Maker tidak boleh menolak opening balance sendiri.');
   }
   if (opening.status !== OpeningBalanceStatus.SUBMITTED) throw errors.conflict('OPENING_NOT_SUBMITTED', 'Opening balance belum diajukan.');
   const updated = await prisma.openingBalance.update({ where: { id }, data: { status: 'REJECTED', rejectionReason: reason, reviewedBy: userId, reviewedAt: new Date() } });

@@ -66,6 +66,105 @@ export function buildTrialBalance(openingLines: LedgerAmount[], movementLines: L
   return { accounts, totalDebit: money(totalDebit), totalCredit: money(totalCredit), difference: money(totalDebit.sub(totalCredit)), balanced: totalDebit.equals(totalCredit) };
 }
 
+function accountBalances(lines: LedgerAmount[], types: AccountType[]) {
+  return aggregateLedger(lines)
+    .filter((row) => types.includes(row.type))
+    .map((row) => ({
+      accountId: row.accountId,
+      code: row.code,
+      name: row.name,
+      type: row.type,
+      amount: money(naturalBalance(row)),
+    }));
+}
+
+function profit(lines: LedgerAmount[]) {
+  return aggregateLedger(lines).reduce((sum, row) => {
+    if (row.type === AccountType.REVENUE) return sum.add(row.credit.sub(row.debit));
+    if (row.type === AccountType.EXPENSE) return sum.sub(row.debit.sub(row.credit));
+    return sum;
+  }, D(0));
+}
+
+export function buildFinancialPosition(lines: LedgerAmount[]) {
+  const assets = accountBalances(lines, [AccountType.ASSET]);
+  const liabilities = accountBalances(lines, [AccountType.LIABILITY]);
+  const equityAccounts = accountBalances(lines, [AccountType.EQUITY]);
+  const unclosedEarnings = profit(lines);
+  const totalAssets = assets.reduce((sum, row) => sum.add(row.amount), D(0));
+  const totalLiabilities = liabilities.reduce((sum, row) => sum.add(row.amount), D(0));
+  const postedEquity = equityAccounts.reduce((sum, row) => sum.add(row.amount), D(0));
+  const totalEquity = postedEquity.add(unclosedEarnings);
+  const difference = totalAssets.sub(totalLiabilities).sub(totalEquity);
+  return {
+    assets,
+    liabilities,
+    equityAccounts,
+    unclosedEarnings: money(unclosedEarnings),
+    totalAssets: money(totalAssets),
+    totalLiabilities: money(totalLiabilities),
+    postedEquity: money(postedEquity),
+    totalEquity: money(totalEquity),
+    totalLiabilitiesAndEquity: money(totalLiabilities.add(totalEquity)),
+    difference: money(difference),
+    balanced: difference.equals(0),
+  };
+}
+
+export function buildChangesInEquity(openingLines: LedgerAmount[], movementLines: LedgerAmount[]) {
+  const openingAccounts = accountBalances(openingLines, [AccountType.EQUITY]);
+  const movementAccounts = accountBalances(movementLines, [AccountType.EQUITY]);
+  const openingPostedEquity = openingAccounts.reduce((sum, row) => sum.add(row.amount), D(0));
+  const openingUnclosedEarnings = profit(openingLines);
+  const directEquityMovement = movementAccounts.reduce((sum, row) => sum.add(row.amount), D(0));
+  const periodProfit = profit(movementLines);
+  const openingTotalEquity = openingPostedEquity.add(openingUnclosedEarnings);
+  const endingTotalEquity = openingTotalEquity.add(directEquityMovement).add(periodProfit);
+  return {
+    openingAccounts,
+    movementAccounts,
+    openingPostedEquity: money(openingPostedEquity),
+    openingUnclosedEarnings: money(openingUnclosedEarnings),
+    openingTotalEquity: money(openingTotalEquity),
+    directEquityMovement: money(directEquityMovement),
+    periodProfit: money(periodProfit),
+    endingTotalEquity: money(endingTotalEquity),
+  };
+}
+
+export type AgingBucket = 'CURRENT' | 'DAYS_1_30' | 'DAYS_31_60' | 'DAYS_61_90' | 'OVER_90';
+
+function jakartaDayOrdinal(value: Date) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(value);
+  const year = Number(parts.find((part) => part.type === 'year')!.value);
+  const month = Number(parts.find((part) => part.type === 'month')!.value);
+  const day = Number(parts.find((part) => part.type === 'day')!.value);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86_400_000);
+}
+
+export function agingClassification(dueDate: Date | null, asOf: Date) {
+  const daysPastDue = dueDate ? Math.max(0, jakartaDayOrdinal(asOf) - jakartaDayOrdinal(dueDate)) : 0;
+  const bucket: AgingBucket = daysPastDue === 0 ? 'CURRENT'
+    : daysPastDue <= 30 ? 'DAYS_1_30'
+      : daysPastDue <= 60 ? 'DAYS_31_60'
+        : daysPastDue <= 90 ? 'DAYS_61_90'
+          : 'OVER_90';
+  return { daysPastDue, bucket };
+}
+
+export function summarizeAging(rows: Array<{ balance: Prisma.Decimal.Value; bucket: AgingBucket }>) {
+  const buckets: Record<AgingBucket, Prisma.Decimal> = {
+    CURRENT: D(0), DAYS_1_30: D(0), DAYS_31_60: D(0), DAYS_61_90: D(0), OVER_90: D(0),
+  };
+  for (const row of rows) buckets[row.bucket] = buckets[row.bucket].add(row.balance);
+  return {
+    buckets: Object.fromEntries(Object.entries(buckets).map(([key, value]) => [key, money(value)])) as Record<AgingBucket, string>,
+    totalOutstanding: money(Object.values(buckets).reduce((sum, value) => sum.add(value), D(0))),
+  };
+}
+
 export function reconciliationResult(ledger: Prisma.Decimal.Value, subledger: Prisma.Decimal.Value) {
   const difference = D(ledger).sub(subledger);
   return { ledgerBalance: money(ledger), subledgerBalance: money(subledger), difference: money(difference), reconciled: difference.equals(0) };

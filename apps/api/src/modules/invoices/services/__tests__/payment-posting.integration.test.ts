@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { PackageStatus, PackageType, PaymentMethod, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import { InvoicePaymentService } from '../invoice-payment.service';
 import { InvoiceRefundService } from '../invoice-refund.service';
 
@@ -26,11 +27,42 @@ describeDatabase('AC-001 package payment posting integration', () => {
   const normalPaymentId = `pay_normal_payment_${runId}`;
   const service = new InvoicePaymentService();
   const refundService = new InvoiceRefundService();
+  let createdFinanceTemplateId: string | null = null;
 
   beforeAll(async () => {
-    const financeTemplate = await prisma.roleTemplate.findUniqueOrThrow({
+    let financeTemplate = await prisma.roleTemplate.findUnique({
       where: { code: 'FINANCE_DUMMY' },
     });
+    if (!financeTemplate) {
+      const requiredPermissions = await prisma.permission.findMany({
+        where: {
+          code: {
+            in: [
+              PERMISSIONS.PAYMENT_VERIFY,
+              PERMISSIONS.PAYMENT_REJECT,
+              PERMISSIONS.PAYMENT_REFUND,
+              PERMISSIONS.JOURNAL_POST,
+            ],
+          },
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      if (requiredPermissions.length !== 4) {
+        throw new Error('Migration IAM belum menyediakan permission pembayaran yang dibutuhkan test.');
+      }
+      financeTemplate = await prisma.roleTemplate.create({
+        data: {
+          code: 'FINANCE_DUMMY',
+          name: 'Finance Integration Test',
+          description: 'Fixture sementara untuk integration test pembayaran.',
+          permissions: {
+            create: requiredPermissions.map((permission) => ({ permissionId: permission.id })),
+          },
+        },
+      });
+      createdFinanceTemplateId = financeTemplate.id;
+    }
     await prisma.user.createMany({ data: [
       { id: verifierId, email: `pay-verifier-${runId}@example.test`, password: 'test-only', role: Role.SUPER_ADMIN },
       {
@@ -214,6 +246,11 @@ describeDatabase('AC-001 package payment posting integration', () => {
     await prisma.accountingPeriod.deleteMany({ where: { id: periodId } });
     await prisma.member.deleteMany({ where: { id: memberId } });
     await prisma.user.deleteMany({ where: { id: { in: [memberUserId, submitterId, verifierId] } } });
+    if (createdFinanceTemplateId) {
+      await prisma.roleTemplate.deleteMany({
+        where: { id: createdFinanceTemplateId, users: { none: {} } },
+      });
+    }
     await prisma.branch.deleteMany({ where: { id: branchId } });
     await prisma.$disconnect();
   }, 30_000);

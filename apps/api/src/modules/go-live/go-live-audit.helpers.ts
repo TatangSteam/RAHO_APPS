@@ -53,6 +53,7 @@ export function evaluateInventoryMutationChain(
     quantity: Prisma.Decimal.Value;
     stockBefore: Prisma.Decimal.Value;
     stockAfter: Prisma.Decimal.Value;
+    referenceType?: string | null;
   }>,
 ) {
   const issues: Array<{ mutationId?: string; reason: string }> = [];
@@ -62,19 +63,33 @@ export function evaluateInventoryMutationChain(
     return { valid: issues.length === 0, issues };
   }
 
-  mutations.forEach((mutation, index) => {
+  // The inventory-ledger migration materialized the then-current legacy stock
+  // as an explicit opening checkpoint. Mutations before that checkpoint belong
+  // to the old direct-stock model and must not be chained into the new ledger.
+  let checkpointIndex = -1;
+  for (let index = mutations.length - 1; index >= 0; index -= 1) {
+    if (mutations[index].referenceType === 'LEGACY_MIGRATION') {
+      checkpointIndex = index;
+      break;
+    }
+  }
+  const auditableMutations = checkpointIndex >= 0
+    ? mutations.slice(checkpointIndex)
+    : mutations;
+
+  auditableMutations.forEach((mutation, index) => {
     const before = D(mutation.stockBefore);
     const after = D(mutation.stockAfter);
     if (!after.sub(before).abs().equals(D(mutation.quantity))) {
       issues.push({ mutationId: mutation.id, reason: 'QUANTITY_DOES_NOT_MATCH_STOCK_DELTA' });
     }
-    if (index > 0 && !D(mutations[index - 1].stockAfter).equals(before)) {
+    if (index > 0 && !D(auditableMutations[index - 1].stockAfter).equals(before)) {
       issues.push({ mutationId: mutation.id, reason: 'MUTATION_CHAIN_DISCONTINUITY' });
     }
   });
 
-  if (!D(mutations[mutations.length - 1].stockAfter).equals(currentStock)) {
-    issues.push({ mutationId: mutations[mutations.length - 1].id, reason: 'LATEST_MUTATION_DOES_NOT_MATCH_STOCK' });
+  if (!D(auditableMutations[auditableMutations.length - 1].stockAfter).equals(currentStock)) {
+    issues.push({ mutationId: auditableMutations[auditableMutations.length - 1].id, reason: 'LATEST_MUTATION_DOES_NOT_MATCH_STOCK' });
   }
   return { valid: issues.length === 0, issues };
 }

@@ -3,7 +3,7 @@ import { prisma } from '@lib/prisma';
 import { assertBranchAccess, assertPermission, getAccessibleBranchIds } from '@modules/iam/authorization.service';
 import { PERMISSIONS } from '@modules/iam/permission-catalog';
 import type { FinanceReportQuery, GeneralLedgerQuery } from './finance-report.schema';
-import { aggregateLedger, buildProfitLoss, buildTrialBalance, money, naturalBalance, reconciliationResult } from './finance-report.helpers';
+import { agingClassification, aggregateLedger, buildChangesInEquity, buildFinancialPosition, buildProfitLoss, buildTrialBalance, money, naturalBalance, reconciliationResult, summarizeAging } from './finance-report.helpers';
 
 const D = (value: Prisma.Decimal.Value = 0) => new Prisma.Decimal(value);
 
@@ -45,7 +45,10 @@ async function ledgerLines(
     where: {
       ...branchWhere(branchIds),
       ...accountWhere,
-      journalEntry: { status: 'POSTED', transactionDate: { ...(from ? { gte: from } : {}), lte: to } },
+      // A reversed journal remains part of the immutable ledger. Its separate
+      // reversal entry neutralizes it; excluding the original would invert the
+      // balance instead of producing a net-zero correction.
+      journalEntry: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { ...(from ? { gte: from } : {}), lte: to } },
     },
     select: { branchId: true, accountId: true, debit: true, credit: true, account: { select: { code: true, name: true, type: true, normalBalance: true } } },
   });
@@ -71,7 +74,7 @@ export async function generalLedger(actorUserId: string, query: GeneralLedgerQue
   const where: Prisma.JournalLineWhereInput = {
     ...branchWhere(branches),
     ...(query.accountCode ? { account: { code: query.accountCode } } : {}),
-    journalEntry: { status: 'POSTED', transactionDate: { gte: start, lte: end } },
+    journalEntry: { status: { in: ['POSTED', 'REVERSED'] }, transactionDate: { gte: start, lte: end } },
   };
   const skip = (query.page - 1) * query.limit;
   const [openingRows, previousRows, rows, total] = await Promise.all([
@@ -143,6 +146,109 @@ export async function cashBankReport(actorUserId: string, query: FinanceReportQu
     ),
   }));
   return { asOf: end, source: 'POSTED_JOURNAL_LINES', accounts: results, reconciled: results.every((row) => row.reconciled) };
+}
+
+export async function financialPosition(actorUserId: string, query: FinanceReportQuery) {
+  const branches = await scope(actorUserId, query);
+  const { end } = range(query);
+  const [lines, postedOpeningBalances, pendingInventoryValuations] = await Promise.all([
+    ledgerLines(branches, undefined, end),
+    prisma.openingBalance.count({
+      where: { status: 'POSTED', ...(branches === null ? {} : { branchId: { in: branches } }) },
+    }),
+    prisma.inventoryCostLayer.count({
+      where: {
+        isVoided: false,
+        remainingQty: { gt: 0 },
+        OR: [{ valuationStatus: 'PENDING_VALUATION' }, { unitCost: null }],
+        ...(branches === null ? {} : { inventoryBalance: { branchId: { in: branches } } }),
+      },
+    }),
+  ]);
+  const limitations = [
+    ...(postedOpeningBalances > 0 ? [] : ['OPENING_BALANCE_MISSING']),
+    ...(pendingInventoryValuations > 0 ? ['INVENTORY_VALUATION_INCOMPLETE'] : []),
+  ];
+  return {
+    asOf: end,
+    source: 'POSTED_JOURNAL_LINES',
+    dataQuality: { complete: limitations.length === 0, postedOpeningBalances, pendingInventoryValuations, limitations },
+    ...buildFinancialPosition(lines),
+  };
+}
+
+export async function changesInEquity(actorUserId: string, query: FinanceReportQuery) {
+  const branches = await scope(actorUserId, query);
+  const { start, end } = range(query);
+  const [opening, movement] = await Promise.all([
+    ledgerLines(branches, undefined, new Date(start.getTime() - 1)),
+    ledgerLines(branches, start, end),
+  ]);
+  return { period: { startDate: start, endDate: end }, source: 'POSTED_JOURNAL_LINES', ...buildChangesInEquity(opening, movement) };
+}
+
+export async function receivableAging(actorUserId: string, query: FinanceReportQuery) {
+  const branches = await scope(actorUserId, query);
+  await assertPermission(actorUserId, PERMISSIONS.INVOICE_READ, query.branchId);
+  const { end: asOf } = range(query);
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      ...(branches === null ? {} : { branchId: { in: branches } }),
+      status: { in: ['PENDING_PAYMENT', 'DEBT', 'OVERDUE'] },
+    },
+    select: {
+      id: true, invoiceNumber: true, totalAmount: true, actualPaidAmount: true, dueDate: true,
+      branch: { select: { id: true, branchCode: true, name: true } },
+      member: { select: { memberNo: true, user: { select: { email: true, profile: { select: { fullName: true } } } } } },
+    },
+    orderBy: [{ dueDate: 'asc' }, { invoiceNumber: 'asc' }],
+  });
+  const rows = invoices.flatMap((invoice) => {
+    const balance = invoice.totalAmount.sub(invoice.actualPaidAmount || 0);
+    if (!balance.greaterThan(0)) return [];
+    return [{
+      id: invoice.id,
+      documentNumber: invoice.invoiceNumber,
+      counterpartyCode: invoice.member.memberNo,
+      counterpartyName: invoice.member.user.profile?.fullName || invoice.member.user.email,
+      branch: invoice.branch,
+      dueDate: invoice.dueDate,
+      balance: money(balance),
+      ...agingClassification(invoice.dueDate, asOf),
+    }];
+  });
+  return { asOf, balanceSnapshotAt: new Date(), source: 'CURRENT_OPERATIONAL_SUBLEDGER', rows, ...summarizeAging(rows) };
+}
+
+export async function payableAging(actorUserId: string, query: FinanceReportQuery) {
+  const branches = await scope(actorUserId, query);
+  await assertPermission(actorUserId, PERMISSIONS.AP_READ, query.branchId);
+  const { end: asOf } = range(query);
+  const invoices = await prisma.supplierInvoice.findMany({
+    where: {
+      ...(branches === null ? {} : { branchId: { in: branches } }),
+      balanceAmount: { gt: 0 },
+      status: { in: ['POSTED', 'PARTIALLY_PAID'] },
+    },
+    select: {
+      id: true, invoiceNumber: true, supplierInvoiceNumber: true, dueDate: true, balanceAmount: true,
+      branch: { select: { id: true, branchCode: true, name: true } },
+      supplier: { select: { code: true, name: true } },
+    },
+    orderBy: [{ dueDate: 'asc' }, { invoiceNumber: 'asc' }],
+  });
+  const rows = invoices.map((invoice) => ({
+    id: invoice.id,
+    documentNumber: invoice.invoiceNumber,
+    externalDocumentNumber: invoice.supplierInvoiceNumber,
+    counterpartyCode: invoice.supplier.code,
+    counterpartyName: invoice.supplier.name,
+    branch: invoice.branch,
+    dueDate: invoice.dueDate,
+    balance: money(invoice.balanceAmount),
+    ...agingClassification(invoice.dueDate, asOf),
+  }));
+  return { asOf, balanceSnapshotAt: new Date(), source: 'CURRENT_OPERATIONAL_SUBLEDGER', rows, ...summarizeAging(rows) };
 }
 
 export async function deferredRevenueReport(actorUserId: string, query: FinanceReportQuery) {

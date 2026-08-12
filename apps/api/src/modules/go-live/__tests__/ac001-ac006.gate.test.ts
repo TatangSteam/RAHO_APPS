@@ -53,6 +53,15 @@ describe('Sprint 11 AC-001–006 automated gate inventory', () => {
     const audit = read('go-live/go-live-audit.service.ts');
     expect(audit).toContain("'INV-004'");
     expect(audit).toContain("'INV-005'");
+    expect(audit).toContain("isActive: true, branchCode: { not: 'EXT' }");
+    expect(audit).toContain('referenceType: true');
     expect(audit).toContain("code: { in: ['1300', '1310'] }");
+  });
+
+  it('audit hanya menghitung cabang operasional dan menolak EXT dari periode serta transfer internal', () => {
+    const audit = read('go-live/go-live-audit.service.ts');
+    expect(audit).toContain("where: { isActive: true, branchCode: { not: 'EXT' } }");
+    expect(audit).toContain("fromBranch: { isActive: true, branchCode: { not: 'EXT' } }");
+    expect(audit).toContain("toBranch: { isActive: true, branchCode: { not: 'EXT' } }");
   });
 });

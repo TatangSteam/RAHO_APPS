@@ -1,3 +1,6 @@
+const { configureTestDatabase } = require('../database-test-safety.cjs');
+
+configureTestDatabase();
 process.env.RUN_INVENTORY_DB_TESTS = 'true';
 
 const { run } = require('jest');

@@ -11,6 +11,10 @@ const handler = <T>(fn: (userId: string, query: T) => Promise<unknown>, schema: 
 export const dashboard = handler(service.financeDashboard, financeReportQuerySchema);
 export const profitLoss = handler(service.profitLoss, financeReportQuerySchema);
 export const trialBalance = handler(service.trialBalance, financeReportQuerySchema);
+export const financialPosition = handler(service.financialPosition, financeReportQuerySchema);
+export const changesInEquity = handler(service.changesInEquity, financeReportQuerySchema);
+export const receivableAging = handler(service.receivableAging, financeReportQuerySchema);
+export const payableAging = handler(service.payableAging, financeReportQuerySchema);
 export const generalLedger = handler(service.generalLedger, generalLedgerQuerySchema);
 export const cashBank = handler(service.cashBankReport, financeReportQuerySchema);
 export const deferredRevenue = handler(service.deferredRevenueReport, financeReportQuerySchema);

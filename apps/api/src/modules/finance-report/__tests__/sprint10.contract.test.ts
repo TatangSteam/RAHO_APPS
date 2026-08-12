@@ -9,10 +9,25 @@ describe('Sprint 10 reporting and notification contract', () => {
 
   it('semua finance report memakai posted journal lines dan branch scope', () => {
     expect(reports).toContain('prisma.journalLine.findMany');
-    expect(reports).toContain("journalEntry: { status: 'POSTED'");
+    expect(reports).toContain("journalEntry: { status: { in: ['POSTED', 'REVERSED'] }");
     expect(reports).toContain('getAccessibleBranchIds');
-    expect(reports).not.toContain('prisma.invoice.findMany');
     expect(reports).not.toContain('prisma.revenueRecognition.findMany');
+  });
+
+  it('laporan standar memakai ledger sedangkan aging menyatakan sumber current subledger', () => {
+    expect(reports).toContain('...buildFinancialPosition(lines)');
+    expect(reports).toContain('buildChangesInEquity(opening, movement)');
+    expect(reports).toContain("source: 'CURRENT_OPERATIONAL_SUBLEDGER'");
+    expect(reports).toContain('balanceSnapshotAt: new Date()');
+  });
+
+  it('pembayaran invoice berpajak fail-closed sampai akun pajak tersedia', () => {
+    expect(payment).toContain("'INVOICE_TAX_LEDGER_NOT_CONFIGURED'");
+  });
+
+  it('ledger mempertahankan jurnal asli yang direversal agar reversal menetralkan saldo', () => {
+    expect(reports).toContain("status: { in: ['POSTED', 'REVERSED'] }");
+    expect(reports).not.toContain("journalEntry: { status: 'POSTED'");
   });
 
   it('dashboard menampilkan status rekonsiliasi kas, deferred, dan jurnal', () => {

@@ -274,11 +274,15 @@ export async function configureGoLiveControl(input: {
   const connection = await activeConnection();
   if (input.canaryBranchIds?.length) {
     const branches = await prisma.branch.findMany({
-      where: { id: { in: input.canaryBranchIds }, isActive: true },
+      where: {
+        id: { in: input.canaryBranchIds },
+        isActive: true,
+        branchCode: { not: 'EXT' },
+      },
       select: { id: true, type: true },
     });
     if (branches.length !== new Set(input.canaryBranchIds).size) {
-      throw new AppError(422, 'ZOHO_CANARY_BRANCH_INVALID', 'Salah satu cabang canary tidak aktif atau tidak ditemukan.');
+      throw new AppError(422, 'ZOHO_CANARY_BRANCH_INVALID', 'Salah satu cabang canary tidak aktif, merupakan cabang sistem, atau tidak ditemukan.');
     }
   }
   return prisma.zohoGoLiveControl.upsert({

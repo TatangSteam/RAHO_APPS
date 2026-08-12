@@ -47,7 +47,7 @@ async function main(): Promise<void> {
       select: { id: true, branchCode: true, name: true, type: true, isActive: true },
     }),
     prisma.branch.findMany({
-      where: { isActive: true },
+      where: { isActive: true, branchCode: { not: 'EXT' } },
       select: { id: true, branchCode: true, name: true, type: true },
       orderBy: { branchCode: 'asc' },
     }),
