@@ -74,6 +74,9 @@ jobs:
           git diff --exit-code -- apps/api/package-lock.json apps/web/package-lock.json
 
           npm ci
+          # A clean runner only has Prisma's placeholder client after npm ci.
+          # Generate the schema-specific client before Jest, lint, and tsc load it.
+          npm run db:generate --prefix apps/api
           npm run test:api
           npm run test:web
           npm run lint --prefix apps/api

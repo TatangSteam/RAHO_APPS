@@ -1,11 +1,19 @@
 import { randomUUID } from 'crypto';
-import { env } from '@config/env';
-import { prisma } from '@lib/prisma';
-import { processClaimedZohoEvent } from '../zoho.worker';
 
-describe('Zoho worker database integration', () => {
+const describeDatabase = process.env.RUN_ZOHO_DB_TESTS === 'true' ? describe : describe.skip;
+
+describeDatabase('Zoho worker database integration', () => {
+  let env: (typeof import('@config/env'))['env'];
+  let prisma: (typeof import('@lib/prisma'))['prisma'];
+  let processClaimedZohoEvent: (typeof import('../zoho.worker'))['processClaimedZohoEvent'];
   const aggregateId = `zoho-worker-test-${randomUUID()}`;
   let eventId = '';
+
+  beforeAll(async () => {
+    ({ env } = await import('@config/env'));
+    ({ prisma } = await import('@lib/prisma'));
+    ({ processClaimedZohoEvent } = await import('../zoho.worker'));
+  });
 
   afterAll(async () => {
     if (eventId) await prisma.integrationEvent.deleteMany({ where: { id: eventId } });
