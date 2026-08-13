@@ -9,7 +9,9 @@ import {
   INVOICE_VOIDED_EVENT,
 } from '../zoho.invoice.service';
 
-describe('Zoho Sprint 5 invoice database integration', () => {
+const describeDatabase = process.env.RUN_ZOHO_DB_TESTS === 'true' ? describe : describe.skip;
+
+describeDatabase('Zoho Sprint 5 invoice database integration', () => {
   const runId = randomUUID().replace(/-/g, '').slice(0, 12);
   const actorId = `zinv-actor-${runId}`;
   const memberUserId = `zinv-member-user-${runId}`;
@@ -168,4 +170,3 @@ describe('Zoho Sprint 5 invoice database integration', () => {
     })).toBe(1);
   });
 });
-

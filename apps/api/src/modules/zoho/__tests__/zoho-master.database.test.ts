@@ -7,7 +7,9 @@ import {
   previewMaster,
 } from '../zoho.master.service';
 
-describe('Zoho Sprint 4 master database integration', () => {
+const describeDatabase = process.env.RUN_ZOHO_DB_TESTS === 'true' ? describe : describe.skip;
+
+describeDatabase('Zoho Sprint 4 master database integration', () => {
   const suffix = randomUUID().slice(0, 8).toUpperCase();
   const uomId = `zoho-uom-${suffix}`;
   const productId = `zoho-product-${suffix}`;

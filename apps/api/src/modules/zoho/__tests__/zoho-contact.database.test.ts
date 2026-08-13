@@ -2,7 +2,9 @@ import { randomUUID } from 'crypto';
 import { prisma } from '@lib/prisma';
 import { enqueueContact, previewContact, SUPPLIER_CONTACT_EVENT } from '../zoho.contact.service';
 
-describe('Zoho Sprint 3 contact database integration', () => {
+const describeDatabase = process.env.RUN_ZOHO_DB_TESTS === 'true' ? describe : describe.skip;
+
+describeDatabase('Zoho Sprint 3 contact database integration', () => {
   const suffix = randomUUID().slice(0, 8);
   const supplierId = `zoho-contact-${suffix}`;
   let actorId = '';
