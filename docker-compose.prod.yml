@@ -124,6 +124,12 @@ services:
     depends_on:
       - postgres
       - minio
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(async response => { const body = await response.json(); if (!response.ok || body.status !== 'ok') process.exit(1); }).catch(() => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     secrets:
       - DATABASE_URL
       - MINIO_ACCESS_KEY
@@ -166,6 +172,12 @@ services:
       NEXT_PUBLIC_APP_VERSION: ${WEB_NEXT_PUBLIC_APP_VERSION:-1.0.0}
     depends_on:
       - api
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/', { redirect: 'manual' }).then(response => { if (response.status < 200 || response.status >= 400) process.exit(1); }).catch(() => process.exit(1));"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
     secrets:
       - JWT_ACCESS_SECRET
       - JWT_REFRESH_SECRET
@@ -234,28 +246,28 @@ networks:
 
 secrets:
   DATABASE_URL:
-    file: ./secrets/DATABASE_URL
+    file: ${RAHO_SECRETS_DIR:-./secrets}/DATABASE_URL
   ICD_API_CLIENT_ID:
-    file: ./secrets/ICD_API_CLIENT_ID
+    file: ${RAHO_SECRETS_DIR:-./secrets}/ICD_API_CLIENT_ID
   ICD_API_CLIENT_SECRET:
-    file: ./secrets/ICD_API_CLIENT_SECRET
+    file: ${RAHO_SECRETS_DIR:-./secrets}/ICD_API_CLIENT_SECRET
   JWT_ACCESS_SECRET:
-    file: ./secrets/JWT_ACCESS_SECRET
+    file: ${RAHO_SECRETS_DIR:-./secrets}/JWT_ACCESS_SECRET
   JWT_REFRESH_SECRET:
-    file: ./secrets/JWT_REFRESH_SECRET
+    file: ${RAHO_SECRETS_DIR:-./secrets}/JWT_REFRESH_SECRET
   MINIO_ACCESS_KEY:
-    file: ./secrets/MINIO_ACCESS_KEY
+    file: ${RAHO_SECRETS_DIR:-./secrets}/MINIO_ACCESS_KEY
   MINIO_ROOT_PASSWORD:
-    file: ./secrets/MINIO_ROOT_PASSWORD
+    file: ${RAHO_SECRETS_DIR:-./secrets}/MINIO_ROOT_PASSWORD
   MINIO_ROOT_USER:
-    file: ./secrets/MINIO_ROOT_USER
+    file: ${RAHO_SECRETS_DIR:-./secrets}/MINIO_ROOT_USER
   MINIO_SECRET_KEY:
-    file: ./secrets/MINIO_SECRET_KEY
+    file: ${RAHO_SECRETS_DIR:-./secrets}/MINIO_SECRET_KEY
   POSTGRES_PASSWORD:
-    file: ./secrets/POSTGRES_PASSWORD
+    file: ${RAHO_SECRETS_DIR:-./secrets}/POSTGRES_PASSWORD
   ZOHO_CLIENT_ID:
-    file: ./secrets/ZOHO_CLIENT_ID
+    file: ${RAHO_SECRETS_DIR:-./secrets}/ZOHO_CLIENT_ID
   ZOHO_CLIENT_SECRET:
-    file: ./secrets/ZOHO_CLIENT_SECRET
+    file: ${RAHO_SECRETS_DIR:-./secrets}/ZOHO_CLIENT_SECRET
   ZOHO_TOKEN_ENCRYPTION_KEY:
-    file: ./secrets/ZOHO_TOKEN_ENCRYPTION_KEY
+    file: ${RAHO_SECRETS_DIR:-./secrets}/ZOHO_TOKEN_ENCRYPTION_KEY

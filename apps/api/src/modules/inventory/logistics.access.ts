@@ -45,6 +45,11 @@ export const canReceiveBranchStock: Role[] = [
   Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
 
+export const canReviewBagStockRequest: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+];
+
 export const canReceiveBagStock: Role[] = [
   Role.ADMIN_LAYANAN,
   Role.SUPER_ADMIN,

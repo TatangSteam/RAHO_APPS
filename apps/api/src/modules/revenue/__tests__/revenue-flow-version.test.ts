@@ -30,6 +30,7 @@ function reservationTx(input: {
     memberPackage: {
       findMany: jest.fn().mockResolvedValue([{
         id: packageId,
+        packageCode: 'PKG-TEST-001',
         finalPrice: new Prisma.Decimal('1250000'),
         revenueFlowVersion: input.revenueFlowVersion ?? CURRENT_REVENUE_FLOW_VERSION,
         status: input.packageStatus ?? PackageStatus.ACTIVE,
@@ -90,6 +91,17 @@ describe('member package revenue flow compatibility', () => {
     )).rejects.toMatchObject({
       status: 422,
       code: 'TREATMENT_REVENUE_CONTRACT_MISSING',
+    });
+  });
+
+  it('explains that an unpaid debt session needs payment verification', async () => {
+    await expect(reserveTreatmentCompletedRevenue(
+      'event-1',
+      reservationTx({ packageStatus: PackageStatus.PENDING_PAYMENT, usedSessions: 0 }),
+    )).rejects.toMatchObject({
+      status: 422,
+      code: 'TREATMENT_PAYMENT_NOT_VERIFIED',
+      message: expect.stringContaining('PKG-TEST-001'),
     });
   });
 

@@ -1,6 +1,7 @@
 import {
   buildZohoContactPayload,
   decideContactMatch,
+  distinctZohoContactName,
   LocalContactSnapshot,
   splitContactName,
 } from '../zoho.contact.policy';
@@ -9,6 +10,7 @@ import { ZOHO_REQUIRED_SCOPES, ZOHO_SCOPE_VERSION } from '../zoho.client';
 const member: LocalContactSnapshot = {
   entityType: 'MEMBER',
   localEntityId: 'member-1',
+  referenceCode: 'MBR-BDG-0007',
   externalKey: 'RAHO:MEMBER:member-1',
   displayName: 'Budi Santoso',
   email: 'budi@example.com',
@@ -71,6 +73,19 @@ describe('Zoho Sprint 3 contact payload', () => {
     expect(splitContactName('Budi Santoso Wijaya')).toEqual({
       first_name: 'Budi',
       last_name: 'Santoso Wijaya',
+    });
+  });
+
+  it('uses the ERP reference to distinguish a rejected same-name contact', () => {
+    expect(distinctZohoContactName(member)).toBe('Budi Santoso [MBR-BDG-0007]');
+    const payload = buildZohoContactPayload(
+      member,
+      'custom-raho-id',
+      distinctZohoContactName(member),
+    );
+    expect(payload).toMatchObject({
+      contact_name: 'Budi Santoso [MBR-BDG-0007]',
+      contact_persons: [expect.objectContaining({ first_name: 'Budi', last_name: 'Santoso' })],
     });
   });
 });

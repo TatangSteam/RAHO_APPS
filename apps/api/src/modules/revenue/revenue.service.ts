@@ -186,6 +186,7 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       where: { id: { in: packageIds } },
       select: {
         id: true,
+        packageCode: true,
         finalPrice: true,
         revenueFlowVersion: true,
         status: true,
@@ -212,9 +213,15 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
       && !contractByPackage.has(pkg.id)
   );
   if (missingFundedContract) {
+    if (missingFundedContract.status === 'PENDING_PAYMENT' || missingFundedContract.status === 'WAITING_VERIFICATION') {
+      throw errors.unprocessable(
+        'TREATMENT_PAYMENT_NOT_VERIFIED',
+        `Paket ${missingFundedContract.packageCode} belum dibayar atau pembayarannya belum diverifikasi. Selesaikan verifikasi pembayaran sebelum menyelesaikan treatment.`,
+      );
+    }
     throw errors.unprocessable(
       'TREATMENT_REVENUE_CONTRACT_MISSING',
-      'Paket berbayar belum memiliki kontrak deferred revenue. Verifikasi pembayaran sebelum menyelesaikan treatment.',
+      `Paket ${missingFundedContract.packageCode} sudah aktif tetapi kontrak deferred revenue belum terbentuk. Jalankan rekonsiliasi pembayaran sebelum menyelesaikan treatment.`,
     );
   }
   // A mixed Basic/Booster session may contain one legacy package and one

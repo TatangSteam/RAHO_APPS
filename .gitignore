@@ -262,6 +262,8 @@ $null
 
 backups/
 scripts/
+!.github/scripts/
+!.github/scripts/deploy-production.sh
 
 # The API package exposes this runner through npm scripts; keep it reproducible.
 !apps/api/scripts/

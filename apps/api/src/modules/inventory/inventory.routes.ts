@@ -20,6 +20,7 @@ import { requirePermission } from '../../middleware/requirePermission';
 import { PERMISSIONS } from '../iam/permission-catalog';
 import {
   canManageCentralStock,
+  canReviewBagStockRequest,
   canReceiveBranchStock,
   canRequestBagStock,
   canShipStock,
@@ -444,7 +445,7 @@ router.get(
 router.post(
   '/logistics/homecare-bags',
   authenticate,
-  authorize(superAdminOnly),
+  authorize(canManageCentralStock),
   validate(createHomecareBagSchema),
   logisticsController.createHomecareBag.bind(logisticsController)
 );
@@ -489,7 +490,7 @@ router.post(
 router.post(
   '/logistics/homecare-bag-requests/:requestId/approve',
   authenticate,
-  authorize(canManageCentralStock),
+  authorize(canReviewBagStockRequest),
   validate(approveBagStockRequestSchema),
   logisticsController.approveBagStockRequest.bind(logisticsController)
 );
@@ -497,7 +498,7 @@ router.post(
 router.post(
   '/logistics/homecare-bag-requests/:requestId/reject',
   authenticate,
-  authorize(canManageCentralStock),
+  authorize(canReviewBagStockRequest),
   validate(rejectBagStockRequestSchema),
   logisticsController.rejectBagStockRequest.bind(logisticsController)
 );

@@ -4,6 +4,7 @@ export type ZohoContactType = 'customer' | 'vendor';
 export type LocalContactSnapshot = {
   entityType: ContactEntityType;
   localEntityId: string;
+  referenceCode: string;
   branchId?: string | null;
   externalKey: string;
   displayName: string;
@@ -77,6 +78,7 @@ export function splitContactName(displayName: string): { first_name: string; las
 export function buildZohoContactPayload(
   snapshot: LocalContactSnapshot,
   customFieldId?: string,
+  contactName = snapshot.displayName,
 ): Record<string, unknown> {
   const contactType = expectedZohoContactType(snapshot.entityType);
   const email = validZohoEmail(snapshot.email);
@@ -87,7 +89,7 @@ export function buildZohoContactPayload(
     is_primary_contact: true,
   };
   return {
-    contact_name: snapshot.displayName,
+    contact_name: contactName,
     contact_type: contactType,
     ...(snapshot.entityType === 'MEMBER'
       ? { customer_sub_type: 'individual' }
@@ -99,6 +101,10 @@ export function buildZohoContactPayload(
       ? { custom_fields: [{ customfield_id: customFieldId, value: snapshot.externalKey }] }
       : {}),
   };
+}
+
+export function distinctZohoContactName(snapshot: LocalContactSnapshot): string {
+  return `${snapshot.displayName} [${snapshot.referenceCode}]`;
 }
 
 export function decideContactMatch(

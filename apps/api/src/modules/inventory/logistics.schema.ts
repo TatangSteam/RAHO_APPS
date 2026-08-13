@@ -91,7 +91,12 @@ export const createHomecareTeamSchema = z.object({
   teamCode: optionalText,
   name: z.string().trim().min(1, 'Nama tim wajib diisi'),
   branchId: idSchema,
+  adminLayananUserId: idSchema,
+  nakesUserId: idSchema,
   description: optionalText,
+}).refine((input) => input.adminLayananUserId !== input.nakesUserId, {
+  message: 'Admin Layanan dan Nakes harus dua akun yang berbeda',
+  path: ['nakesUserId'],
 });
 
 export const addHomecareTeamMemberSchema = z.object({

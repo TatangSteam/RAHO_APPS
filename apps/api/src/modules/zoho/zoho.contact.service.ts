@@ -7,6 +7,7 @@ import {
   buildZohoContactPayload,
   ContactEntityType,
   decideContactMatch,
+  distinctZohoContactName,
   expectedZohoContactType,
   LocalContactSnapshot,
   ZohoContactCandidate,
@@ -15,6 +16,7 @@ import {
 import { ZohoApiError } from './zoho.error';
 import { assertErpManaged } from './zoho.origin';
 import { logZohoErrorThrottled } from './zoho.logging';
+import { mappingReviewContinuation } from './zoho.review.policy';
 
 export const MEMBER_CONTACT_EVENT = 'MEMBER_CONTACT_UPSERTED';
 export const SUPPLIER_CONTACT_EVENT = 'SUPPLIER_CONTACT_UPSERTED';
@@ -40,6 +42,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
     return {
       entityType,
       localEntityId: member.id,
+      referenceCode: member.memberNo,
       branchId: member.registrationBranchId,
       externalKey: `RAHO:MEMBER:${member.id}`,
       displayName: member.user.profile?.fullName?.trim() || member.memberNo,
@@ -63,6 +66,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
     return {
       entityType,
       localEntityId: branch.id,
+      referenceCode: branch.branchCode,
       branchId: branch.id,
       externalKey: `RAHO:PARTNERSHIP:${branch.id}`,
       displayName: `[${branch.branchCode}] ${branch.name}`,
@@ -79,6 +83,7 @@ async function localSnapshot(entityType: ContactEntityType, id: string): Promise
   return {
     entityType,
     localEntityId: supplier.id,
+    referenceCode: supplier.code,
     externalKey: `RAHO:SUPPLIER:${supplier.id}`,
     displayName: supplier.name,
     email: supplier.email || null,
@@ -354,7 +359,7 @@ export async function handleContactEvent(event: { aggregateId: string; aggregate
     localSnapshot(entityType, event.aggregateId),
   ]);
   const field = externalIdField(client.connection);
-  const payload = buildZohoContactPayload(snapshot, field.fieldId || undefined);
+  let payload = buildZohoContactPayload(snapshot, field.fieldId || undefined);
   const mapping = await prisma.zohoEntityMapping.findUnique({
     where: {
       zohoConnectionId_entityType_localEntityId: {
@@ -401,7 +406,8 @@ export async function handleContactEvent(event: { aggregateId: string; aggregate
       },
     },
   });
-  if (pendingReview?.status === 'PENDING') {
+  const reviewContinuation = mappingReviewContinuation(pendingReview?.status);
+  if (reviewContinuation === 'BLOCK') {
     throw new ZohoApiError(
       'Contact memiliki kandidat mapping yang menunggu review manusia.',
       'ZOHO_CONTACT_REVIEW_REQUIRED',
@@ -410,20 +416,30 @@ export async function handleContactEvent(event: { aggregateId: string; aggregate
     );
   }
 
-  const decision = decideContactMatch(snapshot, await searchCandidates(client, snapshot));
-  if (decision.kind === 'REVIEW') {
-    await saveReview(client.connection.id, snapshot, decision.candidates, decision.reason);
-    throw new ZohoApiError(decision.reason, 'ZOHO_CONTACT_REVIEW_REQUIRED', 409, false);
+  if (reviewContinuation === 'CREATE') {
+    payload = buildZohoContactPayload(
+      snapshot,
+      field.fieldId || undefined,
+      distinctZohoContactName(snapshot),
+    );
   }
-  if (decision.kind === 'AUTO_MATCH') {
-    await saveMapping(client.connection.id, snapshot, String(decision.contact.contact_id), {
-      operation: 'AUTO_MATCH',
-    });
-    await client.request(`/books/v3/contacts/${decision.contact.contact_id}`, {
-      method: 'PUT',
-      data: payload,
-    });
-    return { operation: 'AUTO_MATCH_UPDATE', zohoContactId: String(decision.contact.contact_id) };
+
+  if (reviewContinuation === 'SEARCH') {
+    const decision = decideContactMatch(snapshot, await searchCandidates(client, snapshot));
+    if (decision.kind === 'REVIEW') {
+      await saveReview(client.connection.id, snapshot, decision.candidates, decision.reason);
+      throw new ZohoApiError(decision.reason, 'ZOHO_CONTACT_REVIEW_REQUIRED', 409, false);
+    }
+    if (decision.kind === 'AUTO_MATCH') {
+      await saveMapping(client.connection.id, snapshot, String(decision.contact.contact_id), {
+        operation: 'AUTO_MATCH',
+      });
+      await client.request(`/books/v3/contacts/${decision.contact.contact_id}`, {
+        method: 'PUT',
+        data: payload,
+      });
+      return { operation: 'AUTO_MATCH_UPDATE', zohoContactId: String(decision.contact.contact_id) };
+    }
   }
 
   if (!field.ready) {

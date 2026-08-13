@@ -18,12 +18,14 @@ import { logAudit } from '../../utils/auditLog';
 import {
   bagStockReceiverRoles,
   branchStockReceiverRoles,
+  canReviewBagStockRequest,
   canRequestBagStock,
   centralStockManagerRoles,
   centralStockVisibleRoles,
   logisticStaffRoles,
   stockShipmentRoles,
 } from './logistics.access';
+import { getHomecareTeamReadiness, homecareRoleForStaffRole } from './homecare-team.policy';
 import { dispatchInternalTransfer, receiveInternalTransfer } from './services/internal-transfer-posting.service';
 import type {
   AddHomecareTeamMemberInput,
@@ -249,6 +251,63 @@ export class LogisticsService {
     await this.assertBagTeamMember(actor.userId, bag.teamId, roles);
   }
 
+  private async validateHomecareTeamMember(
+    userId: string,
+    requestedRole: HomecareTeamMemberRole,
+    branchId: string,
+  ) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        staffBranches: {
+          where: { branchId },
+          select: { id: true },
+        },
+      },
+    });
+    if (!user || !user.isActive) {
+      throw { status: 422, code: 'HOMECARE_STAFF_INACTIVE', message: 'Staff homecare tidak ditemukan atau tidak aktif' };
+    }
+
+    const allowedTeamRole = homecareRoleForStaffRole(user.role);
+    if (!allowedTeamRole || allowedTeamRole !== requestedRole) {
+      throw {
+        status: 422,
+        code: 'HOMECARE_STAFF_ROLE_MISMATCH',
+        message: `Peran tim tidak sesuai dengan role akun staff ${user.email}`,
+      };
+    }
+    if (user.branchId !== branchId && user.staffBranches.length === 0) {
+      throw {
+        status: 422,
+        code: 'HOMECARE_STAFF_BRANCH_MISMATCH',
+        message: `Staff ${user.email} tidak ditugaskan pada cabang tim homecare`,
+      };
+    }
+
+    return user;
+  }
+
+  private async assertHomecareTeamOperational(teamId: string) {
+    const team = await prisma.homecareTeam.findUnique({
+      where: { id: teamId },
+      include: { members: { where: { isActive: true }, select: { role: true, isActive: true } } },
+    });
+    if (!team || !team.isActive) {
+      throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan atau tidak aktif' };
+    }
+
+    const readiness = getHomecareTeamReadiness(team.members);
+    if (!readiness.isOperational) {
+      throw {
+        status: 422,
+        code: 'HOMECARE_TEAM_INCOMPLETE',
+        message: `Tim homecare belum operasional. Lengkapi: ${readiness.missingRoles.join(' dan ')}.`,
+      };
+    }
+    return team;
+  }
+
   private async validateProducts(productIds: string[]) {
     const uniqueIds = Array.from(new Set(productIds));
     const products = await prisma.masterProduct.findMany({
@@ -279,6 +338,7 @@ export class LogisticsService {
       referenceType: string;
       referenceId: string;
       notes: string;
+      locationType: LogisticLocationType;
       allowNegativeStock?: boolean;
     },
   ): Promise<MovementChange> {
@@ -333,7 +393,7 @@ export class LogisticsService {
     await tx.logisticStockMutation.create({
       data: {
         mutationCode: this.uniqueCode('LGM'),
-        locationType: LogisticLocationType.CENTRAL_STOCK,
+        locationType: params.locationType,
         locationId: params.branchId,
         masterProductId: params.masterProductId,
         type: LogisticTransactionType.STOCK_OUT,
@@ -692,7 +752,7 @@ export class LogisticsService {
     const users = await prisma.user.findMany({
       where: {
         isActive: true,
-        role: { in: [Role.ADMIN_CABANG, Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
+        role: { in: [Role.ADMIN_LAYANAN, Role.DOCTOR, Role.NURSE] },
         ...(query.branchId
           ? {
               OR: [
@@ -787,6 +847,7 @@ export class LogisticsService {
 
     return teams.map((team) => {
       const branch = branchMap.get(team.branchId);
+      const readiness = getHomecareTeamReadiness(team.members);
       return {
         id: team.id,
         teamCode: team.teamCode,
@@ -799,6 +860,7 @@ export class LogisticsService {
         isActive: team.isActive,
         memberCount: team.members.length,
         bagCount: team.bags.length,
+        ...readiness,
         members: team.members.map((member) => {
           const user = userMap.get(member.userId);
           return {
@@ -1561,19 +1623,46 @@ export class LogisticsService {
   async createHomecareTeam(actor: LogisticsActor, input: CreateHomecareTeamInput) {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses membuat tim homecare');
     const branch = await prisma.branch.findUnique({ where: { id: input.branchId } });
-    if (!branch) throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan' };
+    if (!branch || !branch.isActive) throw { status: 404, code: 'BRANCH_NOT_FOUND', message: 'Cabang tidak ditemukan atau tidak aktif' };
+    if (branch.type === BranchType.PUSAT) {
+      throw { status: 422, code: 'HOMECARE_SERVICE_BRANCH_REQUIRED', message: 'Tim homecare harus dibuat pada cabang layanan, bukan Head Office' };
+    }
+    await this.assertManagerBranchAccess(actor, input.branchId);
+
+    const [adminLayanan, nakes] = await Promise.all([
+      this.validateHomecareTeamMember(
+        input.adminLayananUserId,
+        HomecareTeamMemberRole.ADMIN_LAYANAN,
+        input.branchId,
+      ),
+      prisma.user.findUnique({
+        where: { id: input.nakesUserId },
+        select: { role: true },
+      }),
+    ]);
+    const nakesTeamRole = nakes ? homecareRoleForStaffRole(nakes.role) : null;
+    if (nakesTeamRole !== HomecareTeamMemberRole.DOCTOR && nakesTeamRole !== HomecareTeamMemberRole.NURSE) {
+      throw { status: 422, code: 'HOMECARE_NAKES_REQUIRED', message: 'Pilih satu akun Dokter atau Perawat yang aktif sebagai Nakes' };
+    }
+    await this.validateHomecareTeamMember(input.nakesUserId, nakesTeamRole, input.branchId);
 
     const teamCode = input.teamCode || this.uniqueCode('HCT');
-    const team = await prisma.homecareTeam.create({
+    const team = await prisma.$transaction((tx) => tx.homecareTeam.create({
       data: {
         teamCode,
         name: input.name,
         branchId: input.branchId,
         description: input.description,
         createdBy: actor.userId,
+        members: {
+          create: [
+            { userId: adminLayanan.id, role: HomecareTeamMemberRole.ADMIN_LAYANAN },
+            { userId: input.nakesUserId, role: nakesTeamRole },
+          ],
+        },
       },
       include: { members: true, bags: true },
-    });
+    }));
 
     await logAudit({
       userId: actor.userId,
@@ -1581,7 +1670,13 @@ export class LogisticsService {
       action: AuditAction.CREATE,
       resource: 'HomecareTeam',
       resourceId: team.id,
-      meta: { action: 'CREATE_HOMECARE_TEAM', teamCode },
+      meta: {
+        action: 'CREATE_HOMECARE_TEAM',
+        teamCode,
+        adminLayananUserId: input.adminLayananUserId,
+        nakesUserId: input.nakesUserId,
+        nakesRole: nakesTeamRole,
+      },
     });
 
     return team;
@@ -1591,6 +1686,8 @@ export class LogisticsService {
     this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses mengelola anggota tim homecare');
     const team = await prisma.homecareTeam.findUnique({ where: { id: teamId } });
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    await this.assertManagerBranchAccess(actor, team.branchId);
+    await this.validateHomecareTeamMember(input.userId, input.role, team.branchId);
 
     const member = await prisma.homecareTeamMember.upsert({
       where: { teamId_userId: { teamId, userId: input.userId } },
@@ -1627,6 +1724,23 @@ export class LogisticsService {
       include: { team: true },
     });
     if (!member) throw { status: 404, code: 'TEAM_MEMBER_NOT_FOUND', message: 'Anggota tim tidak ditemukan' };
+    await this.assertManagerBranchAccess(actor, member.team.branchId);
+
+    const activeBags = await prisma.homecareBag.count({ where: { teamId, isActive: true } });
+    if (activeBags > 0) {
+      const remainingMembers = await prisma.homecareTeamMember.findMany({
+        where: { teamId, isActive: true, userId: { not: userId } },
+        select: { role: true, isActive: true },
+      });
+      const readiness = getHomecareTeamReadiness(remainingMembers);
+      if (!readiness.isOperational) {
+        throw {
+          status: 422,
+          code: 'HOMECARE_TEAM_WOULD_BE_INCOMPLETE',
+          message: `Anggota tidak dapat dilepas selama tim memiliki tas aktif. Siapkan pengganti ${readiness.missingRoles.join(' dan ')} terlebih dahulu.`,
+        };
+      }
+    }
 
     const updated = await prisma.homecareTeamMember.update({
       where: { id: member.id },
@@ -1684,11 +1798,14 @@ export class LogisticsService {
   }
 
   async createHomecareBag(actor: LogisticsActor, input: CreateHomecareBagInput) {
-    this.assertRole(actor, [Role.SUPER_ADMIN], 'Hanya super admin yang dapat membuat tas homecare');
-    const team = await prisma.homecareTeam.findUnique({ where: { id: input.teamId } });
-    if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses membuat tas homecare');
+    const team = await this.assertHomecareTeamOperational(input.teamId);
+    await this.assertManagerBranchAccess(actor, team.branchId);
 
     const branchId = input.branchId || team.branchId;
+    if (branchId !== team.branchId) {
+      throw { status: 422, code: 'BAG_BRANCH_MISMATCH', message: 'Cabang tas harus sama dengan cabang tim homecare' };
+    }
 
     const bagCode = input.bagCode || this.uniqueCode('HCB');
     const bag = await prisma.homecareBag.create({
@@ -1731,6 +1848,8 @@ export class LogisticsService {
 
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    await this.assertHomecareTeamOperational(team.id);
+    await this.assertManagerBranchAccess(actor, team.branchId);
     if (bag.teamId === team.id) {
       throw {
         status: 400,
@@ -1882,6 +2001,7 @@ export class LogisticsService {
     if (bag.teamId !== input.teamId) {
       throw { status: 400, code: 'BAG_TEAM_MISMATCH', message: 'Tas tidak berada pada tim yang dipilih' };
     }
+    await this.assertHomecareTeamOperational(bag.teamId);
 
     const requestCode = await this.nextRequestCode('HBR', async (codePrefix) => (
       await prisma.homecareBagStockRequest.findFirst({
@@ -1890,8 +2010,9 @@ export class LogisticsService {
         select: { requestCode: true },
       })
     )?.requestCode, bag.bagCode);
-    const request = await prisma.homecareBagStockRequest.create({
-      data: {
+    const request = await prisma.$transaction(async (tx) => {
+      const created = await tx.homecareBagStockRequest.create({
+        data: {
         requestCode,
         teamId: input.teamId,
         bagId: input.bagId,
@@ -1911,12 +2032,38 @@ export class LogisticsService {
             notes: item.notes?.trim() || null,
           })),
         },
-      },
-      include: {
-        team: true,
-        bag: true,
-        items: true,
-      },
+        },
+        include: {
+          team: true,
+          bag: true,
+          items: true,
+        },
+      });
+      const managers = await tx.user.findMany({
+        where: {
+          isActive: true,
+          role: Role.ADMIN_MANAGER,
+          managedBranches: { some: { branchId: bag.branchId } },
+        },
+        select: { id: true },
+      });
+      if (managers.length === 0) {
+        throw {
+          status: 422,
+          code: 'HOMECARE_APPROVER_NOT_FOUND',
+          message: 'Cabang belum memiliki Admin Manager aktif. Tetapkan Admin Manager sebelum membuat request stok tas.',
+        };
+      }
+      await tx.notification.createMany({
+        data: managers.map((manager) => ({
+          userId: manager.id,
+          type: 'INFO',
+          title: 'Request stok tas homecare',
+          body: `${requestCode} dari ${bag.team.name} menunggu persetujuan Anda.`,
+          deepLink: '/inventory/homecare-bags',
+        })),
+      });
+      return created;
     });
 
     await logAudit({
@@ -1932,7 +2079,7 @@ export class LogisticsService {
   }
 
   async approveBagStockRequest(actor: LogisticsActor, requestId: string, input: ApproveBagStockRequestInput) {
-    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses approve request stok tas');
+    this.assertRole(actor, canReviewBagStockRequest, 'Hanya Admin Manager yang dapat menyetujui request stok tas');
     const request = await prisma.homecareBagStockRequest.findUnique({
       where: { id: requestId },
       include: { team: true, bag: true, items: true, shipment: true },
@@ -1962,7 +2109,14 @@ export class LogisticsService {
       throw { status: 400, code: 'NO_APPROVED_ITEMS', message: 'Minimal satu item harus disetujui' };
     }
 
-    const sourceBranchId = input.sourceBranchId || request.bag.branchId;
+    const sourceBranchId = input.sourceBranchId || request.branchId;
+    if (sourceBranchId !== request.branchId) {
+      throw {
+        status: 422,
+        code: 'HOMECARE_SOURCE_BRANCH_MISMATCH',
+        message: 'Stok tas homecare harus dipenuhi dari stok cabang tim yang meminta',
+      };
+    }
     await this.assertManagerBranchAccess(actor, sourceBranchId);
 
     const sourceBranch = await prisma.branch.findUnique({
@@ -2062,7 +2216,7 @@ export class LogisticsService {
   }
 
   async rejectBagStockRequest(actor: LogisticsActor, requestId: string, input: RejectStockRequestInput) {
-    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses reject request stok tas');
+    this.assertRole(actor, canReviewBagStockRequest, 'Hanya Admin Manager yang dapat menolak request stok tas');
     const reviewNotes = this.requireNotes(input.reviewNotes, 'Catatan penolakan wajib diisi');
 
     const request = await prisma.homecareBagStockRequest.update({
@@ -2125,6 +2279,9 @@ export class LogisticsService {
           referenceType: 'HOMECARE_BAG_SHIPMENT',
           referenceId: shipmentId,
           notes,
+          locationType: sourceBranch.type === BranchType.PUSAT
+            ? LogisticLocationType.CENTRAL_STOCK
+            : LogisticLocationType.BRANCH_STOCK,
         }));
       }
 
@@ -2195,6 +2352,14 @@ export class LogisticsService {
       throw { status: 422, code: 'INVALID_SHIPMENT_STATUS', message: 'Shipment hanya dapat diterima saat SHIPPED' };
     }
 
+    const sourceBranch = await prisma.branch.findUnique({
+      where: { id: shipment.fromBranchId },
+      select: { type: true, isActive: true },
+    });
+    if (!sourceBranch || !sourceBranch.isActive) {
+      throw { status: 404, code: 'SOURCE_BRANCH_NOT_FOUND', message: 'Cabang sumber stok tidak ditemukan atau tidak aktif' };
+    }
+
     if (!bagStockReceiverRoles.has(actor.role)) {
       await this.assertBagAccess(actor, shipment.toBagId);
     } else if (actor.role === Role.ADMIN_LAYANAN) {
@@ -2239,7 +2404,9 @@ export class LogisticsService {
 
       await this.createLogisticTransaction(tx, {
         type: LogisticTransactionType.RECEIVE_SHIPMENT,
-        sourceType: LogisticLocationType.CENTRAL_STOCK,
+        sourceType: sourceBranch.type === BranchType.PUSAT
+          ? LogisticLocationType.CENTRAL_STOCK
+          : LogisticLocationType.BRANCH_STOCK,
         sourceId: shipment.fromBranchId,
         destinationType: LogisticLocationType.HOMECARE_BAG,
         destinationId: shipment.toBagId,

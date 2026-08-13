@@ -4,6 +4,7 @@ import { AppError } from '@middleware/errorHandler';
 import { getActiveZohoClient, ZohoClient } from './zoho.client';
 import { ZohoApiError } from './zoho.error';
 import { assertErpManaged } from './zoho.origin';
+import { mappingReviewContinuation } from './zoho.review.policy';
 import { logZohoErrorThrottled } from './zoho.logging';
 import {
   buildZohoItemPayload,
@@ -609,19 +610,22 @@ export async function handleMasterEvent(event: { aggregateId: string; aggregateT
       },
     },
   });
-  if (pendingReview?.status === 'PENDING') {
+  const reviewContinuation = mappingReviewContinuation(pendingReview?.status);
+  if (reviewContinuation === 'BLOCK') {
     throw new ZohoApiError('Mapping master menunggu review manusia.', 'ZOHO_MASTER_REVIEW_REQUIRED', 409, false);
   }
-  const decision = decideMatch(snapshot, await findCandidates(client, snapshot));
-  if (decision.kind === 'REVIEW') {
-    await saveReview(client.connection.id, snapshot, decision.candidates, decision.reason);
-    throw new ZohoApiError(decision.reason, 'ZOHO_MASTER_REVIEW_REQUIRED', 409, false);
-  }
-  if (decision.kind === 'AUTO_MATCH') {
-    const zohoId = candidateId(entityType, decision.candidate);
-    await saveMapping(client.connection.id, snapshot, zohoId, 'AUTO_MATCH');
-    await client.request(`${basePath}/${zohoId}`, { method: 'PUT', data: payload });
-    return { operation: 'AUTO_MATCH_UPDATE', zohoId };
+  if (reviewContinuation === 'SEARCH') {
+    const decision = decideMatch(snapshot, await findCandidates(client, snapshot));
+    if (decision.kind === 'REVIEW') {
+      await saveReview(client.connection.id, snapshot, decision.candidates, decision.reason);
+      throw new ZohoApiError(decision.reason, 'ZOHO_MASTER_REVIEW_REQUIRED', 409, false);
+    }
+    if (decision.kind === 'AUTO_MATCH') {
+      const zohoId = candidateId(entityType, decision.candidate);
+      await saveMapping(client.connection.id, snapshot, zohoId, 'AUTO_MATCH');
+      await client.request(`${basePath}/${zohoId}`, { method: 'PUT', data: payload });
+      return { operation: 'AUTO_MATCH_UPDATE', zohoId };
+    }
   }
   const response = await client.request<Record<string, unknown>>(basePath, { method: 'POST', data: payload });
   const zohoId = responseId(entityType, response);

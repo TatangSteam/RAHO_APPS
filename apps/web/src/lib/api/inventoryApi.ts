@@ -447,6 +447,10 @@ export interface HomecareTeam {
   isActive: boolean;
   memberCount: number;
   bagCount: number;
+  hasAdminLayanan: boolean;
+  hasNakes: boolean;
+  isOperational: boolean;
+  missingRoles: Array<'ADMIN_LAYANAN' | 'NAKES'>;
   members: Array<{
     id: string;
     userId: string;
@@ -1108,6 +1112,8 @@ export const inventoryApi = {
     teamCode?: string;
     name: string;
     branchId: string;
+    adminLayananUserId: string;
+    nakesUserId: string;
     description?: string;
   }) => {
     return api.post('/inventory/logistics/homecare-teams', data);

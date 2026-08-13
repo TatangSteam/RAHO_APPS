@@ -88,8 +88,6 @@ const teamMemberRoles = [
   { value: 'ADMIN_LAYANAN', label: 'Admin Layanan' },
   { value: 'DOCTOR', label: 'Dokter' },
   { value: 'NURSE', label: 'Nakes' },
-  { value: 'DRIVER', label: 'Driver' },
-  { value: 'OTHER', label: 'Lainnya' },
 ] as const;
 type TeamMemberRole = (typeof teamMemberRoles)[number]['value'];
 type HomecareBagStatus = 'ACTIVE' | 'INACTIVE' | 'IN_CHECKING' | 'DAMAGED' | 'LOST';
@@ -144,7 +142,14 @@ export default function HomecareBagsPage() {
   const [bagStock, setBagStock] = useState<HomecareBagStockDetail | null>(null);
   const [stockLoading, setStockLoading] = useState(false);
 
-  const [teamForm, setTeamForm] = useState({ name: '', teamCode: '', branchId: '', description: '' });
+  const [teamForm, setTeamForm] = useState({
+    name: '',
+    teamCode: '',
+    branchId: '',
+    adminLayananUserId: '',
+    nakesUserId: '',
+    description: '',
+  });
   const [manageMemberState, setManageMemberState] = useState<{
     teamId: string;
     userId: string;
@@ -205,12 +210,20 @@ export default function HomecareBagsPage() {
   const canManageSetup = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(role);
   const canManageBag = canManageSetup;
   const canRequestBagStock = role === 'ADMIN_LAYANAN' || canManageSetup;
-  const canReviewRequests = canManageSetup;
+  const canReviewRequests = ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(role);
   const canShipStock = canManageSetup;
   const canAllowNegative = role === 'SUPER_ADMIN';
 
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products]);
   const branchMap = useMemo(() => new Map(branches.map((branch) => [branch.id, branch])), [branches]);
+  const adminLayananOptions = useMemo(
+    () => staffOptions.filter((staff) => staff.role === 'ADMIN_LAYANAN'),
+    [staffOptions],
+  );
+  const nakesOptions = useMemo(
+    () => staffOptions.filter((staff) => staff.role === 'DOCTOR' || staff.role === 'NURSE'),
+    [staffOptions],
+  );
   const selectedBag = useMemo(() => bags.find((bag) => bag.id === selectedBagId) || null, [bags, selectedBagId]);
   const bagStockProductIds = useMemo(() => new Set((bagStock?.stocks || []).map((stock) => stock.masterProductId)), [bagStock]);
   const stockProducts = useMemo(
@@ -291,8 +304,9 @@ export default function HomecareBagsPage() {
       setRequests(unwrapData<HomecareBagRequest[]>(requestsResponse, []));
       setShipments(unwrapData<HomecareBagShipment[]>(shipmentsResponse, []));
 
-      if (!teamForm.branchId && branchData[0]) {
-        setTeamForm((current) => ({ ...current, branchId: current.branchId || branchData[0].id }));
+      const defaultServiceBranch = branchData.find((branch) => branch.type !== 'PUSAT');
+      if (!teamForm.branchId && defaultServiceBranch) {
+        setTeamForm((current) => ({ ...current, branchId: current.branchId || defaultServiceBranch.id }));
       }
       if (!returnBranchId && branchData[0]) {
         setReturnBranchId(branchData[0].id);
@@ -304,7 +318,9 @@ export default function HomecareBagsPage() {
       }
 
       if (canManageSetup) {
-        const staffResponse = await inventoryApi.getHomecareStaff();
+        const staffResponse = await inventoryApi.getHomecareStaff(
+          teamForm.branchId ? { branchId: teamForm.branchId } : undefined,
+        );
         setStaffOptions(unwrapData<HomecareStaffOption[]>(staffResponse, []));
       }
     } catch (error) {
@@ -371,8 +387,8 @@ export default function HomecareBagsPage() {
   };
 
   const handleCreateTeam = async () => {
-    if (!teamForm.name.trim() || !teamForm.branchId) {
-      showToast.error('Nama tim dan cabang wajib diisi');
+    if (!teamForm.name.trim() || !teamForm.branchId || !teamForm.adminLayananUserId || !teamForm.nakesUserId) {
+      showToast.error('Nama, cabang, satu Admin Layanan, dan satu Nakes wajib diisi');
       return;
     }
 
@@ -381,10 +397,19 @@ export default function HomecareBagsPage() {
       await inventoryApi.createHomecareTeam({
         name: teamForm.name.trim(),
         branchId: teamForm.branchId,
+        adminLayananUserId: teamForm.adminLayananUserId,
+        nakesUserId: teamForm.nakesUserId,
         teamCode: teamForm.teamCode.trim() || undefined,
         description: teamForm.description.trim() || undefined,
       });
-      setTeamForm((current) => ({ ...current, name: '', teamCode: '', description: '' }));
+      setTeamForm((current) => ({
+        ...current,
+        name: '',
+        teamCode: '',
+        adminLayananUserId: '',
+        nakesUserId: '',
+        description: '',
+      }));
       await resetAfterAction('Tim homecare berhasil dibuat');
     } catch (error) {
       assertCaughtError(error);
@@ -502,6 +527,10 @@ export default function HomecareBagsPage() {
     const team = teams.find((item) => item.id === manageBagState.teamId);
     if (!team) {
       showToast.error('Tim homecare tidak ditemukan');
+      return;
+    }
+    if (!team.isOperational) {
+      showToast.error('Lengkapi satu Admin Layanan dan satu Nakes sebelum membuat tas');
       return;
     }
 
@@ -1362,9 +1391,26 @@ export default function HomecareBagsPage() {
                   <div className="font-semibold text-neutral-900 dark:text-white">Tim Baru</div>
                   <InputField label="Nama Tim" value={teamForm.name} onChange={(value) => setTeamForm((current) => ({ ...current, name: value }))} />
                   <InputField label="Kode Tim" value={teamForm.teamCode} onChange={(value) => setTeamForm((current) => ({ ...current, teamCode: value }))} placeholder="Auto jika kosong" />
-                  <SelectField label="Cabang" value={teamForm.branchId} onChange={(value) => setTeamForm((current) => ({ ...current, branchId: value }))}>
+                  <SelectField label="Cabang" value={teamForm.branchId} onChange={(value) => setTeamForm((current) => ({
+                    ...current,
+                    branchId: value,
+                    adminLayananUserId: '',
+                    nakesUserId: '',
+                  }))}>
                     <option value="">Pilih cabang</option>
-                    {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                    {branches.filter((branch) => branch.type !== 'PUSAT').map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
+                  </SelectField>
+                  <SelectField label="Admin Layanan (wajib)" value={teamForm.adminLayananUserId} onChange={(value) => setTeamForm((current) => ({ ...current, adminLayananUserId: value }))}>
+                    <option value="">Pilih Admin Layanan</option>
+                    {adminLayananOptions.map((staff) => (
+                      <option key={staff.userId} value={staff.userId}>{staff.fullName} ({staff.staffCode || staff.email})</option>
+                    ))}
+                  </SelectField>
+                  <SelectField label="Nakes (wajib)" value={teamForm.nakesUserId} onChange={(value) => setTeamForm((current) => ({ ...current, nakesUserId: value }))}>
+                    <option value="">Pilih Dokter / Perawat</option>
+                    {nakesOptions.map((staff) => (
+                      <option key={staff.userId} value={staff.userId}>{staff.fullName} · {staff.role === 'DOCTOR' ? 'Dokter' : 'Perawat'}</option>
+                    ))}
                   </SelectField>
                   <TextArea label="Deskripsi" value={teamForm.description} onChange={(value) => setTeamForm((current) => ({ ...current, description: value }))} />
                   <ActionButton icon={<Plus size={16} />} onClick={handleCreateTeam} loading={actionLoading}>Buat Tim</ActionButton>
@@ -1384,6 +1430,9 @@ export default function HomecareBagsPage() {
                     <div>
                       <div className="font-semibold text-neutral-900 dark:text-white">{team.name}</div>
                       <div className="text-xs text-neutral-500">{team.teamCode} · {team.branchName || '-'}</div>
+                      <div className={`mt-2 inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${team.isOperational ? 'bg-emerald-500/15 text-emerald-600' : 'bg-amber-500/15 text-amber-600'}`}>
+                        {team.isOperational ? 'Tim lengkap' : `Belum lengkap: ${team.missingRoles.join(' & ')}`}
+                      </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <div className="text-xs text-neutral-500">{team.memberCount} anggota · {team.bagCount} tas</div>
@@ -1568,7 +1617,20 @@ export default function HomecareBagsPage() {
                         <div className="font-semibold text-neutral-900 dark:text-white">Kelola anggota {team.name}</div>
                         <div className="mt-1">Tambahkan anggota aktif ke tim ini dan atur peran operasionalnya.</div>
                       </div>
-                      <SelectField label="Staff" value={manageMemberState.userId} onChange={(value) => setManageMemberState((current) => ({ ...current, userId: value, teamId: team.id }))}>
+                      <SelectField label="Staff" value={manageMemberState.userId} onChange={(value) => {
+                        const selectedStaff = staffOptions.find((staff) => staff.userId === value);
+                        const memberRole = selectedStaff?.role === 'DOCTOR'
+                          ? 'DOCTOR'
+                          : selectedStaff?.role === 'NURSE'
+                            ? 'NURSE'
+                            : 'ADMIN_LAYANAN';
+                        setManageMemberState((current) => ({
+                          ...current,
+                          userId: value,
+                          role: memberRole,
+                          teamId: team.id,
+                        }));
+                      }}>
                         <option value="">Pilih staff</option>
                         {staffOptions.map((staff) => <option key={staff.userId} value={staff.userId}>{staff.fullName} · {staff.role}</option>)}
                       </SelectField>
