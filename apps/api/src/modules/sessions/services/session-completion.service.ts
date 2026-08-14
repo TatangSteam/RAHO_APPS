@@ -149,10 +149,10 @@ export class SessionCompletionService {
             where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: session.id } },
           }),
           tx.domainEvent.findUnique({ where: { eventKey: `TREATMENT_COMPLETED:${session.id}` } }),
-          tx.memberPackage.findUnique({
+          replayPackageId ? tx.memberPackage.findUnique({
             where: { id: replayPackageId },
             select: { revenueFlowVersion: true },
-          }),
+          }) : Promise.resolve(null),
         ]);
         const isLegacyCompletion = isLegacySession
           || replayPackage?.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
@@ -409,16 +409,18 @@ export class SessionCompletionService {
         session.encounter.memberPackageId,
         session.boosterPackageId,
       );
-      const revenuePackageId = selectedRevenueSource.revenuePackageId;
-      const revenueSourceType = selectedRevenueSource.revenueSourceType === 'BASIC_WITH_BOOSTER'
-        ? TreatmentRevenueSourceType.BASIC_WITH_BOOSTER
-        : TreatmentRevenueSourceType.BASIC;
+      const revenuePackageId = selectedRevenueSource?.revenuePackageId ?? null;
+      const revenueSourceType = selectedRevenueSource
+        ? selectedRevenueSource.revenueSourceType === 'BASIC_WITH_BOOSTER'
+          ? TreatmentRevenueSourceType.BASIC_WITH_BOOSTER
+          : TreatmentRevenueSourceType.BASIC
+        : null;
       const revenuePackages = await tx.memberPackage.findMany({
-        where: { id: { in: selectedRevenueSource.revenuePackageIds } },
+        where: { id: { in: selectedRevenueSource?.revenuePackageIds ?? [] } },
         select: { id: true, memberId: true, packageType: true },
       });
       if (
-        revenuePackages.length !== selectedRevenueSource.revenuePackageIds.length
+        revenuePackages.length !== (selectedRevenueSource?.revenuePackageIds.length ?? 0)
         || revenuePackages.some((pkg) => pkg.memberId !== session.encounter.memberId)
       ) {
         throw errors.unprocessable(
@@ -430,10 +432,10 @@ export class SessionCompletionService {
       const boosterPackage = session.boosterPackageId
         ? revenuePackages.find((pkg) => pkg.id === session.boosterPackageId)
         : null;
-      if (
+      if (selectedRevenueSource && (
         basicPackage?.packageType !== PackageType.BASIC
         || (session.boosterPackageId && boosterPackage?.packageType !== PackageType.BOOSTER)
-      ) {
+      )) {
         throw errors.unprocessable(
           'TREATMENT_REVENUE_SOURCE_MISMATCH',
           'Sumber omzet wajib menggunakan paket Basic, ditambah paket Booster bila dipakai.',
@@ -451,7 +453,7 @@ export class SessionCompletionService {
         memberId: session.encounter.memberId,
         treatmentDate: session.treatmentDate,
         completedAt,
-        packageIds: selectedRevenueSource.revenuePackageIds,
+        packageIds: selectedRevenueSource?.revenuePackageIds ?? [],
       }, tx);
 
       const finance = await postTreatmentCompletionFinancialsInTransaction({
@@ -681,13 +683,13 @@ export class SessionCompletionService {
         session.encounter.memberPackageId,
         session.boosterPackageId,
       );
-      const packages = await tx.$queryRaw<ReversiblePackageUsage[]>(Prisma.sql`
+      const packages = packageIds.length ? await tx.$queryRaw<ReversiblePackageUsage[]>(Prisma.sql`
         SELECT "id", "usedSessions", "totalSessions", "status", "expiredAt"
         FROM "member_packages"
         WHERE "id" IN (${Prisma.join(packageIds)})
         ORDER BY "id"
         FOR UPDATE
-      `);
+      `) : [];
       for (const memberPackage of packages) {
         const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
         const reactivate = memberPackage.status === PackageStatus.EXPIRED

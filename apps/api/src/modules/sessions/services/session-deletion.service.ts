@@ -182,10 +182,9 @@ export class SessionDeletionService {
         restoredStockQuantity += quantity;
       }
 
-      const basicVoucherRestored = await this.releasePackageUsage(
-        tx,
-        session.encounter.memberPackage.id,
-      );
+      const basicVoucherRestored = session.encounter.memberPackage
+        ? await this.releasePackageUsage(tx, session.encounter.memberPackage.id)
+        : false;
       let boosterVoucherRestored = false;
       if (session.boosterPackage) {
         boosterVoucherRestored = await this.releasePackageUsage(tx, session.boosterPackage.id);

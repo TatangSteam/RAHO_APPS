@@ -457,11 +457,11 @@ export class SessionRetrievalService {
               memberNo: session.encounter.member.memberNo,
               fullName: session.encounter.member.user.profile?.fullName || '',
             },
-            memberPackage: {
+            memberPackage: session.encounter.memberPackage ? {
               packageId: session.encounter.memberPackage.id,
               packageCode: session.encounter.memberPackage.packageCode,
               packageType: session.encounter.memberPackage.packageType,
-            },
+            } : null,
             adminLayanan: {
               userId: session.adminLayanan.id,
               fullName: session.adminLayanan.profile?.fullName || '',
@@ -570,11 +570,11 @@ export class SessionRetrievalService {
         memberNo: session.encounter.member.memberNo,
         fullName: session.encounter.member.user.profile?.fullName || '',
       },
-      memberPackage: {
+      memberPackage: session.encounter.memberPackage ? {
         packageId: session.encounter.memberPackage.id,
         packageCode: session.encounter.memberPackage.packageCode,
         packageType: session.encounter.memberPackage.packageType,
-      },
+      } : null,
       adminLayanan: {
         userId: session.adminLayanan.id,
         fullName: session.adminLayanan.profile?.fullName || '',

@@ -33,12 +33,11 @@ export class SessionCreationService {
     // 1. Validate member access
     await this.validateMemberAccess(sessionData.memberId, branchId);
 
-    // 2. Validate member package
-    const memberPackage = await this.validateMemberPackage(
-      sessionData.memberPackageId,
-      sessionData.memberId,
-      branchId
-    );
+    // 2. Validate the optional Basic package. Package-less sessions consume
+    // inventory normally, but never consume vouchers or package revenue.
+    const memberPackage = sessionData.memberPackageId
+      ? await this.validateMemberPackage(sessionData.memberPackageId, sessionData.memberId, branchId)
+      : null;
 
     // 3. Validate doctor
     await this.validateDoctor(sessionData.doctorId);
@@ -127,8 +126,9 @@ export class SessionCreationService {
         branchInfusKe: branchInfusKe,
         branchName: branch.name,
         createdByRole: userRole,
-        packageStatusAtCreation: memberPackage.status,
-        isDebtSession: memberPackage.status !== PackageStatus.ACTIVE,
+        packageMode: memberPackage ? 'BASIC' : 'WITHOUT_PACKAGE',
+        packageStatusAtCreation: memberPackage?.status ?? null,
+        isDebtSession: memberPackage ? memberPackage.status !== PackageStatus.ACTIVE : false,
       },
     });
 
@@ -145,9 +145,11 @@ export class SessionCreationService {
           ? `Infus ke-${globalInfusKe} (Infus pertama di ${branch.name})`
           : `Infus ke-${globalInfusKe} (Infus ke-${branchInfusKe} di ${branch.name})`,
       message:
-        memberPackage.status === PackageStatus.ACTIVE
-          ? 'Sesi terapi berhasil dibuat'
-          : 'Sesi terapi berhasil dibuat sebagai utang',
+        !memberPackage
+          ? 'Sesi terapi tanpa paket berhasil dibuat. Voucher tidak berkurang; stok tetap diproses saat sesi diselesaikan.'
+          : memberPackage.status === PackageStatus.ACTIVE
+            ? 'Sesi terapi berhasil dibuat'
+            : 'Sesi terapi berhasil dibuat sebagai utang',
     };
   }
 
@@ -664,7 +666,8 @@ export class SessionCreationService {
 
   /**
    * Calculate global and branch-specific infusKe
-   * Only counts sessions from BASIC packages
+   * Counts every therapy session, including package-less sessions, so the
+   * member's global and branch sequences never repeat.
    */
   private async calculateInfusKe(memberId: string, branchId: string) {
     const [latestGlobalSession, latestBranchSession] = await Promise.all([
@@ -673,9 +676,6 @@ export class SessionCreationService {
         where: {
           encounter: {
             memberId,
-            memberPackage: {
-              packageType: 'BASIC',
-            },
           },
         },
         select: { infusKe: true },
@@ -687,9 +687,6 @@ export class SessionCreationService {
           branchId,
           encounter: {
             memberId,
-            memberPackage: {
-              packageType: 'BASIC',
-            },
           },
         },
         select: { branchInfusKe: true },
@@ -712,7 +709,7 @@ export class SessionCreationService {
     branch: Branch,
     globalInfusKe: number,
     branchInfusKe: number,
-    memberPackage: MemberPackage,
+    memberPackage: MemberPackage | null,
     userId: string,
     infusionKitMaterials: Parameters<typeof buildAutomaticKitMaterialUsageRows>[2],
   ) {
@@ -720,7 +717,9 @@ export class SessionCreationService {
       // Find or create encounter
       let encounter = await tx.encounter.findFirst({
         where: {
-          memberPackageId: data.memberPackageId,
+          memberPackageId: data.memberPackageId ?? null,
+          memberId: data.memberId,
+          branchId,
           status: EncounterStatus.ONGOING,
         },
       });
@@ -732,7 +731,7 @@ export class SessionCreationService {
             encounterCode,
             memberId: data.memberId,
             branchId,
-            memberPackageId: data.memberPackageId,
+            memberPackageId: data.memberPackageId ?? null,
             adminLayananId: data.adminLayananId,
             doctorId: data.doctorId,
             nurseId: data.nurseId,
@@ -821,16 +820,18 @@ export class SessionCreationService {
       });
 
       // Update member package used sessions
-      const updatedPackage = await tx.memberPackage.update({
-        where: { id: data.memberPackageId },
-        data: { usedSessions: { increment: 1 } },
-      });
+      const updatedPackage = data.memberPackageId
+        ? await tx.memberPackage.update({
+            where: { id: data.memberPackageId },
+            data: { usedSessions: { increment: 1 } },
+          })
+        : null;
 
       // Check if all sessions are used - auto expire only packages that are already active.
       // Pending packages can still be verified after debt sessions have been created.
       if (
-        memberPackage.status === PackageStatus.ACTIVE &&
-        updatedPackage.usedSessions >= updatedPackage.totalSessions
+        memberPackage?.status === PackageStatus.ACTIVE &&
+        updatedPackage && updatedPackage.usedSessions >= updatedPackage.totalSessions
       ) {
         await tx.memberPackage.update({
           where: { id: data.memberPackageId },

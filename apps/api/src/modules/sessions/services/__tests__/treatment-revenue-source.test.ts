@@ -4,6 +4,11 @@ import {
 } from '../treatment-revenue-source';
 
 describe('additive treatment revenue source', () => {
+  it('does not select voucher usage or package revenue for a package-less session', () => {
+    expect(selectTreatmentRevenueSource(null, null)).toBeNull();
+    expect(selectTreatmentPackageUsageIds(null, null)).toEqual([]);
+  });
+
   it('always recognizes Basic when no Booster is selected', () => {
     expect(selectTreatmentRevenueSource('basic-1', null)).toEqual({
       revenueSourceType: 'BASIC',

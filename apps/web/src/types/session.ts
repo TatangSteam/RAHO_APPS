@@ -41,7 +41,7 @@ export interface TherapyPlanSubstance {
 export interface CreateSessionInput {
   branchId?: string;
   memberId: string;
-  memberPackageId: string;
+  memberPackageId?: string | null;
   boosterPackageId?: string;
   therapyPlanId?: string; // Optional: backend can auto-select from active set by session number
   adminLayananId: string;
@@ -141,7 +141,7 @@ export interface Session {
   cancellationReason?: string | null;
   cancellationJournalEntryId?: string | null;
   member: SessionMember;
-  memberPackage: SessionMemberPackage;
+  memberPackage: SessionMemberPackage | null;
   adminLayanan?: SessionStaff | null;
   doctor?: SessionStaff | null;
   doctorEvaluationCompleted?: boolean;

@@ -5,18 +5,20 @@ export type TreatmentRevenueSource = {
 };
 
 export function selectTreatmentPackageUsageIds(
-  basicPackageId: string,
+  basicPackageId: string | null,
   boosterPackageId: string | null,
 ): string[] {
+  if (!basicPackageId) return [];
   return boosterPackageId && boosterPackageId !== basicPackageId
     ? [basicPackageId, boosterPackageId]
     : [basicPackageId];
 }
 
 export function selectTreatmentRevenueSource(
-  basicPackageId: string,
+  basicPackageId: string | null,
   boosterPackageId: string | null,
-): TreatmentRevenueSource {
+): TreatmentRevenueSource | null {
+  if (!basicPackageId) return null;
   const revenuePackageIds = selectTreatmentPackageUsageIds(basicPackageId, boosterPackageId);
   return boosterPackageId
     ? {

@@ -608,8 +608,9 @@ export default function CreateSessionModal({
     // Note: Infus Set validation is done on backend - frontend only shows warning
     // Backend will reject if stock is not available
     
-    if (!selectedPackageId) { setError('Paket Basic harus dipilih'); return; }
+    const withoutPackage = selectedPackageId === '__WITHOUT_PACKAGE__';
     if (useBooster && !selectedBoosterPackageId) { setError('Paket Booster harus dipilih'); return; }
+    if (withoutPackage && useBooster) { setError('Paket Booster tidak dapat digunakan pada sesi tanpa paket'); return; }
     // Validasi IFA - therapy plan harus memiliki IFA 250 atau IFA 500
     const selectedPlanForValidation = therapyPlans.find(p => p.id === selectedTherapyPlanId);
     if (!selectedPlanForValidation) {
@@ -654,11 +655,11 @@ export default function CreateSessionModal({
       }
     }
 
-    const selectedPkg = packages.find(p => p.packageId === selectedPackageId);
-    if (!selectedPkg || selectedPkg.remainingSessions <= 0) {
+    const selectedPkg = withoutPackage ? null : packages.find(p => p.packageId === selectedPackageId);
+    if (!withoutPackage && (!selectedPkg || selectedPkg.remainingSessions <= 0)) {
       setError('Paket yang dipilih tidak memiliki sesi tersisa'); return;
     }
-    if (selectedPkg.status !== 'ACTIVE' && !isDebtEligiblePackage(selectedPkg, outstandingDebtSessions)) {
+    if (selectedPkg && selectedPkg.status !== 'ACTIVE' && !isDebtEligiblePackage(selectedPkg, outstandingDebtSessions)) {
       setError('Paket belum dibayar dan jatah utang 2 sesi sudah habis. Verifikasi pembayaran untuk membuat sesi berikutnya.');
       return;
     }
@@ -675,7 +676,7 @@ export default function CreateSessionModal({
       const baseData = {
         branchId: effectiveSessionBranchId || undefined,
         memberId,
-        memberPackageId: selectedPackageId,
+        memberPackageId: withoutPackage ? null : selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
         therapyPlanId: selectedTherapyPlanId || undefined,
         treatmentDate: new Date(treatmentDate).toISOString(),
@@ -918,18 +919,10 @@ export default function CreateSessionModal({
                 )}
 
                 {/* Package Selection */}
-                {basicPackages.length === 0 && memberId ? (
-                  <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
-                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Tidak ada paket yang bisa digunakan</p>
-                      <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Assign paket, verifikasi pembayaran, atau gunakan paket belum bayar yang masih memiliki jatah utang 2 sesi pertama.</p>
-                    </div>
-                  </div>
-                ) : basicPackages.length > 0 && (
+                {memberId && (
                   <div className="space-y-2">
                     <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
-                      <Package className="h-4 w-4" /> Paket Basic <span className="text-red-500">*</span>
+                      <Package className="h-4 w-4" /> Sumber Sesi <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={selectedPackageId}
@@ -938,10 +931,16 @@ export default function CreateSessionModal({
                       disabled={loading}
                     >
                       <option value="">Pilih paket...</option>
+                      <option value="__WITHOUT_PACKAGE__">Tanpa Paket Basic dan Booster</option>
                       {basicPackages.map((pkg) => (
                         <option key={pkg.packageId} value={pkg.packageId}>{getPackageDisplayName(pkg)}</option>
                       ))}
                     </select>
+                    {selectedPackageId === '__WITHOUT_PACKAGE__' && (
+                      <p className="text-sm text-amber-700 dark:text-amber-400">
+                        Voucher tidak akan berkurang. Material terapi tetap dicatat dan stok akan berkurang saat sesi diselesaikan.
+                      </p>
+                    )}
                     {selectedPackage && isDebtEligiblePackage(selectedPackage, outstandingDebtSessions) && (
                       <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
                         <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
@@ -962,7 +961,7 @@ export default function CreateSessionModal({
                         checked={useBooster}
                         onChange={(e) => { setUseBooster(e.target.checked); if (!e.target.checked) setSelectedBoosterPackageId(''); }}
                         className="w-4 h-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500 bg-white dark:bg-neutral-800"
-                        disabled={loading || boosterPackages.length === 0}
+                        disabled={loading || boosterPackages.length === 0 || selectedPackageId === '__WITHOUT_PACKAGE__'}
                       />
                       <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">Gunakan Paket Booster</span>
                     </label>

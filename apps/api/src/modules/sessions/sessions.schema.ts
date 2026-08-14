@@ -30,7 +30,7 @@ const ifaSubstanceSchema = z.object({
 export const createSessionSchema = z.object({
   branchId: z.string().cuid().optional(),
   memberId: z.string().cuid(),
-  memberPackageId: z.string().cuid(),
+  memberPackageId: z.string().cuid().nullable().optional(),
   boosterPackageId: z.string().cuid().optional(),
   therapyPlanId: z.string().cuid().optional(), // Optional: auto-selected from active set by session number
   adminLayananId: z.string().cuid(),
@@ -45,6 +45,9 @@ export const createSessionSchema = z.object({
   manualBranchInfusKe: z.number().int().positive().optional(), // Branch-specific session number
   useManualNumbering: z.boolean().optional().default(false),
 }).refine(
+  (data) => !!data.memberPackageId || !data.boosterPackageId,
+  { message: 'Paket Booster tidak dapat digunakan pada sesi tanpa paket' }
+).refine(
   (data) => {
     // At least doctorId or nurseId must be provided (the other will be auto-filled)
     return data.doctorId || data.nurseId;

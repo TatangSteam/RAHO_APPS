@@ -40,10 +40,10 @@ export interface TreatmentCompletedEventPayload {
     completedAt: string;
     branchId: string;
     memberId: string;
-    memberPackageId: string;
+    memberPackageId: string | null;
     boosterPackageId: string | null;
-    revenueSourceType: 'BASIC' | 'BASIC_WITH_BOOSTER';
-    revenuePackageId: string;
+    revenueSourceType: 'BASIC' | 'BASIC_WITH_BOOSTER' | null;
+    revenuePackageId: string | null;
   };
   inventory: {
     postingId: string | null;

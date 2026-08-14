@@ -172,10 +172,13 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
   if (!event || event.eventType !== 'TREATMENT_COMPLETED' || !event.treatmentSession) throw errors.badRequest('TREATMENT_EVENT_INVALID', 'Event TREATMENT_COMPLETED tidak valid.');
   const basicPackageId = event.treatmentSession.encounter.memberPackageId;
   const packageIds = [...new Set([
-    basicPackageId,
+    ...(basicPackageId ? [basicPackageId] : []),
     ...(event.treatmentSession.boosterPackageId ? [event.treatmentSession.boosterPackageId] : []),
   ])];
-  if (!basicPackageId || !event.treatmentSession.revenueSourceType) {
+  if (!basicPackageId) {
+    return { reservations: [], revenueCompatibilityMode: 'CURRENT' as const };
+  }
+  if (!event.treatmentSession.revenueSourceType) {
     throw errors.unprocessable(
       'TREATMENT_REVENUE_SOURCE_MISSING',
       'Sumber omzet sesi belum lengkap. Paket Basic wajib dan Booster ditambahkan bila dipakai.',

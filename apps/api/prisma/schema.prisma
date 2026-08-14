@@ -2624,7 +2624,7 @@ model Encounter {
   encounterCode   String          @unique
   memberId        String
   branchId        String
-  memberPackageId String
+  memberPackageId String?
   adminLayananId  String
   doctorId        String
   nurseId         String
@@ -2634,7 +2634,7 @@ model Encounter {
 
   member        Member             @relation(fields: [memberId], references: [id])
   branch        Branch             @relation(fields: [branchId], references: [id])
-  memberPackage MemberPackage      @relation("EncounterBasicPackage", fields: [memberPackageId], references: [id])
+  memberPackage MemberPackage?     @relation("EncounterBasicPackage", fields: [memberPackageId], references: [id])
   diagnoses     Diagnosis[]
   sessions      TreatmentSession[]
 
