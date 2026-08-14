@@ -83,6 +83,8 @@ jobs:
           npm run lint --prefix apps/web
           npm run type-check:all
 
+          docker system prune -a -f
+
       - name: Verify production secret files
         shell: bash
         run: |
