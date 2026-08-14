@@ -83,8 +83,6 @@ jobs:
           npm run lint --prefix apps/web
           npm run type-check:all
 
-          docker system prune -a -f
-
       - name: Verify production secret files
         shell: bash
         run: |
@@ -116,3 +114,9 @@ jobs:
       - name: Build, back up, migrate, deploy, and verify
         shell: bash
         run: bash .github/scripts/deploy-production.sh
+
+      - name: Docker cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker system prune -a -f
