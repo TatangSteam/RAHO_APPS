@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { AccountingPeriodStatus, Prisma, ProductCategory, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { deleteApprovalAuditLogsForDatabaseTest } from './database-test-cleanup';
 import { issueInventory, listInventoryPostings, postOpeningInventory } from '../inventory-ledger.service';
 import { approveAndReserveStockRequest, releaseStockRequestReservations } from '../stock-reservation.service';
 
@@ -135,9 +136,7 @@ describeDatabase('opening stock and stock request reservations', () => {
       where: { entityType: 'StockRequest', entityId: { in: requestIds } },
       select: { id: true },
     })).map((instance) => instance.id);
-    await prisma.approvalAuditLog.deleteMany({
-      where: { approvalInstanceId: { in: approvalInstanceIds } },
-    });
+    await deleteApprovalAuditLogsForDatabaseTest(approvalInstanceIds);
     await prisma.approvalDecision.deleteMany({
       where: { approvalInstanceId: { in: approvalInstanceIds } },
     });

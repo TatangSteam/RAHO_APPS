@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { BranchType, Prisma, ProductCategory, Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import { deleteApprovalAuditLogsForDatabaseTest } from './database-test-cleanup';
 import { postOpeningInventory } from '../inventory-ledger.service';
 import { approveAndReserveStockRequest } from '../stock-reservation.service';
 import { dispatchReservedShipment, receiveReservedShipment } from '../shipment-ledger.service';
@@ -230,9 +231,7 @@ describeDatabase('shipment transfer ledger', () => {
       },
       select: { id: true },
     })).map((instance) => instance.id);
-    await prisma.approvalAuditLog.deleteMany({
-      where: { approvalInstanceId: { in: approvalInstanceIds } },
-    });
+    await deleteApprovalAuditLogsForDatabaseTest(approvalInstanceIds);
     await prisma.approvalDecision.deleteMany({
       where: { approvalInstanceId: { in: approvalInstanceIds } },
     });
