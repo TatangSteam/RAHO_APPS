@@ -15,6 +15,22 @@ describe('production deployment workflow safety', () => {
     expect(workflow).not.toContain('cp -a');
     expect(deployScript).not.toMatch(/docker\s+system\s+prune/);
     expect(deployScript).not.toMatch(/docker\s+(container|volume|network)\s+prune/);
+    expect(deployScript).toContain("docker builder prune -af --filter 'until=24h'");
+  });
+
+  it('checks Docker free space before every image build and before a clean retry', () => {
+    expect(deployScript).toContain('RAHO_MIN_DOCKER_FREE_KB:-6291456');
+    expect(deployScript).toContain('prepare_docker_build_space');
+    const buildFunction = deployScript.slice(
+      deployScript.indexOf('build_service()'),
+      deployScript.indexOf('# Build first:'),
+    );
+    expect(buildFunction).toContain('prepare_docker_build_space');
+    expect(buildFunction).toContain('require_docker_build_space');
+    expect(buildFunction).toContain('docker builder prune -af');
+    expect(buildFunction.indexOf('docker builder prune -af')).toBeLessThan(
+      buildFunction.lastIndexOf('compose build --pull --no-cache'),
+    );
   });
 
   it('backs up and verifies PostgreSQL before migration and replacement', () => {

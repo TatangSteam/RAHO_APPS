@@ -15,6 +15,7 @@ web_image="raho-erp-web:latest"
 api_rollback_image="raho-erp-api:rollback"
 web_rollback_image="raho-erp-web:rollback"
 deployment_started=0
+minimum_docker_free_kb="${RAHO_MIN_DOCKER_FREE_KB:-6291456}"
 
 mkdir -p "$backup_root"
 chmod 700 "$backup_root"
@@ -25,6 +26,47 @@ flock -x 9
 
 compose() {
   docker compose -f "$compose_file" "$@"
+}
+
+docker_root_dir() {
+  docker info --format '{{.DockerRootDir}}'
+}
+
+docker_available_kb() {
+  df -Pk "$(docker_root_dir)" | awk 'NR == 2 { print $4 }'
+}
+
+show_docker_disk_usage() {
+  echo "Docker storage: $(docker_root_dir)"
+  df -h "$(docker_root_dir)"
+  docker system df || true
+}
+
+require_docker_build_space() {
+  local available_kb
+  available_kb="$(docker_available_kb)"
+  if [[ ! "$available_kb" =~ ^[0-9]+$ ]]; then
+    echo "Unable to determine free space for Docker storage." >&2
+    return 1
+  fi
+  if (( available_kb < minimum_docker_free_kb )); then
+    show_docker_disk_usage >&2
+    echo "Deployment blocked: Docker has $((available_kb / 1024)) MiB free; at least $((minimum_docker_free_kb / 1024)) MiB is required." >&2
+    return 1
+  fi
+  echo "Docker build preflight passed: $((available_kb / 1024)) MiB free."
+}
+
+prepare_docker_build_space() {
+  # Prefer retaining the last 24 hours of cache for speed. If the runner is
+  # still below the safety threshold, remove all unused build cache and check
+  # again. Build cache is reproducible and contains no persistent app data.
+  docker builder prune -af --filter 'until=24h'
+  if ! require_docker_build_space; then
+    echo "Recent BuildKit cache is also being reclaimed to recover build space." >&2
+    docker builder prune -af
+    require_docker_build_space
+  fi
 }
 
 container_running() {
@@ -117,9 +159,11 @@ if [[ "$zoho_non_off_count" != "0" ]]; then
   exit 1
 fi
 
-# Reclaim only safe, dangling image layers. Never prune tagged images,
-# containers, networks, volumes, or the build cache before a successful deploy.
+# Reclaim only data Docker has marked unused. BuildKit cache is reproducible
+# and is the main source of growth on this self-hosted runner. Never prune
+# containers, networks, or volumes; production database/object data is kept.
 docker image prune -f
+prepare_docker_build_space
 
 # Preserve the images actually used by the running containers. The :latest
 # tags may point to a prior failed build and are not reliable rollback sources.
@@ -130,9 +174,13 @@ docker tag "$web_running_image_id" "$web_rollback_image"
 
 build_service() {
   local service="$1"
+  prepare_docker_build_space
   echo "Building $service image..."
   if ! compose build --pull "$service"; then
-    echo "$service build failed, retrying once with --no-cache..."
+    echo "$service build failed. Reclaiming unused BuildKit cache before one clean retry..." >&2
+    docker builder prune -af
+    require_docker_build_space
+    echo "Retrying $service once with --no-cache..." >&2
     compose build --pull --no-cache "$service"
   fi
 }
@@ -170,4 +218,5 @@ compose run --rm --no-deps migrate npx prisma migrate status
 deployment_started=0
 trap - ERR
 docker image prune -f || echo "Warning: post-deploy dangling image cleanup failed." >&2
+docker builder prune -af --filter 'until=24h' || echo "Warning: post-deploy BuildKit cleanup failed." >&2
 echo "Deployment completed successfully. Backup: $backup_path"
