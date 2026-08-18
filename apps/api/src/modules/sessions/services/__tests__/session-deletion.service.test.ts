@@ -96,6 +96,7 @@ describe('SessionDeletionService', () => {
     eMRNote: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     sessionDoctor: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     sessionNurse: { deleteMany: jest.fn().mockResolvedValue(undefined) },
+    notification: { deleteMany: jest.fn().mockResolvedValue(undefined) },
     therapyPlan: { updateMany: jest.fn().mockResolvedValue(undefined) },
     treatmentSession: {
       findUnique: jest.fn().mockResolvedValue(sessionResult),
@@ -145,6 +146,13 @@ describe('SessionDeletionService', () => {
       { isolationLevel: 'Serializable' },
     );
     expect(syncMemberVoucherUsageCount).toHaveBeenCalledWith(tx, 'member-1');
+    expect(tx.notification.deleteMany).toHaveBeenCalledWith({
+      where: {
+        deepLink: '/sessions/session-1',
+        type: 'REMINDER',
+        title: 'Diagnosis sesi belum diisi',
+      },
+    });
     expect(tx.treatmentSession.delete).toHaveBeenCalledWith({ where: { id: 'session-1' } });
     expect(result).toMatchObject({
       sessionId: 'session-1',

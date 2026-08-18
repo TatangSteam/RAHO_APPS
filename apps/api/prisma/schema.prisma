@@ -2655,6 +2655,7 @@ model TreatmentSession {
   pelaksanaan                SessionType
   treatmentDate              DateTime
   isCompleted                Boolean                     @default(false)
+  diagnosisDeferred          Boolean                     @default(false)
   completionStatus           TreatmentCompletionStatus   @default(IN_PROGRESS)
   // 1 = sesi yang sudah ada sebelum cutover; 2 = completion inventory/finance/event terbaru
   completionFlowVersion      Int                         @default(2)
@@ -2715,6 +2716,7 @@ model TreatmentSession {
   @@index([branchId, treatmentDate])
   @@index([branchId, branchInfusKe])
   @@index([doctorId, treatmentDate])
+  @@index([diagnosisDeferred, doctorId])
   @@index([isCompleted])
   @@index([completionStatus, completedAt])
   @@index([completionFlowVersion])

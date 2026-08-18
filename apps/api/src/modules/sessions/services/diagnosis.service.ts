@@ -4,7 +4,7 @@ import { generateDiagnosisCode } from '../../../utils/codeGenerator';
 import { getDiagnosisCategoryList, normalizeDiagnosisCategories } from '../../../utils/diagnosisCategories';
 import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
-import { Role, AuditAction, Prisma } from '@prisma/client';
+import { Role, AuditAction, NotificationStatus, Prisma } from '@prisma/client';
 
 const DIAGNOSIS_EDITORS: Role[] = [Role.DOCTOR, Role.NURSE];
 
@@ -120,6 +120,29 @@ export class DiagnosisService {
         pemeriksaanTambahan: data.pemeriksaanTambahan || undefined,
       },
     });
+
+    const deferredSessions = await prisma.treatmentSession.findMany({
+      where: { encounterId, diagnosisDeferred: true },
+      select: { id: true },
+    });
+    if (deferredSessions.length > 0) {
+      const now = new Date();
+      await prisma.$transaction([
+        prisma.treatmentSession.updateMany({
+          where: { id: { in: deferredSessions.map((session) => session.id) } },
+          data: { diagnosisDeferred: false },
+        }),
+        prisma.notification.updateMany({
+          where: {
+            deepLink: { in: deferredSessions.map((session) => `/sessions/${session.id}`) },
+            type: 'REMINDER',
+            title: 'Diagnosis sesi belum diisi',
+            status: NotificationStatus.UNREAD,
+          },
+          data: { status: NotificationStatus.READ, readAt: now },
+        }),
+      ]);
+    }
 
     await logAudit({
       userId,

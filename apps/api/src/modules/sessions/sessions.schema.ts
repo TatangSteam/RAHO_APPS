@@ -33,6 +33,7 @@ export const createSessionSchema = z.object({
   memberPackageId: z.string().cuid().nullable().optional(),
   boosterPackageId: z.string().cuid().optional(),
   therapyPlanId: z.string().cuid().optional(), // Optional: auto-selected from active set by session number
+  diagnosisDeferred: z.boolean().optional().default(false),
   adminLayananId: z.string().cuid(),
   doctorId: z.string().cuid().optional(), // Optional - auto-filled if user is DOCTOR
   nurseId: z.string().cuid().optional(), // Optional - auto-filled if user is NURSE

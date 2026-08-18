@@ -44,6 +44,7 @@ export interface CreateSessionInput {
   memberPackageId?: string | null;
   boosterPackageId?: string;
   therapyPlanId?: string; // Optional: backend can auto-select from active set by session number
+  diagnosisDeferred?: boolean;
   adminLayananId: string;
   doctorId?: string; // Optional - auto-filled if user is DOCTOR
   nurseId?: string; // Optional - auto-filled if user is NURSE
@@ -131,6 +132,7 @@ export interface Session {
   pelaksanaan: SessionType;
   treatmentDate: string;
   isCompleted: boolean;
+  diagnosisDeferred?: boolean;
   completionStatus?: 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
   completedAt?: string | null;
   recognizedRevenue?: string;

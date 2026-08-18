@@ -211,6 +211,13 @@ export class SessionDeletionService {
       await tx.doctorEvaluation.deleteMany({ where: { treatmentSessionId: sessionId } });
       await tx.sessionDoctor.deleteMany({ where: { sessionId } });
       await tx.sessionNurse.deleteMany({ where: { sessionId } });
+      await tx.notification.deleteMany({
+        where: {
+          deepLink: `/sessions/${sessionId}`,
+          type: 'REMINDER',
+          title: 'Diagnosis sesi belum diisi',
+        },
+      });
       await tx.therapyPlan.updateMany({
         where: { treatmentSessionId: sessionId },
         data: { treatmentSessionId: null },

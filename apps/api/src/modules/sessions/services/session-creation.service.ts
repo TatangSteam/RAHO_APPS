@@ -9,6 +9,7 @@ import {
   EncounterStatus,
   type MemberPackage,
   PackageStatus,
+  NotificationType,
 } from '@prisma/client';
 import {
   buildAutomaticKitMaterialUsageRows,
@@ -48,8 +49,12 @@ export class SessionCreationService {
     // 5. Validate admin layanan
     await this.validateAdminLayanan(sessionData.adminLayananId);
 
-    // 6. Validate diagnosis exists
-    await this.validateDiagnosisExists(sessionData.memberId);
+    // 6. Diagnosis may follow later only when the user explicitly chooses it.
+    const existingDiagnoses = await this.validateDiagnosisExists(
+      sessionData.memberId,
+      sessionData.diagnosisDeferred,
+    );
+    sessionData.diagnosisDeferred = sessionData.diagnosisDeferred && existingDiagnoses.length === 0;
 
     // 7. Validate booster package if provided
     if (sessionData.boosterPackageId) {
@@ -366,12 +371,12 @@ export class SessionCreationService {
    * Validate diagnosis exists for member
    * IMPORTANT: Member must have at least one diagnosis before creating therapy session
    */
-  private async validateDiagnosisExists(memberId: string) {
+  private async validateDiagnosisExists(memberId: string, allowDeferred = false) {
     const existingDiagnoses = await prisma.diagnosis.findMany({
       where: { memberId },
     });
 
-    if (existingDiagnoses.length === 0) {
+    if (existingDiagnoses.length === 0 && !allowDeferred) {
       throw {
         status: 422,
         code: 'DIAGNOSIS_REQUIRED',
@@ -757,6 +762,7 @@ export class SessionCreationService {
           doctorId: data.doctorId, // Primary doctor
           nurseId: data.nurseId,   // Primary nurse
           boosterPackageId: data.boosterPackageId,
+          diagnosisDeferred: data.diagnosisDeferred,
           materialPolicyVersion: 2,
           isCompleted: false,
         },
@@ -789,6 +795,22 @@ export class SessionCreationService {
             sessionId: session.id,
             doctorId,
             isPrimary: false,
+          })),
+        });
+      }
+
+      if (data.diagnosisDeferred) {
+        const doctorIds = Array.from(new Set([
+          data.doctorId,
+          ...(data.additionalDoctorIds || []),
+        ]));
+        await tx.notification.createMany({
+          data: doctorIds.map((doctorId) => ({
+            userId: doctorId,
+            type: NotificationType.REMINDER,
+            title: 'Diagnosis sesi belum diisi',
+            body: `Diagnosis ${session.sessionCode} belum diisi dan perlu dilengkapi oleh dokter yang ditugaskan.`,
+            deepLink: `/sessions/${session.id}`,
           })),
         });
       }

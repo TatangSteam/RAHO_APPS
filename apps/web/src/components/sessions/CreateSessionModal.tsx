@@ -63,6 +63,7 @@ export default function CreateSessionModal({
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [loadingDiagnoses, setLoadingDiagnoses] = useState(false);
   const [hasDiagnosis, setHasDiagnosis] = useState(false);
+  const [diagnosisDeferred, setDiagnosisDeferred] = useState(false);
   
   const [adminLayananList, setAdminLayananList] = useState<StaffMember[]>([]);
   const [doctors, setDoctors] = useState<StaffMember[]>([]);
@@ -464,6 +465,7 @@ export default function CreateSessionModal({
       const memberDiagnoses = await diagnosisApi.getMemberDiagnoses(id);
       setDiagnoses(memberDiagnoses);
       setHasDiagnosis(memberDiagnoses.length > 0);
+      if (memberDiagnoses.length > 0) setDiagnosisDeferred(false);
     } catch (err) {
       assertCaughtError(err);
       devError('Failed to load diagnoses:', err);
@@ -599,7 +601,10 @@ export default function CreateSessionModal({
     const effectiveSessionBranchId = sessionBranchId || user?.branchId || '';
 
     if (!memberId) { setError('Member harus dipilih'); return; }
-    if (!hasDiagnosis) { setError('Member belum memiliki diagnosa. Silakan buat diagnosa terlebih dahulu.'); return; }
+    if (!hasDiagnosis && !diagnosisDeferred) {
+      setError('Member belum memiliki diagnosa. Buat diagnosa atau pilih "Diagnosis menyusul".');
+      return;
+    }
     if ((userRole === 'SUPER_ADMIN' || userRole === 'ADMIN_MANAGER') && !effectiveSessionBranchId) {
       setError('Cabang sesi belum terdeteksi. Pilih paket member terlebih dahulu.');
       return;
@@ -679,6 +684,7 @@ export default function CreateSessionModal({
         memberPackageId: withoutPackage ? null : selectedPackageId,
         boosterPackageId: useBooster ? selectedBoosterPackageId || undefined : undefined,
         therapyPlanId: selectedTherapyPlanId || undefined,
+        diagnosisDeferred: !hasDiagnosis && diagnosisDeferred,
         treatmentDate: new Date(treatmentDate).toISOString(),
         pelaksanaan,
         useManualNumbering,
@@ -730,6 +736,7 @@ export default function CreateSessionModal({
       setExpandedSets(new Set());
       setDiagnoses([]);
       setHasDiagnosis(false);
+      setDiagnosisDeferred(false);
       setSelectedDoctorId('');
       setSelectedNurseId('');
       setSelectedAdminLayananId('');
@@ -869,12 +876,27 @@ export default function CreateSessionModal({
 
                 {/* Diagnosis Status */}
                 {memberId && !loadingDiagnoses && !hasDiagnosis && (
-                  <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
-                    <AlertTriangle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-semibold text-red-700 dark:text-red-400">Member belum memiliki diagnosa</p>
-                      <p className="text-xs text-red-600 dark:text-red-400/80 mt-1">Buat diagnosa di tab Diagnosa pada halaman detail member.</p>
+                  <div className="space-y-3 p-4 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Member belum memiliki diagnosis</p>
+                        <p className="text-xs text-amber-600 dark:text-amber-400/80 mt-1">Diagnosis dapat dibuat sekarang atau dilengkapi dokter setelah sesi dibuat.</p>
+                      </div>
                     </div>
+                    <label className="flex items-start gap-3 cursor-pointer rounded-lg border border-amber-300/70 dark:border-amber-500/30 bg-white/70 dark:bg-neutral-900/30 p-3">
+                      <input
+                        type="checkbox"
+                        checked={diagnosisDeferred}
+                        onChange={(event) => setDiagnosisDeferred(event.target.checked)}
+                        disabled={loading}
+                        className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                      />
+                      <span>
+                        <span className="block text-sm font-semibold text-neutral-800 dark:text-neutral-200">Diagnosis menyusul</span>
+                        <span className="block text-xs text-neutral-600 dark:text-neutral-400 mt-1">Dokter yang di-assign akan menerima reminder sampai diagnosis sesi dilengkapi.</span>
+                      </span>
+                    </label>
                   </div>
                 )}
                 {memberId && loadingDiagnoses && (
@@ -1509,7 +1531,7 @@ export default function CreateSessionModal({
             <button
               type="submit"
               form="create-session-form"
-              disabled={loading || !memberId || !hasDiagnosis || !selectedPackageId}
+              disabled={loading || !memberId || (!hasDiagnosis && !diagnosisDeferred) || !selectedPackageId}
               className="px-5 py-2.5 text-sm font-semibold rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-lg shadow-amber-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {loading ? (
