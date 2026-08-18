@@ -10,6 +10,7 @@ import {
   parseStockRequestQuantity,
 } from './stock-request-units';
 import { dispatchInternalTransfer, receiveInternalTransfer } from './internal-transfer-posting.service';
+import { postCompatibilityStockReceiptInTransaction } from './compatibility-stock-reconciliation.service';
 
 interface DiscrepancyItem {
   masterProductId: string;
@@ -597,16 +598,19 @@ export class ShipmentProcessingService {
           });
         }
 
-        const stockBefore = Number(destInventoryItem.stock);
-        const stockAfter = stockBefore + actualReceivedQty;
-
-        // Update stock
-        await tx.inventoryItem.update({
-          where: { id: destInventoryItem.id },
-          data: {
-            stock: stockAfter,
-          },
+        // Legacy/non-reserved shipments have no valued FIFO transfer layer.
+        // Post the receipt into the authoritative location ledger and mirror
+        // stock atomically. The layer stays pending valuation instead of
+        // inventing a financial cost.
+        const receiptPosting = await postCompatibilityStockReceiptInTransaction(tx, {
+          inventoryItemId: destInventoryItem.id,
+          quantity: actualReceivedQty,
+          actorUserId: userId,
+          sourceType: 'LEGACY_SHIPMENT_RECEIPT',
+          sourceId: shipmentId,
         });
+        const stockBefore = Number(receiptPosting.stockBefore);
+        const stockAfter = Number(receiptPosting.stockAfter);
 
         // Create stock mutation record
         await tx.stockMutation.create({

@@ -12,7 +12,7 @@ import { api, getApiErrorMessage } from '@/lib/api';
 import { 
   Package, Search, AlertTriangle, CheckCircle2, FileSpreadsheet, FileText, 
   ClipboardList, Truck, Building2, X, Edit3, ShoppingCart, MapPin,
-  ArrowUpDown, Save
+  ArrowUpDown, Save, RefreshCw
 } from 'lucide-react';
 import { PageLoading, ButtonLoading } from '@/components/ui/LoadingSpinner';
 
@@ -183,6 +183,21 @@ export default function InventoryPage() {
     if (selectedBranchId && accessToken) {
       fetchInventoryItems(selectedBranchId);
     }
+  }, [selectedBranchId, accessToken, fetchInventoryItems]);
+
+  useEffect(() => {
+    const refreshVisibleInventory = () => {
+      if (document.visibilityState === 'visible' && selectedBranchId && accessToken) {
+        void fetchInventoryItems(selectedBranchId);
+      }
+    };
+
+    window.addEventListener('focus', refreshVisibleInventory);
+    document.addEventListener('visibilitychange', refreshVisibleInventory);
+    return () => {
+      window.removeEventListener('focus', refreshVisibleInventory);
+      document.removeEventListener('visibilitychange', refreshVisibleInventory);
+    };
   }, [selectedBranchId, accessToken, fetchInventoryItems]);
 
   const handleExport = async (format: 'csv' | 'excel') => {
@@ -561,6 +576,16 @@ export default function InventoryPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => selectedBranchId && void fetchInventoryItems(selectedBranchId)}
+                disabled={loading || !selectedBranchId}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-xl bg-white dark:bg-neutral-800 border border-neutral-300 dark:border-neutral-600 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                Refresh Stok
+              </button>
+
               {/* Branch Selector */}
               {canSelectBranch && (
                 <div className="flex items-center gap-2">
