@@ -1,10 +1,9 @@
 export const REPORT_TYPES = ['Member', 'Session', 'Payment', 'Inventory'] as const;
-export const REPORT_BRANCHES = ['Semua Cabang', 'RAHO Premier Jakarta', 'RAHO Bandung', 'RAHO Surabaya'] as const;
 export const REPORT_STATUSES = ['Semua Status', 'Paid', 'Completed', 'Pending', 'Cancelled'] as const;
 export const REPORT_FREQUENCIES = ['Daily', 'Weekly', 'Monthly'] as const;
 
 export type ReportType = (typeof REPORT_TYPES)[number];
-export type ReportBranch = (typeof REPORT_BRANCHES)[number];
+export type ReportBranch = string;
 export type ReportStatus = (typeof REPORT_STATUSES)[number];
 export type ReportFrequency = (typeof REPORT_FREQUENCIES)[number];
 export type ReportViewMode = 'table' | 'chart';
@@ -22,26 +21,31 @@ export function buildReportRows(
   reportType: ReportType,
   branch: string,
   status: string,
+  availableBranches: string[] = [],
 ): ReportRow[] {
-  const branchName = branch === 'Semua Cabang' ? 'RAHO Premier Jakarta' : branch;
+  const fallbackBranch = branch === 'Semua Cabang' ? 'Semua Cabang' : branch;
+  const reportBranches = branch === 'Semua Cabang' && availableBranches.length > 0
+    ? availableBranches
+    : [fallbackBranch];
+  const branchAt = (index: number) => reportBranches[index % reportBranches.length];
   const statusText = status === 'Semua Status' ? 'Completed' : status;
 
   return [
     {
       name: reportType === 'Payment' ? 'INV-RAHO-260630-001' : `${reportType} Utama`,
-      branch: branchName,
+      branch: branchAt(0),
       status: statusText,
       total: reportType === 'Payment' ? 'Rp 27.000.000' : '128',
     },
     {
       name: reportType === 'Inventory' ? 'IFA 250' : `${reportType} Reguler`,
-      branch: 'RAHO Bandung',
+      branch: branchAt(1),
       status: reportType === 'Payment' ? 'Paid' : 'Completed',
       total: reportType === 'Payment' ? 'Rp 9.500.000' : '64',
     },
     {
       name: reportType === 'Session' ? 'Terapi O3' : `${reportType} Follow Up`,
-      branch: 'RAHO Surabaya',
+      branch: branchAt(2),
       status: 'Pending',
       total: reportType === 'Payment' ? 'Rp 4.250.000' : '32',
     },
@@ -57,7 +61,7 @@ export function isFutureStartDate(startDate: string): boolean {
   return new Date(`${startDate}T00:00:00`) > today;
 }
 
-function downloadFile(filename: string, mimeType: string, content: string): void {
+function downloadFile(filename: string, mimeType: string, content: BlobPart): void {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -69,27 +73,58 @@ function downloadFile(filename: string, mimeType: string, content: string): void
   URL.revokeObjectURL(url);
 }
 
-export function exportReportFile(
+function csvCell(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
+export async function exportReportFile(
   reportType: ReportType,
   rows: ReportRow[],
   format: ReportExportFormat,
-): void {
+): Promise<void> {
   const filename = `laporan-${reportType.toLowerCase()}-${Date.now()}.${format}`;
-  const content = rows.map((row) => `${row.name},${row.branch},${row.status},${row.total}`).join('\n');
+  const content = rows
+    .map((row) => [row.name, row.branch, row.status, row.total].map(csvCell).join(','))
+    .join('\n');
 
   if (format === 'pdf') {
-    downloadFile(filename, 'application/pdf', `Laporan ${reportType}\n${content}`);
+    const [jsPdfModule, autoTableModule] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+    const document = new jsPdfModule.default();
+    document.setFontSize(16);
+    document.text(`Laporan ${reportType}`, 14, 18);
+    autoTableModule.default(document, {
+      startY: 24,
+      head: [['Nama', 'Cabang', 'Status', 'Total']],
+      body: rows.map((row) => [row.name, row.branch, row.status, row.total]),
+    });
+    document.save(filename);
     return;
   }
 
   if (format === 'xlsx') {
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(`Laporan ${reportType}`);
+    worksheet.columns = [
+      { header: 'Nama', key: 'name', width: 32 },
+      { header: 'Cabang', key: 'branch', width: 28 },
+      { header: 'Status', key: 'status', width: 16 },
+      { header: 'Total', key: 'total', width: 20 },
+    ];
+    rows.forEach((row) => worksheet.addRow(row));
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.autoFilter = 'A1:D1';
+    const buffer = await workbook.xlsx.writeBuffer();
     downloadFile(
       filename,
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      `Laporan ${reportType}\n${content}`,
+      buffer,
     );
     return;
   }
 
-  downloadFile(filename, 'text/csv;charset=utf-8', `Nama,Cabang,Status,Total\n${content}`);
+  downloadFile(filename, 'text/csv;charset=utf-8', `\uFEFFNama,Cabang,Status,Total\n${content}`);
 }

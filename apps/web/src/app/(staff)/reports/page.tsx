@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   CalendarClock,
@@ -11,6 +11,9 @@ import {
   Table2,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { branchesApi } from '@/lib/api/branchesApi';
+import { doctorBranchApi } from '@/lib/api/doctorBranchApi';
+import { devError } from '@/lib/logger';
 import { ReportAccessDenied } from '@/components/reports/ReportAccessDenied';
 import { ReportDropdown } from '@/components/reports/ReportDropdown';
 import { ReportEmailDialog } from '@/components/reports/ReportEmailDialog';
@@ -18,7 +21,6 @@ import { ReportExportMenu } from '@/components/reports/ReportExportMenu';
 import { ReportResults } from '@/components/reports/ReportResults';
 import { ReportScheduleDialog } from '@/components/reports/ReportScheduleDialog';
 import {
-  REPORT_BRANCHES,
   REPORT_STATUSES,
   REPORT_TYPES,
   buildReportRows,
@@ -51,10 +53,46 @@ export default function ReportsPage() {
   const [panel, setPanel] = useState<ReportPanel>(null);
   const [frequency, setFrequency] = useState<ReportFrequency>('Daily');
   const [toast, setToast] = useState('');
+  const [branches, setBranches] = useState<string[]>([]);
+  const [branchesLoading, setBranchesLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBranches = async () => {
+      try {
+        setBranchesLoading(true);
+        const names = role === 'ADMIN_MANAGER'
+          ? (await doctorBranchApi.getManagedBranches(false)).map((item) => item.branchName)
+          : ((await branchesApi.getAllBranches()).data?.data || [])
+              .filter((item) => item.isActive)
+              .map((item) => item.name);
+
+        if (active) {
+          setBranches(Array.from(new Set(names)));
+        }
+      } catch (error) {
+        devError('Gagal memuat cabang laporan:', error);
+        if (active) {
+          setBranches([]);
+          setToast('Gagal memuat daftar cabang. Silakan refresh.');
+        }
+      } finally {
+        if (active) setBranchesLoading(false);
+      }
+    };
+
+    void loadBranches();
+    return () => {
+      active = false;
+    };
+  }, [role]);
+
+  const branchOptions = useMemo(() => ['Semua Cabang', ...branches], [branches]);
 
   const rows = useMemo(
-    () => buildReportRows(reportType, branch, status),
-    [branch, reportType, status],
+    () => buildReportRows(reportType, branch, status, branches),
+    [branch, branches, reportType, status],
   );
 
   const generateReport = () => {
@@ -73,8 +111,13 @@ export default function ReportsPage() {
     setEmpty(false);
   };
 
-  const exportReport = (format: ReportExportFormat) => {
-    exportReportFile(reportType, rows, format);
+  const exportReport = async (format: ReportExportFormat) => {
+    try {
+      await exportReportFile(reportType, rows, format);
+    } catch (error) {
+      devError('Gagal mengekspor laporan:', error);
+      setToast('Gagal mengekspor laporan. Silakan coba lagi.');
+    }
   };
 
   if (!canAccess) {
@@ -144,7 +187,12 @@ export default function ReportsPage() {
         <section className="rounded-lg border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <ReportDropdown label="Tipe Laporan" value={reportType} options={REPORT_TYPES} onChange={setReportType} />
-            <ReportDropdown label="Cabang" value={branch} options={REPORT_BRANCHES} onChange={setBranch} />
+            <ReportDropdown
+              label={branchesLoading ? 'Cabang (memuat...)' : 'Cabang'}
+              value={branch}
+              options={branchOptions}
+              onChange={setBranch}
+            />
             <ReportDropdown label="Status" value={status} options={REPORT_STATUSES} onChange={setStatus} />
             <div>
               <label htmlFor="member-filter" className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">

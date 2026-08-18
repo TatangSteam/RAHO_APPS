@@ -24,6 +24,7 @@ export interface StaffPerformance {
     asNurse: number;
     asAdminLayanan: number;
     total: number;
+    incomplete: number;
   };
   // Optional branch info - included when viewing all branches (Super Admin)
   branch?: {
@@ -92,6 +93,7 @@ export interface StaffSessionHistoryResponse {
     asNurse: number;
     asAdminLayanan: number;
     total: number;
+    incomplete: number;
   };
   sessions: StaffSessionHistoryItem[];
   total: number;
@@ -114,6 +116,7 @@ export interface StaffPerformanceQuery {
 export interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
+  completion?: 'all' | 'complete' | 'incomplete';
   startDate?: string;
   endDate?: string;
   page?: number;

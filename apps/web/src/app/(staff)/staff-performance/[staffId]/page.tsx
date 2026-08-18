@@ -10,7 +10,7 @@ import { devError } from '@/lib/logger';
 import {
   Activity, ChevronLeft, ChevronRight, Building2, Loader2, Calendar,
   Stethoscope, Heart, UserCog, ArrowLeft, User, Mail, Phone,
-  Package, Hash, Clock, CheckCircle2, Download
+  Package, Hash, Clock, CheckCircle2, Download, AlertTriangle
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════════
@@ -111,6 +111,9 @@ export default function StaffPerformanceDetailPage() {
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
   const [positionFilter, setPositionFilter] = useState<'all' | 'doctor' | 'nurse' | 'adminLayanan'>('all');
+  const [completionFilter, setCompletionFilter] = useState<'all' | 'complete' | 'incomplete'>(
+    searchParams.get('completion') === 'incomplete' ? 'incomplete' : 'all',
+  );
   const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
   const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
   const [exporting, setExporting] = useState(false);
@@ -121,6 +124,7 @@ export default function StaffPerformanceDetailPage() {
       const result = await usersApi.getStaffSessionHistory(staffId, {
         branchId,
         position: positionFilter,
+        completion: completionFilter,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
         page,
@@ -134,7 +138,7 @@ export default function StaffPerformanceDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, endDate, limit, page, positionFilter, staffId, startDate]);
+  }, [branchId, completionFilter, endDate, limit, page, positionFilter, staffId, startDate]);
 
   useEffect(() => {
     void fetchHistory();
@@ -150,6 +154,7 @@ export default function StaffPerformanceDetailPage() {
       const blob = await usersApi.exportStaffPerformanceDetail(staffId, {
         branchId,
         position: positionFilter,
+        completion: completionFilter,
         startDate: startDate || undefined,
         endDate: endDate || undefined,
       });
@@ -268,6 +273,13 @@ export default function StaffPerformanceDetailPage() {
                   <p className="text-xs text-amber-600 dark:text-amber-400">Total</p>
                 </div>
               </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30">
+                <AlertTriangle size={18} className="text-red-600 dark:text-red-400" />
+                <div>
+                  <p className="text-lg font-bold text-red-700 dark:text-red-400">{data.summary.incomplete}</p>
+                  <p className="text-xs text-red-600 dark:text-red-400">Belum Lengkap</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -284,6 +296,20 @@ export default function StaffPerformanceDetailPage() {
           <option value="doctor">Sebagai Dokter</option>
           <option value="nurse">Sebagai Nakes</option>
           <option value="adminLayanan">Sebagai Admin Layanan</option>
+        </select>
+
+        <select
+          value={completionFilter}
+          onChange={(e) => {
+            setCompletionFilter(e.target.value as typeof completionFilter);
+            setPage(1);
+          }}
+          aria-label="Status kelengkapan sesi"
+          className="px-4 py-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all min-w-[190px]"
+        >
+          <option value="all">Semua Kelengkapan</option>
+          <option value="incomplete">Belum Lengkap</option>
+          <option value="complete">Sudah Lengkap</option>
         </select>
 
         <div className="flex flex-col gap-1.5">

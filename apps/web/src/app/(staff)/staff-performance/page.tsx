@@ -13,7 +13,7 @@ import { devError } from '@/lib/logger';
 import {
   Activity, Search, Eye, Building2, ChevronLeft, ChevronRight,
   Users, Calendar, Stethoscope, Heart, UserCog,
-  TrendingUp, Filter, BarChart3, Download, Loader2
+  TrendingUp, Filter, BarChart3, Download, Loader2, AlertTriangle
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 
@@ -165,11 +165,12 @@ export default function StaffPerformancePage() {
     }
   }, [branchFilter, endDate, limit, page, startDate]);
 
-  const handleViewDetail = (staffId: string) => {
+  const handleViewDetail = (staffId: string, completion?: 'incomplete') => {
     const params = new URLSearchParams();
     if (branchFilter) params.set('branchId', branchFilter);
     if (startDate) params.set('startDate', startDate);
     if (endDate) params.set('endDate', endDate);
+    if (completion) params.set('completion', completion);
 
     const queryString = params.toString();
     router.push(`/staff-performance/${staffId}${queryString ? `?${queryString}` : ''}`);
@@ -226,6 +227,7 @@ export default function StaffPerformancePage() {
   const totalAsDoctor = filteredStaff.reduce((sum, s) => sum + s.performance.asDoctor, 0);
   const totalAsNurse = filteredStaff.reduce((sum, s) => sum + s.performance.asNurse, 0);
   const totalAsAdmin = filteredStaff.reduce((sum, s) => sum + s.performance.asAdminLayanan, 0);
+  const totalIncomplete = filteredStaff.reduce((sum, s) => sum + s.performance.incomplete, 0);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] p-6">
@@ -259,7 +261,7 @@ export default function StaffPerformancePage() {
 
       {/* Summary Cards */}
       {data && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-6">
           <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4 hover:shadow-lg hover:shadow-amber-500/5 transition-all duration-300">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-amber-100 to-amber-200 dark:from-amber-500/20 dark:to-amber-600/20">
@@ -367,6 +369,17 @@ export default function StaffPerformancePage() {
                 aria-label="Tanggal sesi terapi akhir"
                 className="px-3 py-2.5 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-800 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-all"
               />
+            </div>
+          </div>
+          <div className="bg-white dark:bg-neutral-900 rounded-xl border border-red-200 dark:border-red-500/30 p-4 hover:shadow-lg hover:shadow-red-500/5 transition-all duration-300">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 dark:bg-red-500/20">
+                <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-400">{totalIncomplete}</p>
+                <p className="text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wide">Belum Lengkap</p>
+              </div>
             </div>
           </div>
 
@@ -498,19 +511,25 @@ export default function StaffPerformancePage() {
                       <span className="hidden sm:inline">Total</span>
                     </div>
                   </th>
+                  <th className="px-3 sm:px-4 py-3.5 text-center text-[11px] font-bold text-red-600 dark:text-red-400 uppercase tracking-wider whitespace-nowrap">
+                    <div className="flex flex-col items-center gap-0.5">
+                      <AlertTriangle size={14} />
+                      <span>Belum Lengkap</span>
+                    </div>
+                  </th>
                   <th className="px-4 sm:px-6 py-3.5 text-center text-[11px] font-bold text-neutral-600 dark:text-neutral-300 uppercase tracking-wider whitespace-nowrap">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800/50">
                 {loading ? (
                   <tr>
-                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
+                    <td colSpan={branchFilter === 'all' ? 9 : 8} className="px-6 py-20 text-center">
                       <PageLoading text="Memuat data kinerja" />
                     </td>
                   </tr>
                 ) : filteredStaff.length === 0 ? (
                   <tr>
-                    <td colSpan={branchFilter === 'all' ? 8 : 7} className="px-6 py-20 text-center">
+                    <td colSpan={branchFilter === 'all' ? 9 : 8} className="px-6 py-20 text-center">
                       <div className="flex flex-col items-center gap-4">
                         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-neutral-800">
                           <Users className="h-8 w-8 text-neutral-400" />
@@ -620,6 +639,19 @@ export default function StaffPerformancePage() {
                           }`}>
                             {staff.performance.total > 0 && <TrendingUp size={12} />}
                             {staff.performance.total}
+                          </div>
+                        </td>
+                        <td className="px-4 sm:px-6 py-4">
+                          <div className="flex items-center justify-center">
+                            <button
+                              type="button"
+                              disabled={staff.performance.incomplete === 0}
+                              onClick={() => handleViewDetail(staff.id, 'incomplete')}
+                              className="inline-flex min-w-[2.5rem] items-center justify-center rounded-lg bg-red-50 px-2.5 py-2 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-default disabled:bg-neutral-100 disabled:text-neutral-400 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-600"
+                              title="Lihat sesi terapi yang belum lengkap"
+                            >
+                              {staff.performance.incomplete}
+                            </button>
                           </div>
                         </td>
                         <td className="px-4 sm:px-6 py-4">

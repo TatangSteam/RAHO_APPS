@@ -6,6 +6,7 @@ import { getStaffSessionHistoryService } from './staff-performance.service';
 interface StaffPerformanceDetailExportQuery {
   branchId?: string;
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
+  completion?: 'all' | 'complete' | 'incomplete';
   startDate?: string;
   endDate?: string;
 }
@@ -298,10 +299,15 @@ export async function exportStaffPerformanceDetailService(
   const exportedAt = formatDate(new Date(), true);
   const period = buildPeriodLabel(query.startDate, query.endDate);
   const positionLabel = POSITION_LABELS[query.position || 'all'] || query.position || 'Semua posisi';
+  const completionLabel = query.completion === 'incomplete'
+    ? 'Belum lengkap'
+    : query.completion === 'complete'
+      ? 'Sudah lengkap'
+      : 'Semua kelengkapan';
   const baseMetadata: Array<[string, string | number]> = [
     ['Staff', `${history.staff.staffCode} - ${history.staff.fullName}`],
     ['Tanggal sesi terapi', period],
-    ['Filter posisi', positionLabel],
+    ['Filter posisi / kelengkapan', `${positionLabel} / ${completionLabel}`],
     ['Diekspor', exportedAt],
   ];
 
@@ -322,6 +328,7 @@ export async function exportStaffPerformanceDetailService(
       { header: 'Sebagai Admin', width: 16 },
       { header: 'Total Peran', width: 14 },
       { header: 'Sesi Unik', width: 14 },
+      { header: 'Sesi Belum Lengkap', width: 20 },
     ],
     [[
       history.staff.staffCode,
@@ -335,6 +342,7 @@ export async function exportStaffPerformanceDetailService(
       history.summary.asAdminLayanan,
       history.summary.total,
       history.total,
+      history.summary.incomplete,
     ]],
   );
 

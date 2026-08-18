@@ -97,9 +97,10 @@ export async function exportStaffPerformanceService(
     { key: 'nurse', width: 14 },
     { key: 'admin', width: 14 },
     { key: 'total', width: 14 },
+    { key: 'incomplete', width: 18 },
   ];
 
-  worksheet.mergeCells('A1:J1');
+  worksheet.mergeCells('A1:K1');
   const titleCell = worksheet.getCell('A1');
   titleCell.value = 'LAPORAN KINERJA STAFF';
   titleCell.font = { name: 'Calibri', size: 18, bold: true, color: { argb: 'FF111827' } };
@@ -121,7 +122,7 @@ export async function exportStaffPerformanceService(
   metadata.forEach(([label, value], index) => {
     const rowNumber = index + 2;
     worksheet.mergeCells(rowNumber, 1, rowNumber, 2);
-    worksheet.mergeCells(rowNumber, 3, rowNumber, 10);
+    worksheet.mergeCells(rowNumber, 3, rowNumber, 11);
 
     const labelCell = worksheet.getCell(rowNumber, 1);
     labelCell.value = label;
@@ -138,7 +139,7 @@ export async function exportStaffPerformanceService(
   });
 
   const headerRowNumber = 7;
-  const headers = ['Peringkat', 'Kode Staff', 'Nama Staff', 'Email', 'Role', 'Cabang', 'Sebagai Dokter', 'Sebagai Nakes', 'Sebagai Admin', 'Total'];
+  const headers = ['Peringkat', 'Kode Staff', 'Nama Staff', 'Email', 'Role', 'Cabang', 'Sebagai Dokter', 'Sebagai Nakes', 'Sebagai Admin', 'Total', 'Sesi Belum Lengkap'];
   const headerRow = worksheet.getRow(headerRowNumber);
   headerRow.values = headers;
   headerRow.height = 30;
@@ -161,6 +162,7 @@ export async function exportStaffPerformanceService(
       item.performance.asNurse,
       item.performance.asAdminLayanan,
       item.performance.total,
+      item.performance.incomplete,
     ]);
 
     row.height = 22;
@@ -178,6 +180,7 @@ export async function exportStaffPerformanceService(
     row.getCell(3).font = { bold: true, color: { argb: 'FF111827' } };
     row.getCell(10).font = { bold: true, color: { argb: 'FFB45309' } };
     row.getCell(10).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+    row.getCell(11).font = { bold: true, color: { argb: 'FFDC2626' } };
   });
 
   const firstDataRow = headerRowNumber + 1;
@@ -192,6 +195,7 @@ export async function exportStaffPerformanceService(
     staff.reduce((sum, item) => sum + item.performance.asNurse, 0),
     staff.reduce((sum, item) => sum + item.performance.asAdminLayanan, 0),
     staff.reduce((sum, item) => sum + item.performance.total, 0),
+    staff.reduce((sum, item) => sum + item.performance.incomplete, 0),
   ];
   totalValues.forEach((result, index) => {
     const column = index + 7;
@@ -209,10 +213,10 @@ export async function exportStaffPerformanceService(
 
   worksheet.autoFilter = {
     from: { row: headerRowNumber, column: 1 },
-    to: { row: Math.max(headerRowNumber, lastDataRow), column: 10 },
+    to: { row: Math.max(headerRowNumber, lastDataRow), column: 11 },
   };
   worksheet.getColumn(1).numFmt = '0';
-  [7, 8, 9, 10].forEach((column) => {
+  [7, 8, 9, 10, 11].forEach((column) => {
     worksheet.getColumn(column).numFmt = '#,##0';
   });
   worksheet.headerFooter.oddFooter = '&LRAHO ERP&C&P / &N&R&D &T';

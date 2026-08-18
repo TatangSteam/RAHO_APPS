@@ -20,6 +20,7 @@ interface StaffPerformanceQuery {
 interface StaffSessionHistoryQuery {
   branchId?: string;
   position?: 'doctor' | 'nurse' | 'adminLayanan' | 'all';
+  completion?: 'all' | 'complete' | 'incomplete';
   startDate?: string;
   endDate?: string;
   page?: number;
@@ -91,9 +92,10 @@ export async function getPositionCountMaps(
   const doctorMap = new Map<string, number>();
   const nurseMap = new Map<string, number>();
   const adminMap = new Map<string, number>();
+  const incompleteMap = new Map<string, number>();
 
   if (staffIds.length === 0) {
-    return { doctorMap, nurseMap, adminMap };
+    return { doctorMap, nurseMap, adminMap, incompleteMap };
   }
 
   const sessions = await prisma.treatmentSession.findMany({
@@ -111,6 +113,7 @@ export async function getPositionCountMaps(
       doctorId: true,
       nurseId: true,
       adminLayananId: true,
+      isCompleted: true,
       sessionDoctors: { select: { doctorId: true } },
       sessionNurses: { select: { nurseId: true } },
     },
@@ -133,9 +136,14 @@ export async function getPositionCountMaps(
 
     doctorIds.forEach((doctorId) => incrementCount(doctorMap, doctorId));
     nurseIds.forEach((nurseId) => incrementCount(nurseMap, nurseId));
+    if (!session.isCompleted) {
+      const involvedStaffIds = new Set([...doctorIds, ...nurseIds]);
+      if (staffIdSet.has(session.adminLayananId)) involvedStaffIds.add(session.adminLayananId);
+      involvedStaffIds.forEach((userId) => incrementCount(incompleteMap, userId));
+    }
   }
 
-  return { doctorMap, nurseMap, adminMap };
+  return { doctorMap, nurseMap, adminMap, incompleteMap };
 }
 
 /**
@@ -253,7 +261,7 @@ export async function getStaffPerformanceSummaryService(
 
   const staffIds = staff.map((s) => s.id);
 
-  const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(staffIds, {
+  const { doctorMap, nurseMap, adminMap, incompleteMap } = await getPositionCountMaps(staffIds, {
     ...sessionBranchFilter,
     ...dateFilter,
   });
@@ -280,6 +288,7 @@ export async function getStaffPerformanceSummaryService(
         asNurse,
         asAdminLayanan,
         total,
+        incomplete: incompleteMap.get(s.id) || 0,
       },
     };
   });
@@ -328,7 +337,7 @@ export async function getStaffSessionHistoryService(
   callerBranchId: string | null,
   callerUserId?: string,
 ) {
-  const { branchId, position = 'all', startDate, endDate, page = 1, limit = 20 } = query;
+  const { branchId, position = 'all', completion = 'all', startDate, endDate, page = 1, limit = 20 } = query;
   const skip = (page - 1) * limit;
   let allowedBranchIds: string[] | undefined;
 
@@ -417,6 +426,11 @@ export async function getStaffSessionHistoryService(
 
   const dateFilter = buildDateFilter(startDate, endDate);
   const sessionBranchFilter = buildBranchFilter(allowedBranchIds);
+  const completionFilter: Prisma.TreatmentSessionWhereInput = completion === 'complete'
+    ? { isCompleted: true }
+    : completion === 'incomplete'
+      ? { isCompleted: false }
+      : {};
 
   // Build position filter
   const positionFilter: Prisma.TreatmentSessionWhereInput = {};
@@ -450,6 +464,7 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
+        ...completionFilter,
       },
       select: {
         id: true,
@@ -512,6 +527,7 @@ export async function getStaffSessionHistoryService(
         ...positionFilter,
         ...sessionBranchFilter,
         ...dateFilter,
+        ...completionFilter,
       },
     }),
   ]);
@@ -554,7 +570,7 @@ export async function getStaffSessionHistoryService(
   });
 
   // Get counts by position
-  const [doctorCount, nurseCount, adminCount] = await Promise.all([
+  const [doctorCount, nurseCount, adminCount, incompleteCount] = await Promise.all([
     prisma.treatmentSession.count({
       where: {
         OR: [
@@ -582,6 +598,20 @@ export async function getStaffSessionHistoryService(
         ...dateFilter,
       },
     }),
+    prisma.treatmentSession.count({
+      where: {
+        OR: [
+          { doctorId: staffId },
+          { nurseId: staffId },
+          { adminLayananId: staffId },
+          { sessionDoctors: { some: { doctorId: staffId } } },
+          { sessionNurses: { some: { nurseId: staffId } } },
+        ],
+        ...sessionBranchFilter,
+        ...dateFilter,
+        isCompleted: false,
+      },
+    }),
   ]);
 
   return {
@@ -600,6 +630,7 @@ export async function getStaffSessionHistoryService(
       asNurse: nurseCount,
       asAdminLayanan: adminCount,
       total: doctorCount + nurseCount + adminCount,
+      incomplete: incompleteCount,
     },
     sessions: sessionsWithPosition,
     total: totalSessions,

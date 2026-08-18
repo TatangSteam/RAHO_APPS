@@ -49,13 +49,14 @@ function staff(id: string, fullName: string) {
   };
 }
 
-function sessionForDoctor(doctorId: string) {
+function sessionForDoctor(doctorId: string, isCompleted = true) {
   return {
     doctorId,
     nurseId: 'nurse-1',
     adminLayananId: 'admin-1',
     sessionDoctors: [],
     sessionNurses: [],
+    isCompleted,
   };
 }
 
@@ -256,6 +257,43 @@ describe('staff performance service', () => {
     );
   });
 
+  it('counts each incomplete session once per participating staff and supports detail filtering', async () => {
+    mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([
+      {
+        ...sessionForDoctor('doctor-1', false),
+        sessionDoctors: [{ doctorId: 'doctor-1' }],
+      },
+    ] as any);
+
+    const summary = await getStaffPerformanceSummaryService(
+      { branchId: 'branch-1' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+    expect(summary.staff[0].performance.incomplete).toBe(1);
+
+    mockPrisma.user.findUnique.mockResolvedValue({
+      ...staff('doctor-1', 'Doctor One'),
+      branch: { id: 'branch-1', branchCode: 'BR1', name: 'Branch 1' },
+      staffBranches: [],
+    } as any);
+    mockPrisma.treatmentSession.findMany.mockResolvedValue([] as any);
+    mockPrisma.treatmentSession.count.mockResolvedValue(0 as any);
+
+    await getStaffSessionHistoryService(
+      'doctor-1',
+      { branchId: 'branch-1', completion: 'incomplete' },
+      Role.SUPER_ADMIN,
+      null,
+    );
+    expect(mockPrisma.treatmentSession.findMany).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ isCompleted: false }),
+      }),
+    );
+  });
+
   it('exports a formatted workbook with active filters and totals', async () => {
     mockPrisma.user.findMany.mockResolvedValue([staff('doctor-1', 'Doctor One')] as any);
     mockPrisma.treatmentSession.findMany.mockResolvedValue([sessionForDoctor('doctor-1')] as any);
@@ -277,6 +315,7 @@ describe('staff performance service', () => {
     expect(worksheet?.getCell('A7').value).toBe('Peringkat');
     expect(worksheet?.getCell('C8').value).toBe('Doctor One');
     expect(worksheet?.getCell('J8').value).toBe(1);
+    expect(worksheet?.getCell('K8').value).toBe(0);
     expect(worksheet?.getCell('J9').value).toEqual(expect.objectContaining({ result: 1 }));
     expect(worksheet?.views[0]).toEqual(expect.objectContaining({ state: 'frozen', ySplit: 7 }));
     expect(worksheet?.autoFilter).toBeDefined();
