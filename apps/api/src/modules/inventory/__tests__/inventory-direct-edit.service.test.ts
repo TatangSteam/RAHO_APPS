@@ -180,4 +180,47 @@ describe('InventoryItemsService direct stock edit', () => {
     expect(tx.stockMutation.create).not.toHaveBeenCalled();
     expect(tx.inventoryItem.update).not.toHaveBeenCalled();
   });
+
+  it('does not duplicate stock when legacy reconciliation is submitted again', async () => {
+    const reconciledItem = { ...currentItem, stock: 709 };
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      masterProduct: { update: jest.fn() },
+      stockMutation: { create: jest.fn() },
+      inventoryItem: {
+        update: jest.fn(),
+        findUnique: jest.fn()
+          .mockResolvedValueOnce({
+            id: reconciledItem.id,
+            branchId: reconciledItem.branchId,
+            masterProductId: reconciledItem.masterProductId,
+            stock: reconciledItem.stock,
+            warehouseId: reconciledItem.warehouseId,
+            stockLocationId: reconciledItem.stockLocationId,
+            balances: [{ onHandQty: 709 }],
+          })
+          .mockResolvedValueOnce({
+            ...reconciledItem,
+            branch: { id: 'branch-1', name: 'Cabang HQ' },
+          }),
+      },
+      inventoryBalance: { upsert: jest.fn(), update: jest.fn() },
+      inventoryCostLayer: { create: jest.fn() },
+    };
+    prismaMock.inventoryItem.findUnique.mockResolvedValue(reconciledItem);
+    prismaMock.$transaction.mockImplementation((callback: (client: typeof tx) => unknown) => callback(tx));
+
+    await service.updateInventoryItem(
+      reconciledItem.id,
+      { stock: 709, stockAdjustmentNotes: 'Ulang rekonsiliasi ledger' },
+      'super-admin-1',
+      true,
+    );
+
+    expect(tx.inventoryBalance.upsert).not.toHaveBeenCalled();
+    expect(tx.inventoryBalance.update).not.toHaveBeenCalled();
+    expect(tx.inventoryCostLayer.create).not.toHaveBeenCalled();
+    expect(tx.stockMutation.create).not.toHaveBeenCalled();
+    expect(tx.inventoryItem.update).not.toHaveBeenCalled();
+  });
 });

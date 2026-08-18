@@ -32,6 +32,11 @@ interface InventoryItem {
     conversionFactor: number;
   };
   stockInfo: {
+    totalBaseStock: number;
+    legacyMirrorStock: number;
+    reservedBaseStock: number;
+    quarantineBaseStock: number;
+    requiresLedgerReconciliation: boolean;
     baseStock: number;
     baseUnit: string;
     usageStock: number;
@@ -67,6 +72,10 @@ function normalizeInventoryItem(item: InventoryItem): InventoryItem {
     },
     stockInfo: {
       ...item.stockInfo,
+      totalBaseStock: toFiniteNumber(item.stockInfo.totalBaseStock),
+      legacyMirrorStock: toFiniteNumber(item.stockInfo.legacyMirrorStock),
+      reservedBaseStock: toFiniteNumber(item.stockInfo.reservedBaseStock),
+      quarantineBaseStock: toFiniteNumber(item.stockInfo.quarantineBaseStock),
       baseStock: toFiniteNumber(item.stockInfo.baseStock),
       usageStock: toFiniteNumber(item.stockInfo.usageStock),
       minThresholdBase: toFiniteNumber(item.stockInfo.minThresholdBase),
@@ -289,7 +298,7 @@ export default function InventoryPage() {
       return;
     }
 
-    const stockAfter = selectedItem.stockInfo.baseStock + adjustmentNum;
+    const stockAfter = selectedItem.stockInfo.totalBaseStock + adjustmentNum;
 
     if (stockAfter < 0) {
       showToast.error('Stok setelah penyesuaian tidak boleh negatif');
@@ -333,6 +342,26 @@ export default function InventoryPage() {
     }
   };
 
+  const handleReconcileLegacyStock = async (item: InventoryItem) => {
+    if (!canEditStock || !item.stockInfo.requiresLedgerReconciliation) return;
+
+    const confirmed = window.confirm(
+      `Sinkronkan stok lama ${item.masterProduct.name} sebesar ${item.stockInfo.legacyMirrorStock.toFixed(2)} ${item.stockInfo.baseUnit} ke ledger? Selisih akan ditandai menunggu valuasi finance.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await api.patch(`/inventory/items/${item.id}`, {
+        stock: item.stockInfo.legacyMirrorStock,
+        stockAdjustmentNotes: 'Rekonsiliasi stok fisik lama ke inventory ledger',
+      });
+      showToast.success('Stok lama berhasil disinkronkan ke ledger');
+      await fetchInventoryItems(selectedBranchId);
+    } catch (error: unknown) {
+      showToast.error(getApiErrorMessage(error) || 'Gagal menyinkronkan stok lama');
+    }
+  };
+
   const filteredItems = items.filter((item) => {
     const matchesFilter = filter === 'ALL' || (filter === 'LOW_STOCK' && item.stockInfo.isLowStock);
     const matchesSearch =
@@ -372,7 +401,9 @@ export default function InventoryPage() {
 
     const adjustmentNum = parseFloat(adjustment);
     const hasValidAdjustment = !isNaN(adjustmentNum) && adjustmentNum !== 0;
-    const stockAfter = hasValidAdjustment ? selectedItem.stockInfo.baseStock + adjustmentNum : selectedItem.stockInfo.baseStock;
+    const stockAfter = hasValidAdjustment
+      ? selectedItem.stockInfo.totalBaseStock + adjustmentNum
+      : selectedItem.stockInfo.totalBaseStock;
     const wouldBeNegative = hasValidAdjustment && stockAfter < 0;
     const hasSeparateUsageUnit = selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit;
     const conversionFactorNum = parseFloat(conversionFactor);
@@ -410,13 +441,22 @@ export default function InventoryPage() {
               <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30">
                 <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide mb-1">Stok Saat Ini</p>
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">
-                  {selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
+                  {selectedItem.stockInfo.totalBaseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
                 </p>
                 {selectedItem.stockInfo.baseUnit !== selectedItem.stockInfo.usageUnit && (
                   <p className="text-sm text-blue-600 dark:text-blue-400/80">
-                    ({selectedItem.stockInfo.usageStock.toFixed(0)} {selectedItem.stockInfo.usageUnit})
+                    ({(selectedItem.stockInfo.totalBaseStock * selectedItem.masterProduct.conversionFactor).toFixed(0)} {selectedItem.stockInfo.usageUnit})
                   </p>
                 )}
+                <p className="mt-1 text-xs text-blue-600 dark:text-blue-400/80">
+                  Tersedia {selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}
+                  {selectedItem.stockInfo.reservedBaseStock > 0
+                    ? ` · Reservasi ${selectedItem.stockInfo.reservedBaseStock.toFixed(2)}`
+                    : ''}
+                  {selectedItem.stockInfo.quarantineBaseStock > 0
+                    ? ` · Karantina ${selectedItem.stockInfo.quarantineBaseStock.toFixed(2)}`
+                    : ''}
+                </p>
               </div>
 
               {hasSeparateUsageUnit ? (
@@ -522,7 +562,7 @@ export default function InventoryPage() {
                   </p>
                   {wouldBeNegative && (
                     <p className="mt-1 text-xs font-medium text-red-600 dark:text-red-400">
-                      Stok tidak boleh kurang dari 0. Maksimal pengurangan: -{selectedItem.stockInfo.baseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}.
+                      Stok tidak boleh kurang dari 0. Maksimal pengurangan: -{selectedItem.stockInfo.totalBaseStock.toFixed(2)} {selectedItem.stockInfo.baseUnit}.
                     </p>
                   )}
                 </div>
@@ -850,10 +890,16 @@ export default function InventoryPage() {
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm">
                               <div className={`font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
-                                {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                                {item.stockInfo.totalBaseStock.toFixed(2)} {item.stockInfo.baseUnit}
                               </div>
                               <div className="text-xs text-neutral-500 dark:text-neutral-400">
-                                ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                                Tersedia {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                                {item.stockInfo.reservedBaseStock > 0
+                                  ? ` · Reservasi ${item.stockInfo.reservedBaseStock.toFixed(2)}`
+                                  : ''}
+                                {item.stockInfo.quarantineBaseStock > 0
+                                  ? ` · Karantina ${item.stockInfo.quarantineBaseStock.toFixed(2)}`
+                                  : ''}
                               </div>
                             </div>
                           </td>
@@ -884,6 +930,15 @@ export default function InventoryPage() {
                                 >
                                   <ShoppingCart className="h-3.5 w-3.5" />
                                   Request
+                                </button>
+                              )}
+                              {canEditStock && item.stockInfo.requiresLedgerReconciliation && (
+                                <button
+                                  onClick={() => void handleReconcileLegacyStock(item)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all"
+                                >
+                                  <RefreshCw className="h-3.5 w-3.5" />
+                                  Sinkronkan Ledger
                                 </button>
                               )}
                               {canEditStock && (
@@ -946,10 +1001,16 @@ export default function InventoryPage() {
                         <span className="text-sm text-neutral-500 dark:text-neutral-400">Stok Saat Ini</span>
                         <div className="text-right">
                           <span className={`text-lg font-bold ${item.stockInfo.isLowStock ? 'text-red-600 dark:text-red-400' : 'text-neutral-900 dark:text-white'}`}>
-                            {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                            {item.stockInfo.totalBaseStock.toFixed(2)} {item.stockInfo.baseUnit}
                           </span>
-                          <span className="text-xs text-neutral-400 dark:text-neutral-500 ml-1">
-                            ({item.stockInfo.usageStock.toFixed(0)} {item.stockInfo.usageUnit})
+                          <span className="block text-xs text-neutral-400 dark:text-neutral-500">
+                            Tersedia {item.stockInfo.baseStock.toFixed(2)} {item.stockInfo.baseUnit}
+                            {item.stockInfo.reservedBaseStock > 0
+                              ? ` · Reservasi ${item.stockInfo.reservedBaseStock.toFixed(2)}`
+                              : ''}
+                            {item.stockInfo.quarantineBaseStock > 0
+                              ? ` · Karantina ${item.stockInfo.quarantineBaseStock.toFixed(2)}`
+                              : ''}
                           </span>
                         </div>
                       </div>
@@ -979,6 +1040,15 @@ export default function InventoryPage() {
                           >
                             <ShoppingCart className="h-3.5 w-3.5" />
                             Request Stok
+                          </button>
+                        )}
+                        {canEditStock && item.stockInfo.requiresLedgerReconciliation && (
+                          <button
+                            onClick={() => void handleReconcileLegacyStock(item)}
+                            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-xs font-semibold rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Sinkronkan
                           </button>
                         )}
                         {canEditStock && (

@@ -265,6 +265,18 @@ export class MaterialUsageService {
       ],
     });
     return items.map((item) => {
+      const totalBaseStock = item.balances.reduce(
+        (sum, balance) => sum.add(balance.onHandQty),
+        new Prisma.Decimal(0),
+      );
+      const reservedBaseStock = item.balances.reduce(
+        (sum, balance) => sum.add(balance.reservedQty),
+        new Prisma.Decimal(0),
+      );
+      const quarantineBaseStock = item.balances.reduce(
+        (sum, balance) => sum.add(balance.quarantineQty),
+        new Prisma.Decimal(0),
+      );
       const physicalAvailableBase = item.balances.reduce(
         (sum, balance) => sum.add(balance.onHandQty).sub(balance.reservedQty).sub(balance.quarantineQty),
         new Prisma.Decimal(0),
@@ -273,9 +285,14 @@ export class MaterialUsageService {
       const conversionFactor = item.masterProduct.conversionFactor;
       const availableUsage = availableBase.mul(conversionFactor);
       const minThresholdUsage = item.minThreshold.mul(conversionFactor);
+      const legacyMirrorStock = new Prisma.Decimal(item.stock);
       return {
         ...item,
         stockInfo: {
+          totalBaseStock,
+          legacyMirrorStock,
+          reservedBaseStock,
+          quarantineBaseStock,
           baseStock: availableBase,
           baseUnit: item.masterProduct.baseUnit,
           usageStock: availableUsage,
@@ -285,8 +302,9 @@ export class MaterialUsageService {
           isLowStock: availableBase.lessThan(item.minThreshold),
           displayText: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(2)} ${item.masterProduct.usageUnit} tersedia)`,
           displayShort: `${availableBase.toFixed(2)} ${item.masterProduct.baseUnit} (${availableUsage.toFixed(0)} ${item.masterProduct.usageUnit})`,
-          physicalBaseStock: physicalAvailableBase,
-          requiresValuationReconciliation: false,
+          physicalBaseStock: totalBaseStock,
+          requiresLedgerReconciliation: legacyMirrorStock.greaterThan(totalBaseStock),
+          requiresValuationReconciliation: legacyMirrorStock.greaterThan(totalBaseStock),
         },
       };
     });

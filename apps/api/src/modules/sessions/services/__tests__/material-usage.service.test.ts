@@ -5,7 +5,7 @@ import { MaterialUsageService } from '../material-usage.service';
 jest.mock('@lib/prisma', () => ({
   prisma: {
     treatmentSession: { findUnique: jest.fn() },
-    inventoryItem: { findUnique: jest.fn() },
+    inventoryItem: { findUnique: jest.fn(), findMany: jest.fn() },
     materialUsage: {
       findFirst: jest.fn(),
       findUnique: jest.fn(),
@@ -127,5 +127,66 @@ describe('material usage virtual infusion kit policy', () => {
       code: 'AUTOMATIC_MATERIAL_REQUIRED',
     });
     expect(prisma.materialUsage.delete).not.toHaveBeenCalled();
+  });
+
+  it('separates total, reserved, quarantined, and available branch stock', async () => {
+    (prisma.inventoryItem.findMany as jest.Mock).mockResolvedValue([{
+      id: 'inventory-ifa',
+      masterProductId: 'product-ifa',
+      branchId: 'branch-1',
+      stock: new Prisma.Decimal(709),
+      minThreshold: new Prisma.Decimal(10),
+      storageLocation: null,
+      masterProduct: {
+        id: 'product-ifa',
+        name: 'IFA + NO 2,5ml',
+        baseUnit: 'Botol',
+        usageUnit: 'Botol',
+        conversionFactor: new Prisma.Decimal(1),
+      },
+      balances: [{
+        onHandQty: new Prisma.Decimal(709),
+        reservedQty: new Prisma.Decimal(707),
+        quarantineQty: new Prisma.Decimal(0),
+      }],
+    }]);
+
+    const [item] = await service.getAvailableInventoryItems('branch-1');
+
+    expect(item.stockInfo.totalBaseStock.toFixed()).toBe('709');
+    expect(item.stockInfo.reservedBaseStock.toFixed()).toBe('707');
+    expect(item.stockInfo.quarantineBaseStock.toFixed()).toBe('0');
+    expect(item.stockInfo.baseStock.toFixed()).toBe('2');
+    expect(item.stockInfo.requiresLedgerReconciliation).toBe(false);
+    expect(item.stockInfo.isLowStock).toBe(true);
+  });
+
+  it('flags a legacy mirror quantity that has not reached the ledger', async () => {
+    (prisma.inventoryItem.findMany as jest.Mock).mockResolvedValue([{
+      id: 'inventory-ifa',
+      masterProductId: 'product-ifa',
+      branchId: 'branch-1',
+      stock: new Prisma.Decimal(709),
+      minThreshold: new Prisma.Decimal(10),
+      storageLocation: null,
+      masterProduct: {
+        id: 'product-ifa',
+        name: 'IFA + NO 2,5ml',
+        baseUnit: 'Botol',
+        usageUnit: 'Botol',
+        conversionFactor: new Prisma.Decimal(1),
+      },
+      balances: [{
+        onHandQty: new Prisma.Decimal(2),
+        reservedQty: new Prisma.Decimal(0),
+        quarantineQty: new Prisma.Decimal(0),
+      }],
+    }]);
+
+    const [item] = await service.getAvailableInventoryItems('branch-1');
+
+    expect(item.stockInfo.totalBaseStock.toFixed()).toBe('2');
+    expect(item.stockInfo.legacyMirrorStock.toFixed()).toBe('709');
+    expect(item.stockInfo.requiresLedgerReconciliation).toBe(true);
   });
 });

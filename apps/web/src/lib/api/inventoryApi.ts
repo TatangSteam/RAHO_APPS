@@ -134,6 +134,11 @@ export interface InventoryItemWithStock {
     description: string | null;
   };
   stockInfo: {
+    totalBaseStock: number;
+    legacyMirrorStock: number;
+    reservedBaseStock: number;
+    quarantineBaseStock: number;
+    requiresLedgerReconciliation: boolean;
     baseStock: number;
     baseUnit: string;
     usageStock: number;
