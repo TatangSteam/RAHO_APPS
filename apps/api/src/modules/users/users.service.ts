@@ -17,6 +17,7 @@ import {
   assertTargetInActorScope,
   getAccessibleBranchIds,
 } from '@modules/iam/authorization.service';
+import { getPositionCountMaps } from './services/staff-performance.service';
 
 const HASH_ROUNDS = 12;
 const DELETED_USER_EMAIL_DOMAIN = 'users.invalid';
@@ -180,54 +181,29 @@ export async function listUsersService(
     }),
   ]);
 
-  // Get therapy counts for doctors, nurses, and admin layanan
-  // Separated by role position (not user role) for accurate performance tracking
+  // Count completed therapy sessions within the same branch scope as the staff
+  // list. The shared counter includes legacy primary columns and the newer
+  // multi-doctor/multi-nurse junction tables without double-counting a session.
   const userIds = users.map(u => u.id);
-  
-  // Count sessions where user acted as doctor
-  const doctorCounts = await prisma.treatmentSession.groupBy({
-    by: ['doctorId'],
-    where: {
-      doctorId: { in: userIds },
-      isCompleted: true,
-    },
-    _count: true,
+  const countBranchIds = branchId
+    ? [branchId]
+    : accessibleBranchIds === null
+      ? undefined
+      : accessibleBranchIds;
+  const { doctorMap, nurseMap, adminMap } = await getPositionCountMaps(userIds, {
+    isCompleted: true,
+    ...(countBranchIds && countBranchIds.length === 1
+      ? { branchId: countBranchIds[0] }
+      : countBranchIds && countBranchIds.length > 1
+        ? { branchId: { in: countBranchIds } }
+        : {}),
   });
-
-  // Count sessions where user acted as nurse
-  const nurseCounts = await prisma.treatmentSession.groupBy({
-    by: ['nurseId'],
-    where: {
-      nurseId: { in: userIds },
-      isCompleted: true,
-    },
-    _count: true,
-  });
-
-  // Count sessions where user acted as admin layanan
-  const adminLayananCounts = await prisma.treatmentSession.groupBy({
-    by: ['adminLayananId'],
-    where: {
-      adminLayananId: { in: userIds },
-      isCompleted: true,
-    },
-    _count: true,
-  });
-
-  // Create separate maps for each role position
-  const doctorCountMap = new Map<string, number>();
-  const nurseCountMap = new Map<string, number>();
-  const adminLayananCountMap = new Map<string, number>();
-  
-  doctorCounts.forEach(tc => doctorCountMap.set(tc.doctorId, tc._count));
-  nurseCounts.forEach(tc => nurseCountMap.set(tc.nurseId, tc._count));
-  adminLayananCounts.forEach(tc => adminLayananCountMap.set(tc.adminLayananId, tc._count));
 
   // Add therapy counts to users - separated by position
   const usersWithTherapyCount = users.map(user => {
-    const asDoctor = doctorCountMap.get(user.id) || 0;
-    const asNurse = nurseCountMap.get(user.id) || 0;
-    const asAdminLayanan = adminLayananCountMap.get(user.id) || 0;
+    const asDoctor = doctorMap.get(user.id) || 0;
+    const asNurse = nurseMap.get(user.id) || 0;
+    const asAdminLayanan = adminMap.get(user.id) || 0;
     
     return {
       ...user,

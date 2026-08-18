@@ -83,7 +83,7 @@ function incrementCount(map: Map<string, number>, userId: string) {
   map.set(userId, (map.get(userId) || 0) + 1);
 }
 
-async function getPositionCountMaps(
+export async function getPositionCountMaps(
   staffIds: string[],
   sessionWhere: Prisma.TreatmentSessionWhereInput,
 ) {

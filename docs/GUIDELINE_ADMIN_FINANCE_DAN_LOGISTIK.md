@@ -815,3 +815,4 @@ Jika Zoho gagal:
 - [Panduan Lengkap ERP RAHO untuk Pengguna Awam](./PANDUAN_LENGKAP_ERP_RAHO_UNTUK_PENGGUNA_AWAM.md)
 - [Panduan Fitur Finance dan Flow](./PANDUAN_FITUR_FINANCE_DAN_FLOW.md)
 - [Checklist E2E Finance, Logistik, dan Zoho](./updatelogisticnFinnance/TEST_CHECKLIST_END_TO_END_FINANCE_LOGISTIK_ZOHO.md)
+- [UAT Finance, Logistik, dan Sesi Terapi](./UAT_FINANCE_LOGISTIK_DAN_SESI_TERAPI.md)

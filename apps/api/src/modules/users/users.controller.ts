@@ -344,6 +344,10 @@ export async function listBranchStaff(req: Request, res: Response, next: NextFun
         avatarUrl: user.profile?.avatarUrl || null,
       },
       branch: user.branch,
+      therapyCount: user.therapyCount,
+      therapyCountAsDoctor: user.therapyCountAsDoctor,
+      therapyCountAsNurse: user.therapyCountAsNurse,
+      therapyCountAsAdminLayanan: user.therapyCountAsAdminLayanan,
     }));
     
     sendSuccess(res, { users: transformedUsers, total, page, limit });
