@@ -61,9 +61,11 @@ export default function Step1Diagnosis({
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [memberDiagnoses, setMemberDiagnoses] = useState<Diagnosis[]>([]);
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
+  const canEditDiagnosis = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'NURSE'].includes(user?.role || '');
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
     sourceDiagnosisId: undefined,
@@ -81,6 +83,28 @@ export default function Step1Diagnosis({
     pemeriksaanFisik: '',
     pemeriksaanTambahan: {},
   });
+  const [editFormData, setEditFormData] = useState<Partial<CreateDiagnosisInput>>({});
+  const [additionalExamJson, setAdditionalExamJson] = useState('{}');
+
+  useEffect(() => {
+    if (!diagnosis) return;
+    setEditFormData({
+      diagnosa: diagnosis.diagnosa,
+      kategoriDiagnosa: diagnosis.kategoriDiagnosa || undefined,
+      kategoriDiagnosaList: getDiagnosisCategories(diagnosis) as DiagnosisCategory[],
+      icdPrimer: diagnosis.icdPrimer || '',
+      icdSekunder: diagnosis.icdSekunder || '',
+      icdTersier: diagnosis.icdTersier || '',
+      keluhanRiwayatSekarang: diagnosis.keluhanRiwayatSekarang || '',
+      riwayatPenyakitTerdahulu: diagnosis.riwayatPenyakitTerdahulu || '',
+      riwayatSosialKebiasaan: diagnosis.riwayatSosialKebiasaan || '',
+      riwayatPengobatan: diagnosis.riwayatPengobatan || '',
+      pemeriksaanFisik: diagnosis.pemeriksaanFisik || '',
+      pemeriksaanTambahan: diagnosis.pemeriksaanTambahan || {},
+    });
+    setAdditionalExamJson(JSON.stringify(diagnosis.pemeriksaanTambahan || {}, null, 2));
+    setIsEditing(false);
+  }, [diagnosis]);
 
   // Load member's previous diagnoses
   useEffect(() => {
@@ -220,6 +244,45 @@ export default function Step1Diagnosis({
     }
   };
 
+  const handleUpdateDiagnosis = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!diagnosis || !editFormData.diagnosa?.trim()) {
+      setError('Diagnosa wajib diisi');
+      return;
+    }
+
+    let pemeriksaanTambahan: Record<string, string>;
+    try {
+      const parsed = JSON.parse(additionalExamJson || '{}') as unknown;
+      if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+        throw new Error('Pemeriksaan tambahan harus berupa object JSON');
+      }
+      pemeriksaanTambahan = parsed as Record<string, string>;
+    } catch {
+      setError('Format pemeriksaan tambahan tidak valid. Gunakan object JSON, contoh: {"EKG":"Normal"}');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      await sessionApi.updateDiagnosis(encounterId, {
+        ...editFormData,
+        diagnosa: editFormData.diagnosa.trim(),
+        pemeriksaanTambahan,
+      });
+      showToast.success('Diagnosa sesi berhasil diperbarui');
+      setIsEditing(false);
+      onComplete();
+    } catch (err) {
+      assertCaughtError(err);
+      devError('Failed to update session diagnosis:', err);
+      setError(err.response?.data?.error?.message || 'Gagal memperbarui diagnosa sesi');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   if (isLocked) {
     return (
       <div className={`${styles.container} ${styles.locked}`}>
@@ -234,8 +297,114 @@ export default function Step1Diagnosis({
     );
   }
 
+  if (diagnosis && isEditing) {
+    const selectedCategories = (editFormData.kategoriDiagnosaList || []) as DiagnosisCategory[];
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={`${styles.stepNumber} ${styles.active}`}>1</div>
+          <div className={styles.headerContent}>
+            <h3 className={styles.title}>Edit Diagnosa Sesi</h3>
+            <p className={styles.subtitle}>{diagnosis.diagnosisCode} — perubahan tercatat di audit log</p>
+          </div>
+        </div>
+
+        {error && <div className={styles.errorAlert}><span>!</span><span>{error}</span></div>}
+
+        <form onSubmit={handleUpdateDiagnosis} className={styles.form}>
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Diagnosa <span className={styles.required}>*</span></label>
+            <textarea
+              className={styles.formTextarea}
+              value={editFormData.diagnosa || ''}
+              onChange={(event) => setEditFormData((current) => ({ ...current, diagnosa: event.target.value }))}
+              disabled={loading}
+            />
+          </div>
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Kategori Diagnosa</label>
+            <select
+              multiple
+              className={styles.formSelect}
+              value={selectedCategories}
+              onChange={(event) => {
+                const values = Array.from(event.target.selectedOptions).map((option) => option.value as DiagnosisCategory);
+                setEditFormData((current) => ({
+                  ...current,
+                  kategoriDiagnosa: values[0],
+                  kategoriDiagnosaList: values,
+                }));
+              }}
+              disabled={loading}
+              size={5}
+            >
+              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+            <p className={styles.helpText}>Gunakan Ctrl/Command untuk memilih lebih dari satu kategori.</p>
+          </div>
+
+          <div className={styles.gridThreeCol}>
+            {[
+              ['icdPrimer', 'ICD Primer'],
+              ['icdSekunder', 'ICD Sekunder'],
+              ['icdTersier', 'ICD Tersier'],
+            ].map(([field, label]) => (
+              <div key={field} className={styles.formGroup}>
+                <label className={styles.formLabel}>{label}</label>
+                <input
+                  className={styles.formInput}
+                  value={String(editFormData[field as keyof CreateDiagnosisInput] || '')}
+                  onChange={(event) => setEditFormData((current) => ({ ...current, [field]: event.target.value }))}
+                  disabled={loading}
+                />
+              </div>
+            ))}
+          </div>
+
+          {[
+            ['keluhanRiwayatSekarang', 'Keluhan & Riwayat Sekarang'],
+            ['riwayatPenyakitTerdahulu', 'Riwayat Penyakit Terdahulu'],
+            ['riwayatSosialKebiasaan', 'Riwayat Sosial & Kebiasaan'],
+            ['riwayatPengobatan', 'Riwayat Pengobatan'],
+            ['pemeriksaanFisik', 'Pemeriksaan Fisik'],
+          ].map(([field, label]) => (
+            <div key={field} className={styles.formGroup}>
+              <label className={styles.formLabel}>{label}</label>
+              <textarea
+                className={styles.formTextarea}
+                value={String(editFormData[field as keyof CreateDiagnosisInput] || '')}
+                onChange={(event) => setEditFormData((current) => ({ ...current, [field]: event.target.value }))}
+                disabled={loading}
+              />
+            </div>
+          ))}
+
+          <div className={styles.formGroup}>
+            <label className={styles.formLabel}>Pemeriksaan Tambahan (JSON)</label>
+            <textarea
+              className={styles.formTextarea}
+              value={additionalExamJson}
+              onChange={(event) => setAdditionalExamJson(event.target.value)}
+              disabled={loading}
+              spellCheck={false}
+            />
+          </div>
+
+          <div className={styles.footer}>
+            <button type="button" className={styles.cancelBtn} onClick={() => setIsEditing(false)} disabled={loading}>Batal</button>
+            <button type="submit" className={styles.submitBtn} disabled={loading || !editFormData.diagnosa?.trim()}>
+              {loading ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   if (diagnosis) {
-    // READ-ONLY COMPLETED VIEW - No edit functionality
     return (
       <div className={`${styles.container} ${styles.completed}`}>
         <div className={styles.header}>
@@ -277,16 +446,25 @@ export default function Step1Diagnosis({
               <p className={styles.completedValue}>{diagnosis.pemeriksaanFisik}</p>
             </div>
           )}
-          {canDeleteDiagnosis && (
+          {(canEditDiagnosis || canDeleteDiagnosis) && (
             <div className={styles.editButtonContainer}>
-              <button
-                type="button"
-                onClick={() => void handleDeleteSessionDiagnosis()}
-                disabled={deleting}
-                className={styles.deleteBtn}
-              >
-                {deleting ? 'Menghapus...' : 'Hapus Diagnosa'}
-              </button>
+              <div className={styles.footer} style={{ marginTop: 0, paddingTop: 0, borderTop: 0 }}>
+                {canEditDiagnosis && (
+                  <button type="button" onClick={() => setIsEditing(true)} className={styles.editBtn}>
+                    Edit Diagnosa
+                  </button>
+                )}
+                {canDeleteDiagnosis && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteSessionDiagnosis()}
+                    disabled={deleting}
+                    className={styles.deleteBtn}
+                  >
+                    {deleting ? 'Menghapus...' : 'Hapus Diagnosa'}
+                  </button>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -111,7 +111,7 @@ router.get(
 router.patch(
   '/encounters/:encounterId/diagnoses',
   authenticate,
-  authorize(MEDICAL_STAFF),
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER, ...MEDICAL_STAFF]),
   controller.updateDiagnosis.bind(controller)
 );
 

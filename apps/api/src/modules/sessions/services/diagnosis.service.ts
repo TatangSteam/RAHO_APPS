@@ -6,7 +6,12 @@ import type { CreateDiagnosisInput } from '../sessions.schema';
 import type { UpdateDiagnosisInput } from '../sessions.schema';
 import { Role, AuditAction, NotificationStatus, Prisma } from '@prisma/client';
 
-const DIAGNOSIS_EDITORS: Role[] = [Role.DOCTOR, Role.NURSE];
+const DIAGNOSIS_EDITORS: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.DOCTOR,
+  Role.NURSE,
+];
 
 export class DiagnosisService {
   /**
@@ -172,7 +177,7 @@ export class DiagnosisService {
   /**
    * Update an existing diagnosis linked to an encounter.
    * Only allows updating certain fields, doktorPemeriksa cannot be changed.
-   * Only medical staff can update diagnoses.
+   * Medical staff and authorized management can update diagnoses.
    */
   async updateDiagnosis(encounterId: string, data: UpdateDiagnosisInput, userId: string) {
     // Check if diagnosis exists for this encounter
@@ -189,7 +194,8 @@ export class DiagnosisService {
       };
     }
 
-    // Verify that the user is medical staff
+    // Route/controller already enforce branch scope. Keep a service-level
+    // role check as defense in depth for callers outside the HTTP route.
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
@@ -198,7 +204,7 @@ export class DiagnosisService {
       throw {
         status: 403,
         code: 'FORBIDDEN',
-        message: 'Hanya dokter atau perawat yang dapat mengedit diagnosa',
+        message: 'Hanya dokter, nakes, Super Admin, atau Admin Manager yang dapat mengedit diagnosa',
       };
     }
 

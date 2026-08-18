@@ -46,6 +46,11 @@ import { ensureAutomaticInfusionKitMaterialDrafts } from './automatic-infusion-k
 import { reconcileCompatibilityStockInTransaction } from '@modules/inventory/services/compatibility-stock-reconciliation.service';
 import type { CancelSessionCompletionInput } from '../sessions.schema';
 import { syncMemberVoucherUsageCount } from './voucher-usage-counter';
+import {
+  consumeSessionTeamInventory,
+  resolveSessionTeamInventory,
+  restoreSessionTeamInventory,
+} from './team-session-inventory.service';
 
 const MAX_COMPLETION_ATTEMPTS = 3;
 const LEGACY_COMPLETION_FLOW_VERSION = 1;
@@ -133,6 +138,8 @@ export class SessionCompletionService {
             },
           },
           evaluation: true,
+          sessionDoctors: { select: { doctorId: true } },
+          sessionNurses: { select: { nurseId: true } },
         },
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
@@ -144,7 +151,7 @@ export class SessionCompletionService {
         const replayPackageId = session.revenuePackageId
           || session.boosterPackageId
           || session.encounter.memberPackageId;
-        const [existingEvent, existingRevenueEvent, replayPackage] = await Promise.all([
+        const [existingEvent, existingRevenueEvent, replayPackage, existingTeamInventory] = await Promise.all([
           tx.integrationEvent.findUnique({
             where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: session.id } },
           }),
@@ -153,6 +160,7 @@ export class SessionCompletionService {
             where: { id: replayPackageId },
             select: { revenueFlowVersion: true },
           }) : Promise.resolve(null),
+          tx.homecareMultiBagUsage.findUnique({ where: { treatmentSessionId: session.id } }),
         ]);
         const isLegacyCompletion = isLegacySession
           || replayPackage?.revenueFlowVersion === LEGACY_REVENUE_FLOW_VERSION;
@@ -180,6 +188,9 @@ export class SessionCompletionService {
           message: isLegacyCompletion
             ? 'Sesi terapi lama sudah diselesaikan dan tetap menggunakan alur legacy.'
             : 'Sesi terapi sudah diselesaikan.',
+          inventorySource: existingTeamInventory ? 'TEAM' as const : 'BRANCH' as const,
+          inventoryTeamId: existingTeamInventory?.teamId ?? null,
+          teamInventoryCompletionId: existingTeamInventory?.id ?? null,
         };
       }
 
@@ -205,30 +216,53 @@ export class SessionCompletionService {
           })
         : session.materials;
 
+      const teamInventory = isLegacySession
+        ? null
+        : await resolveSessionTeamInventory(tx, {
+            sessionId: session.id,
+            branchId: session.branchId,
+            adminLayananId: session.adminLayananId,
+            clinicalUserIds: [
+              session.doctorId,
+              session.nurseId,
+              ...session.sessionDoctors.map((row) => row.doctorId),
+              ...session.sessionNurses.map((row) => row.nurseId),
+            ],
+            materials: sessionMaterials.map((material) => ({
+              inventoryItemId: material.inventoryItemId,
+              masterProductId: material.inventoryItem.masterProductId,
+              productName: material.inventoryItem.masterProduct.name,
+              baseQuantity: material.baseQuantity,
+              baseUnit: material.inventoryItem.masterProduct.baseUnit,
+            })),
+          });
+
       // Repair stock entered through the legacy/direct-edit compatibility
       // column before validating the authoritative balance ledger. This is
       // limited to an actual shortage and never overrides reservations or
       // quarantined quantities already represented in the ledger.
       let reconciledCompatibilityStock = false;
-      for (const material of [...sessionMaterials]
-        .filter((row) => row.status === MaterialUsageStatus.DRAFT && row.baseQuantity.greaterThan(0))
-        .sort((a, b) => a.inventoryItemId.localeCompare(b.inventoryItemId))) {
-        const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
-        const ledgerOnHand = material.inventoryItem.balances.reduce(
-          (sum, balance) => sum.add(balance.onHandQty),
-          new Prisma.Decimal(0),
-        );
-        if (
-          physicalAvailable.lessThan(material.baseQuantity)
-          && material.inventoryItem.stock.greaterThan(ledgerOnHand)
-        ) {
-          const reconciliation = await reconcileCompatibilityStockInTransaction(tx, {
-            inventoryItemId: material.inventoryItemId,
-            actorUserId: userId,
-            sourceType: 'TREATMENT_COMPATIBILITY_RECONCILIATION',
-            sourceId: `${session.id}:${material.inventoryItemId}`,
-          });
-          reconciledCompatibilityStock ||= reconciliation.reconciledQuantity.greaterThan(0);
+      if (!teamInventory) {
+        for (const material of [...sessionMaterials]
+          .filter((row) => row.status === MaterialUsageStatus.DRAFT && row.baseQuantity.greaterThan(0))
+          .sort((a, b) => a.inventoryItemId.localeCompare(b.inventoryItemId))) {
+          const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
+          const ledgerOnHand = material.inventoryItem.balances.reduce(
+            (sum, balance) => sum.add(balance.onHandQty),
+            new Prisma.Decimal(0),
+          );
+          if (
+            physicalAvailable.lessThan(material.baseQuantity)
+            && material.inventoryItem.stock.greaterThan(ledgerOnHand)
+          ) {
+            const reconciliation = await reconcileCompatibilityStockInTransaction(tx, {
+              inventoryItemId: material.inventoryItemId,
+              actorUserId: userId,
+              sourceType: 'TREATMENT_COMPATIBILITY_RECONCILIATION',
+              sourceId: `${session.id}:${material.inventoryItemId}`,
+            });
+            reconciledCompatibilityStock ||= reconciliation.reconciledQuantity.greaterThan(0);
+          }
         }
       }
       if (reconciledCompatibilityStock) {
@@ -255,15 +289,17 @@ export class SessionCompletionService {
       if (!hasVitalAfter) errorsList.push('Tanda vital SESUDAH belum diisi');
       if (!this.hasDoctorEvaluation(session.evaluation)) errorsList.push('Evaluasi dokter belum dibuat');
 
-      for (const material of sessionMaterials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
-        const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
-        if (physicalAvailable.lessThan(material.baseQuantity)) {
-          const shortage = material.baseQuantity.sub(physicalAvailable);
-          const unit = material.inventoryItem.masterProduct.baseUnit;
-          throw errors.unprocessable(
-            'INSUFFICIENT_AVAILABLE_STOCK',
-            `Stok ${material.inventoryItem.masterProduct.name} tidak cukup. Dibutuhkan ${formatStockQuantity(material.baseQuantity)} ${unit}, tersedia ${formatStockQuantity(physicalAvailable)} ${unit}, kekurangan ${formatStockQuantity(shortage)} ${unit}. Lakukan penerimaan stok terlebih dahulu.`,
-          );
+      if (!teamInventory) {
+        for (const material of sessionMaterials.filter((row) => row.status === MaterialUsageStatus.DRAFT)) {
+          const physicalAvailable = calculatePhysicalAvailableBaseQuantity(material.inventoryItem.balances);
+          if (physicalAvailable.lessThan(material.baseQuantity)) {
+            const shortage = material.baseQuantity.sub(physicalAvailable);
+            const unit = material.inventoryItem.masterProduct.baseUnit;
+            throw errors.unprocessable(
+              'INSUFFICIENT_AVAILABLE_STOCK',
+              `Stok ${material.inventoryItem.masterProduct.name} tidak cukup. Dibutuhkan ${formatStockQuantity(material.baseQuantity)} ${unit}, tersedia ${formatStockQuantity(physicalAvailable)} ${unit}, kekurangan ${formatStockQuantity(shortage)} ${unit}. Lakukan penerimaan stok terlebih dahulu.`,
+            );
+          }
         }
       }
 
@@ -306,6 +342,7 @@ export class SessionCompletionService {
         (material) => material.baseQuantity.greaterThan(0),
       );
       let materialPostingId: string | null = null;
+      let teamInventoryCompletionId: string | null = null;
       if (legacyConsumedMaterials.length > 0) {
         await tx.materialUsage.updateMany({
           where: { id: { in: legacyConsumedMaterials.map((material) => material.id) } },
@@ -322,7 +359,7 @@ export class SessionCompletionService {
         materialPostingId = await issueInventoryInTransaction(userId, {
           idempotencyKey: `TREATMENT-MATERIAL-${session.id}`,
           branchId: session.branchId,
-          sourceType: 'TREATMENT_SESSION',
+          sourceType: teamInventory ? 'TREATMENT_TEAM_INVENTORY' : 'TREATMENT_SESSION',
           sourceId: session.id,
           sourceNumber: session.sessionCode,
           reasonCode: 'TREATMENT_MATERIAL_USAGE',
@@ -333,7 +370,22 @@ export class SessionCompletionService {
             stockLocationId: material.inventoryItem.stockLocationId ?? undefined,
             quantity: material.baseQuantity.toFixed(4),
           })),
-        }, tx, { allowUnvaluedQuantity: true });
+        }, tx, {
+          allowUnvaluedQuantity: true,
+          preserveCompatibilityStock: Boolean(teamInventory),
+        });
+
+        if (teamInventory) {
+          const teamCompletion = await consumeSessionTeamInventory(tx, {
+            sessionId: session.id,
+            sessionCode: session.sessionCode,
+            branchId: session.branchId,
+            actorUserId: userId,
+            completedAt,
+            resolved: teamInventory,
+          });
+          teamInventoryCompletionId = teamCompletion.id;
+        }
 
         const mutations = await tx.stockMutation.findMany({
           where: { inventoryPostingId: materialPostingId },
@@ -402,6 +454,9 @@ export class SessionCompletionService {
           revenueCompatibilityMode: 'LEGACY' as const,
           idempotentReplay: false,
           message: 'Sesi terapi lama berhasil diselesaikan dengan flow legacy.',
+          inventorySource: 'BRANCH' as const,
+          inventoryTeamId: null,
+          teamInventoryCompletionId: null,
         };
       }
 
@@ -577,6 +632,9 @@ export class SessionCompletionService {
         revenueCompatibilityMode: finance.revenueCompatibilityMode,
         idempotentReplay: false,
         message: 'Sesi terapi berhasil diselesaikan',
+        inventorySource: teamInventory ? 'TEAM' as const : 'BRANCH' as const,
+        inventoryTeamId: teamInventory?.team.id ?? null,
+        teamInventoryCompletionId,
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
 
@@ -600,6 +658,9 @@ export class SessionCompletionService {
         revenueRecognitionStatus: result.revenueCompatibilityMode === 'LEGACY'
           ? 'LEGACY_NOT_APPLICABLE'
           : 'POSTED',
+        inventorySource: result.inventorySource,
+        inventoryTeamId: result.inventoryTeamId,
+        teamInventoryCompletionId: result.teamInventoryCompletionId,
       },
     });
     return result;
@@ -651,6 +712,9 @@ export class SessionCompletionService {
       }
 
       const cancelledAt = new Date();
+      const teamInventoryCompletion = await tx.homecareMultiBagUsage.findUnique({
+        where: { treatmentSessionId: session.id },
+      });
       let inventoryReversalPostingId: string | null = null;
       if (session.materialPostingId) {
         inventoryReversalPostingId = await reverseInventoryPostingInTransaction(userId, session.materialPostingId, {
@@ -701,6 +765,14 @@ export class SessionCompletionService {
             status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
             expiredAt: reactivate ? null : memberPackage.expiredAt,
           },
+        });
+      }
+      if (teamInventoryCompletion) {
+        await restoreSessionTeamInventory(tx, {
+          completionId: teamInventoryCompletion.id,
+          sessionCode: session.sessionCode,
+          actorUserId: userId,
+          reason: input.reason,
         });
       }
 

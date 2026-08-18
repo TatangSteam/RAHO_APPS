@@ -625,6 +625,7 @@ export async function issueInventoryInTransaction(
     mutationType?: StockMutationType;
     stockOpnameBypassId?: string;
     allowUnvaluedQuantity?: boolean;
+    preserveCompatibilityStock?: boolean;
   } = {},
 ): Promise<string> {
   ensureUniqueIssueLines(input);
@@ -634,9 +635,11 @@ export async function issueInventoryInTransaction(
   const basePayload = postingType === InventoryPostingType.ISSUE && mutationType === StockMutationType.USED
     ? { ...input, lines: normalizedLines }
     : { ...input, lines: normalizedLines, postingType, mutationType };
-  const payloadHash = hashPayload(options.allowUnvaluedQuantity
-    ? { ...basePayload, valuationMode: 'QUANTITY_ONLY' }
-    : basePayload);
+  const payloadHash = hashPayload({
+    ...basePayload,
+    ...(options.allowUnvaluedQuantity ? { valuationMode: 'QUANTITY_ONLY' } : {}),
+    ...(options.preserveCompatibilityStock ? { compatibilityStockMode: 'PRESERVE' } : {}),
+  });
   const existing = await findIdempotentPosting(tx, input.idempotencyKey, payloadHash);
   if (existing) return existing.id;
 
@@ -685,17 +688,20 @@ export async function issueInventoryInTransaction(
     const lineCost = sumAllocationCost(allocations);
     postingCost = postingCost.add(lineCost);
 
-    const mirrorUpdate = await tx.inventoryItem.updateMany({
-      where: { id: item.id, stock: { gte: quantity } },
-      data: { stock: { decrement: quantity } },
-    });
-    if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', 'Compatibility stock tidak mencukupi.');
+    if (!options.preserveCompatibilityStock) {
+      const mirrorUpdate = await tx.inventoryItem.updateMany({
+        where: { id: item.id, stock: { gte: quantity } },
+        data: { stock: { decrement: quantity } },
+      });
+      if (mirrorUpdate.count !== 1) throw errors.unprocessable('INSUFFICIENT_AVAILABLE_STOCK', 'Compatibility stock tidak mencukupi.');
+    }
 
     const stockBefore = item.stock;
+    const stockAfter = options.preserveCompatibilityStock ? stockBefore : stockBefore.sub(quantity);
     const mutation = await tx.stockMutation.create({
       data: {
         inventoryItemId: item.id, type: mutationType, quantity,
-        stockBefore, stockAfter: stockBefore.sub(quantity), referenceType: input.sourceType,
+        stockBefore, stockAfter, referenceType: input.sourceType,
         referenceId: input.sourceId, notes: input.reasonCode, createdBy: actorUserId,
         inventoryPostingId: posting.id,
         inventoryBalanceId: allocations.length === 1 ? allocations[0].inventoryBalanceId : null,
@@ -734,7 +740,7 @@ export async function issueInventoryInTransaction(
       });
       if (balanceUpdate.count !== 1) throw errors.conflict('INVENTORY_CONCURRENCY_CONFLICT', 'Inventory balance berubah saat diproses.');
     }
-    item.stock = item.stock.sub(quantity);
+    item.stock = stockAfter;
   }
 
   await tx.inventoryPosting.update({ where: { id: posting.id }, data: { totalCost: postingCost } });
@@ -788,6 +794,7 @@ export async function reverseInventoryPostingInTransaction(
   if (original.type !== InventoryPostingType.ISSUE) {
     throw errors.badRequest('REVERSAL_NOT_SUPPORTED', 'Reversal hanya didukung untuk posting ISSUE.');
   }
+  const preserveCompatibilityStock = original.sourceType === 'TREATMENT_TEAM_INVENTORY';
 
   const mutations = await tx.stockMutation.findMany({
     where: { inventoryPostingId: postingId },
@@ -827,14 +834,16 @@ export async function reverseInventoryPostingInTransaction(
 
   for (const mutation of mutations) {
     const item = await tx.inventoryItem.findUniqueOrThrow({ where: { id: mutation.inventoryItemId } });
-    await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: { increment: mutation.quantity } } });
+    if (!preserveCompatibilityStock) {
+      await tx.inventoryItem.update({ where: { id: item.id }, data: { stock: { increment: mutation.quantity } } });
+    }
     const reversalMutation = await tx.stockMutation.create({
       data: {
         inventoryItemId: item.id,
         type: StockMutationType.ADJUSTMENT,
         quantity: mutation.quantity,
         stockBefore: item.stock,
-        stockAfter: item.stock.add(mutation.quantity),
+        stockAfter: preserveCompatibilityStock ? item.stock : item.stock.add(mutation.quantity),
         referenceType: 'INVENTORY_POSTING',
         referenceId: postingId,
         notes: input.reasonCode,

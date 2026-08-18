@@ -141,7 +141,6 @@ const MENU_GROUPS: MenuGroup[] = [
         href: '/inventory/team',
         icon: <UsersRound size={20} />,
         roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE'],
-        badge: 'Segera',
       },
       {
         label: 'Dashboard Logistik',

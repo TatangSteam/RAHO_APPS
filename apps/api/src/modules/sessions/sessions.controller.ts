@@ -44,14 +44,16 @@ export class SessionsController {
         branchId,
         branch: { isActive: true },
       },
-      select: { id: true },
+      select: { id: true, accessScope: true },
     });
 
-    if (!managedBranch) {
+    if (!managedBranch || managedBranch.accessScope === 'MEMBER_VIEW_ONLY') {
       throw {
         status: 403,
         code: 'SESSION_BRANCH_ACCESS_DENIED',
-        message: 'Anda tidak memiliki akses ke sesi pada cabang ini',
+        message: managedBranch
+          ? 'Akses Admin Manager pada cabang ini hanya untuk melihat data member'
+          : 'Anda tidak memiliki akses ke sesi pada cabang ini',
       };
     }
   }
@@ -412,6 +414,8 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
+      await this.getAuthorizedEncounterBranchId(encounterId, req.user!);
+
       const result = await sessionsService.createDiagnosis(encounterId, validation.data, req.user!.userId);
       return sendSuccess(res, result, 201);
     } catch (err) {
@@ -429,6 +433,7 @@ export class SessionsController {
   async getDiagnosisByEncounter(req: Request, res: Response, next: NextFunction) {
     try {
       const { encounterId } = req.params;
+      await this.getAuthorizedEncounterBranchId(encounterId, req.user!);
       const diagnosis = await sessionsService.getDiagnosisByEncounter(encounterId);
       return sendSuccess(res, diagnosis);
     } catch (err) {
@@ -451,6 +456,8 @@ export class SessionsController {
       if (!validation.success) {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
+
+      await this.getAuthorizedEncounterBranchId(encounterId, req.user!);
 
       const result = await sessionsService.updateDiagnosis(encounterId, validation.data, req.user!.userId);
       return sendSuccess(res, result);

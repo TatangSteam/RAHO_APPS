@@ -104,6 +104,9 @@ describe('SessionCompletionService.cancelCompletion package usage reversal', () 
         create: jest.fn().mockResolvedValue({ id: 'cancel-event-1' }),
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      homecareMultiBagUsage: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
       auditLog: {
         create: jest.fn().mockResolvedValue(undefined),
       },
