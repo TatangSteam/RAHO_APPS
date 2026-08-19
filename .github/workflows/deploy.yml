@@ -60,7 +60,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Verify lockfiles and run tests
+      - name: Verify lockfiles
         shell: bash
         run: |
           set -euo pipefail
@@ -73,7 +73,14 @@ jobs:
           (cd apps/web && npm install --package-lock-only --ignore-scripts --no-workspaces)
           git diff --exit-code -- apps/api/package-lock.json apps/web/package-lock.json
 
+      - name: Install dependencies and run tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${GITHUB_WORKSPACE}"
+
           npm ci
+
           # A clean runner only has Prisma's placeholder client after npm ci.
           # Generate the schema-specific client before Jest, lint, and tsc load it.
           npm run db:generate --prefix apps/api
