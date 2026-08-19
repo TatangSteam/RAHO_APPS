@@ -1186,7 +1186,9 @@ export class LogisticsService {
     const sessionMap = new Map(sessions.map((item) => [item.id, item]));
     const branchMap = new Map(branches.map((item) => [item.id, item]));
 
-    const items = usages.flatMap((usage) => usage.items.map((item) => {
+    const items = usages.flatMap((usage) => usage.items
+      .filter((item) => !query.masterProductId || item.masterProductId === query.masterProductId)
+      .map((item) => {
       const product = productMap.get(item.masterProductId);
       const user = userMap.get(usage.usedBy);
       const session = usage.treatmentSessionId ? sessionMap.get(usage.treatmentSessionId) : undefined;
@@ -1219,7 +1221,7 @@ export class LogisticsService {
         usedByName: user?.profile?.fullName || user?.email || usage.usedBy,
         notes: item.notes || usage.notes,
       };
-    }));
+      }));
 
     return { items, total, page, limit, usageCount: usages.length };
   }

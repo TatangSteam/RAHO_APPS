@@ -1,6 +1,10 @@
 import fs from 'fs';
 import path from 'path';
-import { createHomecareTeamSchema } from '../logistics.schema';
+import {
+  createHomecareTeamSchema,
+  updateHomecareBagSchema,
+  updateHomecareTeamSchema,
+} from '../logistics.schema';
 
 describe('homecare logistics operational contract', () => {
   const moduleRoot = path.resolve(__dirname, '..');
@@ -37,5 +41,30 @@ describe('homecare logistics operational contract', () => {
     expect(service).toContain('locationType: params.locationType');
     expect(service).toContain('? LogisticLocationType.CENTRAL_STOCK');
     expect(service).toContain(': LogisticLocationType.BRANCH_STOCK');
+  });
+
+  it('exposes guarded edit and usage-history endpoints', () => {
+    expect(routes).toContain("'/logistics/homecare-teams/:teamId'");
+    expect(routes).toContain("'/logistics/homecare-bags/:bagId'");
+    expect(routes).toContain("'/logistics/homecare-usage-history'");
+    expect(routes).toContain("'/logistics/homecare-usage-history/export'");
+    expect(routes).toContain('authorize(canManageCentralStock)');
+    expect(routes).toContain('authorize(logisticStaffRoles)');
+  });
+
+  it('rejects empty or invalid team and bag edits', () => {
+    expect(updateHomecareTeamSchema.safeParse({}).success).toBe(false);
+    expect(updateHomecareTeamSchema.safeParse({ name: 'Tim Batavia', isActive: true }).success).toBe(true);
+    expect(updateHomecareBagSchema.safeParse({}).success).toBe(false);
+    expect(updateHomecareBagSchema.safeParse({ status: 'UNKNOWN' }).success).toBe(false);
+    expect(updateHomecareBagSchema.safeParse({ status: 'IN_CHECKING' }).success).toBe(true);
+  });
+
+  it('keeps manager branch scope and product filtering in usage history', () => {
+    expect(service).toContain('actor.role === Role.ADMIN_MANAGER');
+    expect(service).toContain('where: { userId: actor.userId }');
+    expect(service).toContain('!query.masterProductId || item.masterProductId === query.masterProductId');
+    expect(service).toContain("workbook.addWorksheet('Penggunaan Inventori Tim'");
+    expect(service).toContain('workbook.xlsx.writeBuffer()');
   });
 });
