@@ -151,8 +151,11 @@ export async function fundPackageDeferredRevenueInTransaction(input: {
 
 export async function createTreatmentCompletedEventInTransaction(input: {
   sessionId: string; sessionCode: string; branchId: string; memberId: string; treatmentDate: Date; completedAt: Date; packageIds: string[];
+  revisionKey?: string;
 }, tx: Tx) {
-  const eventKey = `TREATMENT_COMPLETED:${input.sessionId}`;
+  const eventKey = input.revisionKey
+    ? `TREATMENT_COMPLETED:${input.sessionId}:REVISION:${input.revisionKey}`
+    : `TREATMENT_COMPLETED:${input.sessionId}`;
   const { payload, payloadHash } = treatmentCompletedEventPayload(input);
   const existing = await tx.domainEvent.findUnique({ where: { eventKey } });
   if (existing) {
@@ -257,7 +260,9 @@ export async function reserveTreatmentCompletedRevenue(eventId: string, tx: Tx) 
         'Deferred revenue paket berubah saat completion diproses. Silakan ulangi setelah rekonsiliasi pembayaran.',
       );
     }
-    const recognitionKey = `TREATMENT_COMPLETED:${event.treatmentSession.id}:PACKAGE:${contract.memberPackageId}`;
+    const recognitionKey = event.eventKey === `TREATMENT_COMPLETED:${event.treatmentSession.id}`
+      ? `TREATMENT_COMPLETED:${event.treatmentSession.id}:PACKAGE:${contract.memberPackageId}`
+      : `${event.eventKey}:PACKAGE:${contract.memberPackageId}`;
     const existing = await tx.revenueRecognition.findUnique({ where: { recognitionKey } });
     if (existing) { reservations.push(existing); continue; }
     const ordinal = contract.recognizedSessions + 1;
@@ -425,7 +430,9 @@ export async function postTreatmentCompletionFinancialsInTransaction(input: {
   let journalEntryId: string | null = null;
   if (lines.length > 0) {
     const posted = await postTreatmentCompletionDerivedJournal({
-      postingKey: `TREATMENT_COMPLETION:${event.treatmentSession.id}`,
+      postingKey: event.eventKey === `TREATMENT_COMPLETED:${event.treatmentSession.id}`
+        ? `TREATMENT_COMPLETION:${event.treatmentSession.id}`
+        : `TREATMENT_COMPLETION:${event.treatmentSession.id}:${event.id}`,
       transactionDate: input.occurredAt,
       branchId: event.branchId,
       actorUserId: input.actorUserId,
@@ -541,6 +548,7 @@ export async function reverseTreatmentCompletionFinancialsInTransaction(input: {
   originalJournalEntryId: string;
   reason: string;
   occurredAt: Date;
+  cancellationKey?: string;
 }, tx: Tx) {
   const recognitions = await tx.revenueRecognition.findMany({
     where: { treatmentSessionId: input.sessionId, status: 'POSTED' },
@@ -553,7 +561,9 @@ export async function reverseTreatmentCompletionFinancialsInTransaction(input: {
   }
   const reversal = await reverseTreatmentCompletionJournalInTransaction({
     originalJournalEntryId: input.originalJournalEntryId,
-    postingKey: `TREATMENT_COMPLETION_REVERSAL:${input.sessionId}`,
+    postingKey: input.cancellationKey
+      ? `TREATMENT_COMPLETION_REVERSAL:${input.sessionId}:${input.cancellationKey}`
+      : `TREATMENT_COMPLETION_REVERSAL:${input.sessionId}`,
     transactionDate: input.occurredAt,
     branchId: input.branchId,
     actorUserId: input.actorUserId,

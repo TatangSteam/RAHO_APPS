@@ -210,4 +210,55 @@ describe('team session inventory source resolver', () => {
     });
     expect(tx.logisticStockMutation.create).toHaveBeenCalledTimes(1);
   });
+
+  it('reuses a cancelled completion group and deducts stock again for the new posting cycle', async () => {
+    const team = teamWithBags([{ bagId: 'bag-a', bagCode: 'BAG-001', stock: '5' }]);
+    const resolved: ResolvedSessionTeamInventory = {
+      team: team as never,
+      allocations: [{
+        bagId: 'bag-a',
+        bagCode: 'BAG-001',
+        masterProductId: 'product-1',
+        quantity: new Prisma.Decimal(2),
+        unit: 'Botol',
+      }],
+    };
+    const cancelledGroup = {
+      id: 'completion-1',
+      status: 'CANCELLED',
+      treatmentSessionId: 'session-1',
+    };
+    const tx = {
+      homecareMultiBagUsage: {
+        findUnique: jest.fn().mockResolvedValue(cancelledGroup),
+        create: jest.fn(),
+        update: jest.fn().mockResolvedValue(cancelledGroup),
+      },
+      homecareBagStock: {
+        findMany: jest.fn().mockResolvedValue(team.bags[0].stocks),
+        updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      homecareBagUsage: { create: jest.fn().mockResolvedValue({ id: 'usage-revision-1' }) },
+      logisticStockMutation: { create: jest.fn().mockResolvedValue({ id: 'mutation-revision-1' }) },
+      $queryRaw: jest.fn().mockResolvedValue([]),
+    };
+
+    await consumeSessionTeamInventory(tx as never, {
+      sessionId: 'session-1',
+      sessionCode: 'SES-001',
+      branchId: 'branch-1',
+      actorUserId: 'manager-1',
+      completedAt: new Date('2026-08-19T00:00:00.000Z'),
+      completionAttemptKey: 'revision-1',
+      resolved,
+    });
+
+    expect(tx.homecareMultiBagUsage.create).not.toHaveBeenCalled();
+    expect(tx.homecareMultiBagUsage.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: cancelledGroup.id },
+      data: expect.objectContaining({ status: 'COMPLETED', usageIds: [] }),
+    }));
+    expect(tx.homecareBagStock.updateMany).toHaveBeenCalledTimes(1);
+    expect(tx.homecareBagUsage.create).toHaveBeenCalledTimes(1);
+  });
 });

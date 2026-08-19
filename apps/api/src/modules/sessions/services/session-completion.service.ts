@@ -55,6 +55,12 @@ import {
 const MAX_COMPLETION_ATTEMPTS = 3;
 const LEGACY_COMPLETION_FLOW_VERSION = 1;
 
+function completionRevisionKey(cancellationIdempotencyKey: string | null | undefined): string | null {
+  if (!cancellationIdempotencyKey) return null;
+  const rawKey = cancellationIdempotencyKey.split(':').pop() || cancellationIdempotencyKey;
+  return rawKey.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 64) || null;
+}
+
 function formatStockQuantity(value: Prisma.Decimal): string {
   return Number(value.toString()).toLocaleString('id-ID', { maximumFractionDigits: 4 });
 }
@@ -144,6 +150,10 @@ export class SessionCompletionService {
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
       const isLegacySession = session.completionFlowVersion === LEGACY_COMPLETION_FLOW_VERSION;
+      const revisionKey = completionRevisionKey(session.cancellationIdempotencyKey);
+      const completionAggregateId = revisionKey
+        ? `${session.id}:REVISION:${revisionKey}`
+        : session.id;
       if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
         throw errors.conflict('SESSION_COMPLETION_CANCELLED', 'Completion sesi ini sudah dibatalkan dan tidak dapat diposting ulang.');
       }
@@ -153,7 +163,7 @@ export class SessionCompletionService {
           || session.encounter.memberPackageId;
         const [existingEvent, existingRevenueEvent, replayPackage, existingTeamInventory] = await Promise.all([
           tx.integrationEvent.findUnique({
-            where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: session.id } },
+            where: { eventType_aggregateId: { eventType: TREATMENT_COMPLETED_EVENT_TYPE, aggregateId: completionAggregateId } },
           }),
           tx.domainEvent.findUnique({ where: { eventKey: `TREATMENT_COMPLETED:${session.id}` } }),
           replayPackageId ? tx.memberPackage.findUnique({
@@ -357,7 +367,9 @@ export class SessionCompletionService {
       }
       if (postableDraftMaterials.length > 0) {
         materialPostingId = await issueInventoryInTransaction(userId, {
-          idempotencyKey: `TREATMENT-MATERIAL-${session.id}`,
+          idempotencyKey: revisionKey
+            ? `TREATMENT-MATERIAL-${session.id}-${revisionKey}`
+            : `TREATMENT-MATERIAL-${session.id}`,
           branchId: session.branchId,
           sourceType: teamInventory ? 'TREATMENT_TEAM_INVENTORY' : 'TREATMENT_SESSION',
           sourceId: session.id,
@@ -382,6 +394,7 @@ export class SessionCompletionService {
             branchId: session.branchId,
             actorUserId: userId,
             completedAt,
+            completionAttemptKey: revisionKey || undefined,
             resolved: teamInventory,
           });
           teamInventoryCompletionId = teamCompletion.id;
@@ -509,6 +522,7 @@ export class SessionCompletionService {
         treatmentDate: session.treatmentDate,
         completedAt,
         packageIds: selectedRevenueSource?.revenuePackageIds ?? [],
+        revisionKey: revisionKey || undefined,
       }, tx);
 
       const finance = await postTreatmentCompletionFinancialsInTransaction({
@@ -583,7 +597,7 @@ export class SessionCompletionService {
           eventType: TREATMENT_COMPLETED_EVENT_TYPE,
           eventVersion: TREATMENT_COMPLETED_EVENT_VERSION,
           aggregateType: 'TreatmentSession',
-          aggregateId: session.id,
+          aggregateId: completionAggregateId,
           branchId: session.branchId,
           payload: payload as unknown as Prisma.InputJsonValue,
           status: IntegrationEventStatus.PENDING,
@@ -593,12 +607,14 @@ export class SessionCompletionService {
       await createInventorySyncEventInTransaction(tx, {
         eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
         aggregateType: 'TreatmentSessionInventory',
-        aggregateId: session.id,
+        aggregateId: completionAggregateId,
         occurredAt: completedAt,
         snapshot: {
           sourceType: 'TREATMENT_COMPLETION',
-          localEntityId: session.id,
-          externalKey: `RAHO-TREATMENT-${session.sessionCode}`,
+          localEntityId: completionAggregateId,
+          externalKey: revisionKey
+            ? `RAHO-TREATMENT-${session.sessionCode}-REV-${revisionKey}`
+            : `RAHO-TREATMENT-${session.sessionCode}`,
           branchId: session.branchId,
           occurredAt: completedAt.toISOString(),
           postingReference: materialPosting?.postingNumber ?? null,
@@ -685,12 +701,121 @@ export class SessionCompletionService {
       });
       if (!session) throw errors.notFound('Sesi tidak ditemukan.');
       const cancellationKey = `TREATMENT-CANCEL:${session.id}:${input.idempotencyKey}`;
+      const reopenForEditing = input.reopenForEditing === true;
+
+      if (
+        reopenForEditing
+        && session.completionStatus === TreatmentCompletionStatus.IN_PROGRESS
+        && !session.isCompleted
+        && session.cancellationIdempotencyKey === cancellationKey
+      ) {
+        return {
+          sessionId: session.id,
+          sessionCode: session.sessionCode,
+          completionStatus: session.completionStatus,
+          inventoryReversalPostingId: session.materialReversalPostingId,
+          cancellationJournalEntryId: session.cancellationJournalEntryId,
+          reopenedForEditing: true,
+          idempotentReplay: true,
+          message: 'Sesi sudah dibuka kembali untuk diedit.',
+        };
+      }
+
       if (session.completionStatus === TreatmentCompletionStatus.CANCELLED) {
-        if (session.cancellationIdempotencyKey !== cancellationKey) {
+        if (!reopenForEditing && session.cancellationIdempotencyKey !== cancellationKey) {
           throw errors.conflict(
             'SESSION_CANCELLATION_ALREADY_POSTED',
             'Completion sudah dibatalkan dengan idempotency key berbeda.',
           );
+        }
+        if (reopenForEditing) {
+          const packageIds = selectTreatmentPackageUsageIds(
+            session.encounter.memberPackageId,
+            session.boosterPackageId,
+          );
+          const packages = packageIds.length ? await tx.$queryRaw<ReversiblePackageUsage[]>(Prisma.sql`
+            SELECT "id", "usedSessions", "totalSessions", "status", "expiredAt"
+            FROM "member_packages"
+            WHERE "id" IN (${Prisma.join(packageIds)})
+            ORDER BY "id"
+            FOR UPDATE
+          `) : [];
+          for (const memberPackage of packages) {
+            if (memberPackage.usedSessions >= memberPackage.totalSessions) {
+              throw errors.conflict(
+                'SESSION_REOPEN_PACKAGE_EXHAUSTED',
+                'Paket sesi sudah dipakai oleh sesi lain setelah pembatalan. Pilih paket lain sebelum membuka kembali sesi.',
+              );
+            }
+            const usedSessions = memberPackage.usedSessions + 1;
+            await tx.memberPackage.update({
+              where: { id: memberPackage.id },
+              data: {
+                usedSessions,
+                status: usedSessions >= memberPackage.totalSessions ? PackageStatus.EXPIRED : PackageStatus.ACTIVE,
+                expiredAt: usedSessions >= memberPackage.totalSessions ? new Date() : null,
+              },
+            });
+          }
+          await tx.materialUsage.updateMany({
+            where: {
+              treatmentSessionId: session.id,
+              status: { in: [MaterialUsageStatus.CONSUMED, MaterialUsageStatus.REVERSED] },
+            },
+            data: {
+              status: MaterialUsageStatus.DRAFT,
+              inventoryPostingId: null,
+              actualUnitCost: null,
+              totalActualCost: null,
+              consumedAt: null,
+              isLegacyConsumption: false,
+            },
+          });
+          await tx.treatmentSession.update({
+            where: { id: session.id },
+            data: {
+              isCompleted: false,
+              completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
+              completedAt: null,
+              completedBy: null,
+              cancellationIdempotencyKey: cancellationKey,
+              materialPostingId: null,
+              completionJournalEntryId: null,
+              recognizedRevenue: new Prisma.Decimal(0),
+              materialCost: new Prisma.Decimal(0),
+              grossProfit: new Prisma.Decimal(0),
+              revenueSourceType: null,
+              revenuePackageId: null,
+              boosterType: null,
+            },
+          });
+          await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
+          await tx.auditLog.create({
+            data: {
+              userId,
+              branchId: session.branchId,
+              action: AuditAction.UPDATE,
+              module: 'TREATMENT',
+              resource: 'TreatmentSession',
+              resourceId: session.id,
+              entityType: 'TreatmentSession',
+              entityId: session.id,
+              entityCode: session.sessionCode,
+              description: `Sesi ${session.sessionCode} yang telah dibatalkan dibuka kembali untuk koreksi.`,
+              beforeData: { completionStatus: TreatmentCompletionStatus.CANCELLED },
+              afterData: { completionStatus: TreatmentCompletionStatus.IN_PROGRESS, reopenedForEditing: true },
+            },
+          });
+          return {
+            sessionId: session.id,
+            sessionCode: session.sessionCode,
+            completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
+            inventoryReversalPostingId: session.materialReversalPostingId,
+            cancellationJournalEntryId: session.cancellationJournalEntryId,
+            reopenedForEditing: true,
+            idempotentReplay: false,
+            message: 'Sesi yang dibatalkan berhasil dibuka kembali untuk diedit.',
+          };
         }
         return {
           sessionId: session.id,
@@ -698,6 +823,7 @@ export class SessionCompletionService {
           completionStatus: session.completionStatus,
           inventoryReversalPostingId: session.materialReversalPostingId,
           cancellationJournalEntryId: session.cancellationJournalEntryId,
+          reopenedForEditing: false,
           idempotentReplay: true,
           message: 'Pembatalan completion sudah diproses.',
         };
@@ -712,6 +838,13 @@ export class SessionCompletionService {
       }
 
       const cancelledAt = new Date();
+      const previousRevisionKey = completionRevisionKey(session.cancellationIdempotencyKey);
+      const currentCompletionAggregateId = previousRevisionKey
+        ? `${session.id}:REVISION:${previousRevisionKey}`
+        : session.id;
+      const cancellationAggregateId = previousRevisionKey
+        ? `${session.id}:CANCEL:${input.idempotencyKey}`
+        : session.id;
       const teamInventoryCompletion = await tx.homecareMultiBagUsage.findUnique({
         where: { treatmentSessionId: session.id },
       });
@@ -722,11 +855,26 @@ export class SessionCompletionService {
           reasonCode: 'TREATMENT_COMPLETION_CANCELLED',
           occurredAt: cancelledAt,
         }, tx);
-        await tx.materialUsage.updateMany({
-          where: { treatmentSessionId: session.id, status: MaterialUsageStatus.CONSUMED },
-          data: { status: MaterialUsageStatus.REVERSED },
-        });
       }
+
+      await tx.materialUsage.updateMany({
+        where: {
+          treatmentSessionId: session.id,
+          status: reopenForEditing
+            ? { in: [MaterialUsageStatus.CONSUMED, MaterialUsageStatus.REVERSED] }
+            : MaterialUsageStatus.CONSUMED,
+        },
+        data: reopenForEditing
+          ? {
+              status: MaterialUsageStatus.DRAFT,
+              inventoryPostingId: null,
+              actualUnitCost: null,
+              totalActualCost: null,
+              consumedAt: null,
+              isLegacyConsumption: false,
+            }
+          : { status: MaterialUsageStatus.REVERSED },
+      });
 
       const financeReversal = session.completionJournalEntryId
         ? await reverseTreatmentCompletionFinancialsInTransaction({
@@ -737,6 +885,7 @@ export class SessionCompletionService {
             originalJournalEntryId: session.completionJournalEntryId,
             reason: input.reason,
             occurredAt: cancelledAt,
+            cancellationKey: previousRevisionKey ? input.idempotencyKey : undefined,
           }, tx)
         : null;
 
@@ -754,18 +903,20 @@ export class SessionCompletionService {
         ORDER BY "id"
         FOR UPDATE
       `) : [];
-      for (const memberPackage of packages) {
-        const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
-        const reactivate = memberPackage.status === PackageStatus.EXPIRED
-          && usedSessions < memberPackage.totalSessions;
-        await tx.memberPackage.update({
-          where: { id: memberPackage.id },
-          data: {
-            usedSessions,
-            status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
-            expiredAt: reactivate ? null : memberPackage.expiredAt,
-          },
-        });
+      if (!reopenForEditing) {
+        for (const memberPackage of packages) {
+          const usedSessions = Math.max(0, memberPackage.usedSessions - 1);
+          const reactivate = memberPackage.status === PackageStatus.EXPIRED
+            && usedSessions < memberPackage.totalSessions;
+          await tx.memberPackage.update({
+            where: { id: memberPackage.id },
+            data: {
+              usedSessions,
+              status: reactivate ? PackageStatus.ACTIVE : memberPackage.status,
+              expiredAt: reactivate ? null : memberPackage.expiredAt,
+            },
+          });
+        }
       }
       if (teamInventoryCompletion) {
         await restoreSessionTeamInventory(tx, {
@@ -781,7 +932,7 @@ export class SessionCompletionService {
           eventType: 'TREATMENT_COMPLETION_CANCELLED',
           eventVersion: 1,
           aggregateType: 'TreatmentSession',
-          aggregateId: session.id,
+          aggregateId: cancellationAggregateId,
           branchId: session.branchId,
           status: IntegrationEventStatus.PENDING,
           occurredAt: cancelledAt,
@@ -801,7 +952,7 @@ export class SessionCompletionService {
         where: {
           eventType_aggregateId: {
             eventType: TREATMENT_INVENTORY_CONSUMED_EVENT,
-            aggregateId: session.id,
+            aggregateId: currentCompletionAggregateId,
           },
         },
       });
@@ -820,12 +971,18 @@ export class SessionCompletionService {
         await createInventorySyncEventInTransaction(tx, {
           eventType: TREATMENT_INVENTORY_REVERSED_EVENT,
           aggregateType: 'TreatmentSessionInventoryReversal',
-          aggregateId: `${session.id}:REVERSAL`,
+          aggregateId: previousRevisionKey
+            ? `${session.id}:REVERSAL:${input.idempotencyKey}`
+            : `${session.id}:REVERSAL`,
           occurredAt: cancelledAt,
           snapshot: {
             sourceType: 'TREATMENT_CANCELLATION',
-            localEntityId: `${session.id}:REVERSAL`,
-            externalKey: `RAHO-TREATMENT-REV-${session.sessionCode}`,
+            localEntityId: previousRevisionKey
+              ? `${session.id}:REVERSAL:${input.idempotencyKey}`
+              : `${session.id}:REVERSAL`,
+            externalKey: previousRevisionKey
+              ? `RAHO-TREATMENT-REV-${session.sessionCode}-${input.idempotencyKey}`
+              : `RAHO-TREATMENT-REV-${session.sessionCode}`,
             branchId: session.branchId,
             occurredAt: cancelledAt.toISOString(),
             postingReference: inventoryReversalPostingId || consumed.postingReference || null,
@@ -843,13 +1000,26 @@ export class SessionCompletionService {
       await tx.treatmentSession.update({
         where: { id: session.id },
         data: {
-          completionStatus: TreatmentCompletionStatus.CANCELLED,
+          isCompleted: reopenForEditing ? false : session.isCompleted,
+          completionStatus: reopenForEditing
+            ? TreatmentCompletionStatus.IN_PROGRESS
+            : TreatmentCompletionStatus.CANCELLED,
+          completedAt: reopenForEditing ? null : session.completedAt,
+          completedBy: reopenForEditing ? null : session.completedBy,
           cancelledAt,
           cancelledBy: userId,
           cancellationIdempotencyKey: cancellationKey,
           cancellationReason: input.reason,
           materialReversalPostingId: inventoryReversalPostingId,
           cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
+          materialPostingId: reopenForEditing ? null : session.materialPostingId,
+          completionJournalEntryId: reopenForEditing ? null : session.completionJournalEntryId,
+          recognizedRevenue: reopenForEditing ? new Prisma.Decimal(0) : session.recognizedRevenue,
+          materialCost: reopenForEditing ? new Prisma.Decimal(0) : session.materialCost,
+          grossProfit: reopenForEditing ? new Prisma.Decimal(0) : session.grossProfit,
+          revenueSourceType: reopenForEditing ? null : session.revenueSourceType,
+          revenuePackageId: reopenForEditing ? null : session.revenuePackageId,
+          boosterType: reopenForEditing ? null : session.boosterType,
         },
       });
       await syncMemberVoucherUsageCount(tx, session.encounter.memberId);
@@ -871,24 +1041,32 @@ export class SessionCompletionService {
             completionJournalEntryId: session.completionJournalEntryId,
           },
           afterData: {
-            completionStatus: TreatmentCompletionStatus.CANCELLED,
+            completionStatus: reopenForEditing
+              ? TreatmentCompletionStatus.IN_PROGRESS
+              : TreatmentCompletionStatus.CANCELLED,
             inventoryReversalPostingId,
             cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
             cancellationEventId: cancellationEvent.id,
             reason: input.reason,
+            reopenedForEditing: reopenForEditing,
           },
         },
       });
       return {
         sessionId: session.id,
         sessionCode: session.sessionCode,
-        completionStatus: TreatmentCompletionStatus.CANCELLED,
+        completionStatus: reopenForEditing
+          ? TreatmentCompletionStatus.IN_PROGRESS
+          : TreatmentCompletionStatus.CANCELLED,
         inventoryReversalPostingId,
         cancellationJournalEntryId: financeReversal?.journalEntryId ?? null,
         releasedRevenue: financeReversal?.releasedRevenue ?? new Prisma.Decimal(0),
         eventId: cancellationEvent.id,
+        reopenedForEditing: reopenForEditing,
         idempotentReplay: false,
-        message: 'Completion sesi berhasil dibatalkan dan seluruh posting telah dibalik.',
+        message: reopenForEditing
+          ? 'Posting sesi berhasil dibalik dan sesi dibuka kembali untuk diedit.'
+          : 'Completion sesi berhasil dibatalkan dan seluruh posting telah dibalik.',
       };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   }

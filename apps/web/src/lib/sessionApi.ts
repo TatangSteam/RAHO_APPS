@@ -248,12 +248,17 @@ export const sessionApi = {
     return response.data.data;
   },
 
-  cancelCompletion: async (sessionId: string, input: { idempotencyKey: string; reason: string }): Promise<{
+  cancelCompletion: async (sessionId: string, input: {
+    idempotencyKey: string;
+    reason: string;
+    reopenForEditing?: boolean;
+  }): Promise<{
     sessionId: string;
     sessionCode: string;
-    completionStatus: 'CANCELLED';
+    completionStatus: 'CANCELLED' | 'IN_PROGRESS';
     inventoryReversalPostingId: string | null;
     cancellationJournalEntryId: string | null;
+    reopenedForEditing?: boolean;
     idempotentReplay: boolean;
     message: string;
   }> => {

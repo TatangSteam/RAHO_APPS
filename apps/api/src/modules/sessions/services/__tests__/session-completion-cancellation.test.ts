@@ -100,6 +100,9 @@ describe('SessionCompletionService.cancelCompletion package usage reversal', () 
       memberPackage: {
         update: jest.fn().mockResolvedValue(undefined),
       },
+      materialUsage: {
+        updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
       integrationEvent: {
         create: jest.fn().mockResolvedValue({ id: 'cancel-event-1' }),
         findUnique: jest.fn().mockResolvedValue(null),
@@ -140,5 +143,85 @@ describe('SessionCompletionService.cancelCompletion package usage reversal', () 
       },
     });
     expect(syncMemberVoucherUsageCount).toHaveBeenCalledWith(tx, 'member-1');
+  });
+
+  it('reopens a posted session without releasing the reserved vouchers twice', async () => {
+    const session = {
+      id: 'session-reopen-1',
+      sessionCode: 'SES-REOPEN-001',
+      branchId: 'branch-1',
+      isCompleted: true,
+      completionStatus: TreatmentCompletionStatus.COMPLETED,
+      completionFlowVersion: 2,
+      completedAt: new Date('2026-08-19T03:00:00.000Z'),
+      completedBy: 'actor-old',
+      cancellationIdempotencyKey: null,
+      materialPostingId: null,
+      materialReversalPostingId: null,
+      completionJournalEntryId: null,
+      cancellationJournalEntryId: null,
+      recognizedRevenue: new Prisma.Decimal(0),
+      materialCost: new Prisma.Decimal(0),
+      grossProfit: new Prisma.Decimal(0),
+      revenueSourceType: null,
+      revenuePackageId: 'basic-1',
+      boosterPackageId: null,
+      boosterType: null,
+      encounter: { memberId: 'member-1', memberPackageId: 'basic-1' },
+    };
+    mockPrisma.treatmentSession.findUnique.mockResolvedValue({ branchId: session.branchId });
+    const tx = {
+      $queryRaw: jest.fn().mockResolvedValue([]),
+      treatmentSession: {
+        findUnique: jest.fn().mockResolvedValue(session),
+        update: jest.fn().mockResolvedValue(undefined),
+      },
+      memberPackage: { update: jest.fn() },
+      materialUsage: { updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      integrationEvent: {
+        create: jest.fn().mockResolvedValue({ id: 'reopen-event-1' }),
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+      homecareMultiBagUsage: { findUnique: jest.fn().mockResolvedValue(null) },
+      auditLog: { create: jest.fn().mockResolvedValue(undefined) },
+    };
+    mockPrisma.$transaction.mockImplementation(
+      (callback: (transaction: typeof tx) => unknown) => callback(tx),
+    );
+
+    const result = await new SessionCompletionService().cancelCompletion(
+      session.id,
+      'manager-1',
+      {
+        idempotencyKey: 'reopen-edit-001',
+        reason: 'Koreksi seluruh data sesi posted',
+        reopenForEditing: true,
+      },
+    );
+
+    expect(tx.memberPackage.update).not.toHaveBeenCalled();
+    expect(tx.materialUsage.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ treatmentSessionId: session.id }),
+      data: expect.objectContaining({
+        status: 'DRAFT',
+        inventoryPostingId: null,
+        actualUnitCost: null,
+        totalActualCost: null,
+      }),
+    }));
+    expect(tx.treatmentSession.update).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: session.id },
+      data: expect.objectContaining({
+        isCompleted: false,
+        completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
+        completedAt: null,
+        completionJournalEntryId: null,
+        materialPostingId: null,
+      }),
+    }));
+    expect(result).toEqual(expect.objectContaining({
+      completionStatus: TreatmentCompletionStatus.IN_PROGRESS,
+      reopenedForEditing: true,
+    }));
   });
 });

@@ -240,13 +240,14 @@ export async function consumeSessionTeamInventory(
     branchId: string;
     actorUserId: string;
     completedAt: Date;
+    completionAttemptKey?: string;
     resolved: ResolvedSessionTeamInventory;
   },
 ) {
   const existing = await tx.homecareMultiBagUsage.findUnique({
     where: { treatmentSessionId: input.sessionId },
   });
-  if (existing) return existing;
+  if (existing && existing.status !== 'CANCELLED') return existing;
 
   const stockRows = await tx.homecareBagStock.findMany({
     where: {
@@ -270,22 +271,33 @@ export async function consumeSessionTeamInventory(
     teamId: input.resolved.team.id,
     allocations: input.resolved.allocations,
   });
-  const group = await tx.homecareMultiBagUsage.create({
-    data: {
-      completionNumber: completionCode('TIM'),
-      idempotencyKey: `TREATMENT-TEAM-INVENTORY-${input.sessionId}`,
-      payloadHash,
-      treatmentSessionId: input.sessionId,
-      teamId: input.resolved.team.id,
-      branchId: input.branchId,
-      usageIds: [],
-      bagCount: new Set(input.resolved.allocations.map((row) => row.bagId)).size,
-      totalItemLines: input.resolved.allocations.length,
-      notes: `Pemakaian Inventory Tim otomatis untuk sesi ${input.sessionCode}.`,
-      completedBy: input.actorUserId,
-      completedAt: input.completedAt,
-    },
-  });
+  const groupData = {
+    payloadHash,
+    teamId: input.resolved.team.id,
+    branchId: input.branchId,
+    status: 'COMPLETED' as const,
+    usageIds: [],
+    bagCount: new Set(input.resolved.allocations.map((row) => row.bagId)).size,
+    totalItemLines: input.resolved.allocations.length,
+    notes: `Pemakaian Inventory Tim otomatis untuk sesi ${input.sessionCode}.`,
+    completedBy: input.actorUserId,
+    completedAt: input.completedAt,
+  };
+  const group = existing
+    ? await tx.homecareMultiBagUsage.update({
+        where: { id: existing.id },
+        data: groupData,
+      })
+    : await tx.homecareMultiBagUsage.create({
+        data: {
+          completionNumber: completionCode('TIM'),
+          idempotencyKey: input.completionAttemptKey
+            ? `TREATMENT-TEAM-INVENTORY-${input.sessionId}-${input.completionAttemptKey}`
+            : `TREATMENT-TEAM-INVENTORY-${input.sessionId}`,
+          treatmentSessionId: input.sessionId,
+          ...groupData,
+        },
+      });
 
   const allocationsByBag = new Map<string, TeamStockAllocation[]>();
   for (const allocation of input.resolved.allocations) {

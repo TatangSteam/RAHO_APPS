@@ -839,6 +839,18 @@ export class SessionsController {
     try {
       const { sessionId } = req.params;
       const input = cancelSessionCompletionSchema.parse(req.body);
+      if (
+        input.reopenForEditing
+        && req.user!.role !== Role.SUPER_ADMIN
+        && req.user!.role !== Role.ADMIN_MANAGER
+      ) {
+        return sendError(
+          res,
+          403,
+          'SESSION_REOPEN_FORBIDDEN',
+          'Hanya Super Admin atau Admin Manager yang dapat membuka kembali sesi posted untuk diedit.',
+        );
+      }
       const result = await sessionsService.cancelCompletion(sessionId, req.user!.userId, input);
       return sendSuccess(res, result);
     } catch (err) {

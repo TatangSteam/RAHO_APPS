@@ -131,6 +131,8 @@ export default function SessionDetailPage() {
   const [boosterEditUseBooster, setBoosterEditUseBooster] = useState(false);
   const [boosterEditPackageId, setBoosterEditPackageId] = useState('');
   const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
+  const [postedEditReason, setPostedEditReason] = useState('');
+  const [postedEditConfirmed, setPostedEditConfirmed] = useState(false);
 
   const loadSessionDetail = useCallback(async () => {
     try {
@@ -221,6 +223,8 @@ export default function SessionDetailPage() {
     if (!session) return;
 
     setBoosterEditError(null);
+    setPostedEditReason('');
+    setPostedEditConfirmed(false);
     setSessionEditMemberPackageId(session.session.memberPackage?.packageId || '');
     setSessionEditTreatmentDate(toDateTimeLocalValue(session.session.treatmentDate));
     setSessionEditPelaksanaan(session.session.pelaksanaan);
@@ -319,26 +323,6 @@ export default function SessionDetailPage() {
       return;
     }
 
-    if (session.session.isCompleted) {
-      try {
-        setSavingBoosterPackage(true);
-        setBoosterEditError(null);
-        await sessionApi.updateSessionDetails(sessionId, {
-          treatmentDate: new Date(sessionEditTreatmentDate).toISOString(),
-        });
-        showToast.success('Tanggal dan jam terapi berhasil dikoreksi');
-        setShowBoosterEditModal(false);
-        await loadSessionDetail();
-      } catch (error) {
-        assertCaughtError(error);
-        devError('Error correcting posted session treatment date:', error);
-        setBoosterEditError(error.response?.data?.error?.message || 'Gagal mengoreksi tanggal terapi');
-      } finally {
-        setSavingBoosterPackage(false);
-      }
-      return;
-    }
-
     if (!sessionEditMemberPackageId) {
       setBoosterEditError('Pilih paket dasar terlebih dahulu');
       return;
@@ -364,9 +348,28 @@ export default function SessionDetailPage() {
       return;
     }
 
+    if (session.session.isCompleted && postedEditReason.trim().length < 5) {
+      setBoosterEditError('Alasan koreksi sesi posted wajib diisi minimal 5 karakter');
+      return;
+    }
+
+    if (session.session.isCompleted && !postedEditConfirmed) {
+      setBoosterEditError('Konfirmasi reversal posting sebelum menyimpan perubahan');
+      return;
+    }
+
+    let reopenedForEditing = false;
     try {
       setSavingBoosterPackage(true);
       setBoosterEditError(null);
+      if (session.session.isCompleted) {
+        await sessionApi.cancelCompletion(sessionId, {
+          idempotencyKey: crypto.randomUUID(),
+          reason: postedEditReason.trim(),
+          reopenForEditing: true,
+        });
+        reopenedForEditing = true;
+      }
       await sessionApi.updateSessionDetails(sessionId, {
         memberPackageId: sessionEditMemberPackageId,
         treatmentDate: new Date(sessionEditTreatmentDate).toISOString(),
@@ -379,7 +382,7 @@ export default function SessionDetailPage() {
         nurseId: sessionEditNurseId,
         additionalDoctorIds: sessionEditAdditionalDoctorIds.filter((doctorId) => doctorId !== sessionEditDoctorId),
         additionalNurseIds: sessionEditAdditionalNurseIds.filter((nurseId) => nurseId !== sessionEditNurseId),
-        ...(session.session.boosterPackage?.boosterType
+        ...(!session.session.isCompleted && session.session.boosterPackage?.boosterType
           ? {}
           : {
               useBooster: boosterEditUseBooster,
@@ -387,13 +390,19 @@ export default function SessionDetailPage() {
             }),
       });
 
-      showToast.success('Data sesi berhasil diperbarui');
+      showToast.success(reopenedForEditing
+        ? 'Posting lama sudah dibalik dan data sesi diperbarui. Selesaikan kembali sesi untuk membuat posting baru.'
+        : 'Data sesi berhasil diperbarui');
       setShowBoosterEditModal(false);
       await loadSessionDetail();
     } catch (error) {
       assertCaughtError(error);
       devError('Error updating session details:', error);
-      setBoosterEditError(error.response?.data?.error?.message || 'Gagal memperbarui data sesi');
+      const message = error.response?.data?.error?.message || 'Gagal memperbarui data sesi';
+      setBoosterEditError(reopenedForEditing
+        ? `Posting lama sudah berhasil dibalik, tetapi perubahan data belum tersimpan: ${message}. Sesi sekarang berstatus pending dan aman untuk diedit ulang.`
+        : message);
+      if (reopenedForEditing || session.session.isCompleted) await loadSessionDetail();
     } finally {
       setSavingBoosterPackage(false);
     }
@@ -495,8 +504,7 @@ export default function SessionDetailPage() {
 
   const { session: sessionInfo, steps } = session;
   const canEditSessionBoosterPackage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
-  const postedSessionLockedFieldDisabled =
-    savingBoosterPackage || loadingBoosterPackages || sessionInfo.isCompleted;
+  const sessionEditFieldDisabled = savingBoosterPackage || loadingBoosterPackages;
   const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
   const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
@@ -1208,11 +1216,11 @@ export default function SessionDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
               <div>
                 <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '6px' }}>
-                  {sessionInfo.isCompleted ? 'Koreksi Tanggal Sesi' : 'Edit Data Sesi'}
+                  Edit Data Sesi
                 </h3>
                 <p style={{ color: 'var(--text-secondary)', fontSize: '14px', margin: 0 }}>
                   {sessionInfo.isCompleted
-                    ? 'Koreksi tanggal dan jam terapi. Data posting lainnya tetap terkunci.'
+                    ? 'Ubah seluruh data sesi melalui reversal terkontrol, lalu selesaikan kembali sesi.'
                     : 'Ubah jadwal, pelaksanaan, paket, dan tim yang menangani sesi ini.'}
                 </p>
               </div>
@@ -1249,8 +1257,9 @@ export default function SessionDetailPage() {
                 fontSize: '14px',
                 marginBottom: '16px',
               }}>
-                Sesi sudah diposting. Admin Manager hanya dapat mengoreksi tanggal dan jam terapi;
-                paket, nomor sesi, pelaksanaan, dan tim tidak berubah.
+                Sesi sudah diposting. Saat disimpan, sistem akan membalik stok, voucher, dan jurnal lama,
+                membuka sesi menjadi pending, lalu menerapkan perubahan. Sesi wajib diselesaikan kembali
+                untuk membuat posting baru.
               </div>
             )}
 
@@ -1286,7 +1295,7 @@ export default function SessionDetailPage() {
                 <select
                   value={sessionEditPelaksanaan}
                   onChange={(event) => setSessionEditPelaksanaan(event.target.value as 'ON_SITE' | 'HOME_CARE')}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1308,7 +1317,7 @@ export default function SessionDetailPage() {
                 <select
                   value={sessionEditMemberPackageId}
                   onChange={(event) => setSessionEditMemberPackageId(event.target.value)}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1341,7 +1350,7 @@ export default function SessionDetailPage() {
                   min="1"
                   value={sessionEditInfusKe}
                   onChange={(event) => setSessionEditInfusKe(event.target.value ? Number(event.target.value) : '')}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1365,7 +1374,7 @@ export default function SessionDetailPage() {
                   min="1"
                   value={sessionEditBranchInfusKe}
                   onChange={(event) => setSessionEditBranchInfusKe(event.target.value ? Number(event.target.value) : '')}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1387,7 +1396,7 @@ export default function SessionDetailPage() {
                 <select
                   value={sessionEditAdminLayananId}
                   onChange={(event) => setSessionEditAdminLayananId(event.target.value)}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1416,7 +1425,7 @@ export default function SessionDetailPage() {
                     setSessionEditDoctorId(event.target.value);
                     setSessionEditAdditionalDoctorIds((ids) => ids.filter((id) => id !== event.target.value));
                   }}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1445,7 +1454,7 @@ export default function SessionDetailPage() {
                     setSessionEditNurseId(event.target.value);
                     setSessionEditAdditionalNurseIds((ids) => ids.filter((id) => id !== event.target.value));
                   }}
-                  disabled={postedSessionLockedFieldDisabled}
+                  disabled={sessionEditFieldDisabled}
                   style={{
                     width: '100%',
                     padding: '12px 14px',
@@ -1474,13 +1483,13 @@ export default function SessionDetailPage() {
               borderRadius: '10px',
               border: '1px solid rgba(245, 158, 11, 0.35)',
               background: 'rgba(245, 158, 11, 0.08)',
-              cursor: postedSessionLockedFieldDisabled ? 'not-allowed' : 'pointer',
+              cursor: sessionEditFieldDisabled ? 'not-allowed' : 'pointer',
             }}>
               <input
                 type="checkbox"
                 checked={sessionEditShiftFollowing}
                 onChange={(event) => setSessionEditShiftFollowing(event.target.checked)}
-                disabled={postedSessionLockedFieldDisabled}
+                disabled={sessionEditFieldDisabled}
                 style={{ marginTop: '3px' }}
               />
               <span>
@@ -1517,7 +1526,7 @@ export default function SessionDetailPage() {
                         type="checkbox"
                         checked={sessionEditAdditionalDoctorIds.includes(staff.userId)}
                         onChange={() => setSessionEditAdditionalDoctorIds((ids) => toggleSelectedId(ids, staff.userId))}
-                        disabled={postedSessionLockedFieldDisabled}
+                        disabled={sessionEditFieldDisabled}
                       />
                       {staff.fullName}
                     </label>
@@ -1546,7 +1555,7 @@ export default function SessionDetailPage() {
                         type="checkbox"
                         checked={sessionEditAdditionalNurseIds.includes(staff.userId)}
                         onChange={() => setSessionEditAdditionalNurseIds((ids) => toggleSelectedId(ids, staff.userId))}
-                        disabled={postedSessionLockedFieldDisabled}
+                        disabled={sessionEditFieldDisabled}
                       />
                       {staff.fullName}
                     </label>
@@ -1570,7 +1579,7 @@ export default function SessionDetailPage() {
                 fontSize: '14px',
                 fontWeight: 600,
                 marginBottom: '14px',
-                cursor: postedSessionLockedFieldDisabled || boosterPackageChangeLocked ? 'not-allowed' : 'pointer',
+                cursor: sessionEditFieldDisabled || (boosterPackageChangeLocked && !sessionInfo.isCompleted) ? 'not-allowed' : 'pointer',
               }}>
                 <input
                   type="checkbox"
@@ -1579,12 +1588,12 @@ export default function SessionDetailPage() {
                     setBoosterEditUseBooster(event.target.checked);
                     if (!event.target.checked) setBoosterEditPackageId('');
                   }}
-                  disabled={postedSessionLockedFieldDisabled || boosterPackageChangeLocked}
+                  disabled={sessionEditFieldDisabled || (boosterPackageChangeLocked && !sessionInfo.isCompleted)}
                 />
                 Gunakan paket booster untuk sesi ini
               </label>
 
-              {boosterPackageChangeLocked && (
+              {boosterPackageChangeLocked && !sessionInfo.isCompleted && (
                 <p style={{ color: '#f59e0b', fontSize: '13px', marginTop: '-6px', marginBottom: '14px' }}>
                   Paket booster terkunci karena jenis booster/stok sudah dipakai.
                 </p>
@@ -1598,7 +1607,7 @@ export default function SessionDetailPage() {
                   <select
                     value={boosterEditPackageId}
                     onChange={(event) => setBoosterEditPackageId(event.target.value)}
-                    disabled={postedSessionLockedFieldDisabled || boosterPackageChangeLocked}
+                    disabled={sessionEditFieldDisabled || (boosterPackageChangeLocked && !sessionInfo.isCompleted)}
                     style={{
                       width: '100%',
                       padding: '12px 14px',
@@ -1638,6 +1647,47 @@ export default function SessionDetailPage() {
               )}
             </div>
 
+            {sessionInfo.isCompleted && (
+              <div style={{
+                marginTop: '20px',
+                padding: '16px',
+                borderRadius: '12px',
+                border: '1px solid rgba(245, 158, 11, 0.45)',
+                background: 'rgba(245, 158, 11, 0.08)',
+              }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px' }}>
+                  Alasan koreksi sesi posted
+                </label>
+                <textarea
+                  value={postedEditReason}
+                  onChange={(event) => setPostedEditReason(event.target.value)}
+                  maxLength={1000}
+                  disabled={savingBoosterPackage}
+                  placeholder="Contoh: assignment nakes dan paket pada sesi salah input"
+                  style={{
+                    width: '100%',
+                    minHeight: '82px',
+                    resize: 'vertical',
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--surface-border)',
+                    background: 'var(--surface-input)',
+                    color: 'var(--text-primary)',
+                  }}
+                />
+                <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginTop: '12px', fontSize: '13px' }}>
+                  <input
+                    type="checkbox"
+                    checked={postedEditConfirmed}
+                    onChange={(event) => setPostedEditConfirmed(event.target.checked)}
+                    disabled={savingBoosterPackage}
+                    style={{ marginTop: '2px' }}
+                  />
+                  Saya memahami posting lama akan direversal dan sesi harus diselesaikan kembali.
+                </label>
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
               <button
                 className="btn btn-secondary"
@@ -1654,7 +1704,7 @@ export default function SessionDetailPage() {
                 {savingBoosterPackage
                   ? 'Menyimpan...'
                   : sessionInfo.isCompleted
-                    ? 'Simpan Koreksi Tanggal'
+                    ? 'Reversal & Simpan Perubahan'
                     : 'Simpan'}
               </button>
             </div>
