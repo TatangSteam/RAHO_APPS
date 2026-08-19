@@ -60,6 +60,27 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Debug Node and npm
+        shell: bash
+        run: |
+          set -eux
+
+          echo "PATH=$PATH"
+          echo "NODE_PATH=${NODE_PATH:-}"
+
+          which node
+          which npm
+
+          node --version
+          npm --version
+
+          node -p "process.execPath"
+          node -p "process.platform + ' ' + process.arch"
+
+          npm config get registry
+          npm config get package-lock
+          npm config get lockfile-version
+
       - name: Verify lockfiles
         shell: bash
         run: |
