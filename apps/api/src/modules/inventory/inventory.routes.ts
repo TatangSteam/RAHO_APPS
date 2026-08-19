@@ -37,6 +37,8 @@ import {
   createBranchStockRequestSchema,
   createHomecareBagSchema,
   createHomecareTeamSchema,
+  updateHomecareBagSchema,
+  updateHomecareTeamSchema,
   getCentralStockQuerySchema,
   receiveBagShipmentSchema,
   receiveShipmentSchema,
@@ -412,6 +414,14 @@ router.post(
   logisticsController.createHomecareTeam.bind(logisticsController)
 );
 
+router.patch(
+  '/logistics/homecare-teams/:teamId',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(updateHomecareTeamSchema),
+  logisticsController.updateHomecareTeam.bind(logisticsController)
+);
+
 router.post(
   '/logistics/homecare-teams/:teamId/members',
   authenticate,
@@ -448,6 +458,14 @@ router.post(
   authorize(canManageCentralStock),
   validate(createHomecareBagSchema),
   logisticsController.createHomecareBag.bind(logisticsController)
+);
+
+router.patch(
+  '/logistics/homecare-bags/:bagId',
+  authenticate,
+  authorize(canManageCentralStock),
+  validate(updateHomecareBagSchema),
+  logisticsController.updateHomecareBag.bind(logisticsController)
 );
 
 router.patch(
@@ -539,6 +557,20 @@ router.get(
   authenticate,
   authorize(logisticStaffRoles),
   logisticsController.listBagUsages.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-usage-history',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.getHomecareUsageHistory.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-usage-history/export',
+  authenticate,
+  authorize(logisticStaffRoles),
+  logisticsController.exportHomecareUsageHistory.bind(logisticsController)
 );
 
 router.post(

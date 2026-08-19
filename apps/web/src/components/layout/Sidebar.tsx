@@ -140,7 +140,7 @@ const MENU_GROUPS: MenuGroup[] = [
         label: 'Inventori Tim',
         href: '/inventory/team',
         icon: <UsersRound size={20} />,
-        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE'],
+        roles: ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG', 'ADMIN_LAYANAN', 'NURSE'],
       },
       {
         label: 'Dashboard Logistik',

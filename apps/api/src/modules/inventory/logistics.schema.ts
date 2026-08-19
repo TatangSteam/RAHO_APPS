@@ -109,6 +109,14 @@ export const removeHomecareTeamMemberSchema = z.object({
   notes: optionalText,
 });
 
+export const updateHomecareTeamSchema = z.object({
+  name: z.string().trim().min(1, 'Nama tim wajib diisi').optional(),
+  description: optionalText,
+  isActive: z.boolean().optional(),
+}).refine((input) => Object.keys(input).length > 0, {
+  message: 'Minimal satu perubahan wajib dikirim',
+});
+
 export const createHomecareBagSchema = z.object({
   bagCode: optionalText,
   name: z.string().trim().min(1, 'Nama tas wajib diisi'),
@@ -116,6 +124,15 @@ export const createHomecareBagSchema = z.object({
   branchId: idSchema.optional(),
   status: z.nativeEnum(HomecareBagStatus).optional(),
   notes: optionalText,
+});
+
+export const updateHomecareBagSchema = z.object({
+  name: z.string().trim().min(1, 'Nama tas wajib diisi').optional(),
+  status: z.nativeEnum(HomecareBagStatus).optional(),
+  notes: optionalText,
+  isActive: z.boolean().optional(),
+}).refine((input) => Object.keys(input).length > 0, {
+  message: 'Minimal satu perubahan wajib dikirim',
 });
 
 export const assignHomecareBagSchema = z.object({
@@ -188,9 +205,11 @@ export type RejectStockRequestInput = z.infer<typeof rejectStockRequestSchema>;
 export type ShipStockInput = z.infer<typeof shipStockSchema>;
 export type ReceiveShipmentInput = z.infer<typeof receiveShipmentSchema>;
 export type CreateHomecareTeamInput = z.infer<typeof createHomecareTeamSchema>;
+export type UpdateHomecareTeamInput = z.infer<typeof updateHomecareTeamSchema>;
 export type AddHomecareTeamMemberInput = z.infer<typeof addHomecareTeamMemberSchema>;
 export type RemoveHomecareTeamMemberInput = z.infer<typeof removeHomecareTeamMemberSchema>;
 export type CreateHomecareBagInput = z.infer<typeof createHomecareBagSchema>;
+export type UpdateHomecareBagInput = z.infer<typeof updateHomecareBagSchema>;
 export type AssignHomecareBagInput = z.infer<typeof assignHomecareBagSchema>;
 export type CreateBagStockRequestInput = z.infer<typeof createBagStockRequestSchema>;
 export type UseBagStockInput = z.infer<typeof useBagStockSchema>;

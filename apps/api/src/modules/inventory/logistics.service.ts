@@ -13,6 +13,7 @@ import {
   StockRequestStatus,
 } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
+import ExcelJS from 'exceljs';
 import { prisma } from '../../lib/prisma';
 import { logAudit } from '../../utils/auditLog';
 import {
@@ -37,6 +38,8 @@ import type {
   CreateBranchStockRequestInput,
   CreateHomecareBagInput,
   CreateHomecareTeamInput,
+  UpdateHomecareTeamInput,
+  UpdateHomecareBagInput,
   ReceiveShipmentInput,
   RejectStockRequestInput,
   RemoveHomecareTeamMemberInput,
@@ -59,6 +62,18 @@ type MovementChange = {
   destinationStockBefore?: number;
   destinationStockAfter?: number;
   notes?: string | null;
+};
+
+type HomecareUsageHistoryQuery = {
+  branchId?: string;
+  teamId?: string;
+  bagId?: string;
+  masterProductId?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  page?: string | number;
+  limit?: string | number;
 };
 
 type BranchStockRequestResponse = Prisma.StockRequestGetPayload<{
@@ -886,6 +901,36 @@ export class LogisticsService {
     });
   }
 
+  async updateHomecareTeam(actor: LogisticsActor, teamId: string, input: UpdateHomecareTeamInput) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses mengubah tim homecare');
+    const team = await prisma.homecareTeam.findUnique({ where: { id: teamId } });
+    if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    await this.assertManagerBranchAccess(actor, team.branchId);
+
+    const updated = await prisma.homecareTeam.update({
+      where: { id: teamId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.description !== undefined ? { description: input.description || null } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await logAudit({
+      userId: actor.userId,
+      branchId: team.branchId,
+      action: AuditAction.UPDATE,
+      resource: 'HomecareTeam',
+      resourceId: teamId,
+      meta: {
+        action: 'UPDATE_HOMECARE_TEAM',
+        before: { name: team.name, description: team.description, isActive: team.isActive },
+        after: { name: updated.name, description: updated.description, isActive: updated.isActive },
+      },
+    });
+    return updated;
+  }
+
   async listHomecareBags(actor: LogisticsActor, query: { teamId?: string; branchId?: string; status?: string; search?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat tas homecare');
 
@@ -961,6 +1006,37 @@ export class LogisticsService {
     });
   }
 
+  async updateHomecareBag(actor: LogisticsActor, bagId: string, input: UpdateHomecareBagInput) {
+    this.assertRole(actor, Array.from(centralStockManagerRoles), 'Anda tidak memiliki akses mengubah tas homecare');
+    const bag = await prisma.homecareBag.findUnique({ where: { id: bagId } });
+    if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
+    await this.assertManagerBranchAccess(actor, bag.branchId);
+
+    const updated = await prisma.homecareBag.update({
+      where: { id: bagId },
+      data: {
+        ...(input.name !== undefined ? { name: input.name } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes || null } : {}),
+        ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      },
+    });
+
+    await logAudit({
+      userId: actor.userId,
+      branchId: bag.branchId,
+      action: AuditAction.UPDATE,
+      resource: 'HomecareBag',
+      resourceId: bagId,
+      meta: {
+        action: 'UPDATE_HOMECARE_BAG',
+        before: { name: bag.name, status: bag.status, notes: bag.notes, isActive: bag.isActive },
+        after: { name: updated.name, status: updated.status, notes: updated.notes, isActive: updated.isActive },
+      },
+    });
+    return updated;
+  }
+
   async listHomecareBagRequests(actor: LogisticsActor, query: { status?: string; teamId?: string; bagId?: string } = {}) {
     this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat request stok tas');
 
@@ -1032,6 +1108,152 @@ export class LogisticsService {
     });
 
     return usages.map((usage) => this.formatBagUsage(usage));
+  }
+
+  async getHomecareUsageHistory(actor: LogisticsActor, query: HomecareUsageHistoryQuery = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses melihat riwayat penggunaan inventori tim');
+    if (query.branchId) await this.assertManagerBranchAccess(actor, query.branchId);
+
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(5000, Math.max(1, Number(query.limit) || 25));
+    const usageDate: Prisma.DateTimeFilter = {};
+    if (query.startDate) usageDate.gte = new Date(`${query.startDate}T00:00:00.000+07:00`);
+    if (query.endDate) usageDate.lte = new Date(`${query.endDate}T23:59:59.999+07:00`);
+
+    const where: Prisma.HomecareBagUsageWhereInput = {
+      ...(query.teamId ? { teamId: query.teamId } : {}),
+      ...(query.bagId ? { bagId: query.bagId } : {}),
+      ...(query.masterProductId ? { items: { some: { masterProductId: query.masterProductId } } } : {}),
+      ...(Object.keys(usageDate).length ? { usageDate } : {}),
+      ...(query.search ? {
+        OR: [
+          { usageCode: { contains: query.search, mode: 'insensitive' } },
+          { notes: { contains: query.search, mode: 'insensitive' } },
+        ],
+      } : {}),
+    };
+
+    const bagWhere: Prisma.HomecareBagWhereInput = {};
+    if (query.branchId) bagWhere.branchId = query.branchId;
+    if (actor.role === Role.ADMIN_MANAGER) {
+      const managed = await prisma.managerBranch.findMany({
+        where: { userId: actor.userId },
+        select: { branchId: true },
+      });
+      const managedIds = managed.map((item) => item.branchId);
+      bagWhere.branchId = query.branchId || { in: managedIds };
+    } else if (!centralStockManagerRoles.has(actor.role)) {
+      bagWhere.team = { members: { some: { userId: actor.userId, isActive: true } } };
+    }
+    if (Object.keys(bagWhere).length) where.bag = bagWhere;
+
+    const [usages, total] = await Promise.all([
+      prisma.homecareBagUsage.findMany({
+        where,
+        include: { bag: { include: { team: true } }, items: true },
+        orderBy: [{ usageDate: 'desc' }, { createdAt: 'desc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.homecareBagUsage.count({ where }),
+    ]);
+
+    const productIds = Array.from(new Set(usages.flatMap((usage) => usage.items.map((item) => item.masterProductId))));
+    const userIds = Array.from(new Set(usages.map((usage) => usage.usedBy)));
+    const sessionIds = Array.from(new Set(usages.map((usage) => usage.treatmentSessionId).filter(Boolean))) as string[];
+    const products: Array<{ id: string; sku: string; name: string; baseUnit: string }> = productIds.length ? await prisma.masterProduct.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, sku: true, name: true, baseUnit: true },
+    }) : [];
+    const users: Array<{ id: string; email: string; profile: { fullName: string | null } | null }> = userIds.length ? await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, profile: { select: { fullName: true } } },
+    }) : [];
+    const sessions = sessionIds.length ? await prisma.treatmentSession.findMany({
+      where: { id: { in: sessionIds } },
+      select: {
+        id: true,
+        sessionCode: true,
+        encounter: { select: { member: { select: { memberNo: true, user: { select: { profile: { select: { fullName: true } } } } } } } },
+      },
+    }) : [];
+    const branches: Array<{ id: string; branchCode: string; name: string }> = usages.length ? await prisma.branch.findMany({
+      where: { id: { in: Array.from(new Set(usages.map((usage) => usage.bag.branchId))) } },
+      select: { id: true, branchCode: true, name: true },
+    }) : [];
+    const productMap = new Map(products.map((item) => [item.id, item]));
+    const userMap = new Map(users.map((item) => [item.id, item]));
+    const sessionMap = new Map(sessions.map((item) => [item.id, item]));
+    const branchMap = new Map(branches.map((item) => [item.id, item]));
+
+    const items = usages.flatMap((usage) => usage.items.map((item) => {
+      const product = productMap.get(item.masterProductId);
+      const user = userMap.get(usage.usedBy);
+      const session = usage.treatmentSessionId ? sessionMap.get(usage.treatmentSessionId) : undefined;
+      const branch = branchMap.get(usage.bag.branchId);
+      return {
+        id: item.id,
+        usageId: usage.id,
+        usageCode: usage.usageCode,
+        usageDate: usage.usageDate.toISOString(),
+        status: usage.status,
+        branchId: usage.bag.branchId,
+        branchCode: branch?.branchCode || null,
+        branchName: branch?.name || null,
+        teamId: usage.teamId,
+        teamCode: usage.bag.team.teamCode,
+        teamName: usage.bag.team.name,
+        bagId: usage.bagId,
+        bagCode: usage.bag.bagCode,
+        bagName: usage.bag.name,
+        masterProductId: item.masterProductId,
+        sku: product?.sku || null,
+        productName: product?.name || item.masterProductId,
+        quantity: Number(item.quantity),
+        unit: item.unit || product?.baseUnit || null,
+        treatmentSessionId: usage.treatmentSessionId,
+        sessionCode: session?.sessionCode || null,
+        memberNo: session?.encounter.member.memberNo || null,
+        memberName: session?.encounter.member.user.profile?.fullName || null,
+        usedBy: usage.usedBy,
+        usedByName: user?.profile?.fullName || user?.email || usage.usedBy,
+        notes: item.notes || usage.notes,
+      };
+    }));
+
+    return { items, total, page, limit, usageCount: usages.length };
+  }
+
+  async exportHomecareUsageHistory(actor: LogisticsActor, query: HomecareUsageHistoryQuery = {}) {
+    const history = await this.getHomecareUsageHistory(actor, { ...query, page: 1, limit: 5000 });
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'RAHO ERP';
+    const sheet = workbook.addWorksheet('Penggunaan Inventori Tim', { views: [{ state: 'frozen', ySplit: 1 }] });
+    sheet.columns = [
+      { header: 'Tanggal', key: 'date', width: 22 }, { header: 'Kode Penggunaan', key: 'usageCode', width: 24 },
+      { header: 'Cabang', key: 'branch', width: 26 }, { header: 'Tim', key: 'team', width: 26 },
+      { header: 'Tas', key: 'bag', width: 24 }, { header: 'SKU', key: 'sku', width: 18 },
+      { header: 'Produk', key: 'product', width: 34 }, { header: 'Jumlah', key: 'quantity', width: 14 },
+      { header: 'Satuan', key: 'unit', width: 14 }, { header: 'Kode Sesi', key: 'session', width: 24 },
+      { header: 'No. Member', key: 'memberNo', width: 18 }, { header: 'Nama Member', key: 'member', width: 28 },
+      { header: 'Digunakan Oleh', key: 'usedBy', width: 28 }, { header: 'Status', key: 'status', width: 16 },
+      { header: 'Catatan', key: 'notes', width: 42 },
+    ];
+    history.items.forEach((item) => sheet.addRow({
+      date: new Date(item.usageDate), usageCode: item.usageCode, branch: item.branchName || item.branchCode || '-',
+      team: `${item.teamCode} - ${item.teamName}`, bag: `${item.bagCode} - ${item.bagName}`,
+      sku: item.sku || '-', product: item.productName, quantity: item.quantity, unit: item.unit || '-',
+      session: item.sessionCode || '-', memberNo: item.memberNo || '-', member: item.memberName || '-',
+      usedBy: item.usedByName, status: item.status, notes: item.notes,
+    }));
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF374151' } };
+    sheet.autoFilter = { from: 'A1', to: 'O1' };
+    sheet.getColumn(1).numFmt = 'dd/mm/yyyy hh:mm';
+    sheet.getColumn(8).numFmt = '#,##0.0000';
+    const buffer = await workbook.xlsx.writeBuffer();
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 13);
+    return { buffer: Buffer.from(buffer), filename: `history-penggunaan-inventori-tim-${stamp}.xlsx` };
   }
 
   async listHomecareBagReturns(actor: LogisticsActor, query: { bagId?: string; teamId?: string } = {}) {

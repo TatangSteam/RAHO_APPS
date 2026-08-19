@@ -99,6 +99,15 @@ export class LogisticsController {
     }
   }
 
+  async updateHomecareTeam(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.updateHomecareTeam(this.actor(req), req.params.teamId, req.body);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async listHomecareTeams(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.listHomecareTeams(this.actor(req), this.query(req));
@@ -144,6 +153,15 @@ export class LogisticsController {
     try {
       const result = await logisticsService.createHomecareBag(this.actor(req), req.body);
       return sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async updateHomecareBag(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.updateHomecareBag(this.actor(req), req.params.bagId, req.body);
+      return sendSuccess(res, result);
     } catch (err) {
       next(err);
     }
@@ -261,6 +279,27 @@ export class LogisticsController {
     try {
       const result = await logisticsService.listHomecareBagUsages(this.actor(req), this.query(req));
       return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async getHomecareUsageHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.getHomecareUsageHistory(this.actor(req), this.query(req));
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async exportHomecareUsageHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.exportHomecareUsageHistory(this.actor(req), this.query(req));
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+      res.setHeader('Content-Length', result.buffer.length);
+      return res.send(result.buffer);
     } catch (err) {
       next(err);
     }

@@ -609,6 +609,43 @@ export interface HomecareBagUsage {
   updatedAt?: string;
 }
 
+export interface HomecareUsageHistoryItem {
+  id: string;
+  usageId: string;
+  usageCode: string;
+  usageDate: string;
+  status: string;
+  branchId: string;
+  branchCode?: string | null;
+  branchName?: string | null;
+  teamId: string;
+  teamCode: string;
+  teamName: string;
+  bagId: string;
+  bagCode: string;
+  bagName: string;
+  masterProductId: string;
+  sku?: string | null;
+  productName: string;
+  quantity: number;
+  unit?: string | null;
+  treatmentSessionId?: string | null;
+  sessionCode?: string | null;
+  memberNo?: string | null;
+  memberName?: string | null;
+  usedBy: string;
+  usedByName: string;
+  notes: string;
+}
+
+export interface HomecareUsageHistoryResponse {
+  items: HomecareUsageHistoryItem[];
+  total: number;
+  page: number;
+  limit: number;
+  usageCount: number;
+}
+
 export interface HomecareBagReturn {
   id: string;
   returnCode: string;
@@ -1155,6 +1192,14 @@ export const inventoryApi = {
     return api.post('/inventory/logistics/homecare-bags', data);
   },
 
+  updateHomecareTeam: (teamId: string, data: { name?: string; description?: string; isActive?: boolean }) => {
+    return api.patch(`/inventory/logistics/homecare-teams/${teamId}`, data);
+  },
+
+  updateHomecareBag: (bagId: string, data: { name?: string; status?: string; notes?: string; isActive?: boolean }) => {
+    return api.patch(`/inventory/logistics/homecare-bags/${bagId}`, data);
+  },
+
   assignHomecareBag: (bagId: string, data: {
     teamId: string;
     notes?: string;
@@ -1205,6 +1250,19 @@ export const inventoryApi = {
 
   getHomecareBagUsages: (params?: { status?: string; bagId?: string; teamId?: string }) => {
     return api.get('/inventory/logistics/homecare-bag-usages', { params });
+  },
+
+  getHomecareUsageHistory: (params?: {
+    branchId?: string; teamId?: string; bagId?: string; masterProductId?: string;
+    startDate?: string; endDate?: string; search?: string; page?: number; limit?: number;
+  }) => api.get<{ data: HomecareUsageHistoryResponse }>('/inventory/logistics/homecare-usage-history', { params }),
+
+  exportHomecareUsageHistory: async (params?: {
+    branchId?: string; teamId?: string; bagId?: string; masterProductId?: string;
+    startDate?: string; endDate?: string; search?: string;
+  }): Promise<Blob> => {
+    const response = await api.get('/inventory/logistics/homecare-usage-history/export', { params, responseType: 'blob' });
+    return response.data;
   },
 
   shipHomecareBagShipment: (shipmentId: string, data: { notes: string; shipmentPhotoUrl?: string; shipmentPhotoName?: string }) => {
