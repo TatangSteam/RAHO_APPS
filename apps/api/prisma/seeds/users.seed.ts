@@ -3,9 +3,9 @@ import bcrypt from 'bcryptjs';
 import { PERMISSIONS } from '../../src/modules/iam/permission-catalog';
 
 const HASH_ROUNDS = 12;
-const FINANCE_DUMMY_EMAIL = 'finance@raho.id';
-const ADMIN_LOGISTIK_DUMMY_EMAIL = 'adminlogistik@raho.id';
-const FINANCE_DUMMY_TEMPLATE_CODE = 'FINANCE_DUMMY';
+const FINANCE_LOGISTICS_EMAIL = 'finance@raho.id';
+const LEGACY_ADMIN_LOGISTIK_EMAIL = 'adminlogistik@raho.id';
+const FINANCE_LOGISTICS_TEMPLATE_CODE = 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT';
 const FINANCE_PERMISSION_BOOTSTRAP = [
   {
     code: PERMISSIONS.WORKFLOW_APPROVAL_READ,
@@ -76,7 +76,7 @@ type SeedUser = {
   roleTemplateId?: string;
 };
 
-async function ensureFinanceDummyRoleTemplate(prisma: PrismaClient) {
+async function ensureFinanceLogisticsRoleTemplate(prisma: PrismaClient) {
   for (const definition of FINANCE_PERMISSION_BOOTSTRAP) {
     await prisma.permission.upsert({
       where: { code: definition.code },
@@ -88,7 +88,7 @@ async function ensureFinanceDummyRoleTemplate(prisma: PrismaClient) {
     });
   }
 
-  const permissions = await prisma.permission.findMany({
+  const financePermissions = await prisma.permission.findMany({
     where: {
       code: { in: [...FINANCE_DUMMY_PERMISSION_CODES] },
       isActive: true,
@@ -96,26 +96,51 @@ async function ensureFinanceDummyRoleTemplate(prisma: PrismaClient) {
     select: { id: true, code: true },
   });
 
-  const foundCodes = new Set(permissions.map((permission) => permission.code));
+  const foundCodes = new Set(financePermissions.map((permission) => permission.code));
   const missingCodes = FINANCE_DUMMY_PERMISSION_CODES.filter((code) => !foundCodes.has(code));
   if (missingCodes.length > 0) {
     throw new Error(
-      `Finance dummy seed requires missing IAM permissions: ${missingCodes.join(', ')}. Run all Prisma migrations first.`,
+      `Finance & Logistics seed requires missing IAM permissions: ${missingCodes.join(', ')}. Run all Prisma migrations first.`,
     );
   }
 
+  const sourceTemplatePermissions = await prisma.roleTemplatePermission.findMany({
+    where: {
+      roleTemplate: {
+        code: {
+          in: [
+            'ADMIN_MANAGER_DEFAULT',
+            'ADMIN_LOGISTIK_DEFAULT',
+            'FINANCE_DUMMY',
+            FINANCE_LOGISTICS_TEMPLATE_CODE,
+          ],
+        },
+      },
+      permission: { isActive: true },
+    },
+    select: { permission: { select: { id: true, code: true } } },
+  });
+
+  const permissionById = new Map(
+    [...financePermissions, ...sourceTemplatePermissions.map((item) => item.permission)]
+      .filter((permission) => permission.code !== PERMISSIONS.INVENTORY_SHIPMENT_RECEIVE)
+      .map((permission) => [permission.id, permission]),
+  );
+  const permissions = Array.from(permissionById.values());
+
   const template = await prisma.roleTemplate.upsert({
-    where: { code: FINANCE_DUMMY_TEMPLATE_CODE },
+    where: { code: FINANCE_LOGISTICS_TEMPLATE_CODE },
     update: {
-      name: 'Finance',
-      description: 'Finance-only permission template for development and UAT.',
+      name: 'Finance & Logistics Controller',
+      description: 'Akses Admin Manager ditambah Finance dan Logistik; pada flow pengiriman hanya melakukan dispatch.',
       isActive: true,
     },
     create: {
-      code: FINANCE_DUMMY_TEMPLATE_CODE,
-      name: 'Finance',
-      description: 'Finance-only permission template for development and UAT.',
-      isSystem: false,
+      code: FINANCE_LOGISTICS_TEMPLATE_CODE,
+      name: 'Finance & Logistics Controller',
+      description: 'Akses Admin Manager ditambah Finance dan Logistik; pada flow pengiriman hanya melakukan dispatch.',
+      baseRole: Role.FINANCE_LOGISTICS_CONTROLLER,
+      isSystem: true,
       isActive: true,
     },
   });
@@ -133,29 +158,6 @@ async function ensureFinanceDummyRoleTemplate(prisma: PrismaClient) {
     }),
   ]);
 
-  const adminLogistikTemplate = await prisma.roleTemplate.findUnique({
-    where: { baseRole: Role.ADMIN_LOGISTIK },
-    select: { id: true },
-  });
-  const workflowReadPermission = permissions.find(
-    (permission) => permission.code === PERMISSIONS.WORKFLOW_APPROVAL_READ,
-  );
-  if (adminLogistikTemplate && workflowReadPermission) {
-    await prisma.roleTemplatePermission.upsert({
-      where: {
-        roleTemplateId_permissionId: {
-          roleTemplateId: adminLogistikTemplate.id,
-          permissionId: workflowReadPermission.id,
-        },
-      },
-      update: {},
-      create: {
-        roleTemplateId: adminLogistikTemplate.id,
-        permissionId: workflowReadPermission.id,
-      },
-    });
-  }
-
   return template;
 }
 
@@ -167,9 +169,9 @@ export async function seedUsers(
 ) {
   console.log('👥 Seeding users for all branches...');
 
-  // FINANCE is represented by a restricted ADMIN_MANAGER template because
-  // the current database Role enum has no dedicated FINANCE value.
-  const financeRoleTemplate = await ensureFinanceDummyRoleTemplate(prisma);
+  // Keep ADMIN_MANAGER as the operational base role for compatibility. The
+  // explicit template adds Finance + Logistics and marks dispatch-only access.
+  const financeLogisticsRoleTemplate = await ensureFinanceLogisticsRoleTemplate(prisma);
 
   const usersToSeed: SeedUser[] = [
     // ============================================================
@@ -203,23 +205,14 @@ export async function seedUsers(
       phone: '0811-0000-0003',
     },
     {
-      email: ADMIN_LOGISTIK_DUMMY_EMAIL,
-      password: 'AdminLogistik@123',
-      role: Role.ADMIN_LOGISTIK,
-      branchId: branchPusatId,
-      staffCode: 'LG-20260723-RAHO',
-      fullName: 'Admin Logistik RAHO',
-      phone: '0811-0000-0004',
-    },
-    {
-      email: FINANCE_DUMMY_EMAIL,
+      email: FINANCE_LOGISTICS_EMAIL,
       password: 'Finance@123',
       role: Role.ADMIN_MANAGER,
       branchId: branchPusatId,
       staffCode: 'FN-20260723-RAHO',
-      fullName: 'Finance RAHO',
+      fullName: 'Finance & Logistik RAHO',
       phone: '0811-0000-0005',
-      roleTemplateId: financeRoleTemplate.id,
+      roleTemplateId: financeLogisticsRoleTemplate.id,
     },
 
     // ============================================================
@@ -396,6 +389,12 @@ export async function seedUsers(
     console.log(`  ✅ User [${u.role}] ${branchName}: ${u.email}`);
   }
 
+  // Keep historical relations intact while removing the duplicate login.
+  await prisma.user.updateMany({
+    where: { email: LEGACY_ADMIN_LOGISTIK_EMAIL },
+    data: { isActive: false },
+  });
+
   const superAdminUser = createdUsers.find(u => u.role === Role.SUPER_ADMIN)!;
   const adminLayananUser = createdUsers.find(u => u.role === Role.ADMIN_LAYANAN && u.branchId === branchPusatId)!;
   const doctorUser = createdUsers.find(u => u.role === Role.DOCTOR && u.branchId === branchPusatId)!;
@@ -495,16 +494,16 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
     }
   }
 
-  const adminLogistik = await prisma.user.findUnique({
-    where: { email: ADMIN_LOGISTIK_DUMMY_EMAIL },
+  const financeLogistics = await prisma.user.findUnique({
+    where: { email: FINANCE_LOGISTICS_EMAIL },
   });
 
-  if (adminLogistik) {
+  if (financeLogistics) {
     for (const branch of branches) {
       const existing = await prisma.staffBranch.findUnique({
         where: {
           userId_branchId: {
-            userId: adminLogistik.id,
+            userId: financeLogistics.id,
             branchId: branch.id,
           },
         },
@@ -513,7 +512,7 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
       if (!existing) {
         await prisma.staffBranch.create({
           data: {
-            userId: adminLogistik.id,
+            userId: financeLogistics.id,
             branchId: branch.id,
           },
         });
@@ -522,7 +521,7 @@ export async function assignStaffToBranches(prisma: PrismaClient) {
     }
   }
 
-  console.log(`✅ Assigned ${doctors.length} doctors, ${nurses.length} nurses, and logistics admin to branches`);
+  console.log(`✅ Assigned ${doctors.length} doctors, ${nurses.length} nurses, and Finance & Logistics to branches`);
   console.log(`   Total assignments: ${assignmentCount}`);
 }
 
@@ -547,7 +546,7 @@ export async function assignManagerToBranches(prisma: PrismaClient) {
   // Get managers
   const manager1 = await prisma.user.findUnique({ where: { email: 'manager1@raho.id' } });
   const manager2 = await prisma.user.findUnique({ where: { email: 'manager2@raho.id' } });
-  const financeUser = await prisma.user.findUnique({ where: { email: FINANCE_DUMMY_EMAIL } });
+  const financeUser = await prisma.user.findUnique({ where: { email: FINANCE_LOGISTICS_EMAIL } });
 
   if (!manager1 || !manager2) {
     console.log('⚠️  Managers not found, skipping assignment');
@@ -623,7 +622,7 @@ export async function assignManagerToBranches(prisma: PrismaClient) {
           },
         });
         assignmentCount++;
-        console.log(`  Finance (${financeUser.email}) -> ${branch.name}`);
+        console.log(`  Finance & Logistics (${financeUser.email}) -> ${branch.name}`);
       }
     }
   }
@@ -631,6 +630,6 @@ export async function assignManagerToBranches(prisma: PrismaClient) {
   console.log(`✅ Branch assignments completed:`);
   console.log(`   - Manager 1: Jakarta Pusat, Bandung`);
   console.log(`   - Manager 2: Surabaya, Jakarta Pusat`);
-  console.log(`   - Finance: all active seeded branches`);
+  console.log(`   - Finance & Logistics: all active seeded branches`);
   console.log(`   Total assignments: ${assignmentCount}`);
 }

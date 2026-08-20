@@ -367,8 +367,7 @@ async function main(): Promise<void> {
     console.log('    superadmin@raho.id   → SuP3r4Dm1n  [SUPER_ADMIN]');
     console.log('    manager1@raho.id      → Manager@123       [ADMIN_MANAGER]');
     console.log('    manager2@raho.id      → Manager@123       [ADMIN_MANAGER]');
-    console.log('    adminlogistik@raho.id → AdminLogistik@123 [ADMIN_LOGISTIK]');
-    console.log('    finance@raho.id       → Finance@123       [FINANCE_DUMMY]');
+    console.log('    finance@raho.id       → Finance@123       [FINANCE & LOGISTICS]');
     console.log('  BRANCH ADMINS:');
     console.log('    admincabang.pst@raho.id  → AdminCabang@123  [ADMIN_CABANG]');
     console.log('    adminlayanan.pst@raho.id → AdminLayanan@123 [ADMIN_LAYANAN]');

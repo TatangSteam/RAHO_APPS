@@ -763,12 +763,6 @@ export async function directAdjustStock(
     }
 
     const adjustment = new Prisma.Decimal(input.adjustment);
-    if (!adjustment.isNegative() && !input.unitCost) {
-      throw errors.unprocessable(
-        'DIRECT_UNIT_COST_REQUIRED',
-        'Penambahan atau valuasi stok wajib memakai harga pokok eksplisit; harga tidak boleh ditebak dari transaksi lain.',
-      );
-    }
     if (adjustment.isZero() && !input.valuationDocumentReference) {
       throw errors.unprocessable(
         'VALUATION_EVIDENCE_REQUIRED',
@@ -781,8 +775,13 @@ export async function directAdjustStock(
         'Valuasi stok lama wajib memakai reason LEGACY_OPENING_VALUATION agar lawan jurnal masuk ekuitas saldo awal, bukan laba-rugi.',
       );
     }
-    const valuation = await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
-    const directUnitCost = valuation.unitCost;
+    // Harga manual adalah override opsional untuk stok masuk. Jika dikosongkan,
+    // gunakan harga sah terakhir. Stok keluar selalu dinilai oleh FIFO sehingga
+    // tidak bergantung pada harga yang diketik pengguna.
+    const valuation = adjustment.isNegative()
+      ? null
+      : await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
+    const directUnitCost = valuation?.unitCost;
     let bootstrappedLegacyStock = false;
     if (balances.length === 0 && mirrorQty.greaterThan(0)) {
       const batchKey = input.batchId || 'NO_BATCH';
@@ -823,7 +822,7 @@ export async function directAdjustStock(
       branchId: item.branchId,
       stockLocationId: location.id,
       batchId: input.batchId,
-      unitCost: directUnitCost,
+      unitCost: directUnitCost!,
       reasonCode: input.reasonCode,
       notes: input.notes,
       idempotencyKey: input.idempotencyKey,
@@ -851,7 +850,7 @@ export async function directAdjustStock(
           inventoryItemId: item.id,
           journalEntryId: pendingValuation.journalEntryId,
           quantityValued: pendingValuation.quantityValued.toFixed(4),
-          unitCost: directUnitCost.toFixed(4),
+          unitCost: directUnitCost!.toFixed(4),
           totalValue: pendingValuation.totalValue.toFixed(2),
           layersValued: pendingValuation.layersValued,
         },
@@ -872,7 +871,7 @@ export async function directAdjustStock(
         batchId: input.batchId,
         direction: adjustment.greaterThan(0) ? 'IN' : 'OUT',
         quantity: adjustment.abs().toFixed(4),
-        unitCost: adjustment.greaterThan(0) ? directUnitCost.toFixed(4) : undefined,
+        unitCost: adjustment.greaterThan(0) ? directUnitCost!.toFixed(4) : undefined,
         notes: input.notes,
       }],
     };
@@ -913,8 +912,8 @@ export async function directAdjustStock(
         status: document.status,
         direct: true,
         adjustment: input.adjustment,
-        unitCost: directUnitCost.toFixed(4),
-        valuationSource: valuation.source,
+        unitCost: directUnitCost?.toFixed(4) ?? null,
+        valuationSource: valuation?.source ?? 'FIFO',
         stockLocationId: location.id,
         bootstrappedLegacyStock,
         valuedLegacyLayers: pendingValuation?.layersValued ?? 0,

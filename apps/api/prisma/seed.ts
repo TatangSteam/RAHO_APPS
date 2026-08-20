@@ -103,13 +103,12 @@ async function main(): Promise<void> {
     console.log('  superadmin@raho.id   → SuP3r4Dm1n  [SUPER_ADMIN]');
     console.log('  manager1@raho.id      → Manager@123       [ADMIN_MANAGER]');
     console.log('  manager2@raho.id      → Manager@123       [ADMIN_MANAGER]');
-    console.log('  adminlogistik@raho.id → AdminLogistik@123 [ADMIN_LOGISTIK]');
-    console.log('  finance@raho.id       → Finance@123       [FINANCE_DUMMY]');
+    console.log('  finance@raho.id       → Finance@123       [FINANCE & LOGISTICS]');
     console.log('──────────────────────────────────────────');
     console.log('\n📊 Data summary:');
     console.log(`  • ${products.length} master products (sesuai List Barang RAHO)`);
     console.log(`  • ${3} branches (Jakarta, Bandung, Surabaya)`);
-    console.log(`  • ${17} seeded staff users`);
+    console.log(`  • ${16} seeded staff users`);
     console.log(`  • ${8} referral codes`);
     console.log(`  • Package pricings (BASIC + BOOSTER) for all branches`);
     console.log(`  • 30 test members with packages`);

@@ -21,9 +21,10 @@ interface ShipModalProps {
   onClose: () => void;
   onShip: (data: ShipShipmentInput) => Promise<void>;
   loading: boolean;
+  dispatchOnly?: boolean;
 }
 
-export default function ShipModal({ shipment, onClose, onShip, loading }: ShipModalProps) {
+export default function ShipModal({ shipment, onClose, onShip, loading, dispatchOnly = false }: ShipModalProps) {
   const [idempotencyKey] = useState(() => `SHIP-${shipment.id}-${crypto.randomUUID()}`);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<ShipmentItemWithOverstock[]>([]);
@@ -101,6 +102,8 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
   const hasOverstock = items.some(item => item.sentQty > (item.originalRequestedQty - item.overstockDeducted));
 
   const validate = (): boolean => {
+    if (dispatchOnly) return true;
+
     const newErrors: Record<string, string> = {};
     
     for (const item of items) {
@@ -119,19 +122,21 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
   const handleSubmit = async () => {
     if (!validate()) return;
 
-    const data: ShipShipmentInput = {
-      idempotencyKey,
-      notes: notes || undefined,
-      items: items.map(item => {
-        const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
-        return {
-          masterProductId: item.masterProductId,
-          sentQty: item.sentQty,
-          unit: item.unit,
-          overstockReason: item.sentQty > expectedSentQty ? item.overstockReason : undefined,
+    const data: ShipShipmentInput = dispatchOnly
+      ? { idempotencyKey }
+      : {
+          idempotencyKey,
+          notes: notes || undefined,
+          items: items.map(item => {
+            const expectedSentQty = item.originalRequestedQty - item.overstockDeducted;
+            return {
+              masterProductId: item.masterProductId,
+              sentQty: item.sentQty,
+              unit: item.unit,
+              overstockReason: item.sentQty > expectedSentQty ? item.overstockReason : undefined,
+            };
+          }),
         };
-      }),
-    };
 
     await onShip(data);
   };
@@ -168,6 +173,12 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                 </span>
               </div>
             </div>
+
+            {dispatchOnly && (
+              <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4 text-sm text-blue-300">
+                Jumlah dan detail pengiriman sudah disiapkan Admin Manager. Anda hanya perlu memeriksa ringkasan lalu menekan <strong>Kirim Pengiriman</strong>.
+              </div>
+            )}
 
             {/* Overstock Info Banner */}
             {items.some(item => item.overstockDeducted > 0) && (
@@ -259,6 +270,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                           <button
                             type="button"
                             onClick={() => updateItemQty(item.masterProductId, -1)}
+                            disabled={dispatchOnly}
                             className="p-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
                           >
                             <Minus className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
@@ -268,11 +280,13 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                             min="0"
                             value={item.sentQty}
                             onChange={(e) => updateItemSentQty(item.masterProductId, parseInt(e.target.value) || 0)}
+                            disabled={dispatchOnly}
                             className="w-20 px-3 py-2 text-center text-sm font-bold rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                           />
                           <button
                             type="button"
                             onClick={() => updateItemQty(item.masterProductId, 1)}
+                            disabled={dispatchOnly}
                             className="p-2 rounded-lg bg-neutral-200 dark:bg-neutral-700 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors"
                           >
                             <Plus className="h-4 w-4 text-neutral-600 dark:text-neutral-300" />
@@ -296,6 +310,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                             type="text"
                             value={item.overstockReason}
                             onChange={(e) => updateOverstockReason(item.masterProductId, e.target.value)}
+                            disabled={dispatchOnly}
                             placeholder="Alasan overstock (wajib diisi)..."
                             className={`w-full px-3 py-2 text-sm rounded-lg border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                               hasError 
@@ -341,7 +356,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
             )}
 
             {/* Notes Section */}
-            <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+            {!dispatchOnly && <div className="p-4 rounded-xl bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
               <h3 className="text-sm font-semibold text-neutral-600 dark:text-neutral-400 mb-3 flex items-center gap-2">
                 <MessageSquare className="h-4 w-4" />
                 Catatan Pengiriman (Opsional)
@@ -353,7 +368,7 @@ export default function ShipModal({ shipment, onClose, onShip, loading }: ShipMo
                 rows={3}
                 className="w-full px-4 py-3 text-sm rounded-xl border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
-            </div>
+            </div>}
           </div>
 
           {/* Footer */}

@@ -12,6 +12,27 @@ import {
   receiveReservedShipment,
 } from './services/shipment-ledger.service';
 
+export const FINANCE_LOGISTICS_TEMPLATE_CODE = 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT';
+
+async function isDispatchOnlyController(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { roleTemplate: { select: { code: true } } },
+  });
+
+  return user?.roleTemplate?.code === FINANCE_LOGISTICS_TEMPLATE_CODE;
+}
+
+async function assertNotDispatchOnlyController(userId: string, action: string): Promise<void> {
+  if (await isDispatchOnlyController(userId)) {
+    throw {
+      status: 403,
+      code: 'FINANCE_LOGISTICS_DISPATCH_ONLY',
+      message: `Finance & Logistik hanya bertugas mengirim barang dan tidak dapat ${action}.`,
+    };
+  }
+}
+
 export interface ReceiveShipmentInput {
   receivedItems?: Array<{
     masterProductId: string;
@@ -80,11 +101,19 @@ export class ShipmentService {
       }>;
     }
   ) {
+    const dispatchOnly = await isDispatchOnlyController(userId);
+    const dispatchData = dispatchOnly
+      ? {
+          idempotencyKey: data?.idempotencyKey,
+          occurredAt: data?.occurredAt,
+        }
+      : data;
+
     if (await hasReservedShipment(shipmentId)) {
       const input = dispatchShipmentSchema.parse({
-        ...data,
-        idempotencyKey: data?.idempotencyKey,
-        occurredAt: data?.occurredAt,
+        ...dispatchData,
+        idempotencyKey: dispatchData?.idempotencyKey,
+        occurredAt: dispatchData?.occurredAt,
       });
       return dispatchReservedShipment(userId, shipmentId, input);
     }
@@ -99,7 +128,7 @@ export class ShipmentService {
         'Shipment Partnership harus melalui approval dan reservation FIFO sebelum dikirim.',
       );
     }
-    return await this.processingService.shipShipment(shipmentId, userId, data);
+    return await this.processingService.shipShipment(shipmentId, userId, dispatchData);
   }
 
   /**
@@ -107,6 +136,8 @@ export class ShipmentService {
    * Supports receiving with discrepancy reporting
    */
   async receiveShipment(shipmentId: string, userId: string, input: ReceiveShipmentInput = {}) {
+    await assertNotDispatchOnlyController(userId, 'menerima barang');
+
     if (await hasReservedShipment(shipmentId)) {
       const parsed = receiveShipmentLedgerSchema.parse({
         ...input,
@@ -124,6 +155,8 @@ export class ShipmentService {
    * Review shipment issue (by Admin Manager / Super Admin)
    */
   async reviewShipmentIssue(shipmentId: string, userId: string, input: ReviewShipmentIssueInput) {
+    await assertNotDispatchOnlyController(userId, 'mereview masalah pengiriman');
+
     if (await hasReservedShipment(shipmentId)) {
       throw errors.unprocessable(
         'LEDGER_DISCREPANCY_REVIEW_REQUIRED',
@@ -149,6 +182,8 @@ export class ShipmentService {
       }>;
     }
   ) {
+    await assertNotDispatchOnlyController(userId, 'mengedit data pengiriman');
+
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { role: true },
@@ -358,6 +393,6 @@ export class ShipmentService {
    */
   async approveShipment(shipmentId: string, userId: string, branchId: string, notes?: string) {
     // Legacy method - redirect to receiveShipment
-    return await this.processingService.receiveShipment(shipmentId, userId, { notes });
+    return await this.receiveShipment(shipmentId, userId, { notes });
   }
 }

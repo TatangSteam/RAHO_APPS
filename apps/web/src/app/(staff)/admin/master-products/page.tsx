@@ -343,13 +343,14 @@ export default function MasterProductsPage() {
     inventoryItemId: string,
     newStock: number,
     notes: string,
-    unitCost: number,
+    unitCost?: number,
   ): Promise<boolean> => {
     if (newStock < 0) { showToast.error('Stok tidak boleh negatif'); return false; }
     const adjustment = newStock - branchInfo.stock;
     if (adjustment === 0 && !branchInfo.isValuationPending) { showToast.error('Tidak ada perubahan stok atau valuasi tertunda'); return false; }
     if (!notes.trim()) { showToast.error('Catatan perubahan stok wajib diisi'); return false; }
-    if (!Number.isFinite(unitCost) || unitCost <= 0) { showToast.error('Harga pokok harus lebih dari 0'); return false; }
+    if (unitCost !== undefined && (!Number.isFinite(unitCost) || unitCost <= 0)) { showToast.error('Harga pokok harus lebih dari 0'); return false; }
+    if (adjustment === 0 && unitCost === undefined) { showToast.error('Harga pokok wajib diisi khusus untuk valuasi stok lama'); return false; }
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/inventory/items/${inventoryItemId}/adjust-stock`, {
         method: 'PATCH',
@@ -357,7 +358,7 @@ export default function MasterProductsPage() {
         body: JSON.stringify({
           idempotencyKey: crypto.randomUUID(),
           adjustment,
-          unitCost,
+          ...(unitCost !== undefined ? { unitCost } : {}),
           notes: notes.trim(),
         }),
       });
@@ -1001,7 +1002,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
     inventoryItemId: string,
     newStock: number,
     notes: string,
-    unitCost: number,
+    unitCost?: number,
   ) => Promise<boolean>;
 }) {
   const [unitMode, setUnitMode] = useState<'base' | 'usage'>('base');
@@ -1030,13 +1031,17 @@ function StockEditModal({ product, onClose, onAdjust }: {
     const draftStr = drafts[b.inventoryItemId];
     const newStock = Number(draftStr);
     if (Number.isNaN(newStock)) return;
-    const unitCostNumber = Number(unitCost);
+    const unitCostNumber = unitCost.trim() ? Number(unitCost) : undefined;
     if (!notes.trim()) {
       showToast.error('Catatan perubahan stok wajib diisi');
       return;
     }
-    if (!Number.isFinite(unitCostNumber) || unitCostNumber <= 0) {
+    if (unitCostNumber !== undefined && (!Number.isFinite(unitCostNumber) || unitCostNumber <= 0)) {
       showToast.error('Harga pokok harus lebih dari 0');
+      return;
+    }
+    if (newStock === b.stock && b.isValuationPending && unitCostNumber === undefined) {
+      showToast.error('Harga pokok wajib diisi khusus untuk valuasi stok lama');
       return;
     }
     setSubmitting(b.inventoryItemId);
@@ -1071,7 +1076,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
           </div>
 
           <div className={styles.formGroup}>
-            <label>Harga Pokok per {product.baseUnit} (Rp) <span className={styles.required}>*</span></label>
+            <label>Harga Pokok per {product.baseUnit} (Rp) <span className={styles.hint}>(Opsional untuk perubahan stok)</span></label>
             <input
               type="number"
               min="0.0001"
@@ -1080,7 +1085,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
               onChange={(e) => setUnitCost(e.target.value)}
               placeholder="Mis: 25000"
             />
-            <p className={styles.hint}>Digunakan untuk valuasi persediaan dan jurnal koreksi stok.</p>
+            <p className={styles.hint}>Kosongkan untuk memakai harga pokok terakhir. Harga tetap wajib hanya saat menjalankan Valuasi stok lama tanpa mengubah jumlah.</p>
           </div>
 
           <div className={styles.stockEditHeader}>
@@ -1113,6 +1118,8 @@ function StockEditModal({ product, onClose, onAdjust }: {
               const adjustmentBase = isDirty ? draftNum - b.stock : 0;
               const adjustmentDisplay = unitMode === 'usage' ? Math.round(adjustmentBase * product.conversionFactor) : adjustmentBase;
               const isLoadingThis = submitting === b.inventoryItemId;
+              const unitCostInvalid = unitCost.trim() !== '' && (!Number.isFinite(Number(unitCost)) || Number(unitCost) <= 0);
+              const requiresValuationPrice = !isDirty && b.isValuationPending;
               const currentStockDisplay = unitMode === 'usage' ? Math.round(b.stock * product.conversionFactor) : b.stock;
               const inputValue = unitMode === 'usage' ? (draft === '' ? '' : String(Math.round(Number(draft) * product.conversionFactor))) : draft;
 
@@ -1155,7 +1162,7 @@ function StockEditModal({ product, onClose, onAdjust }: {
                   </div>
                   <button
                     onClick={() => handleSave(b)}
-                    disabled={(!isDirty && !b.isValuationPending) || isLoadingThis || !notes.trim() || !unitCost || Number(unitCost) <= 0}
+                    disabled={(!isDirty && !b.isValuationPending) || isLoadingThis || !notes.trim() || unitCostInvalid || (requiresValuationPrice && !unitCost.trim())}
                     className={styles.stockEditSaveBtn}
                   >
                     {isLoadingThis ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {isDirty ? 'Simpan' : 'Valuasi'}

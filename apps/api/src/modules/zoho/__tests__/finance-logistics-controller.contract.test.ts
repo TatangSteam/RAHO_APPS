@@ -4,6 +4,51 @@ import { resolve } from 'path';
 const apiRoot = resolve(__dirname, '../../../..');
 
 describe('Finance & Logistics Controller contract', () => {
+  it('merges the seeded Finance and Logistics accounts without deleting history', () => {
+    const seed = readFileSync(resolve(apiRoot, 'prisma/seeds/users.seed.ts'), 'utf8');
+    const migration = readFileSync(resolve(
+      apiRoot,
+      'prisma/migrations/20260820120000_merge_finance_logistics_access/migration.sql',
+    ), 'utf8');
+
+    expect(seed).toContain("const FINANCE_LOGISTICS_EMAIL = 'finance@raho.id'");
+    expect(seed).toContain("password: 'Finance@123'");
+    expect(seed).not.toContain("password: 'AdminLogistik@123'");
+    expect(seed).toContain('data: { isActive: false }');
+    expect(migration).toContain("finance.\"email\" = 'finance@raho.id'");
+    expect(migration).toContain("WHERE \"email\" = 'adminlogistik@raho.id'");
+    expect(migration).not.toContain('DELETE FROM "users"');
+  });
+
+  it('inherits manager, finance, and logistics permissions but keeps shipment dispatch-only', () => {
+    const migration = readFileSync(resolve(
+      apiRoot,
+      'prisma/migrations/20260820120000_merge_finance_logistics_access/migration.sql',
+    ), 'utf8');
+    const shipmentService = readFileSync(resolve(
+      apiRoot,
+      'src/modules/inventory/shipment.service.ts',
+    ), 'utf8');
+    const shipmentPage = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/inventory/shipments/page.tsx',
+    ), 'utf8');
+    const shipmentModal = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/inventory/shipments/components/ShipModal.tsx',
+    ), 'utf8');
+
+    expect(migration).toContain("'ADMIN_MANAGER_DEFAULT'");
+    expect(migration).toContain("'ADMIN_LOGISTIK_DEFAULT'");
+    expect(migration).toContain("'INVENTORY.SHIPMENT.DISPATCH'");
+    expect(migration).toContain("permission.\"code\" = 'INVENTORY.SHIPMENT.RECEIVE'");
+    expect(shipmentService).toContain('FINANCE_LOGISTICS_DISPATCH_ONLY');
+    expect(shipmentService).toContain("await assertNotDispatchOnlyController(userId, 'menerima barang')");
+    expect(shipmentService).toContain('const dispatchData = dispatchOnly');
+    expect(shipmentPage).toContain("user?.roleTemplateName === 'Finance & Logistics Controller'");
+    expect(shipmentModal).toContain('? { idempotencyKey }');
+  });
+
   it('adds the role and its branch-scoped read/control permissions', () => {
     const roleMigration = readFileSync(resolve(
       apiRoot,

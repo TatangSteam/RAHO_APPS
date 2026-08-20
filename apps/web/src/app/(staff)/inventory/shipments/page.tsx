@@ -221,6 +221,9 @@ export default function ShipmentsPage() {
     }
   };
 
+  const isFinanceLogisticsController =
+    user?.roleTemplateName === 'Finance & Logistics Controller';
+
   const canShip = (shipment: Shipment) => 
     [
       'SUPER_ADMIN',
@@ -231,14 +234,17 @@ export default function ShipmentsPage() {
     shipment.status === 'PREPARING';
 
   const canEditShipment = (shipment: Shipment) =>
+    !isFinanceLogisticsController &&
     ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') &&
     shipment.status === 'PREPARING';
     
   const canReceive = (shipment: Shipment) =>
+    !isFinanceLogisticsController &&
     ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK', 'ADMIN_CABANG'].includes(user?.role || '') &&
     ['SHIPPED', 'PARTIALLY_RECEIVED'].includes(shipment.status);
 
   const canReviewIssue = (shipment: Shipment) =>
+    !isFinanceLogisticsController &&
     ['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') &&
     shipment.status === 'RECEIVED_WITH_ISSUE' &&
     !shipment.isLedgerManaged &&
@@ -784,6 +790,7 @@ export default function ShipmentsPage() {
           onClose={closeModal}
           onShip={handleShip}
           loading={actionLoading}
+          dispatchOnly={isFinanceLogisticsController}
         />
       )}
 

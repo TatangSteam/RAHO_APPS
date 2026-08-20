@@ -24,11 +24,12 @@ describe('directStockAdjustmentSchema', () => {
     expect(incoming.reasonCode).toBe('OTHER');
     expect(outgoing.adjustment).toBe('-2.5');
     expect(outgoingWithoutUnitCost.unitCost).toBeUndefined();
-    expect(directStockAdjustmentSchema.safeParse({
+    const incomingWithoutUnitCost = directStockAdjustmentSchema.parse({
       idempotencyKey: 'DIRECT-STOCK-003',
       adjustment: 3,
       notes: 'Penambahan stok tanpa harga',
-    }).success).toBe(false);
+    });
+    expect(incomingWithoutUnitCost.unitCost).toBeUndefined();
   });
 
   it('menerima adjustment nol hanya untuk valuasi stok lama', () => {
@@ -39,7 +40,7 @@ describe('directStockAdjustmentSchema', () => {
       reasonCode: 'LEGACY_OPENING_VALUATION',
     };
     expect(directStockAdjustmentSchema.safeParse(valuationInput).success).toBe(true);
-    expect(directStockAdjustmentSchema.safeParse({ ...valuationInput, unitCost: undefined }).success).toBe(false);
+    expect(directStockAdjustmentSchema.safeParse({ ...valuationInput, unitCost: undefined }).success).toBe(true);
     expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(false);
     expect(directStockAdjustmentSchema.safeParse({
       ...valuationInput,
@@ -73,5 +74,19 @@ describe('directStockAdjustmentSchema', () => {
     expect(service).toContain('adjustment.isZero() ? await valuePendingStockInTransaction');
     expect(service).toContain("'VALUATION_EVIDENCE_REQUIRED'");
     expect(service).toContain('sourceDocumentReference: input.valuationDocumentReference!');
+  });
+
+  it('memakai harga tersimpan untuk stok masuk dan FIFO untuk stok keluar saat harga dikosongkan', () => {
+    const service = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
+      'utf8',
+    );
+
+    expect(service).not.toContain("'DIRECT_UNIT_COST_REQUIRED'");
+    expect(service).toContain("source: 'LATEST_COST_LAYER'");
+    expect(service).toContain("source: 'LATEST_GOODS_RECEIPT'");
+    expect(service).toContain("source: 'LATEST_PURCHASE_ORDER'");
+    expect(service).toContain("source: 'LATEST_PURCHASE_REQUEST'");
+    expect(service).toContain("valuation?.source ?? 'FIFO'");
   });
 });

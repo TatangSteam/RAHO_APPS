@@ -292,8 +292,8 @@ export default function InventoryPage() {
       return;
     }
 
-    const unitCostNum = parseFloat(unitCost);
-    if (isNaN(unitCostNum) || unitCostNum <= 0) {
+    const unitCostNum = unitCost.trim() ? parseFloat(unitCost) : undefined;
+    if (unitCostNum !== undefined && (isNaN(unitCostNum) || unitCostNum <= 0)) {
       showToast.error('Harga pokok per satuan harus lebih dari 0');
       return;
     }
@@ -326,7 +326,7 @@ export default function InventoryPage() {
       await inventoryApi.adjustStock(selectedItem.id, {
         idempotencyKey: crypto.randomUUID(),
         adjustment: adjustmentNum,
-        unitCost: unitCostNum,
+        ...(adjustmentNum > 0 && unitCostNum !== undefined ? { unitCost: unitCostNum } : {}),
         notes: reason.trim(),
       });
 
@@ -409,7 +409,8 @@ export default function InventoryPage() {
     const conversionFactorNum = parseFloat(conversionFactor);
     const conversionInvalid = hasSeparateUsageUnit && (isNaN(conversionFactorNum) || conversionFactorNum <= 0);
     const unitCostNum = parseFloat(unitCost);
-    const unitCostInvalid = isNaN(unitCostNum) || unitCostNum <= 0;
+    const unitCostInvalid = unitCost.trim() !== '' && (isNaN(unitCostNum) || unitCostNum <= 0);
+    const isStockReduction = hasValidAdjustment && adjustmentNum < 0;
 
     const modalContent = (
       <div className="fixed inset-0 z-[9999] overflow-hidden">
@@ -507,7 +508,7 @@ export default function InventoryPage() {
 
               <div className="space-y-2">
                 <label className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                  Harga Pokok per {selectedItem.stockInfo.baseUnit} (Rp) <span className="text-red-500">*</span>
+                  Harga Pokok per {selectedItem.stockInfo.baseUnit} (Rp) <span className="font-normal text-neutral-500">(Opsional)</span>
                 </label>
                 <input
                   type="number"
@@ -515,6 +516,7 @@ export default function InventoryPage() {
                   step="0.0001"
                   value={unitCost}
                   onChange={(e) => setUnitCost(e.target.value)}
+                  disabled={isStockReduction}
                   placeholder="Contoh: 25000"
                   className={`w-full px-4 py-3 text-sm rounded-xl border bg-white dark:bg-neutral-800 text-neutral-900 dark:text-white placeholder-neutral-400 focus:outline-none focus:ring-2 transition-all ${
                     unitCost && unitCostInvalid
@@ -523,7 +525,9 @@ export default function InventoryPage() {
                   }`}
                 />
                 <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                  Digunakan untuk valuasi persediaan dan jurnal penyesuaian.
+                  {isStockReduction
+                    ? 'Pengurangan stok otomatis memakai valuasi FIFO; harga manual tidak diperlukan.'
+                    : 'Kosongkan untuk memakai harga pokok terakhir yang tercatat. Isi hanya jika ingin menentukan harga stok masuk ini.'}
                 </p>
               </div>
 
