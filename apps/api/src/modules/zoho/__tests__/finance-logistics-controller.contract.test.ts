@@ -41,6 +41,7 @@ describe('Finance & Logistics Controller contract', () => {
     expect(migration).toContain("'ADMIN_MANAGER_DEFAULT'");
     expect(migration).toContain("'ADMIN_LOGISTIK_DEFAULT'");
     expect(migration).toContain("'INVENTORY.SHIPMENT.DISPATCH'");
+    expect(migration).toContain("'TREATMENT.COMPLETION.REVERSE'");
     expect(migration).toContain("permission.\"code\" = 'INVENTORY.SHIPMENT.RECEIVE'");
     expect(shipmentService).toContain('FINANCE_LOGISTICS_DISPATCH_ONLY');
     expect(shipmentService).toContain("await assertNotDispatchOnlyController(userId, 'menerima barang')");

@@ -25,6 +25,7 @@ jest.mock('../sessions.service', () => ({
   SessionsService: jest.fn().mockImplementation(() => ({
     getSessionById: jest.fn(),
     createInfusion: jest.fn(),
+    updateSessionDetails: jest.fn(),
     updateTherapyPlanSetForSession: jest.fn(),
   })),
 }));
@@ -110,6 +111,44 @@ describe('SessionsController branch context', () => {
       res,
       { session: { sessionId: 'session-1' } }
     );
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('allows ADMIN_MANAGER with FULL branch access to save session details', async () => {
+    (prisma.treatmentSession.findUnique as jest.Mock).mockResolvedValue({
+      branchId: 'managed-branch',
+    });
+    (prisma.managerBranch.findFirst as jest.Mock).mockResolvedValue({
+      id: 'assignment-1',
+      accessScope: 'FULL',
+    });
+    sessionsServiceMock.updateSessionDetails.mockResolvedValue({ id: 'session-1' });
+
+    const req = {
+      params: { sessionId: 'session-1' },
+      body: {
+        treatmentDate: '2026-08-20T05:00:00.000Z',
+        shiftFollowingSessions: false,
+      },
+      user: {
+        userId: 'manager-1',
+        role: Role.ADMIN_MANAGER,
+        branchId: null,
+        branches: ['managed-branch'],
+      },
+    } as unknown as Request;
+    const res = {} as Response;
+    const next = jest.fn() as NextFunction;
+
+    await controller.updateSessionDetails(req, res, next);
+
+    expect(sessionsServiceMock.updateSessionDetails).toHaveBeenCalledWith(
+      'session-1',
+      req.body,
+      'manager-1',
+      'managed-branch',
+    );
+    expect(sendSuccess).toHaveBeenCalledWith(res, { id: 'session-1' });
     expect(next).not.toHaveBeenCalled();
   });
 
