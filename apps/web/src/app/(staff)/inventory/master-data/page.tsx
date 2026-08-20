@@ -38,7 +38,8 @@ export default function InventoryMasterDataPage() {
       setPermissions(effectivePermissions);
 
       const uomResponse = await inventoryApi.getUoms();
-      setUoms(uomResponse.data?.data || []);
+      const loadedUoms = uomResponse.data?.data || [];
+      setUoms(loadedUoms);
       const productResponse = await inventoryApi.getMasterProducts();
       setProducts(productResponse.data?.data?.products || []);
 
@@ -47,6 +48,8 @@ export default function InventoryMasterDataPage() {
         setBatches([]);
         return;
       }
+
+      if (loadedUoms.length === 0) setTab('UOM');
 
       const batchResponse = await inventoryApi.getBatches();
       setBatches(batchResponse.data?.data || []);
@@ -127,6 +130,11 @@ export default function InventoryMasterDataPage() {
       {error && <div className={styles.error}>{error}</div>}
       {loading ? <div className={styles.loading}>Memuat master data...</div> : (
         <>
+          {uoms.length === 0 && (
+            <div className={styles.notice} role="alert">
+              Belum ada UOM aktif. {canManage ? 'Buat UOM terlebih dahulu sebelum menambahkan atau mengubah produk.' : 'Hubungi Admin Manager untuk menyiapkan UOM.'}
+            </div>
+          )}
           {tab === 'UOM' && <section>
             {canManage && <form className={styles.form} onSubmit={(event) => void submit(event, () => inventoryApi.createUom(uomForm), () => setUomForm({ code: '', name: '', category: 'GENERAL', precision: 4 }))}>
               <label className={styles.field}><span>Kode</span><input className={styles.input} required value={uomForm.code} onChange={(event) => setUomForm({ ...uomForm, code: event.target.value })} /></label>
@@ -151,7 +159,7 @@ export default function InventoryMasterDataPage() {
                 <label className={styles.field}><span>Base UOM</span><select className={styles.select} required value={conversionForm.baseUomId} onChange={(event) => setConversionForm({ ...conversionForm, baseUomId: event.target.value })}><option value="">Pilih</option>{uoms.filter((uom) => uom.isActive).map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
                 <label className={styles.field}><span>Usage UOM</span><select className={styles.select} required value={conversionForm.usageUomId} onChange={(event) => setConversionForm({ ...conversionForm, usageUomId: event.target.value })}><option value="">Pilih</option>{uoms.filter((uom) => uom.isActive).map((uom) => <option key={uom.id} value={uom.id}>{uom.code}</option>)}</select></label>
                 <label className={styles.field}><span>1 base = usage</span><input className={styles.input} required inputMode="decimal" value={conversionForm.factor} onChange={(event) => { const factor = event.target.value; setConversionForm({ ...conversionForm, factor }); setPreviewForm((current) => ({ ...current, factor })); }} /></label>
-                <button className={styles.button} disabled={saving || !conversionForm.productId}><Plus size={15} /> Simpan Conversion</button>
+                <button className={styles.button} disabled={saving || !conversionForm.productId || uoms.length === 0}><Plus size={15} /> Simpan Conversion</button>
               </form>
             </>}
             <h2>Preview conversion</h2>
@@ -175,7 +183,7 @@ export default function InventoryMasterDataPage() {
               <label className={styles.field}><span>Faktor konversi</span><input className={styles.input} required value={productForm.conversionFactor} onChange={(event) => setProductForm({ ...productForm, conversionFactor: event.target.value })} /></label>
               <label><input type="checkbox" checked={productForm.tracksBatch} onChange={(event) => setProductForm({ ...productForm, tracksBatch: event.target.checked, tracksExpiry: event.target.checked ? productForm.tracksExpiry : false })} /> Batch</label>
               <label><input type="checkbox" disabled={!productForm.tracksBatch} checked={productForm.tracksExpiry} onChange={(event) => setProductForm({ ...productForm, tracksExpiry: event.target.checked })} /> Expiry</label>
-              <button className={styles.button} disabled={saving}><Plus size={15} /> Produk</button>
+              <button className={styles.button} disabled={saving || uoms.length === 0}><Plus size={15} /> Produk</button>
             </form>}
             <div className={styles.tableWrap}><table className={styles.table}><thead><tr><th>SKU</th><th>Produk</th><th>Kategori</th><th>Konversi</th><th>Tracking</th><th>Status</th><th>Aksi</th></tr></thead><tbody>{products.map((product) => <tr key={product.id}><td>{product.sku || '-'}</td><td>{product.name}</td><td>{product.category}</td><td>{product.baseUnit} x {String(product.conversionFactor)} {product.usageUnit}</td><td>{product.tracksBatch ? `Batch${product.tracksExpiry ? ' + Expiry' : ''}` : '-'}</td><td><span className={product.isActive ? styles.badge : styles.inactiveBadge}>{product.isActive ? 'Aktif' : 'Nonaktif'}</span></td><td>{canManage && product.isActive ? <button className={styles.dangerButton} title="Nonaktifkan produk" onClick={() => void submit({ preventDefault() {} } as FormEvent, () => inventoryApi.updateMasterProduct(product.id, { isActive: false }), () => undefined)}><Trash2 size={14} /></button> : '-'}</td></tr>)}</tbody></table></div>
           </section>}

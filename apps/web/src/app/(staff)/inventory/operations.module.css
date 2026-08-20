@@ -286,6 +286,16 @@
   color: #b33c3c;
 }
 
+.notice {
+  margin-bottom: 16px;
+  border: 1px solid #d7a13c;
+  border-radius: 6px;
+  background: #fff4d6;
+  color: #70460b;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
 .summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(130px, 1fr));

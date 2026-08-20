@@ -1,4 +1,5 @@
 import { PrismaClient, ProductCategory } from '@prisma/client';
+import { backfillProductUoms } from './inventory-uoms.seed';
 
 /**
  * Master Products Seed - Sesuai dengan List Barang RAHO Official
@@ -155,6 +156,9 @@ export async function seedProducts(prisma: PrismaClient) {
   }
 
   console.log(`✅ Master products: ${products.length} entries`);
+
+  const uomCount = await backfillProductUoms(prisma);
+  console.log(`Inventory UOM ensured: ${uomCount} entries`);
 
   return createdProducts;
 }

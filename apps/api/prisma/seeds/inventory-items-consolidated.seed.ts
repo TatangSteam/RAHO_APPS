@@ -1,4 +1,5 @@
 import { PrismaClient, ProductCategory } from '@prisma/client';
+import { backfillProductUoms } from './inventory-uoms.seed';
 
 /**
  * CONSOLIDATED Inventory Items Seeder
@@ -202,6 +203,9 @@ export async function seedConsolidatedInventoryItems(prisma: PrismaClient) {
   console.log(`   • ${skipped} inventory items already existed`);
   console.log(`\n📦 Product Categories:`);
   
+  const uomCount = await backfillProductUoms(prisma);
+  console.log(`Inventory UOM ensured: ${uomCount} entries`);
+
   const categoryCount = masterProducts.reduce((acc, p) => {
     acc[p.category] = (acc[p.category] || 0) + 1;
     return acc;

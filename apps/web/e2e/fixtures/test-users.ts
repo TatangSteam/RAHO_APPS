@@ -20,7 +20,7 @@ export interface E2EUser {
 const DEFAULT_E2E_CREDENTIALS: Record<E2ERole, { email: string; password: string }> = {
   SUPER_ADMIN: {
     email: 'superadmin@raho.id',
-    password: 'Sup3r4dM1n',
+    password: 'SuP3r4Dm1n',
   },
   ADMIN_MANAGER: {
     email: 'manager1@raho.id',
