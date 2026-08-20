@@ -385,8 +385,10 @@ export default function InventoryPage() {
 
   if (!mounted) return null;
 
-  // Edit Stock Modal
-    const EditStockModal = () => {
+  // Render as a function instead of a nested React component. A nested
+  // component gets a new identity on every parent render, which remounts the
+  // modal and makes the active input lose focus after each keystroke.
+  const renderEditStockModal = () => {
     if (!editModalOpen || !selectedItem) return null;
 
     const adjustmentNum = parseFloat(adjustment);
@@ -1040,7 +1042,7 @@ export default function InventoryPage() {
       </div>
 
       {/* Edit Stock Modal */}
-      <EditStockModal />
+      {renderEditStockModal()}
     </>
   );
 }
