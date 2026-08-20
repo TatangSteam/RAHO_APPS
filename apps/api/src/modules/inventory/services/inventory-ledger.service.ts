@@ -48,6 +48,9 @@ type InboundInventoryInput = ReceiveInventoryInput | (OpeningInventoryInput & {
   sourceType: string;
   reasonCode: string;
 });
+type AdjustmentInboundInventoryInput = Omit<ReceiveInventoryInput, 'unitCost'> & {
+  unitCost?: string;
+};
 
 const MAX_TRANSACTION_ATTEMPTS = 3;
 
@@ -461,7 +464,7 @@ export async function postOpeningInventory(actorUserId: string, input: OpeningIn
  */
 async function receiveInboundInventoryInTransaction(
   actorUserId: string,
-  input: ReceiveInventoryInput,
+  input: ReceiveInventoryInput | AdjustmentInboundInventoryInput,
   tx: Tx,
   postingType: InventoryPostingType,
   stockOpnameBypassId?: string,
@@ -532,8 +535,8 @@ async function receiveInboundInventoryInTransaction(
   await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "inventory_balances" WHERE "id" = ${balance.id} FOR UPDATE`);
 
   const quantity = new Prisma.Decimal(input.quantity);
-  const unitCost = new Prisma.Decimal(input.unitCost);
-  const totalCost = quantity.mul(unitCost);
+  const unitCost = input.unitCost === undefined ? null : new Prisma.Decimal(input.unitCost);
+  const totalCost = unitCost ? quantity.mul(unitCost) : new Prisma.Decimal(0);
   const posting = await tx.inventoryPosting.create({
     data: {
       postingNumber: postingNumber(postingType === InventoryPostingType.OPENING ? 'OPN' : postingType === InventoryPostingType.ADJUSTMENT_IN ? 'ADJ' : 'RCV'),
@@ -567,7 +570,7 @@ async function receiveInboundInventoryInTransaction(
       inventoryPostingId: posting.id,
       inventoryBalanceId: balance.id,
       batchId,
-      actualCost: totalCost,
+      actualCost: unitCost ? totalCost : null,
     },
   });
   const costLayer = await tx.inventoryCostLayer.create({
@@ -580,7 +583,9 @@ async function receiveInboundInventoryInTransaction(
       remainingQty: quantity,
       unitCost,
       currency: input.currency,
-      valuationStatus: InventoryValuationStatus.VALUED,
+      valuationStatus: unitCost
+        ? InventoryValuationStatus.VALUED
+        : InventoryValuationStatus.PENDING_VALUATION,
       receivedAt: occurredAt,
     },
   });
@@ -598,7 +603,7 @@ export function receivePurchasedInventoryInTransaction(actorUserId: string, inpu
 
 export function receiveAdjustmentInventoryInTransaction(
   actorUserId: string,
-  input: ReceiveInventoryInput,
+  input: AdjustmentInboundInventoryInput,
   tx: Tx,
   stockOpnameBypassId?: string,
 ) {
@@ -752,11 +757,13 @@ export function issueAdjustmentInventoryInTransaction(
   input: IssueInventoryInput,
   tx: Tx,
   stockOpnameBypassId?: string,
+  allowUnvaluedQuantity = false,
 ) {
   return issueInventoryInTransaction(actorUserId, input, tx, {
     postingType: InventoryPostingType.ADJUSTMENT_OUT,
     mutationType: StockMutationType.ADJUSTMENT,
     stockOpnameBypassId,
+    allowUnvaluedQuantity,
   });
 }
 

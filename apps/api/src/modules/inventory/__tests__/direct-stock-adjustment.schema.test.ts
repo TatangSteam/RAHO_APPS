@@ -40,7 +40,7 @@ describe('directStockAdjustmentSchema', () => {
       reasonCode: 'LEGACY_OPENING_VALUATION',
     };
     expect(directStockAdjustmentSchema.safeParse(valuationInput).success).toBe(true);
-    expect(directStockAdjustmentSchema.safeParse({ ...valuationInput, unitCost: undefined }).success).toBe(true);
+    expect(directStockAdjustmentSchema.safeParse({ ...valuationInput, unitCost: undefined }).success).toBe(false);
     expect(directStockAdjustmentSchema.safeParse({ ...validInput, adjustment: 0 }).success).toBe(false);
     expect(directStockAdjustmentSchema.safeParse({
       ...valuationInput,
@@ -76,17 +76,21 @@ describe('directStockAdjustmentSchema', () => {
     expect(service).toContain('sourceDocumentReference: input.valuationDocumentReference!');
   });
 
-  it('memakai harga tersimpan untuk stok masuk dan FIFO untuk stok keluar saat harga dikosongkan', () => {
+  it('memisahkan perubahan quantity dari valuasi harga', () => {
     const service = readFileSync(
       resolve(process.cwd(), 'src/modules/inventory/services/inventory-control.service.ts'),
       'utf8',
     );
+    const ledger = readFileSync(
+      resolve(process.cwd(), 'src/modules/inventory/services/inventory-ledger.service.ts'),
+      'utf8',
+    );
 
-    expect(service).not.toContain("'DIRECT_UNIT_COST_REQUIRED'");
-    expect(service).toContain("source: 'LATEST_COST_LAYER'");
-    expect(service).toContain("source: 'LATEST_GOODS_RECEIPT'");
-    expect(service).toContain("source: 'LATEST_PURCHASE_ORDER'");
-    expect(service).toContain("source: 'LATEST_PURCHASE_REQUEST'");
-    expect(service).toContain("valuation?.source ?? 'FIFO'");
+    expect(service).not.toContain('Harga pokok belum tersedia dari riwayat');
+    expect(service).toContain('{ allowUnvaluedQuantity: true }');
+    expect(service).toContain("adjustment.sourceType !== 'SUPER_ADMIN_DIRECT'");
+    expect(service).toContain("adjustment.greaterThan(0) ? 'PENDING_VALUATION' : 'FIFO'");
+    expect(ledger).toContain('InventoryValuationStatus.PENDING_VALUATION');
+    expect(ledger).toContain('actualCost: unitCost ? totalCost : null');
   });
 });

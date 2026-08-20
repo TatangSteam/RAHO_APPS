@@ -11,6 +11,7 @@ import { therapyPlanApi, type TherapyPlan } from '@/lib/therapyPlanApi';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { getApiErrorMessage } from '@/lib/api';
+import { createClientIdempotencyKey } from '@/lib/clientIdempotencyKey';
 import { useAuthStore } from '@/stores/authStore';
 import type { SessionDetail } from '@/types/session';
 import Step1Diagnosis from '@/components/sessions/Step1Diagnosis';
@@ -364,7 +365,7 @@ export default function SessionDetailPage() {
       setBoosterEditError(null);
       if (session.session.isCompleted) {
         await sessionApi.cancelCompletion(sessionId, {
-          idempotencyKey: crypto.randomUUID(),
+          idempotencyKey: createClientIdempotencyKey(),
           reason: postedEditReason.trim(),
           reopenForEditing: true,
         });
@@ -472,7 +473,7 @@ export default function SessionDetailPage() {
       showToast.error('Alasan pembatalan minimal 5 karakter');
       return;
     }
-    const idempotencyKey = cancellationKey || crypto.randomUUID();
+    const idempotencyKey = cancellationKey || createClientIdempotencyKey();
     if (!cancellationKey) setCancellationKey(idempotencyKey);
     try {
       setCancellingCompletion(true);

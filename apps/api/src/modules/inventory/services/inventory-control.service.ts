@@ -51,7 +51,13 @@ const opnameInclude = {
 
 async function estimateOutbound(
   tx: Tx,
-  input: { inventoryItemId: string; stockLocationId: string; batchId?: string; quantity: Prisma.Decimal },
+  input: {
+    inventoryItemId: string;
+    stockLocationId: string;
+    batchId?: string;
+    quantity: Prisma.Decimal;
+    allowUnvaluedQuantity?: boolean;
+  },
 ) {
   const balances = await tx.inventoryBalance.findMany({
     where: {
@@ -61,7 +67,13 @@ async function estimateOutbound(
     },
     include: {
       costLayers: {
-        where: { remainingQty: { gt: 0 }, isVoided: false, valuationStatus: 'VALUED', unitCost: { not: null } },
+        where: {
+          remainingQty: { gt: 0 },
+          isVoided: false,
+          ...(input.allowUnvaluedQuantity
+            ? {}
+            : { valuationStatus: 'VALUED', unitCost: { not: null } }),
+        },
         orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
       },
     },
@@ -80,7 +92,7 @@ async function estimateOutbound(
     for (const layer of balance.costLayers) {
       if (!remaining.greaterThan(0) || !balanceAvailable.greaterThan(0)) break;
       const allocated = Prisma.Decimal.min(remaining, balanceAvailable, layer.remainingQty);
-      value = value.add(allocated.mul(layer.unitCost!));
+      value = value.add(allocated.mul(layer.unitCost ?? 0));
       remaining = remaining.sub(allocated);
       balanceAvailable = balanceAvailable.sub(allocated);
     }
@@ -91,7 +103,11 @@ async function estimateOutbound(
   return money(value);
 }
 
-async function validateAdjustmentLines(tx: Tx, input: ScopedAdjustmentInput) {
+async function validateAdjustmentLines(
+  tx: Tx,
+  input: ScopedAdjustmentInput,
+  options: { allowUnvaluedQuantity?: boolean } = {},
+) {
   const reason = await tx.inventoryAdjustmentReasonCode.findUnique({ where: { code: input.reasonCode } });
   if (!reason?.isActive) throw errors.badRequest('ADJUSTMENT_REASON_INVALID', 'Reason code adjustment tidak aktif atau tidak ditemukan.');
   const location = await tx.stockLocation.findUnique({ where: { id: input.stockLocationId }, include: { warehouse: true } });
@@ -125,14 +141,19 @@ async function validateAdjustmentLines(tx: Tx, input: ScopedAdjustmentInput) {
     const qty = new Prisma.Decimal(line.quantity);
     let estimatedValue: Prisma.Decimal;
     if (line.direction === 'IN') {
-      if (line.unitCost === undefined) throw errors.badRequest('ADJUSTMENT_UNIT_COST_REQUIRED', 'Unit cost wajib untuk adjustment masuk.');
-      estimatedValue = money(qty.mul(new Prisma.Decimal(line.unitCost)));
+      if (line.unitCost === undefined && !options.allowUnvaluedQuantity) {
+        throw errors.badRequest('ADJUSTMENT_UNIT_COST_REQUIRED', 'Unit cost wajib untuk adjustment masuk.');
+      }
+      estimatedValue = line.unitCost === undefined
+        ? new Prisma.Decimal(0)
+        : money(qty.mul(new Prisma.Decimal(line.unitCost)));
     } else {
       estimatedValue = await estimateOutbound(tx, {
         inventoryItemId: line.inventoryItemId,
         stockLocationId: input.stockLocationId,
         batchId: line.batchId,
         quantity: qty,
+        allowUnvaluedQuantity: options.allowUnvaluedQuantity,
       });
     }
     total = total.add(estimatedValue);
@@ -294,7 +315,7 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
       inventoryItemId: line.inventoryItemId,
       stockLocationId: adjustment.stockLocationId,
       quantity: line.quantity.toFixed(4),
-      unitCost: line.unitCost!.toFixed(4),
+      unitCost: line.unitCost?.toFixed(4),
       currency: 'IDR',
       batch: batch ? {
         batchNumber: batch.batchNumber,
@@ -331,7 +352,7 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
         batchId: line.batchId || undefined,
         quantity: line.quantity.toFixed(4),
       })),
-    }, tx, bypassOpnameId);
+    }, tx, bypassOpnameId, adjustment.sourceType === 'SUPER_ADMIN_DIRECT');
     const posting = await tx.inventoryPosting.findUniqueOrThrow({
       where: { id: outboundPostingId }, include: { stockMutations: true },
     });
@@ -357,8 +378,10 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
     { accountCode: reason.lossAccountCode, debit: money(outboundTotal), metadata: { adjustmentRole: 'LOSS' } },
     { accountCode: '1300', credit: money(outboundTotal), metadata: { adjustmentRole: 'INVENTORY_OUT' } },
   );
-  if (journalLines.length === 0) throw errors.unprocessable('ADJUSTMENT_ZERO_VALUE', 'Nilai adjustment harus minimal Rp0,01.');
-  const journal = await postInventoryAdjustmentDerivedJournal({
+  if (journalLines.length === 0 && adjustment.sourceType !== 'SUPER_ADMIN_DIRECT') {
+    throw errors.unprocessable('ADJUSTMENT_ZERO_VALUE', 'Nilai adjustment harus minimal Rp0,01.');
+  }
+  const journal = journalLines.length > 0 ? await postInventoryAdjustmentDerivedJournal({
     postingKey: `INVENTORY_ADJUSTMENT:${adjustment.id}`,
     transactionDate: now,
     branchId: adjustment.branchId,
@@ -371,14 +394,14 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
       sourceNumber: adjustment.adjustmentNumber,
     }],
     metadata: { reasonCode: adjustment.reasonCode, adjustmentId: adjustment.id },
-  }, tx);
+  }, tx) : null;
   const posted = await tx.inventoryAdjustment.update({
     where: { id: adjustment.id },
     data: {
       status: 'POSTED',
       inboundPostingId: firstInboundPostingId,
       outboundPostingId,
-      journalEntryId: journal.journal.id,
+      journalEntryId: journal?.journal.id ?? null,
       totalPostedValue: money(inboundTotal.add(outboundTotal)),
       postedBy: actorUserId,
       postedAt: now,
@@ -389,7 +412,12 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
     userId: actorUserId, branchId: adjustment.branchId, action: 'STOCK_ADJUSTMENT', module: 'INVENTORY',
     resource: 'InventoryAdjustment', resourceId: adjustment.id, entityType: 'InventoryAdjustment', entityId: adjustment.id,
     entityCode: adjustment.adjustmentNumber, description: `Adjustment ${adjustment.adjustmentNumber} diposting.`,
-    afterData: { status: 'POSTED', journalEntryId: journal.journal.id, totalPostedValue: posted.totalPostedValue },
+    afterData: {
+      status: 'POSTED',
+      journalEntryId: journal?.journal.id ?? null,
+      totalPostedValue: posted.totalPostedValue,
+      valuationStatus: journal ? 'VALUED' : 'PENDING_VALUATION',
+    },
   } });
   await createInventorySyncEventInTransaction(tx, {
     eventType: adjustment.stockOpnameId
@@ -420,62 +448,6 @@ async function postAdjustmentInTransaction(tx: Tx, adjustmentId: string, actorUs
     },
   });
   return posted;
-}
-
-async function resolveDirectAdjustmentUnitCost(
-  tx: Tx,
-  item: { id: string; masterProductId: string },
-  requestedUnitCost?: string,
-) {
-  if (requestedUnitCost) {
-    return { unitCost: new Prisma.Decimal(requestedUnitCost), source: 'REQUEST' };
-  }
-
-  const latestLayer = await tx.inventoryCostLayer.findFirst({
-    where: {
-      inventoryBalance: { inventoryItemId: item.id },
-      valuationStatus: InventoryValuationStatus.VALUED,
-      unitCost: { gt: 0 },
-      isVoided: false,
-    },
-    select: { unitCost: true },
-    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
-  });
-  if (latestLayer?.unitCost?.greaterThan(0)) {
-    return { unitCost: latestLayer.unitCost, source: 'LATEST_COST_LAYER' };
-  }
-
-  const latestReceipt = await tx.goodsReceiptItem.findFirst({
-    where: { inventoryItemId: item.id, unitCost: { gt: 0 } },
-    select: { unitCost: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (latestReceipt?.unitCost.greaterThan(0)) {
-    return { unitCost: latestReceipt.unitCost, source: 'LATEST_GOODS_RECEIPT' };
-  }
-
-  const latestOrder = await tx.purchaseOrderItem.findFirst({
-    where: { masterProductId: item.masterProductId, unitPrice: { gt: 0 } },
-    select: { unitPrice: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (latestOrder?.unitPrice.greaterThan(0)) {
-    return { unitCost: latestOrder.unitPrice, source: 'LATEST_PURCHASE_ORDER' };
-  }
-
-  const latestRequest = await tx.purchaseRequestItem.findFirst({
-    where: { masterProductId: item.masterProductId, estimatedUnitCost: { gt: 0 } },
-    select: { estimatedUnitCost: true },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (latestRequest?.estimatedUnitCost.greaterThan(0)) {
-    return { unitCost: latestRequest.estimatedUnitCost, source: 'LATEST_PURCHASE_REQUEST' };
-  }
-
-  throw errors.unprocessable(
-    'VALUATION_UNIT_COST_REQUIRED',
-    'Harga pokok belum tersedia dari riwayat penerimaan/pembelian. Isi Harga Pokok aktual agar valuasi inventory dan jurnal finance tetap benar.',
-  );
 }
 
 type PendingValuationResult = {
@@ -775,12 +747,12 @@ export async function directAdjustStock(
         'Valuasi stok lama wajib memakai reason LEGACY_OPENING_VALUATION agar lawan jurnal masuk ekuitas saldo awal, bukan laba-rugi.',
       );
     }
-    // Harga manual adalah override opsional untuk stok masuk. Jika dikosongkan,
-    // gunakan harga sah terakhir. Stok keluar selalu dinilai oleh FIFO sehingga
-    // tidak bergantung pada harga yang diketik pengguna.
-    const valuation = adjustment.isNegative()
-      ? null
-      : await resolveDirectAdjustmentUnitCost(tx, item, input.unitCost);
+    // Edit stok hanya mengubah kuantitas. Harga hanya dipakai jika dikirim oleh
+    // proses valuasi terpisah; stok masuk tanpa harga dibuat sebagai layer yang
+    // menunggu valuasi dan tidak membuat jurnal finance.
+    const valuation = input.unitCost
+      ? { unitCost: new Prisma.Decimal(input.unitCost), source: 'REQUEST' }
+      : null;
     const directUnitCost = valuation?.unitCost;
     let bootstrappedLegacyStock = false;
     if (balances.length === 0 && mirrorQty.greaterThan(0)) {
@@ -871,11 +843,11 @@ export async function directAdjustStock(
         batchId: input.batchId,
         direction: adjustment.greaterThan(0) ? 'IN' : 'OUT',
         quantity: adjustment.abs().toFixed(4),
-        unitCost: adjustment.greaterThan(0) ? directUnitCost!.toFixed(4) : undefined,
+        unitCost: adjustment.greaterThan(0) ? directUnitCost?.toFixed(4) : undefined,
         notes: input.notes,
       }],
     };
-    const validated = await validateAdjustmentLines(tx, normalized);
+    const validated = await validateAdjustmentLines(tx, normalized, { allowUnvaluedQuantity: true });
     const now = new Date();
     const document = await tx.inventoryAdjustment.create({
       data: {
@@ -913,7 +885,7 @@ export async function directAdjustStock(
         direct: true,
         adjustment: input.adjustment,
         unitCost: directUnitCost?.toFixed(4) ?? null,
-        valuationSource: valuation?.source ?? 'FIFO',
+        valuationSource: valuation?.source ?? (adjustment.greaterThan(0) ? 'PENDING_VALUATION' : 'FIFO'),
         stockLocationId: location.id,
         bootstrappedLegacyStock,
         valuedLegacyLayers: pendingValuation?.layersValued ?? 0,

@@ -797,12 +797,12 @@ export const inventoryApi = {
   },
 
   /**
-   * Direct, audited stock adjustment (Super Admin only).
+   * Direct, audited quantity adjustment (Super Admin only).
+   * Inventory price and valuation are handled by a separate finance flow.
    */
   adjustStock: (itemId: string, data: {
     idempotencyKey: string;
     adjustment: number;
-    unitCost?: number;
     notes: string;
     stockLocationId?: string;
     batchId?: string;

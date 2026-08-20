@@ -48,6 +48,13 @@ export const directStockAdjustmentSchema = z.object({
   batchId: z.string().trim().min(1).optional(),
   reasonCode: z.string().trim().min(2).max(50).transform((value) => value.toUpperCase()).default('OTHER'),
 }).superRefine((input, context) => {
+  if (Number(input.adjustment) === 0 && !input.unitCost) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['unitCost'],
+      message: 'Harga pokok wajib untuk proses valuasi. Perubahan stok biasa tidak memerlukan harga.',
+    });
+  }
   if (Number(input.adjustment) === 0 && !input.valuationDocumentReference) {
     context.addIssue({
       code: z.ZodIssueCode.custom,
