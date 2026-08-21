@@ -927,7 +927,7 @@ export async function listInventoryBalances(actorUserId: string, query: Inventor
     ...(query.stockLocationId ? { stockLocationId: query.stockLocationId } : {}),
     ...(query.batchId ? { batchId: query.batchId } : {}),
   };
-  const [rows, total] = await Promise.all([
+  const [rows, total, totals] = await Promise.all([
     prisma.inventoryBalance.findMany({
       where,
       include: { masterProduct: true, branch: true, stockLocation: { include: { warehouse: true } }, batch: true },
@@ -936,12 +936,32 @@ export async function listInventoryBalances(actorUserId: string, query: Inventor
       take: query.limit,
     }),
     prisma.inventoryBalance.count({ where }),
+    prisma.inventoryBalance.aggregate({
+      where,
+      _sum: {
+        onHandQty: true,
+        reservedQty: true,
+        quarantineQty: true,
+        inTransitQty: true,
+      },
+    }),
   ]);
+  const onHandQty = totals._sum.onHandQty ?? new Prisma.Decimal(0);
+  const reservedQty = totals._sum.reservedQty ?? new Prisma.Decimal(0);
+  const quarantineQty = totals._sum.quarantineQty ?? new Prisma.Decimal(0);
+  const inTransitQty = totals._sum.inTransitQty ?? new Prisma.Decimal(0);
   return {
     data: rows.map((row) => ({
       ...row,
       availableQty: row.onHandQty.sub(row.reservedQty).sub(row.quarantineQty),
     })),
+    summary: {
+      onHandQty,
+      availableQty: onHandQty.sub(reservedQty).sub(quarantineQty),
+      reservedQty,
+      quarantineQty,
+      inTransitQty,
+    },
     meta: { page: query.page, limit: query.limit, total, totalPages: Math.ceil(total / query.limit) },
   };
 }
@@ -1000,9 +1020,27 @@ export async function reconcileInventory(actorUserId: string, branchId: string) 
     };
   });
   const mismatches = results.filter((result) => !result.balanceMatchesMirror || !result.layerMatchesBalance);
+  const valuedLayerQty = results.reduce((sum, result) => sum.add(result.valuedLayerQty), new Prisma.Decimal(0));
+  const pendingValuationQty = results.reduce((sum, result) => sum.add(result.pendingValuationQty), new Prisma.Decimal(0));
   const layerValue = results.reduce((sum, result) => sum.add(result.assetValue), new Prisma.Decimal(0));
   const inTransitValue = openTransfers.reduce((sum, transfer) => sum.add(transfer.totalValue.sub(transfer.receivedValue)), new Prisma.Decimal(0));
   const totalInventoryValue = layerValue.add(inTransitValue);
   await logAudit({ userId: actorUserId, branchId, action: 'VERIFY', resource: 'Inventory', resourceId: branchId, afterData: { checked: results.length, mismatches: mismatches.length } });
-  return { checked: results.length, mismatchCount: mismatches.length, layerValue, inTransitValue, totalInventoryValue, mismatches, results };
+  return {
+    checked: results.length,
+    mismatchCount: mismatches.length,
+    quantityMismatchCount: mismatches.length,
+    valuedLayerQty,
+    pendingValuationQty,
+    pendingValuationItemCount: results.filter((result) => result.pendingValuationQty.greaterThan(0)).length,
+    valuationComplete: pendingValuationQty.equals(0) && mismatches.length === 0,
+    valuationStatus: pendingValuationQty.greaterThan(0)
+      ? 'PENDING_VALUATION'
+      : mismatches.length > 0 ? 'QUANTITY_MISMATCH' : 'VALUED',
+    layerValue,
+    inTransitValue,
+    totalInventoryValue,
+    mismatches,
+    results,
+  };
 }

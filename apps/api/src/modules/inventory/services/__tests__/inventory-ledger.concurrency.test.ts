@@ -4,6 +4,8 @@ import { prisma } from '@lib/prisma';
 import {
   issueInventory,
   issueInventoryInTransaction,
+  listInventoryBalances,
+  reconcileInventory,
   receiveInventory,
   reverseInventoryPosting,
   reverseInventoryPostingInTransaction,
@@ -129,6 +131,29 @@ describeDatabase('inventory ledger PostgreSQL concurrency', () => {
       occurredAt: new Date(),
     });
   }, 30_000);
+
+  it('returns branch-wide balance totals and distinguishes pending valuation from quantity mismatch', async () => {
+    const balances = await listInventoryBalances(actorId, {
+      branchId,
+      page: 1,
+      limit: 1,
+    });
+
+    expect(balances.data).toHaveLength(1);
+    expect(balances.meta.total).toBe(2);
+    expect(balances.summary.onHandQty.toFixed(4)).toBe('15.0000');
+    expect(balances.summary.availableQty.toFixed(4)).toBe('15.0000');
+
+    const reconciliation = await reconcileInventory(actorId, branchId);
+    expect(reconciliation.quantityMismatchCount).toBe(0);
+    expect(reconciliation.mismatchCount).toBe(0);
+    expect(reconciliation.valuedLayerQty.toFixed(4)).toBe('10.0000');
+    expect(reconciliation.pendingValuationQty.toFixed(4)).toBe('5.0000');
+    expect(reconciliation.pendingValuationItemCount).toBe(1);
+    expect(reconciliation.valuationComplete).toBe(false);
+    expect(reconciliation.valuationStatus).toBe('PENDING_VALUATION');
+    expect(reconciliation.layerValue.toFixed(4)).toBe('1000.0000');
+  });
 
   afterAll(async () => {
     await prisma.auditLog.deleteMany({ where: { OR: [{ userId: actorId }, { branchId }] } });

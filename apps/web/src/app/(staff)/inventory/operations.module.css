@@ -163,6 +163,12 @@
   padding: 8px 10px;
 }
 
+.readOnlyInput {
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  cursor: default;
+}
+
 .button,
 .secondaryButton,
 .dangerButton {
@@ -298,7 +304,7 @@
 
 .summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 1px;
   background: var(--surface-border);
   border: 1px solid var(--surface-border);
@@ -320,6 +326,32 @@
 .summaryItem strong {
   font-size: 18px;
   font-variant-numeric: tabular-nums;
+}
+
+.summaryItem small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.summaryItemWarning {
+  box-shadow: inset 3px 0 0 #d7a13c;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.pagination > div {
+  display: flex;
+  gap: 8px;
 }
 
 .section {
