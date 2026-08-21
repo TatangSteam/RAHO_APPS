@@ -152,6 +152,13 @@ export default function LogisticsDashboardPage() {
     outboundQty: Number(row.outboundQty),
   })) || [], [dashboard]);
 
+  const dashboardPendingValuationQty = Number(dashboard?.valuation.pendingValuationQty || 0);
+  const dashboardLayerMismatchCount = Number(dashboard?.valuation.layerMismatchCount || 0);
+  const dashboardValuationComplete = dashboardPendingValuationQty === 0 && dashboardLayerMismatchCount === 0;
+  const valuationPendingQty = Number(valuation?.summary.pendingValuationQty || 0);
+  const valuationMismatchCount = dashboardLayerMismatchCount;
+  const valuationComplete = valuationPendingQty === 0 && valuationMismatchCount === 0;
+
   return <main className={styles.page}>
     <header className={styles.pageHeader}>
       <div><h1>Dashboard Logistik</h1><span>{dashboard ? `${dashboard.filter.startDate} - ${dashboard.filter.endDate}` : 'Inventory reporting'}</span></div>
@@ -175,8 +182,12 @@ export default function LogisticsDashboardPage() {
     {loading && !dashboard ? <div className={styles.loading}>Memuat laporan...</div> : null}
 
     {view === 'OVERVIEW' && dashboard && <>
+      {!dashboardValuationComplete && <div className={styles.valuationNotice} role="status">
+        <AlertTriangle size={18} />
+        <div><strong>Nilai inventory belum lengkap.</strong><span>{dashboardPendingValuationQty > 0 && <> {quantity(dashboardPendingValuationQty)} unit masih menunggu unit cost.</>}{dashboardLayerMismatchCount > 0 && <> {dashboardLayerMismatchCount.toLocaleString('id-ID')} saldo memiliki mismatch quantity dan cost layer.</>} Buka tab Valuation sebelum memakai nilai aset untuk laporan keuangan.</span></div>
+      </div>}
       <section className={styles.kpiGrid}>
-        <Kpi label="Nilai aset inventory" value={currency(dashboard.valuation.totalAssetValue)} note={`In-transit ${currency(dashboard.valuation.inTransitValue)}`} icon={<CircleDollarSign size={19} />} />
+        <Kpi label="Nilai aset inventory" value={dashboardValuationComplete ? currency(dashboard.valuation.totalAssetValue) : 'Belum lengkap'} note={`${currency(dashboard.valuation.totalAssetValue)} sudah terhitung · In-transit ${currency(dashboard.valuation.inTransitValue)}`} icon={<CircleDollarSign size={19} />} />
         <Kpi label="On hand" value={quantity(dashboard.stockSnapshot.onHandQty)} note={`Available ${quantity(dashboard.stockSnapshot.availableQty)}`} icon={<Boxes size={19} />} />
         <Kpi label="Reserved" value={quantity(dashboard.stockSnapshot.reservedQty)} note="Tidak mengubah nilai aset" icon={<ClipboardCheck size={19} />} />
         <Kpi label="Material usage" value={currency(dashboard.usage.actualCost)} note={`${dashboard.usage.usageLines} baris konsumsi`} icon={<ArrowUpFromLine size={19} />} />
@@ -188,7 +199,8 @@ export default function LogisticsDashboardPage() {
         <div><AlertTriangle size={17} /><span>Low stock</span><strong>{dashboard.stockSnapshot.lowStockItems}</strong></div>
         <div><Boxes size={17} /><span>Stock kosong</span><strong>{dashboard.stockSnapshot.outOfStockItems}</strong></div>
         <div><ClipboardCheck size={17} /><span>Batch expiry 30 hari</span><strong>{dashboard.stockSnapshot.expiringBatchCount}</strong></div>
-        <div className={dashboard.valuation.layerMismatchCount ? styles.alertDanger : styles.alertOk}>{dashboard.valuation.layerMismatchCount ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}<span>Mismatch layer</span><strong>{dashboard.valuation.layerMismatchCount}</strong></div>
+        <div className={dashboardPendingValuationQty ? styles.alertDanger : styles.alertOk}>{dashboardPendingValuationQty ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}<span>Pending valuation</span><strong>{quantity(dashboardPendingValuationQty)}</strong></div>
+        <div className={dashboardLayerMismatchCount ? styles.alertDanger : styles.alertOk}>{dashboardLayerMismatchCount ? <AlertTriangle size={17} /> : <CheckCircle2 size={17} />}<span>Mismatch quantity/layer</span><strong>{dashboardLayerMismatchCount}</strong></div>
       </section>
 
       <section className={styles.reportGrid}>
@@ -253,15 +265,19 @@ export default function LogisticsDashboardPage() {
     </section>}
 
     {view === 'VALUATION' && valuation && <section className={styles.viewSection}>
+      {!valuationComplete && <div className={styles.valuationNotice} role="status">
+        <AlertTriangle size={18} />
+        <div><strong>Valuation belum siap untuk laporan keuangan.</strong><span>{valuationPendingQty > 0 && <> {quantity(valuationPendingQty)} unit belum memiliki unit cost.</>}{valuationMismatchCount > 0 && <> {valuationMismatchCount.toLocaleString('id-ID')} saldo memiliki mismatch quantity.</>}</span></div>
+      </div>}
       <section className={styles.stockSummary}>
         <div><span>Layer value</span><strong>{currency(valuation.summary.layerValue)}</strong></div>
         <div><span>In-transit value</span><strong>{currency(valuation.summary.inTransitValue)}</strong></div>
-        <div><span>Total asset</span><strong>{currency(valuation.summary.totalAssetValue)}</strong></div>
+        <div><span>Total asset</span><strong>{valuationComplete ? currency(valuation.summary.totalAssetValue) : 'Belum lengkap'}</strong></div>
         <div><span>Valued quantity</span><strong>{quantity(valuation.summary.valuedQty)}</strong></div>
         <div className={Number(valuation.summary.pendingValuationQty) ? styles.outbound : ''}><span>Pending valuation</span><strong>{quantity(valuation.summary.pendingValuationQty)}</strong></div>
       </section>
       <div className={styles.tableWrap}><table><thead><tr><th>Produk</th><th>Batch</th><th className={styles.number}>On hand</th><th className={styles.number}>Reserved</th><th className={styles.number}>Avg cost</th><th className={styles.number}>Inventory value</th><th>FIFO layer</th></tr></thead><tbody>
-        {valuation.data.length ? valuation.data.map((row) => <tr key={row.id}><td><strong>{row.masterProduct.sku}</strong><span>{row.masterProduct.name}</span></td><td>{row.batch?.batchNumber || 'Tanpa batch'}</td><td className={styles.number}>{quantity(row.onHandQty)}</td><td className={styles.number}>{quantity(row.reservedQty)}</td><td className={styles.number}>{currency(row.averageUnitCost)}</td><td className={styles.number}><strong>{currency(row.inventoryValue)}</strong>{!row.quantityReconciled && <span className={styles.warningText}>Mismatch quantity</span>}</td><td><div className={styles.layers}>{row.costLayers.map((layer) => <span key={layer.id}>{layer.sourceType} · {quantity(layer.remainingQty)} @ {currency(layer.unitCost)}</span>)}</div></td></tr>) : <tr><td colSpan={7} className={styles.empty}>Belum ada cost layer</td></tr>}
+        {valuation.data.length ? valuation.data.map((row) => <tr key={row.id}><td><strong>{row.masterProduct.sku}</strong><span>{row.masterProduct.name}</span></td><td>{row.batch?.batchNumber || 'Tanpa batch'}</td><td className={styles.number}>{quantity(row.onHandQty)}</td><td className={styles.number}>{quantity(row.reservedQty)}</td><td className={styles.number}>{row.averageUnitCost === null ? 'Belum dinilai' : currency(row.averageUnitCost)}</td><td className={styles.number}><strong>{currency(row.inventoryValue)}</strong>{Number(row.pendingValuationQty) > 0 && <span className={styles.warningText}>{quantity(row.pendingValuationQty)} pending valuation</span>}{!row.quantityReconciled && <span className={styles.warningText}>Mismatch quantity</span>}</td><td><div className={styles.layers}>{row.costLayers.map((layer) => <span key={layer.id}>{layer.sourceType} · {quantity(layer.remainingQty)} @ {layer.unitCost === null ? 'Belum dinilai' : currency(layer.unitCost)}</span>)}</div></td></tr>) : <tr><td colSpan={7} className={styles.empty}>Belum ada cost layer</td></tr>}
       </tbody></table></div>
     </section>}
   </main>;

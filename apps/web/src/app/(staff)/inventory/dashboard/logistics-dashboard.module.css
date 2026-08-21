@@ -177,7 +177,7 @@
 
 .alertBand {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   border: 1px solid var(--surface-border);
   margin-bottom: 18px;
 }
@@ -198,6 +198,23 @@
 .alertBand strong { font-variant-numeric: tabular-nums; }
 .alertBand .alertOk { color: #167a62; }
 .alertBand .alertDanger { color: #b74632; }
+
+.valuationNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d39337;
+  border-radius: 6px;
+  background: color-mix(in srgb, #d39337 10%, var(--surface-card));
+  color: #a46110;
+}
+
+.valuationNotice > svg { flex: 0 0 auto; margin-top: 1px; }
+.valuationNotice div { display: grid; gap: 3px; }
+.valuationNotice strong { color: var(--text-primary); font-size: 13px; }
+.valuationNotice span { color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
 
 .reportGrid {
   display: grid;
@@ -389,6 +406,7 @@
   .kpiGrid { grid-template-columns: repeat(3, 1fr); }
   .filters { grid-template-columns: repeat(3, 1fr); }
   .snapshot { grid-column: 1 / -1; border-left: 0; border-top: 2px solid #167a62; padding: 9px 0 0; }
+  .alertBand { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 860px) {
@@ -397,8 +415,7 @@
   .filters label:first-child { grid-column: 1 / -1; }
   .kpiGrid { grid-template-columns: repeat(2, 1fr); }
   .alertBand { grid-template-columns: 1fr 1fr; }
-  .alertBand > div:nth-child(2) { border-right: 0; }
-  .alertBand > div:nth-child(-n+2) { border-bottom: 1px solid var(--surface-border); }
+  .alertBand > div { border-bottom: 1px solid var(--surface-border); }
   .reportGrid, .statusGrid { grid-template-columns: 1fr; }
   .stockSummary { grid-template-columns: repeat(2, 1fr); }
   .stockSummary > div { border-bottom: 1px solid var(--surface-border); }

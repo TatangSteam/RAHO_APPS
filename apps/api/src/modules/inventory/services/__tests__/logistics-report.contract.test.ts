@@ -36,4 +36,12 @@ describe('Sprint 10 logistics reporting contract', () => {
     expect(migration).toContain('material_usages_status_consumedAt_idx');
     expect(migration).toContain('stock_mutations_inventoryItemId_inventoryPostingId_idx');
   });
+
+  it('does not present partial or missing valuation as a final zero value', () => {
+    expect(page).toContain("dashboardValuationComplete ? currency(dashboard.valuation.totalAssetValue) : 'Belum lengkap'");
+    expect(page).toContain('Nilai inventory belum lengkap.');
+    expect(page).toContain('Pending valuation');
+    expect(page).toContain("row.averageUnitCost === null ? 'Belum dinilai'");
+    expect(page).toContain('Mismatch quantity/layer');
+  });
 });
