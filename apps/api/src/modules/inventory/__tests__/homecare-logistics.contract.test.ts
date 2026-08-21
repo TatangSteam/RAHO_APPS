@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import {
   createHomecareTeamSchema,
+  createHomecareTeamLoanSchema,
+  reviewHomecareTeamLoanSchema,
   updateHomecareBagSchema,
   updateHomecareTeamSchema,
 } from '../logistics.schema';
@@ -50,6 +52,34 @@ describe('homecare logistics operational contract', () => {
     expect(routes).toContain("'/logistics/homecare-usage-history/export'");
     expect(routes).toContain('authorize(canManageCentralStock)');
     expect(routes).toContain('authorize(logisticStaffRoles)');
+  });
+
+  it('supports a simple guarded inter-team loan lifecycle', () => {
+    expect(createHomecareTeamLoanSchema.safeParse({
+      fromBagId: 'bag-lender',
+      toBagId: 'bag-borrower',
+      reason: 'Kebutuhan sesi hari ini',
+      items: [{ masterProductId: 'product-1', quantity: 2 }],
+    }).success).toBe(true);
+    expect(createHomecareTeamLoanSchema.safeParse({
+      fromBagId: 'same-bag',
+      toBagId: 'same-bag',
+      reason: 'Kebutuhan sesi hari ini',
+      items: [{ masterProductId: 'product-1', quantity: 2 }],
+    }).success).toBe(false);
+    expect(reviewHomecareTeamLoanSchema.safeParse({ decision: 'APPROVE' }).success).toBe(true);
+    expect(reviewHomecareTeamLoanSchema.safeParse({ decision: 'INVALID' }).success).toBe(false);
+    expect(routes).toContain("'/logistics/homecare-team-loans'");
+    expect(routes).toContain("'/logistics/homecare-team-loans/:loanId/review'");
+    expect(routes).toContain("'/logistics/homecare-team-loans/:loanId/return'");
+    expect(service).toContain('LogisticTransactionType.TEAM_LOAN');
+    expect(service).toContain('LogisticTransactionType.TEAM_LOAN_RETURN');
+    expect(service).toContain("code: 'CROSS_BRANCH_TEAM_LOAN'");
+  });
+
+  it('rejects a team id that does not own the selected bag', () => {
+    expect(service).toContain("code: 'BAG_TEAM_MISMATCH'");
+    expect(service).toContain('const teamId = bag.teamId;');
   });
 
   it('rejects empty or invalid team and bag edits', () => {

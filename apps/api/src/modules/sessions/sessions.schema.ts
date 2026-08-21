@@ -314,6 +314,12 @@ export const createEvaluationSchema = z.object({
 
 export type CreateEvaluationInput = z.infer<typeof createEvaluationSchema>;
 
+export const completeSessionSchema = z.object({
+  inventorySource: z.enum(['AUTO', 'BRANCH', 'TEAM']).optional().default('AUTO'),
+});
+
+export type CompleteSessionInput = z.infer<typeof completeSessionSchema>;
+
 export const cancelSessionCompletionSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),
   reason: z.string().trim().min(5).max(1000),

@@ -2,6 +2,7 @@ import {
   AuditAction,
   BranchType,
   HomecareBagRequestStatus,
+  HomecareTeamLoanStatus,
   HomecareTeamMemberRole,
   LogisticLocationType,
   LogisticTransactionType,
@@ -38,11 +39,14 @@ import type {
   CreateBranchStockRequestInput,
   CreateHomecareBagInput,
   CreateHomecareTeamInput,
+  CreateHomecareTeamLoanInput,
   UpdateHomecareTeamInput,
   UpdateHomecareBagInput,
   ReceiveShipmentInput,
   RejectStockRequestInput,
   RemoveHomecareTeamMemberInput,
+  ReviewHomecareTeamLoanInput,
+  ReturnHomecareTeamLoanInput,
   ReturnBagStockInput,
   ShipStockInput,
   UseBagStockInput,
@@ -2072,6 +2076,15 @@ export class LogisticsService {
 
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
     if (!team) throw { status: 404, code: 'TEAM_NOT_FOUND', message: 'Tim homecare tidak ditemukan' };
+    const activeLoanCount = await prisma.homecareTeamLoan.count({
+      where: {
+        status: { in: [HomecareTeamLoanStatus.PENDING, HomecareTeamLoanStatus.ACTIVE] },
+        OR: [{ fromBagId: bagId }, { toBagId: bagId }],
+      },
+    });
+    if (activeLoanCount > 0) {
+      throw { status: 409, code: 'BAG_HAS_ACTIVE_TEAM_LOAN', message: 'Tas tidak dapat dipindahkan selama masih memiliki permintaan atau pinjaman aktif' };
+    }
     await this.assertHomecareTeamOperational(team.id);
     await this.assertManagerBranchAccess(actor, team.branchId);
     if (bag.teamId === team.id) {
@@ -2125,6 +2138,16 @@ export class LogisticsService {
       },
     });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
+
+    const activeLoanCount = await prisma.homecareTeamLoan.count({
+      where: {
+        status: { in: [HomecareTeamLoanStatus.PENDING, HomecareTeamLoanStatus.ACTIVE] },
+        OR: [{ fromBagId: bagId }, { toBagId: bagId }],
+      },
+    });
+    if (activeLoanCount > 0) {
+      throw { status: 409, code: 'BAG_HAS_ACTIVE_TEAM_LOAN', message: 'Tas tidak dapat dihapus selama masih memiliki permintaan atau pinjaman aktif' };
+    }
 
     if (
       bag.stocks.length > 0 ||
@@ -2688,6 +2711,157 @@ export class LogisticsService {
   }
 
   // ============================================================
+  // Homecare team loans
+  // ============================================================
+
+  async getHomecareTeamLoanOptions(actor: LogisticsActor, borrowerBagId: string) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses logistik homecare');
+    await this.assertBagAccess(actor, borrowerBagId);
+    const borrowerBag = await prisma.homecareBag.findUnique({ where: { id: borrowerBagId }, include: { team: true } });
+    if (!borrowerBag || !borrowerBag.isActive || borrowerBag.status !== 'ACTIVE' || !borrowerBag.team.isActive) {
+      throw { status: 422, code: 'BORROWER_BAG_INACTIVE', message: 'Tas penerima tidak aktif' };
+    }
+    const lenderBags = await prisma.homecareBag.findMany({
+      where: { branchId: borrowerBag.branchId, teamId: { not: borrowerBag.teamId }, isActive: true, status: 'ACTIVE', team: { isActive: true } },
+      include: { team: true, stocks: { where: { stock: { gt: 0 } }, orderBy: { updatedAt: 'desc' } } },
+      orderBy: [{ team: { name: 'asc' } }, { name: 'asc' }],
+    });
+    const productIds = Array.from(new Set(lenderBags.flatMap((bag) => bag.stocks.map((stock) => stock.masterProductId))));
+    const products = productIds.length
+      ? await prisma.masterProduct.findMany({ where: { id: { in: productIds }, isActive: true }, select: { id: true, sku: true, name: true, baseUnit: true } })
+      : [];
+    const productMap = new Map(products.map((product) => [product.id, product]));
+    return {
+      borrowerBag: { id: borrowerBag.id, bagCode: borrowerBag.bagCode, name: borrowerBag.name, teamId: borrowerBag.teamId, teamName: borrowerBag.team.name, branchId: borrowerBag.branchId },
+      lenderBags: lenderBags.map((bag) => ({
+        id: bag.id,
+        bagCode: bag.bagCode,
+        name: bag.name,
+        teamId: bag.teamId,
+        teamName: bag.team.name,
+        stocks: bag.stocks.map((stock) => ({ masterProductId: stock.masterProductId, stock: Number(stock.stock), product: productMap.get(stock.masterProductId) ?? null })),
+      })),
+    };
+  }
+
+  async listHomecareTeamLoans(actor: LogisticsActor, query: { status?: string } = {}) {
+    this.assertRole(actor, logisticStaffRoles, 'Anda tidak memiliki akses logistik homecare');
+    const memberships = centralStockManagerRoles.has(actor.role) ? [] : await prisma.homecareTeamMember.findMany({ where: { userId: actor.userId, isActive: true }, select: { teamId: true } });
+    const teamIds = memberships.map((membership) => membership.teamId);
+    const loans = await prisma.homecareTeamLoan.findMany({
+      where: {
+        ...(query.status ? { status: query.status as HomecareTeamLoanStatus } : {}),
+        ...(centralStockManagerRoles.has(actor.role) ? {} : { OR: [{ lenderTeamId: { in: teamIds } }, { borrowerTeamId: { in: teamIds } }] }),
+      },
+      include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } },
+      orderBy: { requestedAt: 'desc' },
+      take: 200,
+    });
+    return this.formatHomecareTeamLoans(loans);
+  }
+
+  async createHomecareTeamLoan(actor: LogisticsActor, input: CreateHomecareTeamLoanInput) {
+    const reason = this.requireNotes(input.reason, 'Alasan peminjaman wajib diisi');
+    await this.assertBagAccess(actor, input.toBagId);
+    await this.validateProducts(input.items.map((item) => item.masterProductId));
+    const [fromBag, toBag] = await Promise.all([
+      prisma.homecareBag.findUnique({ where: { id: input.fromBagId }, include: { team: true } }),
+      prisma.homecareBag.findUnique({ where: { id: input.toBagId }, include: { team: true } }),
+    ]);
+    if (!fromBag || !toBag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas pemberi atau penerima tidak ditemukan' };
+    if (fromBag.teamId === toBag.teamId) throw { status: 422, code: 'SAME_TEAM_LOAN', message: 'Peminjaman hanya digunakan untuk tim yang berbeda' };
+    if (fromBag.branchId !== toBag.branchId) throw { status: 422, code: 'CROSS_BRANCH_TEAM_LOAN', message: 'Peminjaman antar tim hanya dapat dilakukan dalam cabang yang sama' };
+    if (!fromBag.isActive || !toBag.isActive || fromBag.status !== 'ACTIVE' || toBag.status !== 'ACTIVE' || !fromBag.team.isActive || !toBag.team.isActive) {
+      throw { status: 422, code: 'TEAM_LOAN_BAG_INACTIVE', message: 'Tim dan tas pemberi/penerima harus aktif' };
+    }
+    const lenderStocks = await prisma.homecareBagStock.findMany({
+      where: { bagId: fromBag.id, masterProductId: { in: input.items.map((item) => item.masterProductId) } },
+    });
+    const lenderStockMap = new Map(lenderStocks.map((stock) => [stock.masterProductId, Number(stock.stock)]));
+    if (input.items.some((item) => Number(item.quantity) > (lenderStockMap.get(item.masterProductId) || 0))) {
+      throw { status: 422, code: 'INSUFFICIENT_LENDER_BAG_STOCK', message: 'Jumlah pinjaman melebihi stok yang tersedia pada tim pemberi' };
+    }
+    const loan = await prisma.homecareTeamLoan.create({
+      data: {
+        loanCode: this.uniqueCode('HTL'), lenderTeamId: fromBag.teamId, borrowerTeamId: toBag.teamId, fromBagId: fromBag.id, toBagId: toBag.id,
+        reason, requestedBy: actor.userId,
+        items: { create: input.items.map((item) => ({ masterProductId: item.masterProductId, requestedQty: item.quantity, notes: item.notes })) },
+      },
+      include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } },
+    });
+    await logAudit({ userId: actor.userId, branchId: toBag.branchId, action: AuditAction.STOCK_REQUEST, resource: 'HomecareTeamLoan', resourceId: loan.id, meta: { action: 'REQUEST_TEAM_LOAN', loanCode: loan.loanCode, fromBagId: fromBag.id, toBagId: toBag.id } });
+    return this.formatHomecareTeamLoans([loan])[0];
+  }
+
+  async reviewHomecareTeamLoan(actor: LogisticsActor, loanId: string, input: ReviewHomecareTeamLoanInput) {
+    const initial = await prisma.homecareTeamLoan.findUnique({ where: { id: loanId }, select: { fromBagId: true } });
+    if (!initial) throw { status: 404, code: 'TEAM_LOAN_NOT_FOUND', message: 'Permintaan pinjaman tidak ditemukan' };
+    await this.assertBagAccess(actor, initial.fromBagId, { requireAdminLayanan: true });
+    if (input.decision === 'REJECT' && !input.notes?.trim()) throw { status: 400, code: 'REJECTION_NOTES_REQUIRED', message: 'Alasan penolakan wajib diisi' };
+    const loan = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "homecare_team_loans" WHERE "id" = ${loanId} FOR UPDATE`);
+      const current = await tx.homecareTeamLoan.findUnique({ where: { id: loanId }, include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } } });
+      if (!current) throw { status: 404, code: 'TEAM_LOAN_NOT_FOUND', message: 'Permintaan pinjaman tidak ditemukan' };
+      if (current.status !== HomecareTeamLoanStatus.PENDING) {
+        if ((input.decision === 'APPROVE' && current.status === HomecareTeamLoanStatus.ACTIVE) || (input.decision === 'REJECT' && current.status === HomecareTeamLoanStatus.REJECTED)) return current;
+        throw { status: 409, code: 'TEAM_LOAN_ALREADY_REVIEWED', message: 'Permintaan pinjaman sudah diproses' };
+      }
+      if (current.fromBag.teamId !== current.lenderTeamId || current.toBag.teamId !== current.borrowerTeamId || current.fromBag.branchId !== current.toBag.branchId) {
+        throw { status: 409, code: 'TEAM_LOAN_BAG_ASSIGNMENT_CHANGED', message: 'Assignment tas berubah setelah permintaan dibuat. Buat permintaan pinjaman baru.' };
+      }
+      if (input.decision === 'REJECT') {
+        return tx.homecareTeamLoan.update({ where: { id: loanId }, data: { status: HomecareTeamLoanStatus.REJECTED, reviewedBy: actor.userId, reviewedAt: new Date(), reviewNotes: input.notes?.trim() }, include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } } });
+      }
+      const productIds = current.items.map((item) => item.masterProductId);
+      if (productIds.length) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "homecare_bag_stocks" WHERE "bagId" IN (${current.fromBagId}, ${current.toBagId}) AND "masterProductId" IN (${Prisma.join(productIds)}) FOR UPDATE`);
+      const changes: MovementChange[] = [];
+      for (const item of current.items) {
+        const quantity = Number(item.requestedQty);
+        const outgoing = await this.changeBagStock(tx, { bagId: current.fromBagId, masterProductId: item.masterProductId, quantity, direction: 'OUT', userId: actor.userId, referenceType: 'HOMECARE_TEAM_LOAN', referenceId: current.id, notes: current.reason });
+        const incoming = await this.changeBagStock(tx, { bagId: current.toBagId, masterProductId: item.masterProductId, quantity, direction: 'IN', userId: actor.userId, referenceType: 'HOMECARE_TEAM_LOAN', referenceId: current.id, notes: current.reason });
+        changes.push({ ...outgoing, destinationStockBefore: incoming.destinationStockBefore, destinationStockAfter: incoming.destinationStockAfter });
+        await tx.homecareTeamLoanItem.update({ where: { id: item.id }, data: { approvedQty: item.requestedQty } });
+      }
+      await this.createLogisticTransaction(tx, { type: LogisticTransactionType.TEAM_LOAN, sourceType: LogisticLocationType.HOMECARE_BAG, sourceId: current.fromBagId, destinationType: LogisticLocationType.HOMECARE_BAG, destinationId: current.toBagId, referenceType: 'HOMECARE_TEAM_LOAN', referenceId: current.id, reason: current.reason, notes: input.notes?.trim() || current.reason, createdBy: actor.userId, changes });
+      return tx.homecareTeamLoan.update({ where: { id: loanId }, data: { status: HomecareTeamLoanStatus.ACTIVE, reviewedBy: actor.userId, reviewedAt: new Date(), reviewNotes: input.notes?.trim() }, include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } } });
+    });
+    await logAudit({ userId: actor.userId, branchId: loan.toBag.branchId, action: AuditAction.STOCK_ADJUSTMENT, resource: 'HomecareTeamLoan', resourceId: loan.id, meta: { action: input.decision === 'APPROVE' ? 'APPROVE_TEAM_LOAN' : 'REJECT_TEAM_LOAN', loanCode: loan.loanCode } });
+    return this.formatHomecareTeamLoans([loan])[0];
+  }
+
+  async returnHomecareTeamLoan(actor: LogisticsActor, loanId: string, input: ReturnHomecareTeamLoanInput) {
+    const initial = await prisma.homecareTeamLoan.findUnique({ where: { id: loanId }, select: { toBagId: true } });
+    if (!initial) throw { status: 404, code: 'TEAM_LOAN_NOT_FOUND', message: 'Pinjaman tidak ditemukan' };
+    await this.assertBagAccess(actor, initial.toBagId, { requireAdminLayanan: true });
+    const loan = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "homecare_team_loans" WHERE "id" = ${loanId} FOR UPDATE`);
+      const current = await tx.homecareTeamLoan.findUnique({ where: { id: loanId }, include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } } });
+      if (!current) throw { status: 404, code: 'TEAM_LOAN_NOT_FOUND', message: 'Pinjaman tidak ditemukan' };
+      if (current.status === HomecareTeamLoanStatus.RETURNED) return current;
+      if (current.status !== HomecareTeamLoanStatus.ACTIVE) throw { status: 409, code: 'TEAM_LOAN_NOT_ACTIVE', message: 'Hanya pinjaman aktif yang dapat dikembalikan' };
+      const notes = input.notes?.trim() || `Pengembalian ${current.loanCode}`;
+      const productIds = current.items.map((item) => item.masterProductId);
+      if (productIds.length) await tx.$queryRaw(Prisma.sql`SELECT "id" FROM "homecare_bag_stocks" WHERE "bagId" IN (${current.fromBagId}, ${current.toBagId}) AND "masterProductId" IN (${Prisma.join(productIds)}) FOR UPDATE`);
+      const changes: MovementChange[] = [];
+      for (const item of current.items) {
+        const quantity = Number(item.approvedQty ?? item.requestedQty);
+        const outgoing = await this.changeBagStock(tx, { bagId: current.toBagId, masterProductId: item.masterProductId, quantity, direction: 'OUT', userId: actor.userId, referenceType: 'HOMECARE_TEAM_LOAN_RETURN', referenceId: current.id, notes });
+        const incoming = await this.changeBagStock(tx, { bagId: current.fromBagId, masterProductId: item.masterProductId, quantity, direction: 'IN', userId: actor.userId, referenceType: 'HOMECARE_TEAM_LOAN_RETURN', referenceId: current.id, notes });
+        changes.push({ ...outgoing, destinationStockBefore: incoming.destinationStockBefore, destinationStockAfter: incoming.destinationStockAfter });
+        await tx.homecareTeamLoanItem.update({ where: { id: item.id }, data: { returnedQty: item.approvedQty ?? item.requestedQty } });
+      }
+      await this.createLogisticTransaction(tx, { type: LogisticTransactionType.TEAM_LOAN_RETURN, sourceType: LogisticLocationType.HOMECARE_BAG, sourceId: current.toBagId, destinationType: LogisticLocationType.HOMECARE_BAG, destinationId: current.fromBagId, referenceType: 'HOMECARE_TEAM_LOAN_RETURN', referenceId: current.id, reason: current.reason, notes, createdBy: actor.userId, changes });
+      return tx.homecareTeamLoan.update({ where: { id: loanId }, data: { status: HomecareTeamLoanStatus.RETURNED, returnedBy: actor.userId, returnedAt: new Date(), returnNotes: notes }, include: { lenderTeam: true, borrowerTeam: true, fromBag: true, toBag: true, items: { include: { masterProduct: true } } } });
+    });
+    await logAudit({ userId: actor.userId, branchId: loan.toBag.branchId, action: AuditAction.STOCK_ADJUSTMENT, resource: 'HomecareTeamLoan', resourceId: loan.id, meta: { action: 'RETURN_TEAM_LOAN', loanCode: loan.loanCode } });
+    return this.formatHomecareTeamLoans([loan])[0];
+  }
+
+  private formatHomecareTeamLoans<T extends { items: Array<{ requestedQty: Prisma.Decimal; approvedQty: Prisma.Decimal | null; returnedQty: Prisma.Decimal }> }>(loans: T[]) {
+    return loans.map((loan) => ({ ...loan, items: loan.items.map((item) => ({ ...item, requestedQty: Number(item.requestedQty), approvedQty: item.approvedQty === null ? null : Number(item.approvedQty), returnedQty: Number(item.returnedQty) })) }));
+  }
+
+  // ============================================================
   // Homecare bag usage, return, and opname
   // ============================================================
 
@@ -2700,7 +2874,8 @@ export class LogisticsService {
 
     const bag = await prisma.homecareBag.findUnique({ where: { id: input.bagId } });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
-    const teamId = input.teamId || bag.teamId;
+    if (input.teamId && input.teamId !== bag.teamId) throw { status: 422, code: 'BAG_TEAM_MISMATCH', message: 'Tim harus sesuai dengan pemilik tas stok' };
+    const teamId = bag.teamId;
 
     const usageCode = await this.nextRequestCode('HBU', async (codePrefix) => (
       await prisma.homecareBagUsage.findFirst({
@@ -2793,7 +2968,8 @@ export class LogisticsService {
 
     const bag = await prisma.homecareBag.findUnique({ where: { id: input.bagId } });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
-    const teamId = input.teamId || bag.teamId;
+    if (input.teamId && input.teamId !== bag.teamId) throw { status: 422, code: 'BAG_TEAM_MISMATCH', message: 'Tim harus sesuai dengan pemilik tas stok' };
+    const teamId = bag.teamId;
     const returnCode = await this.nextRequestCode('HBRN', async (codePrefix) => (
       await prisma.homecareBagReturn.findFirst({
         where: { returnCode: { startsWith: codePrefix } },
@@ -2905,7 +3081,8 @@ export class LogisticsService {
     await this.assertBagAccess(actor, input.bagId);
     const bag = await prisma.homecareBag.findUnique({ where: { id: input.bagId } });
     if (!bag) throw { status: 404, code: 'BAG_NOT_FOUND', message: 'Tas homecare tidak ditemukan' };
-    const teamId = input.teamId || bag.teamId;
+    if (input.teamId && input.teamId !== bag.teamId) throw { status: 422, code: 'BAG_TEAM_MISMATCH', message: 'Tim harus sesuai dengan pemilik tas stok' };
+    const teamId = bag.teamId;
     const opnameCode = await this.nextRequestCode('HBO', async (codePrefix) => (
       await prisma.homecareBagOpname.findFirst({
         where: { opnameCode: { startsWith: codePrefix } },

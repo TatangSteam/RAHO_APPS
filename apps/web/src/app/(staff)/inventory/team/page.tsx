@@ -7,6 +7,7 @@ import {
   Boxes,
   CheckCircle2,
   Download,
+  Handshake,
   Pencil,
   Package,
   RefreshCw,
@@ -16,10 +17,11 @@ import {
 } from 'lucide-react';
 import { PageLoading } from '@/components/ui/LoadingSpinner';
 import { inventoryApi } from '@/lib/api/inventoryApi';
-import type { HomecareBag, HomecareBagStockDetail, HomecareTeam } from '@/lib/api/inventoryApi';
+import type { HomecareBag, HomecareBagStockDetail, HomecareTeam, HomecareTeamLoan, HomecareTeamLoanOptions } from '@/lib/api/inventoryApi';
 import type { HomecareUsageHistoryResponse } from '@/lib/api/inventoryApi';
 import { devError } from '@/lib/logger';
 import { showToast } from '@/lib/toast';
+import { assertCaughtError } from '@/lib/caughtError';
 import { useAuthStore } from '@/stores/authStore';
 
 const SELECTED_BAG_KEY = 'raho.inventory-team.selected-bag';
@@ -58,6 +60,11 @@ export default function TeamInventoryPage() {
   const [editingBag, setEditingBag] = useState<HomecareBag | null>(null);
   const [bagDraft, setBagDraft] = useState({ name: '', status: 'ACTIVE', notes: '', isActive: true });
   const [saving, setSaving] = useState(false);
+  const [loans, setLoans] = useState<HomecareTeamLoan[]>([]);
+  const [loansLoading, setLoansLoading] = useState(false);
+  const [loanOptions, setLoanOptions] = useState<HomecareTeamLoanOptions | null>(null);
+  const [loanSubmitting, setLoanSubmitting] = useState(false);
+  const [loanDraft, setLoanDraft] = useState({ fromBagId: '', masterProductId: '', quantity: '1', reason: '' });
   const canManage = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_LOGISTIK'].includes(user?.role || '');
 
   const loadData = useCallback(async () => {
@@ -105,6 +112,113 @@ export default function TeamInventoryPage() {
       })
       .finally(() => setStockLoading(false));
   }, [selectedBagId]);
+
+  const loadLoans = useCallback(async () => {
+    setLoansLoading(true);
+    try {
+      const response = await inventoryApi.getHomecareTeamLoans();
+      setLoans(unwrapData<HomecareTeamLoan[]>(response, []));
+    } catch (error) {
+      devError('Gagal memuat peminjaman antar tim', error);
+      setLoans([]);
+    } finally {
+      setLoansLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void loadLoans(); }, [loadLoans]);
+
+  useEffect(() => {
+    if (!selectedBagId) {
+      setLoanOptions(null);
+      return;
+    }
+    inventoryApi.getHomecareTeamLoanOptions(selectedBagId)
+      .then((response) => {
+        const options = unwrapData<HomecareTeamLoanOptions | null>(response, null);
+        setLoanOptions(options);
+        setLoanDraft((current) => {
+          const lenderExists = options?.lenderBags.some((bag) => bag.id === current.fromBagId);
+          return lenderExists ? current : { ...current, fromBagId: options?.lenderBags[0]?.id || '', masterProductId: '' };
+        });
+      })
+      .catch((error) => {
+        devError('Gagal memuat pilihan peminjaman', error);
+        setLoanOptions(null);
+      });
+  }, [selectedBagId]);
+
+  const selectedLenderBag = loanOptions?.lenderBags.find((bag) => bag.id === loanDraft.fromBagId) || null;
+
+  const refreshSelectedBagStock = useCallback(async () => {
+    if (!selectedBagId) return;
+    const response = await inventoryApi.getHomecareBagStock(selectedBagId);
+    setBagStock(unwrapData<HomecareBagStockDetail | null>(response, null));
+  }, [selectedBagId]);
+
+  const submitLoan = async () => {
+    const quantity = Number(loanDraft.quantity);
+    if (!selectedBagId || !loanDraft.fromBagId || !loanDraft.masterProductId || !Number.isFinite(quantity) || quantity <= 0 || !loanDraft.reason.trim()) {
+      showToast.error('Pilih tim pemberi, barang, jumlah, dan isi alasan peminjaman');
+      return;
+    }
+    const availableStock = selectedLenderBag?.stocks.find((stock) => stock.masterProductId === loanDraft.masterProductId)?.stock || 0;
+    if (quantity > availableStock) {
+      showToast.error(`Jumlah melebihi stok tim pemberi (${availableStock})`);
+      return;
+    }
+    try {
+      setLoanSubmitting(true);
+      await inventoryApi.createHomecareTeamLoan({
+        fromBagId: loanDraft.fromBagId,
+        toBagId: selectedBagId,
+        reason: loanDraft.reason.trim(),
+        items: [{ masterProductId: loanDraft.masterProductId, quantity }],
+      });
+      setLoanDraft((current) => ({ ...current, masterProductId: '', quantity: '1', reason: '' }));
+      await loadLoans();
+      showToast.success('Permintaan pinjaman berhasil dikirim ke tim pemberi');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Gagal mengajukan pinjaman', error);
+      showToast.error(error.response?.data?.error?.message || 'Permintaan pinjaman gagal dikirim');
+    } finally {
+      setLoanSubmitting(false);
+    }
+  };
+
+  const reviewLoan = async (loan: HomecareTeamLoan, decision: 'APPROVE' | 'REJECT') => {
+    const notes = decision === 'REJECT' ? window.prompt('Tuliskan alasan penolakan:') : window.prompt('Catatan persetujuan (opsional):', '') || '';
+    if (decision === 'REJECT' && !notes?.trim()) return;
+    try {
+      setLoanSubmitting(true);
+      await inventoryApi.reviewHomecareTeamLoan(loan.id, decision, notes?.trim());
+      await Promise.all([loadLoans(), refreshSelectedBagStock()]);
+      showToast.success(decision === 'APPROVE' ? 'Pinjaman disetujui dan stok sudah dipindahkan' : 'Permintaan pinjaman ditolak');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Gagal memproses pinjaman', error);
+      showToast.error(error.response?.data?.error?.message || 'Pinjaman gagal diproses. Periksa hak akses dan ketersediaan stok.');
+    } finally {
+      setLoanSubmitting(false);
+    }
+  };
+
+  const returnLoan = async (loan: HomecareTeamLoan) => {
+    if (!window.confirm(`Kembalikan seluruh barang pinjaman ${loan.loanCode}?`)) return;
+    try {
+      setLoanSubmitting(true);
+      await inventoryApi.returnHomecareTeamLoan(loan.id, `Pengembalian ${loan.loanCode}`);
+      await Promise.all([loadLoans(), refreshSelectedBagStock()]);
+      showToast.success('Barang pinjaman sudah dikembalikan');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Gagal mengembalikan pinjaman', error);
+      showToast.error(error.response?.data?.error?.message || 'Pengembalian gagal. Pastikan stok pada tas peminjam masih mencukupi.');
+    } finally {
+      setLoanSubmitting(false);
+    }
+  };
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -215,7 +329,7 @@ export default function TeamInventoryPage() {
                 </div>
               </div>
               <p className="mt-4 max-w-3xl text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-                Berlaku untuk semua jenis sesi. Sistem memakai stok tim hanya jika Admin Layanan/MSO dan minimal satu nakes sesi aktif pada tim yang sama. Tanpa assignment yang cocok, stok otomatis diambil dari cabang.
+                Saat menyelesaikan sesi, petugas dapat memilih Stok Cabang atau Stok Tim. Jika stok tim kurang, barang dapat dipinjam dari tim lain melalui alur permintaan, persetujuan, dan pengembalian yang tercatat.
               </p>
             </div>
             <button
@@ -354,13 +468,82 @@ export default function TeamInventoryPage() {
           </section>
         )}
 
+        <section className="rounded-2xl border border-violet-200 bg-white p-5 dark:border-violet-500/20 dark:bg-neutral-900">
+          <div className="flex items-start gap-3">
+            <Handshake className="mt-0.5 shrink-0 text-violet-600" size={22} />
+            <div>
+              <h2 className="text-lg font-bold">Pinjam Barang dari Tim Lain</h2>
+              <p className="mt-1 text-sm text-neutral-500">Alurnya singkat: ajukan → tim pemberi menyetujui → barang masuk ke stok tim Anda → kembalikan.</p>
+            </div>
+          </div>
+
+          {bags.length === 0 ? (
+            <p className="mt-5 rounded-xl bg-neutral-100 p-4 text-sm text-neutral-500 dark:bg-neutral-800">Anda belum memiliki tas tim aktif untuk menerima pinjaman.</p>
+          ) : (
+            <div className="mt-5 grid gap-3 lg:grid-cols-5">
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300">Tas penerima
+                <select value={selectedBagId} onChange={(event) => setSelectedBagId(event.target.value)} className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+                  {bags.map((bag) => <option key={bag.id} value={bag.id}>{bag.bagCode} — {bag.name}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300">Pinjam dari
+                <select value={loanDraft.fromBagId} onChange={(event) => setLoanDraft((draft) => ({ ...draft, fromBagId: event.target.value, masterProductId: '' }))} className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+                  <option value="">Pilih tim pemberi</option>
+                  {loanOptions?.lenderBags.map((bag) => <option key={bag.id} value={bag.id}>{bag.teamName} — {bag.bagCode}</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300">Barang
+                <select value={loanDraft.masterProductId} onChange={(event) => setLoanDraft((draft) => ({ ...draft, masterProductId: event.target.value }))} className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-950">
+                  <option value="">Pilih barang</option>
+                  {selectedLenderBag?.stocks.map((stock) => <option key={stock.masterProductId} value={stock.masterProductId}>{stock.product?.name || stock.masterProductId} (tersedia {stock.stock})</option>)}
+                </select>
+              </label>
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300">Jumlah
+                <input type="number" min="0.0001" step="0.0001" value={loanDraft.quantity} onChange={(event) => setLoanDraft((draft) => ({ ...draft, quantity: event.target.value }))} className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-950" />
+              </label>
+              <label className="text-xs font-bold text-neutral-600 dark:text-neutral-300">Keperluan
+                <input value={loanDraft.reason} onChange={(event) => setLoanDraft((draft) => ({ ...draft, reason: event.target.value }))} placeholder="Contoh: kebutuhan sesi hari ini" className="mt-2 w-full rounded-xl border border-neutral-300 bg-white px-3 py-2.5 text-sm dark:border-neutral-700 dark:bg-neutral-950" />
+              </label>
+              <div className="flex justify-end lg:col-span-5">
+                <button type="button" onClick={() => void submitLoan()} disabled={loanSubmitting || !loanOptions?.lenderBags.length} className="rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-50">Ajukan Pinjaman</button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 overflow-x-auto">
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="border-b border-neutral-200 text-xs uppercase text-neutral-500 dark:border-neutral-800"><tr><th className="pb-3">Kode / Status</th><th className="pb-3">Dari → Ke</th><th className="pb-3">Barang</th><th className="pb-3">Keperluan</th><th className="pb-3 text-right">Aksi</th></tr></thead>
+              <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
+                {loansLoading ? <tr><td colSpan={5} className="py-8 text-center text-neutral-500">Memuat pinjaman...</td></tr>
+                  : loans.length === 0 ? <tr><td colSpan={5} className="py-8 text-center text-neutral-500">Belum ada peminjaman antar tim.</td></tr>
+                    : loans.map((loan) => {
+                      const lenderAccessible = canManage || (user?.role === 'ADMIN_LAYANAN' && bags.some((bag) => bag.teamId === loan.lenderTeamId));
+                      const borrowerAccessible = canManage || (user?.role === 'ADMIN_LAYANAN' && bags.some((bag) => bag.teamId === loan.borrowerTeamId));
+                      const statusLabel = loan.status === 'PENDING' ? 'Menunggu' : loan.status === 'ACTIVE' ? 'Dipinjam' : loan.status === 'RETURNED' ? 'Dikembalikan' : 'Ditolak';
+                      return <tr key={loan.id}>
+                        <td className="py-3"><p className="font-bold">{loan.loanCode}</p><span className="mt-1 inline-flex rounded-full bg-violet-500/10 px-2 py-1 text-xs font-bold text-violet-600">{statusLabel}</span></td>
+                        <td className="py-3"><p>{loan.lenderTeam.name}</p><p className="text-xs text-neutral-500">→ {loan.borrowerTeam.name}</p></td>
+                        <td className="py-3">{loan.items.map((item) => <p key={item.id}>{item.masterProduct.name}: <strong>{item.approvedQty ?? item.requestedQty}</strong> {item.masterProduct.baseUnit}</p>)}</td>
+                        <td className="max-w-[260px] py-3"><p>{loan.reason}</p>{loan.reviewNotes && <p className="mt-1 text-xs text-neutral-500">Catatan: {loan.reviewNotes}</p>}</td>
+                        <td className="py-3 text-right">
+                          {loan.status === 'PENDING' && lenderAccessible && <div className="flex justify-end gap-2"><button disabled={loanSubmitting} onClick={() => void reviewLoan(loan, 'REJECT')} className="rounded-lg border border-red-300 px-3 py-1.5 text-xs font-bold text-red-600">Tolak</button><button disabled={loanSubmitting} onClick={() => void reviewLoan(loan, 'APPROVE')} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Setujui</button></div>}
+                          {loan.status === 'ACTIVE' && borrowerAccessible && <button disabled={loanSubmitting} onClick={() => void returnLoan(loan)} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white">Kembalikan</button>}
+                          {!((loan.status === 'PENDING' && lenderAccessible) || (loan.status === 'ACTIVE' && borrowerAccessible)) && <span className="text-xs text-neutral-400">—</span>}
+                        </td>
+                      </tr>;
+                    })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
           <div className="flex items-start gap-3">
             <Stethoscope className="mt-0.5 shrink-0 text-emerald-500" size={20} />
             <div>
               <h2 className="font-bold">Aturan saat sesi diselesaikan</h2>
               <p className="mt-2 text-sm leading-6 text-neutral-600 dark:text-neutral-300">
-                Assignment cocok → stok tas tim berkurang. Tidak ada assignment cocok → stok cabang berkurang. Tim yang sudah ter-assign tetapi stoknya kurang akan menghasilkan error dan tidak diam-diam mengambil stok cabang, sehingga sumber stok tetap dapat diaudit dan tidak pernah terpotong ganda.
+                Petugas memilih sumber stok sebelum menekan Selesaikan Sesi. Pilihan Stok Cabang mengurangi stok cabang; pilihan Stok Tim mengurangi tas tim yang sesuai assignment. Jika tim atau stok tidak cukup, sesi ditolak tanpa fallback otomatis agar sumber stok tetap jelas dan tidak pernah terpotong ganda.
               </p>
             </div>
           </div>

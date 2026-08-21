@@ -37,15 +37,20 @@ import {
   createBranchStockRequestSchema,
   createHomecareBagSchema,
   createHomecareTeamSchema,
+  createHomecareTeamLoanSchema,
   updateHomecareBagSchema,
   updateHomecareTeamSchema,
   getCentralStockQuerySchema,
+  homecareTeamLoanListQuerySchema,
+  homecareTeamLoanOptionsQuerySchema,
   receiveBagShipmentSchema,
   receiveShipmentSchema,
   rejectBagStockRequestSchema,
   rejectStockRequestSchema,
   removeHomecareTeamMemberSchema,
   returnBagStockSchema,
+  returnHomecareTeamLoanSchema,
+  reviewHomecareTeamLoanSchema,
   shipBagStockSchema,
   shipStockSchema,
   useBagStockSchema,
@@ -557,6 +562,46 @@ router.get(
   authenticate,
   authorize(logisticStaffRoles),
   logisticsController.listBagUsages.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-team-loans/options',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validateQuery(homecareTeamLoanOptionsQuerySchema),
+  logisticsController.getHomecareTeamLoanOptions.bind(logisticsController)
+);
+
+router.get(
+  '/logistics/homecare-team-loans',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validateQuery(homecareTeamLoanListQuerySchema),
+  logisticsController.listHomecareTeamLoans.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-team-loans',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(createHomecareTeamLoanSchema),
+  logisticsController.createHomecareTeamLoan.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-team-loans/:loanId/review',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(reviewHomecareTeamLoanSchema),
+  logisticsController.reviewHomecareTeamLoan.bind(logisticsController)
+);
+
+router.post(
+  '/logistics/homecare-team-loans/:loanId/return',
+  authenticate,
+  authorize(logisticStaffRoles),
+  validate(returnHomecareTeamLoanSchema),
+  logisticsController.returnHomecareTeamLoan.bind(logisticsController)
 );
 
 router.get(

@@ -198,6 +198,42 @@ export const createBagOpnameSchema = z.object({
   })).min(1, 'Minimal satu item harus dicek'),
 }).merge(supportFileSchema);
 
+export const createHomecareTeamLoanSchema = z.object({
+  fromBagId: idSchema,
+  toBagId: idSchema,
+  reason: requiredNotes,
+  items: z.array(z.object({
+    masterProductId: idSchema,
+    quantity: positiveQty,
+    notes: optionalText,
+  })).min(1, 'Minimal satu barang harus dipinjam'),
+}).superRefine((input, ctx) => {
+  if (input.fromBagId === input.toBagId) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['fromBagId'], message: 'Tas pemberi dan penerima harus berbeda' });
+  }
+  const productIds = input.items.map((item) => item.masterProductId);
+  if (new Set(productIds).size !== productIds.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['items'], message: 'Barang yang sama tidak boleh ditambahkan dua kali' });
+  }
+});
+
+export const reviewHomecareTeamLoanSchema = z.object({
+  decision: z.enum(['APPROVE', 'REJECT']),
+  notes: optionalText,
+});
+
+export const returnHomecareTeamLoanSchema = z.object({
+  notes: optionalText,
+});
+
+export const homecareTeamLoanOptionsQuerySchema = z.object({
+  borrowerBagId: idSchema,
+});
+
+export const homecareTeamLoanListQuerySchema = z.object({
+  status: z.enum(['PENDING', 'ACTIVE', 'REJECTED', 'RETURNED']).optional(),
+});
+
 export type CreateBranchStockRequestInput = z.infer<typeof createBranchStockRequestSchema>;
 export type ApproveStockRequestInput = z.infer<typeof approveStockRequestSchema>;
 export type ApproveBagStockRequestInput = z.infer<typeof approveBagStockRequestSchema>;
@@ -215,3 +251,6 @@ export type CreateBagStockRequestInput = z.infer<typeof createBagStockRequestSch
 export type UseBagStockInput = z.infer<typeof useBagStockSchema>;
 export type ReturnBagStockInput = z.infer<typeof returnBagStockSchema>;
 export type CreateBagOpnameInput = z.infer<typeof createBagOpnameSchema>;
+export type CreateHomecareTeamLoanInput = z.infer<typeof createHomecareTeamLoanSchema>;
+export type ReviewHomecareTeamLoanInput = z.infer<typeof reviewHomecareTeamLoanSchema>;
+export type ReturnHomecareTeamLoanInput = z.infer<typeof returnHomecareTeamLoanSchema>;

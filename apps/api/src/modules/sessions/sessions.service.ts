@@ -9,6 +9,7 @@ import type {
   CreateEvaluationInput,
   UpdateSessionBoosterPackageInput,
   UpdateSessionDetailsInput,
+  CompleteSessionInput,
   CancelSessionCompletionInput,
 } from './sessions.schema';
 
@@ -275,8 +276,8 @@ export class SessionsService {
   // SESSION COMPLETION
   // ============================================================
 
-  async completeSession(sessionId: string, userId: string) {
-    return this.completionService.completeSession(sessionId, userId);
+  async completeSession(sessionId: string, userId: string, input?: CompleteSessionInput) {
+    return this.completionService.completeSession(sessionId, userId, input);
   }
 
   async cancelCompletion(sessionId: string, userId: string, input: CancelSessionCompletionInput) {

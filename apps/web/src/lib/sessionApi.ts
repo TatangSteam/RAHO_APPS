@@ -243,8 +243,18 @@ export const sessionApi = {
   // COMPLETE SESSION
   // ============================================================
 
-  completeSession: async (sessionId: string): Promise<{ sessionId: string; sessionCode: string; isCompleted: boolean; message: string }> => {
-    const response = await api.patch(`/treatment-sessions/${sessionId}/complete`);
+  completeSession: async (
+    sessionId: string,
+    input: { inventorySource: 'BRANCH' | 'TEAM' },
+  ): Promise<{
+    sessionId: string;
+    sessionCode: string;
+    isCompleted: boolean;
+    message: string;
+    inventorySource: 'BRANCH' | 'TEAM';
+    inventoryTeamId: string | null;
+  }> => {
+    const response = await api.patch(`/treatment-sessions/${sessionId}/complete`, input);
     return response.data.data;
   },
 

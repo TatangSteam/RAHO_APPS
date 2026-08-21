@@ -10,6 +10,7 @@ import {
   createEvaluationSchema,
   updateSessionDetailsSchema,
   updateSessionBoosterPackageSchema,
+  completeSessionSchema,
   cancelSessionCompletionSchema,
   type CreateSessionInput,
 } from './sessions.schema';
@@ -825,7 +826,8 @@ export class SessionsController {
   async completeSession(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      const result = await sessionsService.completeSession(sessionId, req.user!.userId);
+      const input = completeSessionSchema.parse(req.body ?? {});
+      const result = await sessionsService.completeSession(sessionId, req.user!.userId, input);
       return sendSuccess(res, result);
     } catch (err) {
       if (err.status) {

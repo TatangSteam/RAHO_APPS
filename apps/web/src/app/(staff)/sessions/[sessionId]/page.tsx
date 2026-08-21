@@ -101,6 +101,7 @@ export default function SessionDetailPage() {
   const [loading, setLoading] = useState(true);
   const [activeStep, setActiveStep] = useState<number>(1);
   const [completing, setCompleting] = useState(false);
+  const [inventorySource, setInventorySource] = useState<'' | 'BRANCH' | 'TEAM'>('');
   const completionInFlightRef = useRef(false);
   const [showCancellationModal, setShowCancellationModal] = useState(false);
   const [cancellationReason, setCancellationReason] = useState('');
@@ -412,6 +413,11 @@ export default function SessionDetailPage() {
   const handleCompleteSession = async () => {
     if (!session || completionInFlightRef.current) return;
 
+    if (!inventorySource) {
+      showToast.error('Pilih Stok Cabang atau Stok Tim terlebih dahulu');
+      return;
+    }
+
     const { steps } = session;
     
     // Validate required steps
@@ -447,7 +453,7 @@ export default function SessionDetailPage() {
     completionInFlightRef.current = true;
     try {
       setCompleting(true);
-      const result = await sessionApi.completeSession(sessionId);
+      const result = await sessionApi.completeSession(sessionId, { inventorySource });
       showToast.success(result.message);
       router.push(`/members/${session.session.member.memberId}`);
     } catch (error) {
@@ -1734,22 +1740,52 @@ export default function SessionDetailPage() {
           bottom: '24px',
           right: '24px',
           zIndex: 1000,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          padding: '10px',
+          borderRadius: '18px',
+          background: 'var(--surface-card)',
+          border: '1px solid var(--surface-border)',
+          boxShadow: '0 10px 32px rgba(0, 0, 0, 0.24)',
         }}>
+          <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>
+            Ambil bahan dari
+          </label>
+          <select
+            value={inventorySource}
+            onChange={(event) => setInventorySource(event.target.value as '' | 'BRANCH' | 'TEAM')}
+            disabled={completing}
+            aria-label="Sumber stok penyelesaian sesi"
+            style={{
+              width: '100%',
+              padding: '10px 12px',
+              borderRadius: '10px',
+              border: '1px solid var(--surface-border)',
+              background: 'var(--surface-card)',
+              color: 'var(--text-primary)',
+              fontWeight: 700,
+            }}
+          >
+            <option value="">Pilih sumber stok</option>
+            <option value="TEAM">Stok Tim</option>
+            <option value="BRANCH">Stok Cabang</option>
+          </select>
           <button
             onClick={handleCompleteSession}
-            disabled={completing}
+            disabled={completing || !inventorySource}
             style={{
               padding: '18px 32px',
               fontSize: '16px',
               fontWeight: '700',
               color: 'white',
-              background: completing 
+              background: completing || !inventorySource
                 ? 'rgba(34, 197, 94, 0.5)'
                 : 'linear-gradient(135deg, #22c55e 0%, #16a34a 100%)',
               border: 'none',
               borderRadius: '16px',
-              cursor: completing ? 'not-allowed' : 'pointer',
-              boxShadow: completing 
+              cursor: completing || !inventorySource ? 'not-allowed' : 'pointer',
+              boxShadow: completing || !inventorySource
                 ? 'none'
                 : '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)',
               transition: 'all 0.3s ease',
@@ -1759,13 +1795,13 @@ export default function SessionDetailPage() {
               animation: 'floatingButtonPulse 2s infinite',
             }}
             onMouseEnter={(e) => {
-              if (!completing) {
+              if (!completing && inventorySource) {
                 e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
                 e.currentTarget.style.boxShadow = '0 12px 40px rgba(34, 197, 94, 0.6), 0 6px 16px rgba(0, 0, 0, 0.4)';
               }
             }}
             onMouseLeave={(e) => {
-              if (!completing) {
+              if (!completing && inventorySource) {
                 e.currentTarget.style.transform = 'translateY(0) scale(1)';
                 e.currentTarget.style.boxShadow = '0 8px 32px rgba(34, 197, 94, 0.5), 0 4px 12px rgba(0, 0, 0, 0.3)';
               }

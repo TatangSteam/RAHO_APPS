@@ -616,6 +616,13 @@ enum HomecareBagOpnameStatus {
   CANCELLED
 }
 
+enum HomecareTeamLoanStatus {
+  PENDING
+  ACTIVE
+  REJECTED
+  RETURNED
+}
+
 enum LogisticLocationType {
   CENTRAL_STOCK
   BRANCH_STOCK
@@ -633,6 +640,8 @@ enum LogisticTransactionType {
   BAG_USAGE
   BAG_RETURN
   STOCK_OPNAME
+  TEAM_LOAN
+  TEAM_LOAN_RETURN
 }
 
 enum LogisticTransactionStatus {
@@ -3372,6 +3381,7 @@ model MasterProduct {
   treatmentBomItems        TreatmentBomItem[]
   kitComponents            ProductKitComponent[]     @relation("KitProduct")
   componentOfKits          ProductKitComponent[]     @relation("KitComponentProduct")
+  homecareTeamLoanItems    HomecareTeamLoanItem[]
 
   @@index([category, isActive])
   @@index([isActive])
@@ -4376,6 +4386,8 @@ model HomecareTeam {
   members       HomecareTeamMember[]
   bags          HomecareBag[]
   stockRequests HomecareBagStockRequest[]
+  loansGiven    HomecareTeamLoan[]        @relation("HomecareTeamLoansGiven")
+  loansReceived HomecareTeamLoan[]        @relation("HomecareTeamLoansReceived")
 
   @@index([branchId, isActive])
   @@index([teamCode])
@@ -4425,6 +4437,8 @@ model HomecareBag {
   returns       HomecareBagReturn[]
   opnames       HomecareBagOpname[]
   mutations     LogisticStockMutation[]
+  loansGiven    HomecareTeamLoan[]        @relation("HomecareBagLoansGiven")
+  loansReceived HomecareTeamLoan[]        @relation("HomecareBagLoansReceived")
 
   @@index([teamId])
   @@index([branchId])
@@ -4451,6 +4465,57 @@ model HomecareBagStock {
   @@index([masterProductId])
   @@index([bagId, stock])
   @@map("homecare_bag_stocks")
+}
+
+model HomecareTeamLoan {
+  id             String                 @id @default(cuid())
+  loanCode       String                 @unique
+  lenderTeamId   String
+  borrowerTeamId String
+  fromBagId      String
+  toBagId        String
+  status         HomecareTeamLoanStatus @default(PENDING)
+  reason         String                 @db.Text
+  requestedBy    String
+  requestedAt    DateTime               @default(now())
+  reviewedBy     String?
+  reviewedAt     DateTime?
+  reviewNotes    String?                @db.Text
+  returnedBy     String?
+  returnedAt     DateTime?
+  returnNotes    String?                @db.Text
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  lenderTeam   HomecareTeam           @relation("HomecareTeamLoansGiven", fields: [lenderTeamId], references: [id])
+  borrowerTeam HomecareTeam           @relation("HomecareTeamLoansReceived", fields: [borrowerTeamId], references: [id])
+  fromBag      HomecareBag            @relation("HomecareBagLoansGiven", fields: [fromBagId], references: [id])
+  toBag        HomecareBag            @relation("HomecareBagLoansReceived", fields: [toBagId], references: [id])
+  items        HomecareTeamLoanItem[]
+
+  @@index([lenderTeamId, status])
+  @@index([borrowerTeamId, status])
+  @@index([fromBagId])
+  @@index([toBagId])
+  @@index([requestedAt])
+  @@map("homecare_team_loans")
+}
+
+model HomecareTeamLoanItem {
+  id              String   @id @default(cuid())
+  loanId          String
+  masterProductId String
+  requestedQty    Decimal  @db.Decimal(10, 4)
+  approvedQty     Decimal? @db.Decimal(10, 4)
+  returnedQty     Decimal  @default(0) @db.Decimal(10, 4)
+  notes           String?  @db.Text
+
+  loan          HomecareTeamLoan @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  masterProduct MasterProduct    @relation(fields: [masterProductId], references: [id], onDelete: Restrict)
+
+  @@unique([loanId, masterProductId])
+  @@index([masterProductId])
+  @@map("homecare_team_loan_items")
 }
 
 model HomecareBagStockRequest {

@@ -266,6 +266,51 @@ export class LogisticsController {
     }
   }
 
+  async getHomecareTeamLoanOptions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.getHomecareTeamLoanOptions(this.actor(req), String(req.query.borrowerBagId));
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async listHomecareTeamLoans(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.listHomecareTeamLoans(this.actor(req), this.query(req));
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async createHomecareTeamLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.createHomecareTeamLoan(this.actor(req), req.body);
+      return sendSuccess(res, result, 201);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async reviewHomecareTeamLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.reviewHomecareTeamLoan(this.actor(req), req.params.loanId, req.body);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  async returnHomecareTeamLoan(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await logisticsService.returnHomecareTeamLoan(this.actor(req), req.params.loanId, req.body);
+      return sendSuccess(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async useBagStock(req: Request, res: Response, next: NextFunction) {
     try {
       const result = await logisticsService.useBagStock(this.actor(req), req.body);

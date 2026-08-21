@@ -29,6 +29,7 @@ import {
   TREATMENT_COMPLETED_EVENT_TYPE,
   TREATMENT_COMPLETED_EVENT_VERSION,
 } from '../events/treatment-completed.event';
+import type { CompleteSessionInput } from '../sessions.schema';
 import { createInventorySyncEventInTransaction } from '@modules/zoho/zoho.inventory-outbox';
 import {
   TREATMENT_INVENTORY_CONSUMED_EVENT,
@@ -113,7 +114,11 @@ export class SessionCompletionService {
     ].some((value) => typeof value === 'string' && value.trim().length > 0);
   }
 
-  async completeSession(sessionId: string, userId: string) {
+  async completeSession(
+    sessionId: string,
+    userId: string,
+    input: CompleteSessionInput = { inventorySource: 'AUTO' },
+  ) {
     const scope = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
       select: { branchId: true },
@@ -226,7 +231,7 @@ export class SessionCompletionService {
           })
         : session.materials;
 
-      const teamInventory = isLegacySession
+      const teamInventory = isLegacySession || input.inventorySource === 'BRANCH'
         ? null
         : await resolveSessionTeamInventory(tx, {
             sessionId: session.id,
@@ -246,6 +251,13 @@ export class SessionCompletionService {
               baseUnit: material.inventoryItem.masterProduct.baseUnit,
             })),
           });
+
+      if (!isLegacySession && input.inventorySource === 'TEAM' && !teamInventory) {
+        throw errors.unprocessable(
+          'SESSION_INVENTORY_TEAM_NOT_FOUND',
+          'Sesi ini belum terhubung ke tim dan tas stok aktif. Pilih Stok Cabang atau lengkapi penugasan tim terlebih dahulu.',
+        );
+      }
 
       // Repair stock entered through the legacy/direct-edit compatibility
       // column before validating the authoritative balance ledger. This is

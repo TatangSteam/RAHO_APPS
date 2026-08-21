@@ -699,6 +699,53 @@ export interface HomecareBagOpname {
   updatedAt?: string;
 }
 
+export type HomecareTeamLoanStatus = 'PENDING' | 'ACTIVE' | 'REJECTED' | 'RETURNED';
+
+export interface HomecareTeamLoan {
+  id: string;
+  loanCode: string;
+  lenderTeamId: string;
+  borrowerTeamId: string;
+  fromBagId: string;
+  toBagId: string;
+  status: HomecareTeamLoanStatus;
+  reason: string;
+  requestedAt: string;
+  reviewedAt?: string | null;
+  reviewNotes?: string | null;
+  returnedAt?: string | null;
+  returnNotes?: string | null;
+  lenderTeam: { id: string; teamCode: string; name: string };
+  borrowerTeam: { id: string; teamCode: string; name: string };
+  fromBag: { id: string; bagCode: string; name: string; branchId: string };
+  toBag: { id: string; bagCode: string; name: string; branchId: string };
+  items: Array<{
+    id: string;
+    masterProductId: string;
+    requestedQty: number;
+    approvedQty?: number | null;
+    returnedQty: number;
+    notes?: string | null;
+    masterProduct: { id: string; sku?: string | null; name: string; baseUnit: string };
+  }>;
+}
+
+export interface HomecareTeamLoanOptions {
+  borrowerBag: { id: string; bagCode: string; name: string; teamId: string; teamName: string; branchId: string };
+  lenderBags: Array<{
+    id: string;
+    bagCode: string;
+    name: string;
+    teamId: string;
+    teamName: string;
+    stocks: Array<{
+      masterProductId: string;
+      stock: number;
+      product: { id: string; sku?: string | null; name: string; baseUnit: string } | null;
+    }>;
+  }>;
+}
+
 export interface HomecareStockItemInput {
   masterProductId: string;
   quantity: number;
@@ -1214,6 +1261,27 @@ export const inventoryApi = {
   getHomecareBagStock: (bagId: string) => {
     return api.get(`/inventory/logistics/homecare-bags/${bagId}/stock`);
   },
+
+  getHomecareTeamLoanOptions: (borrowerBagId: string) => {
+    return api.get<{ data: HomecareTeamLoanOptions }>('/inventory/logistics/homecare-team-loans/options', { params: { borrowerBagId } });
+  },
+
+  getHomecareTeamLoans: (params?: { status?: HomecareTeamLoanStatus }) => {
+    return api.get<{ data: HomecareTeamLoan[] }>('/inventory/logistics/homecare-team-loans', { params });
+  },
+
+  createHomecareTeamLoan: (data: {
+    fromBagId: string;
+    toBagId: string;
+    reason: string;
+    items: Array<{ masterProductId: string; quantity: number; notes?: string }>;
+  }) => api.post('/inventory/logistics/homecare-team-loans', data),
+
+  reviewHomecareTeamLoan: (loanId: string, decision: 'APPROVE' | 'REJECT', notes?: string) =>
+    api.post(`/inventory/logistics/homecare-team-loans/${loanId}/review`, { decision, notes }),
+
+  returnHomecareTeamLoan: (loanId: string, notes?: string) =>
+    api.post(`/inventory/logistics/homecare-team-loans/${loanId}/return`, { notes }),
 
   getHomecareBagRequests: (params?: { status?: string; teamId?: string; bagId?: string }) => {
     return api.get('/inventory/logistics/homecare-bag-requests', { params });
