@@ -14,6 +14,7 @@ import { useManagerInventoryNotifications } from '@/hooks/useManagerInventoryNot
 import { useAuthStore } from '@/stores/authStore';
 import { devLog } from '@/lib/logger';
 import { clsx } from 'clsx';
+import { UnfinishedSessionReminderModal } from '@/components/sessions/UnfinishedSessionReminderModal';
 
 // Inner component that uses LoadingContext
 function StaffLayoutInner({ children }: { children: React.ReactNode }) {
@@ -106,6 +107,7 @@ function StaffLayoutInner({ children }: { children: React.ReactNode }) {
     <>
       <ApiLoadingSetup />
       <GlobalLoadingOverlay />
+      <UnfinishedSessionReminderModal />
       <div className="min-h-screen bg-neutral-50 dark:bg-[#0a0a0a] transition-colors duration-300">
         <ImpersonationBanner />
         <Sidebar 

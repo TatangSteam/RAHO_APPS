@@ -1,5 +1,6 @@
 import { assertCaughtError } from '@/lib/caughtError';
 import { api } from './api';
+import type { AxiosRequestConfig } from 'axios';
 import type {
   CreateSessionInput,
   CreateSessionResponse,
@@ -16,6 +17,40 @@ import type {
   CreateInfusionInput,
   InfusionExecution,
 } from '@/types/session';
+
+export interface UnfinishedSessionReminderItem {
+  sessionId: string;
+  sessionCode: string;
+  treatmentDate: string;
+  kind: 'OPERATIONAL_STEPS' | 'DOCTOR_EVALUATION';
+  missingSteps: Array<{
+    key:
+      | 'DIAGNOSIS'
+      | 'THERAPY_PLAN'
+      | 'VITAL_BEFORE'
+      | 'INFUSION'
+      | 'MATERIALS'
+      | 'VITAL_AFTER'
+      | 'DOCTOR_EVALUATION'
+      | 'FINALIZE';
+    label: string;
+  }>;
+  branch: {
+    id: string;
+    name: string;
+    branchCode: string;
+  };
+  member: {
+    memberId: string;
+    memberNo: string;
+    fullName: string;
+  };
+}
+
+export interface UnfinishedSessionReminderResponse {
+  total: number;
+  items: UnfinishedSessionReminderItem[];
+}
 
 // ============================================================
 // SESSION ENDPOINTS
@@ -53,6 +88,14 @@ export const sessionApi = {
     message: string;
   }> => {
     const response = await api.delete(`/treatment-sessions/${sessionId}`);
+    return response.data.data;
+  },
+
+  getUnfinishedSessionReminders: async (): Promise<UnfinishedSessionReminderResponse> => {
+    const config: AxiosRequestConfig & { skipLoading: boolean } = {
+      skipLoading: true,
+    };
+    const response = await api.get('/treatment-sessions/unfinished-reminders', config);
     return response.data.data;
   },
 
@@ -200,6 +243,7 @@ export const sessionApi = {
     dateTo?: string;
     status?: 'all' | 'completed' | 'incomplete';
     pelaksanaan?: 'all' | 'ON_SITE' | 'HOME_CARE';
+    assignedToMe?: boolean;
   }): Promise<SessionDetail[]> => {
     const response = await api.get('/treatment-sessions', { params });
     return response.data.data || [];

@@ -168,6 +168,7 @@ export class SessionRetrievalService {
     dateTo?: string;
     status?: string;
     pelaksanaan?: string;
+    assignedToMe?: boolean;
   }) {
     const {
       memberId,
@@ -186,6 +187,7 @@ export class SessionRetrievalService {
       dateTo,
       status,
       pelaksanaan,
+      assignedToMe,
     } = params;
     const skip = (page - 1) * limit;
 
@@ -260,6 +262,26 @@ export class SessionRetrievalService {
     // Filter by pelaksanaan
     if (pelaksanaan && pelaksanaan !== 'all') {
       where.pelaksanaan = pelaksanaan as SessionType;
+    }
+
+    if (assignedToMe && userId) {
+      if (role === 'ADMIN_LAYANAN') {
+        addAndFilter({ adminLayananId: userId });
+      } else if (role === 'DOCTOR') {
+        addAndFilter({
+          OR: [
+            { doctorId: userId },
+            { sessionDoctors: { some: { doctorId: userId } } },
+          ],
+        });
+      } else if (role === 'NURSE') {
+        addAndFilter({
+          OR: [
+            { nurseId: userId },
+            { sessionNurses: { some: { nurseId: userId } } },
+          ],
+        });
+      }
     }
 
     // Filter by diagnosis categories

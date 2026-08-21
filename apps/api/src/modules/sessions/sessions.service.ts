@@ -27,6 +27,7 @@ import { BoosterService } from './services/booster.service';
 import { PhotoService } from './services/photo.service';
 import { SessionDeletionService } from './services/session-deletion.service';
 import { SessionDetailsService } from './services/session-details.service';
+import { UnfinishedSessionReminderService } from './services/unfinished-session-reminder.service';
 import type { BulkEditSetInput } from '../members/services/member-therapy-plan-set-edit.service';
 
 /**
@@ -60,6 +61,7 @@ export class SessionsService {
   private photoService: PhotoService;
   private deletionService: SessionDeletionService;
   private detailsService: SessionDetailsService;
+  private unfinishedReminderService: UnfinishedSessionReminderService;
 
   constructor() {
     this.creationService = new SessionCreationService();
@@ -75,6 +77,7 @@ export class SessionsService {
     this.photoService = new PhotoService();
     this.deletionService = new SessionDeletionService();
     this.detailsService = new SessionDetailsService();
+    this.unfinishedReminderService = new UnfinishedSessionReminderService();
   }
 
   // ============================================================
@@ -111,8 +114,17 @@ export class SessionsService {
     dateTo?: string;
     status?: string;
     pelaksanaan?: string;
+    assignedToMe?: boolean;
   }) {
     return this.retrievalService.getAllSessions(params);
+  }
+
+  async getUnfinishedSessionReminders(input: {
+    userId: string;
+    role: import('@prisma/client').Role;
+    branchId: string | null;
+  }) {
+    return this.unfinishedReminderService.listForUser(input);
   }
 
   async deleteSession(sessionId: string, deletedBy: string) {

@@ -32,6 +32,7 @@ import accountingRouter from './modules/accounting/accounting.routes';
 import cashBankRouter from './modules/cash-bank/cash-bank.routes';
 import openingBalanceRouter from './modules/opening-balance/opening-balance.routes';
 import expenseRouter from './modules/expenses/expense.routes';
+import reimbursementRouter from './modules/reimbursements/reimbursement.routes';
 import purchasingRouter from './modules/purchasing/purchasing.routes';
 import revenueRouter from './modules/revenue/revenue.routes';
 import workflowApprovalRouter from './modules/workflow/approval.routes';
@@ -141,6 +142,7 @@ export function createApp(): Application {
   app.use(`${prefix}/cash-bank`, cashBankRouter);
   app.use(`${prefix}/opening-balances`, openingBalanceRouter);
   app.use(`${prefix}/expenses`, expenseRouter);
+  app.use(`${prefix}/reimbursements`, reimbursementRouter);
   app.use(`${prefix}/purchasing`, purchasingRouter);
   app.use(`${prefix}/revenue`, revenueRouter);
   app.use(`${prefix}/workflow`, workflowApprovalRouter);

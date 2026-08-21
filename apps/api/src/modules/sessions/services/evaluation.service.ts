@@ -66,7 +66,7 @@ export class EvaluationService {
         assessment: data.assessment,
         plan: data.plan,
         generalNotes: data.generalNotes,
-        writtenBy: data.writtenBy,
+        writtenBy: userId,
       },
     });
 
@@ -104,7 +104,7 @@ export class EvaluationService {
         assessment: data.assessment,
         plan: data.plan,
         generalNotes: data.generalNotes,
-        writtenBy: data.writtenBy,
+        writtenBy: userId,
       },
     });
 

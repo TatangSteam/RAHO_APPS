@@ -6,6 +6,7 @@ import { upload } from '../../middleware/upload';
 import { Role } from '@prisma/client';
 import { validate } from '../../middleware/validate';
 import { bulkEditTherapyPlanSetSchema } from '../members/members.schema';
+import { UNFINISHED_SESSION_REMINDER_ROLES } from './services/unfinished-session-reminder.service';
 
 const router = Router();
 const controller = new SessionsController();
@@ -57,6 +58,15 @@ router.get(
   authenticate,
   authorize(SESSION_CREATORS),
   controller.getSuggestedSessionNumbers.bind(controller)
+);
+
+// Role-scoped work queue used by the unfinished-session reminder popup.
+// Keep this route before /:sessionId so Express does not treat the literal as an ID.
+router.get(
+  '/unfinished-reminders',
+  authenticate,
+  authorize(UNFINISHED_SESSION_REMINDER_ROLES),
+  controller.getUnfinishedSessionReminders.bind(controller)
 );
 
 // Get booster stock using the branch that owns the session

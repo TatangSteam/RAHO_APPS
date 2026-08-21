@@ -17,7 +17,7 @@ import {
 import { sendSuccess, sendError } from '../../utils/response';
 import { SessionExportService } from './services/session-export.service';
 import { SupportingPhotosService } from './services/supporting-photos.service';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
 
@@ -38,6 +38,84 @@ const parseQueryIdList = (value: unknown): string[] | undefined => {
 };
 
 export class SessionsController {
+  private async assertEvaluationWriteAccess(
+    sessionId: string,
+    user: Request['user'],
+    data: Record<string, unknown>,
+  ) {
+    const session = await prisma.treatmentSession.findUnique({
+      where: { id: sessionId },
+      select: {
+        adminLayananId: true,
+        doctorId: true,
+        nurseId: true,
+        sessionDoctors: { where: { doctorId: user.userId }, select: { id: true } },
+        sessionNurses: { where: { nurseId: user.userId }, select: { id: true } },
+        encounter: { select: { diagnoses: { take: 1, select: { id: true } } } },
+        therapyPlan: { select: { id: true } },
+        vitalSigns: { select: { waktuCatat: true } },
+        infusion: { select: { id: true } },
+        materials: { take: 1, select: { id: true } },
+      },
+    });
+
+    if (!session) {
+      throw { status: 404, code: 'SESSION_NOT_FOUND', message: 'Sesi tidak ditemukan' };
+    }
+
+    const doctorFieldNames = ['subjective', 'objective', 'assessment', 'plan', 'generalNotes'];
+    const writesDoctorEvaluation = doctorFieldNames.some((field) => Object.prototype.hasOwnProperty.call(data, field));
+
+    if (writesDoctorEvaluation) {
+      if (user.role !== Role.DOCTOR) {
+        throw {
+          status: 403,
+          code: 'DOCTOR_EVALUATION_ROLE_REQUIRED',
+          message: 'Evaluasi dokter hanya dapat diisi oleh dokter yang ditugaskan',
+        };
+      }
+
+      const isAssignedDoctor = session.doctorId === user.userId || session.sessionDoctors.length > 0;
+      if (!isAssignedDoctor) {
+        throw {
+          status: 403,
+          code: 'DOCTOR_NOT_ASSIGNED',
+          message: 'Anda bukan dokter yang ditugaskan pada sesi ini',
+        };
+      }
+
+      const prerequisitesReady =
+        session.encounter.diagnoses.length > 0 &&
+        Boolean(session.therapyPlan) &&
+        session.vitalSigns.some((vital) => vital.waktuCatat === 'SEBELUM') &&
+        Boolean(session.infusion) &&
+        session.materials.length > 0 &&
+        session.vitalSigns.some((vital) => vital.waktuCatat === 'SESUDAH');
+
+      if (!prerequisitesReady) {
+        throw {
+          status: 409,
+          code: 'DOCTOR_EVALUATION_NOT_READY',
+          message: 'Evaluasi dokter belum dapat diisi karena tahap sebelumnya belum lengkap',
+        };
+      }
+
+      return;
+    }
+
+    if (user.role === Role.ADMIN_LAYANAN && session.adminLayananId !== user.userId) {
+      throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Sesi ini tidak ditugaskan kepada Anda' };
+    }
+
+    if (
+      user.role === Role.NURSE &&
+      session.nurseId !== user.userId &&
+      session.sessionNurses.length === 0
+    ) {
+      throw { status: 403, code: 'SESSION_NOT_ASSIGNED', message: 'Sesi ini tidak ditugaskan kepada Anda' };
+    }
+  }
+
   private async assertManagerCanAccessBranch(userId: string, branchId: string) {
     const managedBranch = await prisma.managerBranch.findFirst({
       where: {
@@ -137,7 +215,14 @@ export class SessionsController {
   ): Promise<string> {
     const session = await prisma.treatmentSession.findUnique({
       where: { id: sessionId },
-      select: { branchId: true },
+      select: {
+        branchId: true,
+        adminLayananId: true,
+        doctorId: true,
+        nurseId: true,
+        sessionDoctors: { where: { doctorId: user.userId }, select: { id: true } },
+        sessionNurses: { where: { nurseId: user.userId }, select: { id: true } },
+      },
     });
 
     if (!session) {
@@ -154,6 +239,15 @@ export class SessionsController {
 
     if (user.role === Role.ADMIN_MANAGER) {
       await this.assertManagerCanAccessBranch(user.userId, session.branchId);
+      return session.branchId;
+    }
+
+    const isAssigned =
+      (user.role === Role.ADMIN_LAYANAN && session.adminLayananId === user.userId) ||
+      (user.role === Role.DOCTOR && (session.doctorId === user.userId || (session.sessionDoctors?.length ?? 0) > 0)) ||
+      (user.role === Role.NURSE && (session.nurseId === user.userId || (session.sessionNurses?.length ?? 0) > 0));
+
+    if (isAssigned) {
       return session.branchId;
     }
 
@@ -205,6 +299,33 @@ export class SessionsController {
     ]);
 
     if (!accessibleBranchIds.has(encounter.branchId)) {
+      let assignmentFilter: Prisma.TreatmentSessionWhereInput | null = null;
+      if (user.role === Role.ADMIN_LAYANAN) {
+        assignmentFilter = { adminLayananId: user.userId };
+      } else if (user.role === Role.DOCTOR) {
+        assignmentFilter = {
+          OR: [
+            { doctorId: user.userId },
+            { sessionDoctors: { some: { doctorId: user.userId } } },
+          ],
+        };
+      } else if (user.role === Role.NURSE) {
+        assignmentFilter = {
+          OR: [
+            { nurseId: user.userId },
+            { sessionNurses: { some: { nurseId: user.userId } } },
+          ],
+        };
+      }
+
+      if (assignmentFilter) {
+        const assignedSession = await prisma.treatmentSession.findFirst({
+          where: { encounterId, AND: [assignmentFilter] },
+          select: { id: true },
+        });
+        if (assignedSession) return encounter.branchId;
+      }
+
       throw {
         status: 403,
         code: 'SESSION_BRANCH_ACCESS_DENIED',
@@ -297,6 +418,7 @@ export class SessionsController {
         dateTo,
         status,
         pelaksanaan,
+        assignedToMe,
       } = req.query;
       const { userId, branchId, role } = req.user!;
       
@@ -352,6 +474,7 @@ export class SessionsController {
         dateTo: dateTo as string | undefined,
         status: status as string | undefined,
         pelaksanaan: pelaksanaan as string | undefined,
+        assignedToMe: assignedToMe === 'true',
       });
       
       return sendSuccess(res, result);
@@ -774,6 +897,8 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
+      await this.getAuthorizedSessionBranchId(sessionId, req.user!);
+      await this.assertEvaluationWriteAccess(sessionId, req.user!, validation.data);
       const result = await sessionsService.createEvaluation(sessionId, validation.data, req.user!.userId);
       return sendSuccess(res, result, 201);
     } catch (err) {
@@ -796,6 +921,7 @@ export class SessionsController {
         return sendError(res, 400, 'VALIDATION_ERROR', 'Data tidak valid', validation.error.errors);
       }
 
+      await this.assertEvaluationWriteAccess(sessionId, req.user!, validation.data);
       const result = await sessionsService.updateEvaluation(sessionId, validation.data, req.user!.userId);
       return sendSuccess(res, result);
     } catch (err) {
@@ -832,6 +958,23 @@ export class SessionsController {
     } catch (err) {
       if (err.status) {
         return sendError(res, err.status, err.code, err.message, err.errors);
+      }
+      next(err);
+    }
+  }
+
+  async getUnfinishedSessionReminders(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { userId, role, branchId } = req.user!;
+      const result = await sessionsService.getUnfinishedSessionReminders({
+        userId,
+        role: role as Role,
+        branchId: branchId || null,
+      });
+      return sendSuccess(res, result);
+    } catch (err) {
+      if (err.status) {
+        return sendError(res, err.status, err.code, err.message);
       }
       next(err);
     }

@@ -232,6 +232,15 @@ export default function SessionsPage() {
     pelaksanaan: 'all' as 'all' | 'ON_SITE' | 'HOME_CARE',
   });
 
+  useEffect(() => {
+    const requestedStatus = new URLSearchParams(window.location.search).get('status');
+    if (requestedStatus === 'completed' || requestedStatus === 'incomplete') {
+      setFilters((current) => current.status === requestedStatus
+        ? current
+        : { ...current, status: requestedStatus });
+    }
+  }, []);
+
   // Collapsible state for filter sections
   const [branchFilterExpanded, setBranchFilterExpanded] = useState(false);
   const [diagnosisFilterExpanded, setDiagnosisFilterExpanded] = useState(false);
@@ -955,6 +964,9 @@ export default function SessionsPage() {
     try {
       setLoading(true);
       const params: NonNullable<Parameters<typeof sessionApi.getAllSessions>[0]> = { page, limit };
+      if (new URLSearchParams(window.location.search).get('assignedToMe') === 'true') {
+        params.assignedToMe = true;
+      }
       
       // Apply filters
       if (filters.branchIds && filters.branchIds.length > 0) {

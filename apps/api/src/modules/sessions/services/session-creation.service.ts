@@ -800,16 +800,26 @@ export class SessionCreationService {
       }
 
       if (data.diagnosisDeferred) {
-        const doctorIds = Array.from(new Set([
-          data.doctorId,
-          ...(data.additionalDoctorIds || []),
+        const branchAdmins = await tx.user.findMany({
+          where: {
+            branchId,
+            role: Role.ADMIN_CABANG,
+            isActive: true,
+          },
+          select: { id: true },
+        });
+        const operationalRecipientIds = Array.from(new Set([
+          data.adminLayananId,
+          data.nurseId,
+          ...(data.additionalNurseIds || []),
+          ...branchAdmins.map((admin) => admin.id),
         ]));
         await tx.notification.createMany({
-          data: doctorIds.map((doctorId) => ({
-            userId: doctorId,
+          data: operationalRecipientIds.map((recipientId) => ({
+            userId: recipientId,
             type: NotificationType.REMINDER,
             title: 'Diagnosis sesi belum diisi',
-            body: `Diagnosis ${session.sessionCode} belum diisi dan perlu dilengkapi oleh dokter yang ditugaskan.`,
+            body: `Diagnosis ${session.sessionCode} belum diisi dan perlu dilengkapi sebelum evaluasi dokter.`,
             deepLink: `/sessions/${session.id}`,
           })),
         });

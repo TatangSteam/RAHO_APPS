@@ -125,6 +125,13 @@ export const uploadPaymentProof = multer({
   fileFilter: paymentProofFileFilter,
 });
 
+/** Private reimbursement receipt photos: up to five image files, 5 MB each. */
+export const uploadReimbursementEvidence = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_FILE_SIZE, files: 5 },
+  fileFilter,
+});
+
 /**
  * Multer instance for lab results — stores files in memory (as Buffer).
  * Enforces: max 10 MB, accepts PDF, JPG, PNG.

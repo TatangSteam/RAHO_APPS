@@ -128,6 +128,9 @@ export async function decideApprovalInTransaction(input: {
   if (input.decision === ApprovalDecisionType.REJECT && !input.note?.trim()) {
     throw errors.badRequest('APPROVAL_REJECTION_NOTE_REQUIRED', 'Alasan penolakan wajib diisi.');
   }
+  if (input.decision === ApprovalDecisionType.RETURN_FOR_REVISION && !input.note?.trim()) {
+    throw errors.badRequest('APPROVAL_REVISION_NOTE_REQUIRED', 'Catatan perbaikan wajib diisi.');
+  }
   const decidedAt = new Date();
   await tx.approvalDecision.create({ data: {
     approvalInstanceId: instance.id, stepNo: step.stepNo, decision: input.decision,
@@ -136,8 +139,14 @@ export async function decideApprovalInTransaction(input: {
   if (input.decision === ApprovalDecisionType.REJECT) {
     const rejected = await tx.approvalInstance.update({ where: { id: instance.id }, data: { status: ApprovalInstanceStatus.REJECTED, rejectedAt: decidedAt, completedAt: decidedAt } });
     await tx.approvalAuditLog.create({ data: { approvalInstanceId: instance.id, action: 'REJECTED', actorUserId: input.actorUserId, stepNo: step.stepNo, beforeStatus: instance.status, afterStatus: rejected.status, metadata: json({ note: input.note }) } });
-    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval ditolak', body: `${instance.entityNumber || instance.entityId} ditolak: ${input.note}`, deepLink: '/approvals' });
+    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval ditolak', body: `${instance.entityNumber || instance.entityId} ditolak: ${input.note}`, deepLink: instance.entityType === 'Reimbursement' ? '/reimbursements' : '/approvals' });
     return { instance: rejected, isFinal: true, approved: false };
+  }
+  if (input.decision === ApprovalDecisionType.RETURN_FOR_REVISION) {
+    const returned = await tx.approvalInstance.update({ where: { id: instance.id }, data: { status: ApprovalInstanceStatus.REJECTED, rejectedAt: decidedAt, completedAt: decidedAt } });
+    await tx.approvalAuditLog.create({ data: { approvalInstanceId: instance.id, action: 'RETURNED_FOR_REVISION', actorUserId: input.actorUserId, stepNo: step.stepNo, beforeStatus: instance.status, afterStatus: returned.status, metadata: json({ note: input.note }) } });
+    await createNotification(tx, { userId: instance.makerUserId, title: 'Reimburse perlu diperbaiki', body: `${instance.entityNumber || instance.entityId} dikembalikan: ${input.note}`, deepLink: '/reimbursements' });
+    return { instance: returned, isFinal: true, approved: false, returnedForRevision: true };
   }
   const approvalsAtStep = instance.decisions.filter((decision) => decision.stepNo === step.stepNo && decision.decision === ApprovalDecisionType.APPROVE).length + 1;
   if (approvalsAtStep < step.requiredApprovals) {
@@ -153,7 +162,7 @@ export async function decideApprovalInTransaction(input: {
   });
   await tx.approvalAuditLog.create({ data: { approvalInstanceId: instance.id, action: finalStep ? 'APPROVED' : 'STEP_ADVANCED', actorUserId: input.actorUserId, stepNo: step.stepNo, beforeStatus: instance.status, afterStatus: updated.status, metadata: json({ nextStep: finalStep ? null : step.stepNo + 1, note: input.note || null }) } });
   if (finalStep) {
-    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval disetujui', body: `${instance.entityNumber || instance.entityId} telah disetujui.`, deepLink: '/approvals' });
+    await createNotification(tx, { userId: instance.makerUserId, title: 'Approval disetujui', body: `${instance.entityNumber || instance.entityId} telah disetujui.`, deepLink: instance.entityType === 'Reimbursement' ? '/reimbursements' : '/approvals' });
   } else {
     const nextStep = instance.rule.steps.find((candidate) => candidate.stepNo === step.stepNo + 1)!;
     await notifyApprovers(tx, { permissionCode: nextStep.permissionCode, branchId: instance.branchId, makerUserId: instance.makerUserId, entityNumber: instance.entityNumber || instance.entityId, stepName: nextStep.name });
@@ -198,7 +207,13 @@ export async function listApprovalInbox(actorUserId: string, query: ApprovalInbo
     ...(query.module ? { module: query.module.toUpperCase() } : {}),
     ...(query.branchId ? { branchId: query.branchId } : accessible === null ? {} : { branchId: { in: accessible } }),
   };
-  const candidates = await prisma.approvalInstance.findMany({ where, include: { rule: { include: { steps: true } }, decisions: true, auditLogs: { orderBy: { createdAt: 'asc' } } }, orderBy: { submittedAt: 'asc' }, take: query.limit * 3 });
+  const candidates = await prisma.approvalInstance.findMany({ where, include: {
+    rule: { include: { steps: true } },
+    decisions: true,
+    auditLogs: { orderBy: { createdAt: 'asc' } },
+    maker: { select: { id: true, email: true, profile: { select: { fullName: true } } } },
+    branch: { select: { id: true, branchCode: true, name: true } },
+  }, orderBy: { submittedAt: 'asc' }, take: query.limit * 3 });
   const visible = [];
   for (const instance of candidates) {
     const step = instance.rule.steps.find((candidate) => candidate.stepNo === instance.currentStep);

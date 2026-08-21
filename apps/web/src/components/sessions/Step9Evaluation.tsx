@@ -44,8 +44,8 @@ export default function Step9Evaluation({
     generalNotes: evaluation?.generalNotes || '',
   });
 
-  // Check if user can edit (SUPER_ADMIN, ADMIN_MANAGER, DOCTOR)
-  const canEdit = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER' || user?.role === 'DOCTOR';
+  // Evaluasi klinis (SOAP) merupakan tanggung jawab khusus dokter.
+  const canEdit = user?.role === 'DOCTOR';
 
   const hasDoctorEvaluation = !!evaluation && [
     evaluation.subjective,
@@ -278,6 +278,24 @@ export default function Step9Evaluation({
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (!canEdit) {
+    return (
+      <div style={{
+        padding: '24px',
+        background: 'rgba(59,130,246,0.05)',
+        border: '2px solid rgba(59,130,246,0.2)',
+        borderRadius: 'var(--radius-lg)',
+      }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '6px' }}>
+          Evaluasi Dokter
+        </h3>
+        <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+          Evaluasi SOAP hanya dapat diisi oleh dokter yang ditugaskan pada sesi ini.
+        </p>
       </div>
     );
   }

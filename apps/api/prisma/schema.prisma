@@ -415,6 +415,21 @@ enum ExpenseStatus {
   PAID
 }
 
+enum ReimbursementStatus {
+  DRAFT
+  PENDING_APPROVAL
+  REVISION_REQUIRED
+  APPROVED
+  REJECTED
+  CANCELLED
+  PAID
+}
+
+enum ReimbursementPaymentMethod {
+  CASH
+  BANK_TRANSFER
+}
+
 enum SupplierStatus {
   ACTIVE
   INACTIVE
@@ -488,6 +503,7 @@ enum ApprovalInstanceStatus {
 enum ApprovalDecisionType {
   APPROVE
   REJECT
+  RETURN_FOR_REVISION
 }
 
 enum StockOpnameStatus {
@@ -700,6 +716,7 @@ model Branch {
   inventoryBalances       InventoryBalance[]
   openingBalances         OpeningBalance[]
   expenses                Expense[]
+  reimbursements          Reimbursement[]
   internalTransfersFrom   InternalTransferLedger[]   @relation("InternalTransferFromBranch")
   internalTransfersTo     InternalTransferLedger[]   @relation("InternalTransferToBranch")
   purchaseRequests        PurchaseRequest[]
@@ -762,6 +779,9 @@ model User {
   expensesCreated               Expense[]                @relation("ExpenseCreatedBy")
   expensesReviewed              Expense[]                @relation("ExpenseReviewedBy")
   expensesPaid                  Expense[]                @relation("ExpensePaidBy")
+  reimbursementsClaimed         Reimbursement[]          @relation("ReimbursementClaimant")
+  reimbursementsReviewed        Reimbursement[]          @relation("ReimbursementReviewedBy")
+  reimbursementsPaid            Reimbursement[]          @relation("ReimbursementPaidBy")
   suppliersCreated              Supplier[]               @relation("SupplierCreatedBy")
   purchaseRequestsCreated       PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
   purchaseRequestsReviewed      PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
@@ -1001,6 +1021,7 @@ model Account {
   cashBankAccounts        CashBankAccount[]
   openingBalanceLines     OpeningBalanceLine[]
   expenses                Expense[]
+  reimbursements          Reimbursement[]
   supplierInvoiceDebits   SupplierInvoice[]      @relation("SupplierInvoiceGrniAccount")
   supplierInvoiceCredits  SupplierInvoice[]      @relation("SupplierInvoiceApAccount")
   revenuePolicies         PackageRevenuePolicy[] @relation("RevenuePolicyRevenueAccount")
@@ -1069,6 +1090,7 @@ model JournalEntry {
   cashBankTransactions      CashBankTransaction[]
   openingBalance            OpeningBalance?
   expense                   Expense?
+  reimbursement             Reimbursement?
   transferDispatch          InternalTransferLedger?   @relation("TransferDispatchJournal")
   transferReceipt           InternalTransferLedger?   @relation("TransferReceiptJournal")
   goodsReceipt              GoodsReceipt?
@@ -1915,6 +1937,7 @@ model CashBankAccount {
   transactions           CashBankTransaction[]
   openingBalanceLines    OpeningBalanceLine[]
   expenses               Expense[]
+  reimbursements         Reimbursement[]
   supplierPayments       SupplierPayment[]
   supplierPaymentRefunds SupplierPaymentRefund[]
   invoicePaymentRefunds  InvoicePaymentRefund[]
@@ -1980,6 +2003,7 @@ model CashBankTransaction {
   creator               User                   @relation("CashBankTransactionCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
   openingBalanceLine    OpeningBalanceLine?
   expense               Expense?
+  reimbursement         Reimbursement?
   supplierPayment       SupplierPayment?
   supplierPaymentRefund SupplierPaymentRefund?
 
@@ -2105,6 +2129,72 @@ model Expense {
   @@map("expenses")
 }
 
+model Reimbursement {
+  id                     String                     @id @default(cuid())
+  reimbursementNumber    String                     @unique
+  postingKey             String                     @unique
+  payloadHash            String
+  branchId               String
+  claimantUserId         String
+  expenseDate            DateTime
+  category               String
+  description            String
+  amount                 Decimal                    @db.Decimal(18, 2)
+  paymentMethod          ReimbursementPaymentMethod
+  recipientBankName      String?
+  recipientAccountNumber String?
+  recipientAccountHolder String?
+  status                 ReimbursementStatus        @default(DRAFT)
+  approvalInstanceId     String?                    @unique
+  expenseAccountId       String?
+  cashBankAccountId      String?
+  paymentReference       String?
+  rejectionReason        String?
+  revisionNote           String?
+  reviewedBy             String?
+  reviewedAt             DateTime?
+  submittedAt            DateTime?
+  paidBy                 String?
+  paidAt                 DateTime?
+  journalEntryId         String?                    @unique
+  cashBankTransactionId  String?                    @unique
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+
+  branch              Branch                @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  claimant            User                  @relation("ReimbursementClaimant", fields: [claimantUserId], references: [id], onDelete: Restrict)
+  reviewer            User?                 @relation("ReimbursementReviewedBy", fields: [reviewedBy], references: [id], onDelete: Restrict)
+  payer               User?                 @relation("ReimbursementPaidBy", fields: [paidBy], references: [id], onDelete: Restrict)
+  approvalInstance    ApprovalInstance?     @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  expenseAccount      Account?              @relation(fields: [expenseAccountId], references: [id], onDelete: Restrict)
+  cashBankAccount     CashBankAccount?      @relation(fields: [cashBankAccountId], references: [id], onDelete: Restrict)
+  journalEntry        JournalEntry?         @relation(fields: [journalEntryId], references: [id], onDelete: Restrict)
+  cashBankTransaction CashBankTransaction?  @relation(fields: [cashBankTransactionId], references: [id], onDelete: Restrict)
+  attachments         ReimbursementAttachment[]
+
+  @@index([branchId, status, createdAt])
+  @@index([claimantUserId, createdAt])
+  @@index([status, submittedAt])
+  @@map("reimbursements")
+}
+
+model ReimbursementAttachment {
+  id              String   @id @default(cuid())
+  reimbursementId String
+  fileUrl         String
+  fileName        String
+  fileSize        Int
+  mimeType        String
+  checksum        String
+  createdAt       DateTime @default(now())
+
+  reimbursement Reimbursement @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  @@unique([reimbursementId, checksum])
+  @@index([checksum])
+  @@map("reimbursement_attachments")
+}
+
 // Generic, immutable workflow used by finance, purchasing, and inventory.
 model ApprovalRule {
   id              String   @id @default(cuid())
@@ -2174,6 +2264,7 @@ model ApprovalInstance {
   auditLogs           ApprovalAuditLog[]
   stockOpname         StockOpname?
   inventoryAdjustment InventoryAdjustment?
+  reimbursement       Reimbursement?
 
   @@index([module, status, branchId, submittedAt])
   @@index([entityType, entityId])

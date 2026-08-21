@@ -33,8 +33,8 @@ export default function Step8ComplaintsRecommendations({
     rekomendasi: complaintsRecommendations?.rekomendasi || '',
   });
 
-  // Check if user can edit (SUPER_ADMIN, ADMIN_MANAGER, DOCTOR)
-  const canEdit = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER' || user?.role === 'DOCTOR';
+  // Keluhan dan rekomendasi operasional diisi tim pelaksana, bukan dokter.
+  const canEdit = user?.role === 'ADMIN_CABANG' || user?.role === 'ADMIN_LAYANAN' || user?.role === 'NURSE';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,6 +206,24 @@ export default function Step8ComplaintsRecommendations({
             </div>
           )}
         </div>
+      </div>
+    );
+  }
+
+  if (!canEdit) {
+    return (
+      <div style={{
+        padding: '24px',
+        background: 'rgba(148,163,184,0.05)',
+        border: '2px solid rgba(148,163,184,0.2)',
+        borderRadius: 'var(--radius-lg)',
+      }}>
+        <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#f1f5f9', marginBottom: '6px' }}>
+          Keluhan & Rekomendasi
+        </h3>
+        <p style={{ fontSize: '14px', color: '#94a3b8' }}>
+          Bagian ini diisi oleh Admin Layanan, Admin Cabang, atau nakes yang menangani sesi.
+        </p>
       </div>
     );
   }
