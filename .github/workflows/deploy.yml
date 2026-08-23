@@ -3,35 +3,12 @@ name: Deploy RAHO_APPS
 on:
   push:
     branches:
-      - main
-    paths:
-      - '.github/workflows/deploy.yml'
-      - '.github/scripts/deploy-production.sh'
-      - 'docker-compose.prod.yml'
-      - 'package.json'
-      - 'package-lock.json'
-      - 'apps/api/Dockerfile'
-      - 'apps/api/.dockerignore'
-      - 'apps/api/entrypoint.sh'
-      - 'apps/api/package.json'
-      - 'apps/api/package-lock.json'
-      - 'apps/api/prisma/**'
-      - 'apps/api/scripts/**'
-      - 'apps/api/src/**'
-      - 'apps/api/tsconfig*.json'
-      - 'apps/api/jest*.js'
-      - 'apps/web/Dockerfile'
-      - 'apps/web/.dockerignore'
-      - 'apps/web/entrypoint.sh'
-      - 'apps/web/package.json'
-      - 'apps/web/package-lock.json'
-      - 'apps/web/public/**'
-      - 'apps/web/src/**'
-      - 'apps/web/next.config.mjs'
-      - 'apps/web/postcss.config.js'
-      - 'apps/web/tailwind.config.ts'
-      - 'apps/web/tsconfig.json'
-      - 'apps/web/jest*.js'
+      - test
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - '**.example'
   workflow_dispatch:
 
 permissions:
@@ -43,7 +20,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, test-erp-runner]
     timeout-minutes: 60
 
     steps:
@@ -59,27 +36,6 @@ jobs:
         with:
           node-version: 24.13.1
           cache: npm
-
-      - name: Debug Node and npm
-        shell: bash
-        run: |
-          set -eux
-
-          echo "PATH=$PATH"
-          echo "NODE_PATH=${NODE_PATH:-}"
-
-          which node
-          which npm
-
-          node --version
-          npm --version
-
-          node -p "process.execPath"
-          node -p "process.platform + ' ' + process.arch"
-
-          npm config get registry
-          npm config get package-lock
-          npm config get lockfile-version
 
       - name: Verify lockfiles
         shell: bash
@@ -111,17 +67,30 @@ jobs:
           npm run lint --prefix apps/web
           npm run type-check:all
 
-      - name: Verify production secret files
+      - name: Verify and populate production secrets
         shell: bash
+        env:
+          # 1. Map GitHub Repository Secrets to environment variables
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ICD_API_CLIENT_ID: ${{ secrets.ICD_API_CLIENT_ID }}
+          ICD_API_CLIENT_SECRET: ${{ secrets.ICD_API_CLIENT_SECRET }}
+          JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+          JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+          MINIO_ACCESS_KEY: ${{ secrets.MINIO_ACCESS_KEY }}
+          MINIO_ROOT_PASSWORD: ${{ secrets.MINIO_ROOT_PASSWORD }}
+          MINIO_ROOT_USER: ${{ secrets.MINIO_ROOT_USER }}
+          MINIO_SECRET_KEY: ${{ secrets.MINIO_SECRET_KEY }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          ZOHO_CLIENT_ID: ${{ secrets.ZOHO_CLIENT_ID }}
+          ZOHO_CLIENT_SECRET: ${{ secrets.ZOHO_CLIENT_SECRET }}
+          ZOHO_TOKEN_ENCRYPTION_KEY: ${{ secrets.ZOHO_TOKEN_ENCRYPTION_KEY }}
         run: |
           set -euo pipefail
 
-          secrets_dir="$HOME/RAHO_APPS/secrets"
-
-          if [[ ! -d "$secrets_dir" ]]; then
-            echo "Missing production secrets directory: $secrets_dir" >&2
-            exit 1
-          fi
+          # Create a temporary directory inside the runner workspace for secret files
+          secrets_dir="${RUNNER_TEMP}/secrets"
+          mkdir -p "$secrets_dir"
+          chmod 700 "$secrets_dir"
 
           required=(
             DATABASE_URL ICD_API_CLIENT_ID ICD_API_CLIENT_SECRET
@@ -130,21 +99,26 @@ jobs:
             POSTGRES_PASSWORD ZOHO_CLIENT_ID ZOHO_CLIENT_SECRET
             ZOHO_TOKEN_ENCRYPTION_KEY
           )
+
+          # 2. Check each secret variable and write it to a file
           for name in "${required[@]}"; do
-            if [[ ! -s "$secrets_dir/$name" ]]; then
-              echo "Missing or empty production secret: $name" >&2
+            # Fetch variable dynamically by name
+            value="${!name}"
+
+            if [[ -z "$value" ]]; then
+              echo "Missing or empty production secret in GitHub Secrets: $name" >&2
               exit 1
             fi
+
+            # Write secret to the temporary secrets folder
+            printf '%s' "$value" > "$secrets_dir/$name"
+            chmod 600 "$secrets_dir/$name"
           done
 
+          # 3. Export secrets directory path for downstream steps
           echo "RAHO_SECRETS_DIR=$secrets_dir" >> "$GITHUB_ENV"
+          echo "Successfully generated production secret files from GitHub Repository Secrets."
 
       - name: Build, back up, migrate, deploy, and verify
         shell: bash
         run: bash .github/scripts/deploy-production.sh
-
-      - name: Docker cleanup
-        shell: bash
-        run: |
-          set -euo pipefail
-          docker system prune -a -f
