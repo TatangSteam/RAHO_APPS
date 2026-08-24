@@ -3,7 +3,7 @@ import { resolve } from 'path';
 
 describe('production deployment workflow safety', () => {
   const repositoryRoot = resolve(__dirname, '../../../../../..');
-  const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/deploy.yml'), 'utf8');
+  const workflow = readFileSync(resolve(repositoryRoot, '.github/workflows/deploy-main.yml'), 'utf8');
   const deployScript = readFileSync(resolve(repositoryRoot, '.github/scripts/deploy-production.sh'), 'utf8');
   const compose = readFileSync(resolve(repositoryRoot, 'docker-compose.prod.yml'), 'utf8');
 

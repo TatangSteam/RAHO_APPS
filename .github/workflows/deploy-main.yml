@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-main.yml'
       - '.github/scripts/deploy-production.sh'
       - 'docker-compose.prod.yml'
       - 'package.json'
@@ -43,7 +43,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: self-hosted
+    runs-on: [self-hosted, erp-runner]
     timeout-minutes: 60
 
     steps:
