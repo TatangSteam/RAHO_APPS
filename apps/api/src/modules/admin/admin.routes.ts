@@ -26,6 +26,7 @@ import {
   deleteServiceType,
   createAdminManager,
   updateAdminManager,
+  convertAdminManagerRole,
   deleteAdminManager,
   getAllUsers,
   getAllMasterProducts,
@@ -62,6 +63,7 @@ import {
   getAdminManagersQuerySchema,
   getBranchAdminsQuerySchema,
   impersonateUserParamsSchema,
+  convertAdminManagerRoleSchema,
 } from './admin.schema';
 
 const router = Router();
@@ -350,6 +352,13 @@ router.get('/managers/:managerId',
 router.put('/managers/:managerId',
   authorize(['SUPER_ADMIN']),
   updateAdminManager
+);
+
+// Convert Admin Manager to a global Logistics or Finance & Logistics account
+router.post('/managers/:managerId/convert-role',
+  authorize(['SUPER_ADMIN']),
+  validate(convertAdminManagerRoleSchema),
+  convertAdminManagerRole
 );
 
 // Delete Admin Manager (Super Admin only)

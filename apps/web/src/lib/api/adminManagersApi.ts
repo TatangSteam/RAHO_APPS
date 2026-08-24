@@ -48,6 +48,21 @@ export interface UpdateAdminManagerData {
   isActive?: boolean;
 }
 
+export type AdminManagerConversionRole = 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER';
+
+export interface ConvertAdminManagerRoleResult {
+  id: string;
+  email: string;
+  role: AdminManagerConversionRole;
+  assignedBranchCount: number;
+  historyPreserved: boolean;
+  roleTemplate: {
+    id: string;
+    code: string;
+    name: string;
+  } | null;
+}
+
 export interface AdminManagersResponse {
   data: AdminManager[];
   meta: {
@@ -164,6 +179,17 @@ export const adminManagersApi = {
     accessScope: AdminManagerAccessScope = 'FULL'
   ): Promise<{ data: { message: string; branch: Branch } }> => {
     const response = await api.post(`/admin/managers/${managerId}/branches`, { branchId, accessScope });
+    return response.data;
+  },
+
+  /**
+   * Convert an Admin Manager without replacing its user id or business history.
+   */
+  convertAdminManagerRole: async (
+    managerId: string,
+    targetRole: AdminManagerConversionRole,
+  ): Promise<{ data: ConvertAdminManagerRoleResult }> => {
+    const response = await api.post(`/admin/managers/${managerId}/convert-role`, { targetRole });
     return response.data;
   },
 

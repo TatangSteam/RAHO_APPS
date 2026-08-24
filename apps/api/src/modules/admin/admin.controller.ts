@@ -10,6 +10,7 @@ import {
   ProductType,
 } from '@prisma/client';
 import { prisma } from '@lib/prisma';
+import type { ConvertAdminManagerRoleInput } from './admin.schema';
 
 const adminService = new AdminService();
 
@@ -704,6 +705,28 @@ export async function updateAdminManager(req: Request, res: Response, next: Next
       adminManagerAccessScope,
       isActive,
     }, currentUserId);
+
+    sendSuccess(res, result);
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Convert Admin Manager into Admin Logistik or Finance & Logistics.
+ * POST /admin/managers/:managerId/convert-role
+ */
+export async function convertAdminManagerRole(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { managerId } = req.params;
+    const { targetRole } = req.body as ConvertAdminManagerRoleInput;
+    const currentUserId = req.user.userId;
+
+    const result = await adminService.convertAdminManagerRole(
+      managerId,
+      targetRole,
+      currentUserId,
+    );
 
     sendSuccess(res, result);
   } catch (err) {

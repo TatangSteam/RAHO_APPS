@@ -7,7 +7,12 @@ import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
-import { adminManagersApi, Branch, UpdateAdminManagerData } from '@/lib/api/adminManagersApi';
+import {
+  adminManagersApi,
+  Branch,
+  UpdateAdminManagerData,
+  type AdminManagerConversionRole,
+} from '@/lib/api/adminManagersApi';
 import type { AdminManagerAccessScope } from '@/types/auth';
 import styles from './page.module.css';
 
@@ -85,6 +90,7 @@ export default function AdminManagerDetailPage() {
 
   // Activate State
   const [activating, setActivating] = useState(false);
+  const [convertingRole, setConvertingRole] = useState<AdminManagerConversionRole | null>(null);
 
   const loadBranchStaff = useCallback(async (branchId: string) => {
     try {
@@ -392,6 +398,42 @@ export default function AdminManagerDetailPage() {
     setActiveTab(prev => ({ ...prev, [branchId]: tab }));
   };
 
+  const handleConvertRole = async (targetRole: AdminManagerConversionRole) => {
+    if (!manager) return;
+
+    const targetLabel = targetRole === 'ADMIN_LOGISTIK'
+      ? 'Admin Logistik'
+      : 'Finance & Logistik';
+    const scopeExplanation = targetRole === 'ADMIN_LOGISTIK'
+      ? 'Akun akan memperoleh akses logistik global dan assignment cabang Admin Manager akan dilepas.'
+      : 'Akun akan memperoleh akses Finance dan Logistik pada seluruh cabang aktif.';
+    const confirmation = [
+      `Ubah "${manager.fullName}" menjadi ${targetLabel}?`,
+      '',
+      scopeExplanation,
+      'User ID dan seluruh histori transaksi lama tetap dipertahankan.',
+      'Perubahan hak akses berlaku segera setelah akun login ulang.',
+    ].join('\n');
+
+    if (!confirm(confirmation)) return;
+
+    try {
+      setConvertingRole(targetRole);
+      const response = await adminManagersApi.convertAdminManagerRole(managerId, targetRole);
+      const branchInfo = targetRole === 'FINANCE_LOGISTICS_CONTROLLER'
+        ? ` untuk ${response.data.assignedBranchCount} cabang aktif`
+        : '';
+      showToast.success(`Akun berhasil diubah menjadi ${targetLabel}${branchInfo}. Histori tetap aman.`);
+      router.push('/admin/users');
+    } catch (error) {
+      assertCaughtError(error);
+      devError('Error converting Admin Manager role:', error);
+      showToast.error(error.response?.data?.message || `Gagal mengubah akun menjadi ${targetLabel}`);
+    } finally {
+      setConvertingRole(null);
+    }
+  };
+
   const fullAccessBranchCount = manager?.branches.filter(
     (branch) => getBranchAccessScope(branch) === 'FULL',
   ).length || 0;
@@ -465,6 +507,22 @@ export default function AdminManagerDetailPage() {
                 <span>{activating ? 'Mengaktifkan...' : 'Aktifkan'}</span>
               </button>
             )}
+            <button
+              className={styles.convertLogisticsBtn}
+              onClick={() => void handleConvertRole('ADMIN_LOGISTIK')}
+              disabled={convertingRole !== null}
+            >
+              <UserCog size={18} />
+              <span>{convertingRole === 'ADMIN_LOGISTIK' ? 'Mengubah...' : 'Jadikan Admin Logistik'}</span>
+            </button>
+            <button
+              className={styles.convertFinanceBtn}
+              onClick={() => void handleConvertRole('FINANCE_LOGISTICS_CONTROLLER')}
+              disabled={convertingRole !== null}
+            >
+              <UserCog size={18} />
+              <span>{convertingRole === 'FINANCE_LOGISTICS_CONTROLLER' ? 'Mengubah...' : 'Jadikan Finance & Logistik'}</span>
+            </button>
             <button 
               className={styles.editBtn}
               onClick={handleOpenEditModal}

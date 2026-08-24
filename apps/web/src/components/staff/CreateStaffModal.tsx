@@ -17,7 +17,18 @@ interface Props {
   userRole: string;
 }
 
-type CreatableStaffRole = 'ADMIN_LOGISTIK' | 'ADMIN_CABANG' | 'DOCTOR' | 'NURSE' | 'ADMIN_LAYANAN';
+type CreatableStaffRole =
+  | 'ADMIN_LOGISTIK'
+  | 'FINANCE_LOGISTICS_CONTROLLER'
+  | 'ADMIN_CABANG'
+  | 'DOCTOR'
+  | 'NURSE'
+  | 'ADMIN_LAYANAN';
+
+const GLOBAL_STAFF_ROLES: CreatableStaffRole[] = [
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+];
 
 export default function CreateStaffModal({ show, onClose, onSuccess, accessToken, branchId, userRole }: Props) {
   const [mounted, setMounted] = useState(false);
@@ -38,7 +49,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const canSelectBranch = userRole === 'ADMIN_MANAGER' || userRole === 'SUPER_ADMIN';
-  const showBranchSelection = canSelectBranch && formData.role !== 'ADMIN_LOGISTIK';
+  const showBranchSelection = canSelectBranch && !GLOBAL_STAFF_ROLES.includes(formData.role);
 
   useEffect(() => {
     setMounted(true);
@@ -161,7 +172,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         role: formData.role,
         fullName: formData.fullName,
         phone: formData.phone || undefined,
-        branchId: formData.role === 'ADMIN_LOGISTIK'
+        branchId: GLOBAL_STAFF_ROLES.includes(formData.role)
           ? null
           : canSelectBranch
             ? formData.selectedBranchId
@@ -204,6 +215,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
   const getRoleLabel = (role: string) => {
     const roleMap: Record<string, string> = {
       ADMIN_LOGISTIK: 'Admin Logistik',
+      FINANCE_LOGISTICS_CONTROLLER: 'Finance & Logistik',
       ADMIN_CABANG: 'Admin Cabang',
       DOCTOR: 'Dokter',
       NURSE: 'Perawat',
@@ -215,6 +227,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
   const getRoleDescription = (role: string) => {
     const descMap: Record<string, string> = {
       ADMIN_LOGISTIK: 'Mengelola stok pusat, pengiriman, dan proses logistik',
+      FINANCE_LOGISTICS_CONTROLLER: 'Mengelola Finance dan Logistik seluruh cabang dengan kontrol approval',
       ADMIN_CABANG: 'Mengelola cabang, staff, dan operasional cabang',
       DOCTOR: 'Dapat melakukan diagnosis, evaluasi, dan mengelola terapi pasien',
       NURSE: 'Dapat melakukan vital signs, infusion, dan material usage',
@@ -225,7 +238,14 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
   const getAvailableRoles = () => {
     if (userRole === 'SUPER_ADMIN') {
-      return ['ADMIN_LOGISTIK', 'ADMIN_CABANG', 'DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
+      return [
+        'ADMIN_LOGISTIK',
+        'FINANCE_LOGISTICS_CONTROLLER',
+        'ADMIN_CABANG',
+        'DOCTOR',
+        'NURSE',
+        'ADMIN_LAYANAN',
+      ] as const;
     }
     if (userRole === 'ADMIN_MANAGER') {
       return ['ADMIN_CABANG', 'DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
@@ -240,7 +260,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         <div className={styles.modalHeader}>
           <div>
             <h3 className={styles.modalTitle}>👤 Tambah User Baru</h3>
-            <p className={styles.modalSubtitle}>Buat akun user untuk cabang Anda</p>
+            <p className={styles.modalSubtitle}>Buat akun user beserta hak aksesnya</p>
           </div>
           <button
             onClick={onClose}

@@ -268,4 +268,37 @@ describe('adminManagersApi', () => {
       expect(result.meta).toHaveProperty('totalPages');
     });
   });
+
+  describe('convertAdminManagerRole', () => {
+    it('posts the selected Finance & Logistics target role', async () => {
+      const mockResponse = {
+        data: {
+          data: {
+            id: 'manager-1',
+            email: 'manager@raho.id',
+            role: 'FINANCE_LOGISTICS_CONTROLLER',
+            roleTemplate: {
+              id: 'template-1',
+              code: 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT',
+              name: 'Finance & Logistics Controller',
+            },
+            assignedBranchCount: 3,
+            historyPreserved: true,
+          },
+        },
+      };
+      (api.post as jest.Mock).mockResolvedValue(mockResponse);
+
+      const result = await adminManagersApi.convertAdminManagerRole(
+        'manager-1',
+        'FINANCE_LOGISTICS_CONTROLLER',
+      );
+
+      expect(api.post).toHaveBeenCalledWith('/admin/managers/manager-1/convert-role', {
+        targetRole: 'FINANCE_LOGISTICS_CONTROLLER',
+      });
+      expect(result.data.historyPreserved).toBe(true);
+      expect(result.data.assignedBranchCount).toBe(3);
+    });
+  });
 });

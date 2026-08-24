@@ -150,6 +150,7 @@
 .headerActions {
   display: flex;
   gap: 12px;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 
@@ -899,6 +900,43 @@
   font-size: 12px;
   font-weight: 400;
   color: var(--text-muted);
+}
+
+.convertLogisticsBtn,
+.convertFinanceBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.convertLogisticsBtn {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #bfdbfe;
+}
+
+.convertFinanceBtn {
+  color: #6d28d9;
+  background: #ede9fe;
+  border: 1px solid #ddd6fe;
+}
+
+.convertLogisticsBtn:hover:not(:disabled),
+.convertFinanceBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  filter: brightness(0.97);
+}
+
+.convertLogisticsBtn:disabled,
+.convertFinanceBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .fieldHelp {

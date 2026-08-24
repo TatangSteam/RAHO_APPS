@@ -21,6 +21,10 @@ import { getPositionCountMaps } from './services/staff-performance.service';
 
 const HASH_ROUNDS = 12;
 const DELETED_USER_EMAIL_DOMAIN = 'users.invalid';
+const GLOBAL_STAFF_ROLES: readonly Role[] = [
+  Role.ADMIN_LOGISTIK,
+  Role.FINANCE_LOGISTICS_CONTROLLER,
+];
 const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
@@ -55,6 +59,38 @@ function assertCanManageStaffRole(callerRole: Role, targetRole: Role) {
   if (!allowedRoles.includes(targetRole)) {
     throw errors.forbidden(`Role ${callerRole} tidak dapat membuat atau mengubah user menjadi ${targetRole}.`);
   }
+}
+
+export function isGlobalStaffRole(role: Role): boolean {
+  return GLOBAL_STAFF_ROLES.includes(role);
+}
+
+async function getActiveDefaultRoleTemplate(role: Role) {
+  const template = await prisma.roleTemplate.findUnique({
+    where: { baseRole: role },
+    select: { id: true, code: true, isActive: true },
+  });
+
+  if (!template?.isActive) {
+    throw errors.badRequest(
+      'ROLE_TEMPLATE_NOT_FOUND',
+      `Template aktif untuk role ${role} belum tersedia. Jalankan seluruh migration IAM terlebih dahulu.`,
+    );
+  }
+
+  return template;
+}
+
+async function getActiveOperationalBranchIds(): Promise<string[]> {
+  const branches = await prisma.branch.findMany({
+    where: {
+      isActive: true,
+      branchCode: { not: 'EXT' },
+    },
+    select: { id: true },
+  });
+
+  return branches.map((branch) => branch.id);
 }
 
 /**
@@ -256,7 +292,7 @@ export async function createUserService(
   }
 
   // If caller is ADMIN_CABANG, enforce branch assignment to their branch
-  let branchId = input.role === Role.ADMIN_LOGISTIK ? null : input.branchId ?? null;
+  let branchId = isGlobalStaffRole(input.role) ? null : input.branchId ?? null;
   if (callerRole === Role.ADMIN_CABANG) {
     if (!callerBranchId) {
       throw errors.badRequest('BRANCH_REQUIRED', 'Admin cabang harus memiliki branch.');
@@ -273,6 +309,12 @@ export async function createUserService(
 
   const hashed = await bcrypt.hash(input.password, HASH_ROUNDS);
   const staffCode = generateStaffCode(input.role);
+  const globalRoleTemplate = isGlobalStaffRole(input.role)
+    ? await getActiveDefaultRoleTemplate(input.role)
+    : null;
+  const financeBranchIds = input.role === Role.FINANCE_LOGISTICS_CONTROLLER
+    ? await getActiveOperationalBranchIds()
+    : [];
 
   console.log('🔍 [UserService] Generated staffCode:', staffCode);
 
@@ -281,6 +323,7 @@ export async function createUserService(
       email: input.email,
       password: hashed,
       role: input.role,
+      roleTemplateId: globalRoleTemplate?.id,
       staffCode,
       branchId,
       profile: {
@@ -295,6 +338,17 @@ export async function createUserService(
           create: {
             branchId,
           },
+        },
+      } : {}),
+      ...(input.role === Role.FINANCE_LOGISTICS_CONTROLLER ? {
+        staffBranches: {
+          create: financeBranchIds.map((assignedBranchId) => ({ branchId: assignedBranchId })),
+        },
+        managedBranches: {
+          create: financeBranchIds.map((assignedBranchId) => ({
+            branchId: assignedBranchId,
+            accessScope: 'FULL',
+          })),
         },
       } : {}),
     },
@@ -357,13 +411,13 @@ export async function updateUserService(
     : undefined;
 
   const targetRole = input.role ?? existing.role;
-  const nextBranchId = targetRole === Role.ADMIN_LOGISTIK
+  const nextBranchId = isGlobalStaffRole(targetRole)
     ? null
     : input.branchId !== undefined
       ? input.branchId
       : existing.branchId;
 
-  if (targetRole !== Role.ADMIN_LOGISTIK && input.branchId === null) {
+  if (!isGlobalStaffRole(targetRole) && input.branchId === null) {
     throw errors.badRequest('BRANCH_REQUIRED', 'Cabang harus dipilih untuk staff cabang.');
   }
 
@@ -384,13 +438,49 @@ export async function updateUserService(
     ...(input.phone !== undefined ? { phone: input.phone } : {}),
   };
 
-  const user = await prisma.user.update({
-    where: { id: userId },
-    data: {
+  const roleChanged = input.role !== undefined && input.role !== existing.role;
+  const globalRoleTemplate = roleChanged && isGlobalStaffRole(targetRole)
+    ? await getActiveDefaultRoleTemplate(targetRole)
+    : null;
+  const financeBranchIds = roleChanged && targetRole === Role.FINANCE_LOGISTICS_CONTROLLER
+    ? await getActiveOperationalBranchIds()
+    : [];
+
+  const user = await prisma.$transaction(async (tx) => {
+    if (roleChanged) {
+      await Promise.all([
+        tx.managerBranch.deleteMany({ where: { userId } }),
+        tx.staffBranch.deleteMany({ where: { userId } }),
+      ]);
+
+      if (targetRole === Role.FINANCE_LOGISTICS_CONTROLLER) {
+        await Promise.all([
+          tx.managerBranch.createMany({
+            data: financeBranchIds.map((assignedBranchId) => ({
+              userId,
+              branchId: assignedBranchId,
+              accessScope: 'FULL',
+            })),
+            skipDuplicates: true,
+          }),
+          tx.staffBranch.createMany({
+            data: financeBranchIds.map((assignedBranchId) => ({ userId, branchId: assignedBranchId })),
+            skipDuplicates: true,
+          }),
+        ]);
+      } else if (nextBranchId && (targetRole === Role.DOCTOR || targetRole === Role.NURSE)) {
+        await tx.staffBranch.create({ data: { userId, branchId: nextBranchId } });
+      }
+    }
+
+    return tx.user.update({
+      where: { id: userId },
+      data: {
       ...(input.email !== undefined ? { email: input.email } : {}),
       ...(hashedPassword !== undefined ? { password: hashedPassword } : {}),
       ...(input.role !== undefined ? { role: input.role } : {}),
-      ...(input.role === Role.ADMIN_LOGISTIK
+      ...(roleChanged ? { roleTemplateId: globalRoleTemplate?.id ?? null } : {}),
+      ...(input.role !== undefined && isGlobalStaffRole(input.role)
         ? { branchId: null }
         : input.branchId !== undefined
           ? { branchId: input.branchId }
@@ -403,8 +493,9 @@ export async function updateUserService(
             },
           }
         : {}),
-    },
-    select: userSelect,
+      },
+      select: userSelect,
+    });
   });
 
   return user;

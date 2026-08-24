@@ -168,6 +168,7 @@ export default function StaffManagementPage() {
   const getRoleBadge = (role: string) => {
     const roleMap: Record<string, { label: string; className: string }> = {
       ADMIN_LOGISTIK: { label: 'Admin Logistik', className: styles.roleDefault },
+      FINANCE_LOGISTICS_CONTROLLER: { label: 'Finance & Logistik', className: styles.roleDefault },
       ADMIN_CABANG: { label: 'Admin Cabang', className: styles.roleAdminCabang },
       DOCTOR: { label: 'Dokter', className: styles.roleDoctor },
       NURSE: { label: 'Perawat', className: styles.roleNurse },
@@ -213,6 +214,7 @@ export default function StaffManagementPage() {
           >
             <option value="ALL">Semua Role</option>
             <option value="ADMIN_LOGISTIK">Admin Logistik</option>
+            <option value="FINANCE_LOGISTICS_CONTROLLER">Finance & Logistik</option>
             <option value="ADMIN_CABANG">Admin Cabang</option>
             <option value="ADMIN_LAYANAN">Admin Layanan</option>
             <option value="DOCTOR">Dokter</option>

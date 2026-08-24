@@ -4,6 +4,13 @@ import { AuditAction, Prisma, Role } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { generateStaffCode } from '../../../utils/codeGenerator';
 
+type ManagerConversionRole = 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER';
+
+const MANAGER_CONVERSION_TEMPLATE_CODES: Record<ManagerConversionRole, string> = {
+  [Role.ADMIN_LOGISTIK]: 'ADMIN_LOGISTIK_DEFAULT',
+  [Role.FINANCE_LOGISTICS_CONTROLLER]: 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT',
+};
+
 /**
  * Service for user management (admin operations)
  */
@@ -259,6 +266,135 @@ export class UserManagementService {
         branchCode: mb.branch.branchCode,
       })),
       updatedAt: updatedUser.updatedAt.toISOString(),
+    };
+  }
+
+  /**
+   * Convert an Admin Manager into a global Logistics or Finance & Logistics
+   * account. Only IAM assignments are replaced; business and audit history
+   * remain linked to the same user id.
+   */
+  async convertAdminManagerRole(
+    managerId: string,
+    targetRole: ManagerConversionRole,
+    currentUserId: string,
+  ) {
+    if (managerId === currentUserId) {
+      throw {
+        status: 403,
+        code: 'SELF_ROLE_CONVERSION_DENIED',
+        message: 'Anda tidak dapat mengubah role akun sendiri.',
+      };
+    }
+
+    const [manager, roleTemplate] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: managerId },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          profile: { select: { fullName: true } },
+        },
+      }),
+      prisma.roleTemplate.findUnique({
+        where: { code: MANAGER_CONVERSION_TEMPLATE_CODES[targetRole] },
+        select: { id: true, code: true, name: true, isActive: true },
+      }),
+    ]);
+
+    if (!manager || manager.role !== Role.ADMIN_MANAGER) {
+      throw {
+        status: 404,
+        code: 'MANAGER_NOT_FOUND',
+        message: 'Admin Manager tidak ditemukan.',
+      };
+    }
+
+    if (!roleTemplate?.isActive) {
+      throw {
+        status: 422,
+        code: 'ROLE_TEMPLATE_NOT_READY',
+        message: `Template ${MANAGER_CONVERSION_TEMPLATE_CODES[targetRole]} belum tersedia atau tidak aktif.`,
+      };
+    }
+
+    const operationalBranches = targetRole === Role.FINANCE_LOGISTICS_CONTROLLER
+      ? await prisma.branch.findMany({
+          where: { isActive: true, branchCode: { not: 'EXT' } },
+          select: { id: true },
+        })
+      : [];
+
+    const converted = await prisma.$transaction(async (tx) => {
+      await Promise.all([
+        tx.managerBranch.deleteMany({ where: { userId: managerId } }),
+        tx.staffBranch.deleteMany({ where: { userId: managerId } }),
+      ]);
+
+      if (targetRole === Role.FINANCE_LOGISTICS_CONTROLLER) {
+        await Promise.all([
+          tx.managerBranch.createMany({
+            data: operationalBranches.map((branch) => ({
+              userId: managerId,
+              branchId: branch.id,
+              accessScope: 'FULL',
+            })),
+            skipDuplicates: true,
+          }),
+          tx.staffBranch.createMany({
+            data: operationalBranches.map((branch) => ({
+              userId: managerId,
+              branchId: branch.id,
+            })),
+            skipDuplicates: true,
+          }),
+        ]);
+      }
+
+      return tx.user.update({
+        where: { id: managerId },
+        data: {
+          role: targetRole,
+          roleTemplateId: roleTemplate.id,
+          branchId: null,
+          adminManagerAccessScope: 'FULL',
+        },
+        select: {
+          id: true,
+          email: true,
+          role: true,
+          isActive: true,
+          roleTemplate: { select: { id: true, code: true, name: true } },
+          profile: { select: { fullName: true, phone: true } },
+        },
+      });
+    });
+
+    await logAudit({
+      userId: currentUserId,
+      action: AuditAction.UPDATE,
+      module: 'IAM',
+      resource: 'User',
+      resourceId: managerId,
+      entityType: 'User',
+      entityId: managerId,
+      description: `Admin Manager dikonversi menjadi ${roleTemplate.name}.`,
+      beforeData: {
+        role: manager.role,
+        fullName: manager.profile?.fullName,
+      },
+      afterData: {
+        role: converted.role,
+        roleTemplateCode: converted.roleTemplate?.code,
+        assignedBranchCount: operationalBranches.length,
+      },
+    });
+
+    return {
+      ...converted,
+      assignedBranchCount: operationalBranches.length,
+      historyPreserved: true,
     };
   }
 

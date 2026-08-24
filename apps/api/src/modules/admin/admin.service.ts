@@ -187,6 +187,18 @@ export class AdminService {
     return await this.userManagementService.updateAdminManager(managerId, data, currentUserId);
   }
 
+  async convertAdminManagerRole(
+    managerId: string,
+    targetRole: 'ADMIN_LOGISTIK' | 'FINANCE_LOGISTICS_CONTROLLER',
+    currentUserId: string,
+  ) {
+    return await this.userManagementService.convertAdminManagerRole(
+      managerId,
+      targetRole,
+      currentUserId,
+    );
+  }
+
   /**
    * Delete admin manager
    */

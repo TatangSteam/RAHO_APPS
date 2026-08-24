@@ -117,6 +117,10 @@ export const createAdminManagerSchema = z.object({
   },
 );
 
+export const convertAdminManagerRoleSchema = z.object({
+  targetRole: z.enum(['ADMIN_LOGISTIK', 'FINANCE_LOGISTICS_CONTROLLER']),
+});
+
 // ============================================================
 // STOCK REQUEST SCHEMAS
 // ============================================================
@@ -340,6 +344,7 @@ export type CreateBranchInput = z.infer<typeof createBranchSchema>;
 export type UpdateBranchInput = z.infer<typeof updateBranchSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export type CreateAdminManagerInput = z.infer<typeof createAdminManagerSchema>;
+export type ConvertAdminManagerRoleInput = z.infer<typeof convertAdminManagerRoleSchema>;
 export type CreateStockRequestInput = z.infer<typeof createStockRequestSchema>;
 export type StockRequestItemInput = z.infer<typeof stockRequestItemSchema>;
 export type CreatePackagePricingInput = z.infer<typeof createPackagePricingSchema>;
