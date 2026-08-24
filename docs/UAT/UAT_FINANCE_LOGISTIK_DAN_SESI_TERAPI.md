@@ -6,7 +6,8 @@ Pembaruan: 24 Agustus 2026
 
 Mulai dari [Pusat Dokumen UAT](./README.md). Untuk skenario harian yang lebih
 ringkas gunakan [UAT Finance](./UAT_FINANCE.md) dan
-[UAT Admin Manager](./UAT_ADMIN_MANAGER.md).
+[UAT Admin Manager](./UAT_ADMIN_MANAGER.md). Setup akses dan pemeriksaan akhir
+lintas role menggunakan [UAT Super Admin](./UAT_SUPER_ADMIN.md).
 
 ## 1. Batas keamanan
 

@@ -9,6 +9,7 @@ Pembaruan: 24 Agustus 2026
 Dokumen terkait:
 
 - [Pusat Dokumen UAT](./README.md)
+- [UAT Super Admin](./UAT_SUPER_ADMIN.md)
 - [UAT Finance](./UAT_FINANCE.md)
 - [UAT Admin Layanan / MSO](./UAT_ADMIN_LAYANAN_MSO.md)
 - [UAT Nakes](./UAT_NAKES.md)
@@ -164,4 +165,3 @@ Untuk flow lintas role lengkap, jalankan `MFA-01` sampai `MFA-12` pada
 | Perwakilan Admin Manager |  |  |  |
 | QA/UAT |  |  |  |
 | Product Owner |  |  |  |
-

@@ -8,6 +8,7 @@ Pembaruan: 24 Agustus 2026
 Dokumen ini terhubung dengan:
 
 - [Pusat Dokumen UAT](./README.md)
+- [UAT Super Admin](./UAT_SUPER_ADMIN.md)
 - [UAT Admin Layanan / MSO](./UAT_ADMIN_LAYANAN_MSO.md)
 - [UAT Nakes](./UAT_NAKES.md)
 - [UAT Admin Manager](./UAT_ADMIN_MANAGER.md)

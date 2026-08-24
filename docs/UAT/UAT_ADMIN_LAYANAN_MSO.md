@@ -12,6 +12,7 @@ terlebih dahulu.
 Dokumen terkait:
 
 - [Pusat Dokumen UAT](./README.md)
+- [UAT Super Admin](./UAT_SUPER_ADMIN.md)
 - [UAT Nakes / Perawat](./UAT_NAKES.md)
 - [UAT Dokter](./UAT_DOKTER.md)
 - [UAT Admin Manager](./UAT_ADMIN_MANAGER.md)

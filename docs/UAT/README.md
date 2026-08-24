@@ -10,6 +10,7 @@ Pembaruan: 24 Agustus 2026
 
 | Saya menguji sebagai | Buka ini | Mulai dari |
 |---|---|---|
+| Super Admin | [UAT Super Admin](./UAT_SUPER_ADMIN.md) | Cek Kilat + `SA-TTR` + `SA-MFA` |
 | Admin Layanan / MSO | [UAT Admin Layanan / MSO](./UAT_ADMIN_LAYANAN_MSO.md) | Cek Kilat + `TTR` |
 | Nakes / Perawat | [UAT Nakes](./UAT_NAKES.md) | Cek Kilat + `TTR` |
 | Dokter | [UAT Dokter](./UAT_DOKTER.md) | Cek Kilat + `TTR` |
@@ -50,11 +51,12 @@ Sumber: `apps/api/prisma/seeds/users.seed.ts`.
 ## Urutan tercepat
 
 ```text
-1. Seed database test
+1. Super Admin menjalankan preflight akun, role, scope, dan cabang
 2. TTR: MSO -> Nakes -> Dokter -> MSO/Nakes
 3. MFA: Pengaju -> Admin Cabang -> Finance -> Manager -> Finance
 4. Manager cek laporan/audit
 5. Finance cek jurnal, kas/bank, dan rekonsiliasi
+6. Super Admin menjalankan checkpoint SA-TTR dan SA-MFA
 ```
 
 Perintah seed dari root project:
@@ -104,6 +106,8 @@ harus dicatat pada seluruh dokumen terkait.
 
 Pembagian tanggung jawab:
 
+- Super Admin: menyiapkan akun/scope dan memeriksa audit lintas flow tanpa
+  mengambil alih pekerjaan klinis atau maker-checker.
 - MSO/Nakes/Dokter: membuat klaim milik sendiri.
 - Admin Cabang: verifikasi operasional cabang.
 - Finance: persetujuan Finance dan pembayaran.
@@ -118,4 +122,3 @@ Pembagian tanggung jawab:
 - Satu aksi bisnis hanya membentuk satu mutasi stok atau satu posting uang.
 - Total debit harus sama dengan total kredit.
 - Jika salah satu aturan ini gagal, hasil UAT adalah **TIDAK LULUS**.
-
