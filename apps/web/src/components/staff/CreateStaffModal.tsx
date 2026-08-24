@@ -3,7 +3,7 @@
 import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, PackageCheck, BadgeDollarSign, Building2, Stethoscope, HeartPulse, ClipboardList, UserPlus, X } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './CreateStaffModal.module.css';
@@ -236,6 +236,18 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
     return descMap[role] || '';
   };
 
+  const getRoleIcon = (role: CreatableStaffRole) => {
+    const icons: Record<CreatableStaffRole, React.ReactNode> = {
+      ADMIN_LOGISTIK: <PackageCheck size={26} />,
+      FINANCE_LOGISTICS_CONTROLLER: <BadgeDollarSign size={26} />,
+      ADMIN_CABANG: <Building2 size={26} />,
+      DOCTOR: <Stethoscope size={26} />,
+      NURSE: <HeartPulse size={26} />,
+      ADMIN_LAYANAN: <ClipboardList size={26} />,
+    };
+    return icons[role];
+  };
+
   const getAvailableRoles = () => {
     if (userRole === 'SUPER_ADMIN') {
       return [
@@ -259,7 +271,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
         {/* Header */}
         <div className={styles.modalHeader}>
           <div>
-            <h3 className={styles.modalTitle}>👤 Tambah User Baru</h3>
+            <h3 className={styles.modalTitle}><UserPlus size={22} /> Tambah User Baru</h3>
             <p className={styles.modalSubtitle}>Buat akun user beserta hak aksesnya</p>
           </div>
           <button
@@ -268,7 +280,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
             aria-label="Close"
             disabled={loading}
           >
-            ✕
+            <X size={22} />
           </button>
         </div>
 
@@ -279,22 +291,25 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
             <h4 className={styles.sectionTitle}>1. Pilih Role {canSelectBranch ? 'User' : 'Staff'}</h4>
             <div className={styles.roleGrid}>
               {getAvailableRoles().map((role) => (
-                <div
+                <button
+                  type="button"
                   key={role}
                   className={`${styles.roleCard} ${formData.role === role ? styles.roleCardActive : ''}`}
                   onClick={() => setFormData({ ...formData, role })}
+                  aria-pressed={formData.role === role}
+                  disabled={loading}
                 >
                   <div className={styles.roleIcon}>
-                    {role === 'ADMIN_CABANG' ? '👨‍💼' : role === 'DOCTOR' ? '👨‍⚕️' : role === 'NURSE' ? '👩‍⚕️' : '👔'}
+                    {getRoleIcon(role)}
                   </div>
                   <div className={styles.roleInfo}>
                     <h5 className={styles.roleName}>{getRoleLabel(role)}</h5>
                     <p className={styles.roleDesc}>{getRoleDescription(role)}</p>
                   </div>
                   <div className={styles.roleCheck}>
-                    {formData.role === role && '✓'}
+                    {formData.role === role && <span aria-hidden="true">✓</span>}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </div>

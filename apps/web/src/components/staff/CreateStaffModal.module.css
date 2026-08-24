@@ -64,6 +64,9 @@
 }
 
 .modalTitle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-size: 20px;
   font-weight: 700;
   margin: 0 0 4px 0;
@@ -154,6 +157,10 @@
 }
 
 .roleCard {
+  width: 100%;
+  font: inherit;
+  color: inherit;
+  text-align: left;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -173,6 +180,16 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
+.roleCard:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.35);
+  outline-offset: 2px;
+}
+
+.roleCard:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .roleCardActive {
   border-color: #3b82f6;
   background: rgba(59, 130, 246, 0.15);
@@ -180,7 +197,14 @@
 }
 
 .roleIcon {
-  font-size: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.14);
+  border-radius: 12px;
   flex-shrink: 0;
 }
 

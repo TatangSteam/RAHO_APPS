@@ -50,14 +50,16 @@ describe('Admin Manager role conversion contract', () => {
     expect(createModal).toContain('Finance & Logistik');
   });
 
-  it('shows both conversion actions and warns that history is preserved', () => {
+  it('shows a guided role conversion modal and warns that history is preserved', () => {
     const managerPage = readFileSync(resolve(
       apiRoot,
       '../web/src/app/(staff)/admin/managers/[managerId]/page.tsx',
     ), 'utf8');
 
-    expect(managerPage).toContain('Jadikan Admin Logistik');
-    expect(managerPage).toContain('Jadikan Finance & Logistik');
-    expect(managerPage).toContain('seluruh histori transaksi lama tetap dipertahankan');
+    expect(managerPage).toContain('Ubah Peran');
+    expect(managerPage).toContain('Admin Logistik');
+    expect(managerPage).toContain('Finance &amp; Logistik');
+    expect(managerPage).toContain('User ID dan seluruh histori transaksi lama tetap aman');
+    expect(managerPage).toContain('Konfirmasi Ubah Peran');
   });
 });

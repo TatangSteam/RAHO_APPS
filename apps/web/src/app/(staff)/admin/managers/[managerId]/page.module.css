@@ -902,8 +902,7 @@
   color: var(--text-muted);
 }
 
-.convertLogisticsBtn,
-.convertFinanceBtn {
+.convertRoleBtn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -913,30 +912,193 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.convertLogisticsBtn {
-  color: #1d4ed8;
-  background: #dbeafe;
-  border: 1px solid #bfdbfe;
-}
-
-.convertFinanceBtn {
   color: #6d28d9;
-  background: #ede9fe;
+  background: #f5f3ff;
   border: 1px solid #ddd6fe;
 }
 
-.convertLogisticsBtn:hover:not(:disabled),
-.convertFinanceBtn:hover:not(:disabled) {
+.convertRoleBtn:hover:not(:disabled) {
   transform: translateY(-1px);
-  filter: brightness(0.97);
+  background: #ede9fe;
+  border-color: #a78bfa;
 }
 
-.convertLogisticsBtn:disabled,
-.convertFinanceBtn:disabled {
+.convertRoleBtn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.modalSubtitle {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.roleConversionModal {
+  max-width: 680px;
+  max-height: 90vh;
+}
+
+.roleChoiceGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.roleChoiceCard {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: flex-start;
+  gap: 12px;
+  min-height: 138px;
+  padding: 18px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--surface-input);
+  border: 2px solid var(--surface-border);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.roleChoiceCard:hover:not(:disabled) {
+  transform: translateY(-2px);
+  border-color: #a78bfa;
+  box-shadow: 0 8px 24px rgba(109, 40, 217, 0.12);
+}
+
+.roleChoiceCard:focus-visible {
+  outline: 3px solid rgba(139, 92, 246, 0.3);
+  outline-offset: 2px;
+}
+
+.roleChoiceCard:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.roleChoiceActive {
+  background: color-mix(in srgb, #8b5cf6 10%, var(--surface-card));
+  border-color: #8b5cf6;
+  box-shadow: 0 8px 24px rgba(109, 40, 217, 0.14);
+}
+
+.roleChoiceIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.logisticsIcon {
+  color: #1d4ed8;
+  background: #dbeafe;
+}
+
+.financeIcon {
+  color: #6d28d9;
+  background: #ede9fe;
+}
+
+.roleChoiceContent {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.roleChoiceContent strong {
+  font-size: 15px;
+}
+
+.roleChoiceContent small {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.roleChoiceCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: white;
+  background: #8b5cf6;
+  border-radius: 999px;
+}
+
+.conversionNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 18px;
+  padding: 16px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+}
+
+.conversionNotice > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.conversionNotice strong {
+  font-size: 14px;
+}
+
+.conversionNotice ul {
+  margin: 7px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.cancelConversionBtn,
+.confirmConversionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 10px 18px;
+  border-radius: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancelConversionBtn {
+  color: var(--text-secondary);
+  background: var(--surface-card);
+  border: 1px solid var(--surface-border);
+}
+
+.confirmConversionBtn {
+  color: white;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  border: 1px solid #6d28d9;
+  box-shadow: 0 4px 12px rgba(109, 40, 217, 0.24);
+}
+
+.cancelConversionBtn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.confirmConversionBtn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 7px 18px rgba(109, 40, 217, 0.3);
+}
+
+.cancelConversionBtn:disabled,
+.confirmConversionBtn:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .fieldHelp {
@@ -1112,5 +1274,22 @@
   .editModal {
     max-width: 100%;
     margin: 10px;
+  }
+
+  .roleChoiceGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .roleChoiceCard {
+    min-height: 0;
+  }
+
+  .modalFooter {
+    flex-direction: column-reverse;
+  }
+
+  .cancelConversionBtn,
+  .confirmConversionBtn {
+    width: 100%;
   }
 }

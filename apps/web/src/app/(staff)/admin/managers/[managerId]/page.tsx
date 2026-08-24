@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
-import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power } from 'lucide-react';
+import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power, PackageCheck, BadgeDollarSign, AlertTriangle, Check } from 'lucide-react';
 import {
   adminManagersApi,
   Branch,
@@ -91,6 +91,8 @@ export default function AdminManagerDetailPage() {
   // Activate State
   const [activating, setActivating] = useState(false);
   const [convertingRole, setConvertingRole] = useState<AdminManagerConversionRole | null>(null);
+  const [showRoleConversionModal, setShowRoleConversionModal] = useState(false);
+  const [selectedConversionRole, setSelectedConversionRole] = useState<AdminManagerConversionRole>('ADMIN_LOGISTIK');
 
   const loadBranchStaff = useCallback(async (branchId: string) => {
     try {
@@ -404,19 +406,6 @@ export default function AdminManagerDetailPage() {
     const targetLabel = targetRole === 'ADMIN_LOGISTIK'
       ? 'Admin Logistik'
       : 'Finance & Logistik';
-    const scopeExplanation = targetRole === 'ADMIN_LOGISTIK'
-      ? 'Akun akan memperoleh akses logistik global dan assignment cabang Admin Manager akan dilepas.'
-      : 'Akun akan memperoleh akses Finance dan Logistik pada seluruh cabang aktif.';
-    const confirmation = [
-      `Ubah "${manager.fullName}" menjadi ${targetLabel}?`,
-      '',
-      scopeExplanation,
-      'User ID dan seluruh histori transaksi lama tetap dipertahankan.',
-      'Perubahan hak akses berlaku segera setelah akun login ulang.',
-    ].join('\n');
-
-    if (!confirm(confirmation)) return;
-
     try {
       setConvertingRole(targetRole);
       const response = await adminManagersApi.convertAdminManagerRole(managerId, targetRole);
@@ -424,6 +413,7 @@ export default function AdminManagerDetailPage() {
         ? ` untuk ${response.data.assignedBranchCount} cabang aktif`
         : '';
       showToast.success(`Akun berhasil diubah menjadi ${targetLabel}${branchInfo}. Histori tetap aman.`);
+      setShowRoleConversionModal(false);
       router.push('/admin/users');
     } catch (error) {
       assertCaughtError(error);
@@ -508,20 +498,12 @@ export default function AdminManagerDetailPage() {
               </button>
             )}
             <button
-              className={styles.convertLogisticsBtn}
-              onClick={() => void handleConvertRole('ADMIN_LOGISTIK')}
+              className={styles.convertRoleBtn}
+              onClick={() => setShowRoleConversionModal(true)}
               disabled={convertingRole !== null}
             >
               <UserCog size={18} />
-              <span>{convertingRole === 'ADMIN_LOGISTIK' ? 'Mengubah...' : 'Jadikan Admin Logistik'}</span>
-            </button>
-            <button
-              className={styles.convertFinanceBtn}
-              onClick={() => void handleConvertRole('FINANCE_LOGISTICS_CONTROLLER')}
-              disabled={convertingRole !== null}
-            >
-              <UserCog size={18} />
-              <span>{convertingRole === 'FINANCE_LOGISTICS_CONTROLLER' ? 'Mengubah...' : 'Jadikan Finance & Logistik'}</span>
+              <span>Ubah Peran</span>
             </button>
             <button 
               className={styles.editBtn}
@@ -808,6 +790,104 @@ export default function AdminManagerDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Role Conversion Modal */}
+      {showRoleConversionModal && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => convertingRole === null && setShowRoleConversionModal(false)}
+        >
+          <div
+            className={`${styles.modal} ${styles.roleConversionModal}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="role-conversion-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.modalHeader}>
+              <div>
+                <h3 id="role-conversion-title">Ubah Peran Admin</h3>
+                <p className={styles.modalSubtitle}>Pilih akses baru untuk {manager.fullName}</p>
+              </div>
+              <button
+                type="button"
+                className={styles.modalCloseBtn}
+                onClick={() => setShowRoleConversionModal(false)}
+                disabled={convertingRole !== null}
+                aria-label="Tutup modal"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className={styles.modalContent}>
+              <div className={styles.roleChoiceGrid}>
+                <button
+                  type="button"
+                  className={`${styles.roleChoiceCard} ${selectedConversionRole === 'ADMIN_LOGISTIK' ? styles.roleChoiceActive : ''}`}
+                  onClick={() => setSelectedConversionRole('ADMIN_LOGISTIK')}
+                  disabled={convertingRole !== null}
+                >
+                  <span className={`${styles.roleChoiceIcon} ${styles.logisticsIcon}`}><PackageCheck size={24} /></span>
+                  <span className={styles.roleChoiceContent}>
+                    <strong>Admin Logistik</strong>
+                    <small>Mengelola stok pusat, pengiriman, penerimaan, dan operasional logistik.</small>
+                  </span>
+                  <span className={styles.roleChoiceCheck}>{selectedConversionRole === 'ADMIN_LOGISTIK' && <Check size={18} />}</span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.roleChoiceCard} ${selectedConversionRole === 'FINANCE_LOGISTICS_CONTROLLER' ? styles.roleChoiceActive : ''}`}
+                  onClick={() => setSelectedConversionRole('FINANCE_LOGISTICS_CONTROLLER')}
+                  disabled={convertingRole !== null}
+                >
+                  <span className={`${styles.roleChoiceIcon} ${styles.financeIcon}`}><BadgeDollarSign size={24} /></span>
+                  <span className={styles.roleChoiceContent}>
+                    <strong>Finance &amp; Logistik</strong>
+                    <small>Mengelola Finance dan Logistik dengan akses seluruh cabang aktif.</small>
+                  </span>
+                  <span className={styles.roleChoiceCheck}>{selectedConversionRole === 'FINANCE_LOGISTICS_CONTROLLER' && <Check size={18} />}</span>
+                </button>
+              </div>
+
+              <div className={styles.conversionNotice}>
+                <AlertTriangle size={20} />
+                <div>
+                  <strong>Yang perlu diketahui</strong>
+                  <ul>
+                    <li>User ID dan seluruh histori transaksi lama tetap aman.</li>
+                    <li>{selectedConversionRole === 'ADMIN_LOGISTIK'
+                      ? 'Assignment cabang Admin Manager akan dilepas dan diganti akses logistik global.'
+                      : 'Akun akan mendapat akses Finance dan Logistik pada seluruh cabang aktif.'}</li>
+                    <li>Hak akses baru berlaku setelah pengguna login ulang.</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className={styles.modalFooter}>
+              <button
+                type="button"
+                className={styles.cancelConversionBtn}
+                onClick={() => setShowRoleConversionModal(false)}
+                disabled={convertingRole !== null}
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                className={styles.confirmConversionBtn}
+                onClick={() => void handleConvertRole(selectedConversionRole)}
+                disabled={convertingRole !== null}
+              >
+                <UserCog size={18} />
+                <span>{convertingRole ? 'Menyimpan perubahan...' : 'Konfirmasi Ubah Peran'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add Branch Modal */}
       {showAddBranchModal && (
