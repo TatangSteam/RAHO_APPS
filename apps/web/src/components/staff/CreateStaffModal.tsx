@@ -3,7 +3,19 @@
 import { assertCaughtError } from '@/lib/caughtError';
 import { useCallback, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Eye, EyeOff, PackageCheck, BadgeDollarSign, Building2, Stethoscope, HeartPulse, ClipboardList, UserPlus, X } from 'lucide-react';
+import {
+  BadgeDollarSign,
+  Building2,
+  ClipboardList,
+  Eye,
+  EyeOff,
+  HeartPulse,
+  PackageCheck,
+  Stethoscope,
+  UserPlus,
+  X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
 import styles from './CreateStaffModal.module.css';
@@ -29,6 +41,67 @@ const GLOBAL_STAFF_ROLES: CreatableStaffRole[] = [
   'ADMIN_LOGISTIK',
   'FINANCE_LOGISTICS_CONTROLLER',
 ];
+
+const SUPER_ADMIN_CREATABLE_ROLES: CreatableStaffRole[] = [
+  'ADMIN_LOGISTIK',
+  'FINANCE_LOGISTICS_CONTROLLER',
+  'ADMIN_CABANG',
+  'DOCTOR',
+  'NURSE',
+  'ADMIN_LAYANAN',
+];
+
+const ADMIN_MANAGER_CREATABLE_ROLES: CreatableStaffRole[] = [
+  'ADMIN_CABANG',
+  'DOCTOR',
+  'NURSE',
+  'ADMIN_LAYANAN',
+];
+
+const BRANCH_CREATABLE_ROLES: CreatableStaffRole[] = ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN'];
+
+const STAFF_ROLE_META: Record<CreatableStaffRole, {
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}> = {
+  ADMIN_LOGISTIK: {
+    label: 'Admin Logistik',
+    description: 'Mengelola stok pusat, pengiriman, dan proses logistik',
+    icon: PackageCheck,
+  },
+  FINANCE_LOGISTICS_CONTROLLER: {
+    label: 'Finance & Logistik',
+    description: 'Mengelola Finance dan Logistik seluruh cabang dengan kontrol approval',
+    icon: BadgeDollarSign,
+  },
+  ADMIN_CABANG: {
+    label: 'Admin Cabang',
+    description: 'Mengelola cabang, staff, dan operasional cabang',
+    icon: Building2,
+  },
+  DOCTOR: {
+    label: 'Dokter',
+    description: 'Dapat melakukan diagnosis, evaluasi, dan mengelola terapi pasien',
+    icon: Stethoscope,
+  },
+  NURSE: {
+    label: 'Perawat',
+    description: 'Dapat melakukan vital signs, infusion, dan material usage',
+    icon: HeartPulse,
+  },
+  ADMIN_LAYANAN: {
+    label: 'Admin Layanan',
+    description: 'Dapat mengelola sesi terapi dan administrasi layanan',
+    icon: ClipboardList,
+  },
+};
+
+function getCreatableRoles(userRole: string): CreatableStaffRole[] {
+  if (userRole === 'SUPER_ADMIN') return SUPER_ADMIN_CREATABLE_ROLES;
+  if (userRole === 'ADMIN_MANAGER') return ADMIN_MANAGER_CREATABLE_ROLES;
+  return BRANCH_CREATABLE_ROLES;
+}
 
 export default function CreateStaffModal({ show, onClose, onSuccess, accessToken, branchId, userRole }: Props) {
   const [mounted, setMounted] = useState(false);
@@ -212,59 +285,6 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
     }
   };
 
-  const getRoleLabel = (role: string) => {
-    const roleMap: Record<string, string> = {
-      ADMIN_LOGISTIK: 'Admin Logistik',
-      FINANCE_LOGISTICS_CONTROLLER: 'Finance & Logistik',
-      ADMIN_CABANG: 'Admin Cabang',
-      DOCTOR: 'Dokter',
-      NURSE: 'Perawat',
-      ADMIN_LAYANAN: 'Admin Layanan',
-    };
-    return roleMap[role] || role;
-  };
-
-  const getRoleDescription = (role: string) => {
-    const descMap: Record<string, string> = {
-      ADMIN_LOGISTIK: 'Mengelola stok pusat, pengiriman, dan proses logistik',
-      FINANCE_LOGISTICS_CONTROLLER: 'Mengelola Finance dan Logistik seluruh cabang dengan kontrol approval',
-      ADMIN_CABANG: 'Mengelola cabang, staff, dan operasional cabang',
-      DOCTOR: 'Dapat melakukan diagnosis, evaluasi, dan mengelola terapi pasien',
-      NURSE: 'Dapat melakukan vital signs, infusion, dan material usage',
-      ADMIN_LAYANAN: 'Dapat mengelola sesi terapi dan administrasi layanan',
-    };
-    return descMap[role] || '';
-  };
-
-  const getRoleIcon = (role: CreatableStaffRole) => {
-    const icons: Record<CreatableStaffRole, React.ReactNode> = {
-      ADMIN_LOGISTIK: <PackageCheck size={26} />,
-      FINANCE_LOGISTICS_CONTROLLER: <BadgeDollarSign size={26} />,
-      ADMIN_CABANG: <Building2 size={26} />,
-      DOCTOR: <Stethoscope size={26} />,
-      NURSE: <HeartPulse size={26} />,
-      ADMIN_LAYANAN: <ClipboardList size={26} />,
-    };
-    return icons[role];
-  };
-
-  const getAvailableRoles = () => {
-    if (userRole === 'SUPER_ADMIN') {
-      return [
-        'ADMIN_LOGISTIK',
-        'FINANCE_LOGISTICS_CONTROLLER',
-        'ADMIN_CABANG',
-        'DOCTOR',
-        'NURSE',
-        'ADMIN_LAYANAN',
-      ] as const;
-    }
-    if (userRole === 'ADMIN_MANAGER') {
-      return ['ADMIN_CABANG', 'DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
-    }
-    return ['DOCTOR', 'NURSE', 'ADMIN_LAYANAN'] as const;
-  };
-
   const modalContent = (
     <div className={styles.modalBackdrop} onClick={handleBackdropClick}>
       <div className={styles.modalContainer}>
@@ -290,27 +310,31 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
           <div className={styles.section}>
             <h4 className={styles.sectionTitle}>1. Pilih Role {canSelectBranch ? 'User' : 'Staff'}</h4>
             <div className={styles.roleGrid}>
-              {getAvailableRoles().map((role) => (
-                <button
-                  type="button"
-                  key={role}
-                  className={`${styles.roleCard} ${formData.role === role ? styles.roleCardActive : ''}`}
-                  onClick={() => setFormData({ ...formData, role })}
-                  aria-pressed={formData.role === role}
-                  disabled={loading}
-                >
-                  <div className={styles.roleIcon}>
-                    {getRoleIcon(role)}
-                  </div>
-                  <div className={styles.roleInfo}>
-                    <h5 className={styles.roleName}>{getRoleLabel(role)}</h5>
-                    <p className={styles.roleDesc}>{getRoleDescription(role)}</p>
-                  </div>
-                  <div className={styles.roleCheck}>
-                    {formData.role === role && <span aria-hidden="true">✓</span>}
-                  </div>
-                </button>
-              ))}
+              {getCreatableRoles(userRole).map((role) => {
+                const roleMeta = STAFF_ROLE_META[role];
+                const RoleIcon = roleMeta.icon;
+                return (
+                  <button
+                    type="button"
+                    key={role}
+                    className={`${styles.roleCard} ${formData.role === role ? styles.roleCardActive : ''}`}
+                    onClick={() => setFormData({ ...formData, role })}
+                    aria-pressed={formData.role === role}
+                    disabled={loading}
+                  >
+                    <div className={styles.roleIcon}>
+                      <RoleIcon size={26} />
+                    </div>
+                    <div className={styles.roleInfo}>
+                      <h5 className={styles.roleName}>{roleMeta.label}</h5>
+                      <p className={styles.roleDesc}>{roleMeta.description}</p>
+                    </div>
+                    <div className={styles.roleCheck}>
+                      {formData.role === role && <span aria-hidden="true">✓</span>}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

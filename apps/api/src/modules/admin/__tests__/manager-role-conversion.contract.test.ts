@@ -58,7 +58,7 @@ describe('Admin Manager role conversion contract', () => {
 
     expect(managerPage).toContain('Ubah Peran');
     expect(managerPage).toContain('Admin Logistik');
-    expect(managerPage).toContain('Finance &amp; Logistik');
+    expect(managerPage).toContain("label: 'Finance & Logistik'");
     expect(managerPage).toContain('User ID dan seluruh histori transaksi lama tetap aman');
     expect(managerPage).toContain('Konfirmasi Ubah Peran');
   });

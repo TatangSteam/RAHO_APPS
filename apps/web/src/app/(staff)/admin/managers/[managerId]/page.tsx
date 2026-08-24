@@ -6,7 +6,26 @@ import { useRouter, useParams } from 'next/navigation';
 import { useAuthStore } from '@/stores/authStore';
 import { showToast } from '@/lib/toast';
 import { devError } from '@/lib/logger';
-import { ArrowLeft, Building2, Users, UserCog, ChevronDown, ChevronUp, Plus, X, Trash2, Edit, Eye, EyeOff, Power, PackageCheck, BadgeDollarSign, AlertTriangle, Check } from 'lucide-react';
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BadgeDollarSign,
+  Building2,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Edit,
+  Eye,
+  EyeOff,
+  PackageCheck,
+  Plus,
+  Power,
+  Trash2,
+  UserCog,
+  Users,
+  X,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
   adminManagersApi,
   Branch,
@@ -49,6 +68,36 @@ const accessScopeLabels: Record<AdminManagerAccessScope, string> = {
   FULL: 'Akses Penuh',
   MEMBER_VIEW_ONLY: 'Hanya Lihat Member',
 };
+
+const ROLE_CONVERSION_OPTIONS: Array<{
+  role: AdminManagerConversionRole;
+  label: string;
+  description: string;
+  impact: string;
+  icon: LucideIcon;
+  iconClassName: 'logisticsIcon' | 'financeIcon';
+}> = [
+  {
+    role: 'ADMIN_LOGISTIK',
+    label: 'Admin Logistik',
+    description: 'Mengelola stok pusat, pengiriman, penerimaan, dan operasional logistik.',
+    impact: 'Assignment cabang Admin Manager akan dilepas dan diganti akses logistik global.',
+    icon: PackageCheck,
+    iconClassName: 'logisticsIcon',
+  },
+  {
+    role: 'FINANCE_LOGISTICS_CONTROLLER',
+    label: 'Finance & Logistik',
+    description: 'Mengelola Finance dan Logistik dengan akses seluruh cabang aktif.',
+    impact: 'Akun akan mendapat akses Finance dan Logistik pada seluruh cabang aktif.',
+    icon: BadgeDollarSign,
+    iconClassName: 'financeIcon',
+  },
+];
+
+const ROLE_CONVERSION_META = Object.fromEntries(
+  ROLE_CONVERSION_OPTIONS.map((option) => [option.role, option]),
+) as Record<AdminManagerConversionRole, (typeof ROLE_CONVERSION_OPTIONS)[number]>;
 
 export default function AdminManagerDetailPage() {
   const router = useRouter();
@@ -403,9 +452,7 @@ export default function AdminManagerDetailPage() {
   const handleConvertRole = async (targetRole: AdminManagerConversionRole) => {
     if (!manager) return;
 
-    const targetLabel = targetRole === 'ADMIN_LOGISTIK'
-      ? 'Admin Logistik'
-      : 'Finance & Logistik';
+    const targetLabel = ROLE_CONVERSION_META[targetRole].label;
     try {
       setConvertingRole(targetRole);
       const response = await adminManagersApi.convertAdminManagerRole(managerId, targetRole);
@@ -822,33 +869,27 @@ export default function AdminManagerDetailPage() {
 
             <div className={styles.modalContent}>
               <div className={styles.roleChoiceGrid}>
-                <button
-                  type="button"
-                  className={`${styles.roleChoiceCard} ${selectedConversionRole === 'ADMIN_LOGISTIK' ? styles.roleChoiceActive : ''}`}
-                  onClick={() => setSelectedConversionRole('ADMIN_LOGISTIK')}
-                  disabled={convertingRole !== null}
-                >
-                  <span className={`${styles.roleChoiceIcon} ${styles.logisticsIcon}`}><PackageCheck size={24} /></span>
-                  <span className={styles.roleChoiceContent}>
-                    <strong>Admin Logistik</strong>
-                    <small>Mengelola stok pusat, pengiriman, penerimaan, dan operasional logistik.</small>
-                  </span>
-                  <span className={styles.roleChoiceCheck}>{selectedConversionRole === 'ADMIN_LOGISTIK' && <Check size={18} />}</span>
-                </button>
-
-                <button
-                  type="button"
-                  className={`${styles.roleChoiceCard} ${selectedConversionRole === 'FINANCE_LOGISTICS_CONTROLLER' ? styles.roleChoiceActive : ''}`}
-                  onClick={() => setSelectedConversionRole('FINANCE_LOGISTICS_CONTROLLER')}
-                  disabled={convertingRole !== null}
-                >
-                  <span className={`${styles.roleChoiceIcon} ${styles.financeIcon}`}><BadgeDollarSign size={24} /></span>
-                  <span className={styles.roleChoiceContent}>
-                    <strong>Finance &amp; Logistik</strong>
-                    <small>Mengelola Finance dan Logistik dengan akses seluruh cabang aktif.</small>
-                  </span>
-                  <span className={styles.roleChoiceCheck}>{selectedConversionRole === 'FINANCE_LOGISTICS_CONTROLLER' && <Check size={18} />}</span>
-                </button>
+                {ROLE_CONVERSION_OPTIONS.map((option) => {
+                  const RoleIcon = option.icon;
+                  const isSelected = selectedConversionRole === option.role;
+                  return (
+                    <button
+                      key={option.role}
+                      type="button"
+                      className={`${styles.roleChoiceCard} ${isSelected ? styles.roleChoiceActive : ''}`}
+                      onClick={() => setSelectedConversionRole(option.role)}
+                      disabled={convertingRole !== null}
+                      aria-pressed={isSelected}
+                    >
+                      <span className={`${styles.roleChoiceIcon} ${styles[option.iconClassName]}`}><RoleIcon size={24} /></span>
+                      <span className={styles.roleChoiceContent}>
+                        <strong>{option.label}</strong>
+                        <small>{option.description}</small>
+                      </span>
+                      <span className={styles.roleChoiceCheck}>{isSelected && <Check size={18} />}</span>
+                    </button>
+                  );
+                })}
               </div>
 
               <div className={styles.conversionNotice}>
@@ -857,9 +898,7 @@ export default function AdminManagerDetailPage() {
                   <strong>Yang perlu diketahui</strong>
                   <ul>
                     <li>User ID dan seluruh histori transaksi lama tetap aman.</li>
-                    <li>{selectedConversionRole === 'ADMIN_LOGISTIK'
-                      ? 'Assignment cabang Admin Manager akan dilepas dan diganti akses logistik global.'
-                      : 'Akun akan mendapat akses Finance dan Logistik pada seluruh cabang aktif.'}</li>
+                    <li>{ROLE_CONVERSION_META[selectedConversionRole].impact}</li>
                     <li>Hak akses baru berlaku setelah pengguna login ulang.</li>
                   </ul>
                 </div>
