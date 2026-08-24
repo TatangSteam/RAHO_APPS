@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-main.yml'
       - '.github/scripts/deploy-production.sh'
       - 'docker-compose.prod.yml'
       - 'package.json'
