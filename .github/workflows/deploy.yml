@@ -1,4 +1,4 @@
-name: Deploy RAHO_APPS
+name: Test ERP Production Deployment
 
 on:
   push:
