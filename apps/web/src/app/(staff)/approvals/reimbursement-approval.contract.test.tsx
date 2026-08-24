@@ -8,9 +8,9 @@ describe('Approval Inbox reimbursement contract', () => {
   it('shows amount, receipt photos, and all review decisions', () => {
     expect(page).toContain('rupiah(row.amount)');
     expect(page).toContain('Foto bukti');
-    expect(page).toContain("decide('APPROVE')");
-    expect(page).toContain("decide('REJECT')");
-    expect(page).toContain("decide('RETURN_FOR_REVISION')");
+    expect(page).toContain("onDecide('APPROVE')");
+    expect(page).toContain("onDecide('REJECT')");
+    expect(page).toContain("onDecide('RETURN_FOR_REVISION')");
   });
 
   it('supports draft submission, correction, cancellation, and payment', () => {
