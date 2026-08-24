@@ -2183,6 +2183,7 @@ Untuk setiap pembaruan:
 Guide book ini adalah panduan pengguna. Detail implementasi dan keputusan
 integrasi dapat ditelusuri pada dokumentasi teknis, terutama:
 
+- [Register Fitur ERP Lengkap dan Timeline](REGISTER_FITUR_ERP_LENGKAP_DAN_TIMELINE.md);
 - [Flow ERP ke Zoho Books](updatelogisticnFinnance/FLOW_ERP_TO_ZOHO_BOOKS.md);
 - dokumentasi Finance dan Logistik pada folder `docs/`;
 - kode aplikasi serta Audit Log sebagai sumber perilaku aktual.

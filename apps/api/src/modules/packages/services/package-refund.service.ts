@@ -46,6 +46,13 @@ export class PackageRefundService {
     if (!memberPackage) {
       return this.refundStandaloneAddOn(packageId, data, userId, refundProofFile);
     }
+    if (memberPackage.socialProgramRequestId) {
+      throw {
+        status: 409,
+        code: 'SOCIAL_PROGRAM_PACKAGE_LOCKED',
+        message: 'Refund Program Sosial memerlukan proses koreksi khusus dan tidak dapat dilakukan dari refund paket biasa.',
+      };
+    }
     if (memberPackage.status !== 'ACTIVE') {
       throw {
         status: 400,

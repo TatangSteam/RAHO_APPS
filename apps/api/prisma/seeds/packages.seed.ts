@@ -43,6 +43,10 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
       { name: 'Terapi Nano Bubble 1X Premier', totalSessions: 1, price: 2_000_000, code: 'NB1PM', productCode: 'TNB-P1-PM' },
       { name: 'Terapi Nano Bubble 7X Premier', totalSessions: 7, price: 12_500_000, code: 'NB7PM', productCode: 'TNB-P7-PM' },
       { name: 'Terapi Nano Bubble 15X Premier', totalSessions: 15, price: 22_500_000, code: 'NB15PM', productCode: 'TNB-P15-PM' },
+
+      // Program Sosial. Production menggunakan migration additive; full seed
+      // hanya untuk database baru/development.
+      { name: 'Terapi Nano Bubble 1X (Program Sosial)', totalSessions: 1, price: 500_000, code: 'NB1SOC', productCode: 'SRV-TNB-TRP-PS-001' },
       
       // Partnership (PS)
       { name: 'Terapi Nano Bubble 1X Partnership', totalSessions: 1, price: 850_000, code: 'NB1PS', productCode: 'TNB-P1-PS' },
@@ -189,4 +193,3 @@ export async function seedPackagePricing(prisma: PrismaClient, branches: { id: s
   console.log(`\n   ℹ️  NO DUPLICATES - Each booster has unique productCode`);
   console.log(`   ℹ️  Format: BST-{TYPE}-P1-{SERVICE}`);
 }
-

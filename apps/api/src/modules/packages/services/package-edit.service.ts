@@ -105,6 +105,14 @@ export class PackageEditService {
       memberPackage = packages[0]!;
     }
 
+    if (memberPackage.socialProgramRequestId) {
+      throw {
+        status: 409,
+        code: 'SOCIAL_PROGRAM_PACKAGE_LOCKED',
+        message: 'Paket Program Sosial dikunci sesuai hasil approval dan tidak dapat diedit dari menu paket biasa.',
+      };
+    }
+
     if (
       !hasPrivilegedEditAccess &&
       (!branchId || memberPackage.branchId !== branchId)

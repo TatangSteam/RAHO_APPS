@@ -1,8 +1,12 @@
-# User Acceptance Test Finance, Logistik, dan Sesi Terapi
+# UAT Regresi Finance, Logistik, dan Sesi Terapi
 
-Status: siap digunakan untuk UAT development/staging  
+Status: regresi lengkap setelah UAT per role  
 Sumber akun: `apps/api/prisma/seeds/users.seed.ts` dan `members-multibranch.seed.ts`  
-Tanggal: 18 Agustus 2026
+Pembaruan: 24 Agustus 2026
+
+Mulai dari [Pusat Dokumen UAT](./README.md). Untuk skenario harian yang lebih
+ringkas gunakan [UAT Finance](./UAT_FINANCE.md) dan
+[UAT Admin Manager](./UAT_ADMIN_MANAGER.md).
 
 ## 1. Batas keamanan
 
@@ -33,8 +37,7 @@ Sebelum menjalankan seed, periksa bahwa `DATABASE_URL` benar-benar menunjuk ke d
 | Super Admin | `superadmin@raho.id` | `SuP3r4Dm1n` | Setup, pemeriksaan lintas cabang, dan audit |
 | Admin Manager 1 | `manager1@raho.id` | `Manager@123` | Jakarta dan Bandung; checker/approver |
 | Admin Manager 2 | `manager2@raho.id` | `Manager@123` | Surabaya dan Jakarta; checker/approver |
-| Finance UAT | `finance@raho.id` | `Finance@123` | Template `FINANCE_DUMMY`; transaksi Finance |
-| Admin Logistik | `adminlogistik@raho.id` | `AdminLogistik@123` | Logistik lintas cabang |
+| Finance & Logistik | `finance@raho.id` | `Finance@123` | Template `FINANCE_LOGISTICS_CONTROLLER_DEFAULT`; semua cabang seed |
 | Admin Layanan Jakarta | `adminlayanan.pst@raho.id` | `AdminLayanan@123` | Membuat dan mengelola sesi Jakarta |
 | Admin Cabang Jakarta | `admincabang.pst@raho.id` | `AdminCabang@123` | Operasional cabang Jakarta |
 | Dokter Jakarta | `dokter@raho.id` | `Dokter@123` | Diagnosis dan evaluasi dokter |
@@ -49,7 +52,10 @@ Akun Bandung dan Surabaya juga tersedia dengan pola berikut:
 - `dokter3@raho.id` / `Dokter@123`
 - `nakes2@raho.id` dan `nakes3@raho.id` / `Nakes@123`
 
-Seed belum membuat user `FINANCE_LOGISTICS_CONTROLLER`. Untuk UAT Controller, Super Admin harus membuat akun test dan memberinya template `FINANCE_LOGISTICS_CONTROLLER_DEFAULT`. Jangan memakai Super Admin sebagai pengganti saat menguji pembatasan permission Controller.
+Seed aktif sudah membuat `finance@raho.id` dengan template
+`FINANCE_LOGISTICS_CONTROLLER_DEFAULT` dan role dasar kompatibilitas
+`ADMIN_MANAGER`. Akun legacy `adminlogistik@raho.id` dinonaktifkan; seluruh
+skenario Finance dan Logistik baru harus menggunakan akun Finance tersebut.
 
 ## 4. Format pencatatan hasil
 
@@ -65,7 +71,7 @@ Skenario dinyatakan `PASS` hanya jika hasil layar, status dokumen, ledger, journ
 
 ### UAT-AUTH-01 — Login seluruh role
 
-1. Login menggunakan Finance, Admin Logistik, Manager, Admin Layanan, Dokter, dan Nakes.
+1. Login menggunakan Finance & Logistik, Manager, Admin Layanan, Dokter, dan Nakes.
 2. Pastikan nama dan role yang tampil sesuai.
 3. Logout sebelum berpindah akun.
 
@@ -78,8 +84,8 @@ Hasil yang diharapkan:
 
 ### UAT-AUTH-02 — Pembatasan Finance dan Logistik
 
-1. Login sebagai Finance dan coba membuka menu klinis yang tidak diizinkan.
-2. Login sebagai Admin Logistik dan coba melakukan posting journal Finance.
+1. Login sebagai Finance dan coba mengubah data klinis yang tidak diizinkan.
+2. Coba menerima shipment tujuan; template Finance hanya boleh dispatch.
 3. Akses URL secara langsung, bukan hanya melalui menu.
 
 Hasil yang diharapkan: backend mengembalikan `403` untuk aksi tanpa permission; menyembunyikan menu saja tidak dianggap cukup.
@@ -157,7 +163,7 @@ Hasil yang diharapkan: total debit sama dengan kredit, transaksi dapat ditelusur
 
 ### UAT-LOG-01 — Master dan konversi UOM
 
-1. Login Admin Logistik.
+1. Login Finance & Logistik menggunakan `finance@raho.id`.
 2. Buat produk test `UAT-SKU-01` dengan base unit dan usage unit.
 3. Tambahkan konversi dan jalankan preview.
 
@@ -279,7 +285,7 @@ Hasil yang diharapkan:
 
 ## 9. Rekonsiliasi akhir UAT
 
-Finance, Admin Logistik, dan Manager bersama-sama memastikan:
+Finance & Logistik dan Manager bersama-sama memastikan:
 
 - Trial Balance seimbang;
 - saldo inventory sama dengan ledger quantity;

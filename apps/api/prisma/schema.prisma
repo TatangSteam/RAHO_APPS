@@ -506,6 +506,15 @@ enum ApprovalDecisionType {
   RETURN_FOR_REVISION
 }
 
+enum SocialProgramStatus {
+  PENDING_APPROVAL
+  APPROVED
+  ACTIVE
+  REJECTED
+  ACTIVATION_FAILED
+  CANCELLED
+}
+
 enum StockOpnameStatus {
   DRAFT
   COUNTING
@@ -730,6 +739,7 @@ model Branch {
   revenueRecognitions     RevenueRecognition[]
   treatmentBoms           TreatmentBom[]
   approvalInstances       ApprovalInstance[]
+  socialProgramRequests   SocialProgramRequest[]
   stockOpnames            StockOpname[]
   invoicePaymentRefunds   InvoicePaymentRefund[]
 
@@ -782,6 +792,7 @@ model User {
   reimbursementsClaimed         Reimbursement[]          @relation("ReimbursementClaimant")
   reimbursementsReviewed        Reimbursement[]          @relation("ReimbursementReviewedBy")
   reimbursementsPaid            Reimbursement[]          @relation("ReimbursementPaidBy")
+  socialProgramsRequested       SocialProgramRequest[]   @relation("SocialProgramRequestedBy")
   suppliersCreated              Supplier[]               @relation("SupplierCreatedBy")
   purchaseRequestsCreated       PurchaseRequest[]        @relation("PurchaseRequestCreatedBy")
   purchaseRequestsReviewed      PurchaseRequest[]        @relation("PurchaseRequestReviewedBy")
@@ -1203,6 +1214,7 @@ model Member {
   documents           MemberDocument[]
   branchAccesses      BranchMemberAccess[]
   memberPackages      MemberPackage[]
+  socialProgramRequests SocialProgramRequest[]
   memberAddOns        MemberAddOn[]
   nonTherapyPurchases MemberNonTherapyPurchase[]
   invoices            Invoice[]
@@ -1402,6 +1414,7 @@ model MemberPackage {
   boosterType         String?
   serviceType         String? // HC, PS, PHC, PTY, PDA
   purchaseGroupId     String? // Group BASIC + BOOSTER purchased together
+  socialProgramRequestId String?
   upgradedFromId      String? // Track if this is an upgrade from another package
   // 1 = paket legacy sebelum cutover finance; 2 = paket baru yang wajib deferred revenue
   revenueFlowVersion  Int             @default(2)
@@ -1452,12 +1465,14 @@ model MemberPackage {
   revenueContract          PackageRevenueContract?
   deferredRevenueMovements DeferredRevenueMovement[]
   revenueRecognitions      RevenueRecognition[]
+  socialProgramRequest     SocialProgramRequest?     @relation(fields: [socialProgramRequestId], references: [id], onDelete: Restrict)
 
   @@index([memberId, status])
   @@index([branchId, status])
   @@index([packageCode])
   @@index([memberId, packageType, status])
   @@index([purchaseGroupId])
+  @@index([socialProgramRequestId])
   @@index([paymentProofUrl])
   @@index([refundedAt])
   @@index([refundProofUrl])
@@ -2265,10 +2280,46 @@ model ApprovalInstance {
   stockOpname         StockOpname?
   inventoryAdjustment InventoryAdjustment?
   reimbursement       Reimbursement?
+  socialProgramRequest SocialProgramRequest?
 
   @@index([module, status, branchId, submittedAt])
   @@index([entityType, entityId])
   @@map("approval_instances")
+}
+
+model SocialProgramRequest {
+  id                   String              @id @default(cuid())
+  requestNumber        String              @unique
+  memberId             String
+  branchId             String
+  requestedBy          String
+  basicSessions        Int
+  basicListUnitPrice   Decimal             @default(2000000) @db.Decimal(12, 2)
+  basicSocialUnitPrice Decimal             @default(500000) @db.Decimal(12, 2)
+  freeBooster          Boolean             @default(false)
+  boosterType          String?
+  freeBoosterSessions  Int                 @default(0)
+  boosterListUnitPrice Decimal             @default(1000000) @db.Decimal(12, 2)
+  reason               String
+  status               SocialProgramStatus @default(PENDING_APPROVAL)
+  approvalInstanceId   String?             @unique
+  purchaseGroupId      String?
+  activationError      String?
+  submittedAt          DateTime            @default(now())
+  approvedAt           DateTime?
+  activatedAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  member           Member            @relation(fields: [memberId], references: [id], onDelete: Restrict)
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  requester        User              @relation("SocialProgramRequestedBy", fields: [requestedBy], references: [id], onDelete: Restrict)
+  approvalInstance ApprovalInstance? @relation(fields: [approvalInstanceId], references: [id], onDelete: Restrict)
+  memberPackages   MemberPackage[]
+
+  @@index([memberId, status, createdAt])
+  @@index([branchId, status, submittedAt])
+  @@map("social_program_requests")
 }
 
 model ApprovalDecision {
@@ -3049,7 +3100,7 @@ model MaterialUsage {
 }
 
 model TreatmentBom {
-  id               String             @id @default(cuid())
+  id               String            @id @default(cuid())
   bomCode          String             @unique
   packagePricingId String
   branchId         String?
@@ -3134,7 +3185,7 @@ model IntegrationEvent {
 }
 
 model ZohoEntityMapping {
-  id               String            @id @default(cuid())
+  id               String             @id @default(cuid())
   zohoConnectionId String
   entityType       String
   localEntityId    String

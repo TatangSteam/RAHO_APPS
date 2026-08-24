@@ -62,7 +62,9 @@ export default function BasicPackageSection({
   toggleBasic,
   updateBasicQty,
 }: BasicPackageSectionProps) {
-  const basicPricings = pricingsList.filter(p => p.packageType === 'BASIC');
+  const basicPricings = pricingsList.filter(p =>
+    p.packageType === 'BASIC' && p.productCode !== 'SRV-TNB-TRP-PS-001'
+  );
 
   return (
     <div className="assign-package-section space-y-3">

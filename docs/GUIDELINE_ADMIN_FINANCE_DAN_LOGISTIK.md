@@ -794,7 +794,7 @@ Jika Zoho gagal:
 - [ ] Supplier dan payment method sudah benar.
 - [ ] Database backup berhasil diuji.
 - [ ] Concurrency dan go-live database test lulus.
-- [ ] UAT Finance dan Admin Logistik lulus.
+- [ ] UAT Finance & Logistik dan Admin Manager lulus.
 
 ## 17. Catatan implementasi penting
 
@@ -815,4 +815,7 @@ Jika Zoho gagal:
 - [Panduan Lengkap ERP RAHO untuk Pengguna Awam](./PANDUAN_LENGKAP_ERP_RAHO_UNTUK_PENGGUNA_AWAM.md)
 - [Panduan Fitur Finance dan Flow](./PANDUAN_FITUR_FINANCE_DAN_FLOW.md)
 - [Checklist E2E Finance, Logistik, dan Zoho](./updatelogisticnFinnance/TEST_CHECKLIST_END_TO_END_FINANCE_LOGISTIK_ZOHO.md)
-- [UAT Finance, Logistik, dan Sesi Terapi](./UAT_FINANCE_LOGISTIK_DAN_SESI_TERAPI.md)
+- [Pusat Dokumen UAT](./UAT/README.md)
+- [UAT Finance](./UAT/UAT_FINANCE.md)
+- [UAT Admin Manager](./UAT/UAT_ADMIN_MANAGER.md)
+- [Regresi Finance, Logistik, dan Sesi Terapi](./UAT/UAT_FINANCE_LOGISTIK_DAN_SESI_TERAPI.md)

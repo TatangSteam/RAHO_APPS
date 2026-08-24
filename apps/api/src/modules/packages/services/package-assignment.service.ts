@@ -39,6 +39,20 @@ interface PackageDetail {
   boosterType?: string;
   serviceType?: string;
   pricePerSession: number;
+  fixedListPrice?: number;
+  fixedFinalPrice?: number;
+  fixedDiscountNote?: string;
+}
+
+export const SOCIAL_PROGRAM_PRODUCT_CODE = 'SRV-TNB-TRP-PS-001';
+
+export interface ApprovedSocialAssignmentContext {
+  requestId: string;
+  priceOverrides: Record<string, {
+    listPrice: number;
+    finalPrice: number;
+    discountNote: string;
+  }>;
 }
 
 type CreatedPackage = MemberPackage & {
@@ -73,6 +87,8 @@ interface PackageAssignmentTransactionParams {
   userId: string;
   paymentPlan: NormalizedPaymentPlan;
   member: { id: string; registrationBranchId: string };
+  socialProgramRequestId?: string;
+  variableDiscountAmount: number;
 }
 
 /**
@@ -132,7 +148,8 @@ export class PackageAssignmentService {
     memberId: string,
     data: AssignPackageInput,
     branchId: string,
-    userId: string
+    userId: string,
+    approvedSocial?: ApprovedSocialAssignmentContext,
   ) {
     const normalizedAddOns = normalizeAddOnAssignments(data.addOns || []);
 
@@ -178,18 +195,35 @@ export class PackageAssignmentService {
       throw { status: 404, code: 'PRICING_NOT_FOUND', message: 'Beberapa harga paket tidak ditemukan' };
     }
 
+    const socialPricing = pricings.find((pricing) => pricing.productCode === SOCIAL_PROGRAM_PRODUCT_CODE);
+    if (socialPricing && !approvedSocial) {
+      throw {
+        status: 403,
+        code: 'SOCIAL_PROGRAM_APPROVAL_REQUIRED',
+        message: 'Paket Program Sosial hanya dapat dibuat melalui pengajuan dan Approval Inbox.',
+      };
+    }
+    if (approvedSocial && (normalizedAddOns.length > 0 || data.discountAmount || data.discountPercent)) {
+      throw {
+        status: 400,
+        code: 'SOCIAL_PROGRAM_PRICING_INVALID',
+        message: 'Harga Program Sosial ditentukan oleh approval dan tidak dapat digabung dengan diskon atau add-on lain.',
+      };
+    }
+
     // Calculate total price
-    const { subtotal, packageDetails } = this.calculatePackagePricing(data, pricings);
+    const { subtotal, packageDetails, fixedDiscountAmount } = this.calculatePackagePricing(data, pricings, approvedSocial);
     // Add add-on subtotal
     const addOnSubtotal = normalizedAddOns.reduce((sum, addon) => sum + addon.price * addon.quantity, 0);
     const totalSubtotal = subtotal + addOnSubtotal;
 
     // Calculate discount
-    const { totalDiscountAmount } = calculatePurchaseDiscount(
+    const { totalDiscountAmount: variableDiscountAmount } = calculatePurchaseDiscount(
       totalSubtotal,
       data.discountPercent,
       data.discountAmount,
     );
+    const totalDiscountAmount = variableDiscountAmount + fixedDiscountAmount;
     const paymentPlan = this.normalizePaymentPlan(data);
 
     // Determine purchase group
@@ -215,6 +249,8 @@ export class PackageAssignmentService {
         userId,
         paymentPlan,
         member,
+        socialProgramRequestId: approvedSocial?.requestId,
+        variableDiscountAmount,
       },
       basicSequence,
       boosterSequence
@@ -238,12 +274,18 @@ export class PackageAssignmentService {
   /**
    * Calculate package pricing
    */
-  private calculatePackagePricing(data: AssignPackageInput, pricings: PackagePricing[]) {
+  private calculatePackagePricing(
+    data: AssignPackageInput,
+    pricings: PackagePricing[],
+    approvedSocial?: ApprovedSocialAssignmentContext,
+  ) {
     let subtotal = 0;
+    let fixedDiscountAmount = 0;
     const packageDetails: PackageDetail[] = [];
 
     data.packages.forEach((pkg) => {
       const pricing = pricings.find(p => p.id === pkg.pricingId)!;
+      const fixed = approvedSocial?.priceOverrides[pricing.id];
       let pricePerSession = Number(pricing.price);
       let totalPrice = 0;
 
@@ -256,6 +298,18 @@ export class PackageAssignmentService {
         totalPrice = pricePerSession * pricing.totalSessions * pkg.quantity;
       }
 
+      if (fixed) {
+        if (fixed.listPrice < fixed.finalPrice || fixed.finalPrice < 0) {
+          throw {
+            status: 400,
+            code: 'SOCIAL_PROGRAM_PRICE_OVERRIDE_INVALID',
+            message: 'Override harga Program Sosial tidak valid.',
+          };
+        }
+        totalPrice = fixed.listPrice * pkg.quantity;
+        fixedDiscountAmount += (fixed.listPrice - fixed.finalPrice) * pkg.quantity;
+      }
+
       subtotal += totalPrice;
 
       packageDetails.push({
@@ -264,10 +318,13 @@ export class PackageAssignmentService {
         boosterType: pkg.boosterType,
         serviceType: pkg.serviceType,
         pricePerSession,
+        fixedListPrice: fixed?.listPrice,
+        fixedFinalPrice: fixed?.finalPrice,
+        fixedDiscountNote: fixed?.discountNote,
       });
     });
 
-    return { subtotal, packageDetails };
+    return { subtotal, packageDetails, fixedDiscountAmount };
   }
 
   /**
@@ -391,7 +448,7 @@ export class PackageAssignmentService {
       let boosterSequence = initialBoosterSequence;
 
       // Track remaining discount
-      let remainingDiscount = params.totalDiscountAmount;
+      let remainingDiscount = params.variableDiscountAmount;
       let packageIndex = 0;
       const totalPackages = params.packageDetails.reduce((sum, detail) => sum + detail.quantity, 0);
       const createdPackageCodes = new Set<string>();
@@ -430,21 +487,29 @@ export class PackageAssignmentService {
             packageSubtotal = detail.pricePerSession * detail.pricing.totalSessions;
           }
           
-          // Distribute discount proportionally
-          const packageDiscount = allocatePackageDiscount({
-            packageSubtotal,
-            purchaseSubtotal: params.totalSubtotal,
-            purchaseDiscount: params.totalDiscountAmount,
-            remainingDiscount,
-            isLastPackage: packageIndex === totalPackages,
-            hasAddOns: params.addOns.length > 0,
-          });
-          remainingDiscount -= packageDiscount;
-          
-          const packageFinalPrice = Math.round(packageSubtotal - packageDiscount);
+          const hasFixedPrice = detail.fixedListPrice !== undefined && detail.fixedFinalPrice !== undefined;
+          if (hasFixedPrice) packageSubtotal = detail.fixedListPrice!;
+
+          // Program Sosial has an explicit per-item discount. Ordinary
+          // assignments retain the existing proportional allocation.
+          const packageDiscount = hasFixedPrice
+            ? Math.round(detail.fixedListPrice! - detail.fixedFinalPrice!)
+            : allocatePackageDiscount({
+                packageSubtotal,
+                purchaseSubtotal: params.totalSubtotal,
+                purchaseDiscount: params.variableDiscountAmount,
+                remainingDiscount,
+                isLastPackage: packageIndex === totalPackages,
+                hasAddOns: params.addOns.length > 0,
+              });
+          if (!hasFixedPrice) remainingDiscount -= packageDiscount;
+
+          const packageFinalPrice = hasFixedPrice
+            ? Math.round(detail.fixedFinalPrice!)
+            : Math.round(packageSubtotal - packageDiscount);
 
           // Generate product code
-          const productCode = this.generateProductCode(
+          const productCode = detail.pricing.productCode || this.generateProductCode(
             detail.pricing.packageType,
             detail.pricing.totalSessions,
             detail.serviceType,
@@ -463,9 +528,11 @@ export class PackageAssignmentService {
               totalSessions: detail.pricing.totalSessions,
               usedSessions: 0,
               finalPrice: packageFinalPrice,
-              discountPercent: packageDiscount > 0 ? (params.discountPercent || 0) : 0,
+              discountPercent: packageDiscount > 0
+                ? Math.round((packageDiscount / packageSubtotal) * 10000) / 100
+                : 0,
               discountAmount: packageDiscount,
-              discountNote: packageDiscount > 0 ? params.discountNote : null,
+              discountNote: packageDiscount > 0 ? (detail.fixedDiscountNote || params.discountNote) : null,
               status: PackageStatus.PENDING_PAYMENT,
               paymentPlanType: params.paymentPlan.type,
               installmentTotal: params.paymentPlan.installmentCount || null,
@@ -476,6 +543,7 @@ export class PackageAssignmentService {
               notes: params.notes,
               assignedBy: params.userId,
               purchaseGroupId: params.purchaseGroupId,
+              socialProgramRequestId: params.socialProgramRequestId,
             },
           });
 
@@ -495,7 +563,7 @@ export class PackageAssignmentService {
 
       // Calculate and record incentive AFTER all packages are created
       // This ensures bundle incentive is calculated with complete package data
-      if (createdPackages.length > 0) {
+      if (createdPackages.length > 0 && !params.socialProgramRequestId) {
         try {
           // Use the first package to trigger incentive calculation
           // The service will detect if it's a bundle and calculate accordingly

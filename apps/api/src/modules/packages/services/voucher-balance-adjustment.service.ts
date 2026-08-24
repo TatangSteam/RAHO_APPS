@@ -26,9 +26,12 @@ export class VoucherBalanceAdjustmentService {
 
     const packageAccess = await prisma.memberPackage.findUnique({
       where: { id: packageId },
-      select: { branchId: true },
+      select: { branchId: true, socialProgramRequestId: true },
     });
     if (!packageAccess) throw errors.notFound('Paket BASIC tidak ditemukan.');
+    if (packageAccess.socialProgramRequestId) {
+      throw errors.conflict('SOCIAL_PROGRAM_PACKAGE_LOCKED', 'Voucher Program Sosial dikunci sesuai hasil approval.');
+    }
     await assertBranchAccess(userId, packageAccess.branchId);
     await assertPermission(userId, PERMISSIONS.INVOICE_UPDATE, packageAccess.branchId);
 

@@ -46,6 +46,14 @@ export class PackageCancelService {
       return this.cancelStandaloneAddOn(packageId, data, userId);
     }
 
+    if (memberPackage.socialProgramRequestId) {
+      throw {
+        status: 409,
+        code: 'SOCIAL_PROGRAM_PACKAGE_LOCKED',
+        message: 'Paket Program Sosial tidak dapat dibatalkan dari alur paket biasa.',
+      };
+    }
+
     // 2. Validate status
     if (memberPackage.status !== 'PENDING_PAYMENT') {
       throw {
