@@ -1,11 +1,12 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { evaluationApi } from '@/lib/evaluationApi';
 import { devError } from '@/lib/logger';
+import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
 
 interface Evaluation {
   id: string;
@@ -34,6 +35,13 @@ export default function Step9Evaluation({
   onComplete,
 }: Step9EvaluationProps) {
   const { user } = useAuthStore();
+  const evaluationDraft = useSessionWorkflowDraft<{
+    subjective: string;
+    objective: string;
+    assessment: string;
+    plan: string;
+    generalNotes: string;
+  }>('evaluation');
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -42,7 +50,12 @@ export default function Step9Evaluation({
     assessment: evaluation?.assessment || '',
     plan: evaluation?.plan || '',
     generalNotes: evaluation?.generalNotes || '',
+    ...evaluationDraft.initialDraft,
   });
+
+  useEffect(() => {
+    evaluationDraft.updateDraft(formData);
+  }, [formData]);
 
   // Evaluasi klinis (SOAP) merupakan tanggung jawab khusus dokter.
   const canEdit = user?.role === 'DOCTOR';
@@ -84,6 +97,7 @@ export default function Step9Evaluation({
       }
 
       showToast.success('Evaluasi dokter berhasil disimpan');
+      evaluationDraft.clearDraft();
       setIsEditing(false);
       onComplete();
     } catch (error) {

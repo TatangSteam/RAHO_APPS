@@ -285,6 +285,13 @@ export interface SessionDetail {
     createdAt: string;
   } | null;
   steps: StepCompletion;
+  workflow: {
+    drafts: Record<string, unknown>;
+    activeStep: number | null;
+    revision: number;
+    savedAt: string | null;
+    savedBy: string | null;
+  };
 }
 
 export interface SessionMaterial {

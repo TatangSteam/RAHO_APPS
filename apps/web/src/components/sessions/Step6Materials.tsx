@@ -14,6 +14,15 @@ import { devError } from '@/lib/logger';
 import { getApiErrorMessage } from '@/lib/api';
 import { AlertTriangle, ClipboardCheck, Trash2 } from 'lucide-react';
 import type { SessionMaterial } from '@/types/session';
+import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
+
+type MaterialEntryDraft = {
+  inventoryItemId?: string;
+  quantity: string;
+  searchTerm: string;
+  deviationReason: MaterialDeviationReason | '';
+  deviationNotes: string;
+};
 
 interface Step6MaterialsProps {
   sessionId: string;
@@ -97,17 +106,18 @@ export default function Step6Materials({
   isLocked,
   onComplete,
 }: Step6MaterialsProps) {
+  const materialDraft = useSessionWorkflowDraft<MaterialEntryDraft>('materials');
   const [loading, setLoading] = useState(false);
   const [loadingInventory, setLoadingInventory] = useState(true);
   const [inventoryItems, setInventoryItems] = useState<InventoryItemWithStock[]>([]);
   const [selectedItem, setSelectedItem] = useState<InventoryItemWithStock | null>(null);
-  const [quantity, setQuantity] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [quantity, setQuantity] = useState(materialDraft.initialDraft.quantity || '');
+  const [searchTerm, setSearchTerm] = useState(materialDraft.initialDraft.searchTerm || '');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [recommendations, setRecommendations] = useState<MaterialRecommendationsResponse | null>(null);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
-  const [deviationReason, setDeviationReason] = useState<MaterialDeviationReason | ''>('');
-  const [deviationNotes, setDeviationNotes] = useState('');
+  const [deviationReason, setDeviationReason] = useState<MaterialDeviationReason | ''>(materialDraft.initialDraft.deviationReason || '');
+  const [deviationNotes, setDeviationNotes] = useState(materialDraft.initialDraft.deviationNotes || '');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const loadInventoryItems = useCallback(async () => {
@@ -132,6 +142,22 @@ export default function Step6Materials({
   useEffect(() => {
     void loadInventoryItems();
   }, [loadInventoryItems]);
+
+  useEffect(() => {
+    if (!materialDraft.initialDraft.inventoryItemId || selectedItem || inventoryItems.length === 0) return;
+    const restored = inventoryItems.find((item) => item.id === materialDraft.initialDraft.inventoryItemId);
+    if (restored) setSelectedItem(restored);
+  }, [inventoryItems, selectedItem]);
+
+  useEffect(() => {
+    materialDraft.updateDraft({
+      inventoryItemId: selectedItem?.id,
+      quantity,
+      searchTerm,
+      deviationReason,
+      deviationNotes,
+    });
+  }, [deviationNotes, deviationReason, quantity, searchTerm, selectedItem?.id]);
 
   const loadRecommendations = useCallback(async () => {
     try {
@@ -210,6 +236,7 @@ export default function Step6Materials({
       setSearchTerm('');
       setDeviationReason('');
       setDeviationNotes('');
+      materialDraft.clearDraft();
       onComplete();
     } catch (error: unknown) {
       devError('Error adding material:', error);

@@ -289,7 +289,7 @@ export const sessionApi = {
 
   completeSession: async (
     sessionId: string,
-    input: { inventorySource: 'BRANCH' | 'TEAM' },
+    input: { inventorySource: 'BRANCH' | 'TEAM'; expectedWorkflowRevision?: number },
   ): Promise<{
     sessionId: string;
     sessionCode: string;
@@ -299,6 +299,41 @@ export const sessionApi = {
     inventoryTeamId: string | null;
   }> => {
     const response = await api.patch(`/treatment-sessions/${sessionId}/complete`, input);
+    return response.data.data;
+  },
+
+  getWorkflowBurden: async (params?: { dateFrom?: string; dateTo?: string; branchId?: string }): Promise<{
+    period: { dateFrom: string; dateTo: string };
+    summary: {
+      samples: number;
+      uniqueSessions: number;
+      averageActiveSeconds: number;
+      validationErrors: number;
+      completionRetries: number;
+      underThreeMinutes: number;
+    };
+    roles: Array<{ role: string; samples: number; averageActiveSeconds: number; validationErrors: number; completionRetries: number }>;
+    steps: Array<{ step: number; label: string; samples: number; averageSeconds: number }>;
+  }> => {
+    const response = await api.get('/treatment-sessions/workflow-burden', { params });
+    return response.data.data;
+  },
+
+  saveProgress: async (sessionId: string, input: {
+    activeStep: number;
+    drafts: Record<string, unknown>;
+    expectedRevision?: number;
+    metrics?: {
+      startedAt: string;
+      activeSeconds: number;
+      stepSeconds: Record<string, number>;
+      stepTransitions: number;
+      validationErrors: number;
+      retryCount: number;
+      deviceClass: 'MOBILE' | 'TABLET' | 'DESKTOP' | 'UNKNOWN';
+    };
+  }): Promise<{ revision: number; savedAt: string; message: string }> => {
+    const response = await api.patch(`/treatment-sessions/${sessionId}/save-progress`, input);
     return response.data.data;
   },
 

@@ -29,7 +29,7 @@ import {
   TREATMENT_COMPLETED_EVENT_TYPE,
   TREATMENT_COMPLETED_EVENT_VERSION,
 } from '../events/treatment-completed.event';
-import type { CompleteSessionInput } from '../sessions.schema';
+import type { CompleteSessionInput, SaveSessionProgressInput } from '../sessions.schema';
 import { createInventorySyncEventInTransaction } from '@modules/zoho/zoho.inventory-outbox';
 import {
   TREATMENT_INVENTORY_CONSUMED_EVENT,
@@ -207,6 +207,16 @@ export class SessionCompletionService {
           inventoryTeamId: existingTeamInventory?.teamId ?? null,
           teamInventoryCompletionId: existingTeamInventory?.id ?? null,
         };
+      }
+
+      if (
+        input.expectedWorkflowRevision !== undefined
+        && session.workflowRevision !== input.expectedWorkflowRevision
+      ) {
+        throw errors.conflict(
+          'SESSION_WORKFLOW_CONFLICT',
+          'Data sesi telah berubah di perangkat atau oleh pengguna lain. Muat ulang ringkasan sebelum menyelesaikan sesi.',
+        );
       }
 
       if (!isLegacySession) {
@@ -460,6 +470,11 @@ export class SessionCompletionService {
             recognizedRevenue: zero,
             materialCost: totalActualMaterialCost,
             grossProfit: zero,
+            workflowDraft: Prisma.DbNull,
+            workflowDraftStep: null,
+            workflowDraftUpdatedAt: null,
+            workflowDraftUpdatedBy: null,
+            workflowRevision: { increment: 1 },
           },
         });
         return {
@@ -557,6 +572,11 @@ export class SessionCompletionService {
           recognizedRevenue: finance.recognizedRevenue,
           materialCost: finance.materialCost,
           grossProfit: finance.grossProfit,
+          workflowDraft: Prisma.DbNull,
+          workflowDraftStep: null,
+          workflowDraftUpdatedAt: null,
+          workflowDraftUpdatedBy: null,
+          workflowRevision: { increment: 1 },
         },
       });
 
@@ -1083,19 +1103,62 @@ export class SessionCompletionService {
     }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }));
   }
 
-  async saveProgress(sessionId: string, userId: string) {
+  async saveProgress(sessionId: string, userId: string, input: SaveSessionProgressInput) {
     const session = await prisma.treatmentSession.findUnique({ where: { id: sessionId } });
     if (!session) throw errors.notFound('Sesi tidak ditemukan.');
     if (session.isCompleted) throw errors.conflict('SESSION_ALREADY_COMPLETED', 'Sesi sudah diselesaikan, tidak bisa disimpan lagi.');
+    await assertBranchAccess(userId, session.branchId);
+
+    const result = await prisma.treatmentSession.updateMany({
+      where: {
+        id: sessionId,
+        isCompleted: false,
+        ...(input.expectedRevision === undefined
+          ? {}
+          : { workflowRevision: input.expectedRevision }),
+      },
+      data: {
+        workflowDraft: input.drafts as Prisma.InputJsonValue,
+        workflowDraftStep: input.activeStep,
+        workflowDraftUpdatedAt: new Date(),
+        workflowDraftUpdatedBy: userId,
+        workflowRevision: { increment: 1 },
+      },
+    });
+
+    if (result.count === 0) {
+      throw errors.conflict(
+        'SESSION_WORKFLOW_CONFLICT',
+        'Draft sesi telah berubah di perangkat atau oleh pengguna lain. Muat ulang sebelum melanjutkan.',
+      );
+    }
+
+    const saved = await prisma.treatmentSession.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { workflowRevision: true, workflowDraftUpdatedAt: true },
+    });
     await logAudit({
       userId,
       branchId: session.branchId,
       action: AuditAction.UPDATE,
-      resource: 'TreatmentSession',
+      module: 'SESSIONS',
+      resource: 'SessionWorkflowBurden',
       resourceId: sessionId,
-      afterData: { action: 'SAVE_PROGRESS' },
+      afterData: {
+        action: 'SAVE_PROGRESS',
+        activeStep: input.activeStep,
+        draftKeys: Object.keys(input.drafts),
+        metrics: input.metrics,
+        workflowRevision: saved.workflowRevision,
+      },
     });
-    return { sessionId: session.id, sessionCode: session.sessionCode, message: 'Progress berhasil disimpan' };
+    return {
+      sessionId: session.id,
+      sessionCode: session.sessionCode,
+      revision: saved.workflowRevision,
+      savedAt: saved.workflowDraftUpdatedAt?.toISOString() ?? new Date().toISOString(),
+      message: 'Draft dan progress berhasil disimpan',
+    };
   }
 
   async getSessionProgress(sessionId: string) {

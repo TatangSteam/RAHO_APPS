@@ -1158,6 +1158,11 @@ export default function SessionsPage() {
           <p className={styles.subtitle}>Daftar semua sesi terapi</p>
         </div>
         <div className={styles.headerActions}>
+          {['SUPER_ADMIN', 'ADMIN_MANAGER'].includes(user?.role || '') && (
+            <button className="btn btn-secondary" onClick={() => router.push('/sessions/workflow-audit')}>
+              Audit Beban Pengisian
+            </button>
+          )}
           <button
             className={`btn btn-secondary ${styles.filterBtn} ${showTableColumns ? styles.hasFilters : ''}`}
             onClick={() => setShowTableColumns(!showTableColumns)}

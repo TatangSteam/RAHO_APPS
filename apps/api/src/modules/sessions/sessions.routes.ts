@@ -22,6 +22,12 @@ const ALLSTAFF: Role[] = [
 
 const SESSION_CREATORS: Role[] = ALLSTAFF.filter((role) => role !== Role.DOCTOR);
 const MEDICAL_STAFF: Role[] = [Role.DOCTOR, Role.NURSE];
+const CLINICAL_WRITERS: Role[] = [
+  Role.SUPER_ADMIN,
+  Role.ADMIN_MANAGER,
+  Role.ADMIN_CABANG,
+  ...MEDICAL_STAFF,
+];
 const COMPLETION_REVERSERS: Role[] = [Role.SUPER_ADMIN, Role.ADMIN_MANAGER, Role.ADMIN_CABANG];
 
 // ============================================================
@@ -69,6 +75,13 @@ router.get(
   controller.getUnfinishedSessionReminders.bind(controller)
 );
 
+router.get(
+  '/workflow-burden',
+  authenticate,
+  authorize([Role.SUPER_ADMIN, Role.ADMIN_MANAGER]),
+  controller.getWorkflowBurden.bind(controller)
+);
+
 // Get booster stock using the branch that owns the session
 router.get(
   '/:sessionId/booster-stock-availability',
@@ -107,7 +120,7 @@ router.patch(
 router.post(
   '/encounters/:encounterId/diagnoses',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.createDiagnosis.bind(controller)
 );
 
@@ -139,7 +152,7 @@ router.delete(
 router.post(
   '/:sessionId/therapy-plan',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.createTherapyPlan.bind(controller)
 );
 
@@ -172,7 +185,7 @@ router.put(
 router.post(
   '/:sessionId/vital-signs',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.upsertVitalSign.bind(controller)
 );
 
@@ -190,7 +203,7 @@ router.get(
 router.patch(
   '/:sessionId/booster-type',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.updateBoosterType.bind(controller)
 );
 
@@ -215,7 +228,7 @@ router.get(
 router.post(
   '/:sessionId/infusion',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.createInfusion.bind(controller)
 );
 
@@ -240,7 +253,7 @@ router.get(
 router.post(
   '/:sessionId/materials',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.createMaterialUsage.bind(controller)
 );
 
@@ -254,7 +267,7 @@ router.get(
 router.delete(
   '/:sessionId/materials/:usageId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.deleteMaterialUsage.bind(controller)
 );
 
@@ -290,7 +303,7 @@ router.get(
 router.post(
   '/:sessionId/photo',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   upload.single('photo'),
   controller.uploadPhoto.bind(controller)
 );
@@ -298,7 +311,7 @@ router.post(
 router.delete(
   '/:sessionId/photo',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.deletePhoto.bind(controller)
 );
 
@@ -316,21 +329,21 @@ router.get(
 router.delete(
   '/supporting-photos/:photoId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.deleteSupportingPhoto.bind(controller)
 );
 
 router.patch(
   '/supporting-photos/:photoId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.updateSupportingPhotoDescription.bind(controller)
 );
 
 router.post(
   '/:sessionId/supporting-photos',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   upload.single('photo'),
   controller.uploadSupportingPhoto.bind(controller)
 );
@@ -345,14 +358,14 @@ router.get(
 router.delete(
   '/:sessionId/supporting-photos/:photoId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.deleteSupportingPhoto.bind(controller)
 );
 
 router.patch(
   '/:sessionId/supporting-photos/:photoId',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.updateSupportingPhotoDescription.bind(controller)
 );
 
@@ -364,7 +377,7 @@ router.patch(
 router.patch(
   '/:sessionId/save-progress',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.saveProgress.bind(controller)
 );
 
@@ -380,7 +393,7 @@ router.get(
 router.patch(
   '/:sessionId/complete',
   authenticate,
-  authorize(ALLSTAFF),
+  authorize(CLINICAL_WRITERS),
   controller.completeSession.bind(controller)
 );
 

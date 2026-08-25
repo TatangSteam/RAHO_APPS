@@ -234,7 +234,7 @@ export const createInfusionSchema = z.object({
   h2s: z.number().optional(),
   kcl: z.number().optional(),
   jmlNb: z.number().optional(),
-  deviationNotes: z.string().optional(),
+  deviationNotes: z.string().trim().min(5, 'Catatan deviasi minimal 5 karakter').max(2000).optional(),
   bottleType: z.nativeEnum(BottleType).optional(),
   jenisCairan: z.string().optional(),
   volumeCarrier: z.number().optional(),
@@ -316,9 +316,37 @@ export type CreateEvaluationInput = z.infer<typeof createEvaluationSchema>;
 
 export const completeSessionSchema = z.object({
   inventorySource: z.enum(['AUTO', 'BRANCH', 'TEAM']).optional().default('AUTO'),
+  expectedWorkflowRevision: z.number().int().nonnegative().optional(),
 });
 
 export type CompleteSessionInput = z.infer<typeof completeSessionSchema>;
+
+const workflowMetricsSchema = z.object({
+  startedAt: z.string().datetime(),
+  activeSeconds: z.number().int().nonnegative().max(86400),
+  stepSeconds: z.record(z.number().int().nonnegative().max(86400)).default({}),
+  stepTransitions: z.number().int().nonnegative().max(1000).default(0),
+  validationErrors: z.number().int().nonnegative().max(1000).default(0),
+  retryCount: z.number().int().nonnegative().max(1000).default(0),
+  deviceClass: z.enum(['MOBILE', 'TABLET', 'DESKTOP', 'UNKNOWN']).default('UNKNOWN'),
+});
+
+export const saveSessionProgressSchema = z.object({
+  activeStep: z.number().int().min(1).max(9),
+  drafts: z.record(z.unknown()).default({}),
+  expectedRevision: z.number().int().nonnegative().optional(),
+  metrics: workflowMetricsSchema.optional(),
+}).superRefine((data, context) => {
+  if (JSON.stringify(data.drafts).length > 100_000) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['drafts'],
+      message: 'Draft sesi terlalu besar',
+    });
+  }
+});
+
+export type SaveSessionProgressInput = z.infer<typeof saveSessionProgressSchema>;
 
 export const cancelSessionCompletionSchema = z.object({
   idempotencyKey: z.string().trim().min(8).max(160),

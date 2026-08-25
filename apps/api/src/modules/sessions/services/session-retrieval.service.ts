@@ -135,6 +135,15 @@ export class SessionRetrievalService {
       photo: session.photo,
       evaluation: session.evaluation,
       steps,
+      workflow: {
+        drafts: session.workflowDraft && typeof session.workflowDraft === 'object'
+          ? session.workflowDraft
+          : {},
+        activeStep: session.workflowDraftStep,
+        revision: session.workflowRevision,
+        savedAt: session.workflowDraftUpdatedAt?.toISOString() ?? null,
+        savedBy: session.workflowDraftUpdatedBy,
+      },
       // Include staff info
       doctors: session.sessionDoctors,
       nurses: session.sessionNurses,

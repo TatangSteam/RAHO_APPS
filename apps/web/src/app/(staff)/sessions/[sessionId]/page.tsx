@@ -23,6 +23,15 @@ import Step7Photo from '@/components/sessions/Step7Photo';
 import Step8VitalAfter from '@/components/sessions/Step8VitalAfter';
 import Step8ComplaintsRecommendations from '@/components/sessions/Step8ComplaintsRecommendations';
 import Step9Evaluation from '@/components/sessions/Step9Evaluation';
+import { SessionWorkflowDraftProvider, type SessionDraftKey } from '@/components/sessions/SessionWorkflowDraftContext';
+import {
+  SESSION_STEP_OWNER,
+  buildCompletionSummary,
+  canEditSessionStep,
+  canFinalizeSession,
+  getDeviceClass,
+  getMissingRequiredSteps,
+} from '@/components/sessions/sessionWorkflow';
 import EditTherapyPlanSetModal from '@/components/therapy-plan/EditTherapyPlanSetModal';
 import { RotateCcw, X } from 'lucide-react';
 import styles from './page.module.css';
@@ -135,24 +144,57 @@ export default function SessionDetailPage() {
   const [boosterEditError, setBoosterEditError] = useState<string | null>(null);
   const [postedEditReason, setPostedEditReason] = useState('');
   const [postedEditConfirmed, setPostedEditConfirmed] = useState(false);
+  const [workflowDrafts, setWorkflowDrafts] = useState<Record<string, unknown>>({});
+  const workflowRevisionRef = useRef(0);
+  const workflowDraftsRef = useRef<Record<string, unknown>>({});
+  const workflowSaveInFlightRef = useRef(false);
+  const workflowDirtyRef = useRef(false);
+  const [workflowSaveState, setWorkflowSaveState] = useState<'IDLE' | 'SAVING' | 'SAVED' | 'CONFLICT' | 'ERROR'>('IDLE');
+  const [workflowSavedAt, setWorkflowSavedAt] = useState<string | null>(null);
+  const [showCompletionReview, setShowCompletionReview] = useState(false);
+  const [completionError, setCompletionError] = useState<string | null>(null);
+  const metricsRef = useRef({
+    startedAt: new Date().toISOString(),
+    activeSeconds: 0,
+    stepSeconds: {} as Record<string, number>,
+    stepTransitions: 0,
+    validationErrors: 0,
+    retryCount: 0,
+  });
+  const activeStepTimingRef = useRef({ step: 1, startedAt: Date.now() });
+  const pageVisibleRef = useRef(true);
 
   const loadSessionDetail = useCallback(async () => {
     try {
       setLoading(true);
       const data = await sessionApi.getSessionById(sessionId);
       setSession(data);
+      const serverDrafts = data.workflow?.drafts || {};
+      setWorkflowDrafts(serverDrafts);
+      workflowDraftsRef.current = serverDrafts;
+      const revision = data.workflow?.revision || 0;
+      workflowRevisionRef.current = revision;
+      setWorkflowSavedAt(data.workflow?.savedAt || null);
+      workflowDirtyRef.current = false;
       
-      // Auto-select first incomplete step only on initial load (when activeStep is default)
-      // Don't change activeStep if user is already working on a specific step
+      // Auto-select the first incomplete step owned by the current role. A
+      // server-saved step is restored when it is still editable by this user.
       if (data.steps && data.steps.step1_diagnosis) {
         setActiveStep((currentStep) => {
           if (currentStep !== 1) return currentStep;
-          if (!data.steps?.step2_therapyPlan) return 2;
-          if (!data.steps?.step3_vitalBefore) return 3;
-          if (!data.steps?.step4_infusion) return 4;
-          if (!data.steps?.step5_materials) return 5;
-          if (!data.steps?.step7_vitalAfter) return 7;
-          if (!data.steps?.step8_evaluation) return 9;
+          const savedStep = data.workflow?.activeStep;
+          if (savedStep && canEditSessionStep(user?.role, savedStep)) return savedStep;
+          const incompleteSteps = [
+            !data.steps?.step2_therapyPlan ? 2 : null,
+            !data.steps?.step3_vitalBefore ? 3 : null,
+            !data.steps?.step4_infusion ? 4 : null,
+            !data.steps?.step5_materials ? 5 : null,
+            !data.steps?.step7_vitalAfter ? 7 : null,
+            !data.steps?.step8_evaluation ? 9 : null,
+          ].filter((step): step is number => step !== null);
+          const ownedStep = incompleteSteps.find((step) => canEditSessionStep(user?.role, step));
+          if (ownedStep) return ownedStep;
+          if (incompleteSteps.length > 0) return incompleteSteps[0];
           return currentStep;
         });
       }
@@ -165,15 +207,129 @@ export default function SessionDetailPage() {
     } finally {
       setLoading(false);
     }
-  }, [router, sessionId]);
+  }, [router, sessionId, user?.role]);
 
   useEffect(() => {
     void loadSessionDetail();
   }, [loadSessionDetail]);
 
-  const handleStepComplete = async () => {
-    await loadSessionDetail();
-  };
+  const updateWorkflowDraft = useCallback((key: SessionDraftKey, value: unknown) => {
+    const next = { ...workflowDraftsRef.current, [key]: value };
+    workflowDraftsRef.current = next;
+    setWorkflowDrafts(next);
+    workflowDirtyRef.current = true;
+    setWorkflowSaveState('IDLE');
+  }, []);
+
+  const clearWorkflowDraft = useCallback((key: SessionDraftKey) => {
+    const next = { ...workflowDraftsRef.current };
+    delete next[key];
+    workflowDraftsRef.current = next;
+    setWorkflowDrafts(next);
+    workflowDirtyRef.current = true;
+  }, []);
+
+  const saveWorkflowProgress = useCallback(async (force = false): Promise<boolean> => {
+    if (!session || session.session.isCompleted) return true;
+    if (workflowSaveInFlightRef.current) return false;
+    if (!force && !workflowDirtyRef.current) return true;
+    workflowSaveInFlightRef.current = true;
+    setWorkflowSaveState('SAVING');
+    const now = Date.now();
+    const timing = activeStepTimingRef.current;
+    const elapsed = pageVisibleRef.current
+      ? Math.max(0, Math.round((now - timing.startedAt) / 1000))
+      : 0;
+    const metrics = metricsRef.current;
+    const stepSeconds = {
+      ...metrics.stepSeconds,
+      [String(timing.step)]: (metrics.stepSeconds[String(timing.step)] || 0) + elapsed,
+    };
+    try {
+      const result = await sessionApi.saveProgress(sessionId, {
+        activeStep,
+        drafts: workflowDraftsRef.current,
+        expectedRevision: workflowRevisionRef.current,
+        metrics: {
+          ...metrics,
+          activeSeconds: metrics.activeSeconds + elapsed,
+          stepSeconds,
+          deviceClass: typeof window === 'undefined' ? 'UNKNOWN' : getDeviceClass(window.innerWidth),
+        },
+      });
+      metrics.activeSeconds += elapsed;
+      metrics.stepSeconds = stepSeconds;
+      activeStepTimingRef.current = { step: activeStep, startedAt: now };
+      workflowRevisionRef.current = result.revision;
+      setWorkflowSavedAt(result.savedAt);
+      workflowDirtyRef.current = false;
+      setWorkflowSaveState('SAVED');
+      return true;
+    } catch (error) {
+      assertCaughtError(error);
+      const code = error.response?.data?.error?.code;
+      setWorkflowSaveState(code === 'SESSION_WORKFLOW_CONFLICT' ? 'CONFLICT' : 'ERROR');
+      if (code === 'SESSION_WORKFLOW_CONFLICT') {
+        setCompletionError('Sesi berubah di perangkat atau oleh pengguna lain. Muat ulang sebelum melanjutkan.');
+      }
+      return false;
+    } finally {
+      workflowSaveInFlightRef.current = false;
+    }
+  }, [activeStep, session, sessionId]);
+
+  const handleStepComplete = useCallback(async () => {
+    for (let attempt = 0; workflowSaveInFlightRef.current && attempt < 50; attempt += 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    const saved = await saveWorkflowProgress(true);
+    if (saved) await loadSessionDetail();
+  }, [loadSessionDetail, saveWorkflowProgress]);
+
+  useEffect(() => {
+    if (!workflowDirtyRef.current) return;
+    const timer = window.setTimeout(() => void saveWorkflowProgress(), 1500);
+    return () => window.clearTimeout(timer);
+  }, [workflowDrafts, activeStep, saveWorkflowProgress]);
+
+  useEffect(() => {
+    const previous = activeStepTimingRef.current;
+    if (previous.step === activeStep) return;
+    const elapsed = Math.max(0, Math.round((Date.now() - previous.startedAt) / 1000));
+    metricsRef.current.activeSeconds += elapsed;
+    metricsRef.current.stepSeconds[String(previous.step)] =
+      (metricsRef.current.stepSeconds[String(previous.step)] || 0) + elapsed;
+    metricsRef.current.stepTransitions += 1;
+    activeStepTimingRef.current = { step: activeStep, startedAt: Date.now() };
+    workflowDirtyRef.current = true;
+  }, [activeStep]);
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      const now = Date.now();
+      if (document.hidden && pageVisibleRef.current) {
+        const timing = activeStepTimingRef.current;
+        const elapsed = Math.max(0, Math.round((now - timing.startedAt) / 1000));
+        metricsRef.current.activeSeconds += elapsed;
+        metricsRef.current.stepSeconds[String(timing.step)] =
+          (metricsRef.current.stepSeconds[String(timing.step)] || 0) + elapsed;
+      }
+      pageVisibleRef.current = !document.hidden;
+      activeStepTimingRef.current = { step: activeStep, startedAt: now };
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [activeStep]);
+
+  useEffect(() => {
+    if (!session || session.session.isCompleted) return;
+    const timer = window.setInterval(() => {
+      if (!pageVisibleRef.current) return;
+      workflowDirtyRef.current = true;
+      void saveWorkflowProgress(true);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [saveWorkflowProgress, session]);
 
   const openTherapyPlanEditModal = async () => {
     if (loadingTherapyPlanEdit) return;
@@ -414,6 +570,7 @@ export default function SessionDetailPage() {
     if (!session || completionInFlightRef.current) return;
 
     if (!inventorySource) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Pilih Stok Cabang atau Stok Tim terlebih dahulu');
       return;
     }
@@ -422,30 +579,37 @@ export default function SessionDetailPage() {
     
     // Validate required steps
     if (!steps.step1_diagnosis) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Diagnosis belum diisi');
       return;
     }
     if (!steps.step2_therapyPlan) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Therapy Plan belum diisi');
       return;
     }
     if (!steps.step3_vitalBefore) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Tanda vital SEBELUM belum diisi');
       return;
     }
     if (!steps.step4_infusion) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Infus aktual belum dibuat');
       return;
     }
     if (!steps.step5_materials) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Material usage belum dicatat');
       return;
     }
     if (!steps.step7_vitalAfter) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Tanda vital SESUDAH belum diisi');
       return;
     }
     if (!steps.step8_evaluation) {
+      metricsRef.current.validationErrors += 1;
       showToast.error('Evaluasi dokter belum diisi');
       return;
     }
@@ -453,13 +617,24 @@ export default function SessionDetailPage() {
     completionInFlightRef.current = true;
     try {
       setCompleting(true);
-      const result = await sessionApi.completeSession(sessionId, { inventorySource });
+      setCompletionError(null);
+      const progressSaved = await saveWorkflowProgress(true);
+      if (!progressSaved) {
+        throw new Error('Draft belum dapat disimpan. Muat ulang atau coba kembali sebelum completion.');
+      }
+      const result = await sessionApi.completeSession(sessionId, {
+        inventorySource,
+        expectedWorkflowRevision: workflowRevisionRef.current,
+      });
       showToast.success(result.message);
       router.push(`/members/${session.session.member.memberId}`);
     } catch (error) {
       assertCaughtError(error);
       devError('Error completing session:', error);
-      showToast.error(getApiErrorMessage(error) || 'Gagal menyelesaikan sesi');
+      const message = getApiErrorMessage(error) || 'Gagal menyelesaikan sesi';
+      setCompletionError(message);
+      setShowCompletionReview(true);
+      showToast.error(message);
     } finally {
       completionInFlightRef.current = false;
       setCompleting(false);
@@ -513,6 +688,7 @@ export default function SessionDetailPage() {
   const canEditSessionBoosterPackage = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
   const sessionEditFieldDisabled = savingBoosterPackage || loadingBoosterPackages;
   const canCancelCompletion = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'ADMIN_CABANG'].includes(user?.role || '');
+  const userCanFinalize = canFinalizeSession(user?.role);
   const isCompletionCancelled = sessionInfo.completionStatus === 'CANCELLED';
   const boosterPackageChangeLocked = !!sessionInfo.boosterPackage?.boosterType;
   
@@ -539,6 +715,8 @@ export default function SessionDetailPage() {
     steps.step5_materials &&
     steps.step7_vitalAfter &&
     steps.step8_evaluation;
+  const completionSummary = buildCompletionSummary(session);
+  const missingRequiredSteps = getMissingRequiredSteps(steps);
   const sessionPhases = [
     { label: 'Persiapan', range: 'Langkah 1–3', active: activeStep <= 3 },
     { label: 'Pelaksanaan', range: 'Langkah 4–6', active: activeStep >= 4 && activeStep <= 6 },
@@ -661,6 +839,15 @@ export default function SessionDetailPage() {
           }}>
             <span style={{ fontSize: '20px' }}>📋</span> Progress Sesi Terapi
           </h3>
+          {!sessionInfo.isCompleted && (
+            <div style={{ marginLeft: 'auto', fontSize: '12px', color: workflowSaveState === 'CONFLICT' || workflowSaveState === 'ERROR' ? '#ef4444' : 'var(--text-secondary)' }}>
+              {workflowSaveState === 'SAVING' && 'Menyimpan draft...'}
+              {workflowSaveState === 'SAVED' && workflowSavedAt && `Draft tersimpan ${new Date(workflowSavedAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`}
+              {workflowSaveState === 'CONFLICT' && 'Konflik perubahan — muat ulang'}
+              {workflowSaveState === 'ERROR' && 'Draft belum tersimpan'}
+              {workflowSaveState === 'IDLE' && 'Draft tersimpan otomatis'}
+            </div>
+          )}
           <button
             onClick={() => setShowStaffInfo(!showStaffInfo)}
             className="btn btn-secondary btn-sm"
@@ -965,12 +1152,22 @@ export default function SessionDetailPage() {
 
       {/* Step Content */}
       <div className="card">
+        {!canEditSessionStep(user?.role, activeStep) && (
+          <div style={{ margin: '16px', padding: '12px 16px', borderRadius: '10px', border: '1px solid rgba(59, 130, 246, 0.35)', background: 'rgba(59, 130, 246, 0.1)', color: 'var(--text-secondary)', fontSize: '13px' }}>
+            Langkah ini merupakan tanggung jawab <strong>{SESSION_STEP_OWNER[activeStep]}</strong>. Anda dapat melihat statusnya, tetapi tidak dapat mengubah isian.
+          </div>
+        )}
+        <SessionWorkflowDraftProvider
+          drafts={workflowDrafts}
+          updateDraft={updateWorkflowDraft}
+          clearDraft={clearWorkflowDraft}
+        >
         {activeStep === 1 && (
           <Step1Diagnosis 
             encounterId={sessionInfo.encounterId}
             memberId={session.memberId}
             diagnosis={session.diagnosis}
-            isLocked={false}
+            isLocked={!canEditSessionStep(user?.role, 1)}
             onComplete={handleStepComplete}
           />
         )}
@@ -980,7 +1177,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
-            isLocked={!canAccessStep(2)}
+            isLocked={!canAccessStep(2) || !canEditSessionStep(user?.role, 2)}
             onComplete={handleStepComplete}
           />
         )}
@@ -989,7 +1186,7 @@ export default function SessionDetailPage() {
           <Step3VitalBefore 
             sessionId={sessionId}
             vitalSigns={session.vitalSigns.filter(v => v.waktuCatat === 'SEBELUM')}
-            isLocked={!canAccessStep(3)}
+            isLocked={!canAccessStep(3) || !canEditSessionStep(user?.role, 3)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(4)}
           />
@@ -1001,7 +1198,7 @@ export default function SessionDetailPage() {
             memberId={session.memberId}
             therapyPlan={session.therapyPlan}
             infusion={session.infusion}
-            isLocked={!canAccessStep(4)}
+            isLocked={!canAccessStep(4) || !canEditSessionStep(user?.role, 4)}
             onComplete={handleStepComplete}
             onNext={() => setActiveStep(5)}
             onEditTherapyPlanSet={openTherapyPlanEditModal}
@@ -1013,7 +1210,7 @@ export default function SessionDetailPage() {
             sessionId={sessionId}
             branchId={sessionInfo.branchId || ''}
             materials={session.materials || []}
-            isLocked={!canAccessStep(5)}
+            isLocked={!canAccessStep(5) || !canEditSessionStep(user?.role, 5)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1022,7 +1219,7 @@ export default function SessionDetailPage() {
           <Step7Photo 
             sessionId={sessionId}
             photo={session.photo}
-            isLocked={!canAccessStep(6)}
+            isLocked={!canAccessStep(6) || !canEditSessionStep(user?.role, 6)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1031,7 +1228,7 @@ export default function SessionDetailPage() {
           <Step8VitalAfter 
             sessionId={sessionId}
             vitalSigns={session.vitalSigns}
-            isLocked={!canAccessStep(7)}
+            isLocked={!canAccessStep(7) || !canEditSessionStep(user?.role, 7)}
             onComplete={handleStepComplete}
           />
         )}
@@ -1043,7 +1240,7 @@ export default function SessionDetailPage() {
               keluhan: session.evaluation.keluhan,
               rekomendasi: session.evaluation.rekomendasi
             } : null}
-            isLocked={!canAccessStep(8)}
+            isLocked={!canAccessStep(8) || !canEditSessionStep(user?.role, 8)}
             onComplete={async () => {
               await handleStepComplete();
               setActiveStep(9);
@@ -1055,10 +1252,11 @@ export default function SessionDetailPage() {
           <Step9Evaluation 
             sessionId={sessionId}
             evaluation={session.evaluation}
-            isLocked={!canAccessStep(9)}
+            isLocked={!canAccessStep(9) || !canEditSessionStep(user?.role, 9)}
             onComplete={handleStepComplete}
           />
         )}
+        </SessionWorkflowDraftProvider>
       </div>
 
       {/* Session Completed Banner */}
@@ -1132,6 +1330,76 @@ export default function SessionDetailPage() {
             {sessionInfo.cancellationReason || 'Posting revenue dan quantity persediaan telah dibalik.'}
           </p>
         </div>
+      )}
+
+      {showCompletionReview && typeof document !== 'undefined' && createPortal(
+        <div className={styles.modalOverlay} style={{
+          position: 'fixed', inset: 0, zIndex: 1250, background: 'rgba(0, 0, 0, 0.72)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px',
+        }}>
+          <div className={`card ${styles.modalCard}`} style={{ width: '100%', maxWidth: '620px', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '4px' }}>Review sebelum menyelesaikan sesi</h3>
+                <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  Pastikan tindakan, tanda vital, material, dan evaluasi sudah sesuai kondisi aktual.
+                </p>
+              </div>
+              <button type="button" onClick={() => !completing && setShowCompletionReview(false)} disabled={completing} aria-label="Tutup review" style={{ border: 0, background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginTop: '20px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px' }}>
+              {[
+                ['Member', completionSummary.member],
+                ['Sesi', completionSummary.sessionCode],
+                ['Therapy plan', completionSummary.therapyPlan],
+                ['Vital sebelum/sesudah', `${completionSummary.vitalBefore}/${completionSummary.vitalAfter} catatan`],
+                ['Material', `${completionSummary.materialLines} baris · ${completionSummary.materialQuantity} unit`],
+                ['Deviasi material', `${completionSummary.deviations} baris`],
+                ['Sumber stok', inventorySource === 'TEAM' ? 'Stok Tim' : inventorySource === 'BRANCH' ? 'Stok Cabang' : 'Belum dipilih'],
+              ].map(([label, value]) => (
+                <div key={label} style={{ padding: '12px', border: '1px solid var(--surface-border)', borderRadius: '10px', background: 'var(--surface-input)' }}>
+                  <small style={{ display: 'block', color: 'var(--text-muted)', marginBottom: '4px' }}>{label}</small>
+                  <strong style={{ fontSize: '13px' }}>{value}</strong>
+                </div>
+              ))}
+            </div>
+
+            {missingRequiredSteps.length > 0 && (
+              <div style={{ marginTop: '16px', padding: '12px', borderRadius: '10px', background: 'rgba(245, 158, 11, 0.12)', color: '#f59e0b' }}>
+                Belum lengkap: {missingRequiredSteps.map((item) => item.label).join(', ')}.
+              </div>
+            )}
+            {completionError && (
+              <div role="alert" style={{ marginTop: '16px', padding: '12px', borderRadius: '10px', background: 'rgba(239, 68, 68, 0.12)', color: '#ef4444' }}>
+                <strong>Completion belum berhasil.</strong><br />{completionError}
+              </div>
+            )}
+
+            <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+              {workflowSaveState === 'CONFLICT' && (
+                <button type="button" className="btn btn-secondary" onClick={() => void loadSessionDetail()} disabled={completing}>
+                  Muat ulang data terbaru
+                </button>
+              )}
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCompletionReview(false)} disabled={completing}>Kembali periksa</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  if (completionError) metricsRef.current.retryCount += 1;
+                  void handleCompleteSession();
+                }}
+                disabled={completing || missingRequiredSteps.length > 0 || !inventorySource || workflowSaveState === 'CONFLICT'}
+              >
+                {completing ? 'Memproses stok & finance...' : completionError ? 'Coba completion lagi' : 'Konfirmasi & selesaikan'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
 
       {showCancellationModal && typeof document !== 'undefined' && createPortal(
@@ -1734,7 +2002,7 @@ export default function SessionDetailPage() {
       )}
 
       {/* Floating Sticky Button - Always visible when scrolling */}
-      {!sessionInfo.isCompleted && allRequiredStepsComplete && (
+      {!sessionInfo.isCompleted && allRequiredStepsComplete && userCanFinalize && (
         <div className={styles.completionAction} style={{
           position: 'fixed',
           bottom: '24px',
@@ -1772,7 +2040,10 @@ export default function SessionDetailPage() {
             <option value="BRANCH">Stok Cabang</option>
           </select>
           <button
-            onClick={handleCompleteSession}
+            onClick={() => {
+              setCompletionError(null);
+              setShowCompletionReview(true);
+            }}
             disabled={completing || !inventorySource}
             style={{
               padding: '18px 32px',

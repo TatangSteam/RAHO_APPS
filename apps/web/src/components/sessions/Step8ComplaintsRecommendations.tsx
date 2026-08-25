@@ -1,11 +1,12 @@
 'use client';
 
 import { assertCaughtError } from '@/lib/caughtError';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { showToast } from '@/lib/toast';
 import { useAuthStore } from '@/stores/authStore';
 import { evaluationApi } from '@/lib/evaluationApi';
 import { devError } from '@/lib/logger';
+import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
 
 interface ComplaintsRecommendations {
   keluhan: string | null;
@@ -26,12 +27,18 @@ export default function Step8ComplaintsRecommendations({
   onComplete,
 }: Step8ComplaintsRecommendationsProps) {
   const { user } = useAuthStore();
+  const complaintsDraft = useSessionWorkflowDraft<{ keluhan: string; rekomendasi: string }>('complaints');
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
     keluhan: complaintsRecommendations?.keluhan || '',
     rekomendasi: complaintsRecommendations?.rekomendasi || '',
+    ...complaintsDraft.initialDraft,
   });
+
+  useEffect(() => {
+    complaintsDraft.updateDraft(formData);
+  }, [formData]);
 
   // Keluhan dan rekomendasi operasional diisi tim pelaksana, bukan dokter.
   const canEdit = user?.role === 'ADMIN_CABANG' || user?.role === 'ADMIN_LAYANAN' || user?.role === 'NURSE';
@@ -62,6 +69,7 @@ export default function Step8ComplaintsRecommendations({
       }
 
       showToast.success('Keluhan dan rekomendasi berhasil disimpan');
+      complaintsDraft.clearDraft();
       setIsEditing(false);
       onComplete();
     } catch (error) {

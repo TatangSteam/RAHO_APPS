@@ -12,6 +12,7 @@ import {
   updateSessionBoosterPackageSchema,
   completeSessionSchema,
   cancelSessionCompletionSchema,
+  saveSessionProgressSchema,
   type CreateSessionInput,
 } from './sessions.schema';
 import { sendSuccess, sendError } from '../../utils/response';
@@ -20,10 +21,12 @@ import { SupportingPhotosService } from './services/supporting-photos.service';
 import { Prisma, Role } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { getSessionMaterialRecommendations } from '@modules/inventory/services/treatment-bom.service';
+import { WorkflowBurdenService } from './services/workflow-burden.service';
 
 const sessionsService = new SessionsService();
 const exportService = new SessionExportService();
 const supportingPhotosService = new SupportingPhotosService();
+const workflowBurdenService = new WorkflowBurdenService();
 
 const parseQueryIdList = (value: unknown): string[] | undefined => {
   if (!value) return undefined;
@@ -38,6 +41,27 @@ const parseQueryIdList = (value: unknown): string[] | undefined => {
 };
 
 export class SessionsController {
+  async getWorkflowBurden(req: Request, res: Response, next: NextFunction) {
+    try {
+      const dateTo = req.query.dateTo ? new Date(String(req.query.dateTo)) : new Date();
+      const dateFrom = req.query.dateFrom
+        ? new Date(String(req.query.dateFrom))
+        : new Date(dateTo.getTime() - 30 * 24 * 60 * 60 * 1000);
+      if (Number.isNaN(dateFrom.getTime()) || Number.isNaN(dateTo.getTime()) || dateFrom > dateTo) {
+        return sendError(res, 400, 'INVALID_REPORT_PERIOD', 'Periode audit tidak valid');
+      }
+      const result = await workflowBurdenService.getReport({
+        branchId: typeof req.query.branchId === 'string' ? req.query.branchId : undefined,
+        dateFrom,
+        dateTo,
+      });
+      return sendSuccess(res, result);
+    } catch (err) {
+      if (err.status) return sendError(res, err.status, err.code, err.message);
+      next(err);
+    }
+  }
+
   private async assertEvaluationWriteAccess(
     sessionId: string,
     user: Request['user'],
@@ -1013,7 +1037,11 @@ export class SessionsController {
   async saveProgress(req: Request, res: Response, next: NextFunction) {
     try {
       const { sessionId } = req.params;
-      const result = await sessionsService.saveProgress(sessionId, req.user!.userId);
+      const validation = saveSessionProgressSchema.safeParse(req.body ?? {});
+      if (!validation.success) {
+        return sendError(res, 400, 'VALIDATION_ERROR', 'Data progress tidak valid', validation.error.errors);
+      }
+      const result = await sessionsService.saveProgress(sessionId, req.user!.userId, validation.data);
       return sendSuccess(res, result);
     } catch (err) {
       if (err.status) {

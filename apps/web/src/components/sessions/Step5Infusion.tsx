@@ -7,6 +7,7 @@ import { sessionApi } from '@/lib/sessionApi';
 import type { TherapyPlan, InfusionExecution, CreateInfusionInput } from '@/types/session';
 import { therapyPlanApi, type TherapyPlan as MemberTherapyPlan } from '@/lib/therapyPlanApi';
 import { devError } from '@/lib/logger';
+import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
 
 interface Step5InfusionProps {
   sessionId: string;
@@ -264,6 +265,7 @@ export default function Step5Infusion({
   onEditTherapyPlanSet,
 }: Step5InfusionProps) {
   const router = useRouter();
+  const infusionDraft = useSessionWorkflowDraft<CreateInfusionInput>('infusion');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasDeviation, setHasDeviation] = useState(false);
@@ -293,10 +295,39 @@ export default function Step5Infusion({
     volumeCarrier: undefined,
     jumlahJarum: undefined,
     tanggalProduksi: undefined,
+    ...infusionDraft.initialDraft,
   });
 
-  // NO AUTO-FILL - Staff enters actual values manually
-  // Auto-fill removed per user request to allow verification of therapy plan first
+  // Prefill the execution from the approved plan. Staff still verifies the
+  // actual values before saving; an existing server draft always wins.
+  useEffect(() => {
+    if (!therapyPlan || infusion || Object.keys(infusionDraft.initialDraft).length > 0) return;
+    const toDose = (value: number | null | undefined) => {
+      const parsed = Number(value || 0);
+      return parsed > 0 ? parsed : undefined;
+    };
+    setFormData((current) => ({
+      ...current,
+      ifa250: toDose(therapyPlan.ifa250),
+      ifa500: toDose(therapyPlan.ifa500),
+      hho: toDose(therapyPlan.hho),
+      hhoKonsentrat: toDose(therapyPlan.hhoKonsentrat),
+      h2: toDose(therapyPlan.h2),
+      no: getPlannedActualDose('no', therapyPlan, current) || undefined,
+      gaso: toDose(therapyPlan.gaso),
+      o2: toDose(therapyPlan.o2),
+      o3: toDose(therapyPlan.o3),
+      edta: toDose(therapyPlan.edta),
+      mb: toDose(therapyPlan.mb),
+      h2s: toDose(therapyPlan.h2s),
+      kcl: toDose(therapyPlan.kcl),
+      jmlNb: toDose(therapyPlan.jmlNb),
+    }));
+  }, [infusion, therapyPlan]);
+
+  useEffect(() => {
+    if (!infusion) infusionDraft.updateDraft(formData);
+  }, [formData, infusion]);
 
   useEffect(() => {
     if (!therapyPlan) {
@@ -365,13 +396,14 @@ export default function Step5Infusion({
   }, [formData, therapyPlan]);
 
   const [shouldNavigateNext, setShouldNavigateNext] = useState(false);
+  const deviationMissing = hasDeviation && !formData.deviationNotes?.trim();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    if (hasDeviation) {
-      setError('Dosis aktual belum sesuai therapy plan. Edit therapy plan terlebih dahulu agar rencana dan aktual sama.');
+    if (deviationMissing) {
+      setError('Catatan alasan deviasi wajib diisi karena dosis aktual berbeda dari therapy plan.');
       return;
     }
 
@@ -379,6 +411,7 @@ export default function Step5Infusion({
 
     try {
       await sessionApi.createInfusion(sessionId, formData);
+      infusionDraft.clearDraft();
       onComplete();
       // Navigate to next step if user clicked "Simpan & Lanjut"
       if (shouldNavigateNext && onNext) {
@@ -622,8 +655,20 @@ export default function Step5Infusion({
                 Deviasi Terdeteksi
               </p>
               <p style={{ fontSize: '13px', color: '#fcd34d' }}>
-                Ada perbedaan antara dosis aktual dan therapy plan. Edit therapy plan terlebih dahulu agar rencana dan aktual menjadi sesuai.
+                Ada perbedaan antara dosis aktual dan therapy plan. Pastikan nilai aktual benar, lalu isi alasan deviasi di bawah. Edit therapy plan hanya jika rencananya memang salah.
               </p>
+              <label style={{ display: 'block', marginTop: '12px', fontSize: '12px', fontWeight: 700, color: '#fbbf24' }}>
+                Alasan deviasi <span style={{ color: '#ef4444' }}>*</span>
+                <textarea
+                  value={formData.deviationNotes || ''}
+                  onChange={(event) => setFormData((current) => ({ ...current, deviationNotes: event.target.value }))}
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="Contoh: dosis disesuaikan berdasarkan kondisi pasien saat pelaksanaan"
+                  disabled={loading}
+                  style={{ display: 'block', width: '100%', marginTop: '6px', resize: 'vertical', color: 'var(--text-primary)' }}
+                />
+              </label>
             </div>
             {(onEditTherapyPlanSet || memberId) && (
               <button
@@ -980,7 +1025,7 @@ export default function Step5Infusion({
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', paddingTop: '16px', borderTop: '1px solid rgba(148,163,184,0.2)' }}>
           <button
             type="submit"
-            disabled={loading || hasDeviation}
+            disabled={loading || deviationMissing}
             style={{
               padding: '12px 24px',
               background: 'rgba(148,163,184,0.2)',
@@ -989,7 +1034,7 @@ export default function Step5Infusion({
               color: 'var(--text-primary)',
               fontSize: '15px',
               fontWeight: '600',
-              cursor: loading || hasDeviation ? 'not-allowed' : 'pointer',
+              cursor: loading || deviationMissing ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s',
             }}
           >
@@ -998,11 +1043,11 @@ export default function Step5Infusion({
           {onNext && (
             <button
               type="submit"
-              disabled={loading || hasDeviation}
+              disabled={loading || deviationMissing}
               onClick={() => setShouldNavigateNext(true)}
               style={{
                 padding: '12px 32px',
-                background: loading || hasDeviation 
+                background: loading || deviationMissing
                   ? 'rgba(34,197,94,0.3)' 
                   : 'linear-gradient(135deg, #22c55e, #16a34a)',
                 border: 'none',
@@ -1010,9 +1055,9 @@ export default function Step5Infusion({
                 color: 'white',
                 fontSize: '15px',
                 fontWeight: '600',
-                cursor: loading || hasDeviation ? 'not-allowed' : 'pointer',
+                cursor: loading || deviationMissing ? 'not-allowed' : 'pointer',
                 transition: 'all 0.2s',
-                boxShadow: loading || hasDeviation 
+                boxShadow: loading || deviationMissing
                   ? 'none' 
                   : '0 4px 12px rgba(34,197,94,0.3)',
                 display: 'flex',
@@ -1020,14 +1065,14 @@ export default function Step5Infusion({
                 gap: '8px',
               }}
               onMouseEnter={(e) => {
-                if (!loading && !hasDeviation) {
+                if (!loading && !deviationMissing) {
                   e.currentTarget.style.transform = 'translateY(-2px)';
                   e.currentTarget.style.boxShadow = '0 6px 16px rgba(34,197,94,0.4)';
                 }
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = loading || hasDeviation 
+                e.currentTarget.style.boxShadow = loading || deviationMissing
                   ? 'none' 
                   : '0 4px 12px rgba(34,197,94,0.3)';
               }}

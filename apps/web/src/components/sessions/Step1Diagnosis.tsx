@@ -9,6 +9,7 @@ import { confirm, showToast } from '@/lib/toast';
 import type { Diagnosis, CreateDiagnosisInput, DiagnosisCategory } from '@/types/session';
 import { devLog, devError } from '@/lib/logger';
 import styles from './Step1Diagnosis.module.css';
+import { useSessionWorkflowDraft } from './SessionWorkflowDraftContext';
 
 interface Step1DiagnosisProps {
   encounterId: string;
@@ -66,6 +67,7 @@ export default function Step1Diagnosis({
   const [memberDiagnoses, setMemberDiagnoses] = useState<Diagnosis[]>([]);
   const canDeleteDiagnosis = user?.role === 'SUPER_ADMIN' || user?.role === 'ADMIN_MANAGER';
   const canEditDiagnosis = ['SUPER_ADMIN', 'ADMIN_MANAGER', 'DOCTOR', 'NURSE'].includes(user?.role || '');
+  const diagnosisDraft = useSessionWorkflowDraft<CreateDiagnosisInput>('diagnosis');
 
   const [formData, setFormData] = useState<CreateDiagnosisInput>({
     sourceDiagnosisId: undefined,
@@ -82,9 +84,14 @@ export default function Step1Diagnosis({
     riwayatPengobatan: '',
     pemeriksaanFisik: '',
     pemeriksaanTambahan: {},
+    ...diagnosisDraft.initialDraft,
   });
   const [editFormData, setEditFormData] = useState<Partial<CreateDiagnosisInput>>({});
   const [additionalExamJson, setAdditionalExamJson] = useState('{}');
+
+  useEffect(() => {
+    if (!diagnosis) diagnosisDraft.updateDraft(formData);
+  }, [diagnosis, formData]);
 
   useEffect(() => {
     if (!diagnosis) return;
@@ -175,6 +182,7 @@ export default function Step1Diagnosis({
 
       await sessionApi.createDiagnosis(encounterId, data);
       onComplete();
+      diagnosisDraft.clearDraft();
     } catch (err) {
       assertCaughtError(err);
       devError('Failed to save diagnosis:', err);

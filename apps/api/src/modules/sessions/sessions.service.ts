@@ -11,6 +11,7 @@ import type {
   UpdateSessionDetailsInput,
   CompleteSessionInput,
   CancelSessionCompletionInput,
+  SaveSessionProgressInput,
 } from './sessions.schema';
 
 // Import modular services
@@ -296,8 +297,8 @@ export class SessionsService {
     return this.completionService.cancelCompletion(sessionId, userId, input);
   }
 
-  async saveProgress(sessionId: string, userId: string) {
-    return this.completionService.saveProgress(sessionId, userId);
+  async saveProgress(sessionId: string, userId: string, input: SaveSessionProgressInput) {
+    return this.completionService.saveProgress(sessionId, userId, input);
   }
 
   async getSessionProgress(sessionId: string) {

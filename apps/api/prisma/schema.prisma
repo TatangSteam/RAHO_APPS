@@ -2832,6 +2832,13 @@ model TreatmentSession {
   cancellationReason         String?                     @db.Text
   materialReversalPostingId  String?                     @unique
   cancellationJournalEntryId String?                     @unique
+  // Server-side form draft and optimistic revision for the clinical workflow.
+  // Draft data is cleared after a successful completion.
+  workflowDraft              Json?
+  workflowDraftStep          Int?
+  workflowDraftUpdatedAt     DateTime?
+  workflowDraftUpdatedBy     String?
+  workflowRevision           Int                         @default(0)
   createdAt                  DateTime                    @default(now())
   updatedAt                  DateTime                    @updatedAt
 
@@ -2873,6 +2880,7 @@ model TreatmentSession {
   @@index([completionFlowVersion])
   @@index([materialPolicyVersion])
   @@index([revenuePackageId])
+  @@index([workflowDraftUpdatedAt])
   @@map("treatment_sessions")
 }
 
