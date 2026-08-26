@@ -61,6 +61,10 @@ export default function StaffManagementPage() {
 
   useEffect(() => {
     setMounted(true);
+    if (new URLSearchParams(window.location.search).get('action') === 'create') {
+      setShowCreateModal(true);
+      window.history.replaceState(null, '', window.location.pathname);
+    }
   }, []);
 
   useEffect(() => {

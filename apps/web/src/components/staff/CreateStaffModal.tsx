@@ -263,7 +263,7 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Gagal membuat staff');
+        throw new Error(error.error?.message || error.message || 'Gagal membuat staff');
       }
 
       const result = await response.json();
@@ -318,7 +318,16 @@ export default function CreateStaffModal({ show, onClose, onSuccess, accessToken
                     type="button"
                     key={role}
                     className={`${styles.roleCard} ${formData.role === role ? styles.roleCardActive : ''}`}
-                    onClick={() => setFormData({ ...formData, role })}
+                    onClick={() => {
+                      setFormData((current) => ({
+                        ...current,
+                        role,
+                        selectedBranchId: GLOBAL_STAFF_ROLES.includes(role)
+                          ? ''
+                          : current.selectedBranchId,
+                      }));
+                      setErrors((current) => ({ ...current, selectedBranchId: '' }));
+                    }}
                     aria-pressed={formData.role === role}
                     disabled={loading}
                   >

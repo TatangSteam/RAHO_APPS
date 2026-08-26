@@ -222,7 +222,7 @@ export default function ShipmentsPage() {
   };
 
   const isFinanceLogisticsController =
-    user?.roleTemplateName === 'Finance & Logistics Controller';
+    user?.role === 'FINANCE_LOGISTICS_CONTROLLER';
 
   const canShip = (shipment: Shipment) => 
     [

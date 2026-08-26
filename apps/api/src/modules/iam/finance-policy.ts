@@ -1,3 +1,4 @@
+import { Role } from '@prisma/client';
 import { prisma } from '@lib/prisma';
 
 export const FINANCE_ROLE_TEMPLATE_CODE = 'FINANCE';
@@ -9,9 +10,17 @@ export const FINANCE_ROLE_TEMPLATE_CODE = 'FINANCE';
 export async function isAutonomousFinanceUser(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { roleTemplate: { select: { code: true, isActive: true } } },
+    select: {
+      role: true,
+      roleTemplate: { select: { code: true, isActive: true } },
+    },
   });
 
-  return user?.roleTemplate?.isActive === true &&
-    ['FINANCE', 'FINANCE_DUMMY'].includes(user.roleTemplate.code);
+  if (user?.role === Role.FINANCE_LOGISTICS_CONTROLLER) return true;
+
+  return user?.roleTemplate?.isActive === true && [
+    'FINANCE',
+    'FINANCE_DUMMY',
+    'FINANCE_LOGISTICS_CONTROLLER_DEFAULT',
+  ].includes(user.roleTemplate.code);
 }

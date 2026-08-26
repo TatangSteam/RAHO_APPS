@@ -522,7 +522,7 @@ export default function SuperAdminPage() {
                     <QuickActionButton
                       icon={<UserPlus className="h-5 w-5" />}
                       label="Tambah User"
-                      onClick={() => router.push('/admin/users')}
+                      onClick={() => router.push('/admin/users?action=create')}
                     />
                     <QuickActionButton
                       icon={<Eye className="h-5 w-5" />}

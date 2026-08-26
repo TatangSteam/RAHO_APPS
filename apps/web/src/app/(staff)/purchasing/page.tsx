@@ -16,6 +16,7 @@ type PrLine = { masterProductId: string; requestedQty: string; estimatedUnitCost
 export default function PurchasingPage() {
   const user = useAuthStore((state) => state.user);
   const isFinance =
+    user?.role === 'FINANCE_LOGISTICS_CONTROLLER' ||
     user?.roleTemplateName === 'Finance' ||
     user?.staffCode?.startsWith('FN-') === true ||
     user?.email.toLowerCase() === 'finance@raho.id';

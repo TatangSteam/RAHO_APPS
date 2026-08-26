@@ -25,6 +25,10 @@ const GLOBAL_STAFF_ROLES: readonly Role[] = [
   Role.ADMIN_LOGISTIK,
   Role.FINANCE_LOGISTICS_CONTROLLER,
 ];
+const GLOBAL_ROLE_TEMPLATE_CODES: Partial<Record<Role, string>> = {
+  [Role.ADMIN_LOGISTIK]: 'ADMIN_LOGISTIK_DEFAULT',
+  [Role.FINANCE_LOGISTICS_CONTROLLER]: 'FINANCE_LOGISTICS_CONTROLLER_DEFAULT',
+};
 const STAFF_CREDENTIAL_MANAGED_ROLES: readonly Role[] = [
   Role.ADMIN_CABANG,
   Role.ADMIN_LAYANAN,
@@ -66,8 +70,13 @@ export function isGlobalStaffRole(role: Role): boolean {
 }
 
 async function getActiveDefaultRoleTemplate(role: Role) {
+  const templateCode = GLOBAL_ROLE_TEMPLATE_CODES[role];
+  if (!templateCode) {
+    throw errors.badRequest('ROLE_TEMPLATE_NOT_FOUND', `Template untuk role ${role} belum dikonfigurasi.`);
+  }
+
   const template = await prisma.roleTemplate.findUnique({
-    where: { baseRole: role },
+    where: { code: templateCode },
     select: { id: true, code: true, isActive: true },
   });
 

@@ -15,7 +15,8 @@ type Branch = { id: string; branchCode: string; name: string };
 export default function ExpensesPage() {
   const user = useAuthStore((state) => state.user);
   const isFinance =
-    user?.roleTemplateName === 'Finance'
+    user?.role === 'FINANCE_LOGISTICS_CONTROLLER'
+    || user?.roleTemplateName === 'Finance'
     || user?.staffCode?.startsWith('FN-') === true
     || user?.email.toLowerCase() === 'finance@raho.id';
   const [rows, setRows] = useState<Expense[]>([]);

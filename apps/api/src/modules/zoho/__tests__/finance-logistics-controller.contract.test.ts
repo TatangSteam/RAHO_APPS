@@ -46,7 +46,7 @@ describe('Finance & Logistics Controller contract', () => {
     expect(shipmentService).toContain('FINANCE_LOGISTICS_DISPATCH_ONLY');
     expect(shipmentService).toContain("await assertNotDispatchOnlyController(userId, 'menerima barang')");
     expect(shipmentService).toContain('const dispatchData = dispatchOnly');
-    expect(shipmentPage).toContain("user?.roleTemplateName === 'Finance & Logistics Controller'");
+    expect(shipmentPage).toContain("user?.role === 'FINANCE_LOGISTICS_CONTROLLER'");
     expect(shipmentModal).toContain('? { idempotencyKey }');
   });
 
@@ -69,6 +69,41 @@ describe('Finance & Logistics Controller contract', () => {
       permissionMigration.indexOf('WHERE p."code" IN'),
     );
     expect(assignedPermissions).not.toContain("'ZOHO.CONNECTION.MANAGE'");
+  });
+
+  it('repairs Quick Action accounts and recognizes the enum role across Finance UI', () => {
+    const repairMigration = readFileSync(resolve(
+      apiRoot,
+      'prisma/migrations/20260826120000_repair_finance_logistics_user_access/migration.sql',
+    ), 'utf8');
+    const userService = readFileSync(resolve(apiRoot, 'src/modules/users/users.service.ts'), 'utf8');
+    const financePolicy = readFileSync(resolve(apiRoot, 'src/modules/iam/finance-policy.ts'), 'utf8');
+    const quickAction = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/admin/super-admin/page.tsx',
+    ), 'utf8');
+    const usersPage = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/admin/users/page.tsx',
+    ), 'utf8');
+    const purchasingPage = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/purchasing/page.tsx',
+    ), 'utf8');
+    const expensePage = readFileSync(resolve(
+      apiRoot,
+      '../web/src/app/(staff)/expenses/page.tsx',
+    ), 'utf8');
+
+    expect(userService).toContain("'FINANCE_LOGISTICS_CONTROLLER_DEFAULT'");
+    expect(financePolicy).toContain('Role.FINANCE_LOGISTICS_CONTROLLER');
+    expect(quickAction).toContain("'/admin/users?action=create'");
+    expect(usersPage).toContain("get('action') === 'create'");
+    expect(purchasingPage).toContain("user?.role === 'FINANCE_LOGISTICS_CONTROLLER'");
+    expect(expensePage).toContain("user?.role === 'FINANCE_LOGISTICS_CONTROLLER'");
+    expect(repairMigration).toContain("target.\"role\" = 'FINANCE_LOGISTICS_CONTROLLER'");
+    expect(repairMigration).toContain('ON CONFLICT ("userId", "branchId")');
+    expect(repairMigration).not.toContain('DELETE FROM "users"');
   });
 
   it('keeps maker-checker enforcement in the approval engine', () => {
