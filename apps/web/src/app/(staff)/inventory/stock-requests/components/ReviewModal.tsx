@@ -17,10 +17,12 @@ import {
   getPaymentAccountByType,
   type PaymentAccountType,
 } from '@/lib/paymentAccounts';
+import { canCreateStockRequestInvoice } from '../stockRequestPresentation';
+import type { Role } from '@/types/auth';
 
 interface ReviewModalProps {
   request: StockRequest;
-  userRole?: string;
+  userRole?: Role;
   onClose: () => void;
   /** @deprecated No longer used - both Premier and Partnership use onCreatePartnershipInvoice */
   onApprovePremierRequest?: (requestId: string, reviewNotes: string) => Promise<void>;
@@ -463,7 +465,7 @@ export default function ReviewModal({
     }
   };
 
-  const canApprove = isManager && request.status === 'PENDING';
+  const canApprove = canCreateStockRequestInvoice(request, userRole);
   const existingInvoiceTotal = request.invoice?.totalAmount ?? 0;
   const isDebtInvoice = request.invoice?.status === 'DEBT';
   const hasPaymentProof = Boolean(request.paymentProofUrl || request.invoice?.paymentProofUrl);

@@ -13,6 +13,15 @@ export function formatStockRequestDate(dateString: string): string {
   });
 }
 
+export function canCreateStockRequestInvoice(request: StockRequest, role?: Role): boolean {
+  if (!isStockRequestManager(role) || request.invoice) return false;
+  if (request.status === 'PENDING') return true;
+  return (
+    ['APPROVED', 'PARTIALLY_APPROVED'].includes(request.status) &&
+    request.shipment?.status === 'PREPARING'
+  );
+}
+
 export function getStockRequestRowActions(request: StockRequest, role?: Role) {
   const isManager = isStockRequestManager(role);
   const isDebtInvoice = request.invoice?.status === 'DEBT';
@@ -33,7 +42,7 @@ export function getStockRequestRowActions(request: StockRequest, role?: Role) {
   return {
     isDebtInvoice,
     canReview:
-      (request.status === 'PENDING' && isManager) ||
+      canCreateStockRequestInvoice(request, role) ||
       (request.status === 'PAYMENT_UPLOADED' && isManager),
     canEditRequest: canEditPendingRequest || canEditWaitingInvoice,
     canUploadPayment:

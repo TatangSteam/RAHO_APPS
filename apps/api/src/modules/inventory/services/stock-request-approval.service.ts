@@ -312,8 +312,27 @@ export class StockRequestApprovalService {
    * This is the main approval method - creates invoice and sets status to WAITING_PAYMENT
    */
   async createInvoice(requestId: string, userId: string, invoiceData: CreateInvoiceInput) {
-    const request = await this.getRequestWithValidation(requestId, ['PENDING']);
+    const request = await this.getRequestWithValidation(requestId, [
+      StockRequestStatus.PENDING,
+      StockRequestStatus.APPROVED,
+      StockRequestStatus.PARTIALLY_APPROVED,
+    ]);
     await this.validateManagerPermission(userId, request.branchId);
+
+    if (request.invoice) {
+      throw {
+        status: 409,
+        code: 'INVOICE_ALREADY_EXISTS',
+        message: 'Invoice untuk permintaan stok ini sudah dibuat.',
+      };
+    }
+    if (request.shipment && request.shipment.status !== 'PREPARING') {
+      throw {
+        status: 422,
+        code: 'SHIPMENT_ALREADY_PROCESSED',
+        message: 'Invoice tidak dapat dibuat karena shipment sudah diproses.',
+      };
+    }
 
     // Both PREMIER and PARTNERSHIP branches now use the same invoice flow
     if (request.branch.type !== BranchType.PREMIER && request.branch.type !== BranchType.PARTNERSHIP) {
@@ -451,8 +470,17 @@ export class StockRequestApprovalService {
         },
       });
 
-      const shipment = (isFreeRequest || isDebtRequest)
-        ? await tx.shipment.create({
+      const shipment = request.shipment
+        ? await tx.shipment.findUnique({
+            where: { id: request.shipment.id },
+            include: {
+              items: { include: { masterProduct: true } },
+              fromBranch: true,
+              toBranch: true,
+            },
+          })
+        : (isFreeRequest || isDebtRequest)
+          ? await tx.shipment.create({
             data: {
               shipmentCode,
               fromBranchId: senderBranch.id,
@@ -480,7 +508,7 @@ export class StockRequestApprovalService {
               toBranch: true,
             },
           })
-        : null;
+          : null;
 
       return { updatedRequest, invoice, shipment };
     });
