@@ -24,7 +24,6 @@ import MemberDiagnosesTab from '@/components/members/MemberDiagnosesTab';
 import MemberTherapyPlansTab from '@/components/members/MemberTherapyPlansTab';
 import SendNotificationModal from '@/components/members/SendNotificationModal';
 import AssignPackageModal from '@/components/members/AssignPackageModal';
-import SocialProgramModal from '@/components/members/SocialProgramModal';
 import VerifyPaymentModal from '@/components/members/VerifyPaymentModal';
 import PackageRefundModal from '@/components/members/PackageRefundModal';
 import PackageCancelModal from '@/components/members/PackageCancelModal';
@@ -39,7 +38,6 @@ import { getActiveMemberPackagesByType } from '@/components/members/memberStatus
 import {
   ClipboardList,
   FlaskConical,
-  HeartHandshake,
   Package,
   Pill,
   Plus,
@@ -168,7 +166,6 @@ export default function MemberDetailPage() {
   const [packages, setPackages] = useState<PackageDisplay[]>([]);
   const [loadingPackages, setLoadingPackages] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showSocialProgramModal, setShowSocialProgramModal] = useState(false);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [selectedPackageId, setSelectedPackageId] = useState('');
   const [pricings, setPricings] = useState<PackagePricing[]>([]);
@@ -886,14 +883,6 @@ export default function MemberDetailPage() {
                 {canAssignPackage && <div className="flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowSocialProgramModal(true)}
-                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-rose-600 px-4 text-sm font-bold text-white transition hover:bg-rose-500"
-                  >
-                    <HeartHandshake size={16} />
-                    Program Sosial
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setShowAssignModal(true)}
                     className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-amber-500 px-4 text-sm font-bold text-black transition hover:bg-amber-400"
                   >
@@ -1076,15 +1065,6 @@ export default function MemberDetailPage() {
         onClose={() => setShowAssignModal(false)}
         onAssignDataChange={handleAssignDataChange}
         onSubmit={handleAssignPackage}
-      />
-
-      <SocialProgramModal
-        show={showSocialProgramModal}
-        memberId={memberId}
-        branchId={member.registrationBranch.id}
-        memberName={member.profile.fullName}
-        onClose={() => setShowSocialProgramModal(false)}
-        onSubmitted={() => loadMemberDetail(false)}
       />
 
       <VerifyPaymentModal
